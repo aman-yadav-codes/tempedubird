@@ -1,0 +1,154 @@
+{
+  "document_templates": [
+    {
+      "id": 2,
+      "card_category_id": 4,
+      "name": "Modern Navy Gold Achievement Certificate",
+      "thumbnail_url": "https://res.cloudinary.com/dxoat13ad/image/upload/v1782370644/document_templates/yy7oohfkiactvdl71jl5.png",
+      "html_template": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\" />\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n  <title>Modern Navy Gold Achievement Certificate</title>\n  <style>\n    * { box-sizing: border-box; }\n    html, body {\n      margin: 0;\n      padding: 0;\n      background: transparent;\n    }\n    body {\n      width: 1100px;\n      height: 690px;\n      overflow: hidden;\n    }\n    .template-root {\n      width: 1100px;\n      height: 690px;\n      position: relative;\n      background: transparent;\n      overflow: hidden;\n      font-family: Georgia, 'Times New Roman', serif;\n      color: #202020;\n    }\n    .certificate {\n      position: absolute;\n      inset: 0;\n      width: 1100px;\n      height: 690px;\n      background: #ffffff;\n      overflow: hidden;\n    }\n\n    /* Decorative outer geometry */\n    .top-navy {\n      position: absolute;\n      top: 0;\n      left: 602px;\n      width: 285px;\n      height: 62px;\n      background: #0d557d;\n      clip-path: polygon(0 0, 100% 0, 100% 100%, 18% 100%);\n      z-index: 1;\n    }\n    .top-gold {\n      position: absolute;\n      top: 0;\n      left: 850px;\n      width: 88px;\n      height: 62px;\n      background: #ffc943;\n      transform: skewX(11deg);\n      z-index: 2;\n    }\n    .top-orange {\n      position: absolute;\n      top: 0;\n      left: 927px;\n      width: 42px;\n      height: 62px;\n      background: #f29a31;\n      transform: skewX(11deg);\n      z-index: 2;\n    }\n    .right-navy {\n      position: absolute;\n      top: 0;\n      right: 0;\n      width: 72px;\n      height: 690px;\n      background: #0b3c5d;\n      z-index: 1;\n    }\n    .right-blue-stripe {\n      position: absolute;\n      top: 122px;\n      right: 46px;\n      width: 22px;\n      height: 440px;\n      background: #0d6f9d;\n      transform: skewY(31deg);\n      z-index: 2;\n    }\n    .right-gold-stripe {\n      position: absolute;\n      top: 0;\n      right: 24px;\n      width: 40px;\n      height: 690px;\n      background: #ffc943;\n      transform: skewY(31deg);\n      transform-origin: top center;\n      z-index: 3;\n    }\n    .right-orange-stripe {\n      position: absolute;\n      top: 0;\n      right: 0;\n      width: 22px;\n      height: 690px;\n      background: #f29a31;\n      transform: skewY(31deg);\n      transform-origin: top center;\n      z-index: 4;\n    }\n    .left-navy {\n      position: absolute;\n      top: 126px;\n      left: 0;\n      width: 72px;\n      height: 505px;\n      background: #0b3c5d;\n      z-index: 1;\n    }\n    .left-blue-one,\n    .left-blue-two {\n      position: absolute;\n      left: 0;\n      width: 82px;\n      height: 24px;\n      background: #0d6f9d;\n      transform: skewY(40deg);\n      z-index: 2;\n    }\n    .left-blue-one { top: 160px; }\n    .left-blue-two { top: 214px; }\n    .left-gold-band {\n      position: absolute;\n      left: 0;\n      top: 368px;\n      width: 116px;\n      height: 54px;\n      background: #ffc943;\n      transform: skewY(25deg);\n      z-index: 3;\n    }\n    .left-orange-band {\n      position: absolute;\n      left: 0;\n      top: 410px;\n      width: 96px;\n      height: 20px;\n      background: #f29a31;\n      transform: skewY(25deg);\n      z-index: 4;\n    }\n    .bottom-navy {\n      position: absolute;\n      left: 0;\n      bottom: 0;\n      width: 1100px;\n      height: 64px;\n      background: #0b3c5d;\n      z-index: 1;\n    }\n    .bottom-gold {\n      position: absolute;\n      left: 548px;\n      bottom: -18px;\n      width: 96px;\n      height: 150px;\n      background: #ffc943;\n      transform: rotate(-58deg);\n      z-index: 3;\n    }\n    .bottom-orange {\n      position: absolute;\n      left: 606px;\n      bottom: -8px;\n      width: 35px;\n      height: 126px;\n      background: #f29a31;\n      transform: rotate(-58deg);\n      z-index: 4;\n    }\n    .bottom-white-one,\n    .bottom-white-two {\n      position: absolute;\n      bottom: -16px;\n      width: 18px;\n      height: 135px;\n      background: #ffffff;\n      transform: rotate(-58deg);\n      z-index: 5;\n    }\n    .bottom-white-one { left: 690px; }\n    .bottom-white-two { left: 740px; }\n    .bottom-blue-accent {\n      position: absolute;\n      left: 717px;\n      bottom: -10px;\n      width: 18px;\n      height: 120px;\n      background: #0d6f9d;\n      transform: rotate(-58deg);\n      z-index: 4;\n    }\n\n    /* White content field and borders */\n    .white-field {\n      position: absolute;\n      left: 68px;\n      top: 50px;\n      width: 958px;\n      height: 586px;\n      background: #ffffff;\n      z-index: 10;\n      overflow: hidden;\n    }\n    .soft-triangle-left {\n      position: absolute;\n      left: 0;\n      bottom: 34px;\n      width: 430px;\n      height: 390px;\n      background: #f4f4f4;\n      clip-path: polygon(0 0, 100% 100%, 0 100%);\n      z-index: 11;\n    }\n    .soft-triangle-right {\n      position: absolute;\n      right: 0;\n      top: 0;\n      width: 355px;\n      height: 560px;\n      background: #f7f7f7;\n      clip-path: polygon(38% 0, 100% 0, 100% 100%);\n      z-index: 11;\n    }\n    .outer-border {\n      position: absolute;\n      left: 43px;\n      top: 34px;\n      width: 1012px;\n      height: 612px;\n      border: 8px solid #dadada;\n      z-index: 12;\n      pointer-events: none;\n    }\n    .navy-border {\n      position: absolute;\n      left: 72px;\n      top: 60px;\n      width: 954px;\n      height: 558px;\n      border: 10px solid #0b3c5d;\n      z-index: 13;\n      pointer-events: none;\n    }\n    .inner-border {\n      position: absolute;\n      left: 94px;\n      top: 82px;\n      width: 910px;\n      height: 514px;\n      border: 4px solid #d5d5d5;\n      z-index: 14;\n      pointer-events: none;\n    }\n    .thin-inner-border {\n      position: absolute;\n      left: 106px;\n      top: 94px;\n      width: 886px;\n      height: 490px;\n      border: 1px solid #eeeeee;\n      z-index: 14;\n      pointer-events: none;\n    }\n\n    .content {\n      position: absolute;\n      left: 138px;\n      top: 96px;\n      width: 824px;\n      height: 486px;\n      z-index: 20;\n      text-align: center;\n      overflow: hidden;\n      padding: 0 28px;\n    }\n    .title {\n      margin: 0 auto;\n      max-width: 760px;\n      font-size: 54px;\n      line-height: 0.92;\n      font-weight: 500;\n      letter-spacing: 12px;\n      text-transform: uppercase;\n      color: #252525;\n      overflow-wrap: anywhere;\n    }\n    .subtitle {\n      margin-top: 8px;\n      font-size: 24px;\n      line-height: 1.1;\n      font-weight: 500;\n      text-transform: uppercase;\n      letter-spacing: 1px;\n      color: #222222;\n      overflow-wrap: anywhere;\n    }\n    .ornament {\n      margin: 20px auto 8px;\n      width: 86px;\n      height: 16px;\n      position: relative;\n    }\n    .ornament:before,\n    .ornament:after {\n      content: \"\";\n      position: absolute;\n      top: 6px;\n      width: 28px;\n      height: 1px;\n      background: #c8c8c8;\n    }\n    .ornament:before { left: 0; }\n    .ornament:after { right: 0; }\n    .diamond {\n      position: absolute;\n      top: 3px;\n      width: 10px;\n      height: 10px;\n      transform: rotate(45deg);\n    }\n    .diamond.d1 { left: 33px; background: #ffc943; }\n    .diamond.d2 { left: 46px; background: #0d557d; }\n    .presented {\n      max-width: 620px;\n      margin: 0 auto;\n      font-family: Arial, Helvetica, sans-serif;\n      font-size: 12px;\n      line-height: 1.35;\n      font-weight: 700;\n      color: #333333;\n      overflow-wrap: anywhere;\n    }\n    .recipient {\n      max-width: 760px;\n      margin: 12px auto 10px;\n      font-family: 'Brush Script MT', 'Segoe Script', cursive;\n      font-size: 64px;\n      line-height: 1;\n      font-weight: 400;\n      color: #0f0f0f;\n      overflow-wrap: anywhere;\n    }\n    .description {\n      max-width: 590px;\n      margin: 0 auto;\n      font-family: Arial, Helvetica, sans-serif;\n      font-size: 12px;\n      line-height: 1.45;\n      font-weight: 600;\n      color: #3d3d3d;\n      overflow-wrap: anywhere;\n    }\n\n    .seal-wrap {\n      position: relative;\n      width: 96px;\n      height: 114px;\n      margin: 18px auto 0;\n    }\n    .seal-ribbon-left,\n    .seal-ribbon-right {\n      position: absolute;\n      top: 62px;\n      width: 25px;\n      height: 58px;\n      background: #ffc943;\n      z-index: 1;\n    }\n    .seal-ribbon-left {\n      left: 26px;\n      transform: rotate(10deg);\n      clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);\n    }\n    .seal-ribbon-right {\n      right: 26px;\n      transform: rotate(-10deg);\n      clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);\n    }\n    .seal {\n      position: absolute;\n      left: 13px;\n      top: 0;\n      width: 70px;\n      height: 70px;\n      border-radius: 50%;\n      background: #0b3c5d;\n      border: 4px solid #ffc943;\n      box-shadow: inset 0 0 0 3px #ffffff, inset 0 0 0 6px #0b3c5d;\n      display: flex;\n      align-items: center;\n      justify-content: center;\n      padding: 12px;\n      z-index: 2;\n      color: #ffffff;\n      font-family: Arial, Helvetica, sans-serif;\n      font-size: 9px;\n      line-height: 1.05;\n      font-weight: 800;\n      letter-spacing: .3px;\n      text-transform: uppercase;\n      text-align: center;\n      overflow: hidden;\n      overflow-wrap: anywhere;\n    }\n\n    .signatures {\n      position: absolute;\n      left: 64px;\n      right: 64px;\n      bottom: 38px;\n      display: flex;\n      align-items: flex-end;\n      justify-content: space-between;\n      z-index: 24;\n      pointer-events: none;\n    }\n    .signature-block {\n      width: 215px;\n      text-align: center;\n      font-family: Arial, Helvetica, sans-serif;\n      color: #1f1f1f;\n      overflow: hidden;\n    }\n    .signature-line {\n      height: 1px;\n      background: #0b3c5d;\n      width: 205px;\n      margin: 0 auto 7px;\n    }\n    .signature-name {\n      font-size: 11px;\n      line-height: 1.25;\n      font-weight: 700;\n      overflow-wrap: anywhere;\n    }\n    .signature-title {\n      font-size: 10px;\n      line-height: 1.25;\n      margin-top: 1px;\n      overflow-wrap: anywhere;\n    }\n  </style>\n</head>\n<body>\n  <div class=\"template-root\">\n    <div class=\"certificate\">\n      <div class=\"top-navy\"></div>\n      <div class=\"top-gold\"></div>\n      <div class=\"top-orange\"></div>\n      <div class=\"right-navy\"></div>\n      <div class=\"right-blue-stripe\"></div>\n      <div class=\"right-gold-stripe\"></div>\n      <div class=\"right-orange-stripe\"></div>\n      <div class=\"left-navy\"></div>\n      <div class=\"left-blue-one\"></div>\n      <div class=\"left-blue-two\"></div>\n      <div class=\"left-gold-band\"></div>\n      <div class=\"left-orange-band\"></div>\n      <div class=\"bottom-navy\"></div>\n      <div class=\"bottom-gold\"></div>\n      <div class=\"bottom-orange\"></div>\n      <div class=\"bottom-blue-accent\"></div>\n      <div class=\"bottom-white-one\"></div>\n      <div class=\"bottom-white-two\"></div>\n\n      <div class=\"white-field\">\n        <div class=\"soft-triangle-left\"></div>\n        <div class=\"soft-triangle-right\"></div>\n      </div>\n      <div class=\"outer-border\"></div>\n      <div class=\"navy-border\"></div>\n      <div class=\"inner-border\"></div>\n      <div class=\"thin-inner-border\"></div>\n\n      <main class=\"content\">\n        <h1 class=\"title\">{{certificateTitle}}</h1>\n        <div class=\"subtitle\">{{certificateSubtitle}}</div>\n        <div class=\"ornament\"><span class=\"diamond d1\"></span><span class=\"diamond d2\"></span></div>\n        <div class=\"presented\">{{presentedToText}}</div>\n        <div class=\"recipient\">{{recipientName}}</div>\n        <p class=\"description\">{{achievementDescription}}</p>\n\n        <div class=\"seal-wrap\" aria-hidden=\"true\">\n          <div class=\"seal-ribbon-left\"></div>\n          <div class=\"seal-ribbon-right\"></div>\n          <div class=\"seal\">{{awardSealText}}</div>\n        </div>\n      </main>\n\n      <div class=\"signatures\">\n        <div class=\"signature-block\">\n          <div class=\"signature-line\"></div>\n          <div class=\"signature-name\">{{leftSignatureName}}</div>\n          <div class=\"signature-title\">{{leftSignatureTitle}}</div>\n        </div>\n        <div class=\"signature-block\">\n          <div class=\"signature-line\"></div>\n          <div class=\"signature-name\">{{rightSignatureName}}</div>\n          <div class=\"signature-title\">{{rightSignatureTitle}}</div>\n        </div>\n      </div>\n    </div>\n  </div>\n</body>\n</html>",
+      "version": 1,
+      "is_public": true,
+      "is_active": true,
+      "created_by": 1,
+      "updated_by": 1,
+      "created_at": "2026-06-25T01:27:25.583Z",
+      "updated_at": "2026-06-25T01:27:25.583Z",
+      "is_deleted": false,
+      "deleted_at": null,
+      "deleted_by": null
+    }
+  ],
+  "document_template_fields": [
+    {
+      "id": 10,
+      "template_id": 2,
+      "field_name": "certificateTitle",
+      "label": "Certificate Title",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 0,
+      "created_at": "2026-06-25T01:27:25.583Z"
+    },
+    {
+      "id": 11,
+      "template_id": 2,
+      "field_name": "certificateSubtitle",
+      "label": "Certificate Subtitle",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 1,
+      "created_at": "2026-06-25T01:27:25.583Z"
+    },
+    {
+      "id": 12,
+      "template_id": 2,
+      "field_name": "presentedToText",
+      "label": "Presented To Text",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 2,
+      "created_at": "2026-06-25T01:27:25.583Z"
+    },
+    {
+      "id": 13,
+      "template_id": 2,
+      "field_name": "recipientName",
+      "label": "Recipient Name",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 3,
+      "created_at": "2026-06-25T01:27:25.583Z"
+    },
+    {
+      "id": 14,
+      "template_id": 2,
+      "field_name": "achievementDescription",
+      "label": "Achievement Description",
+      "field_type": "textarea",
+      "is_required": true,
+      "sort_order": 4,
+      "created_at": "2026-06-25T01:27:25.583Z"
+    },
+    {
+      "id": 15,
+      "template_id": 2,
+      "field_name": "awardSealText",
+      "label": "Award Seal Text",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 5,
+      "created_at": "2026-06-25T01:27:25.583Z"
+    },
+    {
+      "id": 16,
+      "template_id": 2,
+      "field_name": "leftSignatureName",
+      "label": "Left Signature Name",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 6,
+      "created_at": "2026-06-25T01:27:25.583Z"
+    },
+    {
+      "id": 17,
+      "template_id": 2,
+      "field_name": "leftSignatureTitle",
+      "label": "Left Signature Title",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 7,
+      "created_at": "2026-06-25T01:27:25.583Z"
+    },
+    {
+      "id": 18,
+      "template_id": 2,
+      "field_name": "rightSignatureName",
+      "label": "Right Signature Name",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 8,
+      "created_at": "2026-06-25T01:27:25.583Z"
+    },
+    {
+      "id": 19,
+      "template_id": 2,
+      "field_name": "rightSignatureTitle",
+      "label": "Right Signature Title",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 9,
+      "created_at": "2026-06-25T01:27:25.583Z"
+    }
+  ],
+  "document_template_field_mappings": [],
+  "institution_templates": [
+    {
+      "id": 3,
+      "institution_id": 8,
+      "template_id": 2,
+      "is_default": false,
+      "is_active": true,
+      "assigned_by": 4,
+      "assigned_at": "2026-06-25T01:28:38.264Z"
+    },
+    {
+      "id": 4,
+      "institution_id": 5,
+      "template_id": 2,
+      "is_default": false,
+      "is_active": true,
+      "assigned_by": 4,
+      "assigned_at": "2026-06-25T01:29:25.009Z"
+    },
+    {
+      "id": 5,
+      "institution_id": 6,
+      "template_id": 2,
+      "is_default": false,
+      "is_active": true,
+      "assigned_by": 2,
+      "assigned_at": "2026-07-04T04:37:09.766Z"
+    }
+  ],
+  "institution_template_defaults": []
+}

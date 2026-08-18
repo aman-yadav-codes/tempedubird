@@ -1,0 +1,14 @@
+{
+  "name": "edubird-cron-jobs",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone cron worker for EduBird scheduled jobs.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/worker.js",
+    "check": "node --check src/worker.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

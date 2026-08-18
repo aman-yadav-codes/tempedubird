@@ -1,0 +1,3 @@
+ALTER TABLE student_documents
+ADD COLUMN IF NOT EXISTS public_id TEXT,
+ADD COLUMN IF NOT EXISTS resource_type VARCHAR(50);

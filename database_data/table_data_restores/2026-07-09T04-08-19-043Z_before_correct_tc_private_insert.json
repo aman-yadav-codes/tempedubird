@@ -1,0 +1,536 @@
+{
+  "document_templates": [
+    {
+      "id": 2,
+      "card_category_id": 3,
+      "name": "Nepal CBSE School Transfer Certificate",
+      "thumbnail_url": "https://res.cloudinary.com/dxoat13ad/image/upload/v1781336946/document_templates/fwgpyizaqrtepv6rog3a.png",
+      "html_template": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>Transfer Certificate</title>\n  <style>\n    *{box-sizing:border-box} body{margin:0;background:#d8d8d8} .tc-root{width:1000px;height:1414px;background:#9ec4b1;padding:28px;font-family:Georgia,'Times New Roman',serif;color:#111} .paper{position:relative;width:944px;height:1358px;background:#f8f8f4;border:2px solid #2f6e55;margin:0 auto;padding:20px 40px 30px 40px;overflow:hidden} .masthead{display:grid;grid-template-columns:150px 1fr 245px;column-gap:18px;align-items:start;height:164px} .logo{width:132px;height:132px;object-fit:contain;margin-top:0} .school-title{padding-top:12px;line-height:1.05}.school-title .name{font-family:'Arial Narrow',Impact,sans-serif;font-size:38px;font-weight:900;letter-spacing:1px;white-space:nowrap}.green{color:#04520f}.red{color:#b20e06}.addr{font-family:Arial,Helvetica,sans-serif;font-size:22px;line-height:1.28;margin-top:4px}.edu{text-align:right;font-family:Arial,Helvetica,sans-serif;margin-top:0}.edu .brand{font-size:36px;font-weight:900;letter-spacing:-1px}.edu .site{font-size:16px;font-weight:700;margin-top:2px}.right-nos{position:absolute;right:40px;top:158px;width:275px;font-size:20px;font-weight:700}.no-row{display:flex;align-items:flex-end;margin:22px 0}.no-row span:first-child{width:130px}.no-line{flex:1;border-bottom:2px solid #222;text-align:center;font-family:Arial,Helvetica,sans-serif;font-weight:800;padding-bottom:2px}.serial{position:absolute;left:40px;top:230px;font-size:20px;font-weight:700}.serial .num{display:inline-block;margin-left:22px;font-family:'Courier New',monospace;font-size:34px;letter-spacing:4px;font-weight:700}.title-block{position:absolute;left:0;right:0;top:238px;text-align:center}.seal{position:absolute;left:50%;top:-58px;transform:translateX(-50%);width:116px;height:116px;object-fit:contain;opacity:.86}.tc-title{position:relative;display:inline-block;font-family:'Old English Text MT','Blackadder ITC',Georgia,serif;font-size:50px;color:#b3120c;font-weight:700;letter-spacing:1px;text-shadow:.5px .5px #5b0000}.ornament{width:430px;height:18px;border-top:3px solid #1b1b12;margin:4px auto 0;position:relative}.ornament:after{content:'❧';position:absolute;left:50%;top:-18px;transform:translateX(-50%);font-size:34px;color:#184719;background:#f8f8f4;padding:0 12px}.form{position:absolute;left:40px;right:40px;top:352px;font-size:18px;line-height:1.12}.row{display:flex;align-items:flex-end;min-height:28px;margin:1px 0}.num{width:38px;font-weight:700;font-size:20px}.label{font-weight:700;white-space:nowrap}.small{font-size:16px}.fill{flex:1;border-bottom:2px dotted #262626;min-height:22px;padding:0 7px 1px 7px;font-family:Arial,Helvetica,sans-serif;font-weight:800;text-transform:uppercase;letter-spacing:.4px;text-align:left}.center{text-align:center}.date-row .label{margin-right:10px}.date-row .date-label{font-weight:700;margin:0 8px 0 16px}.date-fill{width:160px;flex:0 0 160px;text-align:center}.hint{font-size:13px;font-family:Arial,Helvetica,sans-serif;font-weight:700;text-align:center;margin-top:1px}.hint-wrap{display:inline-block;width:160px}.subjects{display:grid;grid-template-columns:1fr 1fr;column-gap:86px;margin-left:38px;margin-top:4px;margin-bottom:5px}.subject-line{display:flex;align-items:flex-end;height:31px}.subject-line .sno{font-weight:700;width:45px}.subject-line .fill{height:22px}.long-row{display:block;margin-top:3px}.long-row .firstline{display:flex;align-items:flex-end}.long-row .continued{border-bottom:2px dotted #262626;height:25px;margin-left:0;padding-left:110px;font-family:Arial,Helvetica,sans-serif;font-weight:800;text-transform:uppercase}.footer{position:absolute;left:40px;right:40px;bottom:24px;height:105px;display:grid;grid-template-columns:1fr 1fr 1fr;column-gap:65px;align-items:end;text-align:center}.sigbox{position:relative;height:92px}.sigbox img{position:absolute;left:50%;transform:translateX(-50%);bottom:30px;max-width:185px;max-height:72px;object-fit:contain}.sigline{position:absolute;left:0;right:0;bottom:30px;border-bottom:2px solid #111;height:1px}.siglabel{position:absolute;left:0;right:0;bottom:0;font-size:18px;font-weight:700}.principal-stamp{position:absolute;right:-8px;bottom:4px;width:230px;height:66px;border:0;color:#1a198f;font-family:Arial,Helvetica,sans-serif;font-weight:800;font-size:16px;line-height:1.1;transform:rotate(-3deg);opacity:.9}.principal-stamp .big{font-size:27px;letter-spacing:1px}.principal-stamp .school{font-size:20px;text-decoration:underline}.moon{position:absolute;left:9px;top:472px;width:22px;height:22px;border-radius:50%;background:#7c3d1d;box-shadow:8px -2px 0 #f8f8f4}.dotmark{position:absolute;left:-5px;top:842px;width:28px;height:28px;border-radius:50%;background:#111}.dotmark:after{content:'';position:absolute;left:8px;top:3px;width:13px;height:6px;background:#b8b33f;border-radius:50%;transform:rotate(-28deg)}\n  </style>\n</head>\n<body>\n  <div class=\"tc-root\">\n    <div class=\"paper\">\n      <div class=\"masthead\">\n        <img class=\"logo\" src=\"{{schoolLogo}}\" alt=\"School logo\">\n        <div class=\"school-title\">\n          <div class=\"name\"><span class=\"green\">{{schoolNamePrimary}}</span> <span class=\"red\">{{schoolNameBranch}}</span></div>\n          <div class=\"addr\">{{schoolAddressLine}}<br>Phone: {{schoolPhone}}<br>E-mail: {{schoolEmail}}</div>\n        </div>\n        <div class=\"edu\"><div class=\"brand\">{{educationBrand}}</div><div class=\"site\">{{educationWebsite}}</div></div>\n      </div>\n      <div class=\"right-nos\">\n        <div class=\"no-row\"><span>School No. :</span><div class=\"no-line\">{{schoolNo}}</div></div>\n        <div class=\"no-row\"><span>Affiliation No. :</span><div class=\"no-line\">{{affiliationNo}}</div></div>\n        <div class=\"no-row\"><span>Admission No. :</span><div class=\"no-line\">{{admissionNo}}</div></div>\n      </div>\n      <div class=\"serial\">Serial No. : <span class=\"num\">{{serialNo}}</span></div>\n      <div class=\"title-block\">\n        <img class=\"seal\" src=\"{{schoolSeal}}\" alt=\"School seal\">\n        <div class=\"tc-title\">Transfer Certificate</div>\n        <div class=\"ornament\"></div>\n      </div>\n      <div class=\"moon\"></div><div class=\"dotmark\"></div>\n      <div class=\"form\">\n        <div class=\"row\"><div class=\"num\">1.</div><div class=\"label\">Name of the Student :</div><div class=\"fill center\">{{studentName}}</div></div>\n        <div class=\"row\"><div class=\"num\">2.</div><div class=\"label\">Father's/Mother's/Guardian's Name :</div><div class=\"fill center\">{{guardianName}}</div></div>\n        <div class=\"row\"><div class=\"num\">3.</div><div class=\"label\">Nationality :</div><div class=\"fill\">{{nationality}}</div></div>\n        <div class=\"row\"><div class=\"num\">4.</div><div class=\"label\">Whether the candidate belongs to Scheduled Caste or Scheduled Tribe:</div><div class=\"fill center\">{{casteTribeStatus}}</div></div>\n        <div class=\"row\"><div class=\"num\">5.</div><div class=\"label\">Date of first admission in school with class :</div><div class=\"fill\">{{firstAdmissionDetails}}</div></div>\n        <div class=\"row date-row\"><div class=\"num\">6.</div><div class=\"label\">Date of Birth :</div><div class=\"date-label\">(A.D.)</div><div><div class=\"fill date-fill\">{{dateOfBirthAD}}</div><div class=\"hint\">(DD/MM/YY)</div></div><div class=\"date-label\">(B.S.)</div><div><div class=\"fill date-fill\">{{dateOfBirthBS}}</div><div class=\"hint\">(DD/MM/YY)</div></div></div>\n        <div class=\"row\"><div class=\"num\">7.</div><div class=\"label\">Class in which the pupil last studied <span class=\"small\">(in figures)</span>:</div><div class=\"fill\">{{lastClassStudied}}</div></div>\n        <div class=\"row\"><div class=\"num\">8.</div><div class=\"label\">School/Board Annual Examination last taken with result :</div><div class=\"fill\">{{lastExamResult}}</div></div>\n        <div class=\"row\"><div class=\"num\">9.</div><div class=\"label\">Whether failed, if so once/twice in the same class :</div><div class=\"fill\">{{failedStatus}}</div></div>\n        <div class=\"row\"><div class=\"num\">10.</div><div class=\"label\">Subject studied :</div></div>\n        <div class=\"subjects\">\n          <div>\n            <div class=\"subject-line\"><div class=\"sno\">(1)</div><div class=\"fill\">{{subject1}}</div></div>\n            <div class=\"subject-line\"><div class=\"sno\">(3)</div><div class=\"fill\">{{subject3}}</div></div>\n            <div class=\"subject-line\"><div class=\"sno\">(5)</div><div class=\"fill\">{{subject5}}</div></div>\n            <div class=\"subject-line\"><div class=\"sno\">(7)</div><div class=\"fill\">{{subject7}}</div></div>\n          </div>\n          <div>\n            <div class=\"subject-line\"><div class=\"sno\">(2)</div><div class=\"fill\">{{subject2}}</div></div>\n            <div class=\"subject-line\"><div class=\"sno\">(4)</div><div class=\"fill\">{{subject4}}</div></div>\n            <div class=\"subject-line\"><div class=\"sno\">(6)</div><div class=\"fill\">{{subject6}}</div></div>\n            <div class=\"subject-line\"><div class=\"sno\">(8)</div><div class=\"fill\">{{subject8}}</div></div>\n          </div>\n        </div>\n        <div class=\"row\"><div class=\"num\">11.</div><div class=\"label\">Whether qualified for promotion to higher class, if so, to which class :</div><div class=\"fill center\">{{promotionStatus}}</div></div>\n        <div class=\"row\"><div class=\"num\">12.</div><div class=\"label\">Month up to which the student has paid schools dues:</div><div class=\"fill\">{{duesPaidUpto}}</div></div>\n        <div class=\"row\"><div class=\"num\">13.</div><div class=\"label\">Any fee concession availed of, if so, the nature of such concessions:</div><div class=\"fill\">{{feeConcession}}</div></div>\n        <div class=\"row\"><div class=\"num\">14.</div><div class=\"label\">Total number of school meetings:</div><div class=\"fill\">{{totalSchoolMeetings}}</div></div>\n        <div class=\"row\"><div class=\"num\">15.</div><div class=\"label\">Total number of school meetings present:</div><div class=\"fill\">{{meetingsPresent}}</div></div>\n        <div class=\"row\"><div class=\"num\">16.</div><div class=\"label\">Whether NCC cadet/ scout/ guide <span class=\"small\">(details may be given)</span>:</div><div class=\"fill\">{{nccScoutGuideDetails}}</div></div>\n        <div class=\"long-row\"><div class=\"firstline\"><div class=\"num\">17.</div><div class=\"label\">Games played or extracurricular activities in which the pupil usually took part <span class=\"small\">(*mention achievement level there in)</span>:</div></div><div class=\"continued\">{{activities}}</div></div>\n        <div class=\"row\"><div class=\"num\">18.</div><div class=\"label\">General conduct :</div><div class=\"fill\">{{generalConduct}}</div></div>\n        <div class=\"row date-row\"><div class=\"num\">19.</div><div class=\"label\">Date of application for certificate</div><div class=\"date-label\">(A.D.)</div><div><div class=\"fill date-fill\">{{applicationDateAD}}</div><div class=\"hint\">(DD/MM/YY)</div></div><div class=\"date-label\">(B.S.)</div><div><div class=\"fill date-fill\">{{applicationDateBS}}</div><div class=\"hint\">(DD/MM/YY)</div></div></div>\n        <div class=\"row date-row\"><div class=\"num\">20.</div><div class=\"label\">Date of issue the certificate</div><div class=\"date-label\">(A.D.)</div><div><div class=\"fill date-fill\">{{issueDateAD}}</div><div class=\"hint\">(DD/MM/YY)</div></div><div class=\"date-label\">(B.S.)</div><div><div class=\"fill date-fill\">{{issueDateBS}}</div><div class=\"hint\">(DD/MM/YY)</div></div></div>\n        <div class=\"row\"><div class=\"num\">21.</div><div class=\"label\">Reasons for leaving the school :</div><div class=\"fill\">{{leavingReason}}</div></div>\n        <div class=\"row\"><div class=\"num\">22.</div><div class=\"label\">Any other remarks:</div><div class=\"fill\">{{otherRemarks}}</div></div>\n      </div>\n      <div class=\"footer\">\n        <div class=\"sigbox\"><img src=\"{{preparedBySignature}}\" alt=\"Prepared by signature\"><div class=\"sigline\"></div><div class=\"siglabel\">Prepared by</div></div>\n        <div class=\"sigbox\"><img src=\"{{verifiedBySignature}}\" alt=\"Verified by signature\"><div class=\"sigline\"></div><div class=\"siglabel\">Verified by</div></div>\n        <div class=\"sigbox\"><img src=\"{{principalSignature}}\" alt=\"Principal signature\"><div class=\"sigline\"></div><div class=\"principal-stamp\"><div class=\"big\">PRINCIPAL</div><div class=\"school\">{{principalStampSchoolName}}</div><div>{{principalStampAddress}}</div></div><div class=\"siglabel\">Principal</div></div>\n      </div>\n    </div>\n  </div>\n</body>\n</html>",
+      "version": 1,
+      "is_public": false,
+      "is_active": true,
+      "created_by": 1,
+      "updated_by": 1,
+      "created_at": "2026-06-13T07:49:08.318Z",
+      "updated_at": "2026-07-08T22:36:19.848Z",
+      "is_deleted": false,
+      "deleted_at": null,
+      "deleted_by": null
+    }
+  ],
+  "document_template_fields": [
+    {
+      "id": 10,
+      "template_id": 2,
+      "field_name": "schoolLogo",
+      "label": "School Logo",
+      "field_type": "image",
+      "is_required": false,
+      "sort_order": 0,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 11,
+      "template_id": 2,
+      "field_name": "schoolNamePrimary",
+      "label": "School Name Primary Text",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 1,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 12,
+      "template_id": 2,
+      "field_name": "schoolNameBranch",
+      "label": "School Branch Name",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 2,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 13,
+      "template_id": 2,
+      "field_name": "schoolAddressLine",
+      "label": "School Address Line",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 3,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 14,
+      "template_id": 2,
+      "field_name": "schoolPhone",
+      "label": "School Phone Numbers",
+      "field_type": "phone",
+      "is_required": true,
+      "sort_order": 4,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 15,
+      "template_id": 2,
+      "field_name": "schoolEmail",
+      "label": "School Email",
+      "field_type": "email",
+      "is_required": true,
+      "sort_order": 5,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 16,
+      "template_id": 2,
+      "field_name": "educationBrand",
+      "label": "Education Group Brand",
+      "field_type": "text",
+      "is_required": false,
+      "sort_order": 6,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 17,
+      "template_id": 2,
+      "field_name": "educationWebsite",
+      "label": "Education Group Website",
+      "field_type": "text",
+      "is_required": false,
+      "sort_order": 7,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 18,
+      "template_id": 2,
+      "field_name": "schoolNo",
+      "label": "School Number",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 8,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 19,
+      "template_id": 2,
+      "field_name": "affiliationNo",
+      "label": "Affiliation Number",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 9,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 20,
+      "template_id": 2,
+      "field_name": "admissionNo",
+      "label": "Admission Number",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 10,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 21,
+      "template_id": 2,
+      "field_name": "serialNo",
+      "label": "Serial Number",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 11,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 22,
+      "template_id": 2,
+      "field_name": "schoolSeal",
+      "label": "Center School Seal",
+      "field_type": "image",
+      "is_required": false,
+      "sort_order": 12,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 23,
+      "template_id": 2,
+      "field_name": "studentName",
+      "label": "Name of the Student",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 13,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 24,
+      "template_id": 2,
+      "field_name": "guardianName",
+      "label": "Father's/Mother's/Guardian's Name",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 14,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 25,
+      "template_id": 2,
+      "field_name": "nationality",
+      "label": "Nationality",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 15,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 26,
+      "template_id": 2,
+      "field_name": "casteTribeStatus",
+      "label": "Scheduled Caste or Scheduled Tribe Status",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 16,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 27,
+      "template_id": 2,
+      "field_name": "firstAdmissionDetails",
+      "label": "Date of First Admission with Class",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 17,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 28,
+      "template_id": 2,
+      "field_name": "dateOfBirthAD",
+      "label": "Date of Birth A.D.",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 18,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 29,
+      "template_id": 2,
+      "field_name": "dateOfBirthBS",
+      "label": "Date of Birth B.S.",
+      "field_type": "text",
+      "is_required": false,
+      "sort_order": 19,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 30,
+      "template_id": 2,
+      "field_name": "lastClassStudied",
+      "label": "Last Class Studied",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 20,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 31,
+      "template_id": 2,
+      "field_name": "lastExamResult",
+      "label": "Last Examination Taken with Result",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 21,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 32,
+      "template_id": 2,
+      "field_name": "failedStatus",
+      "label": "Failed Status",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 22,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 33,
+      "template_id": 2,
+      "field_name": "subject1",
+      "label": "Subject 1",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 23,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 34,
+      "template_id": 2,
+      "field_name": "subject2",
+      "label": "Subject 2",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 24,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 35,
+      "template_id": 2,
+      "field_name": "subject3",
+      "label": "Subject 3",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 25,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 36,
+      "template_id": 2,
+      "field_name": "subject4",
+      "label": "Subject 4",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 26,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 37,
+      "template_id": 2,
+      "field_name": "subject5",
+      "label": "Subject 5",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 27,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 38,
+      "template_id": 2,
+      "field_name": "subject6",
+      "label": "Subject 6",
+      "field_type": "text",
+      "is_required": false,
+      "sort_order": 28,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 39,
+      "template_id": 2,
+      "field_name": "subject7",
+      "label": "Subject 7",
+      "field_type": "text",
+      "is_required": false,
+      "sort_order": 29,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 40,
+      "template_id": 2,
+      "field_name": "subject8",
+      "label": "Subject 8",
+      "field_type": "text",
+      "is_required": false,
+      "sort_order": 30,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 41,
+      "template_id": 2,
+      "field_name": "promotionStatus",
+      "label": "Promotion Status",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 31,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 42,
+      "template_id": 2,
+      "field_name": "duesPaidUpto",
+      "label": "School Dues Paid Up To",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 32,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 43,
+      "template_id": 2,
+      "field_name": "feeConcession",
+      "label": "Fee Concession Details",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 33,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 44,
+      "template_id": 2,
+      "field_name": "totalSchoolMeetings",
+      "label": "Total Number of School Meetings",
+      "field_type": "text",
+      "is_required": false,
+      "sort_order": 34,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 45,
+      "template_id": 2,
+      "field_name": "meetingsPresent",
+      "label": "Total Number of Meetings Present",
+      "field_type": "text",
+      "is_required": false,
+      "sort_order": 35,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 46,
+      "template_id": 2,
+      "field_name": "nccScoutGuideDetails",
+      "label": "NCC Cadet / Scout / Guide Details",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 36,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 47,
+      "template_id": 2,
+      "field_name": "activities",
+      "label": "Games and Extracurricular Activities",
+      "field_type": "textarea",
+      "is_required": true,
+      "sort_order": 37,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 48,
+      "template_id": 2,
+      "field_name": "generalConduct",
+      "label": "General Conduct",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 38,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 49,
+      "template_id": 2,
+      "field_name": "applicationDateAD",
+      "label": "Certificate Application Date A.D.",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 39,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 50,
+      "template_id": 2,
+      "field_name": "applicationDateBS",
+      "label": "Certificate Application Date B.S.",
+      "field_type": "text",
+      "is_required": false,
+      "sort_order": 40,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 51,
+      "template_id": 2,
+      "field_name": "issueDateAD",
+      "label": "Certificate Issue Date A.D.",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 41,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 52,
+      "template_id": 2,
+      "field_name": "issueDateBS",
+      "label": "Certificate Issue Date B.S.",
+      "field_type": "text",
+      "is_required": false,
+      "sort_order": 42,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 53,
+      "template_id": 2,
+      "field_name": "leavingReason",
+      "label": "Reason for Leaving the School",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 43,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 54,
+      "template_id": 2,
+      "field_name": "otherRemarks",
+      "label": "Any Other Remarks",
+      "field_type": "text",
+      "is_required": false,
+      "sort_order": 44,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 55,
+      "template_id": 2,
+      "field_name": "preparedBySignature",
+      "label": "Prepared By Signature",
+      "field_type": "image",
+      "is_required": false,
+      "sort_order": 45,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 56,
+      "template_id": 2,
+      "field_name": "verifiedBySignature",
+      "label": "Verified By Signature",
+      "field_type": "image",
+      "is_required": false,
+      "sort_order": 46,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 57,
+      "template_id": 2,
+      "field_name": "principalSignature",
+      "label": "Principal Signature",
+      "field_type": "image",
+      "is_required": false,
+      "sort_order": 47,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 58,
+      "template_id": 2,
+      "field_name": "principalStampSchoolName",
+      "label": "Principal Stamp School Name",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 48,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    },
+    {
+      "id": 59,
+      "template_id": 2,
+      "field_name": "principalStampAddress",
+      "label": "Principal Stamp Address",
+      "field_type": "text",
+      "is_required": true,
+      "sort_order": 49,
+      "created_at": "2026-06-13T07:49:08.318Z"
+    }
+  ],
+  "document_template_field_mappings": [],
+  "institution_templates": [
+    {
+      "id": 3,
+      "institution_id": 5,
+      "template_id": 2,
+      "is_default": false,
+      "is_active": false,
+      "assigned_by": 1,
+      "assigned_at": "2026-06-13T11:48:03.990Z"
+    }
+  ],
+  "institution_template_defaults": []
+}

@@ -1,0 +1,150 @@
+@import "../globals.css";
+
+/*
+  Admin-only theme overrides.
+  Applied only under .admin-theme wrapper in app/admin/layout.tsx
+*/
+
+/*
+  Important:
+  shadcn/Tailwind uses CSS variables (bg-background, text-foreground, etc).
+  But the Tailwind theme mapping is generated from the base variables.
+
+  To ensure admin light mode stays correct, we explicitly override both:
+  - html[data-theme-scope="admin"] for light mode
+  - html[data-theme-scope="admin"].dark for dark mode
+*/
+
+html[data-theme-scope="admin"] {
+  /* Admin LIGHT */
+  --background: #F8FAFC;
+  --foreground: #0F172A;
+
+  --card: #FFFFFF;
+  --card-foreground: #0F172A;
+
+  --popover: #FFFFFF;
+  --popover-foreground: #0F172A;
+
+  --primary: #DC2626;
+  --primary-foreground: #FFFFFF;
+
+  --secondary: #F1F5F9;
+  --secondary-foreground: #0F172A;
+
+  --muted: #F1F5F9;
+  --muted-foreground: #64748B;
+
+  --accent: #EDE9E9;
+  --accent-foreground: #0F172A;
+
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --chat-flash-background: rgb(254 226 226);
+  --chat-flash-ring: rgb(220 38 38 / 0.28);
+
+  --border: #E2E8F0;
+  --input: #CBD5E1;
+  --ring: #DC2626;
+
+  --chart-1: #DC2626;
+  --chart-2: #FB7185;
+  --chart-3: #F43F5E;
+  --chart-4: #9CA3AF;
+  --chart-5: #64748B;
+
+  /* Ensure table row hover/selected (uses bg-muted via shadcn table) */
+  --muted: #F1F5F9;
+
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #0F172A;
+  --sidebar-primary: #DC2626;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F1F5F9;
+  --sidebar-accent-foreground: #0F172A;
+  --sidebar-border: #E2E8F0;
+  --sidebar-ring: #DC2626;
+}
+
+/* redundant muted overrides removed */
+html[data-theme-scope="admin"].dark {
+  /* Admin DARK */
+  --background: #0B0F19;
+  --foreground: #F8FAFC;
+
+  --card: #151B23;
+  --card-foreground: #F8FAFC;
+
+  --popover: #151B23;
+  --popover-foreground: #F8FAFC;
+
+  --primary: #DC2626;
+  --primary-foreground: #FFFFFF;
+
+  --secondary: #1E293B;
+  --secondary-foreground: #F8FAFC;
+
+  --muted: #111827;
+  --muted-foreground: #94A3B8;
+
+  --accent: #1F2937;
+  --accent-foreground: #F8FAFC;
+
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --chat-flash-background: rgb(127 29 29 / 0.72);
+  --chat-flash-ring: rgb(239 68 68 / 0.36);
+
+  --border: #1E293B;
+  --input: #334155;
+  --ring: #DC2626;
+
+  --chart-1: #EF4444;
+  --chart-2: #FB7185;
+  --chart-3: #F43F5E;
+  --chart-4: #9CA3AF;
+  --chart-5: #64748B;
+
+  --sidebar: #0B0F19;
+  --sidebar-foreground: #E2E8F0;
+  --sidebar-primary: #DC2626;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #1F2937;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #1E293B;
+  --sidebar-ring: #DC2626;
+}
+
+.notification-bell-active .notification-bell-icon {
+  transform-origin: 50% 0%;
+  animation: notification-bell-ring 2.4s ease-in-out infinite;
+}
+
+@keyframes notification-bell-ring {
+  0%,
+  72%,
+  100% {
+    transform: rotate(0deg);
+  }
+  76% {
+    transform: rotate(13deg);
+  }
+  80% {
+    transform: rotate(-11deg);
+  }
+  84% {
+    transform: rotate(8deg);
+  }
+  88% {
+    transform: rotate(-6deg);
+  }
+  92% {
+    transform: rotate(3deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-bell-active .notification-bell-icon {
+    animation: none;
+  }
+}
