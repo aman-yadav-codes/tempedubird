@@ -270,6 +270,19 @@ export default function SalesEnquiriesPage() {
         }
     };
 
+    const uniquePrograms = useMemo(() => {
+        const seen = new Set<string>();
+        const list: Array<{ id: number; title: string }> = [];
+        for (const p of programsOptions) {
+            const cleanTitle = p.title?.trim();
+            if (cleanTitle && !seen.has(cleanTitle)) {
+                seen.add(cleanTitle);
+                list.push({ id: p.id, title: cleanTitle });
+            }
+        }
+        return list;
+    }, [programsOptions]);
+
     const displayedEnquiries = useMemo(() => {
         if (timeframeFilter === "all") return enquiries;
         return enquiries.filter((e) => {
@@ -502,53 +515,56 @@ export default function SalesEnquiriesPage() {
                             <DialogDescription>Add a new walk-in, phone call, or online admission inquiry.</DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-3 sm:grid-cols-2">
-                            <div className="space-y-1.5 sm:col-span-1">
+                            <div className="space-y-1.5 sm:col-span-1 min-w-0">
                                 <label className="text-xs font-semibold">Student / Applicant Name *</label>
                                 <Input
                                     value={formName}
                                     onChange={(e) => setFormName(e.target.value)}
                                     placeholder="e.g. Rahul Verma"
+                                    className="text-xs"
                                 />
                             </div>
-                            <div className="space-y-1.5 sm:col-span-1">
+                            <div className="space-y-1.5 sm:col-span-1 min-w-0">
                                 <label className="text-xs font-semibold">Contact Phone Number *</label>
                                 <Input
                                     value={formPhone}
                                     onChange={(e) => setFormPhone(e.target.value)}
                                     placeholder="+91 98765 43210"
+                                    className="text-xs"
                                 />
                             </div>
-                            <div className="space-y-1.5 sm:col-span-1">
+                            <div className="space-y-1.5 sm:col-span-1 min-w-0">
                                 <label className="text-xs font-semibold">Email Address</label>
                                 <Input
                                     value={formEmail}
                                     onChange={(e) => setFormEmail(e.target.value)}
                                     placeholder="applicant@example.com"
+                                    className="text-xs"
                                 />
                             </div>
-                            <div className="space-y-1.5 sm:col-span-1">
+                            <div className="space-y-1.5 sm:col-span-1 min-w-0">
                                 <label className="text-xs font-semibold">Preferred Program / Class</label>
-                                <Select value={formProgram} onValueChange={setFormProgram}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder={loadingPrograms ? "Loading programs..." : "Select Program / Course"} />
+                                <Select value={formProgram} onValueChange={(val) => setFormProgram(val)}>
+                                    <SelectTrigger className="w-full text-xs truncate">
+                                        <SelectValue placeholder={loadingPrograms ? "Loading programs..." : "Select Single Program"} />
                                     </SelectTrigger>
-                                    <SelectContent>
-                                        {programsOptions.length > 0 ? (
-                                            programsOptions.map((p) => (
-                                                <SelectItem key={p.id} value={p.title}>
+                                    <SelectContent className="max-h-60 max-w-sm">
+                                        {uniquePrograms.length > 0 ? (
+                                            uniquePrograms.map((p) => (
+                                                <SelectItem key={p.id} value={p.title} className="text-xs truncate">
                                                     {p.title}
                                                 </SelectItem>
                                             ))
                                         ) : (
-                                            <SelectItem value="General Enquiry">General Enquiry</SelectItem>
+                                            <SelectItem value="General Enquiry" className="text-xs">General Enquiry</SelectItem>
                                         )}
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="space-y-1.5 sm:col-span-2">
+                            <div className="space-y-1.5 sm:col-span-2 min-w-0">
                                 <label className="text-xs font-semibold">Enquiry Source</label>
                                 <Select value={formSource} onValueChange={setFormSource}>
-                                    <SelectTrigger>
+                                    <SelectTrigger className="w-full text-xs">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>

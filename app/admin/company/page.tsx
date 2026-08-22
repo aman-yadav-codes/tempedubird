@@ -79,9 +79,12 @@ type FaqItem = {
 };
 
 const PAGE_TABS = [
-  { slug: "contact-us", label: "Contact Us & Branches", icon: Mail },
-  { slug: "hostels", label: "Hostel Facilities", icon: Building2 },
-  { slug: "libraries", label: "Library Resources", icon: BookOpen },
+  { slug: "faqs", label: "FAQs", icon: HelpCircle },
+  { slug: "privacy-policy", label: "Privacy Policy", icon: ShieldCheck },
+  { slug: "terms-and-conditions", label: "Terms & Conditions", icon: FileText },
+  { slug: "copyright-policy", label: "Copyright Policy", icon: Copyright },
+  { slug: "refund-policy", label: "Refund Policy", icon: RefreshCw },
+  { slug: "social-links", label: "Social Media Links", icon: Share2 },
 ];
 
 export default function AdminCompanyPage() {
@@ -93,7 +96,7 @@ export default function AdminCompanyPage() {
   const isInstAdmin = isInstitutionAdminUser(user);
   const canAccessCompany = isPlatformAdmin || isInstAdmin;
 
-  const tabFromUrl = searchParams.get("tab") || "contact-us";
+  const tabFromUrl = searchParams.get("tab") || "faqs";
   const [activeTab, setActiveTab] = useState<string>(tabFromUrl);
 
   const [loadingPages, setLoadingPages] = useState(true);
@@ -709,303 +712,6 @@ export default function AdminCompanyPage() {
                     </div>
                   </div>
 
-                  {/* Special Metadata for Contact Us: Multi-Branch & Location Contacts */}
-                  {tab.slug === "contact-us" && (() => {
-                    const currentBranches = Array.isArray(page.metadata?.branches) && page.metadata.branches.length > 0
-                      ? page.metadata.branches
-                      : [
-                          {
-                            id: "branch-1",
-                            name: "Main Headquarters / Campus",
-                            address: page.metadata?.address || "Orderly Bazar, Varanasi, UP, India",
-                            working_hours: page.metadata?.working_hours || "Monday - Saturday: 9:00 AM - 6:00 PM IST",
-                            emails: [
-                              { id: "e-1", title: "Support Email", email: page.metadata?.email || "support@edubird.com" }
-                            ],
-                            phones: [
-                              { id: "p-1", title: "General Helpline", number: page.metadata?.phone || "+91 1234567890", type: "phone" }
-                            ]
-                          }
-                        ];
-
-                    const updateBranches = (newBranches: any[]) => {
-                      handleMetaChange("contact-us", "branches", newBranches);
-                      if (newBranches.length > 0) {
-                        const first = newBranches[0];
-                        if (first.address) handleMetaChange("contact-us", "address", first.address);
-                        if (first.working_hours) handleMetaChange("contact-us", "working_hours", first.working_hours);
-                        if (first.emails?.[0]?.email) handleMetaChange("contact-us", "email", first.emails[0].email);
-                        if (first.phones?.[0]?.number) handleMetaChange("contact-us", "phone", first.phones[0].number);
-                      }
-                    };
-
-                    const handleAddBranch = () => {
-                      const newBranch = {
-                        id: `branch-${Date.now()}`,
-                        name: `Branch Office ${currentBranches.length + 1}`,
-                        address: "",
-                        working_hours: "Monday - Saturday: 9:00 AM - 6:00 PM IST",
-                        emails: [{ id: `e-${Date.now()}`, title: "Branch Email", email: "" }],
-                        phones: [{ id: `p-${Date.now()}`, title: "Branch Phone", number: "", type: "phone" }],
-                      };
-                      updateBranches([...currentBranches, newBranch]);
-                    };
-
-                    const handleRemoveBranch = (bIndex: number) => {
-                      const updated = currentBranches.filter((_: any, idx: number) => idx !== bIndex);
-                      updateBranches(updated);
-                    };
-
-                    const handleUpdateBranchField = (bIndex: number, field: string, value: string) => {
-                      const updated = currentBranches.map((b: any, idx: number) => {
-                        if (idx !== bIndex) return b;
-                        return { ...b, [field]: value };
-                      });
-                      updateBranches(updated);
-                    };
-
-                    const handleAddEmail = (bIndex: number) => {
-                      const updated = currentBranches.map((b: any, idx: number) => {
-                        if (idx !== bIndex) return b;
-                        const emails = [...(b.emails || []), { id: `e-${Date.now()}`, title: "Email Title", email: "" }];
-                        return { ...b, emails };
-                      });
-                      updateBranches(updated);
-                    };
-
-                    const handleUpdateEmail = (bIndex: number, eIndex: number, field: "title" | "email", value: string) => {
-                      const updated = currentBranches.map((b: any, idx: number) => {
-                        if (idx !== bIndex) return b;
-                        const emails = (b.emails || []).map((e: any, eIdx: number) => {
-                          if (eIdx !== eIndex) return e;
-                          return { ...e, [field]: value };
-                        });
-                        return { ...b, emails };
-                      });
-                      updateBranches(updated);
-                    };
-
-                    const handleRemoveEmail = (bIndex: number, eIndex: number) => {
-                      const updated = currentBranches.map((b: any, idx: number) => {
-                        if (idx !== bIndex) return b;
-                        const emails = (b.emails || []).filter((_: any, eIdx: number) => eIdx !== eIndex);
-                        return { ...b, emails };
-                      });
-                      updateBranches(updated);
-                    };
-
-                    const handleAddPhone = (bIndex: number) => {
-                      const updated = currentBranches.map((b: any, idx: number) => {
-                        if (idx !== bIndex) return b;
-                        const phones = [...(b.phones || []), { id: `p-${Date.now()}`, title: "Helpline", number: "", type: "phone" }];
-                        return { ...b, phones };
-                      });
-                      updateBranches(updated);
-                    };
-
-                    const handleUpdatePhone = (bIndex: number, pIndex: number, field: "title" | "number" | "type", value: string) => {
-                      const updated = currentBranches.map((b: any, idx: number) => {
-                        if (idx !== bIndex) return b;
-                        const phones = (b.phones || []).map((p: any, pIdx: number) => {
-                          if (pIdx !== pIndex) return p;
-                          return { ...p, [field]: value };
-                        });
-                        return { ...b, phones };
-                      });
-                      updateBranches(updated);
-                    };
-
-                    const handleRemovePhone = (bIndex: number, pIndex: number) => {
-                      const updated = currentBranches.map((b: any, idx: number) => {
-                        if (idx !== bIndex) return b;
-                        const phones = (b.phones || []).filter((_: any, pIdx: number) => pIdx !== pIndex);
-                        return { ...b, phones };
-                      });
-                      updateBranches(updated);
-                    };
-
-                    return (
-                      <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 space-y-6">
-                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-primary/10 pb-3">
-                          <div>
-                            <h4 className="font-bold text-base text-primary flex items-center gap-2">
-                              <Building2 className="h-5 w-5" /> Branch Offices & Location Contacts
-                            </h4>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Add multiple branches with location address, titled emails, and choose between Phone or WhatsApp contact numbers.
-                            </p>
-                          </div>
-                          <Button
-                            type="button"
-                            onClick={handleAddBranch}
-                            variant="default"
-                            size="sm"
-                            className="font-bold text-xs gap-1.5 shadow-xs"
-                          >
-                            <Plus className="h-4 w-4" /> Add Branch Office
-                          </Button>
-                        </div>
-
-                        {/* Branch Cards Loop */}
-                        <div className="space-y-6">
-                          {currentBranches.map((branch: any, bIdx: number) => (
-                            <Card key={branch.id || bIdx} className="p-5 bg-card border-border shadow-xs space-y-5">
-                              <div className="flex items-center justify-between gap-2 border-b border-border pb-3">
-                                <div className="flex items-center gap-2 flex-1 max-w-md">
-                                  <Building2 className="h-4 w-4 text-primary shrink-0" />
-                                  <Input
-                                    value={branch.name || ""}
-                                    onChange={(e) => handleUpdateBranchField(bIdx, "name", e.target.value)}
-                                    placeholder="Branch Name (e.g. Headquarters / Delhi Branch)"
-                                    className="font-bold text-sm bg-background"
-                                  />
-                                </div>
-                                {currentBranches.length > 1 && (
-                                  <Button
-                                    type="button"
-                                    onClick={() => handleRemoveBranch(bIdx)}
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-destructive hover:bg-destructive/10 text-xs gap-1"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" /> Remove Branch
-                                  </Button>
-                                )}
-                              </div>
-
-                              {/* Address & Hours */}
-                              <div className="grid gap-4 sm:grid-cols-2">
-                                <div className="space-y-1.5">
-                                  <Label className="text-xs font-semibold flex items-center gap-1.5">
-                                    <MapPin className="h-3.5 w-3.5 text-primary" />
-                                    Location Address
-                                  </Label>
-                                  <Textarea
-                                    rows={2}
-                                    value={branch.address || ""}
-                                    onChange={(e) => handleUpdateBranchField(bIdx, "address", e.target.value)}
-                                    placeholder="Full office location address (e.g. Orderly Bazar, Varanasi, UP)"
-                                    className="text-xs bg-background resize-none"
-                                  />
-                                </div>
-                                <div className="space-y-1.5">
-                                  <Label className="text-xs font-semibold flex items-center gap-1.5">
-                                    <Clock className="h-3.5 w-3.5 text-primary" />
-                                    Working Hours
-                                  </Label>
-                                  <Input
-                                    value={branch.working_hours || ""}
-                                    onChange={(e) => handleUpdateBranchField(bIdx, "working_hours", e.target.value)}
-                                    placeholder="Mon - Sat: 9:00 AM - 6:00 PM IST"
-                                    className="text-xs bg-background"
-                                  />
-                                </div>
-                              </div>
-
-                              {/* Emails Section */}
-                              <div className="space-y-3 pt-2 border-t border-border/60">
-                                <div className="flex items-center justify-between">
-                                  <Label className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-1.5">
-                                    <Mail className="h-3.5 w-3.5 text-primary" />
-                                    Email Desks ({branch.emails?.length || 0})
-                                  </Label>
-                                  <Button
-                                    type="button"
-                                    onClick={() => handleAddEmail(bIdx)}
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 text-xs font-semibold gap-1"
-                                  >
-                                    <Plus className="h-3 w-3" /> Add Email Desk
-                                  </Button>
-                                </div>
-
-                                {(branch.emails || []).map((emailItem: any, eIdx: number) => (
-                                  <div key={emailItem.id || eIdx} className="flex items-center gap-2">
-                                    <Input
-                                      value={emailItem.title || ""}
-                                      onChange={(e) => handleUpdateEmail(bIdx, eIdx, "title", e.target.value)}
-                                      placeholder="Title (e.g. Support / Admissions)"
-                                      className="text-xs bg-background w-1/3"
-                                    />
-                                    <Input
-                                      value={emailItem.email || ""}
-                                      onChange={(e) => handleUpdateEmail(bIdx, eIdx, "email", e.target.value)}
-                                      placeholder="support@edubird.com"
-                                      className="text-xs bg-background flex-1"
-                                    />
-                                    <Button
-                                      type="button"
-                                      onClick={() => handleRemoveEmail(bIdx, eIdx)}
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </div>
-                                ))}
-                              </div>
-
-                              {/* Phone & WhatsApp Contacts Section */}
-                              <div className="space-y-3 pt-2 border-t border-border/60">
-                                <div className="flex items-center justify-between">
-                                  <Label className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-1.5">
-                                    <Phone className="h-3.5 w-3.5 text-primary" />
-                                    Phone & WhatsApp Numbers ({branch.phones?.length || 0})
-                                  </Label>
-                                  <Button
-                                    type="button"
-                                    onClick={() => handleAddPhone(bIdx)}
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 text-xs font-semibold gap-1"
-                                  >
-                                    <Plus className="h-3 w-3" /> Add Contact Number
-                                  </Button>
-                                </div>
-
-                                {(branch.phones || []).map((phoneItem: any, pIdx: number) => (
-                                  <div key={phoneItem.id || pIdx} className="flex items-center gap-2">
-                                    <select
-                                      value={phoneItem.type || "phone"}
-                                      onChange={(e) => handleUpdatePhone(bIdx, pIdx, "type", e.target.value as any)}
-                                      className="h-9 rounded-md border border-input bg-background px-2 text-xs font-semibold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring shrink-0"
-                                    >
-                                      <option value="phone">📞 Phone Call</option>
-                                      <option value="whatsapp">💬 WhatsApp</option>
-                                    </select>
-                                    <Input
-                                      value={phoneItem.title || ""}
-                                      onChange={(e) => handleUpdatePhone(bIdx, pIdx, "title", e.target.value)}
-                                      placeholder="Title (e.g. Admission Desk)"
-                                      className="text-xs bg-background w-1/3"
-                                    />
-                                    <Input
-                                      value={phoneItem.number || ""}
-                                      onChange={(e) => handleUpdatePhone(bIdx, pIdx, "number", e.target.value)}
-                                      placeholder="+91 9876543210"
-                                      className="text-xs bg-background flex-1"
-                                    />
-                                    <Button
-                                      type="button"
-                                      onClick={() => handleRemovePhone(bIdx, pIdx)}
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </div>
-                                ))}
-                              </div>
-                            </Card>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
                   {/* Special Metadata for Social Media Links */}
                   {tab.slug === "social-links" && (
                     <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-4">
@@ -1127,153 +833,69 @@ export default function AdminCompanyPage() {
           );
         })}
 
-        {/* Hostels Tab */}
-        <TabsContent value="hostels" className="space-y-6">
+        {/* FAQs Tab */}
+        <TabsContent value="faqs" className="space-y-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between border-b bg-card px-6 py-4">
               <div>
                 <CardTitle className="text-xl flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-primary" />
-                  Institution Hostel Facilities
+                  <HelpCircle className="h-5 w-5 text-primary" />
+                  Frequently Asked Questions (FAQs)
                 </CardTitle>
                 <CardDescription>
-                  Manage campus residences, room capacity, fee structures, and amenities for students.
+                  Manage questions and answers displayed on the public /faqs page.
                 </CardDescription>
               </div>
-              <Button onClick={handleOpenAddHostel} className="flex items-center gap-1.5">
-                <Plus className="h-4 w-4" /> Add Hostel Building
+              <Button onClick={handleOpenAddFaq} className="flex items-center gap-1.5">
+                <Plus className="h-4 w-4" /> Add FAQ
               </Button>
             </CardHeader>
 
             <CardContent className="p-6 space-y-4">
-              {loadingHostels ? (
+              {loadingFaqs ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" /> Loading hostels...
+                  <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" /> Loading FAQs...
                 </div>
-              ) : hostels.length === 0 ? (
+              ) : faqs.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground border rounded-lg bg-muted/20">
-                  <Building2 className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3" />
-                  <p className="font-medium text-base">No Hostels added yet.</p>
-                  <p className="text-sm text-muted-foreground mb-4">Click "Add Hostel Building" to publish campus accommodation on your profile.</p>
-                  <Button onClick={handleOpenAddHostel} size="sm">
-                    <Plus className="mr-1.5 h-4 w-4" /> Add Hostel Building
+                  <HelpCircle className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3" />
+                  <p className="font-medium text-base">No FAQs added yet.</p>
+                  <p className="text-sm text-muted-foreground mb-4">Click "Add FAQ" to publish helpful Q&As for students and parents.</p>
+                  <Button onClick={handleOpenAddFaq} size="sm">
+                    <Plus className="mr-1.5 h-4 w-4" /> Add FAQ
                   </Button>
                 </div>
               ) : (
-                <div className="grid gap-4 md:grid-cols-2">
-                  {hostels.map((h) => (
+                <div className="space-y-3">
+                  {faqs.map((faq) => (
                     <div
-                      key={h.id}
-                      className="flex flex-col justify-between gap-4 p-5 rounded-xl border bg-card hover:border-primary/50 transition-all shadow-xs"
+                      key={faq.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border bg-card hover:border-primary/50 transition-all shadow-xs"
                     >
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <h4 className="font-bold text-lg text-foreground">{h.name}</h4>
-                          <Badge variant="outline" className="bg-primary/10 text-primary font-semibold">
-                            {h.type} Hostel
+                      <div className="space-y-1.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-foreground">{faq.question}</span>
+                          <Badge variant="outline" className="text-[10px] font-semibold">
+                            {faq.category}
                           </Badge>
+                          {faq.is_published ? (
+                            <Badge variant="secondary" className="text-[10px] bg-emerald-500/10 text-emerald-600 font-semibold">
+                              Published
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-[10px] bg-amber-500/10 text-amber-600 font-semibold">
+                              Draft
+                            </Badge>
+                          )}
                         </div>
-
-                        <p className="text-sm text-muted-foreground line-clamp-2">{h.description || "Modern student residence facility."}</p>
-
-                        <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg">
-                          <div><span className="font-semibold text-foreground">Capacity:</span> {h.capacity} Beds</div>
-                          <div><span className="font-semibold text-foreground">Available:</span> {h.available_beds} Beds</div>
-                          <div><span className="font-semibold text-foreground">Annual Fee:</span> ₹{Number(h.annual_fee).toLocaleString("en-IN")}</div>
-                          <div><span className="font-semibold text-foreground">Room Types:</span> {h.room_types}</div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                          {h.ac_available && <Badge variant="secondary" className="text-[11px] bg-blue-500/10 text-blue-600">AC Available</Badge>}
-                          {h.wifi_available && <Badge variant="secondary" className="text-[11px] bg-emerald-500/10 text-emerald-600">High-Speed Wi-Fi</Badge>}
-                          {h.mess_facility && <Badge variant="secondary" className="text-[11px]">{h.mess_facility}</Badge>}
-                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-2">{faq.answer}</p>
                       </div>
 
-                      <div className="flex items-center justify-end gap-2 pt-2 border-t mt-2">
-                        <Button variant="outline" size="sm" onClick={() => handleOpenEditHostel(h)}>
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                        <Button variant="outline" size="sm" onClick={() => handleOpenEditFaq(faq)}>
                           <Edit className="h-4 w-4 mr-1" /> Edit
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteHostel(h.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Libraries Tab */}
-        <TabsContent value="libraries" className="space-y-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between border-b bg-card px-6 py-4">
-              <div>
-                <CardTitle className="text-xl flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-primary" />
-                  Institution Library Resources
-                </CardTitle>
-                <CardDescription>
-                  Manage physical books, digital e-journals, reading capacity, and librarian contacts.
-                </CardDescription>
-              </div>
-              <Button onClick={handleOpenAddLibrary} className="flex items-center gap-1.5">
-                <Plus className="h-4 w-4" /> Add Library Resource
-              </Button>
-            </CardHeader>
-
-            <CardContent className="p-6 space-y-4">
-              {loadingLibraries ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" /> Loading library resources...
-                </div>
-              ) : libraries.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground border rounded-lg bg-muted/20">
-                  <BookOpen className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3" />
-                  <p className="font-medium text-base">No Libraries added yet.</p>
-                  <p className="text-sm text-muted-foreground mb-4">Click "Add Library Resource" to showcase library facilities on your profile.</p>
-                  <Button onClick={handleOpenAddLibrary} size="sm">
-                    <Plus className="mr-1.5 h-4 w-4" /> Add Library Resource
-                  </Button>
-                </div>
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2">
-                  {libraries.map((lib) => (
-                    <div
-                      key={lib.id}
-                      className="flex flex-col justify-between gap-4 p-5 rounded-xl border bg-card hover:border-primary/50 transition-all shadow-xs"
-                    >
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <h4 className="font-bold text-lg text-foreground">{lib.name}</h4>
-                          <Badge variant="outline" className="bg-primary/10 text-primary font-semibold">
-                            Library Resource
-                          </Badge>
-                        </div>
-
-                        <p className="text-sm text-muted-foreground line-clamp-2">{lib.description || "Central academic library resource."}</p>
-
-                        <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg">
-                          <div><span className="font-semibold text-foreground">Total Books:</span> {Number(lib.total_books).toLocaleString("en-IN")}</div>
-                          <div><span className="font-semibold text-foreground">Digital Titles:</span> {Number(lib.digital_titles).toLocaleString("en-IN")}</div>
-                          <div><span className="font-semibold text-foreground">Subscribed Journals:</span> {lib.journals_subscribed}</div>
-                          <div><span className="font-semibold text-foreground">Seating Capacity:</span> {lib.seating_capacity} Seats</div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs">
-                          <span className="text-muted-foreground">Hours: <strong className="text-foreground">{lib.opening_hours}</strong></span>
-                          {lib.reading_hall_available && <Badge variant="secondary" className="text-[11px] bg-purple-500/10 text-purple-600">Reading Hall Available</Badge>}
-                          {lib.e_resources_access && <Badge variant="secondary" className="text-[11px] bg-blue-500/10 text-blue-600">24/7 E-Resource Portal</Badge>}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-end gap-2 pt-2 border-t mt-2">
-                        <Button variant="outline" size="sm" onClick={() => handleOpenEditLibrary(lib)}>
-                          <Edit className="h-4 w-4 mr-1" /> Edit
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteLibrary(lib.id)}>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteFaq(faq.id)}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
@@ -1286,301 +908,80 @@ export default function AdminCompanyPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Add / Edit Hostel Dialog */}
-      <Dialog open={hostelDialogOpen} onOpenChange={setHostelDialogOpen}>
+      {/* Add / Edit FAQ Dialog */}
+      <Dialog open={faqDialogOpen} onOpenChange={setFaqDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingHostel ? "Edit Hostel Facility" : "Add Hostel Facility"}</DialogTitle>
+            <DialogTitle>{editingFaq ? "Edit FAQ" : "Add FAQ Question"}</DialogTitle>
             <DialogDescription>
-              Provide hostel accommodation details, room sharing options, annual fees, and amenities.
+              Add commonly asked questions and answers for your institution.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2 max-h-[70vh] overflow-y-auto px-1">
+          <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="hostel-name">Hostel Building / Residence Name</Label>
+              <Label htmlFor="faq-q">Question *</Label>
               <Input
-                id="hostel-name"
-                value={hostelName}
-                onChange={(e) => setHostelName(e.target.value)}
-                placeholder="e.g. Executive Boys Hostel - Block A"
+                id="faq-q"
+                value={faqQuestion}
+                onChange={(e) => setFaqQuestion(e.target.value)}
+                placeholder="e.g. What are the admission criteria and deadlines?"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="faq-a">Answer *</Label>
+              <Textarea
+                id="faq-a"
+                rows={4}
+                value={faqAnswer}
+                onChange={(e) => setFaqAnswer(e.target.value)}
+                placeholder="Provide a detailed and helpful response..."
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="hostel-type">Hostel Type</Label>
-                <select
-                  id="hostel-type"
-                  value={hostelType}
-                  onChange={(e) => setHostelType(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  <option value="Boys">Boys Hostel</option>
-                  <option value="Girls">Girls Hostel</option>
-                  <option value="Co-ed">Co-ed Residence</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="hostel-annual-fee">Annual Fee (₹)</Label>
+                <Label htmlFor="faq-cat">Category</Label>
                 <Input
-                  id="hostel-annual-fee"
-                  type="number"
-                  value={hostelAnnualFee}
-                  onChange={(e) => setHostelAnnualFee(Number(e.target.value))}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="hostel-capacity">Total Capacity (Beds)</Label>
-                <Input
-                  id="hostel-capacity"
-                  type="number"
-                  value={hostelCapacity}
-                  onChange={(e) => setHostelCapacity(Number(e.target.value))}
+                  id="faq-cat"
+                  value={faqCategory}
+                  onChange={(e) => setFaqCategory(e.target.value)}
+                  placeholder="e.g. Admissions, Fees, Courses"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="hostel-available-beds">Available Vacant Beds</Label>
+                <Label htmlFor="faq-order">Display Order</Label>
                 <Input
-                  id="hostel-available-beds"
+                  id="faq-order"
                   type="number"
-                  value={hostelAvailableBeds}
-                  onChange={(e) => setHostelAvailableBeds(Number(e.target.value))}
+                  value={faqOrder}
+                  onChange={(e) => setFaqOrder(Number(e.target.value))}
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="hostel-room-types">Room Sharing Options</Label>
-              <Input
-                id="hostel-room-types"
-                value={hostelRoomTypes}
-                onChange={(e) => setHostelRoomTypes(e.target.value)}
-                placeholder="e.g. Single Occupancy, Double & Triple Sharing"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="hostel-mess">Mess & Dining Facility</Label>
-              <Input
-                id="hostel-mess"
-                value={hostelMessFacility}
-                onChange={(e) => setHostelMessFacility(e.target.value)}
-                placeholder="e.g. Four Meals Daily (Veg & Non-Veg options)"
-              />
-            </div>
-
-            <div className="flex items-center gap-6 pt-1">
+            <div className="pt-2">
               <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={hostelAcAvailable}
-                  onChange={(e) => setHostelAcAvailable(e.target.checked)}
+                  checked={faqPublished}
+                  onChange={(e) => setFaqPublished(e.target.checked)}
                   className="h-4 w-4 rounded border-gray-300 text-primary"
                 />
-                Air Conditioned (AC)
+                Published on Site
               </label>
-
-              <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={hostelWifiAvailable}
-                  onChange={(e) => setHostelWifiAvailable(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-primary"
-                />
-                Campus Wi-Fi Included
-              </label>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="hostel-desc">Description & Facilities</Label>
-              <Textarea
-                id="hostel-desc"
-                rows={3}
-                value={hostelDescription}
-                onChange={(e) => setHostelDescription(e.target.value)}
-                placeholder="Describe room furnishings, security, study halls..."
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="hostel-rules">Hostel Rules & Timings</Label>
-              <Textarea
-                id="hostel-rules"
-                rows={2}
-                value={hostelRules}
-                onChange={(e) => setHostelRules(e.target.value)}
-                placeholder="e.g. Visitor hours 4PM-7PM, Gate curfew 9:30 PM..."
-              />
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setHostelDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setFaqDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveHostel} disabled={savingHostel}>
-              {savingHostel ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
-              {editingHostel ? "Update Hostel" : "Save Hostel"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add / Edit Library Dialog */}
-      <Dialog open={libraryDialogOpen} onOpenChange={setLibraryDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editingLibrary ? "Edit Library Resource" : "Add Library Resource"}</DialogTitle>
-            <DialogDescription>
-              Provide information about physical book collections, digital titles, research journals, and reading hall.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2 max-h-[70vh] overflow-y-auto px-1">
-            <div className="space-y-2">
-              <Label htmlFor="lib-name">Library Name</Label>
-              <Input
-                id="lib-name"
-                value={libraryName}
-                onChange={(e) => setLibraryName(e.target.value)}
-                placeholder="e.g. Central Knowledge & Research Library"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="lib-books">Total Physical Books</Label>
-                <Input
-                  id="lib-books"
-                  type="number"
-                  value={libraryTotalBooks}
-                  onChange={(e) => setLibraryTotalBooks(Number(e.target.value))}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="lib-digital">Digital Titles / E-Books</Label>
-                <Input
-                  id="lib-digital"
-                  type="number"
-                  value={libraryDigitalTitles}
-                  onChange={(e) => setLibraryDigitalTitles(Number(e.target.value))}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="lib-journals">Subscribed Research Journals</Label>
-                <Input
-                  id="lib-journals"
-                  type="number"
-                  value={libraryJournalsSubscribed}
-                  onChange={(e) => setLibraryJournalsSubscribed(Number(e.target.value))}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="lib-seating">Seating Capacity (Seats)</Label>
-                <Input
-                  id="lib-seating"
-                  type="number"
-                  value={librarySeatingCapacity}
-                  onChange={(e) => setLibrarySeatingCapacity(Number(e.target.value))}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="lib-hours">Library Opening Hours</Label>
-              <Input
-                id="lib-hours"
-                value={libraryOpeningHours}
-                onChange={(e) => setLibraryOpeningHours(e.target.value)}
-                placeholder="e.g. 8:00 AM - 10:00 PM (Monday - Saturday)"
-              />
-            </div>
-
-            <div className="flex items-center gap-6 pt-1">
-              <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={libraryReadingHall}
-                  onChange={(e) => setLibraryReadingHall(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-primary"
-                />
-                Quiet Reading Hall Available
-              </label>
-
-              <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={libraryEResources}
-                  onChange={(e) => setLibraryEResources(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-primary"
-                />
-                24/7 E-Resource Portal Access
-              </label>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="lib-contact-name">Head Librarian Name</Label>
-                <Input
-                  id="lib-contact-name"
-                  value={libraryLibrarianName}
-                  onChange={(e) => setLibraryLibrarianName(e.target.value)}
-                  placeholder="e.g. Dr. Chief Librarian"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="lib-contact-email">Librarian Email</Label>
-                <Input
-                  id="lib-contact-email"
-                  value={libraryLibrarianEmail}
-                  onChange={(e) => setLibraryLibrarianEmail(e.target.value)}
-                  placeholder="library@institution.edu"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="lib-desc">Library Overview & Description</Label>
-              <Textarea
-                id="lib-desc"
-                rows={3}
-                value={libraryDescription}
-                onChange={(e) => setLibraryDescription(e.target.value)}
-                placeholder="Describe reading atmosphere, computer terminals, RFID system..."
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="lib-rules">Borrowing Rules & Policy</Label>
-              <Textarea
-                id="lib-rules"
-                rows={2}
-                value={libraryBorrowingRules}
-                onChange={(e) => setLibraryBorrowingRules(e.target.value)}
-                placeholder="e.g. Students can issue up to 4 books for 14 days."
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setLibraryDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveLibrary} disabled={savingLibrary}>
-              {savingLibrary ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
-              {editingLibrary ? "Update Library" : "Save Library"}
+            <Button onClick={handleSaveFaq} disabled={savingFaq}>
+              {savingFaq ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+              {editingFaq ? "Update FAQ" : "Save FAQ"}
             </Button>
           </DialogFooter>
         </DialogContent>

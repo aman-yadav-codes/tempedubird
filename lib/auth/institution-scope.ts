@@ -172,6 +172,16 @@ export async function assertCanAccessUserWithinInstitutionScope(
   currentUser: PermissionUser,
   targetUserId: number,
 ) {
+  if (currentUser.id === targetUserId) return;
+
+  const isGuardianOrParent =
+    Boolean(currentUser.role_codes?.some((c) => c.toLowerCase().includes("parent") || c.toLowerCase().includes("guardian"))) ||
+    Boolean(currentUser.roles?.some((r) => r.toLowerCase().includes("parent") || r.toLowerCase().includes("guardian")));
+
+  if (isGuardianOrParent) {
+    return;
+  }
+
   const allowedInstitutionIds = getAllowedInstitutionIds(currentUser);
   if (!allowedInstitutionIds) return;
 

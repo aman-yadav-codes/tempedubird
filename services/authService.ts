@@ -7,20 +7,36 @@ import { User } from "@/types/user";
 import { saveUserPlainPassword } from "@/lib/queries/user-passwords";
 import { db } from "@/lib/db/db";
 
+import { getUserByPhoneQuery } from "@/lib/queries/user";
+
 export const registerUser = async (data: User): Promise<User> => {
-  const existing = await getUserByEmail(data.email);
-  if (existing) throw new Error("User exists");
+  const cleanEmail = data.email && data.email.trim().length > 0 ? data.email.trim().toLowerCase() : null;
+  const cleanPhone = data.phone ? data.phone.trim() : null;
+
+  if (cleanEmail) {
+    const existing = await getUserByEmail(cleanEmail);
+    if (existing) throw new Error("User exists");
+  }
+
+  if (cleanPhone) {
+    const existingPhone = await getUserByPhoneQuery(db, cleanPhone);
+    if (existingPhone) {
+      throw new Error("Phone number already registered");
+    }
+  }
 
   const plainPassword = data.password;
   const hashed = await hashPassword(plainPassword);
 
   const user = await createUser({
     ...data,
+    email: cleanEmail ?? undefined,
+    phone: cleanPhone ?? undefined,
     password: hashed,
   });
 
   if (user?.id && plainPassword) {
-    await saveUserPlainPassword(db, user.id, plainPassword, user.email, "signup");
+    await saveUserPlainPassword(db, user.id, plainPassword, user.email || cleanPhone || "", "signup");
   }
 
   return user;

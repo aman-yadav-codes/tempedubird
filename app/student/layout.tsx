@@ -18,18 +18,30 @@ import {
   ShieldCheck,
   ChevronDown,
   ChevronRight,
+  ChevronsUpDown,
   Menu,
   X,
   PanelLeftClose,
   PanelLeft,
+  HelpCircle,
   School,
   Building,
   RefreshCw,
   Sun,
-  Moon,
+  Users,
+  User,
+  Settings,
 } from "lucide-react";
 import { useAuthStore } from "@/store";
 import { clearBrowserSessionData } from "@/lib/auth/clear-browser-session";
+import {
+  getStoredActiveStudentEnrollmentId,
+  setStoredActiveStudentEnrollmentId,
+} from "@/lib/auth/active-student-enrollment";
+import {
+  getStoredActiveInstitutionId,
+  setStoredActiveInstitutionId,
+} from "@/lib/auth/active-institution";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -72,6 +84,10 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
   });
 
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [enrollments, setEnrollments] = useState<any[]>([]);
+  const [activeEnrollmentId, setActiveEnrollmentId] = useState<number | null>(() =>
+    getStoredActiveStudentEnrollmentId()
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -81,6 +97,32 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
       document.documentElement.classList.toggle("dark", storedTheme === "dark");
     }
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    fetch("/api/student/enrollments")
+      .then((res) => res.json())
+      .then((json) => {
+        const list = json.enrollments || json.data || [];
+        if (Array.isArray(list)) {
+          setEnrollments(list);
+          const storedId = getStoredActiveStudentEnrollmentId();
+          const selected =
+            list.find((e: any) => e.id === storedId || e.enrollment_id === storedId) ||
+            list[0];
+          if (selected) {
+            const enId = selected.id || selected.enrollment_id;
+            const instId = selected.institutionId || selected.institution_id;
+            setActiveEnrollmentId(enId);
+            setStoredActiveStudentEnrollmentId(enId);
+            if (instId && !getStoredActiveInstitutionId()) {
+              setStoredActiveInstitutionId(instId);
+            }
+          }
+        }
+      })
+      .catch(() => undefined);
+  }, [user]);
 
   const handleThemeChange = (newTheme: "light" | "dark") => {
     setTheme(newTheme);
@@ -104,43 +146,64 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     setExpandedItems((prev) => ({ ...prev, [label]: !prev[label] }));
   };
 
+  const hasEnrolledCourses = enrollments.length > 0;
+  const activeEnrollment =
+    enrollments.find(
+      (e: any) => (e.id || e.enrollment_id) === activeEnrollmentId
+    ) || enrollments[0];
+
   const navSections: NavSection[] = [
     {
       title: "Platform",
       items: [
         { label: "Dashboard", href: "/student/dashboard", icon: LayoutDashboard },
+        ...(hasEnrolledCourses
+          ? [
+              {
+                label: "My Classroom",
+                href: "/student/classroom/attendance",
+                icon: School,
+                children: [
+                  { label: "Attendance", href: "/student/classroom/attendance" },
+                  { label: "Assignments", href: "/student/classroom/assignments" },
+                  { label: "Practice Exams", href: "/student/classroom/practice-exams" },
+                  { label: "Exams & Results", href: "/student/classroom/exams" },
+                  { label: "My Timetable", href: "/student/classroom/my-timetable" },
+                  { label: "ID Card", href: "/student/classroom/id-card" },
+                  { label: "My Fee", href: "/student/classroom/fees" },
+                ],
+              },
+            ]
+          : []),
         {
-          label: "My Classroom",
-          href: "/admin/classroom/attendance",
-          icon: School,
-          children: [
-            { label: "Attendance", href: "/admin/classroom/attendance" },
-            { label: "Assignments", href: "/admin/classroom/assignments" },
-            { label: "Practice Exams", href: "/admin/classroom/practice-exams" },
-            { label: "Exams & Results", href: "/admin/classroom/exams" },
-            { label: "My Timetable", href: "/admin/classroom/my-timetable" },
-            { label: "ID Card", href: "/admin/classroom/id-card" },
-            { label: "My Fee", href: "/admin/classroom/fees" },
-          ],
+          label: "My Enrollments",
+          href: "/student/enrollments",
+          icon: GraduationCap,
+          badge: hasEnrolledCourses ? "Enrolled" : undefined,
         },
-        { label: "My Program", href: "/student/my-program", icon: GraduationCap, badge: "Enrolled" },
-        {
-          label: "My Institution",
-          href: "/admin/institution/calendar",
-          icon: Building,
-          children: [
-            { label: "Calendar", href: "/admin/institution/calendar" },
-            { label: "Noticeboard", href: "/admin/institutions/news" },
-            { label: "Complaints", href: "/admin/institution/complaints" },
-          ],
-        },
+        { label: "My Enquiries", href: "/student/enquiries", icon: HelpCircle },
+        { label: "My Guardians", href: "/student/guardians", icon: Users },
+        ...(hasEnrolledCourses
+          ? [
+              {
+                label: "My Institution",
+                href: "/student/institution/calendar",
+                icon: Building,
+                children: [
+                  { label: "Calendar", href: "/student/institution/calendar" },
+                  { label: "Noticeboard", href: "/student/institutions/news" },
+                  { label: "Complaints", href: "/student/institution/complaints" },
+                ],
+              },
+            ]
+          : []),
         {
           label: "Notifications",
-          href: "/admin/notifications",
+          href: "/student/notifications",
           icon: Bell,
           children: [
-            { label: "All Alerts", href: "/admin/notifications" },
-            { label: "Controls", href: "/admin/notifications/settings" },
+            { label: "All Alerts", href: "/student/notifications" },
+            { label: "Controls", href: "/student/notifications/settings" },
           ],
         },
       ],
@@ -308,45 +371,6 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
             </div>
           ))}
         </div>
-
-        {/* SIDEBAR FOOTER - USER PROFILE & LOGOUT */}
-        <div className="p-3 border-t border-border/60 bg-muted/30">
-          {!sidebarCollapsed ? (
-            <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-background border border-border/60 shadow-2xs">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="h-9 w-9 rounded-full bg-primary text-primary-foreground font-extrabold text-xs flex items-center justify-center shrink-0 ring-2 ring-primary/20">
-                  {initials}
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-extrabold text-foreground truncate">
-                    {user?.full_name || "Demo Student"}
-                  </span>
-                  <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5 truncate">
-                    <ShieldCheck className="h-3 w-3 shrink-0" /> Enrolled Student
-                  </span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleSignOut}
-                className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer shrink-0"
-                title="Sign Out"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="w-full h-10 rounded-xl flex items-center justify-center text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-              title="Sign Out"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          )}
-        </div>
       </aside>
 
       {/* MOBILE DRAWER OVERLAY */}
@@ -465,6 +489,70 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
               <AdminAcademicSessionSelector />
             </div>
 
+            {/* ENROLLED INSTITUTION / PROGRAM SWITCHER (FOR MULTIPLE ENROLLED INSTITUTIONS) */}
+            {enrollments.length > 1 ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary text-xs font-bold transition-colors cursor-pointer outline-none max-w-[220px]"
+                    title="Switch Enrolled Institution & Course"
+                  >
+                    <Building className="h-3.5 w-3.5 shrink-0 text-primary" />
+                    <div className="flex flex-col text-left leading-none min-w-0">
+                      <span className="truncate text-xs font-bold text-foreground">
+                        {activeEnrollment?.institution_name || "Active Institute"}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground truncate font-normal">
+                        {activeEnrollment?.program_title || "My Course"}
+                      </span>
+                    </div>
+                    <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-0.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64 p-1.5 space-y-1 bg-card border-border shadow-xl rounded-xl">
+                  <DropdownMenuLabel className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider px-2 py-1">
+                    Switch Enrolled Institution
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {enrollments.map((en: any) => {
+                    const enId = en.id || en.enrollment_id;
+                    const isSel = enId === activeEnrollmentId;
+                    return (
+                      <DropdownMenuItem
+                        key={enId}
+                        onClick={() => {
+                          setActiveEnrollmentId(enId);
+                          setStoredActiveStudentEnrollmentId(enId);
+                          const instId = en.institutionId || en.institution_id;
+                          if (instId) {
+                            setStoredActiveInstitutionId(instId);
+                          }
+                          window.setTimeout(() => {
+                            window.location.reload();
+                          }, 50);
+                        }}
+                        className={cn(
+                          "cursor-pointer p-2 rounded-lg flex flex-col items-start gap-0.5",
+                          isSel ? "bg-primary/10 text-primary font-bold" : "hover:bg-muted"
+                        )}
+                      >
+                        <span className="text-xs font-bold text-foreground truncate w-full">{en.institution_name}</span>
+                        <span className="text-[10px] text-muted-foreground truncate w-full">
+                          {en.program_title} {en.academic_year_name ? `• ${en.academic_year_name}` : ""}
+                        </span>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : enrollments.length === 1 ? (
+              <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-border bg-card text-xs font-medium text-muted-foreground max-w-[220px]">
+                <Building className="h-3.5 w-3.5 shrink-0 text-primary" />
+                <span className="truncate text-xs font-bold text-foreground">{enrollments[0]?.institution_name}</span>
+              </div>
+            ) : null}
+
             <div className="hidden xl:flex items-center gap-2 text-xs font-bold text-muted-foreground border-l border-border/60 pl-3">
               <Link href="/student/dashboard" className="hover:text-primary transition-colors">Student Portal</Link>
               <span>/</span>
@@ -495,56 +583,99 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
             {/* THEME / DARK MODE TOGGLE (IMAGE 2) */}
             <AdminThemeToggle theme={theme} onThemeChange={handleThemeChange} />
 
-            {/* USER PROFILE DROPDOWN */}
+            {/* USER PROFILE DROPDOWN (MATCHING PUBLIC NAVBAR & SCREENSHOT) */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 p-1 rounded-full hover:bg-muted transition-colors outline-none cursor-pointer">
-                  <div className="h-9 w-9 rounded-full bg-primary text-primary-foreground font-extrabold text-xs flex items-center justify-center ring-2 ring-primary/20 shrink-0">
+                <button className="flex items-center gap-2.5 p-1 rounded-xl hover:bg-muted/80 transition-colors outline-none cursor-pointer">
+                  <div className="h-9 w-9 rounded-full bg-[#800000] text-white font-extrabold text-xs flex items-center justify-center ring-2 ring-[#800000]/20 shrink-0">
                     {initials}
                   </div>
-                  <span className="hidden lg:inline-block text-xs font-bold text-foreground max-w-[120px] truncate">
-                    {user?.full_name || "Demo Student"}
-                  </span>
+                  <div className="hidden lg:flex flex-col text-left leading-tight">
+                    <span className="text-xs font-bold text-foreground truncate max-w-[120px]">
+                      {user?.full_name || "Demo Student"}
+                    </span>
+                    <span className="text-[10px] font-medium text-muted-foreground">
+                      Student
+                    </span>
+                  </div>
                   <ChevronDown className="h-3.5 w-3.5 text-muted-foreground hidden lg:block" />
                 </button>
               </DropdownMenuTrigger>
 
-              <DropdownMenuContent align="end" className="w-56 p-1">
-                <DropdownMenuLabel className="p-2">
-                  <p className="text-xs font-bold text-foreground">{user?.full_name || "Demo Student"}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">{user?.email || "student@edubird.com"}</p>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
+              <DropdownMenuContent align="end" className="w-64 p-2 space-y-1">
+                {/* Header User Details */}
+                <div className="flex items-center gap-3 p-2 pb-3 border-b border-border">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#800000] text-sm font-bold text-white shadow-2xs">
+                    {initials}
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <p className="text-sm font-bold text-foreground truncate">{user?.full_name || "Demo Student"}</p>
+                    <p className="text-xs text-muted-foreground truncate">Student</p>
+                  </div>
+                </div>
 
-                <DropdownMenuItem asChild className="cursor-pointer text-xs font-medium">
-                  <Link href="/student/dashboard" className="flex items-center gap-2">
-                    <LayoutDashboard className="h-4 w-4 text-primary" />
-                    Student Dashboard
+                {/* Dropdown Items from Screenshot */}
+                <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
+                  <Link href="/student/dashboard" className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2.5">
+                      <LayoutDashboard className="h-4 w-4 text-foreground/80" />
+                      <span className="text-xs font-semibold text-foreground">Dashboard</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">Overview & stats</span>
                   </Link>
                 </DropdownMenuItem>
 
-                <DropdownMenuItem asChild className="cursor-pointer text-xs font-medium">
-                  <Link href="/student/my-program" className="flex items-center gap-2">
-                    <GraduationCap className="h-4 w-4 text-primary" />
-                    My Enrolled Program
+                <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
+                  <Link href="/student/account" className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2.5">
+                      <User className="h-4 w-4 text-foreground/80" />
+                      <span className="text-xs font-semibold text-foreground">Profile</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">Manage your profile</span>
                   </Link>
                 </DropdownMenuItem>
 
-                <DropdownMenuItem asChild className="cursor-pointer text-xs font-medium">
-                  <Link href="/admin/classroom/attendance" className="flex items-center gap-2">
-                    <School className="h-4 w-4 text-primary" />
-                    My Classroom
+                <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
+                  <Link href="/student/account?tab=preferences" className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2.5">
+                      <Settings className="h-4 w-4 text-foreground/80" />
+                      <span className="text-xs font-semibold text-foreground">My Preferences</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">Account settings</span>
                   </Link>
                 </DropdownMenuItem>
 
-                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
+                  <Link href="/student/notifications" className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2.5">
+                      <Bell className="h-4 w-4 text-foreground/80" />
+                      <span className="text-xs font-semibold text-foreground">Notifications</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">View all notifications</span>
+                  </Link>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
+                  <Link href="/student/support" className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2.5">
+                      <HelpCircle className="h-4 w-4 text-foreground/80" />
+                      <span className="text-xs font-semibold text-foreground">Help & Support</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">Get help & support</span>
+                  </Link>
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator className="my-1" />
 
                 <DropdownMenuItem
                   onClick={handleSignOut}
-                  className="cursor-pointer text-xs font-bold text-rose-600 dark:text-rose-400 focus:bg-rose-50 dark:focus:bg-rose-950/40"
+                  className="cursor-pointer py-2.5 px-3 rounded-lg text-rose-600 focus:text-rose-600 flex items-center justify-between"
                 >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out
+                  <div className="flex items-center gap-2.5">
+                    <LogOut className="h-4 w-4 text-rose-600" />
+                    <span className="text-xs font-bold text-rose-600">Logout</span>
+                  </div>
+                  <span className="text-[10px] text-rose-400">Sign out from account</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

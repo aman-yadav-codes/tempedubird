@@ -487,20 +487,20 @@ export default function AccountPage() {
 
           <CardContent className="pt-6">
             <Tabs defaultValue="basic" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-auto p-1 bg-muted/60 rounded-xl">
-                <TabsTrigger value="basic" className="rounded-lg text-xs py-2 font-medium">
+              <TabsList className="flex flex-wrap w-full items-center justify-start gap-1.5 p-1.5 bg-muted/60 rounded-xl border border-border/50 min-h-11">
+                <TabsTrigger value="basic" className="flex-1 min-w-[120px] rounded-lg text-xs py-2 font-bold">
                   <User className="mr-1.5 size-3.5" /> Personal Info
                 </TabsTrigger>
-                <TabsTrigger value="location" className="rounded-lg text-xs py-2 font-medium">
+                <TabsTrigger value="location" className="flex-1 min-w-[120px] rounded-lg text-xs py-2 font-bold">
                   <MapPin className="mr-1.5 size-3.5" /> Location
                 </TabsTrigger>
-                <TabsTrigger value="education" className="rounded-lg text-xs py-2 font-medium">
+                <TabsTrigger value="education" className="flex-1 min-w-[120px] rounded-lg text-xs py-2 font-bold">
                   <GraduationCap className="mr-1.5 size-3.5" /> Education
                 </TabsTrigger>
-                <TabsTrigger value="experience" className="rounded-lg text-xs py-2 font-medium">
+                <TabsTrigger value="experience" className="flex-1 min-w-[120px] rounded-lg text-xs py-2 font-bold">
                   <BriefcaseBusiness className="mr-1.5 size-3.5" /> Experience
                 </TabsTrigger>
-                <TabsTrigger value="certifications" className="rounded-lg text-xs py-2 font-medium">
+                <TabsTrigger value="certifications" className="flex-1 min-w-[120px] rounded-lg text-xs py-2 font-bold">
                   <Award className="mr-1.5 size-3.5" /> Docs & Certs
                 </TabsTrigger>
               </TabsList>

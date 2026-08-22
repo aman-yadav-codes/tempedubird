@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth/auth";
+import { getAuthenticatedUser, requireAdmin } from "@/lib/auth/auth";
 import {
   assertTeachingSubjectsMatchInstitutionBoard,
   createAdminUserWithDetails,
@@ -17,7 +17,7 @@ import {
   getScopedInstitutionIds,
   getUserInstitutionIds,
 } from "@/lib/auth/institution-scope";
-import { getStaffPermissionModule, hasPermission, isPlatformAdminUser } from "@/lib/auth/permissions";
+import { getStaffPermissionModule, hasPermission, isPlatformAdminUser, type PermissionUser } from "@/lib/auth/permissions";
 
 function getErrorMessage(err: unknown) {
   return err instanceof Error ? err.message : "Something went wrong";
@@ -117,10 +117,19 @@ function getTargetInstitutionIds(data: AdminCreateUserInput) {
 }
 
 function getRoleAssignmentError(
-  currentUser: Awaited<ReturnType<typeof requireAdmin>>,
+  currentUser: PermissionUser,
   roleMeta: { code: string; scope_code: string | null } | null
 ) {
   if (isPlatformAdminUser(currentUser)) return null;
+
+  const isGuardianOrParent =
+    Boolean(currentUser.role_codes?.some((c) => c.toLowerCase().includes("parent") || c.toLowerCase().includes("guardian"))) ||
+    Boolean(currentUser.roles?.some((r) => r.toLowerCase().includes("parent") || r.toLowerCase().includes("guardian")));
+
+  if (isGuardianOrParent) {
+    if (!roleMeta || roleMeta.code === "student") return null;
+  }
+
   if (!currentUser.role_codes.includes("institution_admin")) {
     return "Only Platform Admin or Institution Admin can manage user admin controls";
   }
@@ -223,6 +232,16 @@ function canCreateRoleInTargetInstitutions(
   roleCode: string | null | undefined,
   targetInstitutionIds: number[]
 ) {
+  const isGuardianOrParent =
+    currentUser.role_codes.includes("guardian") ||
+    currentUser.role_codes.includes("parent") ||
+    currentUser.roles?.includes("Guardian") ||
+    currentUser.roles?.includes("Parent");
+
+  if (roleCode === "student" && isGuardianOrParent) {
+    return true;
+  }
+
   const requiredPermission = `${getCreatePermissionModule(roleCode)}.create`;
   if (!targetInstitutionIds.length) return hasPermission(currentUser, requiredPermission);
 
@@ -324,7 +343,7 @@ export async function POST(req: Request) {
   try {
     const url = new URL(req.url);
     const staffRole = url.searchParams.get("staffRole")?.trim() || null;
-    const currentUser = await requireAdmin(req);
+    const currentUser = await getAuthenticatedUser(req);
     const body = await req.json();
 
     const parsed = adminCreateUserSchema.safeParse(body);
@@ -338,13 +357,34 @@ export async function POST(req: Request) {
       );
     }
 
-    const roleMeta = await getRoleMeta(parsed.data.role_id ?? null);
+    let roleMeta = await getRoleMeta(parsed.data.role_id ?? null);
+    if (!roleMeta) {
+      const defaultStudentRoleRes = await db.query<{ id: number; code: string; scope_code: string | null }>(
+        `SELECT r.id, r.code, st.code AS scope_code
+         FROM roles r
+         LEFT JOIN scope_types st ON st.id = r.scope_id
+         WHERE r.code = 'student' OR r.name ILIKE '%student%'
+         LIMIT 1`
+      );
+      if (defaultStudentRoleRes.rows[0]) {
+        parsed.data.role_id = defaultStudentRoleRes.rows[0].id;
+        roleMeta = defaultStudentRoleRes.rows[0];
+      }
+    }
+
     if (staffRole && roleMeta?.code !== staffRole) {
       return NextResponse.json(
         { error: `This endpoint can only create ${staffRole} profiles` },
         { status: 403 }
       );
     }
+
+    const isGuardianOrParent =
+      Boolean(currentUser.role_codes?.some((c) => c.toLowerCase().includes("parent") || c.toLowerCase().includes("guardian"))) ||
+      Boolean(currentUser.roles?.some((r) => r.toLowerCase().includes("parent") || r.toLowerCase().includes("guardian")));
+
+    const isGuardianCreatingStudent =
+      isGuardianOrParent && (roleMeta?.code === "student" || !roleMeta);
 
     const roleAssignmentError = getRoleAssignmentError(currentUser, roleMeta);
     if (roleAssignmentError) {
@@ -359,13 +399,14 @@ export async function POST(req: Request) {
     const userData = normalizeRoleProfile(parsed.data, roleMeta);
     const allowedInstitutionIds = getAllowedInstitutionIds(currentUser);
     const targetInstitutionIds = getTargetInstitutionIds(userData);
-    if (!canCreateRoleInTargetInstitutions(currentUser, roleMeta?.code, targetInstitutionIds)) {
+
+    if (!isGuardianCreatingStudent && !canCreateRoleInTargetInstitutions(currentUser, roleMeta?.code, targetInstitutionIds)) {
       return NextResponse.json(
         { error: "Forbidden: Admin access required" },
         { status: 403 }
       );
     }
-    if (allowedInstitutionIds) {
+    if (allowedInstitutionIds && !isGuardianCreatingStudent) {
       if (
         roleMeta?.scope_code !== "institution" ||
         targetInstitutionIds.length === 0 ||
@@ -384,6 +425,38 @@ export async function POST(req: Request) {
     );
 
     const user = await createAdminUserWithDetails(db, userData, currentUser.id);
+
+    if (isGuardianCreatingStudent) {
+      try {
+        const sp = await db.query<{ id: number }>(
+          `INSERT INTO student_profiles (user_id, created_by, updated_by, created_at, updated_at)
+           VALUES ($1, $2, $2, NOW(), NOW())
+           ON CONFLICT (user_id) DO UPDATE SET updated_by = EXCLUDED.updated_by
+           RETURNING id`,
+          [user.id, currentUser.id]
+        );
+        if (sp.rows[0]) {
+          const checkGuardian = await db.query<{ id: number }>(
+            `SELECT id FROM student_guardians WHERE student_id = $1 AND guardian_user_id = $2 LIMIT 1`,
+            [sp.rows[0].id, currentUser.id]
+          );
+          if (checkGuardian.rows[0]) {
+            await db.query(
+              `UPDATE student_guardians SET is_deleted = FALSE, deleted_at = NULL, updated_at = NOW() WHERE id = $1`,
+              [checkGuardian.rows[0].id]
+            );
+          } else {
+            await db.query(
+              `INSERT INTO student_guardians (student_id, guardian_user_id, relationship, is_primary, is_deleted)
+               VALUES ($1, $2, 'Parent', TRUE, FALSE)`,
+              [sp.rows[0].id, currentUser.id]
+            );
+          }
+        }
+      } catch (linkErr) {
+        console.error("Auto linking guardian student error:", linkErr);
+      }
+    }
 
     return NextResponse.json({ data: user }, { status: 201 });
   } catch (err: unknown) {

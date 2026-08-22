@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 
 import { requireAdmin } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
@@ -7,6 +8,9 @@ import { getPageCount, getPagination } from "@/lib/queries/pagination";
 let schemaEnquiriesReady = false;
 async function ensureEnquiriesColumns() {
     if (schemaEnquiriesReady) return;
+    try {
+        await db.query(`ALTER TABLE visitor_sessions ALTER COLUMN tracking_token DROP NOT NULL`);
+    } catch {}
     try {
         await db.query(`ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS pipeline_stage VARCHAR(40) DEFAULT 'new'`);
         await db.query(`ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS estimated_value NUMERIC(12,2) DEFAULT 25000`);
@@ -77,21 +81,21 @@ export async function GET(req: Request) {
 
                 SELECT
                     'se_' || se.id::text AS id,
-                    u.name AS student_name,
+                    u.full_name AS student_name,
                     COALESCE(u.phone, '') AS phone,
                     COALESCE(u.email, '') AS email,
                     'new enquiry' AS status,
                     'new enquiry' AS pipeline_stage,
                     COALESCE(p.fee_amount, 25000)::numeric AS estimated_value,
                     'Direct Student Enrollment Application' AS notes,
-                    p.title AS preferred_program,
+                    COALESCE(p.title, 'Academic Course') AS preferred_program,
                     'Student Enrollment' AS source,
                     se.created_at,
                     se.institution_id
                 FROM student_enrollments se
                 INNER JOIN student_profiles sp ON sp.id = se.student_id
                 INNER JOIN users u ON u.id = sp.user_id
-                INNER JOIN institution_programs p ON p.id = se.program_id
+                LEFT JOIN institution_programs p ON p.id = se.program_id
                 WHERE COALESCE(se.is_deleted, FALSE) = FALSE
             )
         `;
@@ -161,6 +165,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Student name and phone number are required" }, { status: 400 });
         }
 
+        const trackingToken = randomUUID();
         const fullNotes = [
             notes,
             parentName ? `Parent/Guardian: ${parentName}` : null,
@@ -170,6 +175,7 @@ export async function POST(req: Request) {
         const res = await db.query(
             `
             INSERT INTO visitor_sessions (
+                tracking_token,
                 institution_id,
                 full_name,
                 phone,
@@ -181,10 +187,11 @@ export async function POST(req: Request) {
                 current_page_url,
                 created_at
             )
-            VALUES ($1, $2, $3, $4, 'new enquiry', $5, $6, $7, $8, NOW())
+            VALUES ($1::uuid, $2, $3, $4, $5, 'new enquiry', $6, $7, $8, $9, NOW())
             RETURNING id
             `,
             [
+                trackingToken,
                 institutionId,
                 studentName,
                 phone,

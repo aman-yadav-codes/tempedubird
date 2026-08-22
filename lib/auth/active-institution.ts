@@ -36,10 +36,20 @@ export function getUserInstitutionOptions(user: SessionUser | null | undefined) 
   );
 }
 
-export function getStoredActiveInstitutionId() {
-  if (typeof window === "undefined") return null;
+export function getDefaultInstitutionId(): number | null {
   return parseActiveInstitutionId(
-    window.localStorage.getItem(ACTIVE_INSTITUTION_STORAGE_KEY)
+    process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ||
+    process.env.NEXT_PUBLIC_INSTITUTION_ID ||
+    process.env.DEFAULT_INSTITUTION_ID
+  );
+}
+
+export function getStoredActiveInstitutionId() {
+  if (typeof window === "undefined") return getDefaultInstitutionId();
+  return (
+    parseActiveInstitutionId(
+      window.localStorage.getItem(ACTIVE_INSTITUTION_STORAGE_KEY)
+    ) ?? getDefaultInstitutionId()
   );
 }
 

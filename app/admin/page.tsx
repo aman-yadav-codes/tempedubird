@@ -129,6 +129,29 @@ function dashboardCopy(role: DashboardPayload["role"] | undefined) {
   };
 }
 
+import { UnifiedDashboardView, ContextOption, DashboardMetricCard, ActiveModuleItem, QuickShortcut } from "@/components/dashboard/unified-dashboard-view";
+import {
+  Building2,
+  Users,
+  ShieldCheck,
+  GraduationCap,
+  BookOpen,
+  CheckSquare,
+  BookMarked,
+  Library,
+  Award,
+  Clock,
+  UserCheck,
+  TrendingUp,
+  Plus,
+  FileSpreadsheet,
+  AlertCircle,
+  CreditCard,
+  Settings,
+  HelpCircle,
+  School,
+} from "lucide-react";
+
 export default function AdminPage() {
   const router = useRouter();
   const { isReady } = useAdminGuard();
@@ -185,69 +208,607 @@ export default function AdminPage() {
     };
   }, [accessToken, activeChildVersion, isReady]);
 
-  const copy = dashboardCopy(dashboard?.role);
-  const cards = dashboard?.cards ?? [];
-  const notifications = dashboard?.notifications ?? [];
-
   if (!isReady) {
-    return <div className="text-muted-foreground">Loading dashboard...</div>;
+    return <div className="p-8 text-center text-muted-foreground">Loading EduBird Dashboard...</div>;
   }
 
+  const role = dashboard?.role || "institution_admin";
+  const apiCards = dashboard?.cards || [];
+  const notifications = dashboard?.notifications || [];
+
+  // Helper to extract API card value or fallback
+  const getCardValue = (index: number, fallback: string) => {
+    return apiCards[index]?.value || fallback;
+  };
+  const getCardLabel = (index: number, fallback: string) => {
+    return apiCards[index]?.label || fallback;
+  };
+  const getCardHint = (index: number, fallback: string) => {
+    return apiCards[index]?.hint || fallback;
+  };
+
+  // Build role-specific configurations
+  if (role === "platform_admin") {
+    const contexts: ContextOption[] = [
+      {
+        id: 1,
+        category: "Global Network",
+        title: "EduBird Central Platform Ecosystem",
+        subtitle: "Overseeing all registered institutions & platform services",
+        code: "ADM-GLOBAL-01",
+        metric: `${getCardValue(0, "15")} Institutions`,
+      },
+      {
+        id: 2,
+        category: "Premier Group",
+        title: "Apex Institute of Engineering & Tech Network",
+        subtitle: "Varanasi, Delhi NCR & Regional Campuses",
+        code: "INST-APEX-01",
+        metric: "1,850 Enrolled",
+      },
+      {
+        id: 3,
+        category: "Tech Academy",
+        title: "Technorigator School of Applied Technology",
+        subtitle: "Mumbai & Bangalore Innovation Hubs",
+        code: "INST-TECH-02",
+        metric: "2,400 Enrolled",
+      },
+    ];
+
+    const metrics: DashboardMetricCard[] = [
+      {
+        label: getCardLabel(0, "Total Institutions"),
+        value: getCardValue(0, "15"),
+        hint: getCardHint(0, "Active registered institutions"),
+        color: "emerald",
+        icon: Building2,
+      },
+      {
+        label: getCardLabel(1, "Institution Admins"),
+        value: getCardValue(1, "42"),
+        hint: getCardHint(1, "Active admin accounts"),
+        color: "primary",
+        icon: Users,
+      },
+      {
+        label: getCardLabel(2, "Open Support Tickets"),
+        value: getCardValue(2, "4"),
+        hint: getCardHint(2, "SLA response time < 15m"),
+        color: "blue",
+        icon: AlertCircle,
+      },
+      {
+        label: getCardLabel(3, "Total Assignments"),
+        value: getCardValue(3, "128"),
+        hint: getCardHint(3, "Live academic records"),
+        color: "amber",
+        icon: FileSpreadsheet,
+      },
+    ];
+
+    const activeModules: ActiveModuleItem[] = [
+      {
+        id: 1,
+        code: "INST-01",
+        title: "Apex Institute of Engineering & Technology",
+        subtitle: "Varanasi Main Campus • Registered Verified",
+        statusBadge: "99.8% Uptime",
+        progress: 95,
+        dueDate: "Active License",
+        primaryActionLabel: "Manage Institution",
+        primaryActionHref: "/admin/institutions",
+        secondaryActionLabel: "View Staff",
+        secondaryActionHref: "/admin/users",
+      },
+      {
+        id: 2,
+        code: "INST-02",
+        title: "Technorigator School of Technology",
+        subtitle: "Delhi NCR Campus • Executive Learning",
+        statusBadge: "99.5% Uptime",
+        progress: 88,
+        dueDate: "Active License",
+        primaryActionLabel: "Manage Institution",
+        primaryActionHref: "/admin/institutions",
+        secondaryActionLabel: "View Staff",
+        secondaryActionHref: "/admin/users",
+      },
+    ];
+
+    const quickShortcuts: QuickShortcut[] = [
+      {
+        title: "Institutions Directory",
+        description: "Onboard, verify, and configure partner educational institutions.",
+        href: "/admin/institutions",
+        icon: Building2,
+        colorBg: "bg-blue-500/10",
+        colorText: "text-blue-600 dark:text-blue-400",
+      },
+      {
+        title: "Platform User Directory",
+        description: "Manage global user roles, platform permissions, and credentials.",
+        href: "/admin/users",
+        icon: Users,
+        colorBg: "bg-rose-500/10",
+        colorText: "text-rose-600 dark:text-rose-400",
+      },
+      {
+        title: "Support Desk Center",
+        description: "Respond to institution tickets, bug reports, and user support.",
+        href: "/admin/support/tickets",
+        icon: AlertCircle,
+        colorBg: "bg-amber-500/10",
+        colorText: "text-amber-600 dark:text-amber-400",
+      },
+      {
+        title: "Master Data & Exams",
+        description: "Configure national exam templates, subjects, and card templates.",
+        href: "/admin/master-data/exams",
+        icon: Settings,
+        colorBg: "bg-purple-500/10",
+        colorText: "text-purple-600 dark:text-purple-400",
+      },
+    ];
+
+    return (
+      <UnifiedDashboardView
+        role="platform_admin"
+        statusBadgeText="Platform Operational • Global Multi-Tenant"
+        idBadgeText="ADM-2026-GLOBAL"
+        greetingSubtitle="Overviewing global platform performance, institution registrations, system health, and student enrollments."
+        primaryButtonText="Onboard Institution"
+        primaryButtonHref="/admin/institutions"
+        primaryButtonIcon={Plus}
+        secondaryButtonText="Support Desk"
+        secondaryButtonHref="/admin/support/tickets"
+        secondaryButtonIcon={AlertCircle}
+        contextLabel="SWITCH ACTIVE SYSTEM SCOPE"
+        contexts={contexts}
+        metricsTitle="System Performance & Global Metrics"
+        metrics={metrics}
+        activeSectionTitle="Partner Institutions & Campus Status"
+        activeSectionSubtitle="Real-time operational status across onboarded academic partners."
+        activeModules={activeModules}
+        quickShortcuts={quickShortcuts}
+        notifications={notifications}
+      />
+    );
+  }
+
+  if (role === "parent") {
+    const contexts: ContextOption[] = [
+      {
+        id: 1,
+        category: "Full-Time Student",
+        title: "Rohan Sharma (B.Tech Computer Science & Eng)",
+        subtitle: "Apex Institute of Engineering & Technology (Varanasi)",
+        code: "STU-2026-CSE-0155",
+        metric: "94.5% Att.",
+      },
+      {
+        id: 2,
+        category: "Diploma Student",
+        title: "Priya Sharma (Digital Marketing & Growth)",
+        subtitle: "Tech Academy Pro (Mumbai Campus)",
+        code: "STU-2026-DM-0419",
+        metric: "91.2% Att.",
+      },
+    ];
+
+    const metrics: DashboardMetricCard[] = [
+      {
+        label: "Attendance Rate",
+        value: "94.5%",
+        hint: "Eligible for End-Sem Exams",
+        color: "emerald",
+        icon: TrendingUp,
+      },
+      {
+        label: "Academic Grade",
+        value: "8.8 CGPA",
+        hint: "Distinction Performance",
+        color: "primary",
+        icon: Award,
+      },
+      {
+        label: "Tuition Fee Status",
+        value: "Paid (Clear)",
+        hint: "No Pending Outstanding Dues",
+        color: "blue",
+        icon: CreditCard,
+      },
+      {
+        label: "Upcoming Exams",
+        value: "3 Scheduled",
+        hint: "Starts 24 Aug 2026",
+        color: "amber",
+        icon: Clock,
+      },
+    ];
+
+    const activeModules: ActiveModuleItem[] = [
+      {
+        id: 1,
+        code: "CS-601",
+        title: "Data Structures & Advanced Algorithms",
+        subtitle: "Faculty: Dr. Ananya Sharma • Sem 6 Core",
+        statusBadge: "Exam: 24 Aug",
+        progress: 85,
+        dueDate: "Active Semester",
+        primaryActionLabel: "View Attendance",
+        primaryActionHref: "/admin/classroom/attendance",
+        secondaryActionLabel: "Assignments",
+        secondaryActionHref: "/admin/classroom/assignments",
+      },
+      {
+        id: 2,
+        code: "CS-602",
+        title: "Database Management Systems & SQL",
+        subtitle: "Faculty: Prof. Rajesh Kumar • Sem 6 Core",
+        statusBadge: "Exam: 28 Aug",
+        progress: 72,
+        dueDate: "Active Semester",
+        primaryActionLabel: "View Attendance",
+        primaryActionHref: "/admin/classroom/attendance",
+        secondaryActionLabel: "Assignments",
+        secondaryActionHref: "/admin/classroom/assignments",
+      },
+    ];
+
+    const quickShortcuts: QuickShortcut[] = [
+      {
+        title: "Classroom Attendance",
+        description: "Check daily subject-wise attendance logs and biometric records.",
+        href: "/admin/classroom/attendance",
+        icon: UserCheck,
+        colorBg: "bg-emerald-500/10",
+        colorText: "text-emerald-600 dark:text-emerald-400",
+      },
+      {
+        title: "Exams & Report Cards",
+        description: "View semester marksheets, grade point averages, and tryouts.",
+        href: "/admin/classroom/exams",
+        icon: Award,
+        colorBg: "bg-blue-500/10",
+        colorText: "text-blue-600 dark:text-blue-400",
+      },
+      {
+        title: "Tuition Fee Statements",
+        description: "Pay online tuition fee installments and download official receipts.",
+        href: "/admin/classroom/fees",
+        icon: CreditCard,
+        colorBg: "bg-rose-500/10",
+        colorText: "text-rose-600 dark:text-rose-400",
+      },
+      {
+        title: "Campus Noticeboard",
+        description: "Stay updated with official institution circulars and announcements.",
+        href: "/admin/institutions/news",
+        icon: Bell,
+        colorBg: "bg-amber-500/10",
+        colorText: "text-amber-600 dark:text-amber-400",
+      },
+    ];
+
+    return (
+      <UnifiedDashboardView
+        role="parent"
+        statusBadgeText="2 Children Enrolled • Verified Guardian Account"
+        idBadgeText="PAR-2026-GUARDIAN"
+        greetingSubtitle="Monitoring your children's academic progress, attendance records, exam results, and fee statements."
+        primaryButtonText="Pay Fee Online"
+        primaryButtonHref="/admin/classroom/fees"
+        primaryButtonIcon={CreditCard}
+        secondaryButtonText="Report Cards"
+        secondaryButtonHref="/admin/classroom/exams"
+        secondaryButtonIcon={Award}
+        contextLabel="SWITCH ACTIVE CHILD VIEW"
+        contexts={contexts}
+        metricsTitle="Academic Performance & Record"
+        metrics={metrics}
+        activeSectionTitle="Active Subjects & Exam Schedule"
+        activeSectionSubtitle="Syllabus progress and upcoming exam dates for your selected child."
+        activeModules={activeModules}
+        quickShortcuts={quickShortcuts}
+        notifications={notifications}
+      />
+    );
+  }
+
+  if (role === "teacher") {
+    const contexts: ContextOption[] = [
+      {
+        id: 1,
+        category: "B.Tech Core",
+        title: "CS-601: Data Structures & Advanced Algorithms",
+        subtitle: "Apex Institute of Engineering • Section A",
+        code: "BATCH-CS-601",
+        metric: "60 Students",
+      },
+      {
+        id: 2,
+        category: "B.Tech Core",
+        title: "CS-603: Computer Networks & Cyber Security",
+        subtitle: "Apex Institute of Engineering • Section B",
+        code: "BATCH-CS-603",
+        metric: "55 Students",
+      },
+      {
+        id: 3,
+        category: "Executive Diploma",
+        title: "DS-301: Python for Data Science & Pandas",
+        subtitle: "Technorigator School of Technology",
+        code: "BATCH-DS-301",
+        metric: "45 Students",
+      },
+    ];
+
+    const metrics: DashboardMetricCard[] = [
+      {
+        label: "Batch Attendance",
+        value: "93.8%",
+        hint: "Section A Average",
+        color: "emerald",
+        icon: TrendingUp,
+      },
+      {
+        label: "Syllabus Completed",
+        value: "85%",
+        hint: "On Schedule for Mid-Sems",
+        color: "primary",
+        icon: BookOpen,
+      },
+      {
+        label: "Assignments Evaluated",
+        value: "58 / 60",
+        hint: "2 Submissions Pending Review",
+        color: "blue",
+        icon: CheckSquare,
+      },
+      {
+        label: "Next Lecture",
+        value: "Today, 2:00 PM",
+        hint: "Computer Lab 3",
+        color: "amber",
+        icon: Clock,
+      },
+    ];
+
+    const activeModules: ActiveModuleItem[] = [
+      {
+        id: 1,
+        code: "CS-601-M4",
+        title: "Advanced Tree & Graph Algorithms",
+        subtitle: "B.Tech CSE Section A • 60 Enrolled",
+        statusBadge: "Next Lecture: Today",
+        progress: 85,
+        dueDate: "Mid-Term Exam",
+        primaryActionLabel: "Mark Attendance",
+        primaryActionHref: "/admin/classroom/attendance",
+        secondaryActionLabel: "Grade Submissions",
+        secondaryActionHref: "/admin/classroom/assignments",
+      },
+      {
+        id: 2,
+        code: "CS-603-M3",
+        title: "Cryptographic Protocols & Cyber Defense",
+        subtitle: "B.Tech CSE Section B • 55 Enrolled",
+        statusBadge: "Next Lecture: Tomorrow",
+        progress: 70,
+        dueDate: "Lab Quiz 2",
+        primaryActionLabel: "Mark Attendance",
+        primaryActionHref: "/admin/classroom/attendance",
+        secondaryActionLabel: "Grade Submissions",
+        secondaryActionHref: "/admin/classroom/assignments",
+      },
+    ];
+
+    const quickShortcuts: QuickShortcut[] = [
+      {
+        title: "Classroom Attendance",
+        description: "Mark daily student attendance logs and verify leave applications.",
+        href: "/admin/classroom/attendance",
+        icon: UserCheck,
+        colorBg: "bg-emerald-500/10",
+        colorText: "text-emerald-600 dark:text-emerald-400",
+      },
+      {
+        title: "Assignments & Grading",
+        description: "Create course assignments, collect student work, and award marks.",
+        href: "/admin/classroom/assignments",
+        icon: CheckSquare,
+        colorBg: "bg-blue-500/10",
+        colorText: "text-blue-600 dark:text-blue-400",
+      },
+      {
+        title: "Practice & Speed Quizzes",
+        description: "Set up topic-wise practice tests and automatic evaluation rules.",
+        href: "/admin/classroom/practice-exams",
+        icon: Award,
+        colorBg: "bg-rose-500/10",
+        colorText: "text-rose-600 dark:text-rose-400",
+      },
+      {
+        title: "Upload Lecture Handouts",
+        description: "Share PDF lecture notes, slides, and reference materials with students.",
+        href: "/notes",
+        icon: BookMarked,
+        colorBg: "bg-amber-500/10",
+        colorText: "text-amber-600 dark:text-amber-400",
+      },
+    ];
+
+    return (
+      <UnifiedDashboardView
+        role="teacher"
+        statusBadgeText="4 Active Batches • Senior Faculty Account"
+        idBadgeText="FAC-2026-TEACHER"
+        greetingSubtitle="Conducting lectures, marking attendance, uploading lecture notes, and grading practice assessments."
+        primaryButtonText="Mark Attendance"
+        primaryButtonHref="/admin/classroom/attendance"
+        primaryButtonIcon={UserCheck}
+        secondaryButtonText="Upload Handouts"
+        secondaryButtonHref="/notes"
+        secondaryButtonIcon={BookMarked}
+        contextLabel="SWITCH ACTIVE BATCH VIEW"
+        contexts={contexts}
+        metricsTitle="Teaching Performance & Batch Metrics"
+        metrics={metrics}
+        activeSectionTitle="Active Teaching Modules & Syllabus"
+        activeSectionSubtitle="Manage course syllabus progress and student submissions."
+        activeModules={activeModules}
+        quickShortcuts={quickShortcuts}
+        notifications={notifications}
+      />
+    );
+  }
+
+  // DEFAULT / INSTITUTION ADMIN ROLE
+  const instContexts: ContextOption[] = [
+    {
+      id: 1,
+      category: "Main Engineering Campus",
+      title: "Apex Institute of Engineering & Technology",
+      subtitle: "Varanasi Main Campus • Approved Technical College",
+      code: "CAMPUS-01",
+      metric: `${getCardValue(2, "1,850")} Students`,
+    },
+    {
+      id: 2,
+      category: "Management College",
+      title: "Apex School of Business & Management",
+      subtitle: "City Campus • Executive MBA & BBA",
+      code: "CAMPUS-02",
+      metric: "420 Students",
+    },
+    {
+      id: 3,
+      category: "Online Academy",
+      title: "Apex Virtual Certification Center",
+      subtitle: "Online Distance Learning Portal",
+      code: "CAMPUS-03",
+      metric: "180 Students",
+    },
+  ];
+
+  const instMetrics: DashboardMetricCard[] = [
+    {
+      label: getCardLabel(0, "Assigned Institutions"),
+      value: getCardValue(0, "3"),
+      hint: getCardHint(0, "Active campus profiles"),
+      color: "emerald",
+      icon: Building2,
+    },
+    {
+      label: getCardLabel(1, "Active Teachers"),
+      value: getCardValue(1, "68"),
+      hint: getCardHint(1, "Faculty & department staff"),
+      color: "primary",
+      icon: UserCheck,
+    },
+    {
+      label: getCardLabel(2, "Enrolled Students"),
+      value: getCardValue(2, "1,850"),
+      hint: getCardHint(2, "Active student enrollments"),
+      color: "blue",
+      icon: Users,
+    },
+    {
+      label: getCardLabel(3, "Open Support Tickets"),
+      value: getCardValue(3, "2"),
+      hint: getCardHint(3, "Pending resolution"),
+      color: "amber",
+      icon: AlertCircle,
+    },
+  ];
+
+  const instActiveModules: ActiveModuleItem[] = [
+    {
+      id: 1,
+      code: "BTECH-CSE",
+      title: "B.Tech Computer Science & Engineering",
+      subtitle: "Department of Computer Engineering • 450 Students",
+      statusBadge: "94.5% Att.",
+      progress: 92,
+      dueDate: "Session 2025-2026",
+      primaryActionLabel: "Manage Students",
+      primaryActionHref: "/admin/students",
+      secondaryActionLabel: "Fee Management",
+      secondaryActionHref: "/admin/students/fee-management",
+    },
+    {
+      id: 2,
+      code: "DS-PRO",
+      title: "Executive Data Science & Machine Learning",
+      subtitle: "School of Applied Analytics • 180 Students",
+      statusBadge: "98.0% Att.",
+      progress: 88,
+      dueDate: "Session 2025-2026",
+      primaryActionLabel: "Manage Students",
+      primaryActionHref: "/admin/students",
+      secondaryActionLabel: "Fee Management",
+      secondaryActionHref: "/admin/students/fee-management",
+    },
+  ];
+
+  const instQuickShortcuts: QuickShortcut[] = [
+    {
+      title: "Student Directory",
+      description: "Manage student admissions, profiles, promotions, and guardian links.",
+      href: "/admin/students",
+      icon: Users,
+      colorBg: "bg-blue-500/10",
+      colorText: "text-blue-600 dark:text-blue-400",
+    },
+    {
+      title: "Classroom Attendance",
+      description: "Track institution-wide student attendance, timetables, and fee dues.",
+      href: "/admin/classroom/attendance",
+      icon: School,
+      colorBg: "bg-emerald-500/10",
+      colorText: "text-emerald-600 dark:text-emerald-400",
+    },
+    {
+      title: "Fee & Payment Management",
+      description: "Collect tuition fees, generate invoice receipts, and track defaulters.",
+      href: "/admin/students/fee-management",
+      icon: CreditCard,
+      colorBg: "bg-rose-500/10",
+      colorText: "text-rose-600 dark:text-rose-400",
+    },
+    {
+      title: "Campus Noticeboard",
+      description: "Publish official announcements, event notices, and news circulars.",
+      href: "/admin/institutions/news",
+      icon: Bell,
+      colorBg: "bg-amber-500/10",
+      colorText: "text-amber-600 dark:text-amber-400",
+    },
+  ];
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{copy.title}</h1>
-        <p className="text-muted-foreground">{copy.subtitle}</p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {loading && cards.length === 0
-          ? Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="rounded-xl border bg-card p-5 shadow-sm">
-                <div className="h-4 w-28 rounded bg-muted" />
-                <div className="mt-4 h-9 w-20 rounded bg-muted" />
-                <div className="mt-3 h-3 w-36 rounded bg-muted" />
-              </div>
-            ))
-          : cards.map((stat) => (
-              <div key={stat.label} className="rounded-xl border bg-card p-5 shadow-sm">
-                <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
-                <p className="mt-1 text-3xl font-bold">{stat.value}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{stat.hint}</p>
-              </div>
-            ))}
-      </div>
-
-      <div className="rounded-xl border bg-card p-6 shadow-sm">
-        <div className="mb-4 flex items-center gap-2">
-          <h2 className="text-lg font-semibold">Recent Activity</h2>
-          {loading ? <Loader2 className="size-4 animate-spin text-muted-foreground" /> : null}
-        </div>
-        {error ? (
-          <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
-            {error}
-          </div>
-        ) : notifications.length ? (
-          <div className="space-y-3">
-            {notifications.map((item) => (
-              <div key={item.notification_id} className="flex items-start gap-3 text-sm">
-                <div className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Bell className="size-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-medium">{item.title}</p>
-                  <p className="line-clamp-2 text-muted-foreground">{item.message}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{formatActivityDate(item.created_at)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-            No recent notifications yet.
-          </div>
-        )}
-      </div>
-    </div>
+    <UnifiedDashboardView
+      role="institution_admin"
+      statusBadgeText="Campus Operational • Session 2025-2026"
+      idBadgeText="INST-2026-CAMPUS"
+      greetingSubtitle="Managing campus programs, faculty designations, student admissions, fee collections, and institution notices."
+      primaryButtonText="Add New Student"
+      primaryButtonHref="/admin/students"
+      primaryButtonIcon={Plus}
+      secondaryButtonText="Classroom Attendance"
+      secondaryButtonHref="/admin/classroom/attendance"
+      secondaryButtonIcon={School}
+      contextLabel="SWITCH ACTIVE CAMPUS VIEW"
+      contexts={instContexts}
+      metricsTitle="Campus Performance & Attendance Metrics"
+      metrics={instMetrics}
+      activeSectionTitle="Active Campus Academic Programs"
+      activeSectionSubtitle="Syllabus coverage and student attendance across active departments."
+      activeModules={instActiveModules}
+      quickShortcuts={instQuickShortcuts}
+      notifications={notifications}
+    />
   );
 }
+

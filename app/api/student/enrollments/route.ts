@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { getAuthenticatedUser, getAuthUser } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
 
@@ -9,32 +10,62 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const result = await db.query(`
+    const { searchParams } = new URL(req.url);
+    const childProfileId = searchParams.get("student_profile_id") ? Number(searchParams.get("student_profile_id")) : null;
+
+    let query = `
       SELECT
         se.id AS enrollment_id,
         se.student_id,
         se.institution_id,
-        ip.name AS institution_name,
+        COALESCE(ip.name, ip.slug, 'Partner Institution') AS institution_name,
         ip.slug AS institution_slug,
         se.program_id,
-        prog.title AS program_title,
-        prog.code AS program_code,
-        prog.duration AS program_duration,
-        prog.fee_amount,
+        COALESCE(prog.title, 'Enrolled Academic Program') AS program_title,
+        prog.slug AS program_slug,
+        ('PRG-' || COALESCE(prog.id, se.program_id)::text) AS program_code,
+        prog.duration_value,
+        prog.duration_unit,
+        CASE 
+          WHEN prog.duration_value IS NOT NULL AND prog.duration_unit IS NOT NULL 
+          THEN CONCAT(prog.duration_value, ' ', prog.duration_unit)
+          ELSE '1 Year'
+        END AS program_duration,
+        COALESCE(prog.fee_amount, 25000) AS fee_amount,
         se.academic_year_id,
         ay.name AS academic_year_name,
         se.status,
         se.admission_date,
         se.created_at,
-        sp.admission_number
+        sp.admission_number,
+        u.full_name AS student_name,
+        u.email AS student_email,
+        u.phone AS student_phone
       FROM student_profiles sp
+      INNER JOIN users u ON u.id = sp.user_id
       INNER JOIN student_enrollments se ON se.student_id = sp.id AND COALESCE(se.is_deleted, FALSE) = FALSE
-      INNER JOIN institution_profiles ip ON ip.id = se.institution_id AND COALESCE(ip.is_deleted, FALSE) = FALSE
-      INNER JOIN institution_programs prog ON prog.id = se.program_id AND COALESCE(prog.is_deleted, FALSE) = FALSE
-      LEFT JOIN academic_years ay ON ay.id = se.academic_year_id AND COALESCE(ay.is_deleted, FALSE) = FALSE
-      WHERE sp.user_id = $1
-      ORDER BY se.id DESC
-    `, [user.id]);
+      LEFT JOIN institution_profiles ip ON ip.id = se.institution_id
+      LEFT JOIN institution_programs prog ON prog.id = se.program_id
+      LEFT JOIN academic_years ay ON ay.id = se.academic_year_id
+      WHERE (
+        sp.user_id = $1
+        OR sp.id IN (
+          SELECT sg.student_id
+          FROM student_guardians sg
+          WHERE sg.guardian_user_id = $1 AND COALESCE(sg.is_deleted, FALSE) = FALSE
+        )
+      )
+    `;
+
+    const params: unknown[] = [user.id];
+    if (childProfileId) {
+      params.push(childProfileId);
+      query += ` AND sp.id = $${params.length}`;
+    }
+
+    query += ` ORDER BY se.id DESC`;
+
+    const result = await db.query(query, params);
 
     return NextResponse.json({
       success: true,
@@ -50,7 +81,7 @@ export async function POST(req: Request) {
     const user = await getAuthenticatedUser(req);
     const body = await req.json();
 
-    const { programId, institutionId: providedInstId } = body;
+    const { programId, institutionId: providedInstId, student_profile_id, child_user_id } = body;
 
     if (!programId) {
       return NextResponse.json({ error: "programId is required" }, { status: 400 });
@@ -79,21 +110,69 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Institution ID could not be determined" }, { status: 400 });
       }
 
-      // 2. Ensure student_profiles row exists for user
-      let studentRes = await client.query<{ id: number }>(
-        `SELECT id FROM student_profiles WHERE user_id = $1 LIMIT 1`,
-        [user.id]
-      );
-
+      // 2. Resolve student_profiles row (either specific child or user themselves)
       let studentId: number;
-      if (studentRes.rows.length === 0) {
-        const createStudentRes = await client.query<{ id: number }>(
-          `INSERT INTO student_profiles (user_id, created_at, updated_at) VALUES ($1, NOW(), NOW()) RETURNING id`,
+      let targetUserId: number = user.id;
+
+      if (student_profile_id) {
+        const checkChild = await client.query<{ id: number; user_id: number }>(
+          `SELECT sp.id, sp.user_id FROM student_profiles sp
+           LEFT JOIN student_guardians sg ON sg.student_id = sp.id
+           WHERE sp.id = $1 AND (sp.user_id = $2 OR sg.guardian_user_id = $2)
+           LIMIT 1`,
+          [Number(student_profile_id), user.id]
+        );
+        if (checkChild.rows[0]) {
+          studentId = checkChild.rows[0].id;
+          targetUserId = checkChild.rows[0].user_id;
+        } else {
+          studentId = Number(student_profile_id);
+        }
+      } else if (child_user_id) {
+        let sp = await client.query<{ id: number }>(
+          `SELECT id FROM student_profiles WHERE user_id = $1 LIMIT 1`,
+          [Number(child_user_id)]
+        );
+        if (sp.rows[0]) {
+          studentId = sp.rows[0].id;
+          targetUserId = Number(child_user_id);
+        } else {
+          const createSp = await client.query<{ id: number }>(
+            `INSERT INTO student_profiles (user_id, created_at, updated_at) VALUES ($1, NOW(), NOW()) RETURNING id`,
+            [Number(child_user_id)]
+          );
+          studentId = createSp.rows[0].id;
+          targetUserId = Number(child_user_id);
+        }
+      } else {
+        // Check if guardian has linked children
+        const guardianChildren = await client.query<{ id: number; user_id: number }>(
+          `SELECT sp.id, sp.user_id FROM student_guardians sg
+           INNER JOIN student_profiles sp ON sp.id = sg.student_id
+           WHERE sg.guardian_user_id = $1 AND COALESCE(sg.is_deleted, FALSE) = FALSE
+           LIMIT 1`,
           [user.id]
         );
-        studentId = createStudentRes.rows[0].id;
-      } else {
-        studentId = studentRes.rows[0].id;
+
+        if (guardianChildren.rows.length > 0) {
+          studentId = guardianChildren.rows[0].id;
+          targetUserId = guardianChildren.rows[0].user_id;
+        } else {
+          let studentRes = await client.query<{ id: number }>(
+            `SELECT id FROM student_profiles WHERE user_id = $1 LIMIT 1`,
+            [user.id]
+          );
+
+          if (studentRes.rows.length === 0) {
+            const createStudentRes = await client.query<{ id: number }>(
+              `INSERT INTO student_profiles (user_id, created_at, updated_at) VALUES ($1, NOW(), NOW()) RETURNING id`,
+              [user.id]
+            );
+            studentId = createStudentRes.rows[0].id;
+          } else {
+            studentId = studentRes.rows[0].id;
+          }
+        }
       }
 
       // 3. Find or ensure active academic year for institution
@@ -123,7 +202,7 @@ export async function POST(req: Request) {
            FROM roles r WHERE r.code = 'student' OR r.name ILIKE '%student%'
            LIMIT 1
            ON CONFLICT DO NOTHING`,
-          [user.id, institutionId]
+          [targetUserId, institutionId]
         );
       } catch {
         // ignore if membership constraint varies
@@ -177,14 +256,36 @@ export async function POST(req: Request) {
 
       const enrollmentId = insertEnrollRes.rows[0].id;
 
-      // 7. Create record in visitor_sessions for Institution Admin Sales Enquiries
+      // Ensure student profile has a clean admission number
+      await client.query(
+        `UPDATE student_profiles
+         SET admission_number = COALESCE(NULLIF(admission_number, ''), 'ADM-2026-' || LPAD($1::text, 4, '0')),
+             updated_at = NOW()
+         WHERE id = $2`,
+        [enrollmentId, studentId]
+      );
+
+      // 7. Create record in visitor_sessions for Institution Admin Sales Enquiries & Pipeline
+      try {
+        await client.query(`ALTER TABLE visitor_sessions ALTER COLUMN tracking_token DROP NOT NULL`);
+      } catch {}
       try {
         await client.query(
           `ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS institution_id INTEGER REFERENCES institution_profiles(id) ON DELETE SET NULL`
         );
         await client.query(
+          `ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`
+        );
+        await client.query(
+          `ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS program_id INTEGER REFERENCES institution_programs(id) ON DELETE SET NULL`
+        );
+        const trackingToken = randomUUID();
+        await client.query(
           `INSERT INTO visitor_sessions (
+            tracking_token,
             institution_id,
+            user_id,
+            program_id,
             full_name,
             email,
             phone,
@@ -193,16 +294,20 @@ export async function POST(req: Request) {
             estimated_value,
             follow_up,
             current_page_url,
-            created_at
-          ) VALUES ($1, $2, $3, $4, 'new enquiry', 'new enquiry', $5, $6, $7, NOW())`,
+            created_at,
+            last_seen_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'enrolled', 'won', $8, $9, $10, NOW(), NOW())`,
           [
+            trackingToken,
             institutionId,
+            user.id,
+            Number(programId),
             user.full_name || "Student Lead",
             user.email || "",
             user.phone || "",
             Number(program.fee_amount || 25000),
-            `Direct Student Enrollment for Course: ${program.title} (ID: ${program.id})`,
-            program.title,
+            `Direct Student Enrollment for Course: ${program.title} (Enrollment ID: ${enrollmentId})`,
+            `/courses/${program.id}`,
           ]
         );
       } catch (e) {

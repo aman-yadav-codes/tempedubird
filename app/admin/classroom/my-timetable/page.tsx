@@ -26,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store";
+import { PageHeader, PageContainer } from "@/components/shared/page-shell";
 
 type TimetableScope = {
   role?: "student" | "teacher";
@@ -181,6 +182,7 @@ export default function MyTimetablePage() {
     () => new Set(entries.map((entry) => entry.subject_id)).size,
     [entries]
   );
+  const isStudentRole = Boolean(user?.role_codes?.includes("student"));
 
   function moveDay(direction: -1 | 1) {
     if (!visibleDays.length) return;
@@ -189,24 +191,34 @@ export default function MyTimetablePage() {
     setSelectedDay(visibleDays[next].value);
   }
 
-  if (!isReady) return <TimetableSkeleton />;
-
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            {isParentView ? "Timetable" : "My Timetable"}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {isTeacherTimetable ? "Your weekly teaching schedule, subjects, and classes." : "Your weekly class schedule, subjects, and teachers."}
-          </p>
-        </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => void loadTimetable()} disabled={loading}>
-          <RefreshCw className={cn("size-4", loading && "animate-spin")} />
-          Refresh
-        </Button>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title={isParentView ? "Child Timetable" : "My Timetable"}
+        icon={CalendarDays}
+        subtitle={
+          isTeacherTimetable
+            ? "Your weekly teaching schedule, subjects, and assigned classes."
+            : "Your weekly class schedule, subjects, and teachers across terms."
+        }
+        backLink={{
+          href: isStudentRole ? "/student/dashboard" : "/admin",
+          label: isStudentRole ? "Back to Student Dashboard" : "Back to Admin Dashboard",
+        }}
+        actions={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void loadTimetable()}
+            disabled={loading}
+            className="rounded-xl shadow-xs font-semibold"
+          >
+            <RefreshCw className={cn("size-4 mr-1.5", loading && "animate-spin")} />
+            Refresh Schedule
+          </Button>
+        }
+      />
 
       {loading && !scope ? <TimetableSkeleton /> : !scope ? (
         <Card className="items-center px-6 py-16 text-center">
@@ -362,6 +374,6 @@ export default function MyTimetablePage() {
           </Card>
         </>
       )}
-    </div>
+    </PageContainer>
   );
 }

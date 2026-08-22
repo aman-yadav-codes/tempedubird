@@ -333,6 +333,15 @@ function getRoleAssignmentError(
   roleMeta: { code: string; scope_code: string | null } | null,
 ) {
   if (isPlatformAdminUser(currentUser)) return null;
+
+  const isGuardianOrParent =
+    Boolean(currentUser.role_codes?.some((c) => c.toLowerCase().includes("parent") || c.toLowerCase().includes("guardian"))) ||
+    Boolean(currentUser.roles?.some((r) => r.toLowerCase().includes("parent") || r.toLowerCase().includes("guardian")));
+
+  if (isGuardianOrParent) {
+    if (!roleMeta || roleMeta.code === "student") return null;
+  }
+
   if (!currentUser.role_codes.includes("institution_admin")) {
     return "Only Platform Admin or Institution Admin can manage user admin controls";
   }

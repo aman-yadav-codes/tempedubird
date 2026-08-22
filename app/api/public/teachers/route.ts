@@ -24,10 +24,25 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search")?.trim().toLowerCase() || "";
     const subject = searchParams.get("subject")?.trim().toLowerCase() || "";
+    const institutionId = searchParams.get("institutionId") ? Number(searchParams.get("institutionId")) : null;
 
-    // Query DB for all teachers across any institution
+    // Query DB for teachers (optionally filtered by institution)
     let dbTeachers: PublicTeacher[] = [];
     try {
+      const whereConditions = [
+        "u.is_active = TRUE",
+        "COALESCE(u.is_deleted, FALSE) = FALSE",
+        "(r_im.code = 'teacher' OR r_ur.code = 'teacher' OR COALESCE(up.is_teacher, FALSE) = TRUE OR u.email LIKE '%teacher%')"
+      ];
+      const params: unknown[] = [];
+
+      if (institutionId && Number.isInteger(institutionId) && institutionId > 0) {
+        params.push(institutionId);
+        whereConditions.push(`(im.institution_id = $${params.length} OR up.under_institution_id = $${params.length})`);
+      }
+
+      const whereClause = whereConditions.join(" AND ");
+
       const res = await db.query(`
         SELECT DISTINCT ON (u.id)
           u.id,
@@ -47,17 +62,10 @@ export async function GET(req: Request) {
         LEFT JOIN institution_profiles ip2 ON ip2.id = up.under_institution_id
         LEFT JOIN locations l1 ON l1.id = ip1.location_id
         LEFT JOIN locations l2 ON l2.id = ip2.location_id
-        WHERE u.is_active = TRUE
-          AND COALESCE(u.is_deleted, FALSE) = FALSE
-          AND (
-            r_im.code = 'teacher' 
-            OR r_ur.code = 'teacher'
-            OR COALESCE(up.is_teacher, FALSE) = TRUE
-            OR u.email LIKE '%teacher%'
-          )
+        WHERE ${whereClause}
         ORDER BY u.id DESC
         LIMIT 100
-      `);
+      `, params);
 
       const DEFAULT_DESIGNATIONS = [
         "Senior Professor & HOD",

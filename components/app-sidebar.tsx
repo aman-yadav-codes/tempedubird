@@ -1,5 +1,6 @@
 "use client";
 
+import NextImage from "next/image";
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -59,6 +60,7 @@ import {
     Copyright,
     RefreshCw,
     Share2,
+    Percent,
 } from "lucide-react";
 import { toast } from "sonner";
 import { readJsonResponse } from "@/lib/api/read-json-response";
@@ -264,8 +266,10 @@ const navItems: SidebarItem[] = [
         url: "/admin/sales/pipeline",
         icon: BadgeDollarSign,
         children: [
+            { title: "Enrollments", url: "/admin/sales/enrollments", icon: GraduationCap },
             { title: "Pipeline", url: "/admin/sales/pipeline", icon: TrendingUp },
             { title: "Enquiry", url: "/admin/sales/enquiries", icon: Mail },
+            { title: "Commissions", url: "/admin/sales/commissions", icon: Percent },
         ],
     },
     {
@@ -375,7 +379,13 @@ const navItems: SidebarItem[] = [
                 url: "/admin/institutions/facilities",
                 icon: Building,
             },
-            
+
+            {
+                title: "Gallery",
+                url: "/admin/institutions/gallery",
+                icon: Image,
+            },
+
             {
                 title: "Institution Cutoffs",
                 url: "/admin/institutions/cutoffs",
@@ -386,6 +396,18 @@ const navItems: SidebarItem[] = [
                 title: "Scholarships",
                 url: "/admin/institutions/scholarships",
                 icon: CreditCard,
+            },
+
+            {
+                title: "Hostel Facilities",
+                url: "/admin/institutions/hostels",
+                icon: Building2,
+            },
+
+            {
+                title: "Library Resources",
+                url: "/admin/institutions/libraries",
+                icon: LibraryBig,
             },
 
             {
@@ -452,14 +474,17 @@ const navItems: SidebarItem[] = [
         ],
     },
     {
-        title: "Information",
-        url: "/admin/company?tab=contact-us",
+        title: "Company & Legal",
+        url: "/admin/company?tab=faqs",
         permissionPath: "/admin/company",
-        icon: Info,
+        icon: Building2,
         children: [
-            { title: "Contact Us & Branches", url: "/admin/company?tab=contact-us", icon: Mail },
-            { title: "Hostel Facilities", url: "/admin/company?tab=hostels", icon: Building2 },
-            { title: "Library Resources", url: "/admin/company?tab=libraries", icon: BookOpen },
+            { title: "FAQs", url: "/admin/company?tab=faqs", icon: HelpCircle },
+            { title: "Privacy Policy", url: "/admin/company?tab=privacy-policy", icon: ShieldCheck },
+            { title: "Terms & Conditions", url: "/admin/company?tab=terms-and-conditions", icon: FileText },
+            { title: "Copyright Policy", url: "/admin/company?tab=copyright-policy", icon: Copyright },
+            { title: "Refund Policy", url: "/admin/company?tab=refund-policy", icon: RefreshCw },
+            { title: "Social Media Links", url: "/admin/company?tab=social-links", icon: Share2 },
         ],
     },
 ];
@@ -470,6 +495,7 @@ interface SidebarItem {
     permissionPath?: string;
     icon?: ComponentType<{ className?: string }>;
     children?: SidebarItem[];
+    badge?: string;
 }
 
 function getActiveSidebarLeaf(
@@ -550,7 +576,7 @@ export function AppSidebar() {
     const isPlatformAdmin = Boolean(user?.role_codes?.includes("platform_admin") || user?.is_super_admin);
     const isInstitutionAdmin = Boolean(user?.role_codes?.includes("institution_admin") && !isPlatformAdmin);
     const isParent = Boolean(user?.role_codes?.includes("parent") && !isPlatformAdmin && !isInstitutionAdmin);
-    const isStudent = Boolean(user?.role_codes?.includes("student") && !isPlatformAdmin && !isInstitutionAdmin && !isParent);
+    const isStudent = Boolean((user?.role_codes?.includes("student") || (user as any)?.roles?.includes("student") || user?.primary_role === "student") && !isPlatformAdmin && !isInstitutionAdmin && !isParent);
     const isRoleInstitutionUser = Boolean(!isPlatformAdmin && !isInstitutionAdmin && user?.role_codes?.some((role) => ["student", "teacher", "parent", "driver"].includes(role)));
     const [activeInstitutionId, setActiveInstitutionId] = useState<number | null>(() => {
         return getStoredActiveInstitutionId();
@@ -832,8 +858,16 @@ export function AppSidebar() {
 
     function selectStudentEnrollment(enrollmentId: number) {
         if (enrollmentId === activeStudentEnrollment?.id) return;
+        const target = studentEnrollments.find((item) => item.id === enrollmentId);
         setActiveStudentEnrollmentId(enrollmentId);
         setStoredActiveStudentEnrollmentId(enrollmentId);
+        if (target?.institutionId) {
+            setActiveInstitutionId(target.institutionId);
+            setStoredActiveInstitutionId(target.institutionId);
+        }
+        window.setTimeout(() => {
+            window.location.reload();
+        }, 50);
     }
 
     async function confirmLogout() {
@@ -852,7 +886,7 @@ export function AppSidebar() {
     return (
         <>
             <Sidebar collapsible="icon">
-                <SidebarHeader>
+                <SidebarHeader className="border-b border-sidebar-border/60 pb-2">
                     <SidebarMenu>
                         <SidebarMenuItem>
                             {canSwitchInstitution || canSwitchChild || canSwitchStudentEnrollment ? (
@@ -879,7 +913,7 @@ export function AppSidebar() {
                                         sideOffset={4}
                                     >
                                         <DropdownMenuLabel className="text-xs text-muted-foreground">
-                                            {canSwitchChild ? "Children" : canSwitchStudentEnrollment ? "My Programs" : "Institutions"}
+                                            {canSwitchChild ? "Children" : canSwitchStudentEnrollment ? "Enrolled Institutions & Programs" : "Institutions"}
                                         </DropdownMenuLabel>
                                         {canSwitchChild
                                             ? parentChildren.map((child) => (
@@ -907,14 +941,14 @@ export function AppSidebar() {
                                                     checked={enrollment.id === activeStudentEnrollment?.id}
                                                     onCheckedChange={() => selectStudentEnrollment(enrollment.id)}
                                                     onSelect={(event) => event.preventDefault()}
-                                                    className="min-w-0 gap-2 p-2"
+                                                    className="min-w-0 gap-2 p-2 cursor-pointer"
                                                 >
                                                     <div className="flex w-full min-w-0 flex-col pl-1">
-                                                        <span className="truncate text-sm font-medium">
-                                                            {enrollment.programName}{enrollment.sectionName ? ` · ${enrollment.sectionName}` : ""}
+                                                        <span className="truncate text-sm font-semibold">
+                                                            {enrollment.institutionName}
                                                         </span>
                                                         <span className="truncate text-xs text-muted-foreground">
-                                                            {enrollment.institutionName} · {enrollment.academicYearName}
+                                                            {enrollment.programName}{enrollment.sectionName ? ` · ${enrollment.sectionName}` : ""} ({enrollment.academicYearName})
                                                         </span>
                                                     </div>
                                                 </DropdownMenuCheckboxItem>
@@ -958,71 +992,102 @@ export function AppSidebar() {
                 </SidebarHeader>
 
                 <SidebarContent>
-                    <SidebarGroup>
-                        <SidebarGroupLabel>Platform</SidebarGroupLabel>
-                        <SidebarMenu>
-                            {visibleNavItems.map((item) =>
-                                item.children ? (
-                                    <Collapsible
-                                        key={item.title}
-                                        asChild
-                                        defaultOpen={isPathActive(item, activeSidebarLeaf)}
-                                        className="group/collapsible"
-                                    >
-                                        <SidebarMenuItem>
-                                            <CollapsibleTrigger asChild>
-                                                <SidebarMenuButton
-                                                    tooltip={item.title}
-                                                    isActive={isPathActive(item, activeSidebarLeaf)}
-                                                    className="data-[active=true]:bg-destructive/15 data-[active=true]:text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                                >
-                                                    <item.icon className="size-4 text-current" />
-                                                    <span>{item.title}</span>
-                                                    <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                                                </SidebarMenuButton>
-                                            </CollapsibleTrigger>
-                                            <CollapsibleContent>
-                                                <SidebarMenuSub>
-                                                    {item.children.map((child) =>
-                                                        child.children ? (
-                                                            <Collapsible
-                                                                key={child.title}
-                                                                asChild
-                                                                defaultOpen={isPathActive(child, activeSidebarLeaf)}
-                                                                className="group/nested-collapsible"
-                                                            >
-                                                                <SidebarMenuSubItem>
-                                                                    <CollapsibleTrigger asChild>
-                                                                        <SidebarMenuSubButton
-                                                                            isActive={isPathActive(child, activeSidebarLeaf)}
-                                                                            className="cursor-pointer data-[active=true]:bg-destructive/15 data-[active=true]:text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                                                        >
-                                                                            <child.icon className="size-3.5 text-current" />
-                                                                            <span>{child.title}</span>
-                                                                            <ChevronRight className="ml-auto size-3 transition-transform duration-200 group-data-[state=open]/nested-collapsible:rotate-90" />
-                                                                        </SidebarMenuSubButton>
-                                                                    </CollapsibleTrigger>
-                                                                    <CollapsibleContent>
-                                                                        <SidebarMenuSub className="ml-4">
-                                                                            {child.children.map((grandchild) => (
-                                                                                <SidebarMenuSubItem key={grandchild.title}>
-                                                                                    <SidebarMenuSubButton
-                                                                                        asChild
-                                                                                        isActive={isPathActive(grandchild, activeSidebarLeaf)}
-                                                                                        className="data-[active=true]:bg-destructive/15 data-[active=true]:text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                                                                    >
-                                                                                        <Link href={roleHref(grandchild.url)}>
-                                                                                            <grandchild.icon className="size-3 text-current" />
-                                                                                            <span className="text-xs">{grandchild.title}</span>
-                                                                                        </Link>
-                                                                                    </SidebarMenuSubButton>
-                                                                                </SidebarMenuSubItem>
-                                                                            ))}
-                                                                        </SidebarMenuSub>
-                                                                    </CollapsibleContent>
-                                                                </SidebarMenuSubItem>
-                                                            </Collapsible>
-                                                        ) : (
+                    {(isStudent ? [
+                        {
+                            label: "Platform",
+                            items: [
+                                { title: "Dashboard", url: "/student/dashboard", icon: LayoutDashboard },
+                                ...(studentEnrollments.length > 0 ? [
+                                    {
+                                        title: "My Classroom",
+                                        url: "/admin/classroom/attendance",
+                                        icon: School,
+                                        children: [
+                                            { title: "Attendance", url: "/admin/classroom/attendance", icon: ClipboardCheck },
+                                            { title: "Assignments", url: "/admin/classroom/assignments", icon: ClipboardList },
+                                            { title: "Practice Exams", url: "/admin/classroom/practice-exams", icon: ClipboardCheck },
+                                            { title: "Exams & Results", url: "/admin/classroom/exams", icon: FileText },
+                                            { title: "My Timetable", url: "/admin/classroom/my-timetable", icon: CalendarDays },
+                                            { title: "ID Card", url: "/admin/classroom/id-card", icon: IdCard },
+                                            { title: "My Fee", url: "/admin/classroom/fees", icon: CreditCard },
+                                        ],
+                                    },
+                                ] : []),
+                                { title: "My Enrollments", url: "/student/enrollments", icon: GraduationCap, badge: studentEnrollments.length > 0 ? "Enrolled" : undefined },
+                                { title: "My Enquiries", url: "/student/enquiries", icon: HelpCircle },
+                                { title: "My Guardians", url: "/student/guardians", icon: Users },
+                                ...(studentEnrollments.length > 0 ? [
+                                    {
+                                        title: "My Institution",
+                                        url: "/admin/institution/calendar",
+                                        icon: Building,
+                                        children: [
+                                            { title: "Calendar", url: "/admin/institution/calendar", icon: CalendarDays },
+                                            { title: "Noticeboard", url: "/admin/institutions/news", icon: Megaphone },
+                                            { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
+                                        ],
+                                    },
+                                ] : []),
+                                {
+                                    title: "Notifications",
+                                    url: "/admin/notifications",
+                                    icon: Bell,
+                                    children: [
+                                        { title: "All Alerts", url: "/admin/notifications", icon: BellRing },
+                                        { title: "Controls", url: "/admin/notifications/settings", icon: Settings },
+                                    ],
+                                },
+                            ],
+                        },
+                        {
+                            label: "Academic & Learning",
+                            items: [
+                                { title: "Practice Tests", url: "/practice", icon: ClipboardCheck, badge: "Quizzes" },
+                                { title: "Lecture Notes", url: "/notes", icon: StickyNote },
+                                { title: "Explore Courses", url: "/courses", icon: BookOpen },
+                            ],
+                        },
+                        {
+                            label: "Campus & Services",
+                            items: [
+                                { title: "Hostels & Residence", url: "/hostels", icon: Building2 },
+                                { title: "Digital Libraries", url: "/libraries", icon: LibraryBig },
+                                { title: "Top Institutes", url: "/institutes", icon: Building2 },
+                                { title: "Expert Faculty", url: "/teachers", icon: UserCheck },
+                            ],
+                        },
+                    ] : [{ label: "Platform", items: visibleNavItems }]).map((group) => (
+                        <SidebarGroup key={group.label}>
+                            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+                            <SidebarMenu>
+                                {group.items.map((item) =>
+                                    item.children ? (
+                                        <Collapsible
+                                            key={item.title}
+                                            asChild
+                                            defaultOpen={isPathActive(item, activeSidebarLeaf)}
+                                            className="group/collapsible"
+                                        >
+                                            <SidebarMenuItem>
+                                                <CollapsibleTrigger asChild>
+                                                    <SidebarMenuButton
+                                                        tooltip={item.title}
+                                                        isActive={isPathActive(item, activeSidebarLeaf)}
+                                                        className="data-[active=true]:bg-destructive/15 data-[active=true]:text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                                    >
+                                                        {item.icon && <item.icon className="size-4 text-current" />}
+                                                        <span className="flex-1">{item.title}</span>
+                                                        {item.badge && (
+                                                            <span className="mr-1 rounded bg-rose-950/80 px-1.5 py-0.5 text-[10px] font-semibold text-rose-300 border border-rose-800/40">
+                                                                {item.badge}
+                                                            </span>
+                                                        )}
+                                                        <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                                                    </SidebarMenuButton>
+                                                </CollapsibleTrigger>
+                                                <CollapsibleContent>
+                                                    <SidebarMenuSub>
+                                                        {item.children.map((child) => (
                                                             <SidebarMenuSubItem key={child.title}>
                                                                 <SidebarMenuSubButton
                                                                     asChild
@@ -1030,36 +1095,67 @@ export function AppSidebar() {
                                                                     className="data-[active=true]:bg-destructive/15 data-[active=true]:text-destructive hover:bg-destructive/10 hover:text-destructive"
                                                                 >
                                                                     <Link href={roleHref(child.url)}>
-                                                                        <child.icon className="size-3.5 text-current" />
+                                                                        {child.icon && <child.icon className="size-3.5 text-current" />}
                                                                         <span>{child.title}</span>
                                                                     </Link>
                                                                 </SidebarMenuSubButton>
                                                             </SidebarMenuSubItem>
-                                                        )
+                                                        ))}
+                                                    </SidebarMenuSub>
+                                                </CollapsibleContent>
+                                            </SidebarMenuItem>
+                                        </Collapsible>
+                                    ) : (
+                                        <SidebarMenuItem key={item.title}>
+                                            <SidebarMenuButton
+                                                asChild
+                                                isActive={isPathActive(item, activeSidebarLeaf)}
+                                                tooltip={item.title}
+                                                className="data-[active=true]:bg-destructive/15 data-[active=true]:text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                            >
+                                                <Link href={roleHref(item.url)} className="flex items-center w-full">
+                                                    {item.icon && <item.icon className="size-4 text-current" />}
+                                                    <span className="flex-1 ml-2">{item.title}</span>
+                                                    {item.badge && (
+                                                        <span className="ml-auto rounded bg-rose-950/80 px-1.5 py-0.5 text-[10px] font-semibold text-rose-300 border border-rose-800/40">
+                                                            {item.badge}
+                                                        </span>
                                                     )}
-                                                </SidebarMenuSub>
-                                            </CollapsibleContent>
+                                                </Link>
+                                            </SidebarMenuButton>
                                         </SidebarMenuItem>
-                                    </Collapsible>
-                                ) : (
-                                    <SidebarMenuItem key={item.title}>
-                                        <SidebarMenuButton
-                                            asChild
-                                            isActive={isPathActive(item, activeSidebarLeaf)}
-                                            tooltip={item.title}
-                                            className="data-[active=true]:bg-destructive/15 data-[active=true]:text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                        >
-                                            <Link href={roleHref(item.url)}>
-                                                <item.icon className="size-4 text-current" />
-                                                <span>{item.title}</span>
-                                            </Link>
-                                        </SidebarMenuButton>
-                                    </SidebarMenuItem>
-                                )
-                            )}
-                        </SidebarMenu>
-                    </SidebarGroup>
+                                    )
+                                )}
+                            </SidebarMenu>
+                        </SidebarGroup>
+                    ))}
                 </SidebarContent>
+
+                <SidebarFooter className="border-t border-sidebar-border/60 p-2">
+                    <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-sidebar-accent/40 border border-sidebar-border/60">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground font-black text-xs flex items-center justify-center shrink-0">
+                                {initials}
+                            </div>
+                            <div className="flex flex-col min-w-0 group-data-[collapsible=icon]:hidden">
+                                <span className="text-xs font-bold text-sidebar-foreground truncate">
+                                    {displayName}
+                                </span>
+                                <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5 truncate">
+                                    <ShieldCheck className="h-3 w-3 shrink-0" /> {activeWorkspaceRole}
+                                </span>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setLogoutOpen(true)}
+                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer shrink-0 group-data-[collapsible=icon]:hidden"
+                            title="Sign Out"
+                        >
+                            <LogOut className="h-4 w-4" />
+                        </button>
+                    </div>
+                </SidebarFooter>
             </Sidebar>
 
             <AlertDialog open={logoutOpen} onOpenChange={setLogoutOpen}>

@@ -8,7 +8,7 @@ function getRegisterErrorStatus(message: string) {
   if (message === "Select an institution for this signup role") return 400;
   if (message === "Designation is only allowed for Institution Admin role") return 422;
   if (message === "Select a designation for this signup role") return 422;
-  if (message === "User exists") return 409;
+  if (message === "User exists" || message === "Phone number already registered") return 409;
   return 500;
 }
 

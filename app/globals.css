@@ -180,12 +180,40 @@
     @apply border-border outline-ring/50;
   }
 
-  body {
-    @apply bg-background text-foreground;
+  html {
+    @apply font-sans antialiased scroll-smooth;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
-  html {
-    @apply font-sans;
+  body {
+    @apply bg-background text-foreground font-sans antialiased text-sm;
+    font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--foreground);
+    letter-spacing: -0.011em;
+  }
+
+  h1, .h1 {
+    @apply text-2xl sm:text-3xl font-black tracking-tight text-foreground;
+  }
+
+  h2, .h2 {
+    @apply text-lg sm:text-xl font-extrabold tracking-tight text-foreground;
+  }
+
+  h3, .h3 {
+    @apply text-base sm:text-lg font-extrabold text-foreground leading-snug tracking-tight;
+  }
+
+  h4, .h4 {
+    @apply text-xs sm:text-sm font-bold text-foreground;
+  }
+
+  p {
+    @apply text-xs sm:text-sm leading-relaxed text-muted-foreground;
+  }
+
+  button, input, select, textarea {
+    font-family: inherit;
   }
 }
 

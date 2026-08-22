@@ -1,23 +1,23 @@
-import { HeroSection } from "@/components/home/hero-section";
-import { CategoriesSection } from "@/components/home/categories-section";
-import { FeaturedCoursesSection } from "@/components/home/featured-courses-section";
-import { WhyChooseUsSection } from "@/components/home/why-choose-us-section";
-import { CtaSection } from "@/components/home/cta-section";
+import { Suspense } from "react";
+import { HomeLandingContainer } from "@/components/home/home-landing-container";
+import { PlatformAdminLanding } from "@/components/home/platform-admin-landing";
 
 export const metadata = {
-  title: "EduBird - Discover Courses, Top Institutes, Schools & Teachers Across India",
+  title: "EduBird - Unified Education Platform & Campus ERP System",
   description:
-    "Explore verified courses, colleges, schools, coaching institutes, and expert faculty across India. Compare fee structures, syllabus, campus facilities, and enroll online.",
+    "Explore verified courses, colleges, schools, coaching institutes, and automated campus ERP solutions across India. Discover courses or manage your educational institution.",
 };
 
 export default function HomePage() {
   return (
-    <>
-      <HeroSection />
-      <CategoriesSection />
-      <FeaturedCoursesSection />
-      <WhyChooseUsSection />
-      <CtaSection />
-    </>
+    <Suspense
+      fallback={
+        <div className="min-h-screen">
+          <PlatformAdminLanding />
+        </div>
+      }
+    >
+      <HomeLandingContainer />
+    </Suspense>
   );
 }

@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -6,6 +8,7 @@ import {
   CheckCircle2,
   Clock,
   GraduationCap,
+  HelpCircle,
   Languages,
   Monitor,
   Users,
@@ -37,8 +40,12 @@ export interface CourseCardProps {
   languages?: string[];
   subjects?: string[];
   sections?: string[];
+  institutionId?: number;
+  institution_id?: number;
+  fee_amount?: any;
   viewMode?: "grid" | "list";
-  onEnroll?: (program: { id: number; title: string; institute: string; price: string; duration: string }) => void;
+  onEnroll?: (program: { id: number; title: string; institute: string; price: string; duration: string; institution_id?: number; fee_amount?: string | number }) => void;
+  onEnquire?: (program: { id: number; title: string; institute: string; price: string; duration: string; institution_id?: number }) => void;
 }
 
 export function CourseCard({
@@ -61,7 +68,11 @@ export function CourseCard({
   subjects = [],
   sections = [],
   viewMode = "grid",
+  institutionId,
+  institution_id,
+  fee_amount,
   onEnroll,
+  onEnquire,
 }: CourseCardProps) {
   const displayImage = images[0]?.url || image || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=80";
   const courseUrl = buildCourseUrl(id, title, institute);
@@ -201,22 +212,29 @@ export function CourseCard({
               {onEnroll && (
                 <button
                   type="button"
-                  onClick={() => onEnroll({ id, title, institute, price, duration })}
-                  className="flex h-10 w-full items-center justify-center gap-1.5 rounded-md bg-primary font-bold text-xs text-primary-foreground shadow-xs transition hover:bg-primary/90"
+                  onClick={() => onEnroll({ id, title, institute, price, duration, institution_id: institutionId || institution_id, fee_amount })}
+                  className="flex h-10 w-full items-center justify-center gap-1.5 rounded-md bg-primary font-bold text-xs text-primary-foreground shadow-xs transition hover:bg-primary/90 cursor-pointer"
                 >
                   <GraduationCap className="h-4 w-4" />
                   Enroll Now
                 </button>
               )}
-              <Link
-                href={courseUrl}
-                className={`flex h-10 w-full items-center justify-center gap-1.5 rounded-md border border-primary/80 text-xs font-semibold text-primary transition hover:bg-primary hover:text-primary-foreground ${
+              <button
+                type="button"
+                onClick={() => {
+                  if (onEnquire) {
+                    onEnquire({ id, title, institute, price, duration, institution_id: institutionId || institution_id });
+                  } else {
+                    window.location.href = courseUrl;
+                  }
+                }}
+                className={`flex h-10 w-full items-center justify-center gap-1.5 rounded-md border border-primary/80 text-xs font-bold text-primary transition hover:bg-primary hover:text-primary-foreground cursor-pointer ${
                   !onEnroll ? "col-span-2" : ""
                 }`}
               >
-                View Details
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
+                <HelpCircle className="h-3.5 w-3.5" />
+                Enquiry
+              </button>
             </div>
           </CardContent>
         </div>

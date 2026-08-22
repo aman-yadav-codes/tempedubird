@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
+import { useCategoryAvailability } from "@/hooks/use-category-availability";
 
 type LibraryItem = {
   id: number;
@@ -17,6 +18,7 @@ type LibraryItem = {
   digital_titles: number;
   journals_subscribed: number;
   seating_capacity: number;
+  membership_fee?: string;
   reading_hall_available: boolean;
   e_resources_access: boolean;
   opening_hours: string;
@@ -30,17 +32,23 @@ type LibraryItem = {
 };
 
 export default function LibrariesPublicPage() {
+  const { isInstitutionalAdmin, activeInstitutionId } = useCategoryAvailability();
   const [libraries, setLibraries] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     fetchLibraries();
-  }, []);
+  }, [activeInstitutionId, isInstitutionalAdmin]);
 
   const fetchLibraries = async () => {
     try {
-      const res = await fetch("/api/public/libraries");
+      setLoading(true);
+      const url =
+        isInstitutionalAdmin && activeInstitutionId
+          ? `/api/public/libraries?institutionId=${activeInstitutionId}`
+          : "/api/public/libraries";
+      const res = await fetch(url);
       if (res.ok) {
         const json = await res.json();
         setLibraries(json.libraries || []);
@@ -91,7 +99,7 @@ export default function LibrariesPublicPage() {
             No library resources found matching your query.
           </Card>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((l) => (
               <Card key={l.id} className="p-6 shadow-xs hover:border-primary/50 transition-colors flex flex-col justify-between space-y-4">
                 <div className="space-y-3">

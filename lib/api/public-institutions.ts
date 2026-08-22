@@ -13,6 +13,13 @@ export type PublicInstitutionProfile = {
   established_year: number | null;
   website: string | null;
   about: string | null;
+  mission: string | null;
+  vision: string | null;
+  goal: string | null;
+  founder_name: string | null;
+  founder_title: string | null;
+  founder_image_url: string | null;
+  founder_about: string | null;
   location_name: string | null;
   full_address: string | null;
   board_name: string | null;
@@ -171,6 +178,13 @@ export async function getCurrentPublicInstitutionProfile(host: string | null | u
         p.established_year,
         p.website,
         p.about,
+        p.mission,
+        p.vision,
+        p.goal,
+        p.founder_name,
+        p.founder_title,
+        p.founder_image_url,
+        p.founder_about,
         l.name AS location_name,
         l.name AS full_address,
         b.name AS board_name,

@@ -13,13 +13,14 @@ export function useAdminGuard() {
   const { user, isAuthenticated, isInitialized } = useAuthStore();
   const canonicalPathname = toCanonicalAdminPath(pathname);
   const hasAdminAccess = canAccessAdminArea(user);
+  const isPublicPage = !canonicalPathname.startsWith("/admin");
   const isSelfServicePage = canonicalPathname === "/admin/account";
-  const hasPageAccess = isSelfServicePage || hasAdminPagePermission(user, canonicalPathname);
-  const isForbidden = isInitialized && isAuthenticated && (!hasAdminAccess || !hasPageAccess);
-  const isReady = isInitialized && isAuthenticated && hasAdminAccess && hasPageAccess;
+  const hasPageAccess = isPublicPage || isSelfServicePage || hasAdminPagePermission(user, canonicalPathname);
+  const isForbidden = !isPublicPage && isInitialized && isAuthenticated && (!hasAdminAccess || !hasPageAccess);
+  const isReady = isPublicPage || (isInitialized && isAuthenticated && hasAdminAccess && hasPageAccess);
 
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!isInitialized || isPublicPage) return;
 
     if (!isAuthenticated) {
       router.replace("/");
@@ -36,7 +37,7 @@ export function useAdminGuard() {
     if (shouldUseRoleRoutePrefix(pathname, user)) {
       router.replace(toRoleRoutePath(pathname, user));
     }
-  }, [hasAdminAccess, hasPageAccess, isAuthenticated, isInitialized, pathname, router, user]);
+  }, [hasAdminAccess, hasPageAccess, isAuthenticated, isInitialized, isPublicPage, pathname, router, user]);
 
   return { isReady, isForbidden };
 }

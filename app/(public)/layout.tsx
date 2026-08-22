@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { Suspense } from "react";
 
 import { PublicNavbar } from "@/components/public/public-navbar";
 import { PublicFooter } from "@/components/public/public-footer";
@@ -40,11 +41,13 @@ export default async function PublicLayout({ children }: { children: React.React
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <LeadTrackerProvider>
-        <PublicNavbar
-          brand={brand}
-          showInstitutesLink={!tenant}
-          institutionNavItems={institutionNavItems}
-        />
+        <Suspense fallback={<div className="h-16 w-full bg-white border-b border-gray-100" />}>
+          <PublicNavbar
+            brand={brand}
+            showInstitutesLink={!tenant}
+            institutionNavItems={institutionNavItems}
+          />
+        </Suspense>
         <main className="flex-1">{children}</main>
         <PublicFooter />
       </LeadTrackerProvider>

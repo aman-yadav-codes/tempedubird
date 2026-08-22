@@ -1,6 +1,7 @@
 // lib/auth.ts
 import { verifyToken } from "@/lib/auth/jwt";
 import { getUserById } from "@/lib/queries/user";
+import { getSession } from "@/models/sessionModel";
 import { db } from "@/lib/db/db";
 import { getAppModeForHost } from "@/lib/deployment/app-mode";
 import { getInstitutionTenantByHost, getRequestHost } from "@/lib/tenancy/institution-domain";
@@ -24,17 +25,57 @@ type AccessTokenPayload = {
 };
 
 export async function getAuthenticatedUser(req: Request) {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader) throw new Error("Unauthorized");
+  let token: string | undefined;
 
-  const token = authHeader.split(" ").pop();
+  const authHeader = req.headers.get("authorization");
+  if (authHeader) {
+    token = authHeader.split(" ").pop();
+  }
+
+  if (!token) {
+    const cookieHeader = req.headers.get("cookie");
+    if (cookieHeader) {
+      const accessMatch = cookieHeader.match(/access_token=([^;]+)/);
+      if (accessMatch) {
+        token = accessMatch[1];
+      } else {
+        const refreshMatch = cookieHeader.match(/refresh_token=([^;]+)/);
+        if (refreshMatch) {
+          token = refreshMatch[1];
+        }
+      }
+    }
+  }
+
   if (!token) throw new Error("Unauthorized");
 
-  const decoded = verifyToken(token) as AccessTokenPayload;
-  const userId = decoded.id ?? Number(decoded.sub);
+  let userId: number | undefined;
 
-  if (decoded.typ && decoded.typ !== "access") throw new Error("Unauthorized");
-  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Unauthorized");
+  // Try JWT decode if it has standard 3-part dot notation
+  if (token.includes(".") && token.split(".").length === 3) {
+    try {
+      const decoded = verifyToken(token) as AccessTokenPayload;
+      userId = decoded.id ?? Number(decoded.sub);
+    } catch {
+      // JWT failed or malformed, fallback to session table check
+    }
+  }
+
+  // If not resolved from JWT, check sessions table by UUID/session token ID
+  if (!userId || !Number.isInteger(userId) || userId <= 0) {
+    try {
+      const session = await getSession(token);
+      if (session && session.user_id) {
+        userId = Number(session.user_id);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!Number.isInteger(userId) || !userId || userId <= 0) {
+    throw new Error("Unauthorized");
+  }
 
   const user = await getUserById(db, userId);
 

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
+import { useCategoryAvailability } from "@/hooks/use-category-availability";
 
 type HostelItem = {
   id: number;
@@ -17,6 +18,7 @@ type HostelItem = {
   capacity: number;
   available_beds: number;
   annual_fee: number;
+  monthly_rent?: string;
   room_types: string;
   mess_facility: boolean;
   ac_available: boolean;
@@ -29,17 +31,23 @@ type HostelItem = {
 };
 
 export default function HostelsPublicPage() {
+  const { isInstitutionalAdmin, activeInstitutionId } = useCategoryAvailability();
   const [hostels, setHostels] = useState<HostelItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     fetchHostels();
-  }, []);
+  }, [activeInstitutionId, isInstitutionalAdmin]);
 
   const fetchHostels = async () => {
     try {
-      const res = await fetch("/api/public/hostels");
+      setLoading(true);
+      const url =
+        isInstitutionalAdmin && activeInstitutionId
+          ? `/api/public/hostels?institutionId=${activeInstitutionId}`
+          : "/api/public/hostels";
+      const res = await fetch(url);
       if (res.ok) {
         const json = await res.json();
         setHostels(json.hostels || []);
@@ -90,7 +98,7 @@ export default function HostelsPublicPage() {
             No campus hostels found matching your query.
           </Card>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((h) => (
               <Card key={h.id} className="p-6 shadow-xs hover:border-primary/50 transition-colors flex flex-col justify-between space-y-4">
                 <div className="space-y-3">

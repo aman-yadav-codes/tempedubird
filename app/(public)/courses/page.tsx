@@ -32,6 +32,7 @@ import { useClientPersistedState } from "@/hooks/use-client-persisted-state";
 import { featuredCourses } from "@/lib/data/home-data";
 import { RightInquiryForm } from "@/components/public/right-inquiry-form";
 import { ProgramEnrollmentDialog, type ProgramEnrollmentTarget } from "@/components/public/program-enrollment-dialog";
+import { CourseEnquiryDialog, type CourseEnquiryTarget } from "@/components/public/course-enquiry-dialog";
 import Link from "next/link";
 
 const PAGE_SIZE = 9;
@@ -49,6 +50,9 @@ type CourseListItem = (typeof featuredCourses)[number] & {
   sections?: string[];
   rating?: number;
   reviews?: number;
+  fee_amount?: any;
+  institutionId?: number;
+  institution_id?: number;
 };
 
 type PublicCourseCategory = {
@@ -182,6 +186,9 @@ function normalizePublicCourse(value: unknown): CourseListItem | null {
     rating: typeof course.rating === "number" ? course.rating : undefined,
     reviews: typeof course.reviews === "number" ? course.reviews : undefined,
     price: typeof course.price === "string" ? course.price : "Contact",
+    fee_amount: typeof course.fee_amount === "string" || typeof course.fee_amount === "number" ? course.fee_amount : undefined,
+    institutionId: typeof course.institutionId === "number" ? course.institutionId : (typeof course.institution_id === "number" ? course.institution_id : undefined),
+    institution_id: typeof course.institution_id === "number" ? course.institution_id : (typeof course.institutionId === "number" ? course.institutionId : undefined),
     verified: typeof course.verified === "boolean" ? course.verified : true,
     students: typeof course.students === "string" ? course.students : "Open seats",
     seatsAvailable: typeof course.seatsAvailable === "number" ? course.seatsAvailable : null,
@@ -298,7 +305,10 @@ function CourseCardSkeleton({ viewMode }: { viewMode: CoursesDirectoryState["vie
   );
 }
 
+import { useCategoryAvailability } from "@/hooks/use-category-availability";
+
 export default function CoursesPage() {
+  const { isInstitutionalAdmin, activeInstitutionId } = useCategoryAvailability();
   const resultsTopRef = useRef<HTMLDivElement | null>(null);
   const [publicCategories, setPublicCategories] = useState<PublicCourseCategory[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
@@ -306,6 +316,8 @@ export default function CoursesPage() {
   const [coursesLoading, setCoursesLoading] = useState(true);
   const [enrollModalOpen, setEnrollModalOpen] = useState(false);
   const [selectedEnrollProgram, setSelectedEnrollProgram] = useState<ProgramEnrollmentTarget | null>(null);
+  const [enquiryModalOpen, setEnquiryModalOpen] = useState(false);
+  const [selectedEnquiryCourse, setSelectedEnquiryCourse] = useState<CourseEnquiryTarget | null>(null);
   const [state, setState] = useClientPersistedState<CoursesDirectoryState>(
     "public.courses.directory",
     defaultCoursesState,
@@ -316,11 +328,24 @@ export default function CoursesPage() {
     setSelectedEnrollProgram({
       id: prog.id,
       title: prog.title,
+      institution_id: prog.institution_id || prog.institutionId,
       institution_name: prog.institute,
-      fee_amount: prog.price,
+      fee_amount: prog.fee_amount || prog.price,
       duration: prog.duration,
     });
     setEnrollModalOpen(true);
+  };
+
+  const handleEnquireClick = (prog: any) => {
+    setSelectedEnquiryCourse({
+      id: prog.id,
+      title: prog.title,
+      institute: prog.institute,
+      institution_id: prog.institution_id || prog.institutionId,
+      price: prog.price,
+      duration: prog.duration,
+    });
+    setEnquiryModalOpen(true);
   };
 
   useEffect(() => {
@@ -365,7 +390,11 @@ export default function CoursesPage() {
     async function loadCourses() {
       setCoursesLoading(true);
       try {
-        const response = await fetch("/api/courses?limit=100", { cache: "no-store" });
+        const url =
+          isInstitutionalAdmin && activeInstitutionId
+            ? `/api/courses?limit=100&institutionId=${activeInstitutionId}`
+            : "/api/courses?limit=100";
+        const response = await fetch(url, { cache: "no-store" });
         if (!response.ok) {
           if (!ignore) setPublicCourses(null);
           return;
@@ -398,7 +427,7 @@ export default function CoursesPage() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [activeInstitutionId, isInstitutionalAdmin]);
 
   const categoryOptions = useMemo(() => {
     if (publicCategories.length > 0) return publicCategories;
@@ -591,75 +620,66 @@ export default function CoursesPage() {
 
         <div ref={resultsTopRef} className="scroll-mt-48" />
 
-        <div className="grid gap-8 lg:grid-cols-[1fr_360px] items-start">
-          <div className="space-y-6">
-            {isLoading ? (
-              <div
-                className={
-                  state.viewMode === "grid"
-                    ? "grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
-                    : "grid gap-5"
-                }
-                aria-label="Loading courses"
-              >
-                {Array.from({ length: PAGE_SIZE }, (_, index) => (
-                  <CourseCardSkeleton key={index} viewMode={state.viewMode} />
-                ))}
-              </div>
-            ) : pageCourses.length > 0 ? (
-              <div
-                className={
-                  state.viewMode === "grid"
-                    ? "grid gap-6 opacity-100 transition-opacity duration-300 sm:grid-cols-2 lg:grid-cols-3"
-                    : "grid gap-5 opacity-100 transition-opacity duration-300"
-                }
-              >
-                {pageCourses.map((course) => (
-                  <CourseCard
-                    key={course.courseKey}
-                    {...course}
-                    viewMode={state.viewMode}
-                    onEnroll={handleEnrollClick}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card/70 px-6 py-20 text-center">
-                <Search className="mb-4 h-12 w-12 text-muted-foreground/40" />
-                <h3 className="mb-1 text-lg font-semibold text-foreground">No courses found</h3>
-                <p className="mb-4 text-sm text-muted-foreground">Try adjusting or clearing your filters.</p>
-                <Button variant="outline" size="sm" onClick={clearAll}>
-                  Clear all filters
-                </Button>
-              </div>
-            )}
-
-            {!isLoading && results.length > PAGE_SIZE && (
-              <div className="mt-8 grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
-                <p className="text-sm text-muted-foreground">
-                  Showing{" "}
-                  <span className="font-semibold text-foreground">
-                    {pageStart + 1}-{pageStart + pageCourses.length}
-                  </span>{" "}
-                  of <span className="font-semibold text-foreground">{results.length}</span> courses
-                </p>
-                <InstitutePagination
-                  page={safePage}
-                  pageCount={pageCount}
-                  onPageChange={changePage}
+        <div className="space-y-6">
+          {isLoading ? (
+            <div
+              className={
+                state.viewMode === "grid"
+                  ? "grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                  : "grid gap-5"
+              }
+              aria-label="Loading courses"
+            >
+              {Array.from({ length: PAGE_SIZE }, (_, index) => (
+                <CourseCardSkeleton key={index} viewMode={state.viewMode} />
+              ))}
+            </div>
+          ) : pageCourses.length > 0 ? (
+            <div
+              className={
+                state.viewMode === "grid"
+                  ? "grid gap-6 opacity-100 transition-opacity duration-300 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                  : "grid gap-5 opacity-100 transition-opacity duration-300"
+              }
+            >
+              {pageCourses.map((course) => (
+                <CourseCard
+                  key={course.courseKey}
+                  {...course}
+                  viewMode={state.viewMode}
+                  onEnroll={handleEnrollClick}
+                  onEnquire={handleEnquireClick}
                 />
-                <span />
-              </div>
-            )}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card/70 px-6 py-20 text-center">
+              <Search className="mb-4 h-12 w-12 text-muted-foreground/40" />
+              <h3 className="mb-1 text-lg font-semibold text-foreground">No courses found</h3>
+              <p className="mb-4 text-sm text-muted-foreground">Try adjusting or clearing your filters.</p>
+              <Button variant="outline" size="sm" onClick={clearAll}>
+                Clear all filters
+              </Button>
+            </div>
+          )}
 
-          {/* RIGHT SIDEBAR INQUIRY FORM */}
-          <RightInquiryForm
-            title="Course Counseling & Inquiry"
-            subtitle="Connect with an academic counselor for syllabus details, discounts & admission requirements."
-            categoryLabel="Select Course Goal"
-            categoryOptions={["Engineering & B.Tech", "Management & MBA/BBA", "Medical & NEET Prep", "School Board Prep", "Computer Science & IT"]}
-          />
+          {!isLoading && results.length > PAGE_SIZE && (
+            <div className="mt-8 grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
+              <p className="text-sm text-muted-foreground">
+                Showing{" "}
+                <span className="font-semibold text-foreground">
+                  {pageStart + 1}-{pageStart + pageCourses.length}
+                </span>{" "}
+                of <span className="font-semibold text-foreground">{results.length}</span> courses
+              </p>
+              <InstitutePagination
+                page={safePage}
+                pageCount={pageCount}
+                onPageChange={changePage}
+              />
+              <span />
+            </div>
+          )}
         </div>
       </div>
 
@@ -667,6 +687,12 @@ export default function CoursesPage() {
         open={enrollModalOpen}
         onOpenChange={setEnrollModalOpen}
         program={selectedEnrollProgram}
+      />
+
+      <CourseEnquiryDialog
+        open={enquiryModalOpen}
+        onOpenChange={setEnquiryModalOpen}
+        course={selectedEnquiryCourse}
       />
     </div>
   );

@@ -25,6 +25,8 @@ export function getStoredActiveStudentEnrollmentId() {
 }
 
 export function setStoredActiveStudentEnrollmentId(id: number) {
+  const current = getStoredActiveStudentEnrollmentId();
+  if (current === id) return;
   window.localStorage.setItem(ACTIVE_STUDENT_ENROLLMENT_STORAGE_KEY, String(id));
   window.dispatchEvent(new CustomEvent(ACTIVE_STUDENT_ENROLLMENT_EVENT, { detail: { id } }));
 }
@@ -55,3 +57,29 @@ export function setStoredStudentDefaultAcademicYearId(institutionId: number, aca
   values[String(institutionId)] = academicYearId;
   window.localStorage.setItem(STUDENT_DEFAULT_ACADEMIC_YEAR_STORAGE_KEY, JSON.stringify(values));
 }
+
+export const ACTIVE_STUDENT_PROFILE_STORAGE_KEY = "edubird.activeStudentProfileId";
+export const ACTIVE_STUDENT_USER_ID_STORAGE_KEY = "edubird.activeStudentUserId";
+
+export function getStoredActiveStudentProfileId() {
+  if (typeof window === "undefined") return null;
+  const value = Number(window.localStorage.getItem(ACTIVE_STUDENT_PROFILE_STORAGE_KEY));
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+export function setStoredActiveStudentProfileId(id: number) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(ACTIVE_STUDENT_PROFILE_STORAGE_KEY, String(id));
+}
+
+export function getStoredActiveStudentUserId() {
+  if (typeof window === "undefined") return null;
+  const value = Number(window.localStorage.getItem(ACTIVE_STUDENT_USER_ID_STORAGE_KEY));
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+export function setStoredActiveStudentUserId(id: number) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(ACTIVE_STUDENT_USER_ID_STORAGE_KEY, String(id));
+}
+

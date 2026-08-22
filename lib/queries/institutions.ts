@@ -2657,6 +2657,14 @@ export async function ensureInstitutionNewsSessionSchema(db: Pool) {
           ADD COLUMN IF NOT EXISTS academic_year_id INTEGER REFERENCES academic_years(id) ON DELETE SET NULL
       `);
       await db.query(`
+        ALTER TABLE institution_news
+          ADD COLUMN IF NOT EXISTS sell_on_marketplace BOOLEAN DEFAULT FALSE
+      `);
+      await db.query(`
+        ALTER TABLE institution_news
+          ADD COLUMN IF NOT EXISTS marketplace_price NUMERIC(12, 2) DEFAULT 0
+      `);
+      await db.query(`
         UPDATE institution_news n
         SET academic_year_id = (
           SELECT ay.id
@@ -2849,8 +2857,9 @@ export async function createInstitutionNews(db: Pool, data: CreateNewsData) {
   const res = await db.query(
     `INSERT INTO institution_news (
       institution_id, academic_year_id, slug, title, content, image_urls, published_at, is_active, is_deleted, created_by, updated_by,
-      target_type, target_role_code, target_id, target_program_id, target_label
-    ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,COALESCE($7::timestamp, NOW()),$8,FALSE,$9,$9,$10,$11,$12,$13,$14) RETURNING *`,
+      target_type, target_role_code, target_id, target_program_id, target_label,
+      sell_on_marketplace, marketplace_price
+    ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,COALESCE($7::timestamp, NOW()),$8,FALSE,$9,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
     [
       data.institutionId,
       data.academicYearId ?? null,
@@ -2866,6 +2875,8 @@ export async function createInstitutionNews(db: Pool, data: CreateNewsData) {
       data.targetId ?? null,
       data.targetProgramId ?? null,
       data.targetLabel ?? null,
+      data.sellOnMarketplace ?? false,
+      data.marketplacePrice ?? 0,
     ],
   );
   return res.rows[0] as InstitutionNews;
@@ -2959,6 +2970,14 @@ export async function updateInstitutionNews(db: Pool, input: UpdateNewsData) {
   if (input.targetLabel !== undefined) {
     params.push(input.targetLabel);
     fields.push(`target_label = $${params.length}`);
+  }
+  if (input.sellOnMarketplace !== undefined) {
+    params.push(input.sellOnMarketplace);
+    fields.push(`sell_on_marketplace = $${params.length}`);
+  }
+  if (input.marketplacePrice !== undefined) {
+    params.push(input.marketplacePrice);
+    fields.push(`marketplace_price = $${params.length}`);
   }
 
   if (!fields.length) return getInstitutionNewsById(db, input.id);

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Search,
   Plus,
@@ -29,9 +29,18 @@ import {
   Settings,
   HelpCircle,
   GraduationCap,
+  School,
+  Info,
+  Target,
+  Users2,
+  Sparkles,
+  MoreHorizontal,
+  Image as ImageIcon,
+  PhoneCall,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
+import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { clearBrowserSessionData } from "@/lib/auth/clear-browser-session";
 import { cn } from "@/lib/utils";
 import {
@@ -43,7 +52,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
+import { toRoleRoutePath } from "@/lib/auth/role-routes";
 import type { PublicInstitutionNavItem, PublicNavbarBrand } from "@/lib/api/public-nav";
+
+import { useCategoryAvailability, type CategoryKey } from "@/hooks/use-category-availability";
 
 type PublicNavbarProps = {
   brand?: PublicNavbarBrand;
@@ -51,16 +63,18 @@ type PublicNavbarProps = {
   institutionNavItems?: PublicInstitutionNavItem[];
 };
 
-const CATEGORY_ITEMS = [
-  { label: "Course", href: "/courses", icon: BookOpen },
-  { label: "Institute", href: "/institutes", icon: Building2 },
-  { label: "Practice", href: "/practice", icon: CheckSquare },
-  { label: "Notes", href: "/notes", icon: BookMarked },
-  { label: "Teachers", href: "/teachers", icon: UserCheck },
-  { label: "Exams", href: "/exams", icon: Award },
-  { label: "Library", href: "/libraries", icon: Library },
-  { label: "Hostel", href: "/hostels", icon: Building2 },
-  { label: "Blogs", href: "/blogs", icon: FileText },
+const CATEGORY_ITEMS: { key: CategoryKey; label: string; href: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { key: "courses", label: "Course", href: "/courses", icon: BookOpen },
+  { key: "institutes", label: "Institute", href: "/institutes", icon: Building2 },
+  { key: "practice", label: "Practice", href: "/practice", icon: CheckSquare },
+  { key: "notes", label: "Notes", href: "/notes", icon: BookMarked },
+  { key: "teachers", label: "Teachers", href: "/teachers", icon: UserCheck },
+  { key: "exams", label: "Exams", href: "/exams", icon: Award },
+  { key: "libraries", label: "Library", href: "/libraries", icon: Library },
+  { key: "hostels", label: "Hostel", href: "/hostels", icon: Building2 },
+  { key: "blogs", label: "Blogs", href: "/blogs", icon: FileText },
+  { key: "gallery", label: "Gallery", href: "/gallery", icon: ImageIcon },
+  { key: "contact", label: "Contact", href: "/contact", icon: PhoneCall },
 ];
 
 const LOCATIONS = ["All Locations", "Varanasi", "New Delhi", "Mumbai", "Bangalore", "Kolkata", "Online"];
@@ -84,7 +98,65 @@ export function PublicNavbar({
 }: PublicNavbarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, isAuthenticated, clearAuth } = useAuthStore();
+  const { activeInstitution, activeInstitutionId } = useActiveInstitution();
+  const { isCategoryVisible, isInstitutionalAdmin, activeInstitutionName } = useCategoryAvailability();
+
+  const [landingViewMode, setLandingViewMode] = useState<"platform" | "institution">("platform");
+  const [institutionInfo, setInstitutionInfo] = useState<any>(null);
+  const [mounted, setMounted] = useState(false);
+
+  const defaultEnvInstId = process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
+    ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
+    : null;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Fetch institution info dynamically for logged in institution admin
+  useEffect(() => {
+    const instId = activeInstitutionId || user?.memberships?.[0]?.institution_id || defaultEnvInstId;
+    if (instId) {
+      fetch(`/api/public/institution/info?institutionId=${instId}`)
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.data) {
+            setInstitutionInfo(json.data);
+          }
+        })
+        .catch(() => undefined);
+    } else {
+      setInstitutionInfo(null);
+    }
+  }, [activeInstitutionId, user, defaultEnvInstId]);
+
+  const activeUrlParam = searchParams?.get("view") || searchParams?.get("mode") || searchParams?.get("portal");
+  const activeInstParamId = searchParams?.get("institution_id") || searchParams?.get("institute_id") || searchParams?.get("inst_id") || searchParams?.get("institution");
+  const effectiveNavInstId = mounted
+    ? (activeInstParamId ? Number(activeInstParamId) : (activeInstitutionId || defaultEnvInstId))
+    : defaultEnvInstId;
+
+  const isInstitutionView =
+    (activeUrlParam !== "platform" && Boolean(effectiveNavInstId) && (
+      (pathname === "/") ||
+      isInstitutionalAdmin ||
+      pathname.startsWith("/institution")
+    ));
+
+  const institutionDisplayName =
+    institutionInfo?.name ||
+    activeInstitution?.name ||
+    user?.memberships?.[0]?.institution_name ||
+    (brand.isInstitution ? brand.name : "Institution");
+
+  // Platform admin sees all 9 categories (including Institute)
+  const platformCategoryItems = CATEGORY_ITEMS.filter((item) => isCategoryVisible(item.key));
+
+  // Institution admin category menu: WITHOUT the "Institute" tab, but WITH dynamic record checking!
+  const institutionCategoryItems = CATEGORY_ITEMS.filter((item) => item.key !== "institutes" && isCategoryVisible(item.key));
+  const effectiveInstitutionItems = institutionCategoryItems;
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("All Locations");
@@ -110,49 +182,260 @@ export function PublicNavbar({
   return (
     <header className="sticky top-0 z-50 w-full bg-white shadow-2xs border-b border-gray-100">
       {/* Top Header Bar */}
-      <div className="container mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
-        {/* Left: Brand Logo */}
-        <Link href="/" className="flex items-center gap-2 shrink-0">
-          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center">
-            <Image
-              src="/icons/edubird.webp"
-              alt="EduBird logo"
-              fill
-              sizes="36px"
-              priority
-              className="object-contain"
-            />
-          </div>
-          <span className="text-xl font-bold text-gray-900 tracking-tight font-sans">
-            EduBird
-          </span>
+      <div className="container mx-auto px-4 py-2.5 flex items-center justify-between gap-2 sm:gap-3">
+        {/* Left: Brand Logo & Name (Dynamically switches to Institution Brand for Institution Admin) */}
+        <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
+          {isInstitutionView ? (
+            <>
+              <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#800000] to-rose-900 text-white font-black text-sm shadow-sm overflow-hidden border border-rose-200/50">
+                {institutionInfo?.logo_url ? (
+                  <Image
+                    src={institutionInfo.logo_url}
+                    alt={institutionDisplayName}
+                    fill
+                    sizes="36px"
+                    className="object-cover"
+                  />
+                ) : (
+                  <School className="h-5 w-5 text-white" />
+                )}
+              </div>
+              <div className="flex flex-col min-w-0 max-w-[130px] sm:max-w-[190px] md:max-w-[230px] leading-tight">
+                <span className="text-xs sm:text-sm font-bold text-gray-900 tracking-tight truncate group-hover:text-rose-700 transition-colors">
+                  {institutionDisplayName}
+                </span>
+                <span className="text-[9px] font-semibold text-rose-700 uppercase tracking-wider truncate">
+                  Campus Portal
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="relative flex h-9 w-9 shrink-0 items-center justify-center">
+                <Image
+                  src="/icons/edubird.webp"
+                  alt="EduBird logo"
+                  fill
+                  sizes="36px"
+                  priority
+                  className="object-contain"
+                />
+              </div>
+              <span className="text-xl font-bold text-gray-900 tracking-tight font-sans group-hover:text-rose-700 transition-colors">
+                EduBird
+              </span>
+            </>
+          )}
         </Link>
 
-        {/* Center: Search Bar */}
-        <form
-          onSubmit={handleSearchSubmit}
-          className="flex-1 max-w-xl mx-2 lg:mx-6 relative hidden md:flex items-center"
-        >
-          <Search className="absolute left-3.5 h-4 w-4 text-gray-400 pointer-events-none" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search practice topics, exams, or colleges..."
-            className="w-full bg-[#F3F4F6] text-gray-800 text-sm font-normal py-2.5 pl-10 pr-4 rounded-xl border border-transparent focus:bg-white focus:border-rose-300 focus:ring-2 focus:ring-rose-500/20 outline-none transition-all placeholder:text-gray-400"
-          />
-        </form>
+        {/* Center: Category Navigation Menu in Top Header (About Us FIRST before Courses, and only categories with added records) */}
+        {isInstitutionView ? (
+          <div className="flex-1 flex items-center justify-start lg:justify-center mx-1 sm:mx-2 py-1">
+            <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap">
+              {/* 1. About Us Dropdown FIRST (Mission, Vision & Goal, About Founder, About Institute) */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg whitespace-nowrap text-xs font-semibold transition-all duration-200 cursor-pointer select-none outline-none",
+                      pathname.startsWith("/about")
+                        ? "bg-[#FEE2E2] text-[#991B1B] font-bold shadow-2xs border border-rose-200/60"
+                        : "text-[#800000] hover:text-[#991B1B] hover:bg-rose-100/50"
+                    )}
+                  >
+                    <Info className="h-3.5 w-3.5 shrink-0 text-[#800000]" />
+                    <span>About Us</span>
+                    <ChevronDown className="h-3 w-3 text-[#800000]/70" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-60 p-1.5 space-y-1 bg-white border border-gray-200 shadow-xl rounded-xl">
+                  <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
+                    <Link href="/about#mission-vision" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
+                      <Target className="h-4 w-4 text-rose-600 shrink-0" />
+                      <div className="flex flex-col leading-tight">
+                        <span className="font-bold">Mission, Vision & Goal</span>
+                        <span className="text-[10px] text-gray-500 font-normal">Core principles & aims</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
+                    <Link href="/about#founder" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
+                      <User className="h-4 w-4 text-rose-600 shrink-0" />
+                      <div className="flex flex-col leading-tight">
+                        <span className="font-bold">About Founder</span>
+                        <span className="text-[10px] text-gray-500 font-normal">Leadership & founders</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
+                    <Link href="/about#facilities" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
+                      <Sparkles className="h-4 w-4 text-rose-600 shrink-0" />
+                      <div className="flex flex-col leading-tight">
+                        <span className="font-bold">Facilities & Infrastructure</span>
+                        <span className="text-[10px] text-gray-500 font-normal">Labs, sports & campus amenities</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
+                    <Link href="/about#institute" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
+                      <Building2 className="h-4 w-4 text-rose-600 shrink-0" />
+                      <div className="flex flex-col leading-tight">
+                        <span className="font-bold">About Institute</span>
+                        <span className="text-[10px] text-gray-500 font-normal">Overview & heritage</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* 2. Primary visible items (only categories where institution admin has added records) */}
+              {effectiveInstitutionItems.slice(0, 4).map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.label || pathname === item.href;
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    onClick={() => setActiveTab(item.label)}
+                    className={cn(
+                      "flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg whitespace-nowrap text-xs font-semibold transition-all duration-200 cursor-pointer select-none",
+                      isActive
+                        ? "bg-[#FEE2E2] text-[#991B1B] font-bold shadow-2xs border border-rose-200/60"
+                        : "text-[#800000] hover:text-[#991B1B] hover:bg-rose-100/50"
+                    )}
+                  >
+                    <Icon className={cn("h-3.5 w-3.5 shrink-0", isActive ? "text-[#991B1B]" : "text-[#800000]")} />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+
+              {/* 3. Overflow "More" dropdown for items beyond 4 (only categories with data) */}
+              {effectiveInstitutionItems.length > 4 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className={cn(
+                        "flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg whitespace-nowrap text-xs font-semibold transition-all duration-200 cursor-pointer select-none outline-none",
+                        effectiveInstitutionItems.slice(4).some((it) => activeTab === it.label || pathname === it.href)
+                          ? "bg-[#FEE2E2] text-[#991B1B] font-bold shadow-2xs border border-rose-200/60"
+                          : "text-[#800000] hover:text-[#991B1B] hover:bg-rose-100/50"
+                      )}
+                    >
+                      <MoreHorizontal className="h-3.5 w-3.5 shrink-0 text-[#800000]" />
+                      <span>More</span>
+                      <ChevronDown className="h-3 w-3 text-[#800000]/70" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-48 p-1.5 space-y-1 bg-white border border-gray-200 shadow-xl rounded-xl">
+                    {effectiveInstitutionItems.slice(4).map((item) => {
+                      const Icon = item.icon;
+                      const isActive = activeTab === item.label || pathname === item.href;
+                      return (
+                        <DropdownMenuItem key={item.label} asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
+                          <Link
+                            href={item.href}
+                            onClick={() => setActiveTab(item.label)}
+                            className={cn(
+                              "flex items-center gap-2.5 w-full text-xs font-semibold",
+                              isActive ? "text-[#991B1B] font-bold bg-rose-50" : "text-gray-800 hover:text-rose-800"
+                            )}
+                          >
+                            <Icon className="h-4 w-4 text-rose-600 shrink-0" />
+                            <span>{item.label}</span>
+                          </Link>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-start lg:justify-center mx-1 sm:mx-2 py-1">
+            <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap">
+              {/* Primary visible items for platform admin (first 5) */}
+              {platformCategoryItems.slice(0, 5).map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.label || pathname === item.href;
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    onClick={() => setActiveTab(item.label)}
+                    className={cn(
+                      "flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg whitespace-nowrap text-xs font-semibold transition-all duration-200 cursor-pointer select-none",
+                      isActive
+                        ? "bg-[#FEE2E2] text-[#991B1B] font-bold shadow-2xs border border-rose-200/60"
+                        : "text-[#800000] hover:text-[#991B1B] hover:bg-rose-100/50"
+                    )}
+                  >
+                    <Icon className={cn("h-3.5 w-3.5 shrink-0", isActive ? "text-[#991B1B]" : "text-[#800000]")} />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+
+              {/* Overflow "More" dropdown for items beyond the first 5 (Exams, Library, Hostel, Blogs) */}
+              {platformCategoryItems.length > 5 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className={cn(
+                        "flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg whitespace-nowrap text-xs font-semibold transition-all duration-200 cursor-pointer select-none outline-none",
+                        platformCategoryItems.slice(5).some((it) => activeTab === it.label || pathname === it.href)
+                          ? "bg-[#FEE2E2] text-[#991B1B] font-bold shadow-2xs border border-rose-200/60"
+                          : "text-[#800000] hover:text-[#991B1B] hover:bg-rose-100/50"
+                      )}
+                    >
+                      <MoreHorizontal className="h-3.5 w-3.5 shrink-0 text-[#800000]" />
+                      <span>More</span>
+                      <ChevronDown className="h-3 w-3 text-[#800000]/70" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 p-1.5 space-y-1 bg-white border border-gray-200 shadow-xl rounded-xl">
+                    {platformCategoryItems.slice(5).map((item) => {
+                      const Icon = item.icon;
+                      const isActive = activeTab === item.label || pathname === item.href;
+                      return (
+                        <DropdownMenuItem key={item.label} asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
+                          <Link
+                            href={item.href}
+                            onClick={() => setActiveTab(item.label)}
+                            className={cn(
+                              "flex items-center gap-2.5 w-full text-xs font-semibold",
+                              isActive ? "text-[#991B1B] font-bold bg-rose-50" : "text-gray-800 hover:text-rose-800"
+                            )}
+                          >
+                            <Icon className="h-4 w-4 text-rose-600 shrink-0" />
+                            <span>{item.label}</span>
+                          </Link>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Right Actions & Dropdowns */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* + Add Listings Direct Button */}
-          <Link
-            href="/packages"
-            className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold rounded-xl border border-gray-200 bg-white text-[#A81C1C] hover:bg-rose-50/50 shadow-2xs transition-colors outline-none cursor-pointer"
-          >
-            <Plus className="h-4 w-4 text-[#A81C1C] stroke-[2.5]" />
-            <span>Add Listings</span>
-          </Link>
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* + Add Listings Direct Button (Only for Platform Admin View) */}
+          {!isInstitutionView && (
+            <Link
+              href="/packages"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold rounded-xl border border-gray-200 bg-white text-[#A81C1C] hover:bg-rose-50/50 shadow-2xs transition-colors outline-none cursor-pointer"
+            >
+              <Plus className="h-4 w-4 text-[#A81C1C] stroke-[2.5]" />
+              <span>Add Listings</span>
+            </Link>
+          )}
 
           {/* Location Dropdown - Icon Only */}
           <DropdownMenu>
@@ -231,20 +514,13 @@ export function PublicNavbar({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="flex items-center gap-2 p-1 pr-2 rounded-full hover:bg-gray-50 transition-colors outline-none cursor-pointer"
+                  className="flex items-center justify-center p-0.5 rounded-full hover:ring-2 hover:ring-rose-200 transition-all outline-none cursor-pointer"
+                  title={displayName || "User profile"}
+                  aria-label="User profile"
                 >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#800000] text-xs font-bold text-white shadow-2xs overflow-hidden">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#800000] text-xs font-bold text-white shadow-2xs overflow-hidden hover:opacity-90 transition-opacity">
                     {initials}
                   </div>
-                  <div className="hidden sm:flex flex-col text-left leading-tight">
-                    <span className="text-xs font-bold text-gray-900 truncate max-w-[110px]">
-                      {displayName}
-                    </span>
-                    <span className="text-[10px] font-medium text-gray-500 truncate max-w-[110px]">
-                      {displaySubtext}
-                    </span>
-                  </div>
-                  <ChevronDown className="h-3.5 w-3.5 text-gray-500 hidden sm:block" />
                 </button>
               </DropdownMenuTrigger>
 
@@ -262,7 +538,7 @@ export function PublicNavbar({
 
                 {/* Dropdown Items from Screenshot 1 */}
                 <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
-                  <Link href="/admin/dashboard" className="flex items-center justify-between w-full">
+                  <Link href={toRoleRoutePath("/admin", user)} className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-2.5">
                       <LayoutDashboard className="h-4 w-4 text-gray-700" />
                       <span className="text-xs font-semibold text-gray-900">Dashboard</span>
@@ -272,7 +548,7 @@ export function PublicNavbar({
                 </DropdownMenuItem>
 
                 <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
-                  <Link href="/admin/profile" className="flex items-center justify-between w-full">
+                  <Link href={toRoleRoutePath("/admin/account", user)} className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-2.5">
                       <User className="h-4 w-4 text-gray-700" />
                       <span className="text-xs font-semibold text-gray-900">Profile</span>
@@ -282,7 +558,7 @@ export function PublicNavbar({
                 </DropdownMenuItem>
 
                 <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
-                  <Link href="/admin/company" className="flex items-center justify-between w-full">
+                  <Link href={toRoleRoutePath("/admin/company", user)} className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-2.5">
                       <Settings className="h-4 w-4 text-gray-700" />
                       <span className="text-xs font-semibold text-gray-900">My Preferences</span>
@@ -292,7 +568,7 @@ export function PublicNavbar({
                 </DropdownMenuItem>
 
                 <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
-                  <Link href="/admin/notifications" className="flex items-center justify-between w-full">
+                  <Link href={toRoleRoutePath("/admin/notifications", user)} className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-2.5">
                       <Bell className="h-4 w-4 text-gray-700" />
                       <span className="text-xs font-semibold text-gray-900">Notifications</span>
@@ -358,46 +634,6 @@ export function PublicNavbar({
           >
             {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
-        </div>
-      </div>
-
-      {/* Mobile Search Bar Expand */}
-      <div className="px-4 pb-2 md:hidden">
-        <form onSubmit={handleSearchSubmit} className="relative flex items-center">
-          <Search className="absolute left-3.5 h-4 w-4 text-gray-400 pointer-events-none" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search practice topics, exams, or colleges..."
-            className="w-full bg-[#F3F4F6] text-gray-800 text-xs py-2 pl-9 pr-3 rounded-lg outline-none"
-          />
-        </form>
-      </div>
-
-      {/* Row 2: Category Navigation Menu Bar */}
-      <div className="bg-[#FFF5F5]/90 border-t border-b border-rose-100/70 shadow-2xs">
-        <div className="container mx-auto px-4 flex items-center justify-start md:justify-center gap-1 sm:gap-2 md:gap-4 overflow-x-auto py-2.5 no-scrollbar text-xs font-medium">
-          {CATEGORY_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.label || pathname === item.href;
-            return (
-              <Link
-                key={item.label}
-                href={item.href}
-                onClick={() => setActiveTab(item.label)}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg whitespace-nowrap transition-all cursor-pointer",
-                  isActive
-                    ? "bg-[#FEE2E2] text-[#991B1B] font-bold shadow-2xs border border-rose-200/60"
-                    : "text-[#800000] hover:text-[#991B1B] hover:bg-rose-100/50"
-                )}
-              >
-                <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-[#991B1B]" : "text-[#800000]")} />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
         </div>
       </div>
 

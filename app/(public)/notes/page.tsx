@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
+import { useCategoryAvailability } from "@/hooks/use-category-availability";
 
 type NoteItem = {
   id: number;
@@ -19,20 +20,28 @@ type NoteItem = {
   author_name: string;
   description: string;
   institution_name: string;
+  price?: string;
+  is_free?: boolean;
 };
 
 export default function NotesPublicPage() {
+  const { isInstitutionalAdmin, activeInstitutionId } = useCategoryAvailability();
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     fetchNotes();
-  }, []);
+  }, [activeInstitutionId, isInstitutionalAdmin]);
 
   const fetchNotes = async () => {
     try {
-      const res = await fetch("/api/public/notes");
+      setLoading(true);
+      const url =
+        isInstitutionalAdmin && activeInstitutionId
+          ? `/api/public/notes?institutionId=${activeInstitutionId}`
+          : "/api/public/notes";
+      const res = await fetch(url);
       if (res.ok) {
         const json = await res.json();
         setNotes(json.notes || []);
@@ -83,7 +92,7 @@ export default function NotesPublicPage() {
             No lecture notes found matching your query.
           </Card>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((n) => (
               <Card key={n.id} className="p-6 shadow-xs hover:border-primary/50 transition-colors flex flex-col justify-between space-y-4">
                 <div className="space-y-3">
@@ -97,9 +106,14 @@ export default function NotesPublicPage() {
                       <p className="text-xs text-muted-foreground font-medium mt-1">Subject: {n.subject}</p>
                     </div>
 
-                    <Badge variant="secondary" className="text-xs font-bold">
-                      PDF Document
-                    </Badge>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge variant="secondary" className="text-xs font-bold">
+                        PDF Document
+                      </Badge>
+                      <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold">
+                        {n.price || "Free Access"}
+                      </Badge>
+                    </div>
                   </div>
 
                   <p className="text-xs text-muted-foreground leading-relaxed">{n.description}</p>

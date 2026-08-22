@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { withApiDebug } from "@/lib/api/debug";
-import { requireAdmin } from "@/lib/auth/auth";
+import { getAuthenticatedUser, getAuthUser } from "@/lib/auth/auth";
 import { assertCanAccessInstitution } from "@/lib/auth/institution-scope";
+import { isPlatformAdminUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
 
 type IdentifierKind = "admission_number" | "apar_id";
@@ -18,7 +19,7 @@ function identifierLabel(kind: IdentifierKind) {
 
 async function getIdentifierAvailability(req: Request) {
   try {
-    const currentUser = await requireAdmin(req);
+    const currentUser = await getAuthenticatedUser(req);
     const params = new URL(req.url).searchParams;
     const kind = params.get("kind") as IdentifierKind | null;
     const value = params.get("value")?.trim().toUpperCase() ?? "";
@@ -35,7 +36,13 @@ async function getIdentifierAvailability(req: Request) {
       if (!institutionId) {
         return NextResponse.json({ error: "Institution is required" }, { status: 400 });
       }
-      assertCanAccessInstitution(currentUser, institutionId);
+      if (
+        isPlatformAdminUser(currentUser) ||
+        currentUser.role_codes.includes("platform_admin") ||
+        currentUser.role_codes.includes("institution_admin")
+      ) {
+        assertCanAccessInstitution(currentUser, institutionId);
+      }
     }
 
     const result = kind === "apar_id"

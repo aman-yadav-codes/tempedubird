@@ -70,17 +70,41 @@ export default function AdminLayout({
           <InstitutionSubscriptionGate />
           <AppSidebar />
           <div className="flex flex-1 flex-col min-h-screen min-w-0 overflow-hidden">
-            <header className="sticky top-0 z-10 flex h-14 items-center border-b bg-background px-4 gap-2">
-              <SidebarTrigger className="-ml-1" />
-              <div className="w-px h-4 bg-border" />
+            <header className="sticky top-0 z-30 flex h-16 items-center border-b border-border/80 bg-background/95 backdrop-blur-md px-4 gap-3 shadow-2xs">
+              <SidebarTrigger className="-ml-1 text-muted-foreground hover:text-foreground" />
+              <div className="w-px h-5 bg-border/60" />
               <AdminAcademicSessionSelector />
-              <div className="ml-auto flex items-center gap-2">
+              
+              <div className="hidden xl:flex items-center gap-2 text-xs font-bold text-muted-foreground border-l border-border/60 pl-3">
+                <span className="text-muted-foreground hover:text-primary transition-colors cursor-default">
+                  EduBird Admin
+                </span>
+                <span>/</span>
+                <span className="text-foreground capitalize truncate max-w-[200px]">
+                  {pathname === "/admin"
+                    ? "Dashboard"
+                    : pathname.replace("/admin/", "").split("/").map(seg => seg.replace(/-/g, " ")).join(" · ")}
+                </span>
+              </div>
+
+              <div className="ml-auto flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  title="Reload Session Data"
+                  className="hidden sm:inline-flex p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors cursor-pointer"
+                >
+                  <span className="sr-only">Reload</span>
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
                 <AdminNotificationCenter />
                 <AdminThemeToggle theme={theme} onThemeChange={setTheme} />
                 <AdminUserProfileMenu />
               </div>
             </header>
-            <main className="flex-1 p-6">{children}</main>
+            <main className="flex-1 overflow-y-auto">{children}</main>
           </div>
         </SidebarProvider>
       </div>

@@ -1,54 +1,59 @@
 import { NextResponse } from "next/server";
-
-import { getAuthenticatedUser } from "@/lib/auth/auth";
+import { getAuthUser } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
-import { getStudentEnrollmentContexts } from "@/lib/auth/student-enrollment-context";
 
 export async function GET(req: Request) {
   try {
-    const user = await getAuthenticatedUser(req);
-    if (!user.role_codes.includes("student")) {
-      return NextResponse.json({ error: "Forbidden: Student access required" }, { status: 403 });
+    const user = await getAuthUser(req);
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const contexts = await getStudentEnrollmentContexts(db, user.id);
-    const institutionIds = Array.from(
-      new Set(contexts.map((context) => Number(context.institution_id)).filter((id) => Number.isInteger(id) && id > 0))
-    );
-    const defaultResult = institutionIds.length > 0
-      ? await db.query<{ id: number; default_academic_year_id: number | null }>(
-        `
-          SELECT id, default_academic_year_id
-          FROM institution_profiles
-          WHERE id = ANY($1::int[])
-        `,
-        [institutionIds]
-      )
-      : { rows: [] };
-    const defaultByInstitutionId = new Map<number, number | null>(
-      defaultResult.rows.map((row): [number, number | null] => [
-        Number(row.id),
-        row.default_academic_year_id ? Number(row.default_academic_year_id) : null,
-      ])
-    );
+
+    const result = await db.query(`
+      SELECT
+        se.id,
+        se.id AS enrollment_id,
+        se.student_id,
+        se.institution_id,
+        se.institution_id AS "institutionId",
+        COALESCE(ip.name, ip.slug, 'Partner Institution') AS "institutionName",
+        COALESCE(ip.name, ip.slug, 'Partner Institution') AS institution_name,
+        ip.slug AS institution_slug,
+        se.program_id,
+        se.program_id AS "programId",
+        COALESCE(prog.title, 'Enrolled Academic Program') AS "programName",
+        COALESCE(prog.title, 'Enrolled Academic Program') AS program_title,
+        se.section_id AS "sectionId",
+        se.section_id,
+        sec.name AS "sectionName",
+        sec.name AS section_name,
+        se.academic_year_id AS "academicYearId",
+        se.academic_year_id,
+        ay.name AS "academicYearName",
+        ay.name AS academic_year_name,
+        se.status,
+        se.admission_date,
+        se.created_at,
+        sp.admission_number,
+        u.full_name AS student_name,
+        u.email AS student_email
+      FROM student_profiles sp
+      INNER JOIN users u ON u.id = sp.user_id
+      INNER JOIN student_enrollments se ON se.student_id = sp.id AND COALESCE(se.is_deleted, FALSE) = FALSE
+      LEFT JOIN institution_profiles ip ON ip.id = se.institution_id
+      LEFT JOIN institution_programs prog ON prog.id = se.program_id
+      LEFT JOIN sections sec ON sec.id = se.section_id
+      LEFT JOIN academic_years ay ON ay.id = se.academic_year_id
+      WHERE sp.user_id = $1
+      ORDER BY se.id DESC
+    `, [user.id]);
 
     return NextResponse.json({
-      data: contexts.map((context) => ({
-        id: Number(context.id),
-        institutionId: Number(context.institution_id),
-        institutionName: context.institution_name,
-        programId: Number(context.program_id),
-        programName: context.program_name,
-        sectionId: context.section_id ? Number(context.section_id) : null,
-        sectionName: context.section_name,
-        academicYearId: Number(context.academic_year_id),
-        academicYearName: context.academic_year_name,
-        academicYearStartDate: context.academic_year_start_date,
-        academicYearEndDate: context.academic_year_end_date,
-        institutionDefaultAcademicYearId: defaultByInstitutionId.get(Number(context.institution_id)) ?? null,
-      })),
+      success: true,
+      data: result.rows,
+      enrollments: result.rows,
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to load enrollments";
-    return NextResponse.json({ error: message }, { status: message === "Unauthorized" ? 401 : 400 });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || "Failed to fetch student enrollments" }, { status: 500 });
   }
 }

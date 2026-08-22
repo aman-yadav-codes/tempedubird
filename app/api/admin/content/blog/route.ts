@@ -11,6 +11,11 @@ type BlogPostRow = {
   id: number;
   institution_id: number | null;
   title: string;
+  category: string | null;
+  cover_image: string | null;
+  video_url: string | null;
+  summary: string | null;
+  tags: string | null;
   content: Record<string, unknown> | null;
   status: BlogStatus;
   publish_at: string | null;
@@ -64,6 +69,11 @@ async function ensureBlogPostsTable() {
       id SERIAL PRIMARY KEY,
       institution_id INTEGER NULL REFERENCES institution_profiles(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
+      category TEXT DEFAULT 'Academic & Curriculum',
+      cover_image TEXT NULL,
+      video_url TEXT NULL,
+      summary TEXT NULL,
+      tags TEXT NULL,
       content JSONB NOT NULL DEFAULT '{}'::jsonb,
       status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'review', 'published')),
       publish_at TIMESTAMPTZ NULL,
@@ -76,6 +86,16 @@ async function ensureBlogPostsTable() {
     )
   `);
 
+  try {
+    await db.query(`
+      ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Academic & Curriculum';
+      ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS cover_image TEXT;
+      ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS video_url TEXT;
+      ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS summary TEXT;
+      ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS tags TEXT;
+    `);
+  } catch {}
+
   await db.query(`
     CREATE INDEX IF NOT EXISTS blog_posts_institution_status_idx
       ON blog_posts(institution_id, status, publish_at)
@@ -87,6 +107,11 @@ function serializeBlog(row: BlogPostRow) {
     id: row.id,
     institution_id: row.institution_id,
     title: row.title,
+    category: row.category || "Academic & Curriculum",
+    cover_image: row.cover_image || null,
+    video_url: row.video_url || null,
+    summary: row.summary || null,
+    tags: row.tags || null,
     content: row.content,
     status: row.status,
     publish_at: row.publish_at,
@@ -128,6 +153,11 @@ export async function GET(req: Request) {
           bp.id,
           bp.institution_id,
           bp.title,
+          bp.category,
+          bp.cover_image,
+          bp.video_url,
+          bp.summary,
+          bp.tags,
           bp.content,
           bp.status,
           bp.publish_at,
@@ -162,6 +192,12 @@ export async function POST(req: Request) {
     const title = typeof body.title === "string" ? body.title.trim() : "";
     if (!title) return NextResponse.json({ error: "Title is required." }, { status: 400 });
 
+    const category = typeof body.category === "string" ? body.category.trim() : "Academic & Curriculum";
+    const coverImage = typeof body.cover_image === "string" ? body.cover_image.trim() : null;
+    const videoUrl = typeof body.video_url === "string" ? body.video_url.trim() : null;
+    const summary = typeof body.summary === "string" ? body.summary.trim() : null;
+    const tags = typeof body.tags === "string" ? body.tags.trim() : null;
+
     const content =
       body.content && typeof body.content === "object"
         ? (body.content as Record<string, unknown>)
@@ -178,6 +214,11 @@ export async function POST(req: Request) {
         INSERT INTO blog_posts (
           institution_id,
           title,
+          category,
+          cover_image,
+          video_url,
+          summary,
+          tags,
           content,
           status,
           publish_at,
@@ -187,23 +228,33 @@ export async function POST(req: Request) {
           updated_by,
           updated_at
         )
-        VALUES ($1, $2, $3::jsonb, $4, $5, CASE WHEN $4 = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END, $6, $6, $6, CURRENT_TIMESTAMP)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, CASE WHEN $9 = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END, $11, $11, $11, CURRENT_TIMESTAMP)
         RETURNING
           id,
           institution_id,
           title,
+          category,
+          cover_image,
+          video_url,
+          summary,
+          tags,
           content,
           status,
           publish_at,
           published_at,
           author_id,
-          (SELECT full_name FROM users WHERE id = $6) AS author_name,
+          (SELECT full_name FROM users WHERE id = $11) AS author_name,
           created_at,
           updated_at
       `,
       [
         institutionId,
         title,
+        category,
+        coverImage,
+        videoUrl,
+        summary,
+        tags,
         JSON.stringify(content),
         status,
         publishAtValue,

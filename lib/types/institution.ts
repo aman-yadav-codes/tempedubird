@@ -426,6 +426,8 @@ export interface CreateNewsData {
   targetId?: number | null;
   targetProgramId?: number | null;
   targetLabel?: string | null;
+  sellOnMarketplace?: boolean;
+  marketplacePrice?: number;
 }
 
 export interface UpdateNewsData extends Partial<CreateNewsData> {

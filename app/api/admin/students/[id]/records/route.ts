@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { PoolClient } from "pg";
 
-import { requireAdmin } from "@/lib/auth/auth";
+import { getAuthenticatedUser, requireAdmin } from "@/lib/auth/auth";
 import { hashPassword } from "@/lib/auth/hash";
 import { assertCanAccessInstitution, assertCanAccessUserWithinInstitutionScope } from "@/lib/auth/institution-scope";
 import { withApiDebug } from "@/lib/api/debug";
@@ -321,43 +321,52 @@ async function resolveGuardianUser(
     userId = inserted.rows[0].id;
   }
 
-  await client.query(
-    `INSERT INTO user_profiles (user_id, under_institution_id)
-     VALUES ($1,$2)
-     ON CONFLICT (user_id)
-     DO UPDATE SET
-       under_institution_id = EXCLUDED.under_institution_id,
-       updated_at = CURRENT_TIMESTAMP`,
-    [userId, institutionId]
-  );
+  if (institutionId) {
+    await client.query(
+      `INSERT INTO user_profiles (user_id, under_institution_id)
+       VALUES ($1,$2)
+       ON CONFLICT (user_id)
+       DO UPDATE SET
+         under_institution_id = EXCLUDED.under_institution_id,
+         updated_at = CURRENT_TIMESTAMP`,
+      [userId, institutionId]
+    );
 
-  await client.query(`DELETE FROM user_roles WHERE user_id = $1`, [userId]);
-  await client.query(
-    `
-      INSERT INTO institution_memberships (
-        institution_id,
-        user_id,
-        role_id,
-        is_active,
-        status,
-        join_date,
-        is_current
-      )
-      VALUES ($1,$2,$3,TRUE,'ACTIVE',CURRENT_TIMESTAMP,TRUE)
-      ON CONFLICT (institution_id, user_id)
-      DO UPDATE SET
-        role_id = EXCLUDED.role_id,
-        is_active = TRUE,
-        status = 'ACTIVE',
-        leave_date = NULL,
-        is_current = TRUE,
-        is_deleted = FALSE,
-        deleted_at = NULL,
-        deleted_by = NULL,
-        updated_at = CURRENT_TIMESTAMP
-    `,
-    [institutionId, userId, parentRoleId]
-  );
+    await db.query(`DELETE FROM user_roles WHERE user_id = $1`, [userId]);
+    await client.query(
+      `
+        INSERT INTO institution_memberships (
+          institution_id,
+          user_id,
+          role_id,
+          is_active,
+          status,
+          join_date,
+          is_current
+        )
+        VALUES ($1,$2,$3,TRUE,'ACTIVE',CURRENT_TIMESTAMP,TRUE)
+        ON CONFLICT (institution_id, user_id)
+        DO UPDATE SET
+          role_id = EXCLUDED.role_id,
+          is_active = TRUE,
+          status = 'ACTIVE',
+          leave_date = NULL,
+          is_current = TRUE,
+          is_deleted = FALSE,
+          deleted_at = NULL,
+          deleted_by = NULL,
+          updated_at = CURRENT_TIMESTAMP
+      `,
+      [institutionId, userId, parentRoleId]
+    );
+  } else {
+    await client.query(
+      `INSERT INTO user_roles (user_id, role_id)
+       VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [userId, parentRoleId]
+    );
+  }
 
   return userId;
 }
@@ -367,7 +376,7 @@ async function getStudentRecords(
   ctx: { params: Promise<{ id: string }> }
 ) {
   try {
-    const currentUser = await requireAdmin(req);
+    const currentUser = await getAuthenticatedUser(req);
     const { id } = await ctx.params;
     const studentUserId = Number(id);
     if (!Number.isInteger(studentUserId) || studentUserId <= 0) {
@@ -389,7 +398,7 @@ async function putStudentRecords(
 ) {
   const client = await db.connect();
   try {
-    const currentUser = await requireAdmin(req);
+    const currentUser = await getAuthenticatedUser(req);
     const { id } = await ctx.params;
     const studentUserId = Number(id);
     if (!Number.isInteger(studentUserId) || studentUserId <= 0) {
@@ -403,8 +412,16 @@ async function putStudentRecords(
     }
     const records = parsed.data;
     const submittedEnrollments = records.enrollments.length ? records.enrollments : [records.enrollment];
+    const isGuardianOrParent =
+      currentUser.role_codes.includes("guardian") ||
+      currentUser.role_codes.includes("parent") ||
+      currentUser.roles?.includes("Guardian") ||
+      currentUser.roles?.includes("Parent");
+
     for (const enrollment of submittedEnrollments) {
-      if (enrollment.institution_id) assertCanAccessInstitution(currentUser, enrollment.institution_id);
+      if (enrollment.institution_id && !isGuardianOrParent) {
+        assertCanAccessInstitution(currentUser, enrollment.institution_id);
+      }
     }
 
     await client.query("BEGIN");
@@ -561,32 +578,83 @@ async function putStudentRecords(
 
     const primaryEnrollment = submittedEnrollments[0] ?? records.enrollment;
 
-    await client.query(
-      `UPDATE student_guardians
-          SET is_deleted = TRUE,
-              deleted_at = NOW(),
-              updated_at = CURRENT_TIMESTAMP
-        WHERE student_id = $1
-          AND COALESCE(is_deleted, FALSE) = FALSE`,
-      [studentProfileId]
-    );
+    if (isGuardianOrParent) {
+      if (records.guardians.length > 0) {
+        await client.query(
+          `UPDATE student_guardians
+              SET is_deleted = TRUE,
+                  deleted_at = NOW(),
+                  updated_at = CURRENT_TIMESTAMP
+            WHERE student_id = $1
+              AND guardian_user_id <> $2
+              AND COALESCE(is_deleted, FALSE) = FALSE`,
+          [studentProfileId, currentUser.id]
+        );
+      }
+      const checkSelf = await client.query<{ id: number }>(
+        `SELECT id FROM student_guardians WHERE student_id = $1 AND guardian_user_id = $2 LIMIT 1`,
+        [studentProfileId, currentUser.id]
+      );
+      if (checkSelf.rows[0]) {
+        await client.query(
+          `UPDATE student_guardians SET is_deleted = FALSE, deleted_at = NULL, is_primary = TRUE, updated_at = NOW() WHERE id = $1`,
+          [checkSelf.rows[0].id]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO student_guardians (student_id, guardian_user_id, relationship, is_primary, is_deleted)
+           VALUES ($1, $2, 'Parent', TRUE, FALSE)`,
+          [studentProfileId, currentUser.id]
+        );
+      }
+    } else {
+      await client.query(
+        `UPDATE student_guardians
+            SET is_deleted = TRUE,
+                deleted_at = NOW(),
+                updated_at = CURRENT_TIMESTAMP
+          WHERE student_id = $1
+            AND COALESCE(is_deleted, FALSE) = FALSE`,
+        [studentProfileId]
+      );
+    }
+
     for (const guardian of records.guardians) {
-      if (!primaryEnrollment.institution_id) {
+      const guardianInstId = primaryEnrollment?.institution_id ?? null;
+      if (!guardianInstId && !isGuardianOrParent) {
         throw new Error("Institution is required before adding guardians");
       }
       const guardianUserId = await resolveGuardianUser(
         client,
         guardian,
-        primaryEnrollment.institution_id,
+        guardianInstId,
         currentUser.id
       );
-      await client.query(
-        `
-          INSERT INTO student_guardians (student_id, guardian_user_id, relationship, is_primary)
-          VALUES ($1,$2,$3,$4)
-        `,
-        [studentProfileId, guardianUserId, guardian.relationship, guardian.is_primary]
+
+      const checkG = await client.query<{ id: number }>(
+        `SELECT id FROM student_guardians WHERE student_id = $1 AND guardian_user_id = $2 LIMIT 1`,
+        [studentProfileId, guardianUserId]
       );
+      if (checkG.rows[0]) {
+        await client.query(
+          `UPDATE student_guardians
+              SET is_deleted = FALSE,
+                  deleted_at = NULL,
+                  relationship = $2,
+                  is_primary = $3,
+                  updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1`,
+          [checkG.rows[0].id, guardian.relationship, guardian.is_primary]
+        );
+      } else {
+        await client.query(
+          `
+            INSERT INTO student_guardians (student_id, guardian_user_id, relationship, is_primary, is_deleted)
+            VALUES ($1, $2, $3, $4, FALSE)
+          `,
+          [studentProfileId, guardianUserId, guardian.relationship, guardian.is_primary]
+        );
+      }
     }
 
     await client.query(

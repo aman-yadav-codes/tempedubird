@@ -266,13 +266,20 @@ export async function resolveStudentEnrollmentContext(
   userId: number,
   roleCodes: string[] = ["student"]
 ) {
-  if (roleCodes.includes("parent") && !roleCodes.includes("student")) {
+  if ((roleCodes.includes("parent") || roleCodes.includes("guardian")) && !roleCodes.includes("student")) {
     const url = new URL(req.url);
     const requestedChildId = Number(url.searchParams.get(ACTIVE_CHILD_QUERY_PARAM));
     const childStudentId = Number.isInteger(requestedChildId) && requestedChildId > 0
       ? requestedChildId
       : null;
     const contexts = await getParentChildEnrollmentContexts(db, userId, childStudentId);
+
+    const requestedId = Number(req.headers.get(ACTIVE_STUDENT_ENROLLMENT_HEADER));
+    if (Number.isInteger(requestedId) && requestedId > 0) {
+      const selected = contexts.find((context) => Number(context.id) === requestedId);
+      if (selected) return selected;
+    }
+
     if (childStudentId && contexts.length === 0) {
       const canAccessChild = await parentCanAccessChild(db, userId, childStudentId);
       if (!canAccessChild) throw new Error("Forbidden: Invalid child context");

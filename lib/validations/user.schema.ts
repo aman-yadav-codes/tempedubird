@@ -10,7 +10,7 @@ export const userSchema = z.object({
     .string()
     .min(2, "Full name must be at least 2 characters")
     .max(100, "Full name must be at most 100 characters"),
-  email: z.string().email("Invalid email address"),
+  email: z.string().email("Invalid email address").optional().nullable(),
   phone: z
     .string()
     .min(7, "Phone number too short")

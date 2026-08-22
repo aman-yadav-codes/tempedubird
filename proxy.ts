@@ -14,14 +14,28 @@ import { getAppModeForHost } from "@/lib/deployment/app-mode";
 
 const DEBUG_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
 const PUBLIC_TOP_LEVEL_ROUTES = new Set([
+    "about",
     "account-suspended",
+    "contact",
+    "copyright",
     "courses",
     "designations",
+    "exams",
+    "faqs",
     "help",
+    "hostels",
     "icons",
     "images",
     "institutes",
     "institutions",
+    "libraries",
+    "notes",
+    "packages",
+    "practice",
+    "privacy",
+    "refund-policy",
+    "teachers",
+    "terms",
     "test",
 ]);
 
@@ -81,10 +95,26 @@ export async function proxy(request: NextRequest) {
         if (!refreshToken) {
             return NextResponse.redirect(new URL("/", request.url));
         }
+
         return NextResponse.next();
     }
 
-    if (firstSegment && isKnownRoleRoutePrefix(firstSegment) && firstSegment !== "admin" && firstSegment !== "student") {
+    if (firstSegment === "parent") {
+        const refreshToken = request.cookies.get("refresh_token");
+        if (!refreshToken) {
+            return NextResponse.redirect(new URL("/", request.url));
+        }
+
+        return NextResponse.next();
+    }
+
+    if (
+        firstSegment &&
+        isKnownRoleRoutePrefix(firstSegment) &&
+        firstSegment !== "admin" &&
+        firstSegment !== "student" &&
+        firstSegment !== "parent"
+    ) {
         const rewriteUrl = request.nextUrl.clone();
         rewriteUrl.pathname = `/admin${segments.length > 1 ? `/${segments.slice(1).join("/")}` : ""}`;
 

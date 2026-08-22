@@ -243,44 +243,38 @@ export function InstitutesDirectory() {
 
       <div ref={resultsTopRef} className="scroll-mt-48" />
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_360px] items-start mt-6">
-        <div className="space-y-6">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card/70 px-6 py-20 text-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
-              <p className="text-sm font-medium text-muted-foreground">Loading partner institutes from database...</p>
-            </div>
-          ) : pagedInstitutes.length > 0 ? (
-            <div
-              className={
-                viewMode === "grid"
-                  ? "grid gap-5 md:grid-cols-2 lg:grid-cols-3"
-                  : "grid gap-5"
-              }
-            >
-              {pagedInstitutes.map((institute) => (
-                <InstituteCard key={institute.id} institute={institute} viewMode={viewMode} />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-border bg-card/70 px-6 py-12 text-center">
-              <h2 className="text-lg font-semibold text-foreground">No institutes found</h2>
-              <p className="mt-2 text-sm text-muted-foreground">Try changing the search term or clearing a few filters.</p>
-            </div>
-          )}
+      <div className="mt-6 space-y-6">
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card/70 px-6 py-20 text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
+            <p className="text-sm font-medium text-muted-foreground">Loading partner institutes from database...</p>
+          </div>
+        ) : pagedInstitutes.length > 0 ? (
+          <div
+            className={
+              viewMode === "grid"
+                ? "grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                : "grid gap-5"
+            }
+          >
+            {pagedInstitutes.map((institute) => (
+              <InstituteCard key={institute.id} institute={institute} viewMode={viewMode} />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-border bg-card/70 px-6 py-12 text-center">
+            <h2 className="text-lg font-semibold text-foreground">No institutes found</h2>
+            <p className="mt-2 text-sm text-muted-foreground">Try changing the search term or clearing a few filters.</p>
+          </div>
+        )}
 
-          {pageCount > 1 && (
-            <InstitutePagination
-              currentPage={safePage}
-              totalPages={pageCount}
-              onPageChange={changePage}
-            />
-          )}
-        </div>
-
-        <aside className="w-full lg:sticky lg:top-24">
-          <RightInquiryForm />
-        </aside>
+        {pageCount > 1 && (
+          <InstitutePagination
+            currentPage={safePage}
+            totalPages={pageCount}
+            onPageChange={changePage}
+          />
+        )}
       </div>
     </section>
   );

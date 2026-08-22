@@ -71,6 +71,9 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "student.myclassroom.notes", label: "Student Notes", description: "the student's class notes", scope: "institution", page: "/admin/students/notes" },
   { key: "student.myclassroom.fees", label: "Student Fees", description: "the student's own fee structure and payments", scope: "institution", page: "/admin/classroom/fees" },
   { key: "student.myprogram", label: "Student My Program", description: "the student's enrolled programs", scope: "institution", page: "/admin/my-program" },
+  { key: "student.guardians", label: "Student Guardians", description: "the student's own guardians", scope: "institution", page: "/admin/guardians" },
+  { key: "student.guardians", label: "Student Guardians", description: "the student's own guardians", scope: "institution", page: "/admin/students/guardians" },
+  { key: "student.guardians", label: "Student Guardians", description: "the student's own guardians", scope: "institution", page: "/student/guardians" },
   { key: "student.notification.all", label: "Student Notifications", description: "the student's notification inbox", scope: "institution", page: "/admin/notifications" },
   { key: "parent.childclassroom.attendance", label: "Child Attendance", description: "a parent's child attendance", scope: "institution", page: "/admin/classroom/attendance" },
   { key: "parent.childclassroom.assignments", label: "Child Assignments", description: "a parent's child assignments", scope: "institution", page: "/admin/classroom/assignments" },
@@ -109,6 +112,7 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "sales.leads", label: "Sales Lead", description: "sales leads", scope: "institution", page: "/admin/sales/leads" },
   { key: "sales.pipeline", label: "Sales Pipeline", description: "sales pipeline", scope: "institution", page: "/admin/sales/pipeline" },
   { key: "sales.enquiries", label: "Sales Enquiry", description: "sales enquiries", scope: "institution", page: "/admin/sales/enquiries" },
+  { key: "sales.enrollments", label: "Course Enrollments", description: "course enrollments", scope: "institution", page: "/admin/sales/enrollments" },
   { key: "content.category_tree", label: "Category Tree", description: "content category tree", scope: "platform", page: "/admin/content/tree" },
   { key: "content.categories", label: "Categories", description: "content categories", scope: "platform", page: "/admin/content/categories" },
   { key: "content.boards", label: "Boards", description: "content boards", scope: "platform", page: "/admin/content/boards" },
@@ -139,6 +143,9 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "institution.programs", label: "Programs", description: "institution programs", scope: "institution", page: "/admin/institutions/programs" },
   { key: "institution.placements", label: "Placements", description: "institution placements", scope: "institution", page: "/admin/institutions/placements" },
   { key: "institution.facilities", label: "Facilities", description: "institution facilities", scope: "institution", page: "/admin/institutions/facilities" },
+  { key: "institution.gallery", label: "Campus Gallery", description: "institution photo gallery and categorized albums", scope: "institution", page: "/admin/institutions/gallery" },
+  { key: "institution.hostels", label: "Hostel Facilities", description: "institution hostels and campus living", scope: "institution", page: "/admin/institutions/hostels" },
+  { key: "institution.libraries", label: "Digital & Central Libraries", description: "institution libraries and digital resources", scope: "institution", page: "/admin/institutions/libraries" },
   { key: "institution.cutoffs", label: "Institution Cutoffs", description: "institution cutoffs", scope: "institution", page: "/admin/institutions/cutoffs" },
   { key: "institution.scholarships", label: "Scholarships", description: "institution scholarships", scope: "institution", page: "/admin/institutions/scholarships" },
   { key: "institution.noticeboard", label: "Noticeboard", description: "institution noticeboard", scope: "institution", page: "/admin/institutions/news" },
@@ -237,10 +244,12 @@ export const LEGACY_PERMISSION_MODULE_MAP: Record<string, string> = {
   "student.results": "student.myclassroom.results",
   "student.notes": "student.myclassroom.notes",
   "student.fees": "student.myclassroom.fees",
+  "student.guardians": "student.guardians",
   "student.notifications": "student.notification.all",
   "student.notification": "student.notification.all",
   "student.practice": "student.myclassroom.practice_exams",
   "classroom.attendance": "student.myclassroom.attendance",
+  "classroom.guardians": "student.guardians",
   "classroom.achievements": "student.myclassroom.achievements",
   "classroom.assignments": "student.myclassroom.assignments",
   "classroom.practice_exams": "student.myclassroom.practice_exams",
@@ -427,6 +436,10 @@ export function isAdminPathVisibleForRole(
       return isTeacherUser(user) || Boolean(user?.role_codes?.includes("driver"));
     }
     return isStudentUser(user) || isParentUser(user);
+  }
+
+  if (normalized === "/admin/guardians" || normalized === "/admin/students/guardians" || normalized === "/student/guardians") {
+    return true;
   }
 
   if (normalized === "/admin/staff" || normalized.startsWith("/admin/staff/")) {
@@ -960,7 +973,10 @@ export function getRequestPermission(method: string, url: string) {
   if (pathname.includes("/api/admin/institutions/languages")) return permissionForAction("institution.languages", verb);
   if (pathname.includes("/api/admin/institutions/programs")) return permissionForAction("institution.programs", verb);
   if (pathname.includes("/api/admin/institutions/placements")) return permissionForAction("institution.placements", verb);
-  if (pathname.includes("/api/admin/institutions/facilities")) return permissionForAction("institution.facilities", verb);
+  if (pathname.includes("/api/admin/institutions/facilities") || pathname.includes("/api/admin/institution/facilities")) return permissionForAction("institution.facilities", verb);
+  if (pathname.includes("/api/admin/institutions/gallery") || pathname.includes("/api/admin/institution/gallery")) return permissionForAction("institution.gallery", verb);
+  if (pathname.includes("/api/admin/institutions/hostels") || pathname.includes("/api/admin/institution/hostels")) return permissionForAction("institution.hostels", verb);
+  if (pathname.includes("/api/admin/institutions/libraries") || pathname.includes("/api/admin/institution/libraries")) return permissionForAction("institution.libraries", verb);
   if (pathname.includes("/api/admin/institutions/cutoffs")) return permissionForAction("institution.cutoffs", verb);
   if (pathname.includes("/api/admin/institutions/scholarships")) return permissionForAction("institution.scholarships", verb);
   if (pathname.includes("/api/admin/institutions/news")) return permissionForAction("institution.noticeboard", verb);
@@ -1032,6 +1048,7 @@ export function hasAdminPagePermission(
   pathname: string
 ) {
   const normalized = normalizeAdminPath(pathname);
+  if (!normalized.startsWith("/admin")) return true;
   if (!isAdminPathVisibleForRole(user, normalized)) return false;
 
   if (normalized === "/admin/access-control") {
@@ -1061,6 +1078,17 @@ export function hasAdminPagePermission(
 
   if (normalized === "/admin/settings/subscription") {
     return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+  }
+
+  if (
+    normalized === "/admin/institutions/gallery" ||
+    normalized.startsWith("/admin/institutions/gallery") ||
+    normalized === "/admin/institutions/hostels" ||
+    normalized.startsWith("/admin/institutions/hostels") ||
+    normalized === "/admin/institutions/libraries" ||
+    normalized.startsWith("/admin/institutions/libraries")
+  ) {
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized));
   }
 
   if (normalized === "/admin/company" || normalized.startsWith("/admin/company")) {
@@ -1216,6 +1244,10 @@ export function hasAdminPagePermission(
       hasPermission(user, "student.dashboard.view") ||
       Boolean(user?.role_codes?.includes("student"))
     );
+  }
+
+  if (normalized === "/admin/guardians" || normalized === "/admin/students/guardians" || normalized === "/student/guardians") {
+    return true;
   }
 
   if (normalized === "/admin/notifications") {

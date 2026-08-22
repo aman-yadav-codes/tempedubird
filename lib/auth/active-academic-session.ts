@@ -96,6 +96,8 @@ export function setStoredActiveAcademicSessions(institutionId: number, sessions:
 }
 
 export function setStoredActiveAcademicYearId(id: number, institutionId?: number | string | null) {
+  const current = getStoredActiveAcademicYearId(institutionId);
+  if (current === id) return;
   window.localStorage.setItem(academicYearIdStorageKey(institutionId), String(id));
   if (!institutionId) {
     window.localStorage.setItem(ACTIVE_ACADEMIC_SESSION_STORAGE_KEY, String(id));

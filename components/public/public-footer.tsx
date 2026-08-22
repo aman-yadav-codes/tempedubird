@@ -2,8 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { GraduationCap } from "lucide-react";
+import Image from "next/image";
+import { usePathname } from "next/navigation";
+import { GraduationCap, School, Mail, Phone, MapPin } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { useAuthStore } from "@/store";
+import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { cn } from "@/lib/utils";
 
 type SocialLinksMap = {
@@ -15,30 +19,6 @@ type SocialLinksMap = {
   youtube?: string;
   linkedin?: string;
 };
-
-const footerLinks = {
-  "Quick Links": [
-    { label: "All Courses", href: "/courses" },
-    { label: "Institutes", href: "/institutes" },
-    { label: "About Us", href: "/about" },
-    { label: "Contact Us", href: "/contact" },
-    { label: "FAQs", href: "/faqs" },
-  ],
-  "Company & Legal": [
-    { label: "About Us", href: "/about" },
-    { label: "Privacy Policy", href: "/privacy" },
-    { label: "Terms & Conditions", href: "/terms" },
-    { label: "Copyright Policy", href: "/copyright" },
-    { label: "Refund Policy", href: "/refund-policy" },
-  ],
-};
-
-const contactInfo = [
-  "support@edubird.com",
-  "+91 1234567890",
-  "Orderly Bazar, Varanasi",
-  "Uttar Pradesh, India",
-];
 
 function formatSocialUrl(val?: string | null) {
   if (!val || !val.trim()) return "";
@@ -113,9 +93,25 @@ function LinkedinIcon() {
 }
 
 export function PublicFooter() {
+  const pathname = usePathname();
+  const { user } = useAuthStore();
+  const { activeInstitution, activeInstitutionId } = useActiveInstitution();
+  const [mounted, setMounted] = useState(false);
   const [socialLinks, setSocialLinks] = useState<SocialLinksMap | null>(null);
+  const [institutionInfo, setInstitutionInfo] = useState<any>(null);
+  const [platformContact, setPlatformContact] = useState<{
+    email?: string;
+    phone?: string;
+    address?: string;
+  }>({});
+
+  const defaultEnvInstId = process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
+    ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
+    : null;
 
   useEffect(() => {
+    setMounted(true);
+
     fetch("/api/public/company/pages/social-links")
       .then((res) => res.json())
       .then((json) => {
@@ -124,7 +120,108 @@ export function PublicFooter() {
         }
       })
       .catch(() => undefined);
+
+    fetch("/api/public/company/pages/contact-us")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.data?.metadata) {
+          setPlatformContact({
+            email: json.data.metadata.email,
+            phone: json.data.metadata.phone,
+            address: json.data.metadata.address,
+          });
+        }
+      })
+      .catch(() => undefined);
   }, []);
+
+  const isPlatformAdmin = Boolean(
+    user?.is_super_admin || user?.role_codes?.includes("platform_admin")
+  );
+
+  const effectiveInstId = mounted
+    ? activeInstitutionId || defaultEnvInstId
+    : defaultEnvInstId;
+
+  const isInstitutionalAdmin = Boolean(
+    !isPlatformAdmin &&
+      (user?.role_codes?.includes("institution_admin") ||
+        user?.primary_role === "institution_admin" ||
+        user?.memberships?.some((m) => m.role_code === "institution_admin") ||
+        Boolean(effectiveInstId))
+  );
+
+  const isInstitutionView = Boolean(
+    effectiveInstId && effectiveInstId > 0 && (
+      (pathname === "/") ||
+      isInstitutionalAdmin ||
+      pathname.startsWith("/institution")
+    )
+  );
+
+  useEffect(() => {
+    if (effectiveInstId && isInstitutionView) {
+      fetch(`/api/public/institution/info?institutionId=${effectiveInstId}`)
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.data) {
+            setInstitutionInfo(json.data);
+          }
+        })
+        .catch(() => undefined);
+    } else {
+      setInstitutionInfo(null);
+    }
+  }, [effectiveInstId, isInstitutionView]);
+
+
+  const institutionDisplayName =
+    institutionInfo?.name ||
+    activeInstitution?.name ||
+    user?.memberships?.[0]?.institution_name ||
+    "Institution Campus";
+
+  const institutionTagline =
+    institutionInfo?.about ||
+    "Verified educational institution offering comprehensive programs, dedicated faculty, and modern academic infrastructure.";
+
+  const primaryBranch = institutionInfo?.branches?.[0];
+  const institutionAddress = isInstitutionView
+    ? institutionInfo?.location_name ||
+      (primaryBranch?.address
+        ? [primaryBranch.address, primaryBranch.city, primaryBranch.state].filter(Boolean).join(", ")
+        : "Orderly Bazar, Varanasi, Uttar Pradesh, India")
+    : platformContact.address || "Orderly Bazar, Varanasi, Uttar Pradesh, India";
+
+  const resolveEmail = (val: unknown): string => {
+    if (!val) return "";
+    if (typeof val === "string") return val;
+    if (typeof val === "object" && val !== null && "email" in val) return String((val as { email: unknown }).email || "");
+    return "";
+  };
+
+  const resolvePhone = (val: unknown): string => {
+    if (!val) return "";
+    if (typeof val === "string") return val;
+    if (typeof val === "object" && val !== null) {
+      const obj = val as Record<string, unknown>;
+      if (obj.phone) return String(obj.phone);
+      if (obj.number) return String(obj.number);
+    }
+    return "";
+  };
+
+  const institutionEmail = isInstitutionView
+    ? resolveEmail(institutionInfo?.email) ||
+      resolveEmail(primaryBranch?.emails?.[0]) ||
+      "support@edubird.com"
+    : platformContact.email || "support@edubird.com";
+
+  const institutionPhone = isInstitutionView
+    ? resolvePhone(institutionInfo?.phone) ||
+      resolvePhone(primaryBranch?.phones?.[0]) ||
+      "+91 1234567890"
+    : platformContact.phone || "+91 1234567890";
 
   const activeSocials = useMemo(() => {
     if (!socialLinks) return [];
@@ -140,20 +237,59 @@ export function PublicFooter() {
     return items.filter((item) => Boolean(item.url));
   }, [socialLinks]);
 
+  // Quick links: Institutes and duplicate About Us removed, replaced with Blogs
+  const quickLinks = [
+    { label: "All Courses", href: "/courses" },
+    { label: "Blogs", href: "/blogs" },
+    { label: "Contact Us", href: "/contact" },
+    { label: "FAQs", href: "/faqs" },
+  ];
+
+  const legalLinks = [
+    { label: "About Us", href: "/about" },
+    { label: "Privacy Policy", href: "/privacy" },
+    { label: "Terms & Conditions", href: "/terms" },
+    { label: "Copyright Policy", href: "/copyright" },
+    { label: "Refund Policy", href: "/refund-policy" },
+  ];
+
   return (
     <footer className="border-t border-border bg-background py-12">
       <div className="container mx-auto px-4">
         <div className="grid gap-8 md:grid-cols-4">
-          {/* Brand */}
+          {/* Brand Column */}
           <div>
-            <div className="mb-4 flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <GraduationCap className="h-5 w-5 text-primary-foreground" />
-              </div>
-              <span className="text-xl font-bold text-foreground">EduBird</span>
+            <div className="mb-4 flex items-center gap-2.5">
+              {isInstitutionView ? (
+                <>
+                  <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#800000] text-white overflow-hidden shadow-xs">
+                    {institutionInfo?.logo_url ? (
+                      <Image
+                        src={institutionInfo.logo_url}
+                        alt={institutionDisplayName}
+                        fill
+                        sizes="32px"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <School className="h-4.5 w-4.5 text-white" />
+                    )}
+                  </div>
+                  <span className="text-lg font-bold text-foreground truncate max-w-[200px]">
+                    {institutionDisplayName}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+                    <GraduationCap className="h-5 w-5 text-primary-foreground" />
+                  </div>
+                  <span className="text-xl font-bold text-foreground">EduBird</span>
+                </>
+              )}
             </div>
-            <p className="text-sm text-muted-foreground">
-              Your trusted platform for finding verified courses from top educational institutes.
+            <p className="text-sm text-muted-foreground line-clamp-3">
+              {isInstitutionView ? institutionTagline : "Your trusted platform for finding verified courses from top educational institutes."}
             </p>
 
             {/* Social Media Links */}
@@ -185,29 +321,50 @@ export function PublicFooter() {
             )}
           </div>
 
-          {/* Dynamic link columns */}
-          {Object.entries(footerLinks).map(([title, links]) => (
-            <div key={title}>
-              <h4 className="mb-4 font-semibold text-foreground">{title}</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {links.map((link) => (
-                  <li key={link.href + link.label}>
-                    <Link href={link.href} className="hover:text-foreground transition-colors">
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          {/* Quick Links Column */}
+          <div>
+            <h4 className="mb-4 font-semibold text-foreground">Quick Links</h4>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              {quickLinks.map((link) => (
+                <li key={link.href + link.label}>
+                  <Link href={link.href} className="hover:text-foreground transition-colors">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
 
-          {/* Contact */}
+          {/* Company & Legal Column */}
+          <div>
+            <h4 className="mb-4 font-semibold text-foreground">Company & Legal</h4>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              {legalLinks.map((link) => (
+                <li key={link.href + link.label}>
+                  <Link href={link.href} className="hover:text-foreground transition-colors">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Contact Details Column (Dynamically fetched for Institution) */}
           <div>
             <h4 className="mb-4 font-semibold text-foreground">Contact</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              {contactInfo.map((info) => (
-                <li key={info}>{info}</li>
-              ))}
+              <li className="flex items-start gap-2">
+                <Mail className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <span className="break-all">{institutionEmail}</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Phone className="h-4 w-4 text-primary shrink-0" />
+                <span>{institutionPhone}</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <span>{institutionAddress}</span>
+              </li>
             </ul>
           </div>
         </div>
@@ -215,7 +372,9 @@ export function PublicFooter() {
         <Separator className="my-8" />
 
         <div className="flex flex-col items-center justify-between gap-4 text-center sm:flex-row sm:text-left">
-          <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} EduBird. All rights reserved.</p>
+          <p className="text-sm text-muted-foreground">
+            © {new Date().getFullYear()} {isInstitutionView ? institutionDisplayName : "EduBird"}. All rights reserved.
+          </p>
           <div className="flex flex-wrap justify-center gap-4 text-sm text-muted-foreground sm:justify-end">
             <Link href="/about" className="hover:text-foreground transition-colors">
               About

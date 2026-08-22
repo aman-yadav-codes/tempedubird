@@ -332,15 +332,15 @@ export function UniversalFeedbackDialog({
 
           {/* TWO SECTIONS: VERIFIED FEEDBACK VS COMMUNITY RATINGS */}
           <Tabs defaultValue="verified" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 h-10">
-              <TabsTrigger value="verified" className="text-xs font-bold gap-1.5">
-                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                <span>Genuine Verified Feedback ({verifiedReviews.length})</span>
+            <TabsList className="w-full flex items-center justify-start gap-1.5 p-1 bg-muted/60 rounded-xl border border-border/50 min-h-11">
+              <TabsTrigger value="verified" className="flex-1 min-w-0 text-xs font-bold gap-1.5 py-2">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <span className="truncate">Genuine Verified Feedback ({verifiedReviews.length})</span>
               </TabsTrigger>
 
-              <TabsTrigger value="community" className="text-xs font-bold gap-1.5">
-                <Users className="h-3.5 w-3.5 text-blue-600" />
-                <span>Community Ratings ({communityReviews.length})</span>
+              <TabsTrigger value="community" className="flex-1 min-w-0 text-xs font-bold gap-1.5 py-2">
+                <Users className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                <span className="truncate">Community Ratings ({communityReviews.length})</span>
               </TabsTrigger>
             </TabsList>
 

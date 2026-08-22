@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
+import { useCategoryAvailability } from "@/hooks/use-category-availability";
 
 type PracticeTest = {
   id: number;
@@ -21,20 +22,28 @@ type PracticeTest = {
   created_by_name: string;
   description: string;
   institution_name: string;
+  price?: string;
+  is_free?: boolean;
 };
 
 export default function PracticePublicPage() {
+  const { isInstitutionalAdmin, activeInstitutionId } = useCategoryAvailability();
   const [tests, setTests] = useState<PracticeTest[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     fetchTests();
-  }, []);
+  }, [activeInstitutionId, isInstitutionalAdmin]);
 
   const fetchTests = async () => {
     try {
-      const res = await fetch("/api/public/practice");
+      setLoading(true);
+      const url =
+        isInstitutionalAdmin && activeInstitutionId
+          ? `/api/public/practice?institutionId=${activeInstitutionId}`
+          : "/api/public/practice";
+      const res = await fetch(url);
       if (res.ok) {
         const json = await res.json();
         setTests(json.practiceTests || []);
@@ -85,7 +94,7 @@ export default function PracticePublicPage() {
             No practice tests found matching your query.
           </Card>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((t) => (
               <Card key={t.id} className="p-6 shadow-xs hover:border-primary/50 transition-colors flex flex-col justify-between space-y-4">
                 <div className="space-y-3">
@@ -99,9 +108,14 @@ export default function PracticePublicPage() {
                       <p className="text-xs text-muted-foreground font-medium mt-1">Subject: {t.subject}</p>
                     </div>
 
-                    <Badge className={t.difficulty === "Hard" ? "bg-red-500" : "bg-amber-500"}>
-                      {t.difficulty}
-                    </Badge>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge className={t.difficulty === "Hard" ? "bg-red-500" : "bg-amber-500"}>
+                        {t.difficulty}
+                      </Badge>
+                      <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold">
+                        {t.price || "Free Access"}
+                      </Badge>
+                    </div>
                   </div>
 
                   <p className="text-xs text-muted-foreground leading-relaxed">{t.description}</p>

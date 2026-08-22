@@ -21,6 +21,7 @@ import {
   FileText,
   Layers,
   CheckCircle2,
+  Users,
 } from "lucide-react";
 import { useAuthStore } from "@/store";
 import { Card, CardContent } from "@/components/ui/card";
@@ -150,19 +151,16 @@ const DEFAULT_MULTI_PROGRAMS: EnrolledProgram[] = [
 ];
 
 export default function StudentDashboardPage() {
-  const { user } = useAuthStore();
+  const { user, accessToken } = useAuthStore();
   const [greeting, setGreeting] = useState("Good Day");
   const [programs, setPrograms] = useState<EnrolledProgram[]>(DEFAULT_MULTI_PROGRAMS);
   const [selectedProgramId, setSelectedProgramId] = useState<number>(1);
 
-  useEffect(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) setGreeting("Good Morning");
-    else if (hour < 17) setGreeting("Good Afternoon");
-    else setGreeting("Good Evening");
+  const loadEnrollments = () => {
+    const headers: Record<string, string> = {};
+    if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
 
-    // Fetch real enrollments from API
-    fetch("/api/student/enrollments")
+    fetch("/api/student/enrollments", { headers })
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.enrollments) && data.enrollments.length > 0) {
@@ -171,12 +169,12 @@ export default function StudentDashboardPage() {
             title: e.program_title || "Enrolled Program",
             institution: e.institution_name || "Partner Institution",
             admissionNo: e.admission_number || `STU-2026-${e.program_code || "ENR"}-${String(e.enrollment_id).padStart(4, "0")}`,
-            currentSemester: "Current Academic Session 2025-2026",
+            currentSemester: e.academic_year_name ? `Academic Session ${e.academic_year_name}` : "Current Academic Session 2025-2026",
             overallAttendance: 92.5 + (idx % 3),
             completedCredits: 40 + idx * 30,
             totalCredits: 120,
-            status: "Active Enrolled",
-            category: "Academic Program",
+            status: e.status ? `Active (${e.status})` : "Active Enrolled",
+            category: e.program_duration || "Academic Program",
             activeSubjects: [
               {
                 id: 10 + idx,
@@ -189,24 +187,34 @@ export default function StudentDashboardPage() {
             ],
           }));
 
-          // Merge with defaults if less than 2
-          if (mapped.length === 1) {
-            setPrograms([mapped[0], DEFAULT_MULTI_PROGRAMS[1], DEFAULT_MULTI_PROGRAMS[2]]);
-          } else {
-            setPrograms(mapped);
-          }
+          setPrograms(mapped);
           setSelectedProgramId(mapped[0].id);
         }
       })
       .catch(() => undefined);
-  }, []);
+  };
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) setGreeting("Good Morning");
+    else if (hour < 17) setGreeting("Good Afternoon");
+    else setGreeting("Good Evening");
+
+    loadEnrollments();
+
+    const handleUpdate = () => loadEnrollments();
+    window.addEventListener("student_enrollment_updated", handleUpdate);
+    return () => {
+      window.removeEventListener("student_enrollment_updated", handleUpdate);
+    };
+  }, [accessToken]);
 
   const activeProgram = programs.find((p) => p.id === selectedProgramId) || programs[0];
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">
       {/* WELCOME & MULTI-PROGRAM SUMMARY BANNER */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-primary/95 to-slate-900 p-6 sm:p-8 text-white shadow-xl">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-rose-950 to-slate-900 p-6 sm:p-8 text-white shadow-xl border border-rose-900/30">
         <div className="relative z-10 space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="space-y-2">
@@ -453,6 +461,16 @@ export default function StudentDashboardPage() {
               </div>
               <h3 className="font-bold text-sm text-foreground">Hostels & Residence</h3>
               <p className="text-xs text-muted-foreground">Check executive hostel room vacancies, mess menus, and Wi-Fi access.</p>
+            </Card>
+          </Link>
+
+          <Link href="/student/guardians">
+            <Card className="p-5 hover:border-primary/60 transition-all hover:-translate-y-0.5 cursor-pointer shadow-2xs space-y-2 group">
+              <div className="p-3 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 w-fit group-hover:scale-110 transition-transform">
+                <Users className="h-6 w-6" />
+              </div>
+              <h3 className="font-bold text-sm text-foreground">My Guardians</h3>
+              <p className="text-xs text-muted-foreground">Manage parent and emergency contacts linked to your institution profile.</p>
             </Card>
           </Link>
 

@@ -43,6 +43,7 @@ import { ImagePreviewSlider } from "@/components/shared/image-preview-slider";
 import { InstitutionProgram, MasterType } from "@/lib/types/institution";
 import { slugify } from "@/lib/utils/slug";
 import { cn } from "@/lib/utils";
+import { MarketplaceSellOption } from "@/components/admin/marketplace-sell-option";
 
 // ---------- Pending Media type ----------
 interface PendingMedia {
@@ -198,6 +199,8 @@ export default function ProgramsAdminPage() {
     const [activeLoadingId, setActiveLoadingId] = useState<number | null>(null);
     const [activeStep, setActiveStep] = useState(0);
     const [programDetailLoading, setProgramDetailLoading] = useState(false);
+    const [sellOnMarketplace, setSellOnMarketplace] = useState(false);
+    const [marketplacePrice, setMarketplacePrice] = useState<number>(0);
 
     // ---- View sheet ----
     const [viewing, setViewing] = useState<InstitutionProgram | null>(null);
@@ -448,6 +451,8 @@ export default function ProgramsAdminPage() {
         setMediaUrlType("auto");
         setActiveStep(0);
         setProgramDetailLoading(false);
+        setSellOnMarketplace(false);
+        setMarketplacePrice(0);
     };
 
     const openCreateDialog = () => {
@@ -573,6 +578,8 @@ export default function ProgramsAdminPage() {
                     value: String(id),
                     label: sectionNames[i] || String(id),
                 })));
+                setSellOnMarketplace(Boolean(full.sell_on_marketplace));
+                setMarketplacePrice(Number(full.marketplace_price ?? 0));
             })
             .catch(() => {
                 if (editDetailRequestRef.current !== requestId) return;
@@ -908,6 +915,8 @@ export default function ProgramsAdminPage() {
             ],
         };
         if (slug.trim()) payload.slug = slug.trim();
+        payload.sell_on_marketplace = sellOnMarketplace;
+        payload.marketplace_price = marketplacePrice;
         if (!isSubjectProgramType) {
             if (durationValue !== "") payload.durationValue = Number(durationValue);
             if (durationUnit) payload.durationUnit = durationUnit;
@@ -1741,6 +1750,18 @@ export default function ProgramsAdminPage() {
                                         )}
                                     </div>
                                 </div>
+
+                                {/* Marketplace Option */}
+                                <MarketplaceSellOption
+                                    sellOnMarketplace={sellOnMarketplace}
+                                    onSellOnMarketplaceChange={setSellOnMarketplace}
+                                    marketplacePrice={marketplacePrice}
+                                    onMarketplacePriceChange={(val) => setMarketplacePrice(Number(val))}
+                                    title="Sell on Marketplace"
+                                    description="List this course/program on the EduBird national marketplace for students to discover and enroll."
+                                    priceLabel="Marketplace Enrollment Price (₹)"
+                                    pricePlaceholder="Enter 0 for free or enrollment fee amount"
+                                />
                             </div>
                         )}
 

@@ -5,18 +5,39 @@ type RoleRouteUser = {
   permissions?: string[];
 } | null | undefined;
 
-const KNOWN_ROLE_PREFIXES = new Set(["admin", "institute", "teacher", "student", "parent", "driver", "accountant", "guest"]);
+const KNOWN_ROLE_PREFIXES = new Set(["admin", "institutionadmin", "institution-admin", "institute", "teacher", "student", "parent", "driver", "accountant", "guest"]);
 const PUBLIC_TOP_LEVEL_SEGMENTS = new Set([
+  "about",
   "account-suspended",
+  "auth",
+  "blogs",
+  "contact",
+  "copyright",
   "courses",
   "designations",
+  "exams",
+  "faqs",
+  "forgot-password",
+  "gallery",
   "help",
+  "hostels",
   "icons",
   "images",
   "institutes",
+  "institution",
   "institutions",
-  "test",
+  "libraries",
+  "login",
+  "notes",
+  "packages",
+  "practice",
+  "privacy",
+  "refund-policy",
+  "reset-password",
+  "signup",
   "teachers",
+  "terms",
+  "test",
 ]);
 const ADMIN_CHILD_SEGMENTS = new Set([
   "access-control",
@@ -24,14 +45,18 @@ const ADMIN_CHILD_SEGMENTS = new Set([
   "ai-settings",
   "analytics",
   "classroom",
+  "children",
   "company",
   "content",
+  "dashboard",
   "finance",
+  "guardians",
   "institution",
   "institutions",
   "marketing",
   "master-data",
   "notifications",
+  "profile",
   "sales",
   "settings",
   "staff",
@@ -45,13 +70,13 @@ const ROLE_PREFIX_MAP: Record<string, string> = {
   platform_admin: "admin",
   accountant: "admin",
   guest: "admin",
-  institution_admin: "admin",
-  professional_organization: "admin",
-  school_owner: "admin",
-  college_owner: "admin",
-  university_owner: "admin",
-  library_owner: "admin",
-  pg_owner: "admin",
+  institution_admin: "institutionadmin",
+  professional_organization: "institutionadmin",
+  school_owner: "institutionadmin",
+  college_owner: "institutionadmin",
+  university_owner: "institutionadmin",
+  library_owner: "institutionadmin",
+  pg_owner: "institutionadmin",
   teacher: "admin",
   student: "student",
   parent: "parent",
@@ -89,7 +114,7 @@ export function sanitizeRolePathSegment(value: string | null | undefined) {
 }
 
 export function getRoleRoutePrefix(user: RoleRouteUser) {
-  if (user?.is_super_admin || user?.permissions?.includes("*")) return "admin";
+  if (user?.is_super_admin || user?.role_codes?.includes("platform_admin")) return "admin";
 
   const roleCodes = user?.role_codes ?? [];
   const mappedRole = PREFIX_PRIORITY.find((roleCode) => roleCodes.includes(roleCode));
@@ -133,7 +158,12 @@ export function toCanonicalAdminPath(pathname: string) {
 }
 
 export function toRoleRoutePath(pathname: string, user: RoleRouteUser) {
-  const canonical = toCanonicalAdminPath(pathname);
+  let canonical = toCanonicalAdminPath(pathname);
+  if (canonical === "/admin/dashboard") {
+    canonical = "/admin";
+  } else if (canonical === "/admin/profile") {
+    canonical = "/admin/account";
+  }
   const base = getRoleRouteBase(user);
 
   if (base === "/admin") return canonical;

@@ -19,6 +19,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAuthStore } from "@/store";
 
 type ProgramDetail = {
   id: number;
@@ -95,11 +96,15 @@ const MULTI_PROGRAM_LIST: ProgramDetail[] = [
 ];
 
 export default function StudentMyProgramPage() {
+  const { accessToken } = useAuthStore();
   const [programs, setPrograms] = useState<ProgramDetail[]>(MULTI_PROGRAM_LIST);
   const [selectedId, setSelectedId] = useState<number>(1);
 
-  useEffect(() => {
-    fetch("/api/student/enrollments")
+  const loadEnrollments = () => {
+    const headers: Record<string, string> = {};
+    if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+    fetch("/api/student/enrollments", { headers })
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.enrollments) && data.enrollments.length > 0) {
@@ -110,7 +115,7 @@ export default function StudentMyProgramPage() {
             city: e.institution_slug ? `${e.institution_slug.toUpperCase()} Campus` : "Main Campus",
             programType: e.program_duration || "Academic Degree / Diploma",
             duration: e.program_duration || "Academic Session",
-            currentSemester: "Active Semester 2025-2026",
+            currentSemester: e.academic_year_name ? `Active Session (${e.academic_year_name})` : "Active Semester 2025-2026",
             admissionNo: e.admission_number || `STU-2026-${e.program_code || "ENR"}-${String(e.enrollment_id).padStart(4, "0")}`,
             totalFee: e.fee_amount ? `₹${Number(e.fee_amount).toLocaleString("en-IN")}` : "₹50,000 / Year",
             feeStatus: `Paid (Receipt #EDUBIRD-2026-${e.enrollment_id + 5000})`,
@@ -122,16 +127,22 @@ export default function StudentMyProgramPage() {
             ],
           }));
 
-          if (mapped.length === 1) {
-            setPrograms([mapped[0], MULTI_PROGRAM_LIST[1], MULTI_PROGRAM_LIST[2]]);
-          } else {
-            setPrograms(mapped);
-          }
+          setPrograms(mapped);
           setSelectedId(mapped[0].id);
         }
       })
       .catch(() => undefined);
-  }, []);
+  };
+
+  useEffect(() => {
+    loadEnrollments();
+
+    const handleUpdate = () => loadEnrollments();
+    window.addEventListener("student_enrollment_updated", handleUpdate);
+    return () => {
+      window.removeEventListener("student_enrollment_updated", handleUpdate);
+    };
+  }, [accessToken]);
 
   const activeProgram = programs.find((p) => p.id === selectedId) || programs[0];
 

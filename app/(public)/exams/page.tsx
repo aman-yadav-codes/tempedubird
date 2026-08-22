@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
+import { useCategoryAvailability } from "@/hooks/use-category-availability";
 
 type EntranceExam = {
   id: number;
@@ -22,17 +23,23 @@ type EntranceExam = {
 };
 
 export default function ExamsPublicPage() {
+  const { isInstitutionalAdmin, activeInstitutionId } = useCategoryAvailability();
   const [exams, setExams] = useState<EntranceExam[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     fetchExams();
-  }, []);
+  }, [activeInstitutionId, isInstitutionalAdmin]);
 
   const fetchExams = async () => {
     try {
-      const res = await fetch("/api/public/exams");
+      setLoading(true);
+      const url =
+        isInstitutionalAdmin && activeInstitutionId
+          ? `/api/public/exams?institutionId=${activeInstitutionId}`
+          : "/api/public/exams";
+      const res = await fetch(url);
       if (res.ok) {
         const json = await res.json();
         setExams(json.exams || []);

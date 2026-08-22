@@ -834,7 +834,7 @@ export const getUsersPaginatedQuery = async (
 
 export const insertUser = async (db: Queryable, data: {
   full_name: string;
-  email: string;
+  email?: string | null;
   phone?: string | null;
   password: string | null;
   avatar_url?: string | null;
@@ -879,7 +879,7 @@ export const insertUser = async (db: Queryable, data: {
     `,
     [
       full_name,
-      email,
+      email || null,
       phone ?? null,
       password,
       avatar_url,
@@ -1084,6 +1084,10 @@ async function assignScopedRole(
   }
 
   if (role.scope_code === "institution") {
+    if (role.code === "student") {
+      await insertUserRole(db, userId, role.id);
+      return;
+    }
     throw new Error("Select an institution for this institution role");
   }
 }
@@ -2444,6 +2448,48 @@ export const getUserByEmailQuery = async (db: Queryable, emailOrPhone: string) =
       LIMIT 1
     `,
     [cleanInput]
+  );
+  return res.rows[0] || null;
+};
+
+export const getUserByPhoneQuery = async (db: Queryable, phone: string) => {
+  const cleanPhone = phone.trim();
+  const res = await db.query<UserRecordRow & { role_names?: string[]; primary_role?: string; avatar_url?: string }>(
+    `
+      SELECT
+        u.id,
+        u.full_name,
+        u.email,
+        u.phone,
+        u.avatar_url,
+        u.is_active,
+        ARRAY_AGG(DISTINCT r.name) FILTER (WHERE r.name IS NOT NULL) AS role_names
+      FROM users u
+      LEFT JOIN user_roles ur ON ur.user_id = u.id
+      LEFT JOIN roles r ON r.id = ur.role_id
+      WHERE u.phone = $1
+        AND COALESCE(u.is_deleted, FALSE) = FALSE
+      GROUP BY u.id, u.full_name, u.email, u.phone, u.avatar_url, u.is_active
+      ORDER BY u.is_active DESC, u.id DESC
+      LIMIT 1
+    `,
+    [cleanPhone]
+  );
+  return res.rows[0] || null;
+};
+
+export const resetUserPasswordQuery = async (db: Queryable, identifier: string, hashedPassword: string) => {
+  const cleanInput = identifier.trim();
+  const res = await db.query<{ id: number; full_name: string; email: string | null; phone: string | null }>(
+    `
+      UPDATE users
+      SET password = $2,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE (LOWER(email) = LOWER($1) OR phone = $1)
+        AND COALESCE(is_deleted, FALSE) = FALSE
+      RETURNING id, full_name, email, phone
+    `,
+    [cleanInput, hashedPassword]
   );
   return res.rows[0] || null;
 };

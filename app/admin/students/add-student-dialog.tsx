@@ -618,6 +618,12 @@ export function AddStudentDialog({
   const showAdminControls = canAssignRoles;
   const showSecurityStep = isEdit && showAdminControls;
   const currentUserRoleCodes = currentUser?.role_codes ?? [];
+  const isParentMode = Boolean(
+    currentUser?.roles?.includes("Guardian") ||
+    currentUser?.roles?.includes("Parent") ||
+    currentUserRoleCodes.includes("guardian") ||
+    currentUserRoleCodes.includes("parent")
+  );
   const canPromoteByRole = Boolean(
     currentUser?.is_super_admin ||
     currentUserRoleCodes.includes("platform_admin") ||
@@ -790,15 +796,24 @@ export function AddStudentDialog({
     "";
   const editingUserId = user?.id ?? null;
   const createInstitutionId = Number(lockedEnrollmentInstitutionId);
-  const canCreateStudents = hasPermission(
-    currentUser,
-    "managestudents.allstudents.create",
-    {
-      institutionId:
-        Number.isInteger(createInstitutionId) && createInstitutionId > 0
-          ? createInstitutionId
-      : null,
-    }
+  const canCreateStudents = Boolean(
+    currentUser?.is_super_admin ||
+    currentUser?.roles?.includes("Platform Admin") ||
+    currentUser?.roles?.includes("Institution Admin") ||
+    currentUser?.roles?.includes("Guardian") ||
+    currentUser?.roles?.includes("Parent") ||
+    currentUser?.role_codes?.includes("guardian") ||
+    currentUser?.role_codes?.includes("parent") ||
+    hasPermission(
+      currentUser,
+      "managestudents.allstudents.create",
+      {
+        institutionId:
+          Number.isInteger(createInstitutionId) && createInstitutionId > 0
+            ? createInstitutionId
+            : null,
+      }
+    )
   );
 
   const clearFieldError = useCallback((field: string) => {
@@ -2198,7 +2213,7 @@ export function AddStudentDialog({
       email: normalizeEmail(form.email),
       phone: safeTrim(form.phone) || null,
       avatar_url: safeTrim(form.avatar_url) || null,
-      role_id: form.role_id ? Number(form.role_id) : null,
+      role_id: form.role_id ? Number(form.role_id) : (defaultStudentRole ? Number(defaultStudentRole.id) : null),
       is_active: form.is_active,
       is_verified: form.is_verified,
       is_profile_complete: form.is_profile_complete,
@@ -2336,7 +2351,7 @@ export function AddStudentDialog({
       class_category_id: enrollment.class_category_id ? Number(enrollment.class_category_id) : null,
       section_id: enrollment.section_id ? Number(enrollment.section_id) : null,
       roll_number: safeTrim(enrollment.roll_number ?? "") || null,
-      admission_date: enrollment.admission_date || studentRecords.admission_date || null,
+      admission_date: isParentMode ? null : (enrollment.admission_date || studentRecords.admission_date || null),
       status: enrollment.status || "active",
       remarks: normalizeNullableText(enrollment.remarks ?? ""),
     }));
@@ -2357,7 +2372,7 @@ export function AddStudentDialog({
       class_category_id: studentRecords.class_category_id ? Number(studentRecords.class_category_id) : null,
       section_id: studentRecords.section_id ? Number(studentRecords.section_id) : null,
       roll_number: safeTrim(studentRecords.roll_number) || null,
-      admission_date: studentRecords.admission_date || null,
+      admission_date: isParentMode ? null : (studentRecords.admission_date || null),
       status: studentRecords.status || "active",
       remarks: normalizeNullableText(studentRecords.remarks),
     },
@@ -3679,20 +3694,22 @@ export function AddStudentDialog({
                   placeholder="B+"
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label>Admission Date</Label>
-                <DatePicker
-                  value={studentRecords.admission_date}
-                  onChange={(value) => {
-                    setStudentRecords((prev) => ({ ...prev, admission_date: value }));
-                    setEnrollmentDrafts((current) => current.map((item, index) => index === 0 ? { ...item, admission_date: value } : item));
-                  }}
-                  placeholder="Select admission date"
-                  fromYear={CURRENT_YEAR}
-                  toYear={CURRENT_YEAR}
-                  disabledDates={{ before: CURRENT_YEAR_START, after: CURRENT_YEAR_END }}
-                />
-              </div>
+              {!isParentMode && (
+                <div className="space-y-1.5">
+                  <Label>Admission Date</Label>
+                  <DatePicker
+                    value={studentRecords.admission_date}
+                    onChange={(value) => {
+                      setStudentRecords((prev) => ({ ...prev, admission_date: value }));
+                      setEnrollmentDrafts((current) => current.map((item, index) => index === 0 ? { ...item, admission_date: value } : item));
+                    }}
+                    placeholder="Select admission date"
+                    fromYear={CURRENT_YEAR}
+                    toYear={CURRENT_YEAR}
+                    disabledDates={{ before: CURRENT_YEAR_START, after: CURRENT_YEAR_END }}
+                  />
+                </div>
+              )}
               <div className="space-y-1.5 sm:col-span-2">
                 <Label>Remarks</Label>
                 <Textarea

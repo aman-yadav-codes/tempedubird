@@ -19,6 +19,8 @@ import {
   Briefcase,
   Sparkles,
   ShieldCheck,
+  KeyRound,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
@@ -83,6 +85,16 @@ export function AuthModalDialog({
   const [signUpPassword, setSignUpPassword] = useState("");
   const [signUpConfirmPassword, setSignUpConfirmPassword] = useState("");
 
+  const [existingPhoneProfile, setExistingPhoneProfile] = useState<{
+    id: number;
+    full_name: string;
+    email: string | null;
+    phone: string;
+    avatar_url: string | null;
+    roles: string[];
+  } | null>(null);
+  const [phoneChecking, setPhoneChecking] = useState(false);
+
   const signUpState = {
     signUpFullName,
     signUpEmail,
@@ -96,6 +108,32 @@ export function AuthModalDialog({
     formState: signUpState,
     enabled: open && activeTab === "signup",
   });
+
+  // Check phone duplication when 10 digits are typed
+  useEffect(() => {
+    const cleanPhone = signUpPhone.replace(/\D/g, "").slice(-10);
+    if (open && activeTab === "signup" && cleanPhone.length === 10) {
+      const timer = setTimeout(async () => {
+        setPhoneChecking(true);
+        try {
+          const res = await fetch(`/api/auth/phone-lookup?phone=${cleanPhone}`);
+          const data = await res.json();
+          if (data.exists && data.user) {
+            setExistingPhoneProfile(data.user);
+          } else {
+            setExistingPhoneProfile(null);
+          }
+        } catch {
+          setExistingPhoneProfile(null);
+        } finally {
+          setPhoneChecking(false);
+        }
+      }, 350);
+      return () => clearTimeout(timer);
+    } else {
+      setExistingPhoneProfile(null);
+    }
+  }, [signUpPhone, open, activeTab]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -174,11 +212,8 @@ export function AuthModalDialog({
       toast.error("Please enter your full name.");
       return;
     }
-    if (!signUpEmail.trim()) {
-      toast.error("Please enter your email address.");
-      return;
-    }
-    if (!signUpPhone.trim() || signUpPhone.trim().length !== 10) {
+    const cleanPhone = signUpPhone.replace(/\D/g, "").slice(-10);
+    if (!cleanPhone || cleanPhone.length !== 10) {
       toast.error("Phone number must be exactly 10 digits.");
       return;
     }
@@ -197,13 +232,14 @@ export function AuthModalDialog({
 
     setSubmitting(true);
     try {
+      const payloadEmail = signUpEmail.trim() || null;
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           full_name: signUpFullName.trim(),
-          email: signUpEmail.trim(),
-          phone: signUpPhone.trim(),
+          email: payloadEmail,
+          phone: cleanPhone,
           address: signUpCity.trim(),
           role_code: signUpRole,
           password: signUpPassword,
@@ -213,15 +249,24 @@ export function AuthModalDialog({
 
       const json = await res.json();
       if (!res.ok) {
+        if (json.error === "Phone number already registered" || res.status === 409) {
+          // fetch existing profile
+          const lookupRes = await fetch(`/api/auth/phone-lookup?phone=${cleanPhone}`);
+          const lookupData = await lookupRes.json();
+          if (lookupData.exists && lookupData.user) {
+            setExistingPhoneProfile(lookupData.user);
+          }
+        }
         throw new Error(json.error || "Registration failed");
       }
 
       // Auto login after registration
+      const loginIdentifier = payloadEmail || cleanPhone;
       const loginRes = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: signUpEmail.trim(),
+          email: loginIdentifier,
           password: signUpPassword,
         }),
       });
@@ -236,7 +281,7 @@ export function AuthModalDialog({
       } else {
         toast.success("Account created successfully! Please sign in.");
         setActiveTab("signin");
-        setSignInIdentifier(signUpEmail.trim());
+        setSignInIdentifier(loginIdentifier);
         setSignInPassword(signUpPassword);
       }
     } catch (err) {
@@ -290,6 +335,69 @@ export function AuthModalDialog({
           {activeTab === "signup" ? (
             /* Sign Up Form matching Screenshot Exact Design */
             <form onSubmit={handleSignUp} className="space-y-2.5">
+              {/* Existing Phone Profile Alert & Selector */}
+              {existingPhoneProfile && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border-2 border-amber-500/40 space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-10 w-10 rounded-xl bg-amber-500 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-xs">
+                        {existingPhoneProfile.full_name ? existingPhoneProfile.full_name[0].toUpperCase() : "U"}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-black text-slate-900 truncate">
+                            {existingPhoneProfile.full_name}
+                          </span>
+                          {existingPhoneProfile.roles?.length > 0 && (
+                            <span className="text-[9px] font-bold bg-amber-500/20 text-amber-900 px-1.5 py-0.5 rounded-md">
+                              {existingPhoneProfile.roles[0]}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-600 font-medium truncate">
+                          {existingPhoneProfile.email ? `${existingPhoneProfile.email} • ` : ""}{existingPhoneProfile.phone}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="bg-amber-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0">
+                      Already Registered
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-amber-900 font-medium leading-tight">
+                    An account is already associated with this phone number. Select an option below:
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        onOpenChange(false);
+                        router.push(`/forgot-password?identifier=${encodeURIComponent(existingPhoneProfile.phone)}`);
+                      }}
+                      className="w-full bg-[#D91B1B] hover:bg-[#b01414] text-white text-[11px] font-bold h-8.5 rounded-xl shadow-xs gap-1.5 cursor-pointer"
+                    >
+                      <KeyRound className="h-3.5 w-3.5" />
+                      Select & Reset Password
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setActiveTab("signin");
+                        setSignInIdentifier(existingPhoneProfile.phone);
+                        setExistingPhoneProfile(null);
+                      }}
+                      className="w-full text-[11px] font-bold h-8.5 rounded-xl border-amber-500/40 text-amber-900 hover:bg-amber-100/60 gap-1.5 cursor-pointer"
+                    >
+                      <ArrowRight className="h-3.5 w-3.5" />
+                      Sign In with Password
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Row 1: Full Name & Email Address */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {/* Full Name */}
@@ -315,7 +423,7 @@ export function AuthModalDialog({
                   </div>
                 </div>
 
-                {/* Email Address */}
+                {/* Email Address (Optional) */}
                 <div
                   onBlur={() => handleBlur()}
                   className="flex items-center gap-2.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus-within:border-[#D91B1B] focus-within:ring-2 focus-within:ring-rose-500/10 transition-all shadow-2xs"
@@ -324,12 +432,12 @@ export function AuthModalDialog({
                     <Mail className="h-3.5 w-3.5" />
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
-                    <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">
-                      Email Address <span className="text-[#D91B1B]">*</span>
+                    <span className="text-[9px] font-extrabold text-slate-500 uppercase tracking-wider">
+                      Email Address <span className="text-slate-400 font-normal">(Optional)</span>
                     </span>
                     <input
                       type="email"
-                      placeholder="name@example.com"
+                      placeholder="name@example.com (optional)"
                       value={signUpEmail}
                       onChange={(e) => setSignUpEmail(e.target.value)}
                       disabled={submitting}
@@ -339,17 +447,17 @@ export function AuthModalDialog({
                 </div>
               </div>
 
-              {/* Row 2: Phone Number & City */}
+              {/* Row 2: Phone Number & Register As */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {/* Phone Number */}
                 <div
                   onBlur={() => handleBlur()}
-                  className="flex items-center gap-2.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus-within:border-[#D91B1B] focus-within:ring-2 focus-within:ring-rose-500/10 transition-all shadow-2xs"
+                  className="flex items-center gap-2.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus-within:border-[#D91B1B] focus-within:ring-2 focus-within:ring-rose-500/10 transition-all shadow-2xs relative"
                 >
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-[#D91B1B]">
                     <Phone className="h-3.5 w-3.5" />
                   </div>
-                  <div className="flex flex-col min-w-0 flex-1">
+                  <div className="flex flex-col min-w-0 flex-1 pr-5">
                     <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">
                       Phone Number <span className="text-[#D91B1B]">*</span>
                     </span>
@@ -358,58 +466,46 @@ export function AuthModalDialog({
                       maxLength={10}
                       placeholder="10-digit mobile"
                       value={signUpPhone}
-                      onChange={(e) => setSignUpPhone(e.target.value)}
+                      onChange={(e) => {
+                        setSignUpPhone(e.target.value);
+                        if (existingPhoneProfile) setExistingPhoneProfile(null);
+                      }}
                       disabled={submitting}
                       className="w-full text-xs font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal bg-transparent outline-none border-none p-0 focus:ring-0"
                     />
                   </div>
+                  {phoneChecking && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[#D91B1B]" />
+                    </div>
+                  )}
                 </div>
 
-                {/* City */}
+                {/* Register As */}
                 <div
                   onBlur={() => handleBlur()}
                   className="flex items-center gap-2.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus-within:border-[#D91B1B] focus-within:ring-2 focus-within:ring-rose-500/10 transition-all shadow-2xs"
                 >
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-[#D91B1B]">
-                    <MapPin className="h-3.5 w-3.5" />
+                    <GraduationCap className="h-3.5 w-3.5" />
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
                     <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">
-                      City
+                      Register As <span className="text-[#D91B1B]">*</span>
                     </span>
-                    <input
-                      type="text"
-                      placeholder="Your city"
-                      value={signUpCity}
-                      onChange={(e) => setSignUpCity(e.target.value)}
+                    <select
+                      value={signUpRole}
+                      onChange={(e) => setSignUpRole(e.target.value)}
                       disabled={submitting}
-                      className="w-full text-xs font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal bg-transparent outline-none border-none p-0 focus:ring-0"
-                    />
+                      className="w-full text-xs font-semibold text-slate-900 bg-transparent outline-none border-none p-0 focus:ring-0 cursor-pointer truncate"
+                    >
+                      {REGISTER_ROLES.map((r) => (
+                        <option key={r.value} value={r.value}>
+                          {r.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                </div>
-              </div>
-
-              {/* Row 3: Register As Dropdown */}
-              <div className="space-y-0.5">
-                <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider pl-1">
-                  Register As
-                </span>
-                <div className="flex items-center gap-2.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus-within:border-[#D91B1B] focus-within:ring-2 focus-within:ring-rose-500/10 transition-all shadow-2xs">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-[#D91B1B]">
-                    <GraduationCap className="h-3.5 w-3.5" />
-                  </div>
-                  <select
-                    value={signUpRole}
-                    onChange={(e) => setSignUpRole(e.target.value)}
-                    disabled={submitting}
-                    className="w-full text-xs font-semibold text-slate-900 bg-transparent outline-none border-none p-0 focus:ring-0 cursor-pointer"
-                  >
-                    {REGISTER_ROLES.map((r) => (
-                      <option key={r.value} value={r.value}>
-                        {r.label}
-                      </option>
-                    ))}
-                  </select>
                 </div>
               </div>
 
@@ -568,6 +664,21 @@ export function AuthModalDialog({
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
+              </div>
+
+              {/* Forgot Password Link */}
+              <div className="flex justify-end pr-1 -mt-1">
+                <Link
+                  href={
+                    signInIdentifier.trim()
+                      ? `/forgot-password?identifier=${encodeURIComponent(signInIdentifier.trim())}`
+                      : "/forgot-password"
+                  }
+                  onClick={() => onOpenChange(false)}
+                  className="text-[11px] font-bold text-[#D91B1B] hover:underline cursor-pointer"
+                >
+                  Forgot Password?
+                </Link>
               </div>
 
               {/* Submit Button */}

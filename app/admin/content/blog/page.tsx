@@ -7,10 +7,19 @@ import type { SerializedEditorState } from "lexical";
 import {
   ArrowUpDown,
   CalendarClock,
+  Clock,
   FileText,
+  Image as ImageIcon,
+  Layers,
   Loader2,
   Plus,
   RefreshCw,
+  Send,
+  Sparkles,
+  Tag,
+  Video,
+  Upload,
+  X,
 } from "lucide-react";
 import {
   useCallback,
@@ -19,6 +28,7 @@ import {
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
+  type ChangeEvent,
 } from "react";
 
 import { CronScheduleField } from "@/components/shared/cron-schedule-field";
@@ -35,6 +45,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -62,6 +73,11 @@ type BlogPost = {
   id: number;
   institution_id: number | null;
   title: string;
+  category?: string | null;
+  cover_image?: string | null;
+  video_url?: string | null;
+  summary?: string | null;
+  tags?: string | null;
   author: string;
   status: BlogStatus;
   publish_at: string | null;
@@ -73,9 +89,27 @@ type BlogPost = {
 
 type BlogForm = {
   title: string;
+  category: string;
+  cover_image: string;
+  video_url: string;
+  summary: string;
+  tags: string;
+  publishMode: "now" | "schedule" | "draft";
   status: BlogStatus;
   publishAt: string;
 };
+
+const BLOG_CATEGORIES = [
+  "Academic & Curriculum",
+  "Admissions & Counseling",
+  "Campus Life & Culture",
+  "Exams, Cutoffs & Results",
+  "Placements & Career",
+  "Scholarships & Financial Aid",
+  "Student Activities & Sports",
+  "Technology & Innovation",
+  "Announcements & Notices",
+];
 
 const statusClassName: Record<BlogStatus, string> = {
   draft: "border-muted-foreground/30 text-muted-foreground",
@@ -91,7 +125,13 @@ const statusLabel: Record<BlogStatus, string> = {
 
 const emptyForm: BlogForm = {
   title: "",
-  status: "draft",
+  category: "Academic & Curriculum",
+  cover_image: "",
+  video_url: "",
+  summary: "",
+  tags: "",
+  publishMode: "now",
+  status: "published",
   publishAt: "",
 };
 
@@ -107,10 +147,10 @@ function formatDateOnly(value: string | Date) {
 }
 
 function formatDateTime(value: string | null) {
-  if (!value) return "Manual publish";
+  if (!value) return "Immediate publish";
 
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Manual publish";
+  if (Number.isNaN(date.getTime())) return "Immediate publish";
 
   return date.toLocaleString("en-IN", {
     day: "2-digit",
@@ -148,55 +188,60 @@ function getEffectiveStatus(post: BlogPost, now: number): BlogStatus {
 }
 
 function getEditorPlainText(value: unknown): string {
-  const parts: string[] = [];
+  if (!value || typeof value !== "object") return "";
 
-  function visit(node: unknown) {
-    if (!node || typeof node !== "object") return;
-    const record = node as { text?: unknown; children?: unknown };
+  const root = (value as { root?: { children?: unknown[] } }).root;
+  if (!root || !Array.isArray(root.children)) return "";
 
-    if (typeof record.text === "string") {
-      parts.push(record.text);
-    }
+  const extractText = (nodes: unknown[]): string => {
+    return nodes
+      .map((node) => {
+        if (!node || typeof node !== "object") return "";
+        const item = node as { text?: string; children?: unknown[] };
+        if (typeof item.text === "string") return item.text;
+        if (Array.isArray(item.children)) return extractText(item.children);
+        return "";
+      })
+      .filter(Boolean)
+      .join(" ");
+  };
 
-    if (Array.isArray(record.children)) {
-      record.children.forEach(visit);
-      parts.push("\n");
-    }
-  }
-
-  visit(value);
-  return parts.join(" ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  return extractText(root.children).trim();
 }
 
-export default function BlogPage() {
-  const { user, accessToken } = useAuthStore();
+export default function AdminBlogPage() {
   const searchParams = useSearchParams();
+  const { user, accessToken } = useAuthStore();
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activePost, setActivePost] = useState<BlogPost | null>(null);
   const [form, setForm] = useState<BlogForm>(emptyForm);
-  const [blogEditorLeftSize, setBlogEditorLeftSize] = useState(34);
-  const [now, setNow] = useState(() => Date.now());
-  const blogEditorSplitRef = useRef<HTMLDivElement | null>(null);
-  const blogBodyRef = useRef<SerializedEditorState | null>(null);
+  const [blogEditorLeftSize, setBlogEditorLeftSize] = useState(36);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
-  const authorName = user?.full_name?.trim() || "Current user";
-  const authHeader = useMemo(
-    () => (accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined),
-    [accessToken],
-  );
+  const blogBodyRef = useRef<SerializedEditorState | null>(null);
+  const blogEditorSplitRef = useRef<HTMLDivElement | null>(null);
+
+  const authHeader = useMemo(() => {
+    if (!accessToken) return null;
+    return { Authorization: `Bearer ${accessToken}` };
+  }, [accessToken]);
+
+  const authorName = useMemo(() => {
+    return user?.full_name?.trim() || user?.email?.trim() || "Institutional Admin";
+  }, [user]);
 
   const fetchBlogs = useCallback(async () => {
     if (!authHeader) return;
+
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/admin/content/blog", {
-        headers: authHeader,
-      });
+      const response = await fetch("/api/admin/content/blog", { headers: authHeader });
       const json = await response.json();
       if (!response.ok) throw new Error(json.error ?? "Failed to load blogs.");
       setPosts(json.data ?? []);
@@ -237,7 +282,7 @@ export default function BlogPage() {
     const onMove = (moveEvent: PointerEvent) => {
       const rect = container.getBoundingClientRect();
       const nextSize = ((moveEvent.clientX - rect.left) / rect.width) * 100;
-      setBlogEditorLeftSize(Math.min(45, Math.max(24, nextSize)));
+      setBlogEditorLeftSize(Math.min(48, Math.max(26, nextSize)));
     };
 
     const onUp = () => {
@@ -248,6 +293,23 @@ export default function BlogPage() {
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
   }, []);
+
+  const handleImageFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      setForm((prev) => ({ ...prev, cover_image: base64 }));
+      setUploadingImage(false);
+    };
+    reader.onerror = () => {
+      setUploadingImage(false);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const columns = useMemo<ColumnDef<BlogPost>[]>(
     () => [
@@ -264,9 +326,21 @@ export default function BlogPage() {
           </button>
         ),
         cell: ({ row }) => (
-          <div>
-            <div className="font-semibold">{row.original.title}</div>
-            <div className="text-sm text-muted-foreground">Website blog post</div>
+          <div className="flex items-center gap-3">
+            {row.original.cover_image && (
+              <img
+                src={row.original.cover_image}
+                alt=""
+                className="h-10 w-12 object-cover rounded-lg border shrink-0 bg-muted"
+              />
+            )}
+            <div className="min-w-0">
+              <div className="font-semibold truncate">{row.original.title}</div>
+              <div className="text-xs text-muted-foreground flex items-center gap-2">
+                <span className="text-primary font-medium">{row.original.category || "General"}</span>
+                {row.original.tags && <span>• {row.original.tags}</span>}
+              </div>
+            </div>
           </div>
         ),
       },
@@ -318,6 +392,9 @@ export default function BlogPage() {
     setSaving(true);
     setError(null);
     try {
+      const finalStatus = form.publishMode === "now" ? "published" : form.status;
+      const finalPublishAt = form.publishMode === "schedule" ? toIsoFromLocal(form.publishAt) : null;
+
       const response = await fetch("/api/admin/content/blog", {
         method: "POST",
         headers: {
@@ -326,8 +403,13 @@ export default function BlogPage() {
         },
         body: JSON.stringify({
           title,
-          status: form.status,
-          publish_at: toIsoFromLocal(form.publishAt),
+          category: form.category,
+          cover_image: form.cover_image,
+          video_url: form.video_url,
+          summary: form.summary,
+          tags: form.tags,
+          status: finalStatus,
+          publish_at: finalPublishAt,
           content: blogBodyRef.current,
         }),
       });
@@ -360,7 +442,7 @@ export default function BlogPage() {
             <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
             Refresh
           </Button>
-          <Button onClick={openAddBlog}>
+          <Button onClick={openAddBlog} disabled={!authHeader} className="font-bold gap-1.5">
             <Plus className="size-4" />
             Add Blog
           </Button>
@@ -368,7 +450,7 @@ export default function BlogPage() {
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       ) : null}
@@ -376,64 +458,71 @@ export default function BlogPage() {
       <DataTable
         columns={columns}
         data={posts}
-        searchKey="title"
-        filterPlaceholder="Search blog posts..."
-        emptyText={loading ? "Loading blogs..." : "No blog posts found."}
         onRowClick={(post) => setActivePost(post)}
+        emptyText={loading ? "Loading blogs..." : "No blog posts found."}
       />
 
       <Sheet open={Boolean(activePost)} onOpenChange={(open) => !open && setActivePost(null)}>
-        <SheetContent className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
-          <SheetHeader className="border-b px-6 py-5 pr-14 text-left">
-            <SheetTitle className="flex items-center gap-2 text-xl">
-              <FileText className="size-5 text-primary" />
-              {activePost?.title ?? "Blog"}
-            </SheetTitle>
-            <SheetDescription>
-              {activePost ? `By ${activePost.author} · Updated ${formatDateOnly(activePost.updated_at)}` : ""}
-            </SheetDescription>
-          </SheetHeader>
-
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
           {activePost ? (
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+            <div className="space-y-6 pt-6">
+              <SheetHeader>
+                <div className="flex items-center gap-2 text-xs font-semibold text-primary">
+                  <Badge variant="outline" className="text-[10px]">{activePost.category || "Academic & Curriculum"}</Badge>
+                </div>
+                <SheetTitle className="text-xl font-bold">{activePost.title}</SheetTitle>
+                <SheetDescription className="text-xs">
+                  Created by {activePost.author} on {formatDateOnly(activePost.created_at)}
+                </SheetDescription>
+              </SheetHeader>
+
+              {activePost.cover_image && (
+                <div className="rounded-xl overflow-hidden border">
+                  <img src={activePost.cover_image} alt="" className="w-full h-48 object-cover" />
+                </div>
+              )}
+
+              {activePost.video_url && (
+                <div className="p-3 bg-muted/40 rounded-xl border flex items-center gap-2 text-xs">
+                  <Video className="h-4 w-4 text-primary shrink-0" />
+                  <span className="font-semibold text-muted-foreground truncate">Video Attached:</span>
+                  <a href={activePost.video_url} target="_blank" rel="noreferrer" className="text-primary hover:underline truncate">
+                    {activePost.video_url}
+                  </a>
+                </div>
+              )}
+
+              {activePost.summary && (
+                <div className="p-3 rounded-xl bg-card border text-xs text-muted-foreground italic">
+                  "{activePost.summary}"
+                </div>
+              )}
+
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border bg-card p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</p>
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Status</p>
                   <Badge
                     variant="outline"
-                    className={`mt-2 ${statusClassName[getEffectiveStatus(activePost, now)]}`}
+                    className={`mt-1.5 ${statusClassName[getEffectiveStatus(activePost, now)]}`}
                   >
                     {statusLabel[getEffectiveStatus(activePost, now)]}
                   </Badge>
                 </div>
-                <div className="rounded-lg border bg-card p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Publish Timer</p>
-                  <p className="mt-2 text-sm font-medium">{formatDateTime(activePost.publish_at)}</p>
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Publish Timer</p>
+                  <p className="mt-1.5 text-xs font-medium">{formatDateTime(activePost.publish_at)}</p>
                 </div>
-                <div className="rounded-lg border bg-card p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Published</p>
-                  <p className="mt-2 text-sm font-medium">
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Published</p>
+                  <p className="mt-1.5 text-xs font-medium">
                     {activePost.published_at ? formatDateTime(activePost.published_at) : "-"}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border bg-card p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Created</p>
-                  <p className="mt-2 text-sm font-medium">{formatDateTime(activePost.created_at)}</p>
-                </div>
-                <div className="rounded-lg border bg-card p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Institution</p>
-                  <p className="mt-2 text-sm font-medium">
-                    {activePost.institution_id ? `Institution #${activePost.institution_id}` : "Platform"}
                   </p>
                 </div>
               </div>
 
               <div className="rounded-lg border bg-card">
                 <div className="border-b px-4 py-3">
-                  <h3 className="font-semibold">Blog Content</h3>
+                  <h3 className="font-semibold text-sm">Blog Content</h3>
                 </div>
                 <div className="whitespace-pre-wrap px-4 py-4 text-sm leading-6 text-muted-foreground">
                   {getEditorPlainText(activePost.content) || "No content added."}
@@ -446,92 +535,230 @@ export default function BlogPage() {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent
-          className="flex h-[88dvh] max-h-[900px] w-[96vw] max-w-[1400px] flex-col gap-0 overflow-hidden rounded-lg border bg-background p-0 shadow-2xl sm:max-w-[1400px]"
+          className="flex h-[90dvh] max-h-[920px] w-[96vw] max-w-[1400px] flex-col gap-0 overflow-hidden rounded-xl border bg-background p-0 shadow-2xl sm:max-w-[1400px]"
           onPointerDownOutside={(event) => event.preventDefault()}
         >
-          <DialogHeader className="shrink-0 border-b px-5 py-4 pr-14">
-            <DialogTitle className="flex items-center gap-2">
+          <DialogHeader className="shrink-0 border-b px-5 py-3.5 pr-14">
+            <DialogTitle className="flex items-center gap-2 text-lg">
               <FileText className="size-4 text-primary" />
-              Add Blog
+              Add Blog Article
             </DialogTitle>
             <DialogDescription className="sr-only">
-              Add blog details on the left and write formatted blog content on the editor canvas.
+              Configure blog details, media, schedule, and author on the left panel, and format content on the right canvas.
             </DialogDescription>
           </DialogHeader>
 
           <div ref={blogEditorSplitRef} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
             <div
-              className="flex h-full min-h-0 min-w-0 shrink-0 grow-0 flex-col overflow-hidden bg-background"
+              className="flex h-full min-h-0 min-w-0 shrink-0 grow-0 flex-col overflow-hidden bg-background border-r"
               style={{ flexBasis: `${blogEditorLeftSize}%` }}
             >
-              <div className="shrink-0 border-b px-5 py-5">
-                <h3 className="font-semibold">Blog Fields</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Set title, status, author, and publish timer before saving. Write the blog
-                  content on the canvas.
+              <div className="shrink-0 border-b px-5 py-3.5 bg-muted/20">
+                <h3 className="font-bold text-sm text-foreground flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-primary" /> Blog Configuration & Fields
+                </h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Set title, category, media, tags, and publishing schedule.
                 </p>
               </div>
 
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
-                <div className="space-y-2">
-                  <Label htmlFor="blog-title">Title *</Label>
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="blog-title" className="text-xs font-bold">
+                    Title <span className="text-destructive">*</span>
+                  </Label>
                   <Input
                     id="blog-title"
                     value={form.title}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, title: event.target.value }))
                     }
-                    placeholder="Annual admission guide..."
+                    placeholder="e.g. Annual Admission Guide 2026..."
+                    className="h-9 text-xs"
+                    required
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Status</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold flex items-center gap-1">
+                    <Layers className="h-3.5 w-3.5 text-primary" /> Category <span className="text-destructive">*</span>
+                  </Label>
                   <Select
-                    value={form.status}
+                    value={form.category}
                     onValueChange={(value) =>
-                      setForm((current) => ({ ...current, status: value as BlogStatus }))
+                      setForm((current) => ({ ...current, category: value }))
                     }
                   >
-                    <SelectTrigger className="w-full bg-input/20">
-                      <SelectValue placeholder="Select status" />
+                    <SelectTrigger className="w-full h-9 text-xs bg-background font-medium">
+                      <SelectValue placeholder="Select Category" />
                     </SelectTrigger>
-                    <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)]">
-                      <SelectItem value="draft">Draft</SelectItem>
-                      <SelectItem value="review">Review</SelectItem>
-                      <SelectItem value="published">Publish</SelectItem>
+                    <SelectContent>
+                      {BLOG_CATEGORIES.map((cat) => (
+                        <SelectItem key={cat} value={cat} className="text-xs">
+                          {cat}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="blog-author">Blog By</Label>
-                  <Input id="blog-author" value={authorName} readOnly className="bg-input/20" />
+                <div className="space-y-2 p-3 rounded-xl border border-border/80 bg-muted/30">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold flex items-center gap-1">
+                      <ImageIcon className="h-3.5 w-3.5 text-primary" /> Cover Image
+                    </Label>
+                    {form.cover_image && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setForm((prev) => ({ ...prev, cover_image: "" }))}
+                        className="h-6 px-1.5 text-[10px] text-destructive hover:bg-destructive/10"
+                      >
+                        <X className="h-3 w-3 mr-0.5" /> Remove
+                      </Button>
+                    )}
+                  </div>
+
+                  {form.cover_image ? (
+                    <div className="relative rounded-lg overflow-hidden border border-border h-28 bg-card">
+                      <img src={form.cover_image} alt="Cover Preview" className="w-full h-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <label className="flex-1 cursor-pointer">
+                          <div className="border border-dashed border-border rounded-lg p-2.5 text-center hover:bg-muted/50 transition-colors flex items-center justify-center gap-2 text-xs font-medium text-muted-foreground">
+                            <Upload className="h-4 w-4 text-primary" />
+                            <span>{uploadingImage ? "Uploading..." : "Upload Image"}</span>
+                          </div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageFileUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                      <Input
+                        value={form.cover_image}
+                        onChange={(e) => setForm((prev) => ({ ...prev, cover_image: e.target.value }))}
+                        placeholder="Or paste image URL (https://...)"
+                        className="h-8 text-xs bg-background"
+                      />
+                    </div>
+                  )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Publish Date & Time</Label>
-                  <CronScheduleField
-                    value={form.publishAt}
-                    onChange={(publishAt) =>
-                      setForm((current) => ({ ...current, publishAt }))
-                    }
-                    minDate={todayDateValue()}
+                <div className="space-y-1.5">
+                  <Label htmlFor="blog-video" className="text-xs font-bold flex items-center gap-1">
+                    <Video className="h-3.5 w-3.5 text-primary" /> Video URL (Optional)
+                  </Label>
+                  <Input
+                    id="blog-video"
+                    value={form.video_url}
+                    onChange={(e) => setForm((prev) => ({ ...prev, video_url: e.target.value }))}
+                    placeholder="https://youtube.com/watch?v=... or mp4 stream"
+                    className="h-9 text-xs"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Vercel Cron checks scheduled jobs every minute and publishes due blogs on
-                    the server.
-                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="blog-summary" className="text-xs font-bold">
+                    Short Summary / Excerpt
+                  </Label>
+                  <Textarea
+                    id="blog-summary"
+                    rows={2}
+                    value={form.summary}
+                    onChange={(e) => setForm((prev) => ({ ...prev, summary: e.target.value }))}
+                    placeholder="Brief 1-2 line teaser summary for search & blog cards..."
+                    className="text-xs resize-none"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="blog-tags" className="text-xs font-bold flex items-center gap-1">
+                    <Tag className="h-3.5 w-3.5 text-primary" /> Topic Tags
+                  </Label>
+                  <Input
+                    id="blog-tags"
+                    value={form.tags}
+                    onChange={(e) => setForm((prev) => ({ ...prev, tags: e.target.value }))}
+                    placeholder="e.g. Admissions, Campus Life, Engineering"
+                    className="h-9 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-2.5 p-3 rounded-xl border border-border/80 bg-muted/20">
+                  <Label className="text-xs font-bold flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5 text-primary" /> Publishing Schedule
+                  </Label>
+
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <Button
+                      type="button"
+                      variant={form.publishMode === "now" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setForm((prev) => ({ ...prev, publishMode: "now", status: "published" }))}
+                      className="h-8 text-xs font-bold gap-1 px-2"
+                    >
+                      <Send className="h-3 w-3" /> Now
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={form.publishMode === "schedule" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setForm((prev) => ({ ...prev, publishMode: "schedule", status: "draft" }))}
+                      className="h-8 text-xs font-bold gap-1 px-2"
+                    >
+                      <Clock className="h-3 w-3" /> Schedule
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={form.publishMode === "draft" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setForm((prev) => ({ ...prev, publishMode: "draft", status: "draft" }))}
+                      className="h-8 text-xs font-bold gap-1 px-2"
+                    >
+                      Draft
+                    </Button>
+                  </div>
+
+                  {form.publishMode === "schedule" && (
+                    <div className="space-y-1.5 pt-1.5 border-t">
+                      <Label className="text-[11px] font-semibold text-muted-foreground">Select Publish Date & Time</Label>
+                      <CronScheduleField
+                        value={form.publishAt}
+                        onChange={(publishAt) =>
+                          setForm((current) => ({ ...current, publishAt }))
+                        }
+                        minDate={todayDateValue()}
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        Post will be automatically published on the chosen schedule.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="blog-author" className="text-xs font-bold">Blog By</Label>
+                  <Input id="blog-author" value={authorName} readOnly className="bg-muted/40 h-8 text-xs font-semibold cursor-not-allowed" />
                 </div>
               </div>
 
-              <DialogFooter className="shrink-0 border-t px-5 py-4">
-                <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
+              <DialogFooter className="shrink-0 border-t px-5 py-3.5 flex items-center justify-between gap-2">
+                <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving} className="text-xs h-9">
                   Cancel
                 </Button>
-                <Button onClick={saveBlog} disabled={!form.title.trim() || saving}>
-                  {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-                  Add Blog
+                <Button
+                  onClick={saveBlog}
+                  disabled={!form.title.trim() || saving}
+                  className="text-xs h-9 font-bold bg-primary text-primary-foreground gap-1.5"
+                >
+                  {saving ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-3.5" />}
+                  {form.publishMode === "now" ? "Publish Blog" : form.publishMode === "schedule" ? "Schedule Blog" : "Save Draft"}
                 </Button>
               </DialogFooter>
             </div>
@@ -549,7 +776,7 @@ export default function BlogPage() {
                 }
                 if (event.key === "ArrowRight") {
                   event.preventDefault();
-                  setBlogEditorLeftSize((size) => Math.min(45, size + 2));
+                  setBlogEditorLeftSize((size) => Math.min(48, size + 2));
                 }
               }}
             >
@@ -559,17 +786,17 @@ export default function BlogPage() {
             </div>
 
             <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-              <div className="shrink-0 border-b px-5 py-4">
+              <div className="shrink-0 border-b px-5 py-3.5">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="font-semibold">Document Canvas</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Rich formatting, tables, lists, links, and quick commands.
+                    <h3 className="font-bold text-sm">Document Canvas</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Rich formatting, tables, lists, links, images, and quick slash commands.
                     </p>
                   </div>
                   <div className="hidden text-xs text-muted-foreground md:block">
                     Press{" "}
-                    <kbd className="rounded border bg-muted px-1.5 py-0.5 text-[10px]">/</kbd>{" "}
+                    <kbd className="rounded border bg-muted px-1.5 py-0.5 text-[10px] font-mono">/</kbd>{" "}
                     for commands
                   </div>
                 </div>

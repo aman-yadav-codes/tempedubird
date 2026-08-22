@@ -19,7 +19,7 @@ export async function GET(req: Request) {
     if (search) {
       params.push(`%${search}%`);
       whereClauses.push(
-        `(u.name ILIKE $${params.length} OR u.email ILIKE $${params.length} OR u.phone ILIKE $${params.length} OR p.title ILIKE $${params.length} OR inst.name ILIKE $${params.length})`
+        `(u.full_name ILIKE $${params.length} OR u.email ILIKE $${params.length} OR u.phone ILIKE $${params.length} OR p.title ILIKE $${params.length} OR inst.name ILIKE $${params.length})`
       );
     }
 
@@ -55,7 +55,7 @@ export async function GET(req: Request) {
         SELECT
           se.id AS enrollment_id,
           se.student_id,
-          u.name AS student_name,
+          u.full_name AS student_name,
           u.email AS student_email,
           u.phone AS student_phone,
           sp.avatar_url AS student_avatar,

@@ -20,7 +20,10 @@ export const registerSchema = z
       .string()
       .min(2, "Full name must be at least 2 characters")
       .max(100, "Full name too long"),
-    email: z.string().email("Invalid email address"),
+    email: z
+      .union([z.string().email("Invalid email address"), z.literal(""), z.null()])
+      .optional()
+      .nullable(),
     phone: z
       .string()
       .length(10, "Phone number must be exactly 10 digits"),

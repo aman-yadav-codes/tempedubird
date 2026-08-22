@@ -115,19 +115,57 @@ export async function POST(req: Request) {
         [userId]
       );
 
-      // If student, ensure student_profiles
+      // If student, ensure student_profiles and initial enrollments
       if (demoConfig.role_code === "student") {
-        await db.query(
+        const spRes = await db.query<{ id: number }>(
           `INSERT INTO student_profiles (user_id, admission_number)
            VALUES ($1, 'DEMO-STU-001')
-           ON CONFLICT DO NOTHING`,
+           ON CONFLICT DO NOTHING
+           RETURNING id`,
           [userId]
         );
+        const sId = spRes.rows[0]?.id;
+        if (sId) {
+          await db.query(`
+            INSERT INTO student_enrollments (student_id, institution_id, program_id, academic_year_id, class_category_id, status, admission_date, created_at, updated_at)
+            SELECT $1, p.institution_id, p.id, 1, 1, 'active', CURRENT_DATE, NOW(), NOW()
+            FROM institution_programs p
+            WHERE p.id IN (1, 4, 5)
+            ON CONFLICT DO NOTHING
+          `, [sId]);
+        }
       }
     } else {
       userId = userResult.rows[0].id;
       // Ensure user is active
       await db.query(`UPDATE users SET is_active = TRUE WHERE id = $1`, [userId]);
+
+      if (demoConfig.role_code === "student") {
+        const spRes = await db.query<{ id: number }>(
+          `SELECT id FROM student_profiles WHERE user_id = $1 LIMIT 1`,
+          [userId]
+        );
+        let sId = spRes.rows[0]?.id;
+        if (!sId) {
+          const newSp = await db.query<{ id: number }>(
+            `INSERT INTO student_profiles (user_id, admission_number) VALUES ($1, 'DEMO-STU-001') RETURNING id`,
+            [userId]
+          );
+          sId = newSp.rows[0]?.id;
+        }
+        if (sId) {
+          const checkEnr = await db.query(`SELECT id FROM student_enrollments WHERE student_id = $1 LIMIT 1`, [sId]);
+          if (checkEnr.rows.length === 0) {
+            await db.query(`
+              INSERT INTO student_enrollments (student_id, institution_id, program_id, academic_year_id, class_category_id, status, admission_date, created_at, updated_at)
+              SELECT $1, p.institution_id, p.id, 1, 1, 'active', CURRENT_DATE, NOW(), NOW()
+              FROM institution_programs p
+              WHERE p.id IN (1, 4, 5)
+              ON CONFLICT DO NOTHING
+            `, [sId]);
+          }
+        }
+      }
     }
 
     const fullUser = await getUserById(db, userId);

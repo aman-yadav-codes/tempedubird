@@ -3,6 +3,25 @@ import { db } from "@/lib/db/db";
 
 export async function GET(req: NextRequest) {
   try {
+    const { searchParams } = new URL(req.url);
+    const institutionId = searchParams.get("institutionId") ? Number(searchParams.get("institutionId")) : null;
+    const search = searchParams.get("search")?.trim() || "";
+
+    const whereConditions: string[] = [];
+    const params: unknown[] = [];
+
+    if (institutionId && Number.isInteger(institutionId) && institutionId > 0) {
+      params.push(institutionId);
+      whereConditions.push(`t.institution_id = $${params.length}`);
+    }
+
+    if (search) {
+      params.push(`%${search}%`);
+      whereConditions.push(`(t.title ILIKE $${params.length} OR t.subject ILIKE $${params.length} OR t.category ILIKE $${params.length})`);
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(" AND ")}` : "";
+
     const testsRes = await db.query(`
       SELECT
         t.id,
@@ -17,12 +36,14 @@ export async function GET(req: NextRequest) {
         t.created_by_name,
         t.description,
         t.created_at,
-        p.name AS institution_name,
-        p.city AS institution_city
+        'Free' AS price,
+        TRUE AS is_free,
+        COALESCE(ip.name, ip.slug, 'Institution') AS institution_name
       FROM practice_tests t
-      LEFT JOIN user_profiles p ON p.id = t.institution_id
+      LEFT JOIN institution_profiles ip ON ip.id = t.institution_id
+      ${whereClause}
       ORDER BY t.id DESC
-    `);
+    `, params);
 
     return NextResponse.json({
       success: true,

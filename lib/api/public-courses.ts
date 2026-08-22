@@ -94,7 +94,10 @@ function mapPublicCourseRow(row: Record<string, unknown>) {
         : typeof row.program_type_name === "string"
           ? row.program_type_name
           : "Course",
-    price: formatPrice(row.min_amount === null ? null : Number(row.min_amount)),
+    price: formatPrice(row.min_amount === null ? (row.fee_amount ? Number(row.fee_amount) : null) : Number(row.min_amount)),
+    fee_amount: row.fee_amount ?? row.min_amount ?? null,
+    institutionId: row.institution_id ? Number(row.institution_id) : undefined,
+    institution_id: row.institution_id ? Number(row.institution_id) : undefined,
     verified: true,
     students: row.seats_available ? `${row.seats_available} seats` : "Open seats",
     seatsAvailable: row.seats_available ? Number(row.seats_available) : null,
@@ -119,6 +122,9 @@ export async function handlePublicCoursesGet(req: Request) {
     ? Number(url.searchParams.get("categoryId"))
     : null;
   const tenant = await getInstitutionTenantByHost(db, getRequestHost(req));
+  const requestedInstitutionId = url.searchParams.get("institutionId")
+    ? Number(url.searchParams.get("institutionId"))
+    : null;
 
   const where = [
     "COALESCE(ip.is_deleted, FALSE) = FALSE",
@@ -128,7 +134,10 @@ export async function handlePublicCoursesGet(req: Request) {
   ];
   const params: unknown[] = [];
 
-  if (tenant) {
+  if (requestedInstitutionId && Number.isInteger(requestedInstitutionId) && requestedInstitutionId > 0) {
+    params.push(requestedInstitutionId);
+    where.push(`ip.institution_id = $${params.length}`);
+  } else if (tenant) {
     params.push(tenant.institution_id);
     where.push(`ip.institution_id = $${params.length}`);
   }
@@ -286,6 +295,8 @@ export async function handlePublicCoursesGet(req: Request) {
       ip.duration_unit,
       ip.seats_available,
       ip.teaching_method,
+      ip.fee_amount,
+      ip.institution_id,
       ip.updated_at,
       pt.name AS program_type_name,
       COALESCE(inst.name, inst.slug) AS institution_name,
@@ -466,6 +477,8 @@ export async function getPublicCourseById(idOrSlug: number | string, opts: { hos
         ip.duration_unit,
         ip.seats_available,
         ip.teaching_method,
+        ip.fee_amount,
+        ip.institution_id,
         pt.name AS program_type_name,
         COALESCE(inst.name, inst.slug) AS institution_name,
         primary_category.category_id,

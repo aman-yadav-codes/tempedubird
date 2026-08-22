@@ -62,7 +62,10 @@ const SUBJECT_OPTIONS = [
   "Computer Science",
 ];
 
+import { useCategoryAvailability } from "@/hooks/use-category-availability";
+
 export function TeachersDirectory() {
+  const { isInstitutionalAdmin, activeInstitutionId } = useCategoryAvailability();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -82,7 +85,7 @@ export function TeachersDirectory() {
 
   useEffect(() => {
     fetchTeachers();
-  }, [search, selectedSubject]);
+  }, [search, selectedSubject, activeInstitutionId, isInstitutionalAdmin]);
 
   const fetchTeachers = async () => {
     setLoading(true);
@@ -90,6 +93,9 @@ export function TeachersDirectory() {
       const params = new URLSearchParams();
       if (search.trim()) params.set("search", search.trim());
       if (selectedSubject !== "All Subjects") params.set("subject", selectedSubject);
+      if (isInstitutionalAdmin && activeInstitutionId) {
+        params.set("institutionId", String(activeInstitutionId));
+      }
 
       const res = await fetch(`/api/public/teachers?${params.toString()}`);
       const data = await res.json();
@@ -199,32 +205,31 @@ export function TeachersDirectory() {
         </div>
       </div>
 
-      {/* Main 2-Column Grid Layout: Left Teacher Listings + Right Sidebar Form */}
-      <div className="grid gap-8 lg:grid-cols-[1fr_360px] items-start">
-        {/* LEFT SIDE: TEACHER LISTINGS GRID */}
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
-              <GraduationCap className="h-5 w-5 text-primary" />
-              Available Faculty Members ({teachers.length})
-            </h3>
-            <span className="text-xs text-muted-foreground">Showing verified educational teachers</span>
-          </div>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
+            <GraduationCap className="h-5 w-5 text-primary" />
+            Available Faculty Members ({teachers.length})
+          </h3>
+          <span className="text-xs text-muted-foreground">Showing verified educational teachers</span>
+        </div>
 
-          {loading ? (
-            <div className="py-20 text-center flex flex-col items-center justify-center gap-3 text-muted-foreground">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="text-xs">Loading teacher listings...</span>
-            </div>
-          ) : teachers.length === 0 ? (
-            <div className="rounded-2xl border border-dashed p-12 text-center text-muted-foreground space-y-3">
-              <UserCheck className="h-10 w-10 mx-auto opacity-30 text-primary" />
-              <p className="font-semibold text-base text-foreground">No Teachers Found</p>
-              <p className="text-xs">Try clearing search keywords or selecting a different subject filter.</p>
-            </div>
-          ) : (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {teachers.map((teacher) => (
+        {loading ? (
+          <div className="py-20 text-center flex flex-col items-center justify-center gap-3 text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="text-xs">Loading teacher listings...</span>
+          </div>
+        ) : teachers.length === 0 ? (
+          <div className="rounded-2xl border border-dashed p-12 text-center text-muted-foreground space-y-3">
+            <UserCheck className="h-10 w-10 mx-auto opacity-30 text-primary" />
+            <p className="font-semibold text-base text-foreground">No Teachers Found</p>
+            <p className="text-xs">Try clearing search keywords or selecting a different subject filter.</p>
+          </div>
+        ) : (
+          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {teachers.map((teacher) => {
+              const teacherUrl = buildTeacherUrl(teacher.id, teacher.full_name, teacher.designation, teacher.institution_name, teacher.location);
+              return (
                 <div
                   key={teacher.id}
                   className="rounded-2xl border border-border bg-card p-6 shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between space-y-5"
@@ -248,7 +253,7 @@ export function TeachersDirectory() {
                         <div className="flex items-center gap-1.5">
                           <h4 className="font-bold text-base text-foreground truncate">
                             <Link
-                              href={buildTeacherUrl(teacher.id, teacher.full_name, teacher.designation, teacher.institution_name, teacher.location)}
+                              href={teacherUrl}
                               className="hover:text-primary hover:underline"
                             >
                               {teacher.full_name}
@@ -313,181 +318,20 @@ export function TeachersDirectory() {
                       <MapPin className="h-3 w-3" /> {teacher.location}
                     </span>
 
-                    <Button
-                      size="sm"
-                      onClick={() => handleSelectTeacherForInquiry(teacher)}
-                      className="text-xs font-bold bg-primary text-primary-foreground shadow-2xs gap-1.5"
-                    >
-                      <span>Inquire Now</span>
-                      <Send className="h-3.5 w-3.5" />
-                    </Button>
+                    <Link href={teacherUrl}>
+                      <Button
+                        size="sm"
+                        className="text-xs font-bold bg-primary text-primary-foreground shadow-2xs gap-1.5"
+                      >
+                        <span>View Profile</span>
+                      </Button>
+                    </Link>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* RIGHT SIDEBAR: INQUIRY & CONTACT FORM */}
-        <div ref={formRef} className="space-y-6 sticky top-24">
-          <div className="rounded-2xl border border-primary/20 bg-card p-6 shadow-md space-y-6">
-            <div className="border-b border-border pb-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
-                  <UserCheck className="h-5 w-5 text-primary" />
-                  Teacher Inquiry Form
-                </h3>
-                <Badge variant="outline" className="text-[10px]">Direct Contact</Badge>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {selectedTeacherForInquiry
-                  ? `Inquiring about ${selectedTeacherForInquiry.full_name}`
-                  : "Send your inquiry to connect with expert faculty."}
-              </p>
-            </div>
-
-            {selectedTeacherForInquiry && (
-              <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="h-8 w-8 rounded-full bg-primary text-white font-bold flex items-center justify-center text-xs shrink-0">
-                    {selectedTeacherForInquiry.full_name.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-bold text-foreground truncate">{selectedTeacherForInquiry.full_name}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">{selectedTeacherForInquiry.designation}</p>
-                  </div>
-                </div>
-
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedTeacherForInquiry(null)}
-                  className="h-6 text-[10px] text-muted-foreground hover:text-foreground"
-                >
-                  Clear
-                </Button>
-              </div>
-            )}
-
-            {inquirySuccess ? (
-              <div className="py-8 text-center space-y-3">
-                <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-full w-12 h-12 mx-auto flex items-center justify-center">
-                  <CheckCircle2 className="h-6 w-6" />
-                </div>
-                <h4 className="font-bold text-foreground text-base">Inquiry Submitted!</h4>
-                <p className="text-xs text-muted-foreground">
-                  Our faculty team will contact you directly on your provided email & phone number.
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setInquirySuccess(false)}
-                  className="text-xs mt-2"
-                >
-                  Send Another Inquiry
-                </Button>
-              </div>
-            ) : (
-              <form onSubmit={handleInquirySubmit} className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="inq-name" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <User className="h-3.5 w-3.5 text-primary" />
-                    Full Name <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="inq-name"
-                    placeholder="e.g. Anish Sharma"
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    className="bg-background text-xs"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="inq-email" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <Mail className="h-3.5 w-3.5 text-primary" />
-                    Email Address <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="inq-email"
-                    type="email"
-                    placeholder="name@example.com"
-                    value={formEmail}
-                    onChange={(e) => setFormEmail(e.target.value)}
-                    className="bg-background text-xs"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="inq-phone" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <Phone className="h-3.5 w-3.5 text-primary" />
-                    Phone Number <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="inq-phone"
-                    type="tel"
-                    placeholder="+91 98765 43210"
-                    value={formPhone}
-                    onChange={(e) => setFormPhone(e.target.value)}
-                    className="bg-background text-xs"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <BookOpen className="h-3.5 w-3.5 text-primary" />
-                    Preferred Subject
-                  </Label>
-                  <Select value={formSubject} onValueChange={setFormSubject}>
-                    <SelectTrigger className="bg-background text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Mathematics">Mathematics</SelectItem>
-                      <SelectItem value="Physics">Physics</SelectItem>
-                      <SelectItem value="Chemistry">Chemistry</SelectItem>
-                      <SelectItem value="Biology">Biology</SelectItem>
-                      <SelectItem value="Computer Science">Computer Science</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="inq-msg" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <MessageSquare className="h-3.5 w-3.5 text-primary" />
-                    Message / Learning Request
-                  </Label>
-                  <Textarea
-                    id="inq-msg"
-                    placeholder="Describe your course, exam target or learning goals..."
-                    value={formMessage}
-                    onChange={(e) => setFormMessage(e.target.value)}
-                    rows={3}
-                    className="bg-background text-xs resize-none"
-                  />
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={submittingInquiry}
-                  className="w-full py-5 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs gap-2 mt-2"
-                >
-                  {submittingInquiry ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4" />
-                      <span>Submit Teacher Inquiry</span>
-                    </>
-                  )}
-                </Button>
-              </form>
-            )}
+              );
+            })}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

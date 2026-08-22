@@ -516,7 +516,6 @@ export default function InstitutionsAdminPage() {
         { label: "Mission, Vision & Goal", icon: Target },
         { label: "Contact & Branches", icon: MapPin },
         { label: "Founder", icon: UserCheck },
-        { label: "Media & Review", icon: CheckCircle2 },
     ];
 
     const authHeader = useMemo(() => ({ Authorization: `Bearer ${accessToken}` }), [accessToken]);
@@ -1238,7 +1237,7 @@ export default function InstitutionsAdminPage() {
 
                     {/* Wizard Steps Header */}
                     <div className="-mx-4 overflow-x-auto overscroll-x-contain px-4 pb-2 mb-6 sm:mx-0 sm:overflow-visible sm:px-0 sm:pb-0">
-                        <ol className="flex w-max min-w-full gap-2 sm:w-full sm:grid sm:grid-cols-5">
+                        <ol className="flex w-max min-w-full gap-2 sm:w-full sm:grid sm:grid-cols-4">
                             {steps.map((step, idx) => {
                                 const Icon = step.icon;
                                 const isActive = idx === activeStep;
@@ -1592,124 +1591,6 @@ export default function InstitutionsAdminPage() {
                                         rows={4}
                                         className="bg-background/50 border border-border resize-none"
                                     />
-                                </div>
-                            </div>
-                        )}
-
-                        {activeStep === 4 && (
-                            <div className="space-y-5">
-                                {/* Gallery Images */}
-                                <div className="space-y-2 rounded-lg border bg-muted/10 p-3.5">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div>
-                                            <Label className="text-sm font-medium flex items-center gap-1.5">
-                                                <Film className="size-4 text-primary" />
-                                                Institution Gallery Images
-                                            </Label>
-                                            <p className="text-xs text-muted-foreground">Upload up to 20 images for the institution gallery.</p>
-                                        </div>
-                                        {mediaLoading && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
-                                    </div>
-                                    <DocumentFileUpload
-                                        accessToken={accessToken}
-                                        files={galleryFiles}
-                                        onFilesChange={handleGalleryFilesChange}
-                                        maxFiles={20}
-                                        maxSize={5 * 1024 * 1024}
-                                        compact
-                                        disabled={mediaLoading}
-                                        buttonLabel="Add gallery images"
-                                        emptyText="Drop images here or click to browse (max 20)"
-                                    />
-                                    {!mediaLoading && galleryFiles.length === 0 && (
-                                        <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-                                            No gallery images uploaded yet.
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Gallery Videos Upload & Embedding Section */}
-                                <div className="space-y-3 rounded-lg border border-border bg-muted/10 p-3.5">
-                                    <div>
-                                        <Label className="text-sm font-medium flex items-center gap-1.5">
-                                            <Video className="size-4 text-primary" />
-                                            Institution Gallery Videos
-                                        </Label>
-                                        <p className="text-xs text-muted-foreground">Upload video files (.mp4, .webm) or add YouTube/video embed URLs.</p>
-                                    </div>
-
-                                    {/* Upload Video Files */}
-                                    <div className="space-y-1.5">
-                                        <span className="text-xs font-semibold text-foreground">Upload Video Files</span>
-                                        <DocumentFileUpload
-                                            accessToken={accessToken}
-                                            files={videoFiles}
-                                            onFilesChange={handleVideoFilesChange}
-                                            maxFiles={10}
-                                            maxSize={50 * 1024 * 1024}
-                                            compact
-                                            accept="video/*"
-                                            disabled={mediaLoading}
-                                            buttonLabel="Upload Video Files"
-                                            emptyText="Drop video files (.mp4, .webm) here or click to browse"
-                                        />
-                                    </div>
-
-                                    {/* Embed Video URL */}
-                                    <div className="space-y-2 pt-2 border-t border-border/50">
-                                        <span className="text-xs font-semibold text-foreground">Or Add Video Link (YouTube / Vimeo / Direct URL)</span>
-                                        <div className="flex flex-col sm:flex-row gap-2">
-                                            <Input
-                                                value={videoTitleInput}
-                                                onChange={(e) => setVideoTitleInput(e.target.value)}
-                                                placeholder="Video Title (e.g. Campus Tour)"
-                                                className="bg-background/60 text-xs sm:w-1/3"
-                                            />
-                                            <Input
-                                                value={videoUrlInput}
-                                                onChange={(e) => setVideoUrlInput(e.target.value)}
-                                                placeholder="Video URL (https://youtube.com/watch?v=... or .mp4)"
-                                                className="bg-background/60 text-xs flex-1"
-                                            />
-                                            <Button type="button" onClick={handleAddVideoLink} size="sm" className="gap-1 font-semibold text-xs shrink-0">
-                                                <Plus className="size-3.5" /> Add Video Link
-                                            </Button>
-                                        </div>
-                                    </div>
-
-                                    {/* List of Added Videos */}
-                                    {videoFiles.length > 0 && (
-                                        <div className="space-y-2 pt-2 border-t border-border/50">
-                                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
-                                                Gallery Videos ({videoFiles.length})
-                                            </span>
-                                            <div className="grid gap-2 sm:grid-cols-2">
-                                                {videoFiles.map((v, idx) => (
-                                                    <div key={`v-${idx}`} className="flex items-center justify-between text-xs rounded-md border p-2.5 bg-background/80">
-                                                        <div className="flex items-center gap-2 truncate mr-2">
-                                                            <Video className="size-4 text-primary shrink-0" />
-                                                            <div className="truncate">
-                                                                <p className="font-semibold text-foreground truncate">{v.name || `Video ${idx + 1}`}</p>
-                                                                <p className="text-[10px] text-muted-foreground truncate font-mono">{v.url}</p>
-                                                            </div>
-                                                        </div>
-                                                        <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="size-7 text-muted-foreground hover:text-destructive shrink-0"
-                                                            onClick={() => {
-                                                                if (v.mediaId) void deleteInstitutionMedia(v.mediaId, { refresh: false });
-                                                                setVideoFiles((prev) => prev.filter((_, i) => i !== idx));
-                                                            }}
-                                                        >
-                                                            <Trash2 className="size-3.5" />
-                                                        </Button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         )}

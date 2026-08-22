@@ -28,9 +28,19 @@ async function ensureLibraryTables() {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Add extra columns if missing
+    await db.query(`
+      ALTER TABLE institution_libraries ADD COLUMN IF NOT EXISTS membership_fee NUMERIC(12, 2) DEFAULT 0;
+      ALTER TABLE institution_libraries ADD COLUMN IF NOT EXISTS features TEXT;
+      ALTER TABLE institution_libraries ADD COLUMN IF NOT EXISTS available_categories TEXT;
+      ALTER TABLE institution_libraries ADD COLUMN IF NOT EXISTS sell_on_marketplace BOOLEAN DEFAULT FALSE;
+      ALTER TABLE institution_libraries ADD COLUMN IF NOT EXISTS marketplace_price NUMERIC(12, 2) DEFAULT 0;
+    `);
+
     schemaLibraryReady = true;
   } catch (err) {
-    console.error("Error creating institution_libraries table:", err);
+    console.error("Error setting up institution_libraries table:", err);
   }
 }
 
@@ -41,26 +51,31 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const institutionIdParam = url.searchParams.get("institutionId") || req.headers.get("x-institution-id");
 
-    let institutionId: number | null = null;
-    if (institutionIdParam && !isNaN(Number(institutionIdParam))) {
-      institutionId = Number(institutionIdParam);
-    } else if (user?.memberships?.length > 0) {
-      const instMem = user.memberships.find((m: any) => m.institution_id);
-      if (instMem) institutionId = Number(instMem.institution_id);
+    let query = `
+      SELECT 
+        l.*,
+        COALESCE(l.sell_on_marketplace, FALSE) AS sell_on_marketplace,
+        COALESCE(l.marketplace_price, 0) AS marketplace_price,
+        ip.name as institution_name,
+        COALESCE(ip.name, ip.slug) as institution_org_name
+      FROM institution_libraries l
+      LEFT JOIN institution_profiles ip ON ip.id = l.institution_id
+      WHERE COALESCE(l.is_active, TRUE) = TRUE
+    `;
+    const params: any[] = [];
+
+    if (institutionIdParam && institutionIdParam !== "all" && !isNaN(Number(institutionIdParam))) {
+      query += ` AND l.institution_id = $1`;
+      params.push(Number(institutionIdParam));
     }
 
-    if (!institutionId) {
-      const firstInst = await db.query<{ id: number }>(`SELECT id FROM institution_profiles LIMIT 1`);
-      institutionId = firstInst.rows[0]?.id || 1;
-    }
+    query += ` ORDER BY l.id DESC`;
 
-    const res = await db.query(
-      `SELECT * FROM institution_libraries WHERE institution_id = $1 AND COALESCE(is_active, TRUE) = TRUE ORDER BY id ASC`,
-      [institutionId]
-    );
+    const res = await db.query(query, params);
 
-    return NextResponse.json({ data: res.rows, institutionId });
+    return NextResponse.json({ data: res.rows });
   } catch (err: any) {
+    console.error("GET /api/admin/institution/libraries error:", err);
     return NextResponse.json({ error: err.message || "Failed to fetch libraries" }, { status: 500 });
   }
 }
@@ -76,26 +91,22 @@ export async function POST(req: Request) {
     const digitalTitles = Number(body.digital_titles || 5000);
     const journalsSubscribed = Number(body.journals_subscribed || 120);
     const seatingCapacity = Number(body.seating_capacity || 250);
+    const membershipFee = Number(body.membership_fee || 0);
     const readingHallAvailable = Boolean(body.reading_hall_available ?? true);
     const eResourcesAccess = Boolean(body.e_resources_access ?? true);
     const openingHours = String(body.opening_hours || "8:00 AM - 10:00 PM").trim();
     const borrowingRules = String(body.borrowing_rules || "Students can issue up to 4 books for 14 days.").trim();
+    const features = String(body.features || "Air Conditioned, High-Speed Wi-Fi, Quiet Pods, Photocopy / Print Service").trim();
+    const availableCategories = String(body.available_categories || "Engineering, Medical, Science, Management, Humanities").trim();
     const librarianName = String(body.librarian_name || "Head Librarian").trim();
     const librarianEmail = String(body.librarian_email || "").trim();
     const librarianPhone = String(body.librarian_phone || "").trim();
     const description = String(body.description || "").trim();
+    const sellOnMarketplace = Boolean(body.sell_on_marketplace ?? false);
+    const marketplacePrice = Number(body.marketplace_price ?? (sellOnMarketplace ? body.membership_fee || 0 : 0));
 
-    const url = new URL(req.url);
-    const institutionIdParam = url.searchParams.get("institutionId") || req.headers.get("x-institution-id") || body.institution_id;
-    let institutionId: number | null = null;
-    if (institutionIdParam && !isNaN(Number(institutionIdParam))) {
-      institutionId = Number(institutionIdParam);
-    } else if (user?.memberships?.length > 0) {
-      const instMem = user.memberships.find((m: any) => m.institution_id);
-      if (instMem) institutionId = Number(instMem.institution_id);
-    }
-
-    if (!institutionId) {
+    let institutionId: number = Number(body.institution_id || 1);
+    if (!institutionId || isNaN(institutionId)) {
       const firstInst = await db.query<{ id: number }>(`SELECT id FROM institution_profiles LIMIT 1`);
       institutionId = firstInst.rows[0]?.id || 1;
     }
@@ -108,38 +119,49 @@ export async function POST(req: Request) {
       // Update
       const updateRes = await db.query(
         `UPDATE institution_libraries SET
-          name = $1,
-          total_books = $2,
-          digital_titles = $3,
-          journals_subscribed = $4,
-          seating_capacity = $5,
-          reading_hall_available = $6,
-          e_resources_access = $7,
-          opening_hours = $8,
-          borrowing_rules = $9,
-          librarian_name = $10,
-          librarian_email = $11,
-          librarian_phone = $12,
-          description = $13,
+          institution_id = $1,
+          name = $2,
+          total_books = $3,
+          digital_titles = $4,
+          journals_subscribed = $5,
+          seating_capacity = $6,
+          membership_fee = $7,
+          reading_hall_available = $8,
+          e_resources_access = $9,
+          opening_hours = $10,
+          borrowing_rules = $11,
+          features = $12,
+          available_categories = $13,
+          librarian_name = $14,
+          librarian_email = $15,
+          librarian_phone = $16,
+          description = $17,
+          sell_on_marketplace = $18,
+          marketplace_price = $19,
           updated_at = NOW()
-        WHERE id = $14 AND institution_id = $15
+        WHERE id = $20
         RETURNING *`,
         [
+          institutionId,
           name,
           totalBooks,
           digitalTitles,
           journalsSubscribed,
           seatingCapacity,
+          membershipFee,
           readingHallAvailable,
           eResourcesAccess,
           openingHours,
           borrowingRules,
+          features,
+          availableCategories,
           librarianName,
           librarianEmail,
           librarianPhone,
           description,
+          sellOnMarketplace,
+          marketplacePrice,
           Number(body.id),
-          institutionId,
         ]
       );
       return NextResponse.json({ success: true, data: updateRes.rows[0] });
@@ -153,15 +175,20 @@ export async function POST(req: Request) {
           digital_titles,
           journals_subscribed,
           seating_capacity,
+          membership_fee,
           reading_hall_available,
           e_resources_access,
           opening_hours,
           borrowing_rules,
+          features,
+          available_categories,
           librarian_name,
           librarian_email,
           librarian_phone,
-          description
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          description,
+          sell_on_marketplace,
+          marketplace_price
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
         RETURNING *`,
         [
           institutionId,
@@ -170,19 +197,25 @@ export async function POST(req: Request) {
           digitalTitles,
           journalsSubscribed,
           seatingCapacity,
+          membershipFee,
           readingHallAvailable,
           eResourcesAccess,
           openingHours,
           borrowingRules,
+          features,
+          availableCategories,
           librarianName,
           librarianEmail,
           librarianPhone,
           description,
+          sellOnMarketplace,
+          marketplacePrice,
         ]
       );
       return NextResponse.json({ success: true, data: insertRes.rows[0] });
     }
   } catch (err: any) {
+    console.error("POST /api/admin/institution/libraries error:", err);
     return NextResponse.json({ error: err.message || "Failed to save library" }, { status: 500 });
   }
 }

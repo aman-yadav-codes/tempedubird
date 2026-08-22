@@ -48,10 +48,24 @@ export function useActiveInstitution() {
     };
   }, []);
 
+  const defaultEnvId = parseActiveInstitutionId(
+    process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ||
+    process.env.NEXT_PUBLIC_INSTITUTION_ID
+  );
+
+  // Return the user's actual institution membership/selection.
+  // Do NOT blindly fall back to the env default — that would scope
+  // all public marketplace pages to a single institute.
+  // `defaultEnvInstitutionId` is exposed separately for components
+  // that explicitly need it (e.g. HomeLandingContainer).
+  const resolvedId = activeInstitution?.id ?? activeInstitutionId ?? null;
+
   return {
     institutions,
     activeInstitution,
-    activeInstitutionId: activeInstitution?.id ?? null,
+    activeInstitutionId: resolvedId,
+    defaultEnvInstitutionId: defaultEnvId,
     setActiveInstitutionId: setStoredActiveInstitutionId,
   };
 }
+
