@@ -31,20 +31,14 @@ export function FeaturedCoursesSection() {
           const json = await res.json();
           const rows = Array.isArray(json?.data) ? json.data : [];
           if (!ignore) {
-            if (rows.length > 0) {
-              setCourses(rows);
-            } else if (!isInstitutionalAdmin) {
-              setCourses(featuredCourses.slice(0, 6));
-            } else {
-              setCourses([]);
-            }
+            setCourses(rows);
           }
-        } else if (!ignore && !isInstitutionalAdmin) {
-          setCourses(featuredCourses.slice(0, 6));
+        } else if (!ignore) {
+          setCourses([]);
         }
       } catch {
-        if (!ignore && !isInstitutionalAdmin) {
-          setCourses(featuredCourses.slice(0, 6));
+        if (!ignore) {
+          setCourses([]);
         }
       } finally {
         if (!ignore) {
@@ -67,15 +61,13 @@ export function FeaturedCoursesSection() {
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold mb-2">
               <BookOpen className="h-3.5 w-3.5" />
-              <span>{isInstitutionalAdmin ? `${activeInstitutionName || "Institution"} Programs` : "Marketplace Showcase"}</span>
+              <span>Marketplace Showcase</span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight">
-              {isInstitutionalAdmin ? "Active Courses & Programs" : "Featured Marketplace Courses"}
+              Featured Marketplace Courses
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              {isInstitutionalAdmin
-                ? "Showing verified academic courses and programs published by your institution."
-                : "Handpicked courses from top verified institutes across India."}
+              Handpicked courses from top verified institutes across India.
             </p>
           </div>
           <Button variant="outline" className="gap-2 shrink-0" asChild>

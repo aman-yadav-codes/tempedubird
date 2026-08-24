@@ -84,25 +84,43 @@ export async function proxy(request: NextRequest) {
         return NextResponse.next();
     }
 
+    if (PUBLIC_TOP_LEVEL_ROUTES.has(firstSegment)) {
+        return NextResponse.next();
+    }
+
     if (pathname === "/api/admin/access" || pathname.startsWith("/api/admin/access/")) {
         const rewriteUrl = request.nextUrl.clone();
         rewriteUrl.pathname = pathname.replace(/^\/api\/admin\/access(?=\/|$)/, "/api/admin/access-control");
         return NextResponse.rewrite(rewriteUrl);
     }
 
-    if (firstSegment === "student") {
+    if (firstSegment === "student" || firstSegment === "students") {
         const refreshToken = request.cookies.get("refresh_token");
         if (!refreshToken) {
             return NextResponse.redirect(new URL("/", request.url));
         }
 
+        if (firstSegment === "students") {
+            const rewriteUrl = request.nextUrl.clone();
+            const rest = segments.slice(1).join("/");
+            rewriteUrl.pathname = `/student${rest ? `/${rest}` : ""}`;
+            return NextResponse.rewrite(rewriteUrl);
+        }
+
         return NextResponse.next();
     }
 
-    if (firstSegment === "parent") {
+    if (firstSegment === "parent" || firstSegment === "parents") {
         const refreshToken = request.cookies.get("refresh_token");
         if (!refreshToken) {
             return NextResponse.redirect(new URL("/", request.url));
+        }
+
+        if (firstSegment === "parents") {
+            const rewriteUrl = request.nextUrl.clone();
+            const rest = segments.slice(1).join("/");
+            rewriteUrl.pathname = `/parent${rest ? `/${rest}` : ""}`;
+            return NextResponse.rewrite(rewriteUrl);
         }
 
         return NextResponse.next();
@@ -113,7 +131,9 @@ export async function proxy(request: NextRequest) {
         isKnownRoleRoutePrefix(firstSegment) &&
         firstSegment !== "admin" &&
         firstSegment !== "student" &&
-        firstSegment !== "parent"
+        firstSegment !== "students" &&
+        firstSegment !== "parent" &&
+        firstSegment !== "parents"
     ) {
         const rewriteUrl = request.nextUrl.clone();
         rewriteUrl.pathname = `/admin${segments.length > 1 ? `/${segments.slice(1).join("/")}` : ""}`;

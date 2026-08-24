@@ -30,13 +30,13 @@ type AboutPageViewProps = {
 
 export function AboutPageView({ initialProfile, companyPage }: AboutPageViewProps) {
   const { user } = useAuthStore();
-  const { activeInstitution, activeInstitutionId } = useActiveInstitution();
+  const { activeInstitution, activeInstitutionId, defaultEnvInstitutionId } = useActiveInstitution();
   const [profile, setProfile] = useState<any>(initialProfile);
 
   const [facilities, setFacilities] = useState<any[]>([]);
 
   useEffect(() => {
-    const instId = activeInstitutionId || user?.memberships?.[0]?.institution_id;
+    const instId = initialProfile?.id || defaultEnvInstitutionId;
     const url = instId
       ? `/api/public/institution/info?institutionId=${instId}`
       : "/api/public/institution/info";
@@ -62,9 +62,9 @@ export function AboutPageView({ initialProfile, companyPage }: AboutPageViewProp
         }
       })
       .catch(() => undefined);
-  }, [activeInstitutionId, user]);
+  }, [defaultEnvInstitutionId, initialProfile]);
 
-  const name = profile?.name || activeInstitution?.name || companyPage?.title || "EduBird";
+  const name = profile?.name || (defaultEnvInstitutionId ? "Institution" : companyPage?.title || "EduBird");
   const typeLabel = [profile?.type_name, profile?.subtype_name].filter(Boolean).join(" / ") || "Educational Institution";
   const about =
     profile?.about?.trim() ||

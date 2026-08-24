@@ -4,9 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ColumnDef, PaginationState } from "@tanstack/react-table";
 import {
     ArrowUpDown,
+    BookOpen,
+    Calendar,
     CheckCircle2,
     Clock,
+    DollarSign,
     Download,
+    Globe,
+    GraduationCap,
     HelpCircle,
     Loader2,
     Mail,
@@ -15,6 +20,7 @@ import {
     PhoneCall,
     Plus,
     Search,
+    Sparkles,
     UserCheck,
     Users,
 } from "lucide-react";
@@ -49,6 +55,29 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { useAuthStore } from "@/store";
 import { readJsonResponse } from "@/lib/api/read-json-response";
+
+export type SalesProgramOption = {
+    id: number;
+    title: string;
+    duration_value?: number | null;
+    duration_unit?: string | null;
+    seats_available?: number | null;
+    teaching_method?: string | null;
+    languages?: string | null;
+    categories?: string | null;
+    board_name?: string | null;
+    fee_components?: Array<{
+        id?: number;
+        title: string;
+        amount: number;
+        unit?: string | null;
+        payment_mode?: string | null;
+        discount_type?: string | null;
+        discount_value?: number | null;
+        final_amount?: number | null;
+        installments_count?: number | null;
+    }> | null;
+};
 
 type EnquiryRecord = {
     id: number;
@@ -132,7 +161,7 @@ export default function SalesEnquiriesPage() {
     const [formNotes, setFormNotes] = useState("");
 
     // Programs list fetched from institution admin
-    const [programsOptions, setProgramsOptions] = useState<Array<{ id: number; title: string }>>([]);
+    const [programsOptions, setProgramsOptions] = useState<SalesProgramOption[]>([]);
     const [loadingPrograms, setLoadingPrograms] = useState(false);
 
     // Details & Status update dialog
@@ -183,7 +212,7 @@ export default function SalesEnquiriesPage() {
             const res = await fetch(`/api/admin/institutions/programs?limit=100`, {
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
-            const json = await readJsonResponse<{ data?: Array<{ id: number; title: string }>; error?: string }>(res);
+            const json = await readJsonResponse<{ data?: SalesProgramOption[]; error?: string }>(res);
             if (res.ok && json.data) {
                 setProgramsOptions(json.data);
             }
@@ -270,14 +299,18 @@ export default function SalesEnquiriesPage() {
         }
     };
 
+    const selectedProgramObj = useMemo(() => {
+        return programsOptions.find((p) => p.title === formProgram || String(p.id) === formProgram);
+    }, [programsOptions, formProgram]);
+
     const uniquePrograms = useMemo(() => {
         const seen = new Set<string>();
-        const list: Array<{ id: number; title: string }> = [];
+        const list: SalesProgramOption[] = [];
         for (const p of programsOptions) {
             const cleanTitle = p.title?.trim();
             if (cleanTitle && !seen.has(cleanTitle)) {
                 seen.add(cleanTitle);
-                list.push({ id: p.id, title: cleanTitle });
+                list.push(p);
             }
         }
         return list;
@@ -345,10 +378,58 @@ export default function SalesEnquiriesPage() {
         },
         {
             accessorKey: "preferred_program",
-            header: "Preferred Program / Class",
-            cell: ({ row }) => (
-                <span className="text-sm font-medium">{row.original.preferred_program || "General Enquiry"}</span>
-            ),
+            header: "Program & Course Details",
+            cell: ({ row }) => {
+                const programName = row.original.preferred_program || "General Enquiry";
+                const matched = programsOptions.find(
+                    (p) => p.title.toLowerCase() === programName.toLowerCase() || String(p.id) === programName
+                );
+
+                if (!matched) {
+                    return <span className="text-xs font-semibold text-foreground">{programName}</span>;
+                }
+
+                const primaryFee = matched.fee_components?.[0];
+                const feeText = primaryFee
+                    ? `₹${Number(primaryFee.amount).toLocaleString()}${primaryFee.unit ? `/${primaryFee.unit}` : ""}`
+                    : null;
+                const durationText = matched.duration_value
+                    ? `${matched.duration_value} ${matched.duration_unit || "Yr"}`
+                    : null;
+
+                return (
+                    <div className="space-y-1 py-0.5 max-w-[280px]">
+                        <p className="text-xs font-bold text-foreground truncate">{matched.title}</p>
+                        <div className="flex items-center gap-1 flex-wrap">
+                            {feeText && (
+                                <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-bold text-primary bg-primary/5 border-primary/20">
+                                    💰 {feeText}
+                                </Badge>
+                            )}
+                            {durationText && (
+                                <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-medium bg-muted/60">
+                                    ⏱️ {durationText}
+                                </Badge>
+                            )}
+                            {matched.teaching_method && (
+                                <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-medium bg-muted/60">
+                                    🏫 {matched.teaching_method}
+                                </Badge>
+                            )}
+                            {matched.seats_available != null && (
+                                <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-medium bg-muted/60">
+                                    🪑 {matched.seats_available} Seats
+                                </Badge>
+                            )}
+                            {matched.languages && (
+                                <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-medium bg-muted/60">
+                                    🌐 {matched.languages}
+                                </Badge>
+                            )}
+                        </div>
+                    </div>
+                );
+            },
         },
         {
             accessorKey: "source",
@@ -561,6 +642,79 @@ export default function SalesEnquiriesPage() {
                                     </SelectContent>
                                 </Select>
                             </div>
+
+                            {/* Live Selected Program Info Preview Card */}
+                            {selectedProgramObj && (
+                                <div className="sm:col-span-2 p-3 rounded-xl bg-muted/40 border border-border/80 space-y-2 text-xs">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-extrabold text-foreground flex items-center gap-1.5">
+                                            <BookOpen className="h-4 w-4 text-primary" />
+                                            {selectedProgramObj.title}
+                                        </span>
+                                        {selectedProgramObj.teaching_method && (
+                                            <Badge variant="outline" className="text-[10px] font-bold bg-background">
+                                                🏫 {selectedProgramObj.teaching_method}
+                                            </Badge>
+                                        )}
+                                    </div>
+
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-border/50 text-[11px]">
+                                        <div className="space-y-0.5">
+                                            <span className="text-[10px] text-muted-foreground uppercase font-bold block">⏱️ Duration</span>
+                                            <span className="font-bold text-foreground">
+                                                {selectedProgramObj.duration_value ? `${selectedProgramObj.duration_value} ${selectedProgramObj.duration_unit || "Yr"}` : "Standard"}
+                                            </span>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <span className="text-[10px] text-muted-foreground uppercase font-bold block">🪑 Available Seats</span>
+                                            <span className="font-bold text-foreground">
+                                                {selectedProgramObj.seats_available != null ? `${selectedProgramObj.seats_available} Seats` : "Open Intake"}
+                                            </span>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <span className="text-[10px] text-muted-foreground uppercase font-bold block">🏫 Mode</span>
+                                            <span className="font-bold text-foreground truncate block">
+                                                {selectedProgramObj.teaching_method || "Classroom / Offline"}
+                                            </span>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <span className="text-[10px] text-muted-foreground uppercase font-bold block">🌐 Languages</span>
+                                            <span className="font-bold text-foreground truncate block">
+                                                {selectedProgramObj.languages || "English, Hindi"}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Fee Structure Preview */}
+                                    {selectedProgramObj.fee_components && selectedProgramObj.fee_components.length > 0 && (
+                                        <div className="pt-1.5 border-t border-border/50 space-y-1">
+                                            <span className="text-[10px] text-muted-foreground uppercase font-bold block">
+                                                💰 Available Fee Plans:
+                                            </span>
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                {selectedProgramObj.fee_components.map((f, i) => {
+                                                    const numAmt = Number(f.amount) || 0;
+                                                    const numDisc = Number(f.discount_value) || 0;
+                                                    const hasDisc = numDisc > 0;
+                                                    const deduction = hasDisc
+                                                        ? f.discount_type === "percentage" ? (numAmt * Math.min(100, numDisc)) / 100 : Math.min(numAmt, numDisc)
+                                                        : 0;
+                                                    const net = Math.max(0, numAmt - deduction);
+                                                    return (
+                                                        <Badge key={i} variant="secondary" className="text-[10.5px] font-semibold py-0.5 px-2 bg-background border border-border">
+                                                            <strong>{f.title || "Fee"}:</strong>&nbsp;
+                                                            {hasDisc && <span className="line-through text-muted-foreground mr-1">₹{numAmt.toLocaleString()}</span>}
+                                                            <span className="text-primary font-bold">₹{net.toLocaleString()}</span>
+                                                            <span className="text-muted-foreground ml-0.5">/{f.unit || "month"}</span>
+                                                        </Badge>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="space-y-1.5 sm:col-span-2 min-w-0">
                                 <label className="text-xs font-semibold">Enquiry Source</label>
                                 <Select value={formSource} onValueChange={setFormSource}>
@@ -599,7 +753,7 @@ export default function SalesEnquiriesPage() {
 
                 {/* View Details Sheet */}
                 <Sheet open={!!selectedEnquiry} onOpenChange={(open) => !open && setSelectedEnquiry(null)}>
-                    <SheetContent className="w-full sm:max-w-md">
+                    <SheetContent className="w-full sm:max-w-md overflow-y-auto">
                         <SheetHeader>
                             <SheetTitle>{selectedEnquiry?.student_name}</SheetTitle>
                             <SheetDescription>Enquiry details & contact history</SheetDescription>
@@ -616,6 +770,59 @@ export default function SalesEnquiriesPage() {
                                 <p><span className="text-muted-foreground">Status:</span> {selectedEnquiry?.status}</p>
                                 <p><span className="text-muted-foreground">Recorded On:</span> {selectedEnquiry?.created_at ? formatDate(selectedEnquiry.created_at) : "N/A"}</p>
                             </div>
+
+                            {/* Program Info Card in Details Drawer */}
+                            {(() => {
+                                const prog = programsOptions.find(
+                                    (p) => p.title.toLowerCase() === (selectedEnquiry?.preferred_program || "").toLowerCase() || String(p.id) === selectedEnquiry?.preferred_program
+                                );
+                                if (!prog) return null;
+                                return (
+                                    <div className="rounded-lg border p-4 space-y-2.5 bg-card shadow-2xs">
+                                        <div className="flex items-center justify-between">
+                                            <p className="font-extrabold text-foreground flex items-center gap-1.5 text-xs">
+                                                <BookOpen className="h-4 w-4 text-primary" />
+                                                {prog.title}
+                                            </p>
+                                            {prog.teaching_method && (
+                                                <Badge variant="outline" className="text-[10px] font-bold">
+                                                    {prog.teaching_method}
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-border/50">
+                                            <div>
+                                                <span className="text-[10px] text-muted-foreground uppercase font-bold block">⏱️ Duration</span>
+                                                <span className="font-semibold">{prog.duration_value ? `${prog.duration_value} ${prog.duration_unit || "Yr"}` : "Standard"}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] text-muted-foreground uppercase font-bold block">🪑 Available Seats</span>
+                                                <span className="font-semibold">{prog.seats_available != null ? `${prog.seats_available} Seats` : "Open"}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] text-muted-foreground uppercase font-bold block">🏫 Mode</span>
+                                                <span className="font-semibold">{prog.teaching_method || "Classroom / Offline"}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] text-muted-foreground uppercase font-bold block">🌐 Languages</span>
+                                                <span className="font-semibold">{prog.languages || "English, Hindi"}</span>
+                                            </div>
+                                        </div>
+                                        {prog.fee_components && prog.fee_components.length > 0 && (
+                                            <div className="pt-1.5 border-t border-border/50 space-y-1">
+                                                <span className="text-[10px] text-muted-foreground uppercase font-bold block">💰 Fee Options:</span>
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                    {prog.fee_components.map((f, i) => (
+                                                        <Badge key={i} variant="secondary" className="text-[10px] py-0.5 px-2 bg-muted/60">
+                                                            {f.title}: <strong>₹{Number(f.amount).toLocaleString()}</strong>/{f.unit || "mo"}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })()}
                             {selectedEnquiry?.notes && (
                                 <div className="rounded-lg border p-4 space-y-1">
                                     <p className="font-semibold">Notes</p>

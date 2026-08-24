@@ -44,8 +44,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
+import { isPlatformAdminUser } from "@/lib/auth/permissions";
 import type { ExamRow } from "@/lib/types/exam";
 import type { SyllabusNode } from "@/lib/types/syllabus";
+import { useAuthStore } from "@/store";
 
 export type ExamInstitutionOption = { id: number; name: string };
 type ExamProgramOption = { id: number; title: string };
@@ -381,6 +383,8 @@ export function ExamEditor({
   onSaved,
 }: Props) {
   const { activeInstitution } = useActiveInstitution();
+  const user = useAuthStore((s) => s.user);
+  const isPlatformAdmin = isPlatformAdminUser(user);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [totalMarks, setTotalMarks] = useState("1");
@@ -424,8 +428,9 @@ export function ExamEditor({
   const [expandedClassMappingId, setExpandedClassMappingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const useClassMappings = Boolean(seriesId && !template && targetType === "INSTITUTION");
-  const visibleTabs = seriesId
-    ? WIZARD_TABS.filter((tab) => tab.value !== "targets").sort((first, second) => {
+  const visibleTabs = useMemo(() => {
+    if (seriesId) {
+      return WIZARD_TABS.filter((tab) => tab.value !== "targets").sort((first, second) => {
         const order: Record<WizardTab, number> = {
           syllabus: 0,
           basic: 1,
@@ -433,8 +438,13 @@ export function ExamEditor({
           targets: 3,
         };
         return order[first.value] - order[second.value];
-      })
-    : WIZARD_TABS;
+      });
+    }
+    if (isPlatformAdmin) {
+      return WIZARD_TABS.filter((tab) => tab.value !== "targets");
+    }
+    return WIZARD_TABS;
+  }, [isPlatformAdmin, seriesId]);
   const mappingExamDates = useMemo(
     () =>
       classMappings
@@ -662,18 +672,20 @@ export function ExamEditor({
   }, [open, programId]);
 
   async function fetchPrograms(search: string, page: number) {
-    if (!accessToken || !institutionId) return { data: [], hasMore: false };
+    if (!accessToken) return { data: [], hasMore: false };
     const params = new URLSearchParams({
       page: String(page),
-      limit: "15",
+      limit: "25",
       search,
-      institutionId,
     });
+    if (!isPlatformAdmin && institutionId) {
+      params.set("institutionId", institutionId);
+    }
     const res = await fetch(`/api/admin/institutions/programs?${params.toString()}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json = await readJson(res);
-    if (!res.ok) throw new Error(json.error ?? "Failed to load classes");
+    if (!res.ok) throw new Error(json.error ?? "Failed to load courses/programs");
     return {
       data: (json.data ?? []) as ExamProgramOption[],
       hasMore: page < Number(json.pageCount ?? 0),
@@ -738,6 +750,7 @@ export function ExamEditor({
   }, [accessToken, open, syllabusId]);
 
   function resolveTargetId() {
+    if (isPlatformAdmin) return Number(programId || 1);
     if (targetType === "INSTITUTION") return Number(institutionId);
     if (targetType === "PROGRAM") return Number(programId);
     if (targetType === "SECTION") return Number(sectionId);
@@ -1029,6 +1042,13 @@ export function ExamEditor({
   }
 
   function validateTargets(showToast = true) {
+    if (isPlatformAdmin) {
+      if (!programId) {
+        if (showToast) toast.error("Course / Program is required");
+        return false;
+      }
+      return true;
+    }
     if (!institutionId) {
       if (showToast) toast.error("Institution is required");
       return false;
@@ -1066,7 +1086,7 @@ export function ExamEditor({
       return false;
     }
     if (index >= 2 && !validateTargets()) {
-      setActiveTab("targets");
+      setActiveTab(isPlatformAdmin ? "basic" : "targets");
       return false;
     }
     if (index >= 3 && !validateClassMappings()) {
@@ -1271,13 +1291,13 @@ export function ExamEditor({
             result_date: (seriesId ? (seriesInstantResult ?? instantResult) : instantResult)
               ? null
               : (seriesId ? (seriesResultDate ?? resultDate) : resultDate),
-            source_institution_id: Number(institutionId),
-            target_type: targetType,
+            source_institution_id: Number(institutionId || activeInstitution?.id || 1),
+            target_type: isPlatformAdmin ? "PROGRAM" : targetType,
             target_id: resolveTargetId(),
             target_program_id: programId ? Number(programId) : null,
             syllabus_node_ids: selectedNodeIds,
             ai_question_format: aiQuestionFormat,
-            is_public: seriesId ? (seriesIsPublic ?? isPublic) : isPublic,
+            is_public: isPlatformAdmin ? true : (seriesId ? (seriesIsPublic ?? isPublic) : isPublic),
             is_active: seriesId ? (seriesIsActive ?? isActive) : isActive,
           }),
         }
@@ -1546,15 +1566,65 @@ export function ExamEditor({
               <>
             {!seriesId && (
               <>
-                <div className="space-y-2">
-                  <RequiredLabel>Exam Title</RequiredLabel>
-                  <Input value={title} onChange={(event) => setTitle(event.target.value)} />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <RequiredLabel>Class / Program</RequiredLabel>
+                    <AsyncSearchPopover<ExamProgramOption>
+                      value={programId}
+                      selectedLabel={programName}
+                      onChange={(value) => {
+                        setProgramId(value);
+                        setSectionId("");
+                        setStudentId("");
+                        setStudentName("");
+                        setSubjectId("");
+                        setSubjectName("");
+                        setSyllabusId("");
+                        setSyllabusName("");
+                        setSyllabusTree([]);
+                        setSelectedNodeIds([]);
+                        setExpandedNodeIds([]);
+                        if (value) void loadProgramDetail(value);
+                        else {
+                          setSections([]);
+                          setProgramSubjects([]);
+                          setProgramName("");
+                        }
+                      }}
+                      onSelectItem={(program: any) => {
+                        setProgramName(program.title || program.name);
+                        if (program.institution_id && !institutionId) {
+                          setInstitutionId(String(program.institution_id));
+                        }
+                        if (!title.trim() || title.endsWith("Exam")) {
+                          setTitle(`${program.title || program.name} Exam`);
+                        }
+                      }}
+                      fetcher={fetchPrograms}
+                      getValue={(program) => String(program.id)}
+                      getLabel={(program) => program.title}
+                      placeholder="Select course / program..."
+                      searchPlaceholder="Search all courses / programs..."
+                      emptyText="No courses/programs found"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <RequiredLabel>Exam Title</RequiredLabel>
+                    <Input
+                      value={title}
+                      onChange={(event) => setTitle(event.target.value)}
+                      placeholder="e.g. Class 10 Science Final Exam"
+                    />
+                  </div>
                 </div>
+
                 <div className="space-y-2">
                   <Label>Description</Label>
                   <Textarea
                     value={description}
                     onChange={(event) => setDescription(event.target.value)}
+                    placeholder="Optional description or exam guidelines..."
                     className="min-h-24"
                   />
                 </div>

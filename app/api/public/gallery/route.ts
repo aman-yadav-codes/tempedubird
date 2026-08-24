@@ -1,203 +1,218 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/db";
+import { listInstitutionFacilitiesWithMedia } from "@/lib/queries/institutions";
+import { getConfiguredInstitutionId } from "@/lib/tenancy/institution-domain";
 
-const DEFAULT_CATEGORIES = [
-  { key: "all", label: "All Photos" },
-  { key: "campus", label: "Campus & Architecture" },
-  { key: "labs", label: "Laboratories & Tech" },
-  { key: "library", label: "Central Library" },
-  { key: "hostels", label: "Hostels & Living" },
-  { key: "classrooms", label: "Smart Classrooms" },
-  { key: "events", label: "Events & Fests" },
+export type FacilityGalleryItem = {
+  id: number | string;
+  facility_id: number;
+  institution_id: number;
+  institution_name: string;
+  media_type: string;
+  category_slug: string;
+  category_name: string;
+  url: string;
+  title: string;
+  description?: string;
+  category?: string;
+  media?: Array<{ id: number; url: string; title?: string; media_type?: string }>;
+  total_photos?: number;
+};
+
+const DEFAULT_FALLBACK_FACILITIES = [
+  {
+    id: "fb-1",
+    facility_id: 1,
+    institution_id: 1,
+    institution_name: "Campus Facility",
+    media_type: "labs",
+    category_slug: "labs",
+    category_name: "Laboratories & Tech",
+    url: "https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?auto=format&fit=crop&w=1200&q=80",
+    title: "High-Tech Computer & Robotics Laboratories",
+    description: "Equipped with high-performance workstations, GPU computing clusters, IoT prototyping hardware, and AI development toolkits for practical engineering learning.",
+    media: [
+      { id: 101, url: "https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?auto=format&fit=crop&w=1200&q=80", title: "Robotics Workstation" },
+      { id: 102, url: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80", title: "Computing Cluster" },
+    ],
+    total_photos: 2,
+  },
+  {
+    id: "fb-2",
+    facility_id: 2,
+    institution_id: 1,
+    institution_name: "Campus Facility",
+    media_type: "library",
+    category_slug: "library",
+    category_name: "Central Library",
+    url: "https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=1200&q=80",
+    title: "Central Digital Knowledge Library",
+    description: "Spacious air-conditioned library containing over 35,000 physical volumes, 24/7 digital subscriptions (IEEE, Springer, ScienceDirect), and automated RFID borrowing.",
+    media: [
+      { id: 103, url: "https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=1200&q=80", title: "Reading Hall" },
+    ],
+    total_photos: 1,
+  },
+  {
+    id: "fb-3",
+    facility_id: 3,
+    institution_id: 1,
+    institution_name: "Campus Facility",
+    media_type: "classrooms",
+    category_slug: "classrooms",
+    category_name: "Smart Classrooms",
+    url: "https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&w=1200&q=80",
+    title: "Interactive Smart Lecture Amphitheatres",
+    description: "Ergonomically designed lecture halls equipped with 4K interactive touch displays, digital recording cameras for hybrid lectures, and high-fidelity sound systems.",
+    media: [
+      { id: 104, url: "https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&w=1200&q=80", title: "Smart Amphitheatre" },
+    ],
+    total_photos: 1,
+  },
+  {
+    id: "fb-4",
+    facility_id: 4,
+    institution_id: 1,
+    institution_name: "Campus Facility",
+    media_type: "sports",
+    category_slug: "sports",
+    category_name: "Sports Complex",
+    url: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80",
+    title: "Sports Complex & Fitness Center",
+    description: "Olympic-standard sports facilities featuring outdoor cricket and football grounds, basketball and badminton courts, indoor gymnasium, and certified sports trainers.",
+    media: [
+      { id: 105, url: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80", title: "Sports Complex" },
+    ],
+    total_photos: 1,
+  },
+  {
+    id: "fb-5",
+    facility_id: 5,
+    institution_id: 1,
+    institution_name: "Campus Facility",
+    media_type: "hostels",
+    category_slug: "hostels",
+    category_name: "Hostel Living",
+    url: "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=1200&q=80",
+    title: "Modern Residential Hostels & Dining Hall",
+    description: "Separate secure residences for boys and girls with furnished rooms, 1Gbps high-speed Wi-Fi, 24/7 power backup, hygienic multi-cuisine mess, and biometric security.",
+    media: [
+      { id: 106, url: "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=1200&q=80", title: "Hostel Campus" },
+    ],
+    total_photos: 1,
+  },
+  {
+    id: "fb-6",
+    facility_id: 6,
+    institution_id: 1,
+    institution_name: "Campus Facility",
+    media_type: "auditorium",
+    category_slug: "auditorium",
+    category_name: "Auditorium",
+    url: "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80",
+    title: "Grand Auditorium & Convention Center",
+    description: "1,200-seat acoustically engineered auditorium hosting international conferences, technical hackathons, guest lectures from industry pioneers, and cultural festivals.",
+    media: [
+      { id: 107, url: "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80", title: "Main Auditorium" },
+    ],
+    total_photos: 1,
+  },
 ];
-
-let schemaChecked = false;
-async function ensureGallerySchema() {
-  if (schemaChecked) return;
-  try {
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS institution_gallery_categories (
-        id SERIAL PRIMARY KEY,
-        institution_id INTEGER REFERENCES institution_profiles(id) ON DELETE CASCADE,
-        name VARCHAR(120) NOT NULL,
-        slug VARCHAR(150) NOT NULL,
-        description TEXT,
-        sort_order INTEGER DEFAULT 0,
-        is_active BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
-      );
-
-      ALTER TABLE institution_media ADD COLUMN IF NOT EXISTS category_id INTEGER REFERENCES institution_gallery_categories(id) ON DELETE SET NULL;
-      ALTER TABLE institution_media ADD COLUMN IF NOT EXISTS category VARCHAR(120);
-      ALTER TABLE institution_media ADD COLUMN IF NOT EXISTS description TEXT;
-    `);
-    schemaChecked = true;
-  } catch (err) {
-    console.error("Error setting up gallery schema:", err);
-  }
-}
 
 export async function GET(req: NextRequest) {
   try {
-    await ensureGallerySchema();
     const { searchParams } = new URL(req.url);
-    const institutionIdParam = searchParams.get("institutionId");
-    const institutionId = institutionIdParam ? Number(institutionIdParam) : null;
-    const category = searchParams.get("category")?.trim().toLowerCase() || "all";
+    const institutionIdParam = searchParams.get("institutionId") || searchParams.get("inst");
+    const instIdNum = institutionIdParam && /^\d+$/.test(institutionIdParam) ? Number(institutionIdParam) : null;
+    const targetInstitutionId = instIdNum || getConfiguredInstitutionId();
 
-    const params: unknown[] = [];
-    const whereConditions = [
-      "COALESCE(m.is_deleted, FALSE) = FALSE",
-      "m.url IS NOT NULL",
-      "m.url <> ''",
-    ];
+    let facilities: any[] = [];
+    let instName = "Educational Institution";
 
-    if (institutionId && Number.isInteger(institutionId) && institutionId > 0) {
-      params.push(institutionId);
-      whereConditions.push(`m.institution_id = $${params.length}`);
-    }
-
-    const whereClause = whereConditions.join(" AND ");
-
-    // Fetch media with categories
-    const query = `
-      SELECT
-        m.id,
-        m.institution_id,
-        COALESCE(p.name, 'Educational Institution') AS institution_name,
-        COALESCE(gc.slug, m.category, m.media_type, 'campus') AS category_slug,
-        COALESCE(gc.name, m.category, 'Campus & Architecture') AS category_name,
-        m.media_type,
-        m.url,
-        COALESCE(m.title, 'Campus Photo') AS title,
-        m.description,
-        m.sort_order,
-        m.created_at
-      FROM institution_media m
-      LEFT JOIN institution_profiles p ON p.id = m.institution_id
-      LEFT JOIN institution_gallery_categories gc ON gc.id = m.category_id
-      WHERE ${whereClause}
-      ORDER BY m.sort_order ASC, m.id DESC
-    `;
-
-    const res = await db.query(query, params);
-    let items = res.rows || [];
-
-    // Fetch custom categories for the institution
-    let categories = [...DEFAULT_CATEGORIES];
-    if (institutionId && Number.isInteger(institutionId) && institutionId > 0) {
+    if (targetInstitutionId && targetInstitutionId > 0) {
       try {
-        const catRes = await db.query(
-          `SELECT id, name, slug FROM institution_gallery_categories WHERE institution_id = $1 AND COALESCE(is_active, TRUE) = TRUE ORDER BY sort_order ASC, name ASC`,
-          [institutionId]
+        facilities = await listInstitutionFacilitiesWithMedia(db, targetInstitutionId);
+        const nameRes = await db.query<{ name: string }>(
+          `SELECT name FROM institution_profiles WHERE id = $1 LIMIT 1`,
+          [targetInstitutionId]
         );
-        if (catRes.rows.length > 0) {
-          const customCats = catRes.rows.map((c) => ({
-            key: c.slug || c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-            label: c.name,
-          }));
-          // Merge unique categories with 'all' at the beginning
-          const seen = new Set(["all"]);
-          categories = [{ key: "all", label: "All Photos" }];
-          for (const c of customCats) {
-            if (!seen.has(c.key)) {
-              seen.add(c.key);
-              categories.push(c);
-            }
-          }
-          for (const def of DEFAULT_CATEGORIES.slice(1)) {
-            if (!seen.has(def.key)) {
-              seen.add(def.key);
-              categories.push(def);
-            }
-          }
+        if (nameRes.rows[0]?.name) {
+          instName = nameRes.rows[0].name;
         }
-      } catch (catErr) {
-        console.error("Error fetching gallery categories:", catErr);
+      } catch (err) {
+        console.error("Error fetching facilities for gallery:", err);
       }
     }
 
-    // Fallback demo gallery items if table is empty
-    if (items.length === 0) {
-      items = [
-        {
-          id: 1,
-          institution_id: institutionId || 1,
-          institution_name: "Apex Institute of Technology",
-          media_type: "campus",
-          category_slug: "campus",
-          category_name: "Campus & Architecture",
-          url: "https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=1200&q=80",
-          title: "Central Administrative & Academic Campus Building",
-          description: "25-acre sprawling Wi-Fi enabled green academic campus.",
-        },
-        {
-          id: 2,
-          institution_id: institutionId || 1,
-          institution_name: "Apex Institute of Technology",
-          media_type: "library",
-          category_slug: "library",
-          category_name: "Central Library",
-          url: "https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=1200&q=80",
-          title: "Central Digital Knowledge Library",
-          description: "Over 35,000 physical volumes and 24/7 e-resource stations.",
-        },
-        {
-          id: 3,
-          institution_id: institutionId || 1,
-          institution_name: "Apex Institute of Technology",
-          media_type: "labs",
-          category_slug: "labs",
-          category_name: "Laboratories & Tech",
-          url: "https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?auto=format&fit=crop&w=1200&q=80",
-          title: "High-Performance Robotics & AI Research Lab",
-          description: "GPU-accelerated computing workstations and automation rigs.",
-        },
-        {
-          id: 4,
-          institution_id: institutionId || 1,
-          institution_name: "Apex Institute of Technology",
-          media_type: "classrooms",
-          category_slug: "classrooms",
-          category_name: "Smart Classrooms",
-          url: "https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&w=1200&q=80",
-          title: "Interactive Smart Lecture Theatres",
-          description: "Acoustically treated amphitheatres with 4K digital projection.",
-        },
-        {
-          id: 5,
-          institution_id: institutionId || 1,
-          institution_name: "Apex Institute of Technology",
-          media_type: "hostels",
-          category_slug: "hostels",
-          category_name: "Hostels & Living",
-          url: "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=1200&q=80",
-          title: "Air-Conditioned Student Residences & Hostels",
-          description: "Comfortable single and sharing rooms with attached washrooms.",
-        },
-        {
-          id: 6,
-          institution_id: institutionId || 1,
-          institution_name: "Apex Institute of Technology",
-          media_type: "events",
-          category_slug: "events",
-          category_name: "Events & Fests",
-          url: "https://images.unsplash.com/photo-1523580494863-6f3031224c94?auto=format&fit=crop&w=1200&q=80",
-          title: "Annual Convocation & Technical Hackathon",
-          description: "Celebrating student innovation, research awards, and graduation.",
-        },
+    // Filter active and non-deleted
+    const validFacilities = facilities.filter(
+      (f) => !f.is_deleted && f.is_active !== false
+    );
+
+    if (validFacilities.length > 0) {
+      const galleryItems: FacilityGalleryItem[] = [];
+      const categoryMap = new Map<string, string>();
+
+      for (const fac of validFacilities) {
+        const catSlug = fac.facility_type_slug || fac.facility_type_name?.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "facility";
+        const catName = fac.facility_type_name || "Facility";
+        categoryMap.set(catSlug, catName);
+
+        // Facility main photo
+        const mainUrl = fac.image_url || fac.media?.[0]?.url;
+        const allMedia = Array.isArray(fac.media) ? fac.media : [];
+
+        if (mainUrl) {
+          galleryItems.push({
+            id: `facility-${fac.id}`,
+            facility_id: fac.id,
+            institution_id: fac.institution_id || targetInstitutionId || 1,
+            institution_name: instName,
+            media_type: catSlug,
+            category_slug: catSlug,
+            category_name: catName,
+            url: mainUrl,
+            title: fac.title || fac.facility_type_name || "Campus Facility",
+            description: fac.description || fac.ai_description || undefined,
+            category: catName,
+            media: allMedia,
+            total_photos: (fac.image_url ? 1 : 0) + allMedia.length,
+          });
+        }
+      }
+
+      const categories = [
+        { key: "all", label: "All Facilities" },
+        ...Array.from(categoryMap.entries()).map(([key, label]) => ({ key, label })),
       ];
+
+      return NextResponse.json({
+        success: true,
+        data: galleryItems,
+        categories,
+        total: galleryItems.length,
+      });
     }
+
+    // Fallback if no facilities in database
+    const defaultCategories = [
+      { key: "all", label: "All Facilities" },
+      { key: "labs", label: "Laboratories & Tech" },
+      { key: "library", label: "Central Library" },
+      { key: "classrooms", label: "Smart Classrooms" },
+      { key: "sports", label: "Sports Complex" },
+      { key: "hostels", label: "Hostel Living" },
+      { key: "auditorium", label: "Auditorium" },
+    ];
 
     return NextResponse.json({
       success: true,
-      data: items,
-      categories,
-      total: items.length,
+      data: DEFAULT_FALLBACK_FACILITIES,
+      categories: defaultCategories,
+      total: DEFAULT_FALLBACK_FACILITIES.length,
     });
   } catch (err: any) {
     console.error("GET /api/public/gallery error:", err);
-    return NextResponse.json({ error: "Failed to fetch gallery media" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch gallery facilities" }, { status: 500 });
   }
 }

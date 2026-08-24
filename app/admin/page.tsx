@@ -23,10 +23,79 @@ type DashboardNotification = {
   created_at: string;
 };
 
+type DashboardInstitution = {
+  id: number;
+  name: string;
+  slug: string;
+  location_name?: string | null;
+  student_count: number;
+  program_count: number;
+};
+
+type DashboardBranch = {
+  id: number;
+  institution_id: number;
+  branch_name: string;
+  city?: string | null;
+  state?: string | null;
+  address?: string | null;
+  is_primary: boolean;
+};
+
+type DashboardProgram = {
+  id: number;
+  title: string;
+  code: string;
+  student_count: number;
+};
+
 type DashboardPayload = {
   role: "platform_admin" | "institution_admin" | "teacher" | "student" | "parent" | "admin";
   cards: DashboardCard[];
   notifications: DashboardNotification[];
+  institutions?: DashboardInstitution[];
+  branches?: DashboardBranch[];
+  programs?: DashboardProgram[];
+  actionRequired?: {
+    pendingEnquiries?: Array<{
+      id: number;
+      student_name: string;
+      phone: string;
+      email: string;
+      status: string;
+      program_title?: string | null;
+      created_at: string;
+    }>;
+    unverifiedDocuments?: Array<{
+      id: number;
+      student_name: string;
+      admission_number?: string | null;
+      document_type: string;
+      document_number?: string | null;
+      created_at: string;
+    }>;
+    openTickets?: Array<{
+      id: number;
+      ticket_number: string;
+      subject: string;
+      status: string;
+      priority: string;
+      creator_name?: string | null;
+      created_at: string;
+    }>;
+  };
+  latestRecords?: {
+    recentAdmissions?: Array<{
+      id: number;
+      student_name: string;
+      admission_number?: string | null;
+      roll_number?: string | null;
+      program_name?: string | null;
+      status?: string | null;
+      admission_date?: string | null;
+      created_at: string;
+    }>;
+  };
 };
 
 let dashboardRequest:
@@ -150,6 +219,7 @@ import {
   Settings,
   HelpCircle,
   School,
+  Phone,
 } from "lucide-react";
 
 export default function AdminPage() {
@@ -664,110 +734,111 @@ export default function AdminPage() {
     );
   }
 
-  // DEFAULT / INSTITUTION ADMIN ROLE
-  const instContexts: ContextOption[] = [
-    {
-      id: 1,
-      category: "Main Engineering Campus",
-      title: "Apex Institute of Engineering & Technology",
-      subtitle: "Varanasi Main Campus • Approved Technical College",
-      code: "CAMPUS-01",
-      metric: `${getCardValue(2, "1,850")} Students`,
-    },
-    {
-      id: 2,
-      category: "Management College",
-      title: "Apex School of Business & Management",
-      subtitle: "City Campus • Executive MBA & BBA",
-      code: "CAMPUS-02",
-      metric: "420 Students",
-    },
-    {
-      id: 3,
-      category: "Online Academy",
-      title: "Apex Virtual Certification Center",
-      subtitle: "Online Distance Learning Portal",
-      code: "CAMPUS-03",
-      metric: "180 Students",
-    },
-  ];
+  // DYNAMIC INSTITUTION ADMIN ROLE
+  let instContexts: ContextOption[] = [];
+  if (dashboard?.branches && dashboard.branches.length > 0) {
+    instContexts = dashboard.branches.map((branch, idx) => ({
+      id: branch.id,
+      category: branch.is_primary ? "Main Campus" : "Branch Campus",
+      title: branch.branch_name,
+      subtitle: [branch.city, branch.state].filter(Boolean).join(", ") || dashboard?.institutions?.[0]?.name || "Campus Location",
+      code: `BRANCH-${String(idx + 1).padStart(2, "0")}`,
+      metric: "Active Branch",
+    }));
+  } else if (dashboard?.institutions && dashboard.institutions.length > 0) {
+    instContexts = dashboard.institutions.map((inst, idx) => ({
+      id: inst.id,
+      category: "Registered Institution",
+      title: inst.name,
+      subtitle: inst.location_name || "Main Campus",
+      code: `CAMPUS-${String(idx + 1).padStart(2, "0")}`,
+      metric: `${inst.student_count || 0} Students`,
+    }));
+  } else {
+    instContexts = [
+      {
+        id: 1,
+        category: "Institution Campus",
+        title: dashboard?.institutions?.[0]?.name || "My Institution Campus",
+        subtitle: "Main Operational Campus",
+        code: "CAMPUS-01",
+        metric: `${getCardValue(0, "0")} Students`,
+      },
+    ];
+  }
 
   const instMetrics: DashboardMetricCard[] = [
     {
-      label: getCardLabel(0, "Assigned Institutions"),
-      value: getCardValue(0, "3"),
-      hint: getCardHint(0, "Active campus profiles"),
+      label: getCardLabel(0, "Enrolled Students"),
+      value: getCardValue(0, "0"),
+      hint: getCardHint(0, "Active student registrations"),
       color: "emerald",
-      icon: Building2,
+      icon: Users,
     },
     {
-      label: getCardLabel(1, "Active Teachers"),
-      value: getCardValue(1, "68"),
-      hint: getCardHint(1, "Faculty & department staff"),
+      label: getCardLabel(1, "Faculty & Staff"),
+      value: getCardValue(1, "0"),
+      hint: getCardHint(1, "Teaching staff members"),
       color: "primary",
       icon: UserCheck,
     },
     {
-      label: getCardLabel(2, "Enrolled Students"),
-      value: getCardValue(2, "1,850"),
-      hint: getCardHint(2, "Active student enrollments"),
+      label: getCardLabel(2, "Live Programs"),
+      value: getCardValue(2, "0"),
+      hint: getCardHint(2, "Offered degree & courses"),
       color: "blue",
-      icon: Users,
+      icon: BookOpen,
     },
     {
-      label: getCardLabel(3, "Open Support Tickets"),
-      value: getCardValue(3, "2"),
-      hint: getCardHint(3, "Pending resolution"),
+      label: getCardLabel(3, "Open Enquiries"),
+      value: getCardValue(3, "0"),
+      hint: getCardHint(3, "Website leads awaiting response"),
       color: "amber",
       icon: AlertCircle,
     },
   ];
 
-  const instActiveModules: ActiveModuleItem[] = [
-    {
-      id: 1,
-      code: "BTECH-CSE",
-      title: "B.Tech Computer Science & Engineering",
-      subtitle: "Department of Computer Engineering • 450 Students",
-      statusBadge: "94.5% Att.",
-      progress: 92,
+  let instActiveModules: ActiveModuleItem[] = [];
+  if (dashboard?.programs && dashboard.programs.length > 0) {
+    instActiveModules = dashboard.programs.map((prog) => ({
+      id: prog.id,
+      code: prog.code || `PROG-${prog.id}`,
+      title: prog.title,
+      subtitle: `${prog.student_count || 0} Enrolled Students`,
+      statusBadge: "Active Course",
+      progress: Math.min(100, Math.max(25, (prog.student_count || 1) * 12)),
       dueDate: "Session 2025-2026",
       primaryActionLabel: "Manage Students",
-      primaryActionHref: "/admin/students",
-      secondaryActionLabel: "Fee Management",
-      secondaryActionHref: "/admin/students/fee-management",
-    },
-    {
-      id: 2,
-      code: "DS-PRO",
-      title: "Executive Data Science & Machine Learning",
-      subtitle: "School of Applied Analytics • 180 Students",
-      statusBadge: "98.0% Att.",
-      progress: 88,
-      dueDate: "Session 2025-2026",
-      primaryActionLabel: "Manage Students",
-      primaryActionHref: "/admin/students",
-      secondaryActionLabel: "Fee Management",
-      secondaryActionHref: "/admin/students/fee-management",
-    },
-  ];
+      primaryActionHref: `/admin/students?programId=${prog.id}`,
+      secondaryActionLabel: "Course Details",
+      secondaryActionHref: "/admin/institutions/programs",
+    }));
+  }
 
   const instQuickShortcuts: QuickShortcut[] = [
     {
-      title: "Student Directory",
-      description: "Manage student admissions, profiles, promotions, and guardian links.",
+      title: "Student Admissions & Records",
+      description: "Register students, assign roll numbers, upload documents, and track enrollments.",
       href: "/admin/students",
       icon: Users,
       colorBg: "bg-blue-500/10",
       colorText: "text-blue-600 dark:text-blue-400",
     },
     {
-      title: "Classroom Attendance",
-      description: "Track institution-wide student attendance, timetables, and fee dues.",
-      href: "/admin/classroom/attendance",
-      icon: School,
+      title: "Programs & Courses",
+      description: "Manage offered degree courses, streams, syllabus details, and intake capacity.",
+      href: "/admin/institutions/programs",
+      icon: BookOpen,
       colorBg: "bg-emerald-500/10",
       colorText: "text-emerald-600 dark:text-emerald-400",
+    },
+    {
+      title: "Course Inquiries & Leads",
+      description: "Respond to incoming student inquiries, contact admission leads, and track pipeline.",
+      href: "/admin/sales/leads",
+      icon: Phone,
+      colorBg: "bg-amber-500/10",
+      colorText: "text-amber-600 dark:text-amber-400",
     },
     {
       title: "Fee & Payment Management",
@@ -777,34 +848,28 @@ export default function AdminPage() {
       colorBg: "bg-rose-500/10",
       colorText: "text-rose-600 dark:text-rose-400",
     },
-    {
-      title: "Campus Noticeboard",
-      description: "Publish official announcements, event notices, and news circulars.",
-      href: "/admin/institutions/news",
-      icon: Bell,
-      colorBg: "bg-amber-500/10",
-      colorText: "text-amber-600 dark:text-amber-400",
-    },
   ];
 
   return (
     <UnifiedDashboardView
       role="institution_admin"
-      statusBadgeText="Campus Operational • Session 2025-2026"
-      idBadgeText="INST-2026-CAMPUS"
-      greetingSubtitle="Managing campus programs, faculty designations, student admissions, fee collections, and institution notices."
+      statusBadgeText="Campus Operational • Active Session"
+      idBadgeText="INST-CAMPUS"
+      greetingSubtitle="Managing your campus programs, faculty, student admissions, fee collections, and website leads."
       primaryButtonText="Add New Student"
       primaryButtonHref="/admin/students"
       primaryButtonIcon={Plus}
-      secondaryButtonText="Classroom Attendance"
-      secondaryButtonHref="/admin/classroom/attendance"
-      secondaryButtonIcon={School}
+      secondaryButtonText="Course Inquiries"
+      secondaryButtonHref="/admin/sales/leads"
+      secondaryButtonIcon={Phone}
       contextLabel="SWITCH ACTIVE CAMPUS VIEW"
       contexts={instContexts}
       metricsTitle="Campus Performance & Attendance Metrics"
       metrics={instMetrics}
+      actionRequired={dashboard?.actionRequired}
+      latestRecords={dashboard?.latestRecords}
       activeSectionTitle="Active Campus Academic Programs"
-      activeSectionSubtitle="Syllabus coverage and student attendance across active departments."
+      activeSectionSubtitle="Programs and student enrollment numbers configured for your institution."
       activeModules={instActiveModules}
       quickShortcuts={instQuickShortcuts}
       notifications={notifications}

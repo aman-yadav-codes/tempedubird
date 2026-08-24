@@ -67,6 +67,20 @@ type EnrollmentRecord = {
   program_code?: string;
   program_duration?: string;
   program_fee: string | number;
+  teaching_method?: string | null;
+  seats_available?: number | null;
+  languages?: string | null;
+  fee_components?: Array<{
+    id?: number;
+    title: string;
+    amount: number;
+    unit?: string | null;
+    payment_mode?: string | null;
+    discount_type?: string | null;
+    discount_value?: number | null;
+    final_amount?: number | null;
+    installments_count?: number | null;
+  }> | null;
   institution_id: number;
   institution_name: string;
   institution_slug?: string;
@@ -366,25 +380,54 @@ export default function AdminSalesEnrollmentsPage() {
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                         <div className="p-2 rounded-lg bg-muted/40 space-y-0.5">
                           <span className="text-[10px] text-muted-foreground uppercase font-bold block">Enrolled Course</span>
                           <span className="font-bold text-foreground truncate block">{item.program_title}</span>
-                          {item.program_duration && (
-                            <span className="text-[11px] text-primary block">{item.program_duration}</span>
+                          <span className="text-[11px] text-primary font-medium block">
+                            {item.program_duration || "Standard Duration"}
+                          </span>
+                        </div>
+
+                        <div className="p-2 rounded-lg bg-muted/40 space-y-0.5">
+                          <span className="text-[10px] text-muted-foreground uppercase font-bold block">Course Fee</span>
+                          <span className="font-extrabold text-emerald-600 block text-sm">{formattedFee}</span>
+                          {item.fee_components && item.fee_components.length > 0 && (
+                            <span className="text-[10.5px] text-muted-foreground block truncate">
+                              {item.fee_components.length} payment plan{item.fee_components.length > 1 ? "s" : ""} available
+                            </span>
                           )}
                         </div>
 
                         <div className="p-2 rounded-lg bg-muted/40 space-y-0.5">
-                          <span className="text-[10px] text-muted-foreground uppercase font-bold block">Course Fee Potential</span>
-                          <span className="font-extrabold text-emerald-600 block text-sm">{formattedFee}</span>
+                          <span className="text-[10px] text-muted-foreground uppercase font-bold block">Mode & Seats</span>
+                          <span className="font-bold text-foreground truncate block">
+                            {item.teaching_method || "Classroom / Offline"}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground block">
+                            {item.seats_available != null ? `${item.seats_available} Seats` : "Open Intake"}
+                          </span>
                         </div>
 
                         <div className="p-2 rounded-lg bg-muted/40 space-y-0.5">
-                          <span className="text-[10px] text-muted-foreground uppercase font-bold block">Institution</span>
+                          <span className="text-[10px] text-muted-foreground uppercase font-bold block">Institution & Lang</span>
                           <span className="font-bold text-foreground truncate block">{item.institution_name}</span>
+                          <span className="text-[11px] text-muted-foreground block truncate">
+                            {item.languages || "English, Hindi"}
+                          </span>
                         </div>
                       </div>
+
+                      {/* Fee Breakdown Badges if components present */}
+                      {item.fee_components && item.fee_components.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                          {item.fee_components.map((fc, idx) => (
+                            <Badge key={idx} variant="outline" className="text-[10px] py-0 px-1.5 font-semibold bg-background">
+                              {fc.title}: <strong className="text-primary ml-0.5">₹{Number(fc.amount).toLocaleString()}</strong>/{fc.unit || "mo"}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
 
                       <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground pt-1">
                         {item.student_email && (

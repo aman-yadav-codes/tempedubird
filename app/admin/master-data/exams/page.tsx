@@ -206,7 +206,7 @@ export default function ExamsPage() {
         page: String(pagination.pageIndex + 1),
         limit: String(pagination.pageSize),
         search: debouncedSearch,
-        view: isPlatformAdmin ? "my" : examView,
+        view: examView,
       });
       if (!isPlatformAdmin && activeInstitutionId) {
         params.set("institutionId", String(activeInstitutionId));
@@ -239,7 +239,7 @@ export default function ExamsPage() {
   ]);
 
   const fetchInstitutions = useCallback(async (searchValue: string, page: number) => {
-    if (!accessToken || isPlatformAdmin) return { data: [], hasMore: false };
+    if (!accessToken) return { data: [], hasMore: false };
     const params = new URLSearchParams({
       action: "institutions",
       search: searchValue,
@@ -256,7 +256,7 @@ export default function ExamsPage() {
       data: (json.data ?? []) as ExamInstitutionOption[],
       hasMore: page < Number(json.pageCount ?? 0),
     };
-  }, [accessToken, authHeaders, isPlatformAdmin]);
+  }, [accessToken, authHeaders]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -1324,11 +1324,12 @@ export default function ExamsPage() {
               : "Create scheduled exams with targets, marketplace sharing, and result controls."}
           </p>
         </div>
-        {canCreate && examView === "my" && (
+        {(canCreate || isPlatformAdmin) && examView === "my" && (
           <Button
             onClick={() => {
-              resetSeriesEditor(null);
-              setSeriesEditorOpen(true);
+              setEditing(null);
+              setActiveSeries(null);
+              setEditorOpen(true);
             }}
           >
             <Plus className="size-4" />
@@ -1337,30 +1338,28 @@ export default function ExamsPage() {
         )}
       </div>
 
-      {!isPlatformAdmin && (
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant={examView === "my" ? "default" : "outline"}
-            onClick={() => {
-              setExamView("my");
-              setPagination((current) => ({ ...current, pageIndex: 0 }));
-            }}
-          >
-            My Exams
-          </Button>
-          <Button
-            type="button"
-            variant={examView === "marketplace" ? "default" : "outline"}
-            onClick={() => {
-              setExamView("marketplace");
-              setPagination((current) => ({ ...current, pageIndex: 0 }));
-            }}
-          >
-            Marketplace
-          </Button>
-        </div>
-      )}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant={examView === "my" ? "default" : "outline"}
+          onClick={() => {
+            setExamView("my");
+            setPagination((current) => ({ ...current, pageIndex: 0 }));
+          }}
+        >
+          {isPlatformAdmin ? "All Exams" : "My Exams"}
+        </Button>
+        <Button
+          type="button"
+          variant={examView === "marketplace" ? "default" : "outline"}
+          onClick={() => {
+            setExamView("marketplace");
+            setPagination((current) => ({ ...current, pageIndex: 0 }));
+          }}
+        >
+          Marketplace
+        </Button>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total Exams" value={stats.total} />
@@ -2311,6 +2310,44 @@ export default function ExamsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ExamEditor
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+        accessToken={accessToken}
+        template={editing}
+        existingSubjects={seriesSubjects}
+        existingSubjectsLoading={seriesManagerLoading}
+        seriesId={activeSeries?.id ?? null}
+        seriesTitle={activeSeries?.title ?? null}
+        seriesFromDate={activeSeries?.from_date ?? null}
+        seriesToDate={activeSeries?.to_date ?? null}
+        seriesTargetType={activeSeries?.target_type ?? null}
+        seriesTargetId={activeSeries?.target_id ?? null}
+        seriesTargetProgramId={activeSeries?.target_program_id ?? null}
+        seriesTargetLabel={activeSeries?.target_label ?? null}
+        seriesResultDate={activeSeries?.result_date ?? null}
+        seriesInstantResult={activeSeries?.instant_result}
+        seriesIsPublic={Boolean(activeSeries?.marketplace_approved || activeSeries?.marketplace_requested)}
+        seriesIsActive={activeSeries?.is_active}
+        fetchInstitutions={fetchInstitutions}
+        onSaved={(_id) => {
+          void fetchRows();
+        }}
+      />
+
+      {questionTemplate && (
+        <ExamQuestionEditor
+          open={questionEditorOpen}
+          onOpenChange={setQuestionEditorOpen}
+          accessToken={accessToken}
+          template={questionTemplate}
+          onSaved={() => {
+            void fetchRows();
+            if (active) void openDetail(active);
+          }}
+        />
+      )}
     </div>
   );
 }

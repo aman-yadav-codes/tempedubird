@@ -72,7 +72,10 @@ function rememberUtm() {
     }
 }
 
+import { usePageSeo } from "@/hooks/use-page-seo";
+
 export function LeadTrackerProvider({ children }: { children: React.ReactNode }) {
+    usePageSeo();
     const pathname = usePathname();
     const [settings, setSettings] = useState<TrackerSettings | null>(null);
     const [open, setOpen] = useState(false);

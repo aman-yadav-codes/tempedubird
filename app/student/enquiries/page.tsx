@@ -51,27 +51,31 @@ export default function StudentEnquiriesPage() {
   const [loading, setLoading] = useState(true);
 
   const fetchEnquiries = async () => {
+    const token =
+      accessToken ||
+      (typeof window !== "undefined"
+        ? window.localStorage.getItem("accessToken") || window.localStorage.getItem("token")
+        : null);
+
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
-      const token =
-        accessToken ||
-        (typeof window !== "undefined"
-          ? window.localStorage.getItem("accessToken") || window.localStorage.getItem("token")
-          : null);
-
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${token}`,
+      };
       const res = await fetch("/api/student/enquiries", { headers, cache: "no-store" });
       const json = await res.json();
       if (res.ok) {
         setEnquiries(json.enquiries || []);
-      } else {
+      } else if (res.status !== 401) {
         toast.error(json.error || "Failed to load enquiries");
       }
     } catch (err) {
-      toast.error("Error loading your course enquiries");
+      console.error("Error loading your course enquiries:", err);
     } finally {
       setLoading(false);
     }

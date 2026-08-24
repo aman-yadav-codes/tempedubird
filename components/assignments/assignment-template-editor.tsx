@@ -44,9 +44,11 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
+import { isPlatformAdminUser } from "@/lib/auth/permissions";
 import type { AssignmentTemplateRow } from "@/lib/types/assignment-template";
 import type { SyllabusNode } from "@/lib/types/syllabus";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/store";
 
 export type AssignmentInstitutionOption = { id: number; name: string };
 type AssignmentProgramOption = { id: number; title: string };
@@ -257,6 +259,8 @@ export function AssignmentTemplateEditor({
   onSaved,
 }: Props) {
   const { activeInstitution } = useActiveInstitution();
+  const user = useAuthStore((s) => s.user);
+  const isPlatformAdmin = isPlatformAdminUser(user);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [totalMarks, setTotalMarks] = useState("1");
@@ -395,18 +399,20 @@ export function AssignmentTemplateEditor({
   }, [open, programId]);
 
   async function fetchPrograms(search: string, page: number) {
-    if (!accessToken || !institutionId) return { data: [], hasMore: false };
+    if (!accessToken) return { data: [], hasMore: false };
     const params = new URLSearchParams({
       page: String(page),
-      limit: "15",
+      limit: "25",
       search,
-      institutionId,
     });
+    if (!isPlatformAdmin && institutionId) {
+      params.set("institutionId", institutionId);
+    }
     const res = await fetch(`/api/admin/institutions/programs?${params.toString()}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json = await readJson(res);
-    if (!res.ok) throw new Error(json.error ?? "Failed to load classes");
+    if (!res.ok) throw new Error(json.error ?? "Failed to load courses/programs");
     return {
       data: (json.data ?? []) as AssignmentProgramOption[],
       hasMore: page < Number(json.pageCount ?? 0),
@@ -450,14 +456,8 @@ export function AssignmentTemplateEditor({
     });
     const json = await readJson(res);
     if (!res.ok) throw new Error(json.error ?? "Failed to load syllabi");
-    const data = (json.data ?? []) as SyllabusOption[];
-    const promptKey = `${institutionId}:${subjectId}`;
-    if (page === 1 && !search.trim() && data.length === 0 && promptKey !== missingSyllabusPromptKey) {
-      setMissingSyllabusPromptKey(promptKey);
-      setMissingSyllabusOpen(true);
-    }
     return {
-      data,
+      data: (json.data ?? []) as SyllabusOption[],
       hasMore: page < Number(json.pageCount ?? 0),
     };
   }
@@ -508,20 +508,38 @@ export function AssignmentTemplateEditor({
   }, [accessToken, open, syllabusId]);
 
   function resolveTargetId() {
+    if (isPlatformAdmin) return Number(programId || 1);
     if (targetType === "PROGRAM") return Number(programId);
     if (targetType === "SECTION") return Number(sectionId);
     return Number(studentId);
   }
 
-  function toggleNode(nodeId: number) {
-    const node = findSyllabusNode(syllabusTree, nodeId);
-    const branchIds = node ? collectSyllabusBranchIds(node) : [nodeId];
-    setSelectedNodeIds((current) => {
-      const branchSelected = branchIds.every((id) => current.includes(id));
-      if (branchSelected) {
-        return current.filter((id) => !branchIds.includes(id));
+  function getNodeAndDescendantIds(nodes: SyllabusNode[], nodeId: number): number[] {
+    for (const node of nodes) {
+      if (node.id === nodeId) {
+        const collect = (item: SyllabusNode): number[] => [
+          item.id,
+          ...(item.children ?? []).flatMap(collect),
+        ];
+        return collect(node);
       }
-      return Array.from(new Set([...current, ...branchIds]));
+      const nested = getNodeAndDescendantIds(node.children ?? [], nodeId);
+      if (nested.length > 0) return nested;
+    }
+    return [];
+  }
+
+  function toggleNode(nodeId: number) {
+    const affectedIds = getNodeAndDescendantIds(syllabusTree, nodeId);
+    const idsToToggle = affectedIds.length > 0 ? affectedIds : [nodeId];
+    setSelectedNodeIds((current) => {
+      const selected = new Set(current);
+      const isSelected = selected.has(nodeId);
+      idsToToggle.forEach((id) => {
+        if (isSelected) selected.delete(id);
+        else selected.add(id);
+      });
+      return Array.from(selected);
     });
   }
 
@@ -535,12 +553,12 @@ export function AssignmentTemplateEditor({
 
   function validateBasic(showToast = true) {
     if (!title.trim()) {
-      if (showToast) toast.error("Assignment title is required");
+      if (showToast) toast.error("Title is required");
       return false;
     }
     const marks = Number(totalMarks);
-    if (!Number.isFinite(marks) || marks <= 0) {
-      if (showToast) toast.error("Total marks must be greater than zero");
+    if (Number.isNaN(marks) || marks <= 0) {
+      if (showToast) toast.error("Total marks must be greater than 0");
       return false;
     }
     if (!issueDate) {
@@ -559,6 +577,13 @@ export function AssignmentTemplateEditor({
   }
 
   function validateTargets(showToast = true) {
+    if (isPlatformAdmin) {
+      if (!programId) {
+        if (showToast) toast.error("Course / Program is required");
+        return false;
+      }
+      return true;
+    }
     if (!institutionId) {
       if (showToast) toast.error("Institution is required");
       return false;
@@ -606,7 +631,7 @@ export function AssignmentTemplateEditor({
       return false;
     }
     if (index >= 2 && !validateTargets()) {
-      setActiveTab("targets");
+      setActiveTab(isPlatformAdmin ? "basic" : "targets");
       return false;
     }
     return true;
@@ -621,14 +646,20 @@ export function AssignmentTemplateEditor({
   }
 
   function goNext() {
-    const currentIndex = WIZARD_TABS.findIndex((item) => item.value === activeTab);
-    const next = WIZARD_TABS[currentIndex + 1];
+    const visibleList = isPlatformAdmin
+      ? WIZARD_TABS.filter((item) => item.value !== "targets")
+      : WIZARD_TABS;
+    const currentIndex = visibleList.findIndex((item) => item.value === activeTab);
+    const next = visibleList[currentIndex + 1];
     if (next) goToTab(next.value);
   }
 
   function goPrevious() {
-    const currentIndex = WIZARD_TABS.findIndex((item) => item.value === activeTab);
-    const previous = WIZARD_TABS[currentIndex - 1];
+    const visibleList = isPlatformAdmin
+      ? WIZARD_TABS.filter((item) => item.value !== "targets")
+      : WIZARD_TABS;
+    const currentIndex = visibleList.findIndex((item) => item.value === activeTab);
+    const previous = visibleList[currentIndex - 1];
     if (previous) setActiveTab(previous.value);
   }
 
@@ -639,7 +670,7 @@ export function AssignmentTemplateEditor({
     if (!validateQuestionFormat()) return;
     setActiveTab("questions");
     const marks = Number(totalMarks);
-    if (!resolveTargetId()) return toast.error("Assignment target is required");
+    const resolvedInstId = Number(institutionId || activeInstitution?.id || 1);
     setSaving(true);
     try {
       const res = await fetch(
@@ -656,15 +687,15 @@ export function AssignmentTemplateEditor({
             title: title.trim(),
             description: description.trim(),
             total_marks: marks,
-            source_institution_id: Number(institutionId),
-            target_type: targetType,
+            source_institution_id: resolvedInstId,
+            target_type: "PROGRAM",
             target_id: resolveTargetId(),
             target_program_id: programId ? Number(programId) : null,
             syllabus_node_ids: selectedNodeIds,
             ai_question_format: aiQuestionFormat,
             issue_date: issueDate,
             submission_date: submissionDate,
-            is_public: isPublic,
+            is_public: isPlatformAdmin ? true : isPublic,
             is_active: isActive,
           }),
         }
@@ -682,8 +713,11 @@ export function AssignmentTemplateEditor({
     }
   }
 
+  const visibleTabs = isPlatformAdmin
+    ? WIZARD_TABS.filter((item) => item.value !== "targets")
+    : WIZARD_TABS;
   const activeTabIndex = Math.max(
-    WIZARD_TABS.findIndex((item) => item.value === activeTab),
+    visibleTabs.findIndex((item) => item.value === activeTab),
     0
   );
   const isQuestionsStep = activeTab === "questions";
@@ -702,7 +736,7 @@ export function AssignmentTemplateEditor({
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap gap-2">
-          {WIZARD_TABS.map(({ value, label, icon: Icon }) => (
+          {visibleTabs.map(({ value, label, icon: Icon }) => (
             <Button
               key={value as string}
               type="button"
@@ -717,15 +751,97 @@ export function AssignmentTemplateEditor({
 
         {activeTab === "basic" && (
           <div className="grid gap-4">
-            <div className="space-y-2">
-              <RequiredLabel>Assignment Title</RequiredLabel>
-              <Input value={title} onChange={(event) => setTitle(event.target.value)} />
+            {!isPlatformAdmin && !template && !activeInstitution && (
+              <div className="space-y-2">
+                <RequiredLabel>Institution</RequiredLabel>
+                <AsyncSearchPopover<AssignmentInstitutionOption>
+                  value={institutionId}
+                  selectedLabel={institutionName}
+                  onChange={(value) => {
+                    setInstitutionId(value);
+                    if (!value) setInstitutionName("");
+                    setProgramId("");
+                    setProgramName("");
+                    setSections([]);
+                    setProgramSubjects([]);
+                    setSubjectId("");
+                    setSubjectName("");
+                    setSyllabusId("");
+                    setSyllabusName("");
+                    setSyllabusTree([]);
+                    setSelectedNodeIds([]);
+                    setExpandedNodeIds([]);
+                  }}
+                  onSelectItem={(inst) => setInstitutionName(inst.name)}
+                  fetcher={fetchInstitutions}
+                  getValue={(inst) => String(inst.id)}
+                  getLabel={(inst) => inst.name}
+                  placeholder="Select institution..."
+                  searchPlaceholder="Search institutions..."
+                  emptyText="No accessible institutions found"
+                />
+              </div>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <RequiredLabel>Course / Program</RequiredLabel>
+                <AsyncSearchPopover<AssignmentProgramOption>
+                  value={programId}
+                  selectedLabel={programName}
+                  onChange={(value) => {
+                    setProgramId(value);
+                    setSectionId("");
+                    setStudentId("");
+                    setStudentName("");
+                    setSubjectId("");
+                    setSubjectName("");
+                    setSyllabusId("");
+                    setSyllabusName("");
+                    setSyllabusTree([]);
+                    setSelectedNodeIds([]);
+                    setExpandedNodeIds([]);
+                    if (value) void loadProgramDetail(value);
+                    else {
+                      setSections([]);
+                      setProgramSubjects([]);
+                      setProgramName("");
+                    }
+                  }}
+                  onSelectItem={(program: any) => {
+                    setProgramName(program.title || program.name);
+                    if (program.institution_id && !institutionId) {
+                      setInstitutionId(String(program.institution_id));
+                    }
+                    if (!title.trim() || title.endsWith("Assignment")) {
+                      setTitle(`${program.title || program.name} Assignment`);
+                    }
+                  }}
+                  fetcher={fetchPrograms}
+                  getValue={(program) => String(program.id)}
+                  getLabel={(program) => program.title}
+                  placeholder="Select course / program..."
+                  searchPlaceholder="Search all courses / programs..."
+                  emptyText="No courses/programs found"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <RequiredLabel>Assignment Title</RequiredLabel>
+                <Input
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  placeholder="e.g. Class 10 Science Assignment"
+                />
+              </div>
             </div>
+
             <div className="space-y-2">
               <Label>Description</Label>
               <Textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
+                placeholder="Optional description or assignment instructions..."
                 className="min-h-24"
               />
             </div>
@@ -758,10 +874,12 @@ export function AssignmentTemplateEditor({
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-5 pt-2">
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox checked={isPublic} onCheckedChange={(value) => setIsPublic(Boolean(value))} />
-                Request marketplace review
-              </label>
+              {!isPlatformAdmin && (
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={isPublic} onCheckedChange={(value) => setIsPublic(Boolean(value))} />
+                  Request marketplace review
+                </label>
+              )}
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox checked={isActive} onCheckedChange={(value) => setIsActive(Boolean(value))} />
                 Active

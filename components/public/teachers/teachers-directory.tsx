@@ -53,6 +53,8 @@ type Teacher = {
   is_verified: boolean;
 };
 
+import { useCategoryAvailability } from "@/hooks/use-category-availability";
+
 const SUBJECT_OPTIONS = [
   "All Subjects",
   "Physics",
@@ -61,8 +63,6 @@ const SUBJECT_OPTIONS = [
   "Biology",
   "Computer Science",
 ];
-
-import { useCategoryAvailability } from "@/hooks/use-category-availability";
 
 export function TeachersDirectory() {
   const { isInstitutionalAdmin, activeInstitutionId } = useCategoryAvailability();

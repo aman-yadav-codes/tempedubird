@@ -15,6 +15,9 @@ import {
   Plus,
   UserPlus,
   UserRound,
+  MapPin,
+  Image as ImageIcon,
+  X as XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useProgressiveSave } from "@/hooks/use-progressive-save";
@@ -1037,50 +1040,12 @@ function getRoleDisplay(role: RoleOption) {
         }
       }
 
-      if (safeTrim(form.avatar_url)) {
-        try {
-          new URL(safeTrim(form.avatar_url));
-        } catch {
-          nextErrors.avatar_url = "Enter a valid image URL.";
-        }
-      }
-
       if (showAccountInstitution && form.institution_ids.length === 0) {
         nextErrors.under_institution_id = "Select at least one institution for this role.";
       }
-
     }
 
     if (stepIndex === 1) {
-      if (selectedRoleIsTeacher && safeTrim(form.about).length === 0) {
-        nextErrors.about = "Enter a short profile summary.";
-      }
-
-      if (selectedRoleIsTeacher && (!form.gender || form.gender === NO_GENDER)) {
-        nextErrors.gender = "Select a gender.";
-      }
-
-      if (
-        showHourlyCharges &&
-        safeTrim(form.hourly_charges) &&
-        Number.isNaN(Number(form.hourly_charges))
-      ) {
-        nextErrors.hourly_charges = "Enter a valid amount.";
-      }
-
-      if (
-        selectedRoleIsTeacher &&
-        form.teacher_type === "institute_teacher" &&
-        !form.under_institution_id
-      ) {
-        nextErrors.under_institution_id = "Select an institution.";
-      }
-      if (selectedRole?.code === "institution_admin" && !form.designation_id) {
-        nextErrors.designation_id = "Select a designation for this role.";
-      }
-    }
-
-    if (stepIndex === 3) {
       form.experiences.forEach((experience, index) => {
         const hasValues = hasAnyValue([
           experience.job_title,
@@ -1099,15 +1064,6 @@ function getRoleDisplay(role: RoleOption) {
         if (!safeTrim(experience.company_name)) {
           nextErrors[`experience.${index}.company_name`] = "Required.";
         }
-        if (!experience.from_month || !experience.from_year) {
-          nextErrors[`experience.${index}.from`] = "Start date is required.";
-        }
-        if (
-          !experience.is_current &&
-          (!experience.to_month || !experience.to_year)
-        ) {
-          nextErrors[`experience.${index}.to`] = "End date is required.";
-        }
       });
 
       form.education.forEach((education, index) => {
@@ -1123,67 +1079,6 @@ function getRoleDisplay(role: RoleOption) {
 
         if (!safeTrim(education.qualification)) {
           nextErrors[`education.${index}.qualification`] = "Required.";
-        }
-        if (!education.institution_id && !safeTrim(education.institution_name)) {
-          nextErrors[`education.${index}.institution_id`] = "Required.";
-        }
-        if (!education.from_year || !education.to_year) {
-          nextErrors[`education.${index}.years`] = "Years are required.";
-        }
-      });
-
-      form.certifications.forEach((certification, index) => {
-        const hasValues = hasAnyValue([
-          certification.name,
-          certification.issued_authority,
-          certification.duration,
-        ]);
-
-        if (hasValues && !safeTrim(certification.name)) {
-          nextErrors[`certification.${index}.name`] = "Required.";
-        }
-
-        if (hasValues && certification.duration) {
-          const durationNum = Number(certification.duration);
-          if (Number.isNaN(durationNum) || durationNum <= 0 || !Number.isInteger(durationNum)) {
-            nextErrors[`certification.${index}.duration`] = "Enter a valid duration in months.";
-          }
-        }
-      });
-    }
-
-    if (stepIndex === documentsStepIndex) {
-      form.documents.forEach((document, index) => {
-        const documentFiles = getDocumentFiles(document);
-        const hasDocumentValues = hasAnyValue([
-          document.document_type,
-          document.document_number,
-          document.file_url,
-          document.public_id,
-        ]) || documentFiles.length > 0;
-
-        if (!hasDocumentValues) return;
-
-        if (!safeTrim(document.document_type)) {
-          nextErrors[`document.${index}.document_type`] = "Required.";
-        }
-        if (documentFiles.length === 0) {
-          nextErrors[`document.${index}.files`] = "Upload at least one image.";
-        }
-      });
-    }
-
-    if (stepIndex === salaryStepIndex) {
-      form.salary_components.forEach((component, index) => {
-        const hasSalaryValues = hasAnyValue([component.label, component.amount]);
-        if (!hasSalaryValues) return;
-
-        if (!safeTrim(component.label)) {
-          nextErrors[`salary.${index}.label`] = "Required.";
-        }
-        const amount = Number(component.amount);
-        if (!safeTrim(component.amount) || Number.isNaN(amount) || amount < 0) {
-          nextErrors[`salary.${index}.amount`] = "Enter a valid amount.";
         }
       });
     }
@@ -1202,18 +1097,6 @@ function getRoleDisplay(role: RoleOption) {
   };
 
   const goToStep = (targetStep: number) => {
-    if (targetStep <= activeStep) {
-      setActiveStep(targetStep);
-      return;
-    }
-
-    for (let index = 0; index < targetStep; index += 1) {
-      if (!validateStep(index)) {
-        setActiveStep(index);
-        return;
-      }
-    }
-
     setActiveStep(targetStep);
   };
 
@@ -1264,6 +1147,7 @@ function getRoleDisplay(role: RoleOption) {
       is_profile_complete: form.is_profile_complete,
       profile: {
         about: normalizeNullableText(form.about),
+        is_marketplace_enabled: form.is_marketplace_enabled ?? true,
         is_teacher: selectedRoleIsTeacher,
         teacher_type: selectedRoleIsTeacher
           ? form.teacher_type || (primaryInstitutionId ? "institute_teacher" : "individual_teacher")
@@ -1288,19 +1172,20 @@ function getRoleDisplay(role: RoleOption) {
         : null,
       experiences: compactExperiences.map((experience) => ({
         job_title: normalizeText(experience.job_title),
-        company_id: experience.company_id ? Number(experience.company_id) : null,
+        company_id: experience.company_id && !isNaN(Number(experience.company_id)) ? Number(experience.company_id) : null,
         company_name: normalizeText(experience.company_name),
-        from_month: Number(experience.from_month),
-        from_year: Number(experience.from_year),
-        to_month: experience.is_current ? null : Number(experience.to_month),
-        to_year: experience.is_current ? null : Number(experience.to_year),
+        from_month: Number(experience.from_month) || null,
+        from_year: Number(experience.from_year) || null,
+        to_month: experience.is_current ? null : Number(experience.to_month) || null,
+        to_year: experience.is_current ? null : Number(experience.to_year) || null,
         is_current: experience.is_current,
       })),
       education: compactEducation.map((education) => ({
         qualification: normalizeText(education.qualification),
-        institution_id: education.institution_id ? Number(education.institution_id) : null,
-        from_year: Number(education.from_year),
-        to_year: Number(education.to_year),
+        institution_id: education.institution_id && !isNaN(Number(education.institution_id)) ? Number(education.institution_id) : null,
+        institution_name: normalizeText(education.institution_name),
+        from_year: Number(education.from_year) || null,
+        to_year: Number(education.to_year) || null,
       })),
       certifications: compactCertifications.map((certification) => ({
         name: normalizeText(certification.name),
@@ -1353,6 +1238,8 @@ function getRoleDisplay(role: RoleOption) {
     for (let index = 0; index < dialogSteps.length - 1; index += 1) {
       if (!validateStep(index)) {
         setActiveStep(index);
+        const stepName = dialogSteps[index]?.label || `Step ${index + 1}`;
+        toast.error(`Please complete the required fields in ${stepName}.`);
         return;
       }
     }
@@ -1667,15 +1554,42 @@ function getRoleDisplay(role: RoleOption) {
                 />
                 <FieldError message={errors.phone} />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="add-user-address">Address / City</Label>
-                <Input
-                  id="add-user-address"
-                  value={form.full_address || ""}
-                  onChange={(event) => updateForm("full_address", event.target.value)}
-                  placeholder="Street address or city"
-                  autoComplete="off"
+
+              {/* Location selection based on map pin & address search */}
+              <div className="space-y-2 sm:col-span-2 rounded-lg border bg-muted/10 p-3">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="add-user-address" className="text-xs font-semibold flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5 text-primary" />
+                    Address & Map Pin Location
+                  </Label>
+                  <span className="text-[11px] text-muted-foreground">Select on map or search address</span>
+                </div>
+                <GoogleLocationPicker
+                  value={form.location}
+                  onChange={(location) => {
+                    setForm((prev) => ({
+                      ...prev,
+                      location,
+                      full_address:
+                        location.full_address ||
+                        location.formatted_address ||
+                        [location.city, location.state].filter(Boolean).join(", "),
+                    }));
+                  }}
                 />
+                <div className="space-y-1">
+                  <Label htmlFor="add-user-address" className="text-[11px] text-muted-foreground font-normal">
+                    Address / City
+                  </Label>
+                  <Input
+                    id="add-user-address"
+                    value={form.full_address || ""}
+                    onChange={(event) => updateForm("full_address", event.target.value)}
+                    placeholder="Street address or city"
+                    className="text-xs h-9 bg-background"
+                    autoComplete="off"
+                  />
+                </div>
               </div>
               {showRoleAssignment && (
               <div className="space-y-1.5">
@@ -1794,31 +1708,86 @@ function getRoleDisplay(role: RoleOption) {
                 />
               </div>
 
-              {/* Compact Avatar Image Upload */}
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label className="text-xs font-semibold">Avatar Image</Label>
-                <div className="flex items-center gap-3 p-2 border rounded-md bg-slate-50/50">
+              {/* Picture Upload Option (Computer / Mobile) + URL */}
+              <div className="space-y-2 sm:col-span-2 rounded-lg border bg-muted/10 p-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <ImageIcon className="h-3.5 w-3.5 text-primary" />
+                    Profile Picture / Avatar
+                  </Label>
+                  <span className="text-[11px] text-muted-foreground">Upload from device or paste image URL</span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                   {form.avatar_url ? (
-                    <img src={form.avatar_url} alt="Avatar" className="h-10 w-10 rounded-full object-cover border border-slate-200" />
+                    <div className="relative group shrink-0">
+                      <img
+                        src={form.avatar_url}
+                        alt="Avatar"
+                        className="h-14 w-14 rounded-full object-cover border-2 border-primary/30 shadow-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => updateForm("avatar_url", "")}
+                        className="absolute -top-1 -right-1 bg-destructive text-white rounded-full p-0.5 shadow-sm hover:scale-110 transition-transform"
+                        title="Remove photo"
+                      >
+                        <XIcon className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   ) : (
-                    <div className="h-10 w-10 rounded-full bg-slate-200 border border-slate-300 grid place-items-center text-xs font-black text-slate-600">
+                    <div className="h-14 w-14 rounded-full bg-primary/10 border-2 border-dashed border-primary/30 grid place-items-center text-xs font-black text-primary shrink-0">
                       {form.full_name?.slice(0, 2)?.toUpperCase() || "AV"}
                     </div>
                   )}
-                  <Input
-                    type="text"
-                    placeholder="Paste image URL or upload URL..."
-                    value={form.avatar_url || ""}
-                    onChange={(e) => updateForm("avatar_url", e.target.value)}
-                    className="h-9 text-xs flex-1 bg-white"
-                  />
+
+                  <div className="flex-1 w-full space-y-2">
+                    <DocumentFileUpload
+                      accessToken={accessToken}
+                      files={
+                        form.avatar_url
+                          ? [
+                              {
+                                url: form.avatar_url,
+                                publicId: "",
+                                resourceType: "image",
+                                fileType: "image/*",
+                                name: "Profile Photo",
+                              },
+                            ]
+                          : []
+                      }
+                      onFilesChange={(files) => {
+                        if (files.length > 0) {
+                          updateForm("avatar_url", files[0].url);
+                        } else {
+                          updateForm("avatar_url", "");
+                        }
+                      }}
+                      maxFiles={1}
+                      maxSize={5 * 1024 * 1024}
+                      compact
+                      buttonLabel="Upload Photo"
+                      emptyText="Drop profile photo here or click to browse (mobile & desktop)"
+                    />
+
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="text"
+                        placeholder="Or paste direct image URL (https://...)"
+                        value={form.avatar_url || ""}
+                        onChange={(e) => updateForm("avatar_url", e.target.value)}
+                        className="h-8 text-xs flex-1 bg-background"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <FieldError message={errors.avatar_url} />
               </div>
 
               {showAdminControls && (
-              <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
-                <div className="flex h-12 items-center gap-3 rounded-md border p-3">
+              <div className="grid gap-3 sm:col-span-2 sm:grid-cols-3">
+                <div className="flex h-12 items-center gap-3 rounded-md border p-3 bg-muted/20">
                   <Checkbox
                     id="add-user-active"
                     checked={Boolean(form.is_active)}
@@ -1826,11 +1795,11 @@ function getRoleDisplay(role: RoleOption) {
                       updateForm("is_active", checked === true)
                     }
                   />
-                  <Label htmlFor="add-user-active" className="cursor-pointer">
+                  <Label htmlFor="add-user-active" className="cursor-pointer text-xs font-medium">
                     Active
                   </Label>
                 </div>
-                <div className="flex h-12 items-center gap-3 rounded-md border p-3">
+                <div className="flex h-12 items-center gap-3 rounded-md border p-3 bg-muted/20">
                   <Checkbox
                     id="add-user-verified"
                     checked={Boolean(form.is_verified)}
@@ -1838,8 +1807,20 @@ function getRoleDisplay(role: RoleOption) {
                       updateForm("is_verified", checked === true)
                     }
                   />
-                  <Label htmlFor="add-user-verified" className="cursor-pointer font-medium">
+                  <Label htmlFor="add-user-verified" className="cursor-pointer text-xs font-medium">
                     Genuine user
+                  </Label>
+                </div>
+                <div className="flex h-12 items-center gap-3 rounded-md border p-3 bg-primary/5 border-primary/20">
+                  <Checkbox
+                    id="add-user-marketplace"
+                    checked={Boolean(form.is_marketplace_enabled ?? true)}
+                    onCheckedChange={(checked) =>
+                      updateForm("is_marketplace_enabled", checked === true)
+                    }
+                  />
+                  <Label htmlFor="add-user-marketplace" className="cursor-pointer text-xs font-medium">
+                    Show on market place
                   </Label>
                 </div>
               </div>
@@ -1847,57 +1828,180 @@ function getRoleDisplay(role: RoleOption) {
             </div>
           )}
 
-          {/* STEP 1: Background & Education */}
+          {/* STEP 1: Background, Education & Experience with Multiple Entries */}
           {activeStep === 1 && (
-            <div className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="add-user-qualification">Highest Qualification</Label>
-                  <Input
-                    id="add-user-qualification"
-                    value={form.education[0]?.qualification || ""}
-                    onChange={(e) => {
-                      const nextEdu = [...form.education];
-                      if (!nextEdu[0]) nextEdu[0] = blankEducation();
-                      nextEdu[0] = { ...nextEdu[0], qualification: e.target.value };
-                      updateForm("education", nextEdu);
-                    }}
-                    placeholder="e.g. M.Sc Computer Science, Ph.D, B.Tech"
-                    className="h-9 text-xs"
-                  />
+            <div className="space-y-6">
+              {/* Education Qualifications Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                      <GraduationCap className="h-4 w-4 text-primary" />
+                      Education & Qualifications
+                    </h4>
+                    <p className="text-[11px] text-muted-foreground">Add academic degrees, diplomas, and institutional qualifications</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => updateForm("education", [...form.education, blankEducation()])}
+                    className="h-8 gap-1 text-xs"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add Qualification
+                  </Button>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="add-user-exp">Experience (Years)</Label>
-                  <Input
-                    id="add-user-exp"
-                    type="number"
-                    value={form.experiences[0]?.from_year ? String(new Date().getFullYear() - Number(form.experiences[0].from_year)) : "5"}
-                    onChange={(e) => {
-                      const years = parseInt(e.target.value, 10) || 0;
-                      const nextExp = [...form.experiences];
-                      if (!nextExp[0]) nextExp[0] = blankExperience();
-                      nextExp[0] = { ...nextExp[0], from_year: String(new Date().getFullYear() - years) };
-                      updateForm("experiences", nextExp);
-                    }}
-                    placeholder="e.g. 5"
-                    className="h-9 text-xs"
-                  />
+
+                {form.education.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-4 text-center">
+                    <p className="text-xs text-muted-foreground mb-2">No educational qualifications added yet.</p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => updateForm("education", [blankEducation()])}
+                      className="h-7 text-xs"
+                    >
+                      + Add Qualification
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {form.education.map((edu, idx) => (
+                      <EducationCard
+                        key={edu.id || idx}
+                        education={edu}
+                        index={idx}
+                        errors={errors}
+                        accessToken={accessToken}
+                        onChange={(patch) => {
+                          const next = form.education.map((item, i) => (i === idx ? { ...item, ...patch } : item));
+                          updateForm("education", next);
+                        }}
+                        onDelete={() => {
+                          const next = form.education.filter((_, i) => i !== idx);
+                          updateForm("education", next);
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Work Experience Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                      <Briefcase className="h-4 w-4 text-primary" />
+                      Previous Work Experience & Institutions
+                    </h4>
+                    <p className="text-[11px] text-muted-foreground">Add employment history, past school/college teaching, and designations</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => updateForm("experiences", [...form.experiences, blankExperience()])}
+                    className="h-8 gap-1 text-xs"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add Experience
+                  </Button>
                 </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor="add-user-prev-institution">Previous Work Experience / Institution</Label>
-                  <Input
-                    id="add-user-prev-institution"
-                    value={form.experiences[0]?.company_name || ""}
-                    onChange={(e) => {
-                      const nextExp = [...form.experiences];
-                      if (!nextExp[0]) nextExp[0] = blankExperience();
-                      nextExp[0] = { ...nextExp[0], company_name: e.target.value };
-                      updateForm("experiences", nextExp);
-                    }}
-                    placeholder="e.g. DPS International, Apex Academy, IIT Delhi"
-                    className="h-9 text-xs"
-                  />
+
+                {form.experiences.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-4 text-center">
+                    <p className="text-xs text-muted-foreground mb-2">No previous work experience added yet.</p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => updateForm("experiences", [blankExperience()])}
+                      className="h-7 text-xs"
+                    >
+                      + Add Work Experience
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {form.experiences.map((exp, idx) => (
+                      <ExperienceCard
+                        key={exp.id || idx}
+                        experience={exp}
+                        index={idx}
+                        errors={errors}
+                        accessToken={accessToken}
+                        onChange={(patch) => {
+                          const next = form.experiences.map((item, i) => (i === idx ? { ...item, ...patch } : item));
+                          updateForm("experiences", next);
+                        }}
+                        onDelete={() => {
+                          const next = form.experiences.filter((_, i) => i !== idx);
+                          updateForm("experiences", next);
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Certifications Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                      <FileText className="h-4 w-4 text-primary" />
+                      Certifications & Specialized Training
+                    </h4>
+                    <p className="text-[11px] text-muted-foreground">Professional certificates, diplomas, training and credentials</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => updateForm("certifications", [...form.certifications, blankCertification()])}
+                    className="h-8 gap-1 text-xs"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add Certification
+                  </Button>
                 </div>
+
+                {form.certifications.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-4 text-center">
+                    <p className="text-xs text-muted-foreground mb-2">No certifications added yet (optional).</p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => updateForm("certifications", [blankCertification()])}
+                      className="h-7 text-xs"
+                    >
+                      + Add Certification
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {form.certifications.map((cert, idx) => (
+                      <CertificationCard
+                        key={cert.id || idx}
+                        certification={cert}
+                        index={idx}
+                        errors={errors}
+                        onChange={(patch) => {
+                          const next = form.certifications.map((item, i) => (i === idx ? { ...item, ...patch } : item));
+                          updateForm("certifications", next);
+                        }}
+                        onDelete={() => {
+                          const next = form.certifications.filter((_, i) => i !== idx);
+                          updateForm("certifications", next);
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1905,39 +2009,131 @@ function getRoleDisplay(role: RoleOption) {
           {/* STEP 2: Upload Documents */}
           {activeStep === 2 && (
             <div className="space-y-4">
-              <p className="text-xs text-muted-foreground font-medium">Upload staff identification documents and certificates for verification.</p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="doc-id">Government ID / Aadhaar / PAN</Label>
-                  <Input
-                    id="doc-id"
-                    placeholder="Document Number / ID Link"
-                    value={form.documents[0]?.document_number || ""}
-                    onChange={(e) => {
-                      const nextDocs = [...form.documents];
-                      if (!nextDocs[0]) nextDocs[0] = blankUserDocument();
-                      nextDocs[0] = { ...nextDocs[0], document_type: "GOVT_ID", document_number: e.target.value };
-                      updateForm("documents", nextDocs);
-                    }}
-                    className="h-9 text-xs"
-                  />
+              <div className="flex items-center justify-between border-b pb-2">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                    <FileText className="h-4 w-4 text-primary" />
+                    Staff Verification Documents
+                  </h4>
+                  <p className="text-[11px] text-muted-foreground">Upload identification, certificates, or resumes for staff records</p>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="doc-resume">Resume / CV Document URL</Label>
-                  <Input
-                    id="doc-resume"
-                    placeholder="https://example.com/resume.pdf"
-                    value={form.documents[0]?.files?.[0]?.url || ""}
-                    onChange={(e) => {
-                      const nextDocs = [...form.documents];
-                      if (!nextDocs[0]) nextDocs[0] = blankUserDocument();
-                      nextDocs[0] = { ...nextDocs[0], document_type: "RESUME", files: [{ url: e.target.value, publicId: "resume-1", resourceType: "raw", fileType: "pdf", name: "Resume.pdf", size: 1024 }] };
-                      updateForm("documents", nextDocs);
-                    }}
-                    className="h-9 text-xs"
-                  />
-                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateForm("documents", [...form.documents, blankUserDocument()])}
+                  className="h-8 gap-1 text-xs"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Document
+                </Button>
               </div>
+
+              {form.documents.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-4 text-center">
+                  <p className="text-xs text-muted-foreground mb-2">No documents added yet (optional).</p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => updateForm("documents", [blankUserDocument()])}
+                    className="h-7 text-xs"
+                  >
+                    + Add First Document
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {form.documents.map((doc, idx) => (
+                    <div key={doc.id || idx} className="rounded-lg border bg-muted/10 p-3.5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                          <FileText className="size-3.5 text-primary" />
+                          Document {idx + 1}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => {
+                            const next = form.documents.filter((_, i) => i !== idx);
+                            updateForm("documents", next);
+                          }}
+                        >
+                          <XIcon className="size-4 text-muted-foreground hover:text-destructive" />
+                          <span className="sr-only">Remove document</span>
+                        </Button>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Document Type</Label>
+                          <Select
+                            value={doc.document_type || "GOVT_ID"}
+                            onValueChange={(val) => {
+                              const next = form.documents.map((item, i) => (i === idx ? { ...item, document_type: val } : item));
+                              updateForm("documents", next);
+                            }}
+                          >
+                            <SelectTrigger className="h-9 text-xs">
+                              <SelectValue placeholder="Select type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="GOVT_ID">Government ID (Aadhaar / PAN)</SelectItem>
+                              <SelectItem value="AADHAAR">Aadhaar Card</SelectItem>
+                              <SelectItem value="PAN">PAN Card</SelectItem>
+                              <SelectItem value="RESUME">Resume / Curriculum Vitae (CV)</SelectItem>
+                              <SelectItem value="DEGREE">Degree / Educational Certificate</SelectItem>
+                              <SelectItem value="EXPERIENCE_LETTER">Experience / Relieving Letter</SelectItem>
+                              <SelectItem value="OTHER">Other Verification Document</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Document / ID Number (Optional)</Label>
+                          <Input
+                            placeholder="e.g. XXXX-XXXX-XXXX / Reference ID"
+                            value={doc.document_number || ""}
+                            onChange={(e) => {
+                              const next = form.documents.map((item, i) => (i === idx ? { ...item, document_number: e.target.value } : item));
+                              updateForm("documents", next);
+                            }}
+                            className="h-9 text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-xs">Upload Document File / Image</Label>
+                        <DocumentFileUpload
+                          accessToken={accessToken}
+                          files={getDocumentFiles(doc)}
+                          onFilesChange={(files) => {
+                            const next = form.documents.map((item, i) =>
+                              i === idx
+                                ? {
+                                    ...item,
+                                    files,
+                                    file_url: files[0]?.url || "",
+                                    public_id: files[0]?.publicId || "",
+                                    resource_type: files[0]?.resourceType || "",
+                                  }
+                                : item
+                            );
+                            updateForm("documents", next);
+                          }}
+                          maxFiles={3}
+                          maxSize={10 * 1024 * 1024}
+                          compact
+                          buttonLabel="Upload Document"
+                          emptyText="Drop document (PDF, PNG, JPG) here or click to browse"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

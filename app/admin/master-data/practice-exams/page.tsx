@@ -130,7 +130,7 @@ export default function PracticeExamsPage() {
         page: String(pagination.pageIndex + 1),
         limit: String(pagination.pageSize),
         search: debouncedSearch,
-        view: isPlatformAdmin ? "my" : practiceExamView,
+        view: practiceExamView,
       });
       if (!isPlatformAdmin && activeInstitutionId) {
         params.set("institutionId", String(activeInstitutionId));
@@ -163,7 +163,7 @@ export default function PracticeExamsPage() {
   ]);
 
   const fetchInstitutions = useCallback(async (searchValue: string, page: number) => {
-    if (!accessToken || isPlatformAdmin) return { data: [], hasMore: false };
+    if (!accessToken) return { data: [], hasMore: false };
     const params = new URLSearchParams({
       action: "institutions",
       search: searchValue,
@@ -180,7 +180,7 @@ export default function PracticeExamsPage() {
       data: (json.data ?? []) as PracticeExamInstitutionOption[],
       hasMore: page < Number(json.pageCount ?? 0),
     };
-  }, [accessToken, authHeaders, isPlatformAdmin]);
+  }, [accessToken, authHeaders]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -703,7 +703,7 @@ export default function PracticeExamsPage() {
               : "Create reusable practice exams with objective and true / false questions."}
           </p>
         </div>
-        {canCreate && practiceExamView === "my" && (
+        {(canCreate || isPlatformAdmin) && practiceExamView === "my" && (
           <Button
             onClick={() => {
               setEditing(null);
@@ -716,30 +716,28 @@ export default function PracticeExamsPage() {
         )}
       </div>
 
-      {!isPlatformAdmin && (
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant={practiceExamView === "my" ? "default" : "outline"}
-            onClick={() => {
-              setPracticeExamView("my");
-              setPagination((current) => ({ ...current, pageIndex: 0 }));
-            }}
-          >
-            My Practice Exams
-          </Button>
-          <Button
-            type="button"
-            variant={practiceExamView === "marketplace" ? "default" : "outline"}
-            onClick={() => {
-              setPracticeExamView("marketplace");
-              setPagination((current) => ({ ...current, pageIndex: 0 }));
-            }}
-          >
-            Marketplace
-          </Button>
-        </div>
-      )}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant={practiceExamView === "my" ? "default" : "outline"}
+          onClick={() => {
+            setPracticeExamView("my");
+            setPagination((current) => ({ ...current, pageIndex: 0 }));
+          }}
+        >
+          {isPlatformAdmin ? "All Practice Exams" : "My Practice Exams"}
+        </Button>
+        <Button
+          type="button"
+          variant={practiceExamView === "marketplace" ? "default" : "outline"}
+          onClick={() => {
+            setPracticeExamView("marketplace");
+            setPagination((current) => ({ ...current, pageIndex: 0 }));
+          }}
+        >
+          Marketplace
+        </Button>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total Practice Exams" value={stats.total} />
@@ -1143,6 +1141,30 @@ export default function PracticeExamsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PracticeExamEditor
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+        accessToken={accessToken}
+        template={editing}
+        fetchInstitutions={fetchInstitutions}
+        onSaved={(_id) => {
+          void fetchRows();
+        }}
+      />
+
+      {questionTemplate && (
+        <PracticeExamQuestionEditor
+          open={questionEditorOpen}
+          onOpenChange={setQuestionEditorOpen}
+          accessToken={accessToken}
+          template={questionTemplate}
+          onSaved={() => {
+            void fetchRows();
+            if (active) void openDetail(active);
+          }}
+        />
+      )}
     </div>
   );
 }

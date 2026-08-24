@@ -12,6 +12,7 @@ const ACCEPTED_IMAGE_TYPES = new Set([
   "image/webp",
   "image/gif",
   "image/avif",
+  "image/svg+xml",
 ]);
 const ACCEPTED_VIDEO_TYPES = new Set([
   "video/mp4",

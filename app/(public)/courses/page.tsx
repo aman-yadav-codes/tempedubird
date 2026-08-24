@@ -391,7 +391,7 @@ export default function CoursesPage() {
       setCoursesLoading(true);
       try {
         const url =
-          isInstitutionalAdmin && activeInstitutionId
+          activeInstitutionId
             ? `/api/courses?limit=100&institutionId=${activeInstitutionId}`
             : "/api/courses?limit=100";
         const response = await fetch(url, { cache: "no-store" });
@@ -450,7 +450,7 @@ export default function CoursesPage() {
     });
   }, [categoryOptions]);
 
-  const courses = publicCourses ?? fallbackCoursesWithMainCategories;
+  const courses = activeInstitutionId ? (publicCourses ?? []) : (publicCourses ?? fallbackCoursesWithMainCategories);
   const isLoading = categoriesLoading || coursesLoading;
   const results = useMemo(() => filterCourses(state, courses), [courses, state]);
   const activeFilterCount = countActiveFilters(state.filters);

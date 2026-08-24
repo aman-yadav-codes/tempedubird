@@ -134,28 +134,40 @@ export function PublicNavbar({
 
   const activeUrlParam = searchParams?.get("view") || searchParams?.get("mode") || searchParams?.get("portal");
   const activeInstParamId = searchParams?.get("institution_id") || searchParams?.get("institute_id") || searchParams?.get("inst_id") || searchParams?.get("institution");
-  const effectiveNavInstId = mounted
-    ? (activeInstParamId ? Number(activeInstParamId) : (activeInstitutionId || defaultEnvInstId))
-    : defaultEnvInstId;
+  const effectiveNavInstId = activeInstParamId ? Number(activeInstParamId) : defaultEnvInstId;
 
-  const isInstitutionView =
-    (activeUrlParam !== "platform" && Boolean(effectiveNavInstId) && (
-      (pathname === "/") ||
-      isInstitutionalAdmin ||
-      pathname.startsWith("/institution")
-    ));
+  // SSR & initial client render must strictly align with brand.isInstitution to prevent hydration mismatch
+  const isInstitutionView = mounted
+    ? (activeUrlParam !== "platform" && Boolean(effectiveNavInstId))
+    : Boolean(brand?.isInstitution);
 
   const institutionDisplayName =
     institutionInfo?.name ||
-    activeInstitution?.name ||
-    user?.memberships?.[0]?.institution_name ||
-    (brand.isInstitution ? brand.name : "Institution");
+    (brand?.isInstitution ? brand.name : "Institution");
 
-  // Platform admin sees all 9 categories (including Institute)
-  const platformCategoryItems = CATEGORY_ITEMS.filter((item) => isCategoryVisible(item.key));
+  // Platform marketplace: strictly the 9 Marketplace modules (without Gallery or Contact)
+  const PLATFORM_MARKETPLACE_KEYS: CategoryKey[] = [
+    "courses",
+    "institutes",
+    "practice",
+    "notes",
+    "teachers",
+    "exams",
+    "libraries",
+    "hostels",
+    "blogs",
+  ];
+  const platformCategoryItems = CATEGORY_ITEMS.filter((item) =>
+    PLATFORM_MARKETPLACE_KEYS.includes(item.key)
+  );
 
-  // Institution admin category menu: WITHOUT the "Institute" tab, but WITH dynamic record checking!
-  const institutionCategoryItems = CATEGORY_ITEMS.filter((item) => item.key !== "institutes" && isCategoryVisible(item.key));
+  // Institution edition menu: WITHOUT the "Institute" tab, but WITH dynamic record checking!
+  const institutionCategoryItems = CATEGORY_ITEMS.filter(
+    (item) =>
+      item.key !== "institutes" &&
+      item.key !== "contact" &&
+      (!mounted || isCategoryVisible(item.key))
+  );
   const effectiveInstitutionItems = institutionCategoryItems;
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -642,6 +654,7 @@ export function PublicNavbar({
         open={authDialogOpen}
         onOpenChange={setAuthDialogOpen}
         defaultTab={authDialogTab}
+        institutionId={brand.isInstitution ? (activeInstitutionId || 1) : undefined}
       />
     </header>
   );

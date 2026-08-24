@@ -47,8 +47,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { AsyncSearchPopover } from "@/components/shared/async-search-popover";
 import { DocumentFileUpload, type UploadedDocumentFile } from "@/components/shared/document-file-upload";
 import { GoogleLocationPicker, PickedLocation } from "@/components/shared/google-location-picker";
-import { MasterType, InstitutionProfile } from "@/lib/types/institution";
+import { MasterType, InstitutionProfile, InstitutionBranch, InstitutionCourse } from "@/lib/types/institution";
 import { InstitutionBranchManager } from "@/components/admin/institutions/institution-branch-manager";
+import { InstitutionCourseManager } from "@/components/admin/institutions/institution-course-manager";
 import { cn } from "@/lib/utils";
 
 type InstitutionMedia = {
@@ -470,6 +471,9 @@ export default function InstitutionsAdminPage() {
     const [editing, setEditing] = useState<InstitutionProfile | null>(null);
     const [activeLoadingId, setActiveLoadingId] = useState<number | null>(null);
     const [activeStep, setActiveStep] = useState(0);
+    const [stagedBranches, setStagedBranches] = useState<InstitutionBranch[]>([]);
+    const [stagedCourses, setStagedCourses] = useState<InstitutionCourse[]>([]);
+    const [isMarketplaceEnabled, setIsMarketplaceEnabled] = useState(true);
 
     const [viewing, setViewing] = useState<InstitutionProfile | null>(null);
     const [viewOpen, setViewOpen] = useState(false);
@@ -515,6 +519,7 @@ export default function InstitutionsAdminPage() {
         { label: "Basic", icon: Building2 },
         { label: "Mission, Vision & Goal", icon: Target },
         { label: "Contact & Branches", icon: MapPin },
+        { label: "Courses", icon: GraduationCap },
         { label: "Founder", icon: UserCheck },
     ];
 
@@ -785,6 +790,7 @@ export default function InstitutionsAdminPage() {
             setFounderTitle(editing.founder_title ?? "");
             setFounderImageUrl(editing.founder_image_url ?? "");
             setFounderAbout(editing.founder_about ?? "");
+            setIsMarketplaceEnabled(editing.is_marketplace_enabled !== false);
             setFounderFiles(editing.founder_image_url ? [{
                 url: editing.founder_image_url,
                 publicId: "",
@@ -823,6 +829,9 @@ export default function InstitutionsAdminPage() {
         setFounderImageUrl("");
         setFounderAbout("");
         setFounderFiles([]);
+        setStagedBranches([]);
+        setStagedCourses([]);
+        setIsMarketplaceEnabled(true);
         setActiveStep(0);
     };
 
@@ -969,6 +978,7 @@ export default function InstitutionsAdminPage() {
                 aiContent: aiContent,
                 parentUniversityId: parentUniversityId ? Number(parentUniversityId) : null,
                 boardId: showBoardField && boardId ? Number(boardId) : null,
+                isMarketplaceEnabled,
                 createdBy: null,
             };
 
@@ -982,8 +992,59 @@ export default function InstitutionsAdminPage() {
                 toast.success("Created");
                 const created = json.data;
                 await syncInstitutionMedia(created.id);
+                if (stagedBranches.length > 0) {
+                    for (const branch of stagedBranches) {
+                        try {
+                            await fetch("/api/admin/institutions/branches", {
+                                method: "POST",
+                                headers: { ...authHeader, "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    institutionId: created.id,
+                                    branchName: branch.branch_name,
+                                    address: branch.address,
+                                    city: branch.city,
+                                    state: branch.state,
+                                    pincode: branch.pincode,
+                                    workingHours: branch.working_hours,
+                                    phones: branch.phones,
+                                    emails: branch.emails,
+                                    isPrimary: branch.is_primary,
+                                }),
+                            });
+                        } catch (branchErr) {
+                            console.error("Error saving staged branch:", branchErr);
+                        }
+                    }
+                }
+                if (stagedCourses.length > 0) {
+                    for (const course of stagedCourses) {
+                        try {
+                            await fetch("/api/admin/institutions/courses", {
+                                method: "POST",
+                                headers: { ...authHeader, "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    institutionId: created.id,
+                                    courseName: course.course_name,
+                                    stream: course.stream,
+                                    boardOrUniversity: course.board_or_university,
+                                    duration: course.duration,
+                                    price: course.price,
+                                    feeAmount: course.fee_amount,
+                                    eligibility: course.eligibility,
+                                    description: course.description,
+                                    seatsAvailable: course.seats_available,
+                                    sortOrder: course.sort_order,
+                                }),
+                            });
+                        } catch (courseErr) {
+                            console.error("Error saving staged course:", courseErr);
+                        }
+                    }
+                }
                 setImageUrl("");
                 setGalleryFiles([]);
+                setStagedBranches([]);
+                setStagedCourses([]);
                 setDialogOpen(false);
                 setEditing(null);
                 await fetchItems();
@@ -1019,6 +1080,7 @@ export default function InstitutionsAdminPage() {
                 aiContent: aiContent,
                 parentUniversityId: parentUniversityId ? Number(parentUniversityId) : null,
                 boardId: showBoardField && boardId ? Number(boardId) : null,
+                isMarketplaceEnabled,
                 updatedBy: null,
             };
 
@@ -1237,7 +1299,7 @@ export default function InstitutionsAdminPage() {
 
                     {/* Wizard Steps Header */}
                     <div className="-mx-4 overflow-x-auto overscroll-x-contain px-4 pb-2 mb-6 sm:mx-0 sm:overflow-visible sm:px-0 sm:pb-0">
-                        <ol className="flex w-max min-w-full gap-2 sm:w-full sm:grid sm:grid-cols-4">
+                        <ol className="flex w-max min-w-full gap-2 sm:w-full sm:grid sm:grid-cols-5">
                             {steps.map((step, idx) => {
                                 const Icon = step.icon;
                                 const isActive = idx === activeStep;
@@ -1433,6 +1495,24 @@ export default function InstitutionsAdminPage() {
                                         />
                                     </div>
                                 )}
+
+                                <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2">
+                                    <label className="flex items-start gap-3 cursor-pointer">
+                                        <Checkbox
+                                            checked={isMarketplaceEnabled}
+                                            onCheckedChange={(checked) => setIsMarketplaceEnabled(Boolean(checked))}
+                                            className="mt-0.5"
+                                        />
+                                        <div className="space-y-0.5">
+                                            <span className="text-sm font-semibold text-foreground flex items-center gap-2">
+                                                Institute should be available on edubird market place
+                                            </span>
+                                            <p className="text-xs text-muted-foreground">
+                                                When enabled, this institution and its active programs will be publicly discoverable on the EduBird educational marketplace & course catalog.
+                                            </p>
+                                        </div>
+                                    </label>
+                                </div>
                             </div>
                         )}
 
@@ -1510,21 +1590,27 @@ export default function InstitutionsAdminPage() {
 
                         {activeStep === 2 && (
                             <div className="space-y-4">
-                                {editing ? (
-                                    <InstitutionBranchManager institutionId={editing.id} accessToken={accessToken} />
-                                ) : (
-                                    <div className="rounded-xl border border-dashed p-6 text-center space-y-2 bg-muted/20">
-                                        <MapPin className="size-8 mx-auto text-muted-foreground opacity-50" />
-                                        <p className="text-sm font-semibold">Save Profile First to Manage Branches</p>
-                                        <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                                            Once the basic profile is registered, you can add multiple branch contact cards with titled phone numbers & email addresses.
-                                        </p>
-                                    </div>
-                                )}
+                                <InstitutionBranchManager
+                                    institutionId={editing?.id || 0}
+                                    accessToken={accessToken}
+                                    stagedBranches={stagedBranches}
+                                    onStagedBranchesChange={setStagedBranches}
+                                />
                             </div>
                         )}
 
                         {activeStep === 3 && (
+                            <div className="space-y-4">
+                                <InstitutionCourseManager
+                                    institutionId={editing?.id || 0}
+                                    accessToken={accessToken}
+                                    stagedCourses={stagedCourses}
+                                    onStagedCoursesChange={setStagedCourses}
+                                />
+                            </div>
+                        )}
+
+                        {activeStep === 4 && (
                             <div className="space-y-4">
                                 <div className="space-y-1">
                                     <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -1856,6 +1942,11 @@ export default function InstitutionsAdminPage() {
                                     </div>
                                 </section>
                             )}
+
+                            {/* Courses Management Section */}
+                            <section className="space-y-3 pt-2">
+                                <InstitutionCourseManager institutionId={viewing.id} accessToken={accessToken} />
+                            </section>
 
                             {/* Branch Contacts Management Section */}
                             <section className="space-y-3 pt-2">

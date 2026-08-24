@@ -88,12 +88,37 @@ export async function GET(req: Request) {
         ('PRG-' || COALESCE(prog.id, se.program_id)::text) AS program_code,
         prog.duration_value,
         prog.duration_unit,
+        prog.seats_available,
+        prog.teaching_method,
         CASE 
           WHEN prog.duration_value IS NOT NULL AND prog.duration_unit IS NOT NULL 
           THEN CONCAT(prog.duration_value, ' ', prog.duration_unit)
           ELSE '1 Year'
         END AS program_duration,
         COALESCE(prog.fee_amount, 25000) AS program_fee,
+        (
+          SELECT string_agg(l.name, ', ' ORDER BY l.name)
+          FROM program_languages pl
+          JOIN languages l ON l.id = pl.language_id
+          WHERE pl.program_id = prog.id
+        ) AS languages,
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', pfc.id,
+              'title', pfc.title,
+              'amount', pfc.amount,
+              'unit', pfc.fee_unit,
+              'payment_mode', pfc.payment_mode,
+              'discount_type', pfc.discount_type,
+              'discount_value', pfc.discount_value,
+              'final_amount', pfc.final_amount,
+              'installments_count', pfc.installments_count
+            ) ORDER BY pfc.sort_order ASC
+          )
+          FROM program_fee_components pfc
+          WHERE pfc.program_id = prog.id
+        ) AS fee_components,
         se.institution_id,
         COALESCE(ip.name, ip.slug, 'Institution') AS institution_name,
         ip.slug AS institution_slug

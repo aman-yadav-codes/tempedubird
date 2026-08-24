@@ -46,6 +46,11 @@ type FeeComponent = {
   title?: string;
   amount?: unknown;
   unit?: string | null;
+  payment_mode?: "one_time" | "installment" | string | null;
+  discount_type?: "percentage" | "fixed" | string | null;
+  discount_value?: unknown;
+  final_amount?: unknown;
+  installments_count?: number | null;
 };
 
 const fallbackLearnings = [
@@ -85,8 +90,9 @@ function formatAmount(amount: unknown) {
 }
 
 function formatFeeAmount(fee: FeeComponent) {
+  const finalVal = fee.final_amount != null ? Number(fee.final_amount) : Number(fee.amount);
   const unit = typeof fee.unit === "string" && fee.unit.trim() ? ` / ${fee.unit.trim()}` : "";
-  return `${formatAmount(fee.amount)}${unit}`;
+  return `${formatAmount(finalVal)}${unit}`;
 }
 
 function compactText(text: string, fallback: string) {
@@ -193,17 +199,27 @@ export default async function CourseDetailPage({ params }: Props) {
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px]">
           <main className="min-w-0 space-y-8">
             <section>
-              <div className="mb-4 flex flex-wrap gap-2">
-                <Badge className="bg-green-500 text-white">Verified</Badge>
-                <Badge variant="outline">{course.programType ?? "Course"}</Badge>
-                <Badge variant="outline">{course.category}</Badge>
-                {course.selectedCategory && <Badge variant="outline">{course.selectedCategory}</Badge>}
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <Badge className="bg-green-500 text-white text-[11px] font-bold">Verified</Badge>
+                {course.programType && (
+                  <Badge variant="outline" className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {course.programType}
+                  </Badge>
+                )}
+                <Badge variant="secondary" className="text-[11px] font-bold uppercase tracking-wider bg-muted/50 text-foreground">
+                  {course.category}
+                </Badge>
+                {course.selectedCategory && (
+                  <Badge variant="outline" className="text-[11px] font-semibold text-primary border-primary/30">
+                    {course.selectedCategory}
+                  </Badge>
+                )}
               </div>
 
-              <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+              <h1 className="text-4xl font-black uppercase tracking-tight text-foreground sm:text-5xl leading-tight">
                 {course.title}
               </h1>
-              <p className="mt-4 text-base text-muted-foreground">
+              <p className="mt-3 text-base text-muted-foreground">
                 Offered by <span className="font-semibold text-primary">{course.institute}</span>
               </p>
 
@@ -356,18 +372,55 @@ export default async function CourseDetailPage({ params }: Props) {
           <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
             <SidebarSummary course={course} />
 
-            <CardBlock title="Fee Components">
+            <CardBlock title="Fee Structure & Components">
               {feeComponents.length > 0 ? (
-                feeComponents.map((fee) => (
-                  <div key={fee.id ?? fee.title} className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">{fee.title ?? "Course fee"}</span>
-                    <span className="font-semibold text-foreground">{formatFeeAmount(fee)}</span>
-                  </div>
-                ))
+                <div className="space-y-3">
+                  {feeComponents.map((fee) => {
+                    const origAmount = Number(fee.amount);
+                    const finalAmount = fee.final_amount != null ? Number(fee.final_amount) : origAmount;
+                    const hasDiscount = Boolean(fee.discount_value && Number(fee.discount_value) > 0);
+                    const isInstallment = fee.payment_mode === "installment" || (fee.unit && fee.unit !== "one-time");
+
+                    return (
+                      <div key={fee.id ?? fee.title} className="p-3 rounded-xl border border-border/80 bg-muted/20 space-y-1.5">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-semibold text-foreground">{fee.title ?? "Course Fee"}</span>
+                          <Badge variant="outline" className="text-[10px] font-bold">
+                            {fee.unit ? `per ${fee.unit}` : isInstallment ? "Installment" : "One-Time"}
+                          </Badge>
+                        </div>
+
+                        <div className="flex items-baseline justify-between pt-1">
+                          <div className="text-xs text-muted-foreground">
+                            {hasDiscount && (
+                              <span className="line-through text-muted-foreground/80 mr-2">
+                                {formatAmount(origAmount)}
+                              </span>
+                            )}
+                            {hasDiscount && (
+                              <Badge variant="secondary" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-bold mr-1.5">
+                                {fee.discount_type === "percentage" ? `${fee.discount_value}% OFF` : `₹${fee.discount_value} OFF`}
+                              </Badge>
+                            )}
+                          </div>
+                          <span className="font-extrabold text-base text-primary">
+                            {formatFeeAmount(fee)}
+                          </span>
+                        </div>
+
+                        {fee.installments_count && fee.installments_count > 1 ? (
+                          <p className="text-[11px] text-muted-foreground">
+                            {fee.installments_count} installments estimated for full duration
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
               ) : (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Course fee</span>
-                  <span className="font-semibold text-foreground">{course.price}</span>
+                <div className="flex items-center justify-between text-sm p-3 rounded-xl border border-border/80 bg-muted/20">
+                  <span className="text-muted-foreground">Full Course Fee</span>
+                  <span className="font-bold text-foreground text-base">{course.price}</span>
                 </div>
               )}
             </CardBlock>
@@ -399,9 +452,9 @@ export default async function CourseDetailPage({ params }: Props) {
             </CardBlock>
 
             <CardBlock title="Have a question?">
-              <p className="mb-4 text-sm text-muted-foreground">Our team is here to help you.</p>
-              <Button variant="outline" className="w-full border-primary text-primary hover:bg-primary hover:text-primary-foreground">
-                Contact Support
+              <p className="mb-4 text-sm text-muted-foreground">Our admissions counseling team is here to help you.</p>
+              <Button variant="outline" className="w-full border-primary text-primary hover:bg-primary hover:text-primary-foreground font-bold">
+                Contact Support / Enquiry
               </Button>
             </CardBlock>
           </aside>
@@ -469,41 +522,58 @@ function SidebarSummary({
 }) {
   if (!course) return null;
 
-  const language = course.languages[0] ?? "English";
+  const languagesText = course.languages && course.languages.length > 0 ? course.languages.join(", ") : "English";
+  const methodText = course.teachingMethod
+    ? course.teachingMethod.includes("class") || course.teachingMethod.includes("off")
+      ? "Classroom / Offline"
+      : course.teachingMethod.includes("onl")
+      ? "Online Live"
+      : "Hybrid / Blended"
+    : "Classroom / Offline";
 
   return (
     <Card className="border-border bg-card/95 shadow-md">
       <CardContent className="space-y-5 p-6">
-        <div className="space-y-4 text-sm">
+        <div className="space-y-3.5 text-sm">
           <DetailRow icon={<Clock className="h-4 w-4" />} label="Duration" value={course.duration} />
-          <DetailRow icon={<GraduationCap className="h-4 w-4" />} label="Level" value={course.selectedCategory ?? "Beginner"} />
-          <DetailRow icon={<Languages className="h-4 w-4" />} label="Language" value={language} />
-          <DetailRow icon={<CalendarDays className="h-4 w-4" />} label="Last Updated" value="May 2024" />
+          <DetailRow icon={<GraduationCap className="h-4 w-4" />} label="Level / Class" value={course.selectedCategory ?? course.level} />
+          <DetailRow icon={<Languages className="h-4 w-4" />} label="Language" value={languagesText} />
+          <DetailRow icon={<Users className="h-4 w-4" />} label="Teaching Method" value={methodText} />
+          {course.seatsAvailable ? (
+            <DetailRow icon={<Users className="h-4 w-4" />} label="Seats Available" value={`${course.seatsAvailable} Seats`} />
+          ) : null}
+          {(course as any).boardName ? (
+            <DetailRow icon={<Award className="h-4 w-4" />} label="Affiliated Board" value={(course as any).boardName} />
+          ) : null}
+          {(course as any).universityName ? (
+            <DetailRow icon={<Award className="h-4 w-4" />} label="University" value={(course as any).universityName} />
+          ) : null}
         </div>
 
         <Separator />
 
         <div>
-          <p className="text-sm text-muted-foreground">Course Price</p>
-          <p className="mt-1 text-3xl font-bold text-primary">{course.price}</p>
+          <p className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Course Fee</p>
+          <p className="mt-1 text-3xl font-extrabold text-primary">{course.price}</p>
         </div>
 
         <Separator />
 
-        <div className="space-y-4 text-sm">
-          <DetailRow icon={<Clock className="h-4 w-4" />} label="Duration" value={course.duration} />
-          <DetailRow icon={<Users className="h-4 w-4" />} label="Classes" value={course.seatsAvailable ? String(course.seatsAvailable) : "60"} />
+        <div className="space-y-3.5 text-sm">
           <DetailRow icon={<BookOpen className="h-4 w-4" />} label="Category" value={course.category} />
           <DetailRow icon={<Award className="h-4 w-4" />} label="Program" value={course.selectedCategory ?? course.title} />
+          {course.sections && course.sections.length > 0 ? (
+            <DetailRow icon={<Award className="h-4 w-4" />} label="Sections" value={course.sections.join(", ")} />
+          ) : null}
         </div>
 
         <CourseDetailEnrollButton course={course} />
-        <Button variant="outline" className="w-full" size="lg" data-tracker-trigger="contact">
+        <Button variant="outline" className="w-full font-bold" size="lg" data-tracker-trigger="contact">
           Contact Institute
         </Button>
         <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
           <ShieldCheck className="h-4 w-4 text-green-500" />
-          14 days money-back guarantee
+          Verified Institution Curriculum
         </div>
       </CardContent>
     </Card>
@@ -521,11 +591,11 @@ function DetailRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <span className="flex items-center gap-2 text-muted-foreground">
+      <span className="flex items-center gap-2 text-muted-foreground text-xs font-semibold">
         {icon}
         {label}
       </span>
-      <span className="max-w-[170px] truncate text-right font-semibold text-foreground">{value}</span>
+      <span className="max-w-[170px] truncate text-right font-bold text-foreground text-xs">{value}</span>
     </div>
   );
 }

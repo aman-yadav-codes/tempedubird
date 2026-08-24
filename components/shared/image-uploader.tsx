@@ -30,7 +30,14 @@ type ImageUploaderProps = {
 };
 
 const DEFAULT_MAX_SIZE = 5 * 1024 * 1024;
-const DEFAULT_ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const DEFAULT_ACCEPTED_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/svg+xml",
+  "image/gif",
+  "image/avif",
+];
 
 function initialsFromUrl(url: string) {
   if (!url) return "IMG";
@@ -120,7 +127,7 @@ export function ImageUploader({
     }
 
     if (!acceptedFileTypes.includes(file.type)) {
-      toast.error("Only JPG, PNG, and WebP images are allowed.");
+      toast.error("Only WebP, SVG, PNG, and JPEG images are allowed.");
       return;
     }
 
@@ -158,12 +165,17 @@ export function ImageUploader({
 
   const openCropDialog = (file: File) => {
     if (!acceptedFileTypes.includes(file.type)) {
-      toast.error("Only JPG, PNG, and WebP images are allowed.");
+      toast.error("Only WebP, SVG, PNG, and JPEG images are allowed.");
       return;
     }
 
     if (file.size > maxSize) {
       toast.error("Image must be 5MB or smaller.");
+      return;
+    }
+
+    if (file.type === "image/svg+xml") {
+      uploadFile(file);
       return;
     }
 

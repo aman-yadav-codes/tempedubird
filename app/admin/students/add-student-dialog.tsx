@@ -131,6 +131,19 @@ const CURRENT_YEAR = TODAY.getFullYear();
 const CURRENT_YEAR_START = new Date(CURRENT_YEAR, 0, 1);
 const CURRENT_YEAR_END = new Date(CURRENT_YEAR, 11, 31);
 
+const STANDARD_DOCUMENT_TYPES = [
+  { value: "AADHAAR", label: "Aadhaar Card" },
+  { value: "PAN", label: "PAN Card" },
+  { value: "TC", label: "Transfer Certificate (TC)" },
+  { value: "MARKSHEET", label: "Marksheet / Transcript" },
+  { value: "BIRTH_CERTIFICATE", label: "Birth Certificate" },
+  { value: "CASTE_CERTIFICATE", label: "Caste Certificate" },
+  { value: "INCOME_CERTIFICATE", label: "Income Certificate" },
+  { value: "MIGRATION_CERTIFICATE", label: "Migration Certificate" },
+  { value: "CHARACTER_CERTIFICATE", label: "Character Certificate" },
+  { value: "OTHER", label: "Other Document" },
+];
+
 type AvailabilityCheck = {
   status: "idle" | "checking" | "available" | "taken";
   message?: string;
@@ -4245,14 +4258,53 @@ export function AddStudentDialog({
                   <div key={document.id} className="grid gap-3 rounded-md border p-3 sm:grid-cols-2">
                     <div className="space-y-1.5">
                       <Label>Document Type</Label>
-                      <Input
-                        value={document.document_type}
-                        onChange={(event) => setStudentRecords((prev) => ({
-                          ...prev,
-                          documents: prev.documents.map((item, itemIndex) => itemIndex === index ? { ...item, document_type: event.target.value.toUpperCase() } : item),
-                        }))}
-                        placeholder="AADHAAR, PAN, TC"
-                      />
+                      <Select
+                        value={
+                          STANDARD_DOCUMENT_TYPES.some((d) => d.value === document.document_type)
+                            ? document.document_type
+                            : document.document_type ? "OTHER" : "AADHAAR"
+                        }
+                        onValueChange={(val) => {
+                          setStudentRecords((prev) => ({
+                            ...prev,
+                            documents: prev.documents.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, document_type: val === "OTHER" ? (item.document_type && !STANDARD_DOCUMENT_TYPES.some(d => d.value === item.document_type) ? item.document_type : "") : val }
+                                : item
+                            ),
+                          }));
+                        }}
+                      >
+                        <SelectTrigger className="bg-background">
+                          <SelectValue placeholder="Select Document Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {STANDARD_DOCUMENT_TYPES.map((dt) => (
+                            <SelectItem key={dt.value} value={dt.value}>
+                              {dt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {(!STANDARD_DOCUMENT_TYPES.some((d) => d.value === document.document_type && d.value !== "OTHER") ||
+                        document.document_type === "OTHER" ||
+                        (document.document_type && !STANDARD_DOCUMENT_TYPES.map(d => d.value).includes(document.document_type))) && (
+                        <Input
+                          value={document.document_type === "OTHER" ? "" : document.document_type}
+                          onChange={(event) =>
+                            setStudentRecords((prev) => ({
+                              ...prev,
+                              documents: prev.documents.map((item, itemIndex) =>
+                                itemIndex === index
+                                  ? { ...item, document_type: event.target.value.toUpperCase() }
+                                  : item
+                              ),
+                            }))
+                          }
+                          placeholder="Enter document name"
+                          className="mt-1.5"
+                        />
+                      )}
                     </div>
                     <div className="space-y-1.5">
                       <Label>Document Number</Label>

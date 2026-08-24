@@ -3,7 +3,9 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   BadgeDollarSign,
+  BookOpen,
   CircleDollarSign,
+  Globe,
   IndianRupee,
   MoreHorizontal,
   Plus,
@@ -52,6 +54,29 @@ import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { useAuthStore } from "@/store";
 import { readJsonResponse } from "@/lib/api/read-json-response";
 
+export type SalesProgramOption = {
+  id: number;
+  title: string;
+  duration_value?: number | null;
+  duration_unit?: string | null;
+  seats_available?: number | null;
+  teaching_method?: string | null;
+  languages?: string | null;
+  categories?: string | null;
+  board_name?: string | null;
+  fee_components?: Array<{
+    id?: number;
+    title: string;
+    amount: number;
+    unit?: string | null;
+    payment_mode?: string | null;
+    discount_type?: string | null;
+    discount_value?: number | null;
+    final_amount?: number | null;
+    installments_count?: number | null;
+  }> | null;
+};
+
 type PipelineStage =
   | "new"
   | "qualified"
@@ -69,6 +94,7 @@ type DealRecord = {
   contact_name: string;
   email?: string | null;
   phone?: string | null;
+  preferred_program?: string | null;
   value: number;
   stage: PipelineStage;
   probability: number;
@@ -94,6 +120,17 @@ const PIPELINE_STAGES: Array<{
   { id: "won", label: "Won", color: "text-emerald-600 dark:text-emerald-400", badgeBg: "bg-emerald-50 text-emerald-700 border-emerald-200", borderColor: "border-emerald-500", headerBg: "bg-emerald-50/50" },
   { id: "lost", label: "Lost", color: "text-rose-600 dark:text-rose-400", badgeBg: "bg-rose-50 text-rose-700 border-rose-200", borderColor: "border-rose-500", headerBg: "bg-rose-50/50" },
 ];
+
+const defaultProbabilities: Record<PipelineStage, number> = {
+  new: 20,
+  qualified: 40,
+  garbage: 0,
+  contacted: 40,
+  waiting_for_response: 60,
+  negotiation: 80,
+  won: 100,
+  lost: 0,
+};
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -147,21 +184,18 @@ export default function SalesPipelinePage() {
             raw_id: eq.id,
             title: `${eq.preferred_program ? eq.preferred_program + " - " : "Admission Enquiry - "}${eq.student_name}`,
             contact_name: eq.student_name,
-            phone: eq.phone || null,
             email: eq.email || null,
+            phone: eq.phone || null,
+            preferred_program: eq.preferred_program || null,
             value: val,
-            stage: stage,
-            probability: stage === "won" ? 100 : stage === "lost" ? 0 : stage === "negotiation" ? 80 : stage === "waiting_for_response" ? 60 : stage === "contacted" ? 40 : 20,
-            notes: `Source: ${eq.source || 'Walk-in'}${eq.notes ? ' | ' + eq.notes : ''}`,
+            stage,
+            probability: defaultProbabilities[stage] ?? 50,
+            expected_close_date: null,
+            notes: eq.notes || null,
             created_at: eq.created_at || new Date().toISOString(),
           };
         });
-
-        setDeals((prev) => {
-          const fetchedIds = new Set(enquiryDeals.map((d) => d.id));
-          const customDeals = prev.filter((d) => !fetchedIds.has(d.id));
-          return [...enquiryDeals, ...customDeals];
-        });
+        setDeals(enquiryDeals);
       }
     } catch {
       // Fallback sample data
@@ -174,7 +208,7 @@ export default function SalesPipelinePage() {
     fetchEnquiries();
   }, [fetchEnquiries]);
 
-  const [programsOptions, setProgramsOptions] = useState<Array<{ id: number; title: string }>>([]);
+  const [programsOptions, setProgramsOptions] = useState<SalesProgramOption[]>([]);
   const [loadingPrograms, setLoadingPrograms] = useState(false);
 
   const fetchPrograms = useCallback(async () => {
@@ -184,7 +218,7 @@ export default function SalesPipelinePage() {
       const res = await fetch(`/api/admin/institutions/programs?limit=100`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      const json = await readJsonResponse<{ data?: Array<{ id: number; title: string }>; error?: string }>(res);
+      const json = await readJsonResponse<{ data?: SalesProgramOption[]; error?: string }>(res);
       if (res.ok && json.data) {
         setProgramsOptions(json.data);
       }
@@ -214,6 +248,10 @@ export default function SalesPipelinePage() {
   const [formSource, setFormSource] = useState("Walk-in");
   const [formValue, setFormValue] = useState("");
   const [formNotes, setFormNotes] = useState("");
+
+  const selectedProgramObj = useMemo(() => {
+    return programsOptions.find((p) => p.title === formProgram || String(p.id) === formProgram);
+  }, [programsOptions, formProgram]);
 
   // Selected Deal Detail Sheet
   const [selectedDeal, setSelectedDeal] = useState<DealRecord | null>(null);
@@ -710,7 +748,16 @@ export default function SalesPipelinePage() {
               </div>
               <div className="space-y-1.5 sm:col-span-1">
                 <label className="font-extrabold text-slate-700">Preferred Program / Class</label>
-                <Select value={formProgram} onValueChange={setFormProgram}>
+                <Select
+                  value={formProgram}
+                  onValueChange={(val) => {
+                    setFormProgram(val);
+                    const p = programsOptions.find((opt) => opt.title === val || String(opt.id) === val);
+                    if (p && p.fee_components && p.fee_components[0]?.amount) {
+                      setFormValue(String(p.fee_components[0].amount));
+                    }
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder={loadingPrograms ? "Loading programs..." : "Select Program / Course"} />
                   </SelectTrigger>
@@ -727,6 +774,79 @@ export default function SalesPipelinePage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Live Program Info Preview Card in New Deal Modal */}
+              {selectedProgramObj && (
+                <div className="sm:col-span-2 p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-slate-900 flex items-center gap-1.5">
+                      <BookOpen className="h-4 w-4 text-[#D91B1B]" />
+                      {selectedProgramObj.title}
+                    </span>
+                    {selectedProgramObj.teaching_method && (
+                      <Badge variant="outline" className="text-[10px] font-bold bg-white">
+                        🏫 {selectedProgramObj.teaching_method}
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-slate-200/60 text-[11px]">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">⏱️ Duration</span>
+                      <span className="font-bold text-slate-800">
+                        {selectedProgramObj.duration_value ? `${selectedProgramObj.duration_value} ${selectedProgramObj.duration_unit || "Yr"}` : "Standard"}
+                      </span>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">🪑 Available Seats</span>
+                      <span className="font-bold text-slate-800">
+                        {selectedProgramObj.seats_available != null ? `${selectedProgramObj.seats_available} Seats` : "Open Intake"}
+                      </span>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">🏫 Mode</span>
+                      <span className="font-bold text-slate-800 truncate block">
+                        {selectedProgramObj.teaching_method || "Classroom / Offline"}
+                      </span>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">🌐 Languages</span>
+                      <span className="font-bold text-slate-800 truncate block">
+                        {selectedProgramObj.languages || "English, Hindi"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Fee Structure Preview */}
+                  {selectedProgramObj.fee_components && selectedProgramObj.fee_components.length > 0 && (
+                    <div className="pt-1.5 border-t border-slate-200/60 space-y-1">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                        💰 Fee Breakdown:
+                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {selectedProgramObj.fee_components.map((f, i) => {
+                          const numAmt = Number(f.amount) || 0;
+                          const numDisc = Number(f.discount_value) || 0;
+                          const hasDisc = numDisc > 0;
+                          const deduction = hasDisc
+                            ? f.discount_type === "percentage" ? (numAmt * Math.min(100, numDisc)) / 100 : Math.min(numAmt, numDisc)
+                            : 0;
+                          const net = Math.max(0, numAmt - deduction);
+                          return (
+                            <Badge key={i} variant="secondary" className="text-[10.5px] font-semibold py-0.5 px-2 bg-white border border-slate-200">
+                              <strong>{f.title || "Fee"}:</strong>&nbsp;
+                              {hasDisc && <span className="line-through text-slate-400 mr-1">₹{numAmt.toLocaleString()}</span>}
+                              <span className="text-[#D91B1B] font-bold">₹{net.toLocaleString()}</span>
+                              <span className="text-slate-400 ml-0.5">/{f.unit || "month"}</span>
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-1.5 sm:col-span-1">
                 <label className="font-extrabold text-slate-700">Enquiry Source</label>
                 <Select value={formSource} onValueChange={setFormSource}>
@@ -777,7 +897,7 @@ export default function SalesPipelinePage() {
 
         {/* Deal Detail Sheet */}
         <Sheet open={!!selectedDeal} onOpenChange={(o) => !o && setSelectedDeal(null)}>
-          <SheetContent className="w-full sm:max-w-md">
+          <SheetContent className="w-full sm:max-w-md overflow-y-auto">
             <SheetHeader>
               <SheetTitle className="text-base font-black text-slate-900">{selectedDeal?.title}</SheetTitle>
               <SheetDescription className="text-xs text-slate-500">Sales Pipeline Deal Overview</SheetDescription>
@@ -805,13 +925,77 @@ export default function SalesPipelinePage() {
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-200/60">
                   <span className="text-slate-500">Phone:</span>
-                  <span className="text-slate-800 font-semibold">{selectedDeal?.phone || "N/A"}</span>
+                  <span className="font-medium text-slate-800">{selectedDeal?.phone || "N/A"}</span>
                 </div>
-                <div className="flex justify-between py-1">
+                <div className="flex justify-between py-1 border-b border-slate-200/60">
                   <span className="text-slate-500">Email:</span>
-                  <span className="text-slate-800 font-semibold">{selectedDeal?.email || "N/A"}</span>
+                  <span className="font-medium text-slate-800">{selectedDeal?.email || "N/A"}</span>
+                </div>
+                {selectedDeal?.preferred_program && (
+                  <div className="flex justify-between py-1 border-b border-slate-200/60">
+                    <span className="text-slate-500">Program / Class:</span>
+                    <strong className="text-slate-900 font-bold">{selectedDeal.preferred_program}</strong>
+                  </div>
+                )}
+                <div className="flex justify-between py-1">
+                  <span className="text-slate-500">Created:</span>
+                  <span className="text-slate-600">{selectedDeal?.created_at ? new Date(selectedDeal.created_at).toLocaleDateString("en-IN") : "N/A"}</span>
                 </div>
               </div>
+
+              {/* Matched Program Details Card */}
+              {(() => {
+                const prog = programsOptions.find(
+                  (p) => p.title.toLowerCase() === (selectedDeal?.preferred_program || "").toLowerCase() || String(p.id) === selectedDeal?.preferred_program
+                );
+                if (!prog) return null;
+                return (
+                  <div className="rounded-xl border border-slate-200 p-4 space-y-2.5 bg-white shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <p className="font-extrabold text-slate-900 flex items-center gap-1.5 text-xs">
+                        <BookOpen className="h-4 w-4 text-[#D91B1B]" />
+                        {prog.title}
+                      </p>
+                      {prog.teaching_method && (
+                        <Badge variant="outline" className="text-[10px] font-bold">
+                          {prog.teaching_method}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-100">
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">⏱️ Duration</span>
+                        <span className="font-semibold">{prog.duration_value ? `${prog.duration_value} ${prog.duration_unit || "Yr"}` : "Standard"}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">🪑 Seats</span>
+                        <span className="font-semibold">{prog.seats_available != null ? `${prog.seats_available} Seats` : "Open"}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">🏫 Mode</span>
+                        <span className="font-semibold">{prog.teaching_method || "Classroom / Offline"}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">🌐 Languages</span>
+                        <span className="font-semibold">{prog.languages || "English, Hindi"}</span>
+                      </div>
+                    </div>
+                    {prog.fee_components && prog.fee_components.length > 0 && (
+                      <div className="pt-1.5 border-t border-slate-100 space-y-1">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">💰 Fee Options:</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {prog.fee_components.map((f, i) => (
+                            <Badge key={i} variant="secondary" className="text-[10px] py-0.5 px-2 bg-slate-50">
+                              {f.title}: <strong>₹{Number(f.amount).toLocaleString()}</strong>/{f.unit || "mo"}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {selectedDeal?.notes && (
                 <div className="rounded-xl border border-slate-200 p-4 space-y-1 bg-white">
                   <p className="font-bold text-slate-900">Deal Notes</p>

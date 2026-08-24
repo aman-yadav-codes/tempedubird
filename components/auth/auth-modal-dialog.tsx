@@ -40,10 +40,14 @@ import { useProgressiveSave } from "@/hooks/use-progressive-save";
 import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
 import { toRoleRoutePath } from "@/lib/auth/role-routes";
 
+import { useSearchParams } from "next/navigation";
+import { useActiveInstitution } from "@/hooks/use-active-institution";
+
 type AuthModalDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultTab?: "signin" | "signup";
+  institutionId?: number | null;
 };
 
 const REGISTER_ROLES = [
@@ -56,9 +60,52 @@ export function AuthModalDialog({
   open,
   onOpenChange,
   defaultTab = "signup",
+  institutionId,
 }: AuthModalDialogProps) {
   const router = useRouter();
   const { setAuth } = useAuthStore();
+  const searchParams = useSearchParams();
+  const { activeInstitutionId, defaultEnvInstitutionId } = useActiveInstitution();
+  const [isTenantInstitution, setIsTenantInstitution] = useState(false);
+
+  useEffect(() => {
+    let isCancelled = false;
+    fetch("/api/tenant/current", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!isCancelled && (data?.tenant?.institution_id || data?.appType === "institution")) {
+          setIsTenantInstitution(true);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  const urlInstIdRaw =
+    searchParams?.get("institution_id") ||
+    searchParams?.get("institute_id") ||
+    searchParams?.get("inst_id") ||
+    searchParams?.get("institution") ||
+    searchParams?.get("institutionId") ||
+    searchParams?.get("inst");
+  const urlInstId =
+    urlInstIdRaw && !isNaN(Number(urlInstIdRaw)) && Number(urlInstIdRaw) > 0
+      ? Number(urlInstIdRaw)
+      : null;
+
+  const hasInstitutionId = Boolean(
+    institutionId ||
+      urlInstId ||
+      activeInstitutionId ||
+      defaultEnvInstitutionId ||
+      isTenantInstitution ||
+      process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ||
+      process.env.NEXT_PUBLIC_INSTITUTION_ID ||
+      process.env.NEXT_PUBLIC_TENANT_INSTITUTION_ID ||
+      process.env.NEXT_PUBLIC_INSTITUTION_PROFILE_ID
+  );
 
   const [activeTab, setActiveTab] = useState<"signin" | "signup">(defaultTab);
 
@@ -708,7 +755,12 @@ export function AuthModalDialog({
                   </span>
                   <span className="text-[10px] text-slate-400 font-medium">1-Click Access</span>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div
+                  className={cn(
+                    "grid gap-2",
+                    hasInstitutionId ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4"
+                  )}
+                >
                   {/* Student Demo */}
                   <button
                     type="button"
@@ -752,18 +804,20 @@ export function AuthModalDialog({
                   </button>
 
                   {/* Platform Admin Demo */}
-                  <button
-                    type="button"
-                    disabled={submitting}
-                    onClick={() => handleDemoLogin("platform_admin")}
-                    className="flex flex-col items-center justify-center p-2 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-purple-50/80 hover:border-purple-300 hover:shadow-xs transition-all cursor-pointer group text-center"
-                  >
-                    <div className="h-8 w-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform">
-                      <ShieldCheck className="h-4 w-4" />
-                    </div>
-                    <span className="text-xs font-extrabold text-slate-800 group-hover:text-purple-700">Platform Admin</span>
-                    <span className="text-[9px] text-slate-500 font-medium leading-none mt-0.5">Full System Access</span>
-                  </button>
+                  {!hasInstitutionId && (
+                    <button
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => handleDemoLogin("platform_admin")}
+                      className="flex flex-col items-center justify-center p-2 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-purple-50/80 hover:border-purple-300 hover:shadow-xs transition-all cursor-pointer group text-center"
+                    >
+                      <div className="h-8 w-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform">
+                        <ShieldCheck className="h-4 w-4" />
+                      </div>
+                      <span className="text-xs font-extrabold text-slate-800 group-hover:text-purple-700">Platform Admin</span>
+                      <span className="text-[9px] text-slate-500 font-medium leading-none mt-0.5">Full System Access</span>
+                    </button>
+                  )}
                 </div>
               </div>
 

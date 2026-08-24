@@ -208,15 +208,20 @@ export function AdminAcademicSessionSelector() {
     return () => window.clearTimeout(timeout);
   }, [loadSessions]);
 
+  function cleanSessionLabel(label?: string) {
+    if (!label) return "";
+    return label.replace(/\s*Academic\s+Session\s*/gi, "").trim();
+  }
+
   if (!isStudent && !activeInstitutionId) return null;
   const options = isStudent
     ? uniqueStudentEnrollments.map((enrollment) => ({
       id: enrollment.id,
-      label: enrollment.academicYearName,
+      label: cleanSessionLabel(enrollment.academicYearName),
     }))
     : sessions.map((session) => ({
       id: session.id,
-      label: session.name,
+      label: cleanSessionLabel(session.name),
     }));
 
   return (

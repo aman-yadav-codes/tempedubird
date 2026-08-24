@@ -75,7 +75,9 @@ function getPlatformHosts() {
 
 export function getConfiguredInstitutionId() {
   const rawId = String(
-    process.env.INSTITUTION_ID ??
+    process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ??
+      process.env.DEFAULT_INSTITUTION_ID ??
+      process.env.INSTITUTION_ID ??
       process.env.NEXT_PUBLIC_INSTITUTION_ID ??
       process.env.TENANT_INSTITUTION_ID ??
       process.env.NEXT_PUBLIC_TENANT_INSTITUTION_ID ??
@@ -90,17 +92,7 @@ export function getConfiguredInstitutionId() {
 }
 
 export function hasConfiguredInstitutionId() {
-  return Boolean(
-    String(
-      process.env.INSTITUTION_ID ??
-        process.env.NEXT_PUBLIC_INSTITUTION_ID ??
-        process.env.TENANT_INSTITUTION_ID ??
-        process.env.NEXT_PUBLIC_TENANT_INSTITUTION_ID ??
-        process.env.INSTITUTION_PROFILE_ID ??
-        process.env.NEXT_PUBLIC_INSTITUTION_PROFILE_ID ??
-        ""
-    ).trim()
-  );
+  return Boolean(getConfiguredInstitutionId());
 }
 
 export function isPlatformHost(host: string | null | undefined) {

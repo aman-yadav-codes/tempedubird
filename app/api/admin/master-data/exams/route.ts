@@ -1177,7 +1177,7 @@ export async function GET(req: Request) {
       },
       capabilities: {
         canCreate:
-          !isPlatformAdmin &&
+          isPlatformAdmin ||
           hasPermission(currentUser, "content.exams.create"),
         canBlock: isPlatformAdmin,
         canInherit: !isPlatformAdmin && view === "marketplace",
@@ -1192,16 +1192,12 @@ export async function POST(req: Request) {
   try {
     const currentUser = await requireAdmin(req);
     await ensureExamSchema();
-    if (isPlatformAdminUser(currentUser)) {
-      return NextResponse.json(
-        { error: "Platform Admin can review exams but cannot create them" },
-        { status: 403 }
-      );
-    }
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const body = await req.json();
     if (body?.record_type === "series") {
       const payload = parseSeriesPayload(body);
       if (
+        !isPlatformAdmin &&
         !hasPermission(currentUser, "content.exams.create", {
           institutionId: payload.institutionId,
         })
@@ -1218,17 +1214,15 @@ export async function POST(req: Request) {
         payload.targetProgramId
       );
       const slug = await buildSeriesSlug(payload.institutionId, payload.title);
+      const isPublic = isPlatformAdmin ? payload.isPublic : false;
+      const marketplaceApproved = isPlatformAdmin && payload.isPublic;
       const result = await db.query<{ id: number }>(
         `
           INSERT INTO exam_series
             (source_institution_id, title, slug, description, from_date, to_date,
              target_type, target_id, target_program_id, result_date, instant_result,
-             marketplace_requested, marketplace_requested_at, marketplace_requested_by,
              is_active, created_by, updated_by)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-                  $12, CASE WHEN $12 THEN CURRENT_TIMESTAMP ELSE NULL END,
-                  CASE WHEN $12 THEN $14::integer ELSE NULL::integer END,
-                  $13, $14, $14)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
           RETURNING id
         `,
         [
@@ -1243,7 +1237,6 @@ export async function POST(req: Request) {
           payload.targetProgramId,
           payload.resultDate,
           payload.instantResult,
-          payload.isPublic,
           payload.isActive,
           currentUser.id,
         ]
@@ -1276,6 +1269,7 @@ export async function POST(req: Request) {
     }
     const payload = parseExamMetadataPayload(body);
     if (
+      !isPlatformAdmin &&
       !hasPermission(currentUser, "content.exams.create", {
         institutionId: payload.institutionId,
       })
@@ -1309,20 +1303,25 @@ export async function POST(req: Request) {
     const client = await db.connect();
     try {
       await client.query("BEGIN");
+      const isPublic = isPlatformAdmin ? payload.isPublic : false;
+      const marketplaceApproved = isPlatformAdmin && payload.isPublic;
       const result = await client.query<{ id: number }>(
         `
           INSERT INTO practice_exam_templates
             (title, description, total_marks, ai_question_format, duration_minutes, exam_kind, exam_series_id,
              exam_date, exam_time, exam_place, exam_mode, result_date, instant_result, is_public,
              marketplace_requested, marketplace_requested_at, marketplace_requested_by,
-             marketplace_approved, is_active, version, source_institution_id,
+             marketplace_approved, marketplace_approved_at, marketplace_approved_by,
+             is_active, version, source_institution_id,
              created_by, updated_by)
           VALUES (
-            $1, $2, $3, $4::jsonb, $5, 'exam', $16,
-            $6, $7, $8, $9, $10, $11, FALSE,
-            $12, CASE WHEN $12 THEN CURRENT_TIMESTAMP ELSE NULL END,
-            CASE WHEN $12 THEN $15::integer ELSE NULL::integer END,
-            FALSE, $13, 1, $14, $15, $15
+            $1, $2, $3, $4::jsonb, $5, 'exam', $6,
+            $7, $8, $9, $10, $11, $12, $17,
+            $13, CASE WHEN $13 THEN CURRENT_TIMESTAMP ELSE NULL END,
+            CASE WHEN $13 THEN $16::integer ELSE NULL::integer END,
+            $18, CASE WHEN $18 THEN CURRENT_TIMESTAMP ELSE NULL END,
+            CASE WHEN $18 THEN $16::integer ELSE NULL::integer END,
+            $14, 1, $15, $16, $16
           )
           RETURNING id
         `,
@@ -1332,6 +1331,7 @@ export async function POST(req: Request) {
           payload.totalMarks,
           JSON.stringify(payload.aiQuestionFormat),
           payload.durationMinutes,
+          payload.examSeriesId,
           payload.examDate,
           payload.examTime,
           payload.examPlace,
@@ -1342,7 +1342,8 @@ export async function POST(req: Request) {
           payload.isActive,
           payload.institutionId,
           currentUser.id,
-          payload.examSeriesId,
+          isPublic,
+          marketplaceApproved,
         ]
       );
       const templateId = result.rows[0].id;

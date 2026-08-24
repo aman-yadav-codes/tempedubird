@@ -24,10 +24,24 @@ export default async function PublicLayout({ children }: { children: React.React
     isInstitution: false,
   };
 
+  const envDefaultInstId = process.env.DEFAULT_INSTITUTION_ID || process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID;
+
   try {
     tenant = await getInstitutionTenantByHost(db, host);
-    institutionNavItems = await getPublicInstitutionNavItems(tenant, host);
-    brand = await getPublicNavbarBrand(tenant);
+    if (!tenant && envDefaultInstId && /^\d+$/.test(envDefaultInstId.trim()) && Number(envDefaultInstId.trim()) > 0) {
+      tenant = {
+        institution_id: Number(envDefaultInstId.trim()),
+        institution_name: "Institution",
+        institution_slug: null,
+        domain: host || null,
+        is_primary: true,
+        config: {},
+      };
+    }
+    if (tenant) {
+      institutionNavItems = await getPublicInstitutionNavItems(tenant, host);
+      brand = await getPublicNavbarBrand(tenant);
+    }
   } catch {
     tenant = null;
     institutionNavItems = [];

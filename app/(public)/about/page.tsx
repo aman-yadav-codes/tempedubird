@@ -4,6 +4,8 @@ import { db } from "@/lib/db/db";
 import { getCompanyPageBySlug } from "@/lib/queries/company";
 import { AboutPageView } from "@/components/public/about-page-view";
 
+import { resolvePageMetadata } from "@/lib/seo/metadata";
+
 async function getHost() {
   const headerList = await headers();
   return headerList.get("x-forwarded-host") ?? headerList.get("host");
@@ -13,10 +15,10 @@ export async function generateMetadata() {
   const profile = await getCurrentPublicInstitutionProfile(await getHost());
   const name = profile?.name ?? "EduBird";
 
-  return {
+  return resolvePageMetadata("/about", profile?.id, {
     title: `About ${name} | Mission, Vision, Goals & Leadership`,
     description: profile?.about ?? "Learn more about our institution, mission, vision, goals, and leadership.",
-  };
+  });
 }
 
 export default async function AboutPage() {

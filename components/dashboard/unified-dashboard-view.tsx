@@ -30,7 +30,12 @@ import {
   CreditCard,
   Settings,
   HelpCircle,
+  Phone,
+  Mail,
+  FileCheck,
+  AlertTriangle,
   LucideIcon,
+  ExternalLink,
 } from "lucide-react";
 import { useAuthStore } from "@/store";
 import { Card } from "@/components/ui/card";
@@ -58,7 +63,7 @@ export type DashboardMetricCard = {
   label: string;
   value: string;
   hint: string;
-  color: "emerald" | "primary" | "blue" | "amber";
+  color: "emerald" | "primary" | "blue" | "amber" | "rose";
   icon: LucideIcon;
 };
 
@@ -86,6 +91,48 @@ export type QuickShortcut = {
   colorText: string;
 };
 
+export type ActionRequiredData = {
+  pendingEnquiries?: Array<{
+    id: number;
+    student_name: string;
+    phone: string;
+    email: string;
+    status: string;
+    program_title?: string | null;
+    created_at: string;
+  }>;
+  unverifiedDocuments?: Array<{
+    id: number;
+    student_name: string;
+    admission_number?: string | null;
+    document_type: string;
+    document_number?: string | null;
+    created_at: string;
+  }>;
+  openTickets?: Array<{
+    id: number;
+    ticket_number: string;
+    subject: string;
+    status: string;
+    priority: string;
+    creator_name?: string | null;
+    created_at: string;
+  }>;
+};
+
+export type LatestRecordsData = {
+  recentAdmissions?: Array<{
+    id: number;
+    student_name: string;
+    admission_number?: string | null;
+    roll_number?: string | null;
+    program_name?: string | null;
+    status?: string | null;
+    admission_date?: string | null;
+    created_at: string;
+  }>;
+};
+
 export type UnifiedDashboardProps = {
   role: "platform_admin" | "institution_admin" | "teacher" | "student" | "parent" | "admin";
   statusBadgeText: string;
@@ -100,10 +147,13 @@ export type UnifiedDashboardProps = {
 
   contextLabel: string;
   contexts: ContextOption[];
-  
+
   metricsTitle: string;
   metricsSubtitle?: string;
   metrics: DashboardMetricCard[];
+
+  actionRequired?: ActionRequiredData;
+  latestRecords?: LatestRecordsData;
 
   activeSectionTitle: string;
   activeSectionSubtitle?: string;
@@ -132,6 +182,9 @@ export function UnifiedDashboardView({
   metricsSubtitle,
   metrics,
 
+  actionRequired,
+  latestRecords,
+
   activeSectionTitle,
   activeSectionSubtitle,
   activeModules,
@@ -151,7 +204,7 @@ export function UnifiedDashboardView({
     else if (hour < 17) setGreeting("Good Afternoon");
     else setGreeting("Good Evening");
 
-    if (contexts.length > 0 && !contexts.some(c => c.id === selectedContextId)) {
+    if (contexts.length > 0 && !contexts.some((c) => c.id === selectedContextId)) {
       setSelectedContextId(contexts[0].id);
     }
   }, [contexts, selectedContextId]);
@@ -184,6 +237,12 @@ export function UnifiedDashboardView({
           text: "text-amber-700 dark:text-amber-400",
           iconBg: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
         };
+      case "rose":
+        return {
+          card: "border-rose-500/20 bg-rose-500/5",
+          text: "text-rose-700 dark:text-rose-400",
+          iconBg: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+        };
       default:
         return {
           card: "border-primary/20 bg-primary/5",
@@ -192,6 +251,11 @@ export function UnifiedDashboardView({
         };
     }
   };
+
+  const pendingEnquiriesCount = actionRequired?.pendingEnquiries?.length || 0;
+  const unverifiedDocsCount = actionRequired?.unverifiedDocuments?.length || 0;
+  const openTicketsCount = actionRequired?.openTickets?.length || 0;
+  const totalActionsCount = pendingEnquiriesCount + unverifiedDocsCount + openTicketsCount;
 
   return (
     <div className="space-y-8">
@@ -245,7 +309,7 @@ export function UnifiedDashboardView({
             </div>
           </div>
 
-          {/* CONTEXT SELECTOR CAROUSEL (IMAGE 1 STYLE) */}
+          {/* CONTEXT SELECTOR CAROUSEL */}
           {contexts && contexts.length > 0 && (
             <div className="pt-4 border-t border-white/15 space-y-2">
               <p className="text-xs font-bold text-white/70 uppercase tracking-wider flex items-center gap-1.5">
@@ -338,6 +402,202 @@ export function UnifiedDashboardView({
         </div>
       </div>
 
+      {/* ACTION REQUIRED SECTION (USER EXPLICIT REQUIREMENT) */}
+      {totalActionsCount > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2.5 w-2.5 rounded-full bg-rose-500 animate-pulse" />
+                <h2 className="text-xl font-black text-foreground flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-rose-500" />
+                  Action Required & Urgent Attention
+                </h2>
+                <Badge className="bg-rose-500 text-white font-extrabold text-xs">
+                  {totalActionsCount} Pending
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Tasks, unverified student documents, open inquiries, or tickets requiring immediate administrative response.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {/* 1. Pending Website Course Enquiries / Leads */}
+            <Card className="p-5 border-amber-500/30 bg-amber-500/5 shadow-2xs flex flex-col justify-between space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                    <Phone className="h-4 w-4" /> New Course Inquiries
+                  </span>
+                  <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 font-extrabold text-[11px]">
+                    {pendingEnquiriesCount} New Leads
+                  </Badge>
+                </div>
+
+                {pendingEnquiriesCount === 0 ? (
+                  <p className="text-xs text-muted-foreground italic py-3">No pending student inquiries.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {actionRequired?.pendingEnquiries?.slice(0, 3).map((lead) => (
+                      <div key={lead.id} className="p-2.5 rounded-lg bg-background/80 border border-border/60 text-xs space-y-1">
+                        <div className="flex items-center justify-between font-bold text-foreground">
+                          <span>{lead.student_name}</span>
+                          <span className="text-[10px] text-muted-foreground font-normal">
+                            {new Date(lead.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground font-medium truncate">
+                          Course: {lead.program_title || "General Inquiry"}
+                        </p>
+                        <p className="text-[11px] text-primary font-semibold flex items-center gap-1">
+                          <Phone className="h-3 w-3" /> {lead.phone || lead.email}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <Link href="/admin/sales/leads" className="w-full">
+                <Button size="sm" variant="outline" className="w-full text-xs font-bold gap-1.5 border-amber-500/30 hover:bg-amber-500/10 text-amber-700 dark:text-amber-400 cursor-pointer">
+                  <span>Respond on Leads Desk</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            </Card>
+
+            {/* 2. Unverified Student Documents */}
+            <Card className="p-5 border-blue-500/30 bg-blue-500/5 shadow-2xs flex flex-col justify-between space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
+                    <FileCheck className="h-4 w-4" /> Document Verifications
+                  </span>
+                  <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30 font-extrabold text-[11px]">
+                    {unverifiedDocsCount} Pending
+                  </Badge>
+                </div>
+
+                {unverifiedDocsCount === 0 ? (
+                  <p className="text-xs text-muted-foreground italic py-3">All student documents verified.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {actionRequired?.unverifiedDocuments?.slice(0, 3).map((doc) => (
+                      <div key={doc.id} className="p-2.5 rounded-lg bg-background/80 border border-border/60 text-xs space-y-1">
+                        <div className="flex items-center justify-between font-bold text-foreground">
+                          <span>{doc.student_name}</span>
+                          <Badge variant="secondary" className="text-[9px] font-bold">
+                            {doc.document_type}
+                          </Badge>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          {doc.admission_number ? `Adm: ${doc.admission_number}` : "Uploaded Document"}
+                          {doc.document_number ? ` • No: ${doc.document_number}` : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <Link href="/admin/students" className="w-full">
+                <Button size="sm" variant="outline" className="w-full text-xs font-bold gap-1.5 border-blue-500/30 hover:bg-blue-500/10 text-blue-700 dark:text-blue-400 cursor-pointer">
+                  <span>Verify in Student Desk</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            </Card>
+
+            {/* 3. Open Helpdesk Support Tickets */}
+            <Card className="p-5 border-rose-500/30 bg-rose-500/5 shadow-2xs flex flex-col justify-between space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1.5">
+                    <AlertCircle className="h-4 w-4" /> Open Support Tickets
+                  </span>
+                  <Badge variant="outline" className="bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30 font-extrabold text-[11px]">
+                    {openTicketsCount} Unresolved
+                  </Badge>
+                </div>
+
+                {openTicketsCount === 0 ? (
+                  <p className="text-xs text-muted-foreground italic py-3">No unresolved support tickets.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {actionRequired?.openTickets?.slice(0, 3).map((ticket) => (
+                      <div key={ticket.id} className="p-2.5 rounded-lg bg-background/80 border border-border/60 text-xs space-y-1">
+                        <div className="flex items-center justify-between font-bold text-foreground">
+                          <span className="truncate max-w-[140px]">{ticket.subject}</span>
+                          <Badge variant="destructive" className="text-[9px] font-bold uppercase">
+                            {ticket.priority || "Normal"}
+                          </Badge>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          From: {ticket.creator_name || "User"} • #{ticket.ticket_number || ticket.id}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <Link href="/admin/support/tickets" className="w-full">
+                <Button size="sm" variant="outline" className="w-full text-xs font-bold gap-1.5 border-rose-500/30 hover:bg-rose-500/10 text-rose-700 dark:text-rose-400 cursor-pointer">
+                  <span>Reply in Helpdesk</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* LATEST DATABASE RECORDS: RECENT ADMISSIONS & ENROLLMENTS */}
+      {latestRecords?.recentAdmissions && latestRecords.recentAdmissions.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Recent Student Admissions & Enrollments
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Latest student records admitted into your campus academic programs.
+              </p>
+            </div>
+            <Link href="/admin/students">
+              <Button variant="ghost" size="sm" className="text-xs font-bold text-primary gap-1">
+                <span>View All Students</span> <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {latestRecords.recentAdmissions.map((adm) => (
+              <Card key={adm.id} className="p-4 shadow-2xs hover:border-primary/40 transition-all space-y-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h3 className="font-bold text-sm text-foreground">{adm.student_name}</h3>
+                    <p className="text-xs text-primary font-medium">{adm.program_name}</p>
+                  </div>
+                  <Badge variant="outline" className="text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                    {adm.status || "Active"}
+                  </Badge>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-border/50">
+                  <span>Adm: <strong>{adm.admission_number || "Pending"}</strong></span>
+                  {adm.roll_number && <span>Roll: <strong>{adm.roll_number}</strong></span>}
+                  <span>{new Date(adm.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ACTIVE MODULES / ITEMS GRID */}
       {activeModules && activeModules.length > 0 && (
         <div className="space-y-4">
@@ -371,13 +631,13 @@ export function UnifiedDashboardView({
 
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs font-semibold">
-                    <span className="text-muted-foreground">Progress / Metric</span>
+                    <span className="text-muted-foreground">Enrollment / Capacity</span>
                     <span className="text-foreground">{item.progress}%</span>
                   </div>
                   <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
                     <div
                       className="bg-primary h-full rounded-full transition-all duration-300"
-                      style={{ width: `${item.progress}%` }}
+                      style={{ width: `${Math.min(100, Math.max(15, item.progress))}%` }}
                     />
                   </div>
                 </div>

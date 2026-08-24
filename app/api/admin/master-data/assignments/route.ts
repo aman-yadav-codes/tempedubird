@@ -589,7 +589,7 @@ export async function GET(req: Request) {
       },
       capabilities: {
         canCreate:
-          !isPlatformAdmin &&
+          isPlatformAdmin ||
           hasPermission(currentUser, "content.assignments.create"),
         canBlock: isPlatformAdmin,
         canInherit: !isPlatformAdmin && view === "marketplace",
@@ -604,14 +604,10 @@ export async function POST(req: Request) {
   try {
     const currentUser = await requireAdmin(req);
     await ensureAssignmentTemplateSchema();
-    if (isPlatformAdminUser(currentUser)) {
-      return NextResponse.json(
-        { error: "Platform Admin can review assignments but cannot create them" },
-        { status: 403 }
-      );
-    }
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const payload = parseAssignmentMetadataPayload(await req.json());
     if (
+      !isPlatformAdmin &&
       !hasPermission(currentUser, "content.assignments.create", {
         institutionId: payload.institutionId,
       })
@@ -635,18 +631,23 @@ export async function POST(req: Request) {
     const client = await db.connect();
     try {
       await client.query("BEGIN");
+      const isPublic = isPlatformAdmin ? payload.isPublic : false;
+      const marketplaceApproved = isPlatformAdmin && payload.isPublic;
       const result = await client.query<{ id: number }>(
         `
           INSERT INTO assignment_templates
             (title, description, total_marks, ai_question_format, is_public,
              marketplace_requested, marketplace_requested_at, marketplace_requested_by,
-             marketplace_approved, is_active, version, source_institution_id,
+             marketplace_approved, marketplace_approved_at, marketplace_approved_by,
+             is_active, version, source_institution_id,
              created_by, updated_by)
           VALUES (
-            $1, $2, $3, $4::jsonb, FALSE,
-            $5, CASE WHEN $5 THEN CURRENT_TIMESTAMP ELSE NULL END,
-            CASE WHEN $5 THEN $8::integer ELSE NULL::integer END,
-            FALSE, $6, 1, $7, $8, $8
+            $1, $2, $3, $4::jsonb, $5,
+            $6, CASE WHEN $6 THEN CURRENT_TIMESTAMP ELSE NULL END,
+            CASE WHEN $6 THEN $8::integer ELSE NULL::integer END,
+            $9, CASE WHEN $9 THEN CURRENT_TIMESTAMP ELSE NULL END,
+            CASE WHEN $9 THEN $8::integer ELSE NULL::integer END,
+            $7, 1, $10, $8, $8
           )
           RETURNING id
         `,
@@ -655,10 +656,12 @@ export async function POST(req: Request) {
           payload.description,
           payload.totalMarks,
           JSON.stringify(payload.aiQuestionFormat),
+          isPublic,
           payload.isPublic,
           payload.isActive,
-          payload.institutionId,
           currentUser.id,
+          marketplaceApproved,
+          payload.institutionId,
         ]
       );
       const templateId = result.rows[0].id;

@@ -169,6 +169,7 @@ export function getInitialForm(
         is_active: user?.is_active ?? true,
         is_verified: user?.is_verified ?? false,
         is_profile_complete: user?.is_profile_complete ?? false,
+        is_marketplace_enabled: (user as any)?.is_marketplace_enabled ?? (user?.profile as any)?.is_marketplace_enabled ?? true,
         about: user?.profile.about ?? "",
         is_teacher: user?.profile.is_teacher ?? false,
         teacher_type: user?.profile.teacher_type ?? "",

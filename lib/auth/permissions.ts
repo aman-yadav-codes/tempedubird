@@ -116,11 +116,12 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "content.category_tree", label: "Category Tree", description: "content category tree", scope: "platform", page: "/admin/content/tree" },
   { key: "content.categories", label: "Categories", description: "content categories", scope: "platform", page: "/admin/content/categories" },
   { key: "content.boards", label: "Boards", description: "content boards", scope: "platform", page: "/admin/content/boards" },
+  { key: "content.universities", label: "Universities", description: "content universities registry", scope: "platform", page: "/admin/content/universities" },
   { key: "content.subjects", label: "Subjects", description: "content subjects", scope: "platform", page: "/admin/content/subjects" },
   { key: "content.skills", label: "Skills", description: "content skills", scope: "platform", page: "/admin/master-data/skills" },
   { key: "content.designations", label: "Designations", description: "content designations", scope: "platform", page: "/admin/master-data/designations" },
   { key: "content.locations", label: "Locations", description: "content locations", scope: "platform", page: "/admin/master-data/locations" },
-  { key: "content.syllabus", label: "Syllabus", description: "universal and institution syllabi", scope: "institution", page: "/admin/master-data/syllabus" },
+  { key: "content.syllabus", label: "Syllabus", description: "universal and institution syllabi", scope: "platform", page: "/admin/content/syllabus" },
   { key: "content.card_categories", label: "Card Categories", description: "global card and document categories", scope: "platform", page: "/admin/master-data/card-categories" },
   { key: "content.card_templates", label: "Card Templates", description: "assigned and marketplace card templates", scope: "institution", page: "/admin/master-data/card-templates" },
   { key: "content.assignments", label: "Assignments", description: "institution assignment templates", scope: "institution", page: "/admin/master-data/assignments" },
@@ -265,6 +266,7 @@ export const LEGACY_PERMISSION_MODULE_MAP: Record<string, string> = {
   "content.categories.category_tree": "content.category_tree",
   "content.categories.manage_categories": "content.categories",
   "content.categories.boards": "content.boards",
+  "content.categories.universities": "content.universities",
   "content.categories.subjects": "content.subjects",
   "content.master_data.skills": "content.skills",
   "content.master_data.designations": "content.designations",
@@ -940,10 +942,14 @@ export function getRequestPermission(method: string, url: string) {
   if (pathname.includes("/api/admin/analytics/sales")) return permissionForAction("analytics.sales", verb);
   if (pathname.includes("/api/admin/analytics/reports")) return permissionForAction("analytics.reports", verb);
   if (pathname.includes("/api/admin/analytics")) return permissionForAction("analytics.overview", verb);
+  if (pathname.includes("/api/admin/content/courses")) {
+    return verb === "GET" ? AUTHENTICATED_LOOKUP_PERMISSION : permissionForAction("content.category_tree", verb);
+  }
   if (pathname.includes("/api/admin/categories/tree")) return permissionForAction("content.category_tree", verb);
   if (pathname.includes("/api/admin/categories")) return permissionForAction("content.categories", verb);
   if (pathname.includes("/api/admin/content/blog")) return permissionForAction("content.blog", verb);
   if (pathname.includes("/api/admin/boards")) return permissionForAction("content.boards", verb);
+  if (pathname.includes("/api/admin/universities")) return permissionForAction("content.universities", verb);
   if (pathname.includes("/api/admin/subjects")) return permissionForAction("content.subjects", verb);
   if (pathname.includes("/api/admin/master-data/skills")) return permissionForAction("content.skills", verb);
   if (pathname.includes("/api/admin/master-data/designations")) return permissionForAction("content.designations", verb);

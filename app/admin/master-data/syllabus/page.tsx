@@ -4,14 +4,25 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import {
   BookOpen,
+  Check,
+  CheckCircle2,
+  ChevronDown,
   ChevronRight,
+  ClipboardPaste,
   Eye,
+  FileText,
+  FolderPlus,
   GitBranch,
+  GraduationCap,
   Info,
+  Layers,
   Loader2,
   MoreHorizontal,
   Plus,
   RefreshCw,
+  Search,
+  Sparkles,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -497,6 +508,230 @@ export default function SyllabusPage() {
   const [updateTargetSyllabus, setUpdateTargetSyllabus] = useState<Syllabus | null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
 
+  // Course / Program & Subject Tabs State
+  type CourseOption = {
+    id: number;
+    name: string;
+    code?: string | null;
+    category_name?: string | null;
+    board_name?: string | null;
+    university_name?: string | null;
+    certification_provider_name?: string | null;
+    authority_type?: string | null;
+  };
+
+  const [courses, setCourses] = useState<CourseOption[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState<string>("all");
+  const [loadingCourses, setLoadingCourses] = useState(false);
+  const [subjectsList, setSubjectsList] = useState<Array<{ id: number; name: string; code?: string | null; icon_url?: string | null; course_id?: number | null; category_name?: string | null; board_name?: string | null }>>([]);
+  const [loadingSubjectsList, setLoadingSubjectsList] = useState(false);
+  const [subjectFilterSearch, setSubjectFilterSearch] = useState("");
+
+  // Curriculum Builder (Module / Unit / Chapter / Lesson / Topic) State
+  type DraftSyllabusNode = {
+    id: string;
+    parentId: string | null;
+    node_type: "module" | "unit" | "chapter" | "lesson" | "topic";
+    title: string;
+    duration_value?: string;
+    duration_unit?: "hours" | "minutes" | "days";
+    estimated_hours?: string;
+    learning_outcomes?: string;
+  };
+
+  // Map of subjectId -> DraftSyllabusNode[] for individual subject tabs
+  const [subjectNodesMap, setSubjectNodesMap] = useState<Record<string, DraftSyllabusNode[]>>({});
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
+  const [expandedAccordions, setExpandedAccordions] = useState<Set<string>>(new Set());
+
+  // Top add bar inputs
+  const [newNodeType, setNewNodeType] = useState<"module" | "unit" | "chapter" | "lesson" | "topic">("unit");
+  const [newNodeTitle, setNewNodeTitle] = useState("");
+  const [newNodeParentId, setNewNodeParentId] = useState<string>("root");
+  const [newNodeDurationValue, setNewNodeDurationValue] = useState("");
+  const [newNodeDurationUnit, setNewNodeDurationUnit] = useState<"hours" | "minutes" | "days">("hours");
+
+  // Inline add state inside accordion
+  const [inlineAddTargetId, setInlineAddTargetId] = useState<string | null>(null);
+  const [inlineAddType, setInlineAddType] = useState<"chapter" | "lesson" | "topic">("lesson");
+  const [inlineAddTitle, setInlineAddTitle] = useState("");
+  const [inlineAddDurationValue, setInlineAddDurationValue] = useState("");
+  const [inlineAddDurationUnit, setInlineAddDurationUnit] = useState<"hours" | "minutes" | "days">("hours");
+
+  // Quick bulk paste
+  const [bulkPasteOpen, setBulkPasteOpen] = useState(false);
+  const [bulkPasteText, setBulkPasteText] = useState("");
+  const [bulkPasteType, setBulkPasteType] = useState<"module" | "unit" | "chapter" | "lesson" | "topic">("chapter");
+
+  const currentSubjectNodes = useMemo(() => {
+    return (form.subject_id && subjectNodesMap[form.subject_id]) || [];
+  }, [form.subject_id, subjectNodesMap]);
+
+  function formatNodeDuration(node: DraftSyllabusNode) {
+    if (node.duration_value) {
+      const unitLabel =
+        node.duration_unit === "minutes"
+          ? "mins"
+          : node.duration_unit === "days"
+          ? "days"
+          : "hrs";
+      return `${node.duration_value} ${unitLabel}`;
+    }
+    if (node.estimated_hours) {
+      return `${node.estimated_hours} hrs`;
+    }
+    return null;
+  }
+
+  const toggleAccordion = (nodeId: string) => {
+    setExpandedAccordions((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+      } else {
+        next.add(nodeId);
+      }
+      return next;
+    });
+  };
+
+  const addDraftNode = (
+    type?: "module" | "unit" | "chapter" | "lesson" | "topic",
+    title?: string,
+    parentId?: string | null,
+    durationVal?: string,
+    durationUnit?: "hours" | "minutes" | "days"
+  ) => {
+    if (!form.subject_id) {
+      toast.error("Please select a subject first");
+      return;
+    }
+    const finalType = type || newNodeType;
+    const finalTitle = (title !== undefined ? title : newNodeTitle).trim();
+    const finalParentId = parentId !== undefined ? parentId : (newNodeParentId === "root" ? null : newNodeParentId);
+    const finalDurationVal = (durationVal !== undefined ? durationVal : newNodeDurationValue).trim();
+    const finalDurationUnit = durationUnit || (durationVal !== undefined ? "hours" : newNodeDurationUnit);
+
+    if (!finalTitle) {
+      toast.error("Please enter a title");
+      return;
+    }
+
+    // Calculate approximate estimated_hours for database storage
+    let calculatedHours: string | undefined = undefined;
+    if (finalDurationVal) {
+      const num = Number(finalDurationVal);
+      if (Number.isFinite(num) && num > 0) {
+        if (finalDurationUnit === "minutes") {
+          calculatedHours = (num / 60).toFixed(2);
+        } else if (finalDurationUnit === "days") {
+          calculatedHours = (num * 6).toFixed(1);
+        } else {
+          calculatedHours = String(num);
+        }
+      }
+    }
+
+    const newNode: DraftSyllabusNode = {
+      id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      parentId: finalParentId,
+      node_type: finalType,
+      title: finalTitle,
+      duration_value: finalDurationVal || undefined,
+      duration_unit: finalDurationUnit,
+      estimated_hours: calculatedHours,
+    };
+
+    setSubjectNodesMap((prev) => {
+      const existing = prev[form.subject_id] || [];
+      return {
+        ...prev,
+        [form.subject_id]: [...existing, newNode],
+      };
+    });
+
+    if (finalParentId) {
+      setExpandedAccordions((prev) => new Set(prev).add(finalParentId));
+    }
+
+    setNewNodeTitle("");
+    setNewNodeDurationValue("");
+    setInlineAddTargetId(null);
+    setInlineAddTitle("");
+    setInlineAddDurationValue("");
+    setSaveStatus("saved");
+    toast.success(`Added ${finalType.toUpperCase()}: "${finalTitle}"`);
+  };
+
+  const removeDraftNode = (id: string) => {
+    if (!form.subject_id) return;
+    setSubjectNodesMap((prev) => {
+      const existing = prev[form.subject_id] || [];
+      const removeIds = new Set<string>([id]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const n of existing) {
+          if (n.parentId && removeIds.has(n.parentId) && !removeIds.has(n.id)) {
+            removeIds.add(n.id);
+            changed = true;
+          }
+        }
+      }
+      return {
+        ...prev,
+        [form.subject_id]: existing.filter((n) => !removeIds.has(n.id)),
+      };
+    });
+    setSaveStatus("saved");
+    toast.success("Removed curriculum item.");
+  };
+
+  const applyBulkPaste = () => {
+    if (!form.subject_id || !bulkPasteText.trim()) return;
+    const lines = bulkPasteText
+      .split(/[\n,]+/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (lines.length === 0) return;
+
+    const parentId = newNodeParentId === "root" ? null : newNodeParentId;
+    const newItems: DraftSyllabusNode[] = lines.map((line, idx) => ({
+      id: `draft-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 5)}`,
+      parentId,
+      node_type: bulkPasteType,
+      title: line,
+    }));
+
+    setSubjectNodesMap((prev) => {
+      const existing = prev[form.subject_id] || [];
+      return {
+        ...prev,
+        [form.subject_id]: [...existing, ...newItems],
+      };
+    });
+
+    if (parentId) {
+      setExpandedAccordions((prev) => new Set(prev).add(parentId));
+    }
+
+    setBulkPasteText("");
+    setBulkPasteOpen(false);
+    setSaveStatus("saved");
+    toast.success(`Added ${newItems.length} ${bulkPasteType}(s) to curriculum.`);
+  };
+
+  function formatCourseOptionLabel(c: CourseOption) {
+    const affiliation = c.board_name || c.university_name || c.certification_provider_name;
+    if (affiliation) {
+      return `${c.name} (${affiliation})${c.code ? ` • ${c.code}` : ""}`;
+    }
+    if (c.category_name) {
+      return `${c.name} • ${c.category_name}${c.code ? ` (${c.code})` : ""}`;
+    }
+    return `${c.name}${c.code ? ` (${c.code})` : ""}`;
+  }
+
   const isPlatformAdmin = Boolean(
     user?.is_super_admin || user?.role_codes?.includes("platform_admin")
   );
@@ -557,6 +792,46 @@ export default function SyllabusPage() {
     return () => window.clearTimeout(timeout);
   }, [fetchSyllabi, isReady]);
 
+  const fetchCoursesList = useCallback(async () => {
+    if (!accessToken) return;
+    setLoadingCourses(true);
+    try {
+      const res = await fetch("/api/admin/content/courses?limit=100", {
+        headers: authHeaders(),
+      });
+      const json = await readJson(res);
+      if (res.ok && Array.isArray(json.data)) {
+        setCourses(json.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch courses", err);
+    } finally {
+      setLoadingCourses(false);
+    }
+  }, [accessToken, authHeaders]);
+
+  const fetchSubjectsList = useCallback(async (courseId?: string) => {
+    if (!accessToken) return;
+    setLoadingSubjectsList(true);
+    try {
+      const params = new URLSearchParams({ limit: "150" });
+      if (courseId && courseId !== "all") {
+        params.set("courseId", courseId);
+      }
+      const res = await fetch(`/api/admin/subjects?${params.toString()}`, {
+        headers: authHeaders(),
+      });
+      const json = await readJson(res);
+      if (res.ok && Array.isArray(json.data)) {
+        setSubjectsList(json.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch subjects list", err);
+    } finally {
+      setLoadingSubjectsList(false);
+    }
+  }, [accessToken, authHeaders]);
+
   const fetchSubjects = useCallback(async (searchText: string, page: number) => {
     if (!accessToken) return { data: [], hasMore: false };
     const params = new URLSearchParams({
@@ -591,6 +866,23 @@ export default function SyllabusPage() {
   const openCreateDialog = () => {
     setEditingSyllabus(null);
     setForm(blankSyllabusForm());
+    setSelectedCourseId("all");
+    setSubjectFilterSearch("");
+    setSubjectNodesMap({});
+    setExpandedAccordions(new Set());
+    setNewNodeType("unit");
+    setNewNodeTitle("");
+    setNewNodeParentId("root");
+    setNewNodeDurationValue("");
+    setNewNodeDurationUnit("hours");
+    setInlineAddTargetId(null);
+    setInlineAddDurationValue("");
+    setInlineAddDurationUnit("hours");
+    setBulkPasteOpen(false);
+    setBulkPasteText("");
+    setSaveStatus("saved");
+    fetchCoursesList();
+    fetchSubjectsList("all");
     setDialogOpen(true);
   };
 
@@ -620,12 +912,29 @@ export default function SyllabusPage() {
           subject_label: subjectLabel,
           title: subjectLabel ? `${subjectLabel} Syllabus` : "",
         });
+        setSelectedCourseId("all");
+        setSubjectFilterSearch("");
+        setSubjectNodesMap({});
+        setExpandedAccordions(new Set());
+        setNewNodeType("unit");
+        setNewNodeTitle("");
+        setNewNodeParentId("root");
+        setNewNodeDurationValue("");
+        setNewNodeDurationUnit("hours");
+        setInlineAddTargetId(null);
+        setInlineAddDurationValue("");
+        setInlineAddDurationUnit("hours");
+        setBulkPasteOpen(false);
+        setBulkPasteText("");
+        setSaveStatus("saved");
+        fetchCoursesList();
+        fetchSubjectsList("all");
         setDialogOpen(true);
       }
       window.history.replaceState(null, "", window.location.pathname);
     }, 0);
     return () => window.clearTimeout(timeout);
-  }, [isReady]);
+  }, [fetchCoursesList, fetchSubjectsList, isReady]);
 
   const openEditDialog = (syllabus: Syllabus) => {
     setEditingSyllabus(syllabus);
@@ -637,21 +946,35 @@ export default function SyllabusPage() {
       version: String(syllabus.version),
       is_active: syllabus.is_active,
     });
+    setSelectedCourseId("all");
+    setSubjectFilterSearch("");
+    setSubjectNodesMap({});
+    setExpandedAccordions(new Set());
+    setInlineAddTargetId(null);
+    setSaveStatus("saved");
+    fetchCoursesList();
+    fetchSubjectsList("all");
     setDialogOpen(true);
   };
 
   const saveSyllabus = async () => {
     if (!accessToken) return;
-    if (!form.subject_id || !form.title.trim()) {
-      toast.error("Select subject and enter title");
+    if (!form.subject_id) {
+      toast.error("Please select a subject");
       return;
     }
     setSaving(true);
+    setSaveStatus("saving");
     try {
+      const selectedSub = subjectsList.find((s) => String(s.id) === form.subject_id);
+      const subjectName = selectedSub?.name || form.subject_label || "Subject";
+      const selectedCourse = courses.find((c) => String(c.id) === selectedCourseId);
+      const autoTitle = form.title.trim() || (selectedCourse ? `${selectedCourse.name} - ${subjectName}` : `${subjectName} Syllabus`);
+
       const body = {
         subject_id: Number(form.subject_id),
-        title: form.title.trim(),
-        description: form.description.trim(),
+        title: autoTitle,
+        description: form.description.trim() || null,
         version: Number(form.version) || 1,
         is_template: isPlatformAdmin,
         is_active: form.is_active,
@@ -666,10 +989,55 @@ export default function SyllabusPage() {
       });
       const json = await readJson(res);
       if (!res.ok) throw new Error(json.error ?? "Failed to save syllabus");
-      toast.success(editingSyllabus ? "Syllabus updated." : "Syllabus created.");
+      const createdSyllabusId = editingSyllabus ? editingSyllabus.id : (json.data?.id ?? json.data);
+
+      const nodesToSave = subjectNodesMap[form.subject_id] || [];
+
+      // Save draft curriculum nodes if created
+      if (!editingSyllabus && createdSyllabusId && nodesToSave.length > 0) {
+        const idMap = new Map<string, number>();
+        const sortedDrafts = [...nodesToSave].sort((a, b) => {
+          if (!a.parentId && b.parentId) return -1;
+          if (a.parentId && !b.parentId) return 1;
+          return 0;
+        });
+
+        for (const draft of sortedDrafts) {
+          const realParentId = draft.parentId ? (idMap.get(draft.parentId) ?? null) : null;
+          const nodeRes = await fetch(`/api/admin/master-data/syllabi/${createdSyllabusId}/nodes`, {
+            method: "POST",
+            headers: { ...authHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({
+              parent_id: realParentId,
+              node_type: draft.node_type,
+              title: draft.title.trim(),
+              estimated_hours: draft.estimated_hours ? Number(draft.estimated_hours) : null,
+              learning_outcomes: draft.learning_outcomes?.trim() || null,
+              sort_order: 0,
+              is_active: true,
+            }),
+          });
+          const nodeJson = await readJson(nodeRes);
+          if (nodeRes.ok && nodeJson.data?.id) {
+            idMap.set(draft.id, Number(nodeJson.data.id));
+          } else if (nodeRes.ok && typeof nodeJson.data === "number") {
+            idMap.set(draft.id, nodeJson.data);
+          }
+        }
+      }
+
+      setSaveStatus("saved");
+      toast.success(
+        editingSyllabus
+          ? "Syllabus updated."
+          : nodesToSave.length > 0
+          ? `Syllabus created with ${nodesToSave.length} curriculum items.`
+          : "Syllabus created."
+      );
       setDialogOpen(false);
       fetchSyllabi();
     } catch (err) {
+      setSaveStatus("unsaved");
       toast.error(readError(err));
     } finally {
       setSaving(false);
@@ -1365,75 +1733,898 @@ export default function SyllabusPage() {
       />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[92vh] overflow-y-auto sm:!max-w-3xl">
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:!max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editingSyllabus ? "Edit Syllabus" : "Add Syllabus"}</DialogTitle>
-            <DialogDescription>
-              Platform entries become templates. Institution copies are edited separately after inheritance.
-            </DialogDescription>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-primary" />
+              {editingSyllabus ? "Edit Syllabus" : "Add Syllabus"}
+            </DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Subject</Label>
-              <AsyncSearchPopover<SubjectOption>
-                value={form.subject_id}
-                selectedLabel={form.subject_label}
-                onChange={(value) => setForm((prev) => ({ ...prev, subject_id: value }))}
-                onSelectItem={(item) => setForm((prev) => ({
-                  ...prev,
-                  subject_id: String(item.id),
-                  subject_label: item.label,
-                  title: prev.title || `${item.name} Syllabus`,
-                }))}
-                fetcher={fetchSubjects}
-                getValue={(item) => String(item.id)}
-                getLabel={(item) => item.label}
-                placeholder="Select subject"
-                searchPlaceholder="Search category, board, subject..."
-                emptyText="No level 4 subjects found"
-                popoverClassName="w-[min(var(--radix-popover-trigger-width),calc(100vw-48px))] sm:w-[min(var(--radix-popover-trigger-width),calc(100vw-48px))]"
-                renderItem={(item) => (
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate font-medium">{item.name}</span>
-                      <Badge variant="outline" className="shrink-0 text-[10px]">
-                        Level {item.level ?? 4}
-                      </Badge>
+
+          <div className="space-y-4 py-2">
+            {/* Choose Course / Program */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                <span>Choose Course / Program</span>
+                {loadingCourses && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+              </Label>
+              <Select
+                value={selectedCourseId}
+                onValueChange={(val) => {
+                  setSelectedCourseId(val);
+                  fetchSubjectsList(val);
+                }}
+              >
+                <SelectTrigger className="w-full h-9 text-xs">
+                  <SelectValue placeholder="All Courses / Universal" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  <SelectItem value="all" className="text-xs font-medium">
+                    All Courses / Universal
+                  </SelectItem>
+                  {courses.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)} className="text-xs">
+                      {formatCourseOptionLabel(c)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Individual Subject Tabs Selection */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <GraduationCap className="h-4 w-4 text-primary" />
+                  <span>Subjects</span>
+                  <span className="text-[11px] text-muted-foreground font-normal">
+                    (Click a tab to configure its syllabus)
+                  </span>
+                </Label>
+                <div className="flex items-center gap-2">
+                  {saveStatus === "saving" ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-500">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Saving changes...
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Progressive Save Active
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Individual Subject Tabs (Horizontal Scrollable) */}
+              <div className="p-2 rounded-xl border border-border bg-muted/10 overflow-hidden">
+                {loadingSubjectsList ? (
+                  <div className="flex items-center justify-center py-4 text-muted-foreground text-xs gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <span>Loading subjects...</span>
+                  </div>
+                ) : subjectsList.length === 0 ? (
+                  <div className="py-4 text-center text-muted-foreground text-xs">
+                    No subjects found for this course.
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                    {subjectsList.map((sub) => {
+                      const isSelected = form.subject_id === String(sub.id);
+                      const count = subjectNodesMap[String(sub.id)]?.length || 0;
+                      return (
+                        <button
+                          key={sub.id}
+                          type="button"
+                          onClick={() => {
+                            setForm((prev) => ({
+                              ...prev,
+                              subject_id: String(sub.id),
+                              subject_label: sub.name,
+                              title: `${sub.name} Syllabus`,
+                            }));
+                            const nodes = subjectNodesMap[String(sub.id)] || [];
+                            if (nodes.length > 0) {
+                              setExpandedAccordions(new Set(nodes.map((n) => n.id)));
+                            }
+                          }}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all border text-left cursor-pointer ${
+                            isSelected
+                              ? "bg-primary text-primary-foreground border-primary shadow-xs ring-2 ring-primary/20 scale-[1.02]"
+                              : "bg-background hover:bg-muted text-foreground border-border hover:border-primary/40"
+                          }`}
+                        >
+                          {sub.icon_url ? (
+                            <img
+                              src={sub.icon_url}
+                              alt=""
+                              className="h-3.5 w-3.5 rounded object-contain shrink-0"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = "none";
+                              }}
+                            />
+                          ) : (
+                            <GraduationCap className={`h-3.5 w-3.5 shrink-0 ${isSelected ? "text-primary-foreground" : "text-muted-foreground"}`} />
+                          )}
+                          <span className="truncate max-w-[140px]">{sub.name}</span>
+                          <Badge
+                            variant="outline"
+                            className={`text-[9px] px-1.5 py-0 rounded-full font-bold ${
+                              isSelected
+                                ? "bg-primary-foreground/20 text-primary-foreground border-primary-foreground/30"
+                                : count > 0
+                                ? "bg-primary/10 text-primary border-primary/30"
+                                : "bg-muted text-muted-foreground border-border"
+                            }`}
+                          >
+                            {count}
+                          </Badge>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Curriculum Accordion Tree Builder */}
+            {form.subject_id && !editingSyllabus && (
+              <div className="space-y-3 pt-3 border-t border-border/80">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Layers className="h-4 w-4 text-primary" />
+                    <span>Curriculum Hierarchy: {form.subject_label}</span>
+                    <Badge variant="secondary" className="text-[10px] py-0 px-1.5 font-bold text-primary">
+                      {currentSubjectNodes.length} Items Total
+                    </Badge>
+                  </Label>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setBulkPasteOpen(!bulkPasteOpen)}
+                    className="h-7 px-2 text-[11px] font-semibold text-primary hover:text-primary gap-1"
+                  >
+                    <ClipboardPaste className="h-3.5 w-3.5" />
+                    {bulkPasteOpen ? "Close Bulk Paste" : "Quick Bulk Paste"}
+                  </Button>
+                </div>
+
+                {/* Bulk Paste Box */}
+                {bulkPasteOpen && (
+                  <div className="p-3 rounded-2xl border border-primary/30 bg-primary/5 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label className="text-[11px] font-semibold text-foreground">
+                        Paste items (one per line or comma-separated):
+                      </Label>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-medium text-muted-foreground">Type:</span>
+                        <select
+                          value={bulkPasteType}
+                          onChange={(e) => setBulkPasteType(e.target.value as any)}
+                          className="h-6 text-[10px] px-2 py-0 rounded border border-input bg-background font-semibold"
+                        >
+                          <option value="module">Module</option>
+                          <option value="unit">Unit</option>
+                          <option value="chapter">Chapter</option>
+                          <option value="lesson">Lesson (Sub-part of Chapter)</option>
+                          <option value="topic">Topic (Sub-part of Lesson)</option>
+                        </select>
+                      </div>
                     </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {[item.category_path ?? item.category_name, item.board_name]
-                        .filter(Boolean)
-                        .join(" -> ")}
+                    <Textarea
+                      placeholder="e.g.&#10;Unit 1: Real Numbers&#10;Unit 2: Polynomials&#10;Unit 3: Linear Equations"
+                      value={bulkPasteText}
+                      onChange={(e) => setBulkPasteText(e.target.value)}
+                      rows={3}
+                      className="text-xs bg-background"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-6 text-[11px]"
+                        onClick={() => setBulkPasteOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-6 text-[11px] bg-primary text-primary-foreground font-semibold"
+                        onClick={applyBulkPaste}
+                      >
+                        Add All
+                      </Button>
                     </div>
                   </div>
                 )}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Title</Label>
-              <Input
-                value={form.title}
-                onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
-                placeholder="CBSE Mathematics"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Version</Label>
-              <Input
-                value={form.version}
-                onChange={(event) => setForm((prev) => ({ ...prev, version: event.target.value.replace(/\D/g, "") }))}
-                placeholder="1"
-              />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Description</Label>
-              <Textarea
-                value={form.description}
-                onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
-                placeholder="Describe this syllabus template"
-              />
-            </div>
-            <label className="flex items-center gap-2 text-sm">
+
+                {/* Add Item Top Input Form */}
+                <div className="p-3 rounded-2xl border border-border/80 bg-muted/20 space-y-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                    {/* Level / Type */}
+                    <div className="sm:col-span-3">
+                      <Select
+                        value={newNodeType}
+                        onValueChange={(val: any) => {
+                          setNewNodeType(val);
+                          // Auto-select sensible default parent
+                          if (val === "topic") {
+                            const firstLesson = currentSubjectNodes.find((n) => n.node_type === "lesson");
+                            if (firstLesson) {
+                              setNewNodeParentId(firstLesson.id);
+                            }
+                          } else if (val === "lesson") {
+                            const firstChapter = currentSubjectNodes.find((n) => n.node_type === "chapter");
+                            if (firstChapter) {
+                              setNewNodeParentId(firstChapter.id);
+                            }
+                          } else if (val === "chapter") {
+                            const firstUnit = currentSubjectNodes.find((n) => n.node_type === "unit" || n.node_type === "module");
+                            if (firstUnit) {
+                              setNewNodeParentId(firstUnit.id);
+                            }
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="h-8 text-xs font-semibold">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="module" className="text-xs">Module</SelectItem>
+                          <SelectItem value="unit" className="text-xs">Unit</SelectItem>
+                          <SelectItem value="chapter" className="text-xs">Chapter</SelectItem>
+                          <SelectItem value="lesson" className="text-xs">Lesson (Sub-part of Chapter)</SelectItem>
+                          <SelectItem value="topic" className="text-xs">Topic (Sub-part of Lesson)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Parent Selector */}
+                    <div className="sm:col-span-4">
+                      <select
+                        value={newNodeParentId}
+                        onChange={(e) => setNewNodeParentId(e.target.value)}
+                        className="w-full h-8 px-2 rounded-md border border-input bg-background text-xs truncate font-medium"
+                      >
+                        <option value="root">None (Top Root Level)</option>
+                        {currentSubjectNodes
+                          .filter((n) => {
+                            if (newNodeType === "topic") {
+                              return n.node_type === "lesson" || n.node_type === "chapter";
+                            }
+                            if (newNodeType === "lesson") {
+                              return n.node_type === "chapter";
+                            }
+                            if (newNodeType === "chapter") {
+                              return n.node_type === "unit" || n.node_type === "module";
+                            }
+                            return n.node_type === "module";
+                          })
+                          .map((n) => (
+                            <option key={n.id} value={n.id}>
+                              Under: [{n.node_type.toUpperCase()}] {n.title}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    {/* Title Input */}
+                    <div className="sm:col-span-5">
+                      <Input
+                        placeholder={
+                          newNodeType === "topic"
+                            ? "Topic title (e.g. Topic 1: Introduction to Prime Numbers)"
+                            : newNodeType === "lesson"
+                            ? "Lesson title (e.g. Lesson 1.1: Prime Factorisation)"
+                            : newNodeType === "chapter"
+                            ? "Chapter title (e.g. Chapter 1: Real Numbers)"
+                            : newNodeType === "unit"
+                            ? "Unit title (e.g. Unit 1: Number Systems)"
+                            : "Title..."
+                        }
+                        value={newNodeTitle}
+                        onChange={(e) => setNewNodeTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addDraftNode();
+                          }
+                        }}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-muted-foreground font-medium">Duration:</span>
+                      <Input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        placeholder="e.g. 4"
+                        value={newNodeDurationValue}
+                        onChange={(e) => setNewNodeDurationValue(e.target.value)}
+                        className="h-7 w-16 text-xs"
+                      />
+                      <select
+                        value={newNodeDurationUnit}
+                        onChange={(e) => setNewNodeDurationUnit(e.target.value as any)}
+                        className="h-7 text-[11px] px-2 py-0 rounded border border-input bg-background font-medium"
+                      >
+                        <option value="hours">Hours</option>
+                        <option value="minutes">Minutes</option>
+                        <option value="days">Days</option>
+                      </select>
+                    </div>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => addDraftNode()}
+                      disabled={!newNodeTitle.trim()}
+                      className="h-7 text-xs font-semibold bg-primary text-primary-foreground gap-1"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add to Syllabus
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Interactive Accordion Tree (Module/Unit -> Chapter -> Lesson -> Topic) */}
+                <div className="space-y-2 min-h-[140px] max-h-[360px] overflow-y-auto pr-1">
+                  {currentSubjectNodes.length === 0 ? (
+                    <div className="p-6 rounded-2xl border border-dashed text-center space-y-2 bg-muted/10">
+                      <Layers className="h-8 w-8 text-muted-foreground/50 mx-auto" />
+                      <p className="text-xs font-semibold text-foreground">No curriculum structure yet</p>
+                      <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
+                        Add units, chapters, lessons, and topics using the builder above to configure the syllabus for {form.subject_label}.
+                      </p>
+                    </div>
+                  ) : (
+                    currentSubjectNodes
+                      .filter((n) => !n.parentId)
+                      .map((rootNode) => {
+                        const isExpanded = expandedAccordions.has(rootNode.id);
+                        const childNodes = currentSubjectNodes.filter((c) => c.parentId === rootNode.id);
+                        const rootDuration = formatNodeDuration(rootNode);
+
+                        return (
+                          <div
+                            key={rootNode.id}
+                            className="rounded-2xl border border-border/80 bg-card overflow-hidden transition-all shadow-2xs"
+                          >
+                            {/* Root Level Accordion Header (Unit / Module / Standalone Chapter) */}
+                            <div
+                              onClick={() => toggleAccordion(rootNode.id)}
+                              className="p-2.5 flex items-center justify-between gap-2 hover:bg-muted/40 transition-colors cursor-pointer select-none"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <button
+                                  type="button"
+                                  className="h-5 w-5 rounded hover:bg-muted flex items-center justify-center shrink-0"
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                  ) : (
+                                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                                  )}
+                                </button>
+                                <Badge
+                                  variant="outline"
+                                  className="text-[9px] font-extrabold uppercase px-1.5 py-0 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 shrink-0"
+                                >
+                                  {rootNode.node_type}
+                                </Badge>
+                                <span className="font-bold text-xs text-foreground truncate">
+                                  {rootNode.title}
+                                </span>
+                                {rootDuration && (
+                                  <span className="text-[10px] text-muted-foreground font-mono bg-muted/60 px-1 py-0.2 rounded shrink-0">
+                                    {rootDuration}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                <Badge variant="secondary" className="text-[10px] py-0 px-1.5 font-semibold">
+                                  {childNodes.length} Sub-items
+                                </Badge>
+
+                                {rootNode.node_type === "chapter" && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-1.5 text-[10px] font-semibold text-purple-600 hover:text-purple-700 gap-0.5"
+                                    onClick={() => {
+                                      setInlineAddTargetId(rootNode.id);
+                                      setInlineAddType("lesson");
+                                      setExpandedAccordions((prev) => new Set(prev).add(rootNode.id));
+                                    }}
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                    Lesson
+                                  </Button>
+                                )}
+
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                  onClick={() => removeDraftNode(rootNode.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+
+                            {/* Accordion Body */}
+                            {isExpanded && (
+                              <div className="p-2.5 pt-0 space-y-2 border-t border-border/40 bg-muted/10">
+                                {childNodes.length === 0 ? (
+                                  <div className="py-2 text-center text-[11px] text-muted-foreground italic">
+                                    No sub-items yet. Click + Chapter to add content.
+                                  </div>
+                                ) : (
+                                  childNodes.map((chapter) => {
+                                    const isChapterExpanded = expandedAccordions.has(chapter.id);
+                                    const lessons = currentSubjectNodes.filter((g) => g.parentId === chapter.id);
+                                    const chapterDuration = formatNodeDuration(chapter);
+
+                                    if (chapter.node_type === "chapter") {
+                                      return (
+                                        <div
+                                          key={chapter.id}
+                                          className="rounded-xl border border-border/80 bg-background overflow-hidden"
+                                        >
+                                          {/* Chapter Accordion Header */}
+                                          <div
+                                            onClick={() => toggleAccordion(chapter.id)}
+                                            className="p-2 flex items-center justify-between gap-2 hover:bg-muted/40 transition-colors cursor-pointer select-none"
+                                          >
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                              <button
+                                                type="button"
+                                                className="h-4 w-4 rounded flex items-center justify-center shrink-0"
+                                              >
+                                                {isChapterExpanded ? (
+                                                  <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                                                ) : (
+                                                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                                )}
+                                              </button>
+                                              <Badge
+                                                variant="outline"
+                                                className="text-[9px] font-bold uppercase px-1 py-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                                              >
+                                                CHAPTER
+                                              </Badge>
+                                              <span className="font-semibold text-xs text-foreground truncate">
+                                                {chapter.title}
+                                              </span>
+                                              {chapterDuration && (
+                                                <span className="text-[10px] text-muted-foreground font-mono bg-muted/60 px-1 py-0.2 rounded">
+                                                  {chapterDuration}
+                                                </span>
+                                              )}
+                                            </div>
+
+                                            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-5 px-1 text-[10px] font-semibold text-purple-600 hover:text-purple-700 gap-0.5"
+                                                onClick={() => {
+                                                  setInlineAddTargetId(chapter.id);
+                                                  setInlineAddType("lesson");
+                                                  setExpandedAccordions((prev) => new Set(prev).add(chapter.id));
+                                                }}
+                                              >
+                                                <Plus className="h-3 w-3" />
+                                                Lesson
+                                              </Button>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-5 w-5 text-muted-foreground hover:text-destructive"
+                                                onClick={() => removeDraftNode(chapter.id)}
+                                              >
+                                                <Trash2 className="h-3 w-3" />
+                                              </Button>
+                                            </div>
+                                          </div>
+
+                                          {/* Chapter Body (Lessons & Topics) */}
+                                          {isChapterExpanded && (
+                                            <div className="p-2 pt-0 space-y-1.5 border-t border-border/40 bg-muted/10">
+                                              {lessons.length === 0 ? (
+                                                <div className="py-1 text-center text-[10px] text-muted-foreground italic">
+                                                  No lessons yet. Click + Lesson to add sub-parts.
+                                                </div>
+                                              ) : (
+                                                lessons.map((lesson) => {
+                                                  const isLessonExpanded = expandedAccordions.has(lesson.id);
+                                                  const topics = currentSubjectNodes.filter((t) => t.parentId === lesson.id);
+                                                  const lessonDuration = formatNodeDuration(lesson);
+
+                                                  if (lesson.node_type === "lesson") {
+                                                    return (
+                                                      <div
+                                                        key={lesson.id}
+                                                        className="rounded-lg border border-purple-500/20 bg-card overflow-hidden"
+                                                      >
+                                                        {/* Lesson Header */}
+                                                        <div
+                                                          onClick={() => toggleAccordion(lesson.id)}
+                                                          className="p-1.5 px-2 flex items-center justify-between gap-1.5 hover:bg-muted/30 transition-colors cursor-pointer select-none"
+                                                        >
+                                                          <div className="flex items-center gap-1.5 min-w-0">
+                                                            <button
+                                                              type="button"
+                                                              className="h-3.5 w-3.5 rounded flex items-center justify-center shrink-0"
+                                                            >
+                                                              {isLessonExpanded ? (
+                                                                <ChevronDown className="h-2.5 w-2.5 text-muted-foreground" />
+                                                              ) : (
+                                                                <ChevronRight className="h-2.5 w-2.5 text-muted-foreground" />
+                                                              )}
+                                                            </button>
+                                                            <Badge
+                                                              variant="outline"
+                                                              className="text-[8px] font-extrabold uppercase px-1 py-0 bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30"
+                                                            >
+                                                              LESSON
+                                                            </Badge>
+                                                            <span className="font-semibold text-xs text-foreground truncate">
+                                                              {lesson.title}
+                                                            </span>
+                                                            {lessonDuration && (
+                                                                <span className="text-[9px] text-muted-foreground font-mono bg-muted/60 px-1 py-0.2 rounded">
+                                                                {lessonDuration}
+                                                              </span>
+                                                            )}
+                                                          </div>
+
+                                                          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                                            <Badge variant="outline" className="text-[8px] py-0 px-1 text-muted-foreground font-medium">
+                                                              {topics.length} Topics
+                                                            </Badge>
+                                                            <Button
+                                                              type="button"
+                                                              variant="ghost"
+                                                              size="sm"
+                                                              className="h-4.5 px-1 text-[9px] font-bold text-emerald-600 hover:text-emerald-700 gap-0.5"
+                                                              onClick={() => {
+                                                                setInlineAddTargetId(lesson.id);
+                                                                setInlineAddType("topic");
+                                                                setExpandedAccordions((prev) => new Set(prev).add(lesson.id));
+                                                              }}
+                                                            >
+                                                              <Plus className="h-2.5 w-2.5" />
+                                                              Topic
+                                                            </Button>
+                                                            <Button
+                                                              type="button"
+                                                              variant="ghost"
+                                                              size="icon"
+                                                              className="h-4 w-4 text-muted-foreground hover:text-destructive"
+                                                              onClick={() => removeDraftNode(lesson.id)}
+                                                            >
+                                                              <Trash2 className="h-2.5 w-2.5" />
+                                                            </Button>
+                                                          </div>
+                                                        </div>
+
+                                                        {/* Topics inside Lesson */}
+                                                        {isLessonExpanded && (
+                                                          <div className="p-1.5 pt-0 space-y-1 border-t border-purple-500/10 bg-muted/20">
+                                                            {topics.length === 0 ? (
+                                                              <div className="py-0.5 text-center text-[9px] text-muted-foreground italic">
+                                                                No topics yet. Click + Topic to add topic.
+                                                              </div>
+                                                            ) : (
+                                                              topics.map((topic) => {
+                                                                const topicDuration = formatNodeDuration(topic);
+                                                                return (
+                                                                  <div
+                                                                    key={topic.id}
+                                                                    className="p-1 px-2 rounded-md border border-border/60 bg-background flex items-center justify-between gap-1.5 text-xs"
+                                                                  >
+                                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                                      <Badge
+                                                                        variant="outline"
+                                                                        className="text-[8px] font-bold uppercase px-1 py-0 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                                                                      >
+                                                                        TOPIC
+                                                                      </Badge>
+                                                                      <span className="font-normal text-[11px] text-foreground truncate">
+                                                                        {topic.title}
+                                                                      </span>
+                                                                      {topicDuration && (
+                                                                        <span className="text-[8px] text-muted-foreground font-mono bg-muted/60 px-1 py-0.2 rounded">
+                                                                          {topicDuration}
+                                                                        </span>
+                                                                      )}
+                                                                    </div>
+                                                                    <Button
+                                                                      type="button"
+                                                                      variant="ghost"
+                                                                      size="icon"
+                                                                      className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive shrink-0"
+                                                                      onClick={() => removeDraftNode(topic.id)}
+                                                                    >
+                                                                      <Trash2 className="h-2 w-2" />
+                                                                    </Button>
+                                                                  </div>
+                                                                );
+                                                              })
+                                                            )}
+
+                                                            {/* Inline Add Topic Form under this Lesson */}
+                                                            {inlineAddTargetId === lesson.id && (
+                                                              <div className="p-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 space-y-1.5 mt-1">
+                                                                <span className="text-[9px] font-bold text-emerald-600 uppercase">
+                                                                  + Add Topic to {lesson.title}
+                                                                </span>
+                                                                <div className="flex items-center gap-1">
+                                                                  <Input
+                                                                    placeholder="Topic title..."
+                                                                    value={inlineAddTitle}
+                                                                    onChange={(e) => setInlineAddTitle(e.target.value)}
+                                                                    className="h-6 text-xs bg-background flex-1"
+                                                                  />
+                                                                  <Input
+                                                                    type="number"
+                                                                    step="0.5"
+                                                                    min="0"
+                                                                    placeholder="Time"
+                                                                    value={inlineAddDurationValue}
+                                                                    onChange={(e) => setInlineAddDurationValue(e.target.value)}
+                                                                    className="h-6 w-14 text-xs bg-background"
+                                                                  />
+                                                                  <select
+                                                                    value={inlineAddDurationUnit}
+                                                                    onChange={(e) => setInlineAddDurationUnit(e.target.value as any)}
+                                                                    className="h-6 text-[10px] px-1 rounded border border-input bg-background font-medium"
+                                                                  >
+                                                                    <option value="hours">Hours</option>
+                                                                    <option value="minutes">Mins</option>
+                                                                    <option value="days">Days</option>
+                                                                  </select>
+                                                                  <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    className="h-6 px-1.5 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                                                                    onClick={() =>
+                                                                      addDraftNode("topic", inlineAddTitle, lesson.id, inlineAddDurationValue, inlineAddDurationUnit)
+                                                                    }
+                                                                  >
+                                                                    Add
+                                                                  </Button>
+                                                                  <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-6 px-1 text-xs text-muted-foreground"
+                                                                    onClick={() => setInlineAddTargetId(null)}
+                                                                  >
+                                                                    ✕
+                                                                  </Button>
+                                                                </div>
+                                                              </div>
+                                                            )}
+                                                          </div>
+                                                        )}
+                                                      </div>
+                                                    );
+                                                  }
+
+                                                  // Standalone sub-item under chapter
+                                                  const subDuration = formatNodeDuration(lesson);
+                                                  return (
+                                                    <div
+                                                      key={lesson.id}
+                                                      className="p-1 px-2 rounded-lg border border-border/60 bg-card flex items-center justify-between gap-1.5 text-xs"
+                                                    >
+                                                      <div className="flex items-center gap-1.5 min-w-0">
+                                                        <Badge
+                                                          variant="outline"
+                                                          className="text-[8px] font-extrabold uppercase px-1 py-0 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                                                        >
+                                                          {lesson.node_type}
+                                                        </Badge>
+                                                        <span className="font-medium text-foreground truncate">
+                                                          {lesson.title}
+                                                        </span>
+                                                        {subDuration && (
+                                                          <span className="text-[9px] text-muted-foreground font-mono bg-muted/60 px-1 py-0.2 rounded">
+                                                            {subDuration}
+                                                          </span>
+                                                        )}
+                                                      </div>
+                                                      <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-4 w-4 text-muted-foreground hover:text-destructive shrink-0"
+                                                        onClick={() => removeDraftNode(lesson.id)}
+                                                      >
+                                                        <Trash2 className="h-2.5 w-2.5" />
+                                                      </Button>
+                                                    </div>
+                                                  );
+                                                })
+                                              )}
+
+                                              {/* Inline Quick Add Lesson Form for this Chapter */}
+                                              {inlineAddTargetId === chapter.id && (
+                                                <div className="p-2 rounded-xl border border-purple-500/30 bg-purple-500/5 space-y-1.5 mt-1">
+                                                  <span className="text-[10px] font-bold text-purple-600 uppercase">
+                                                    + Add Lesson to {chapter.title}
+                                                  </span>
+                                                  <div className="flex items-center gap-1.5">
+                                                    <Input
+                                                      placeholder="Lesson title (e.g. Lesson 1.1: Prime Factorisation)..."
+                                                      value={inlineAddTitle}
+                                                      onChange={(e) => setInlineAddTitle(e.target.value)}
+                                                      className="h-7 text-xs bg-background flex-1"
+                                                    />
+                                                    <Input
+                                                      type="number"
+                                                      step="0.5"
+                                                      min="0"
+                                                      placeholder="Duration"
+                                                      value={inlineAddDurationValue}
+                                                      onChange={(e) => setInlineAddDurationValue(e.target.value)}
+                                                      className="h-7 w-16 text-xs bg-background"
+                                                    />
+                                                    <select
+                                                      value={inlineAddDurationUnit}
+                                                      onChange={(e) => setInlineAddDurationUnit(e.target.value as any)}
+                                                      className="h-7 text-[10px] px-1.5 rounded border border-input bg-background font-medium"
+                                                    >
+                                                      <option value="hours">Hours</option>
+                                                      <option value="minutes">Minutes</option>
+                                                      <option value="days">Days</option>
+                                                    </select>
+                                                    <Button
+                                                      type="button"
+                                                      size="sm"
+                                                      className="h-7 px-2 text-xs bg-purple-600 hover:bg-purple-700 text-white font-semibold"
+                                                      onClick={() =>
+                                                        addDraftNode("lesson", inlineAddTitle, chapter.id, inlineAddDurationValue, inlineAddDurationUnit)
+                                                      }
+                                                    >
+                                                      Add
+                                                    </Button>
+                                                    <Button
+                                                      type="button"
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      className="h-7 px-1.5 text-xs text-muted-foreground"
+                                                      onClick={() => setInlineAddTargetId(null)}
+                                                    >
+                                                      ✕
+                                                    </Button>
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    }
+
+                                    // Direct sub-item under Unit (e.g. standalone lesson)
+                                    const directDuration = formatNodeDuration(chapter);
+                                    return (
+                                      <div
+                                        key={chapter.id}
+                                        className="p-1.5 px-2.5 rounded-xl border border-border/70 bg-background flex items-center justify-between gap-2 text-xs"
+                                      >
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <Badge
+                                            variant="outline"
+                                            className="text-[9px] font-bold uppercase px-1.5 py-0 bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30"
+                                          >
+                                            {chapter.node_type}
+                                          </Badge>
+                                          <span className="font-semibold text-foreground truncate">
+                                            {chapter.title}
+                                          </span>
+                                          {directDuration && (
+                                            <span className="text-[10px] text-muted-foreground font-mono bg-muted/60 px-1 py-0.2 rounded">
+                                              {directDuration}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-5 w-5 text-muted-foreground hover:text-destructive"
+                                          onClick={() => removeDraftNode(chapter.id)}
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    );
+                                  })
+                                )}
+
+                                {/* Inline Quick Add Chapter Form for this Unit */}
+                                {inlineAddTargetId === rootNode.id && (
+                                  <div className="p-2 rounded-xl border border-primary/30 bg-primary/5 space-y-1.5 mt-1">
+                                    <span className="text-[10px] font-bold text-primary uppercase">
+                                      + Add Chapter to {rootNode.title}
+                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                      <Input
+                                        placeholder="Chapter title (e.g. Chapter 1: Real Numbers)..."
+                                        value={inlineAddTitle}
+                                        onChange={(e) => setInlineAddTitle(e.target.value)}
+                                        className="h-7 text-xs bg-background flex-1"
+                                      />
+                                      <Input
+                                        type="number"
+                                        step="0.5"
+                                        min="0"
+                                        placeholder="Duration"
+                                        value={inlineAddDurationValue}
+                                        onChange={(e) => setInlineAddDurationValue(e.target.value)}
+                                        className="h-7 w-16 text-xs bg-background"
+                                      />
+                                      <select
+                                        value={inlineAddDurationUnit}
+                                        onChange={(e) => setInlineAddDurationUnit(e.target.value as any)}
+                                        className="h-7 text-[10px] px-1.5 rounded border border-input bg-background font-medium"
+                                      >
+                                        <option value="hours">Hours</option>
+                                        <option value="minutes">Minutes</option>
+                                        <option value="days">Days</option>
+                                      </select>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        className="h-7 px-2 text-xs bg-primary text-primary-foreground font-semibold"
+                                        onClick={() =>
+                                          addDraftNode("chapter", inlineAddTitle, rootNode.id, inlineAddDurationValue, inlineAddDurationUnit)
+                                        }
+                                      >
+                                        Add Chapter
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 px-1.5 text-xs text-muted-foreground"
+                                        onClick={() => setInlineAddTargetId(null)}
+                                      >
+                                        ✕
+                                      </Button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Active Checkbox */}
+            <label className="flex items-center gap-2 text-xs font-semibold text-foreground cursor-pointer pt-1">
               <Checkbox
                 checked={form.is_active}
                 onCheckedChange={(checked) => setForm((prev) => ({ ...prev, is_active: Boolean(checked) }))}
@@ -1441,10 +2632,11 @@ export default function SyllabusPage() {
               Active
             </label>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="pt-2">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={saveSyllabus} disabled={saving}>
-              {saving && <Loader2 className="size-4 animate-spin" />}
+            <Button onClick={saveSyllabus} disabled={saving || !form.subject_id}>
+              {saving && <Loader2 className="size-4 animate-spin mr-1.5" />}
               {editingSyllabus ? "Save Changes" : "Create Template"}
             </Button>
           </DialogFooter>

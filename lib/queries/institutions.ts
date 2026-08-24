@@ -472,6 +472,8 @@ async function ensureInstitutionProfileSchema(db: Queryable) {
   await db.query(`ALTER TABLE institution_profiles ADD COLUMN IF NOT EXISTS mission TEXT`);
   await db.query(`ALTER TABLE institution_profiles ADD COLUMN IF NOT EXISTS vision TEXT`);
   await db.query(`ALTER TABLE institution_profiles ADD COLUMN IF NOT EXISTS goal TEXT`);
+  await db.query(`ALTER TABLE institution_profiles ADD COLUMN IF NOT EXISTS logo_url TEXT`);
+  await db.query(`ALTER TABLE institution_profiles ADD COLUMN IF NOT EXISTS is_marketplace_enabled BOOLEAN DEFAULT TRUE`);
   await db.query(`
         UPDATE institution_types 
         SET name = 'Institute', slug = 'institute', updated_at = CURRENT_TIMESTAMP
@@ -592,6 +594,7 @@ export async function listInstitutionProfiles(
         p.location_id,
         p.parent_university_id,
         p.board_id,
+        p.is_marketplace_enabled,
         p.is_active,
         p.is_deleted,
         p.created_by,
@@ -707,8 +710,8 @@ export async function createInstitutionProfile(
       INSERT INTO institution_profiles (
         name, slug, institution_type_id, institution_subtype_id,
         phone, email, established_year, website, about, mission, vision, goal, founder_name, founder_title, founder_image_url, founder_about, ai_content, location_id, parent_university_id, board_id,
-        is_active, is_deleted, add_source, created_by, updated_by
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21, FALSE, $22, $23, $23)
+        is_marketplace_enabled, is_active, is_deleted, add_source, created_by, updated_by
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22, FALSE, $23, $24, $24)
       RETURNING *
     `,
       [
@@ -734,6 +737,7 @@ export async function createInstitutionProfile(
         (await institutionTypeAllowsBoard(client, data.institutionTypeId))
           ? data.boardId || null
           : null,
+        data.isMarketplaceEnabled ?? true,
         data.isActive ?? true,
         data.addSource ?? null,
         data.createdBy || null,
@@ -863,6 +867,10 @@ export async function updateInstitutionProfile(
         : null;
       params.push(allowedBoardId);
       fields.push(`board_id = $${params.length}`);
+    }
+    if (input.isMarketplaceEnabled !== undefined) {
+      params.push(input.isMarketplaceEnabled);
+      fields.push(`is_marketplace_enabled = $${params.length}`);
     }
     if (input.slug !== undefined) {
       params.push(input.slug);
@@ -1368,15 +1376,40 @@ export async function listInstitutionPrograms(
         ip.*,
         pt.name AS program_type_name,
         COALESCE(inst.name, inst.slug) AS institution_name,
+        prog_board.name AS board_name,
         (
           SELECT string_agg(c.name, ', ' ORDER BY c.name)
           FROM program_categories pc
           JOIN categories c ON c.id = pc.category_id
           WHERE pc.program_id = ip.id
-        ) AS categories
+        ) AS categories,
+        (
+          SELECT string_agg(l.name, ', ' ORDER BY l.name)
+          FROM program_languages pl
+          JOIN languages l ON l.id = pl.language_id
+          WHERE pl.program_id = ip.id
+        ) AS languages,
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', pfc.id,
+              'title', pfc.title,
+              'amount', pfc.amount,
+              'unit', pfc.fee_unit,
+              'payment_mode', pfc.payment_mode,
+              'discount_type', pfc.discount_type,
+              'discount_value', pfc.discount_value,
+              'final_amount', pfc.final_amount,
+              'installments_count', pfc.installments_count
+            ) ORDER BY pfc.sort_order ASC
+          )
+          FROM program_fee_components pfc
+          WHERE pfc.program_id = ip.id
+        ) AS fee_components
       FROM institution_programs ip
       LEFT JOIN program_types pt ON pt.id = ip.program_type_id
       INNER JOIN institution_profiles inst ON inst.id = ip.institution_id
+      LEFT JOIN boards prog_board ON prog_board.id = ip.board_id
       ${where}
     ORDER BY ip.updated_at DESC, ip.created_at DESC
       LIMIT $${params.length + 1}
@@ -1406,7 +1439,8 @@ export async function getInstitutionProgramById(db: Pool, id: number) {
             ay.start_date AS academic_year_start_date,
             ay.end_date AS academic_year_end_date,
             inst.board_id AS institution_board_id,
-            board.name AS institution_board_name
+            board.name AS institution_board_name,
+            prog_board.name AS board_name
          FROM institution_programs ip
          LEFT JOIN program_types pt ON pt.id = ip.program_type_id
          INNER JOIN institution_profiles inst
@@ -1416,6 +1450,7 @@ export async function getInstitutionProgramById(db: Pool, id: number) {
          LEFT JOIN institution_profiles univ ON univ.id = ip.university_id
          LEFT JOIN academic_years ay ON ay.id = ip.academic_year_id
          LEFT JOIN boards board ON board.id = inst.board_id
+         LEFT JOIN boards prog_board ON prog_board.id = ip.board_id
          WHERE ip.id = $1
            AND COALESCE(ip.is_deleted, FALSE) = FALSE`,
     [id],
@@ -1509,7 +1544,7 @@ export async function getInstitutionProgramById(db: Pool, id: number) {
   program.section_names = sections.rows.map((r: any) => r.section_name);
   await ensureProgramFeeComponentUnitColumn(db);
   const fees = await db.query(
-    `SELECT id, title, amount, fee_unit AS unit FROM program_fee_components WHERE program_id = $1 ORDER BY sort_order ASC`,
+    `SELECT id, title, amount, fee_unit AS unit, payment_mode, discount_type, discount_value, final_amount, installments_count FROM program_fee_components WHERE program_id = $1 ORDER BY sort_order ASC`,
     [id],
   );
   program.fee_components = fees.rows;
@@ -1526,7 +1561,12 @@ type QueryRunner = {
 async function ensureProgramFeeComponentUnitColumn(client: QueryRunner) {
   await client.query(`
     ALTER TABLE program_fee_components
-      ADD COLUMN IF NOT EXISTS fee_unit TEXT NULL
+      ADD COLUMN IF NOT EXISTS fee_unit TEXT NULL,
+      ADD COLUMN IF NOT EXISTS payment_mode TEXT NULL,
+      ADD COLUMN IF NOT EXISTS discount_type TEXT NULL,
+      ADD COLUMN IF NOT EXISTS discount_value NUMERIC NULL,
+      ADD COLUMN IF NOT EXISTS final_amount NUMERIC NULL,
+      ADD COLUMN IF NOT EXISTS installments_count INTEGER NULL
   `);
 }
 
@@ -1650,8 +1690,22 @@ export async function createInstitutionProgram(
       let order = 0;
       for (const f of data.feeComponents) {
         await client.query(
-          `INSERT INTO program_fee_components (program_id, title, amount, fee_unit, sort_order, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$6)`,
-          [newProgram.id, f.title, f.amount, f.unit || null, order++, data.createdBy || null],
+          `INSERT INTO program_fee_components (
+            program_id, title, amount, fee_unit, payment_mode, discount_type, discount_value, final_amount, installments_count, sort_order, created_by, updated_by
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)`,
+          [
+            newProgram.id,
+            f.title,
+            f.amount,
+            f.unit || null,
+            f.payment_mode || null,
+            f.discount_type || null,
+            f.discount_value != null ? f.discount_value : null,
+            f.final_amount != null ? f.final_amount : null,
+            f.installments_count != null ? f.installments_count : null,
+            order++,
+            data.createdBy || null,
+          ],
         );
       }
     }
@@ -1819,8 +1873,22 @@ export async function updateInstitutionProgram(
       let order = 0;
       for (const f of input.feeComponents) {
         await client.query(
-          `INSERT INTO program_fee_components (program_id, title, amount, fee_unit, sort_order, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$6)`,
-          [input.id, f.title, f.amount, f.unit || null, order++, input.updatedBy || null],
+          `INSERT INTO program_fee_components (
+            program_id, title, amount, fee_unit, payment_mode, discount_type, discount_value, final_amount, installments_count, sort_order, created_by, updated_by
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)`,
+          [
+            input.id,
+            f.title,
+            f.amount,
+            f.unit || null,
+            f.payment_mode || null,
+            f.discount_type || null,
+            f.discount_value != null ? f.discount_value : null,
+            f.final_amount != null ? f.final_amount : null,
+            f.installments_count != null ? f.installments_count : null,
+            order++,
+            input.updatedBy || null,
+          ],
         );
       }
     }

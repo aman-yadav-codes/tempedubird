@@ -71,8 +71,17 @@ function mapPublicCourseRow(row: Record<string, unknown>) {
     : [];
   const feeComponents = Array.isArray(row.fee_components)
     ? row.fee_components.filter(
-        (fee): fee is { id?: number; title?: string; amount?: unknown } =>
-          Boolean(fee) && typeof fee === "object",
+        (fee): fee is {
+          id?: number;
+          title?: string;
+          amount?: unknown;
+          unit?: string | null;
+          payment_mode?: "one_time" | "installment" | string | null;
+          discount_type?: "percentage" | "fixed" | string | null;
+          discount_value?: unknown;
+          final_amount?: unknown;
+          installments_count?: number | null;
+        } => Boolean(fee) && typeof fee === "object",
       )
     : [];
 
@@ -88,6 +97,8 @@ function mapPublicCourseRow(row: Record<string, unknown>) {
     selectedCategory: typeof row.category_name === "string" ? row.category_name : null,
     selectedCategoryId: row.category_id ? Number(row.category_id) : null,
     duration: formatDuration(row.duration_value ? Number(row.duration_value) : null, typeof row.duration_unit === "string" ? row.duration_unit : null),
+    durationValue: row.duration_value ? Number(row.duration_value) : null,
+    durationUnit: typeof row.duration_unit === "string" ? row.duration_unit : null,
     level:
       typeof row.category_name === "string"
         ? row.category_name
@@ -98,6 +109,8 @@ function mapPublicCourseRow(row: Record<string, unknown>) {
     fee_amount: row.fee_amount ?? row.min_amount ?? null,
     institutionId: row.institution_id ? Number(row.institution_id) : undefined,
     institution_id: row.institution_id ? Number(row.institution_id) : undefined,
+    boardName: typeof row.board_name === "string" ? row.board_name : null,
+    universityName: typeof row.university_name === "string" ? row.university_name : null,
     verified: true,
     students: row.seats_available ? `${row.seats_available} seats` : "Open seats",
     seatsAvailable: row.seats_available ? Number(row.seats_available) : null,
@@ -462,7 +475,17 @@ export async function getPublicCourseById(idOrSlug: number | string, opts: { hos
         SELECT
           MIN(amount)::numeric AS min_amount,
           json_agg(
-            json_build_object('id', id, 'title', title, 'amount', amount, 'unit', fee_unit)
+            json_build_object(
+              'id', id,
+              'title', title,
+              'amount', amount,
+              'unit', fee_unit,
+              'payment_mode', payment_mode,
+              'discount_type', discount_type,
+              'discount_value', discount_value,
+              'final_amount', final_amount,
+              'installments_count', installments_count
+            )
             ORDER BY sort_order ASC, id ASC
           ) AS fee_components
         FROM program_fee_components
@@ -479,6 +502,8 @@ export async function getPublicCourseById(idOrSlug: number | string, opts: { hos
         ip.teaching_method,
         ip.fee_amount,
         ip.institution_id,
+        COALESCE(b.name, inst_b.name) AS board_name,
+        COALESCE(u.name, inst_u.name) AS university_name,
         pt.name AS program_type_name,
         COALESCE(inst.name, inst.slug) AS institution_name,
         primary_category.category_id,
@@ -500,6 +525,14 @@ export async function getPublicCourseById(idOrSlug: number | string, opts: { hos
        AND inst.is_active = TRUE
       LEFT JOIN program_types pt
         ON pt.id = ip.program_type_id
+      LEFT JOIN boards b
+        ON b.id = ip.board_id
+      LEFT JOIN boards inst_b
+        ON inst_b.id = inst.board_id
+      LEFT JOIN institution_profiles u
+        ON u.id = ip.university_id
+      LEFT JOIN institution_profiles inst_u
+        ON inst_u.id = inst.parent_university_id
       LEFT JOIN primary_category ON TRUE
       LEFT JOIN category_rollup ON TRUE
       LEFT JOIN language_rollup ON TRUE

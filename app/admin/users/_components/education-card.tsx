@@ -84,10 +84,18 @@ export function EducationCard({
                 <div className="space-y-1.5">
                     <Label>Institution</Label>
                     <AsyncSearchPopover<MasterOrgOption>
-                        value={education.institution_id}
+                        value={education.institution_id || education.institution_name}
                         onChange={(value) => onChange({ institution_id: value })}
-                        placeholder="Select institution"
-                        searchPlaceholder="Search institution..."
+                        allowCustomValue
+                        customValueLabel={(value) => `Use custom institution: "${value}"`}
+                        onCreateCustomValue={(value) =>
+                            onChange({
+                                institution_id: "",
+                                institution_name: value,
+                            })
+                        }
+                        placeholder="Select or type institution"
+                        searchPlaceholder="Search institution or type name..."
                         emptyText="No institution found"
                         selectedLabel={education.institution_name}
                         fetcher={async (search, page) => {

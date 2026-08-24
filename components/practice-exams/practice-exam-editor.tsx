@@ -27,9 +27,11 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
+import { isPlatformAdminUser } from "@/lib/auth/permissions";
 import type { PracticeExamRow } from "@/lib/types/practice-exam";
 import type { SyllabusNode } from "@/lib/types/syllabus";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/store";
 
 export type PracticeExamInstitutionOption = { id: number; name: string };
 type PracticeExamProgramOption = { id: number; title: string };
@@ -181,6 +183,8 @@ export function PracticeExamEditor({
   onSaved,
 }: Props) {
   const { activeInstitution } = useActiveInstitution();
+  const user = useAuthStore((s) => s.user);
+  const isPlatformAdmin = isPlatformAdminUser(user);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [totalMarks, setTotalMarks] = useState("1");
@@ -309,18 +313,20 @@ export function PracticeExamEditor({
   }, [open, programId]);
 
   async function fetchPrograms(search: string, page: number) {
-    if (!accessToken || !institutionId) return { data: [], hasMore: false };
+    if (!accessToken) return { data: [], hasMore: false };
     const params = new URLSearchParams({
       page: String(page),
-      limit: "15",
+      limit: "25",
       search,
-      institutionId,
     });
+    if (!isPlatformAdmin && institutionId) {
+      params.set("institutionId", institutionId);
+    }
     const res = await fetch(`/api/admin/institutions/programs?${params.toString()}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json = await readJson(res);
-    if (!res.ok) throw new Error(json.error ?? "Failed to load classes");
+    if (!res.ok) throw new Error(json.error ?? "Failed to load courses/programs");
     return {
       data: (json.data ?? []) as PracticeExamProgramOption[],
       hasMore: page < Number(json.pageCount ?? 0),
@@ -406,6 +412,7 @@ export function PracticeExamEditor({
   }, [accessToken, open, syllabusId]);
 
   function resolveTargetId() {
+    if (isPlatformAdmin) return Number(programId || 1);
     if (targetType === "INSTITUTION") return Number(institutionId);
     if (targetType === "PROGRAM") return Number(programId);
     if (targetType === "SECTION") return Number(sectionId);
@@ -451,23 +458,30 @@ export function PracticeExamEditor({
 
   function validateBasic(showToast = true) {
     if (!title.trim()) {
-      if (showToast) toast.error("Practice Exam title is required");
+      if (showToast) toast.error("Title is required");
       return false;
     }
     const marks = Number(totalMarks);
-    if (!Number.isFinite(marks) || marks <= 0) {
-      if (showToast) toast.error("Total marks must be greater than zero");
+    if (Number.isNaN(marks) || marks <= 0) {
+      if (showToast) toast.error("Total marks must be greater than 0");
       return false;
     }
     const duration = Number(durationMinutes);
-    if (!Number.isInteger(duration) || duration <= 0) {
-      if (showToast) toast.error("Duration minutes must be greater than zero");
+    if (!Number.isInteger(duration) || duration < 1) {
+      if (showToast) toast.error("Duration minutes must be an integer >= 1");
       return false;
     }
     return true;
   }
 
   function validateTargets(showToast = true) {
+    if (isPlatformAdmin) {
+      if (!programId) {
+        if (showToast) toast.error("Course / Program is required");
+        return false;
+      }
+      return true;
+    }
     if (!institutionId) {
       if (showToast) toast.error("Institution is required");
       return false;
@@ -521,7 +535,7 @@ export function PracticeExamEditor({
       return false;
     }
     if (index >= 2 && !validateTargets()) {
-      setActiveTab("targets");
+      setActiveTab(isPlatformAdmin ? "basic" : "targets");
       return false;
     }
     return true;
@@ -536,14 +550,20 @@ export function PracticeExamEditor({
   }
 
   function goNext() {
-    const currentIndex = WIZARD_TABS.findIndex((item) => item.value === activeTab);
-    const next = WIZARD_TABS[currentIndex + 1];
+    const visibleList = isPlatformAdmin
+      ? WIZARD_TABS.filter((item) => item.value !== "targets")
+      : WIZARD_TABS;
+    const currentIndex = visibleList.findIndex((item) => item.value === activeTab);
+    const next = visibleList[currentIndex + 1];
     if (next) goToTab(next.value);
   }
 
   function goPrevious() {
-    const currentIndex = WIZARD_TABS.findIndex((item) => item.value === activeTab);
-    const previous = WIZARD_TABS[currentIndex - 1];
+    const visibleList = isPlatformAdmin
+      ? WIZARD_TABS.filter((item) => item.value !== "targets")
+      : WIZARD_TABS;
+    const currentIndex = visibleList.findIndex((item) => item.value === activeTab);
+    const previous = visibleList[currentIndex - 1];
     if (previous) setActiveTab(previous.value);
   }
 
@@ -554,7 +574,7 @@ export function PracticeExamEditor({
     if (!validateQuestionFormat()) return;
     setActiveTab("questions");
     const marks = Number(totalMarks);
-    if (!resolveTargetId()) return toast.error("Practice Exam target is required");
+    const resolvedInstId = Number(institutionId || activeInstitution?.id || 1);
     setSaving(true);
     try {
       const res = await fetch(
@@ -572,13 +592,13 @@ export function PracticeExamEditor({
             description: description.trim(),
             total_marks: marks,
             duration_minutes: Number(durationMinutes),
-            source_institution_id: Number(institutionId),
-            target_type: targetType,
+            source_institution_id: resolvedInstId,
+            target_type: "PROGRAM",
             target_id: resolveTargetId(),
             target_program_id: programId ? Number(programId) : null,
             syllabus_node_ids: selectedNodeIds,
             ai_question_format: aiQuestionFormat,
-            is_public: isPublic,
+            is_public: isPlatformAdmin ? true : isPublic,
             is_active: isActive,
           }),
         }
@@ -596,8 +616,11 @@ export function PracticeExamEditor({
     }
   }
 
+  const visibleTabs = isPlatformAdmin
+    ? WIZARD_TABS.filter((item) => item.value !== "targets")
+    : WIZARD_TABS;
   const activeTabIndex = Math.max(
-    WIZARD_TABS.findIndex((item) => item.value === activeTab),
+    visibleTabs.findIndex((item) => item.value === activeTab),
     0
   );
   const isQuestionsStep = activeTab === "questions";
@@ -615,7 +638,7 @@ export function PracticeExamEditor({
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap gap-2">
-          {WIZARD_TABS.map(({ value, label, icon: Icon }) => (
+          {visibleTabs.map(({ value, label, icon: Icon }) => (
             <Button
               key={value as string}
               type="button"
@@ -630,15 +653,97 @@ export function PracticeExamEditor({
 
         {activeTab === "basic" && (
           <div className="grid gap-4">
-            <div className="space-y-2">
-              <RequiredLabel>Practice Exam Title</RequiredLabel>
-              <Input value={title} onChange={(event) => setTitle(event.target.value)} />
+            {!isPlatformAdmin && !template && !activeInstitution && (
+              <div className="space-y-2">
+                <RequiredLabel>Institution</RequiredLabel>
+                <AsyncSearchPopover<PracticeExamInstitutionOption>
+                  value={institutionId}
+                  selectedLabel={institutionName}
+                  onChange={(value) => {
+                    setInstitutionId(value);
+                    if (!value) setInstitutionName("");
+                    setProgramId("");
+                    setProgramName("");
+                    setSections([]);
+                    setProgramSubjects([]);
+                    setSubjectId("");
+                    setSubjectName("");
+                    setSyllabusId("");
+                    setSyllabusName("");
+                    setSyllabusTree([]);
+                    setSelectedNodeIds([]);
+                    setExpandedNodeIds([]);
+                  }}
+                  onSelectItem={(inst) => setInstitutionName(inst.name)}
+                  fetcher={fetchInstitutions}
+                  getValue={(inst) => String(inst.id)}
+                  getLabel={(inst) => inst.name}
+                  placeholder="Select institution..."
+                  searchPlaceholder="Search institutions..."
+                  emptyText="No accessible institutions found"
+                />
+              </div>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <RequiredLabel>Course / Program</RequiredLabel>
+                <AsyncSearchPopover<PracticeExamProgramOption>
+                  value={programId}
+                  selectedLabel={programName}
+                  onChange={(value) => {
+                    setProgramId(value);
+                    setSectionId("");
+                    setStudentId("");
+                    setStudentName("");
+                    setSubjectId("");
+                    setSubjectName("");
+                    setSyllabusId("");
+                    setSyllabusName("");
+                    setSyllabusTree([]);
+                    setSelectedNodeIds([]);
+                    setExpandedNodeIds([]);
+                    if (value) void loadProgramDetail(value);
+                    else {
+                      setSections([]);
+                      setProgramSubjects([]);
+                      setProgramName("");
+                    }
+                  }}
+                  onSelectItem={(program: any) => {
+                    setProgramName(program.title || program.name);
+                    if (program.institution_id && !institutionId) {
+                      setInstitutionId(String(program.institution_id));
+                    }
+                    if (!title.trim() || title.endsWith("Practice Exam")) {
+                      setTitle(`${program.title || program.name} Practice Exam`);
+                    }
+                  }}
+                  fetcher={fetchPrograms}
+                  getValue={(program) => String(program.id)}
+                  getLabel={(program) => program.title}
+                  placeholder="Select course / program..."
+                  searchPlaceholder="Search all courses / programs..."
+                  emptyText="No courses/programs found"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <RequiredLabel>Practice Exam Title</RequiredLabel>
+                <Input
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  placeholder="e.g. Class 10 Science Practice Exam"
+                />
+              </div>
             </div>
+
             <div className="space-y-2">
               <Label>Description</Label>
               <Textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
+                placeholder="Optional description or exam instructions..."
                 className="min-h-24"
               />
             </div>
@@ -665,10 +770,12 @@ export function PracticeExamEditor({
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-5 pt-2">
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox checked={isPublic} onCheckedChange={(value) => setIsPublic(Boolean(value))} />
-                Request marketplace review
-              </label>
+              {!isPlatformAdmin && (
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={isPublic} onCheckedChange={(value) => setIsPublic(Boolean(value))} />
+                  Request marketplace review
+                </label>
+              )}
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox checked={isActive} onCheckedChange={(value) => setIsActive(Boolean(value))} />
                 Active

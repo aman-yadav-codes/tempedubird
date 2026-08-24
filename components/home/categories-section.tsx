@@ -27,18 +27,11 @@ export function CategoriesSection() {
     <section className="py-16">
       <div className="container mx-auto px-4 space-y-8">
         <div className="text-center max-w-2xl mx-auto space-y-2">
-          {isInstitutionalAdmin && activeInstitutionName && (
-            <Badge variant="outline" className="border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold px-3 py-1 text-xs">
-              🏫 {activeInstitutionName} Active Modules
-            </Badge>
-          )}
           <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight">
-            {isInstitutionalAdmin ? "Explore Institution Offerings" : "Browse by Academic Category"}
+            Browse by Academic Category
           </h2>
           <p className="text-sm text-muted-foreground">
-            {isInstitutionalAdmin
-              ? "Access all verified records, courses, study notes, and facilities added by your institution."
-              : "Explore verified courses, institutes, mock tests, and faculty across India."}
+            Explore verified courses, institutes, mock tests, and faculty across India.
           </p>
         </div>
 

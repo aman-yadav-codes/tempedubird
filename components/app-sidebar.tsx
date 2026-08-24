@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
     LayoutDashboard,
+    LayoutGrid,
     Users,
     UsersRound,
     BarChart3,
@@ -32,9 +33,11 @@ import {
     Loader2,
     FolderTree,
     BookOpen,
+    BookCheck,
     GraduationCap,
     Briefcase,
     Edit2,
+    Globe,
     MapPin,
     Building,
     ChartNoAxesColumnIncreasing,
@@ -163,7 +166,6 @@ const navItems: SidebarItem[] = [
         icon: GraduationCap,
         children: [
             { title: "All Students", url: "/admin/students", icon: GraduationCap },
-            { title: "Enrollments", url: "/admin/students/enrollments", icon: BookOpen },
             { title: "Fee Management", url: "/admin/students/fee-management", icon: CreditCard },
             { title: "Attendance", url: "/admin/students/attendance", icon: ClipboardCheck },
             { title: "Achievements", url: "/admin/students/achievements", icon: Trophy },
@@ -259,6 +261,7 @@ const navItems: SidebarItem[] = [
             { title: "Ads Builder", url: "/admin/marketing/ads-builder", icon: Megaphone },
             { title: "New Offers", url: "/admin/marketing/offers", icon: Sparkles },
             { title: "Business Analytics", url: "/admin/marketing/business-analytics", icon: BarChart3 },
+            { title: "SEO & Meta Tags", url: "/admin/marketing/seo", icon: Globe },
         ],
     },
     {
@@ -277,39 +280,37 @@ const navItems: SidebarItem[] = [
         url: "/admin/content",
         icon: FileText,
         children: [
-            {
-                title: "Categories",
-                url: "/admin/content/categories",
-                icon: FolderTree,
-                children: [
-                    { title: "Category Tree", url: "/admin/content/tree", icon: FolderTree },
-                    { title: "Manage Categories", url: "/admin/content/categories", icon: Edit2 },
-                    { title: "Boards", url: "/admin/content/boards", icon: BookOpen },
-                    { title: "Subjects", url: "/admin/content/subjects", icon: GraduationCap },
-                ],
-            },
-            {
-                title: "Master Data",
-                url: "/admin/master-data",
-                icon: Briefcase,
-                children: [
-                    { title: "Skills", url: "/admin/master-data/skills", icon: BookOpen },
-                    { title: "Designations", url: "/admin/master-data/designations", icon: UserCog },
-                    { title: "Locations", url: "/admin/master-data/locations", icon: MapPin },
-                    { title: "Syllabus", url: "/admin/master-data/syllabus", icon: BookOpen },
-                    { title: "Card Categories", url: "/admin/master-data/card-categories", icon: LibraryBig },
-                    { title: "Card Templates", url: "/admin/master-data/card-templates", icon: IdCard },
-                    { title: "Assignments", url: "/admin/master-data/assignments", icon: ClipboardList },
-                    { title: "Practice Exams", url: "/admin/master-data/practice-exams", icon: ClipboardCheck },
-                    { title: "Exams", url: "/admin/master-data/exams", icon: FileText },
-                    { title: "Notes", url: "/admin/master-data/notes", icon: StickyNote },
-                    { title: "Default Calendar", url: "/admin/master-data/default-calendar", icon: CalendarDays },
-                    { title: "Institute Calendar", url: "/admin/master-data/institute-calendar", icon: CalendarDays },
-                    { title: "Timetable Setup", url: "/admin/master-data/timetable-setup", icon: CalendarDays },
-                ],
-            },
+            { title: "Category Tree", url: "/admin/content/tree", icon: FolderTree },
+            { title: "Manage Categories", url: "/admin/content/categories", icon: Edit2 },
+            { title: "Boards", url: "/admin/content/boards", icon: BookOpen },
+            { title: "Universities", url: "/admin/content/universities", icon: Building2 },
+            { title: "Affiliated By / Certifications", url: "/admin/content/certifications", icon: BadgeCheck },
+            { title: "Subjects", url: "/admin/content/subjects", icon: GraduationCap },
+            { title: "Courses & Programs", url: "/admin/content/courses", icon: BookCheck },
+            { title: "Syllabus", url: "/admin/content/syllabus", icon: BookOpen },
+            { title: "Assignments", url: "/admin/content/assignments", icon: ClipboardList },
+            { title: "Practice Exams", url: "/admin/content/practice-exams", icon: ClipboardCheck },
+            { title: "Exams", url: "/admin/content/exams", icon: FileText },
+            { title: "Notes", url: "/admin/content/notes", icon: StickyNote },
             { title: "Blog", url: "/admin/content/blog", icon: FileText },
             { title: "Media", url: "/admin/content/media", icon: Image },
+        ],
+    },
+    {
+        title: "Master Data",
+        url: "/admin/master-data",
+        icon: Briefcase,
+        children: [
+            { title: "Overview Hub", url: "/admin/master-data", icon: LayoutGrid },
+            { title: "Skills", url: "/admin/master-data/skills", icon: BookOpen },
+            { title: "Designations", url: "/admin/master-data/designations", icon: UserCog },
+            { title: "Locations", url: "/admin/master-data/locations", icon: MapPin },
+            { title: "Card Categories", url: "/admin/master-data/card-categories", icon: LibraryBig },
+            { title: "Card Templates", url: "/admin/master-data/card-templates", icon: IdCard },
+            { title: "Default Calendar", url: "/admin/master-data/default-calendar", icon: CalendarDays },
+            { title: "Institute Calendar", url: "/admin/master-data/institute-calendar", icon: CalendarDays },
+            { title: "Timetable Setup", url: "/admin/master-data/timetable-setup", icon: CalendarDays },
+            { title: "Attendance Setup", url: "/admin/master-data/attendance-setup", icon: ClipboardCheck },
         ],
     },
 
@@ -319,97 +320,75 @@ const navItems: SidebarItem[] = [
         icon: Building,
         children: [
             {
-                title: "Master",
-                url: "/admin/institutions/master",
-                icon: FolderTree,
-                children: [
-                    {
-                        title: "Institution Types",
-                        url: "/admin/institutions/types",
-                        icon: Building,
-                    },
-                    {
-                        title: "Institution Subtypes",
-                        url: "/admin/institutions/subtypes",
-                        icon: Building,
-                    },
-                    {
-                        title: "Program Types",
-                        url: "/admin/institutions/program-types",
-                        icon: BookOpen,
-                    },
-                    {
-                        title: "Facility Types",
-                        url: "/admin/institutions/facility-types",
-                        icon: Building,
-                    },
-                    {
-                        title: "Languages",
-                        url: "/admin/institutions/languages",
-                        icon: BookOpen,
-                    },
-                    {
-                        title: "Academic Sessions",
-                        url: "/admin/institutions/academic-years",
-                        icon: CalendarDays,
-                    },
-                ],
-            },
-
-            {
-                title: "Institutions",
+                title: "All Institutions",
                 url: "/admin/institutions/list",
                 icon: Building,
             },
-
+            {
+                title: "Institution Types",
+                url: "/admin/institutions/types",
+                icon: Building,
+            },
+            {
+                title: "Institution Subtypes",
+                url: "/admin/institutions/subtypes",
+                icon: Building,
+            },
+            {
+                title: "Program Types",
+                url: "/admin/institutions/program-types",
+                icon: BookOpen,
+            },
             {
                 title: "Programs",
                 url: "/admin/institutions/programs",
                 icon: GraduationCap,
             },
-
             {
                 title: "Placements",
                 url: "/admin/institutions/placements",
                 icon: TrendingUp,
             },
-
             {
                 title: "Facilities",
                 url: "/admin/institutions/facilities",
                 icon: Building,
             },
-
             {
-                title: "Gallery",
-                url: "/admin/institutions/gallery",
-                icon: Image,
+                title: "Facility Types",
+                url: "/admin/institutions/facility-types",
+                icon: Building,
             },
-
+            {
+                title: "Languages",
+                url: "/admin/institutions/languages",
+                icon: BookOpen,
+            },
+            {
+                title: "Academic Sessions",
+                url: "/admin/institutions/academic-years",
+                icon: CalendarDays,
+            },
             {
                 title: "Institution Cutoffs",
                 url: "/admin/institutions/cutoffs",
                 icon: ChartNoAxesColumnIncreasing,
             },
-
             {
                 title: "Scholarships",
                 url: "/admin/institutions/scholarships",
-                icon: CreditCard,
+                icon: Trophy,
             },
-
             {
                 title: "Hostel Facilities",
                 url: "/admin/institutions/hostels",
-                icon: Building2,
+                icon: Building,
             },
-
             {
-                title: "Library Resources",
+                title: "Library Facilities",
                 url: "/admin/institutions/libraries",
                 icon: LibraryBig,
             },
-
             {
                 title: "Noticeboard",
                 url: "/admin/institutions/news",
@@ -420,7 +399,6 @@ const navItems: SidebarItem[] = [
                 url: "/admin/institution/complaints",
                 icon: MessageSquareWarning,
             },
-
         ],
     },
     {

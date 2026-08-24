@@ -3,10 +3,14 @@ import { ShieldCheck } from "lucide-react";
 import { db } from "@/lib/db/db";
 import { getCompanyPageBySlug } from "@/lib/queries/company";
 
-export const metadata = {
-  title: "Privacy Policy | EduBird",
-  description: "Learn how EduBird collects, protects, and uses your personal data.",
-};
+import { resolvePageMetadata } from "@/lib/seo/metadata";
+
+export async function generateMetadata() {
+  return resolvePageMetadata("/privacy", null, {
+    title: "Privacy Policy | EduBird",
+    description: "Learn how EduBird collects, protects, and uses your personal data.",
+  });
+}
 
 export default async function PrivacyPage() {
   const page = await getCompanyPageBySlug(db, "privacy-policy");

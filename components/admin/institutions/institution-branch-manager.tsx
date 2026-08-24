@@ -40,18 +40,29 @@ import {
 import { InstitutionBranch, BranchPhone, BranchEmail } from "@/lib/types/institution";
 
 interface InstitutionBranchManagerProps {
-  institutionId: number;
+  institutionId?: number;
   accessToken?: string;
   readOnly?: boolean;
+  stagedBranches?: InstitutionBranch[];
+  onStagedBranchesChange?: (branches: InstitutionBranch[]) => void;
 }
 
 export function InstitutionBranchManager({
   institutionId,
   accessToken,
   readOnly = false,
+  stagedBranches,
+  onStagedBranchesChange,
 }: InstitutionBranchManagerProps) {
-  const [branches, setBranches] = useState<InstitutionBranch[]>([]);
+  const [branches, setBranches] = useState<InstitutionBranch[]>(stagedBranches || []);
   const [loading, setLoading] = useState(false);
+
+  // Sync stagedBranches if provided from parent
+  useEffect(() => {
+    if (!institutionId && stagedBranches) {
+      setBranches(stagedBranches);
+    }
+  }, [institutionId, stagedBranches]);
 
   // Dialog State
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -73,7 +84,7 @@ export function InstitutionBranchManager({
   const [deleteTarget, setDeleteTarget] = useState<InstitutionBranch | null>(null);
 
   const fetchBranches = useCallback(async () => {
-    if (!institutionId) return;
+    if (!institutionId || institutionId <= 0) return;
     setLoading(true);
     try {
       const headers: Record<string, string> = {};
@@ -96,8 +107,10 @@ export function InstitutionBranchManager({
   }, [institutionId, accessToken]);
 
   useEffect(() => {
-    void fetchBranches();
-  }, [fetchBranches]);
+    if (institutionId && institutionId > 0) {
+      void fetchBranches();
+    }
+  }, [fetchBranches, institutionId]);
 
   const openCreateModal = () => {
     setEditingBranch(null);
@@ -184,6 +197,42 @@ export function InstitutionBranchManager({
     const validPhones = phones.filter((p) => p.phone.trim().length > 0);
     const validEmails = emails.filter((e) => e.email.trim().length > 0);
 
+    // Staged / In-memory Mode (When creating a new institution)
+    if (!institutionId || institutionId <= 0) {
+      const nowIso = new Date().toISOString();
+      const branchData: InstitutionBranch = {
+        id: editingBranch?.id || Date.now(),
+        institution_id: 0,
+        branch_name: branchName.trim(),
+        address: address.trim() || undefined,
+        city: city.trim() || undefined,
+        state: state.trim() || undefined,
+        pincode: pincode.trim() || undefined,
+        working_hours: workingHours.trim() || undefined,
+        phones: validPhones,
+        emails: validEmails,
+        is_primary: isPrimary,
+        sort_order: editingBranch?.sort_order || 0,
+        is_active: true,
+        created_at: editingBranch?.created_at || nowIso,
+        updated_at: nowIso,
+      };
+
+      let updatedBranches: InstitutionBranch[];
+      if (editingBranch) {
+        updatedBranches = branches.map((b) => (b.id === editingBranch.id ? branchData : b));
+      } else {
+        updatedBranches = [...branches, branchData];
+      }
+
+      setBranches(updatedBranches);
+      onStagedBranchesChange?.(updatedBranches);
+      toast.success(editingBranch ? "Branch updated" : "Branch contact added");
+      setDialogOpen(false);
+      return;
+    }
+
+    // Live API Mode (When editing an existing institution)
     setSubmitting(true);
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -227,6 +276,17 @@ export function InstitutionBranchManager({
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
+
+    // In-memory delete
+    if (!institutionId || institutionId <= 0) {
+      const updated = branches.filter((b) => b.id !== deleteTarget.id);
+      setBranches(updated);
+      onStagedBranchesChange?.(updated);
+      toast.success("Branch contact removed");
+      setDeleteTarget(null);
+      return;
+    }
+
     try {
       const headers: Record<string, string> = {};
       if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
@@ -262,7 +322,7 @@ export function InstitutionBranchManager({
           </p>
         </div>
         {!readOnly && (
-          <Button onClick={openCreateModal} size="sm" className="gap-1.5 font-semibold">
+          <Button onClick={openCreateModal} size="sm" className="gap-1.5 font-semibold bg-primary text-primary-foreground">
             <Plus className="size-4" /> Add Branch Contact
           </Button>
         )}
@@ -299,33 +359,35 @@ export function InstitutionBranchManager({
                   <div className="flex items-center gap-2">
                     <h4 className="font-bold text-sm text-foreground">{branch.branch_name}</h4>
                     {branch.is_primary && (
-                      <Badge className="bg-amber-500/15 text-amber-600 hover:bg-amber-500/20 border-amber-500/30 text-[10px] gap-1 px-1.5 py-0">
-                        <Star className="size-3 fill-amber-500 text-amber-500" /> Primary Branch
+                      <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-[10px] gap-1 px-1.5 py-0.5">
+                        <Star className="size-3 fill-amber-500 text-amber-500" /> Primary Campus
                       </Badge>
                     )}
                   </div>
-                  {branch.working_hours && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Clock className="size-3.5 shrink-0 text-muted-foreground/70" />
-                      <span>{branch.working_hours}</span>
-                    </div>
+                  {(branch.city || branch.state) && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <MapPin className="size-3 shrink-0 text-primary" />
+                      {[branch.city, branch.state, branch.pincode].filter(Boolean).join(", ")}
+                    </p>
                   )}
                 </div>
 
                 {!readOnly && (
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 shrink-0">
                     <Button
-                      size="icon"
+                      type="button"
                       variant="ghost"
+                      size="icon"
                       className="size-7 text-muted-foreground hover:text-foreground"
                       onClick={() => openEditModal(branch)}
                     >
                       <Edit2 className="size-3.5" />
                     </Button>
                     <Button
-                      size="icon"
+                      type="button"
                       variant="ghost"
-                      className="size-7 text-muted-foreground hover:text-destructive"
+                      size="icon"
+                      className="size-7 text-destructive hover:bg-destructive/10"
                       onClick={() => setDeleteTarget(branch)}
                     >
                       <Trash2 className="size-3.5" />
@@ -335,71 +397,53 @@ export function InstitutionBranchManager({
               </div>
 
               {branch.address && (
-                <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-border/50">
-                  <MapPin className="size-3.5 shrink-0 text-primary mt-0.5" />
-                  <span className="leading-relaxed">
-                    {branch.address}
-                    {branch.city ? `, ${branch.city}` : ""}
-                    {branch.state ? `, ${branch.state}` : ""}
-                    {branch.pincode ? ` - ${branch.pincode}` : ""}
-                  </span>
-                </div>
+                <p className="text-xs text-muted-foreground line-clamp-2 bg-muted/30 p-2 rounded-md border border-border/40">
+                  {branch.address}
+                </p>
               )}
 
-              {/* Titled Phone Numbers */}
+              {/* Titled Phones */}
               {branch.phones && branch.phones.length > 0 && (
-                <div className="space-y-1.5 pt-1">
-                  <span className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider block">
-                    Phone Contacts ({branch.phones.length})
+                <div className="space-y-1">
+                  <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+                    <Phone className="size-3 text-emerald-500" /> Phone Helplines:
                   </span>
-                  <div className="space-y-1">
+                  <div className="flex flex-wrap gap-1.5">
                     {branch.phones.map((p, idx) => (
-                      <div
-                        key={`${p.phone}-${idx}`}
-                        className="flex items-center justify-between text-xs rounded-md border p-2 bg-background/60"
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[11px] font-medium border border-emerald-500/20"
                       >
-                        <span className="text-muted-foreground font-medium flex items-center gap-1.5">
-                          <Phone className="size-3 text-primary shrink-0" />
-                          {p.title || "Phone"}:
-                        </span>
-                        <a
-                          href={`tel:${p.phone.replace(/\s+/g, "")}`}
-                          className="font-semibold text-foreground hover:text-primary transition-colors font-mono"
-                        >
-                          {p.phone}
-                        </a>
-                      </div>
+                        <strong>{p.title}:</strong> {p.phone}
+                      </span>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Titled Email Addresses */}
+              {/* Titled Emails */}
               {branch.emails && branch.emails.length > 0 && (
-                <div className="space-y-1.5 pt-1">
-                  <span className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider block">
-                    Email Addresses ({branch.emails.length})
+                <div className="space-y-1">
+                  <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+                    <Mail className="size-3 text-blue-500" /> Official Emails:
                   </span>
-                  <div className="space-y-1">
+                  <div className="flex flex-wrap gap-1.5">
                     {branch.emails.map((e, idx) => (
-                      <div
-                        key={`${e.email}-${idx}`}
-                        className="flex items-center justify-between text-xs rounded-md border p-2 bg-background/60"
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-700 dark:text-blue-300 text-[11px] font-medium border border-blue-500/20"
                       >
-                        <span className="text-muted-foreground font-medium flex items-center gap-1.5 truncate mr-2">
-                          <Mail className="size-3 text-primary shrink-0" />
-                          {e.title || "Email"}:
-                        </span>
-                        <a
-                          href={`mailto:${e.email}`}
-                          className="font-semibold text-foreground hover:text-primary transition-colors truncate"
-                        >
-                          {e.email}
-                        </a>
-                      </div>
+                        <strong>{e.title}:</strong> {e.email}
+                      </span>
                     ))}
                   </div>
                 </div>
+              )}
+
+              {branch.working_hours && (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1 pt-1 border-t border-border/50">
+                  <Clock className="size-3 text-amber-500" /> {branch.working_hours}
+                </p>
               )}
             </div>
           ))}
@@ -408,208 +452,195 @@ export function InstitutionBranchManager({
 
       {/* Add / Edit Branch Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-card border border-border">
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto p-6">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 text-lg">
               <Building2 className="size-5 text-primary" />
-              {editingBranch ? "Edit Branch Contact" : "Add New Branch Contact"}
+              {editingBranch ? "Edit Branch Contact Card" : "Add New Branch / Location Contact"}
             </DialogTitle>
-            <DialogDescription>
-              Configure branch address and multiple titled phone numbers and email addresses for your website&apos;s contact us page.
+            <DialogDescription className="text-xs">
+              Configure branch name, full address, working hours, and titled contact numbers/emails.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-5 py-2">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="sm:col-span-2 space-y-1.5">
-                <Label className="text-xs font-semibold">Branch Title / Name *</Label>
-                <Input
-                  value={branchName}
-                  onChange={(e) => setBranchName(e.target.value)}
-                  placeholder="e.g. Main Campus, Downtown Office, Admissions Cell"
-                  className="bg-background/50"
-                />
-              </div>
-              <div className="space-y-1.5 flex flex-col justify-end">
-                <label className="flex items-center gap-2 p-2.5 rounded-md border border-border bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors text-xs font-medium">
-                  <Checkbox checked={isPrimary} onCheckedChange={(c) => setIsPrimary(Boolean(c))} />
-                  <span>Main Primary Branch</span>
-                </label>
-              </div>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">
+                Branch / Campus Title <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                placeholder="e.g. Main Administrative Campus / Admission Office"
+                value={branchName}
+                onChange={(e) => setBranchName(e.target.value)}
+                className="text-xs"
+              />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Location Address</Label>
+              <Label className="text-xs font-bold">Full Physical Address</Label>
               <Textarea
+                placeholder="Plot / Street Address, Landmark, Campus Block..."
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="e.g. 123 Education Street, Block B, Knowledge Park"
                 rows={2}
-                className="bg-background/50 resize-none text-xs"
+                className="text-xs resize-none"
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-muted-foreground">City</Label>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">City</Label>
                 <Input
+                  placeholder="e.g. Varanasi"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
-                  placeholder="e.g. Varanasi"
-                  className="bg-background/50 text-xs"
+                  className="text-xs"
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-muted-foreground">State</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">State</Label>
                 <Input
+                  placeholder="e.g. Uttar Pradesh"
                   value={state}
                   onChange={(e) => setState(e.target.value)}
-                  placeholder="e.g. Uttar Pradesh"
-                  className="bg-background/50 text-xs"
+                  className="text-xs"
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-muted-foreground">Pincode</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Pincode</Label>
                 <Input
+                  placeholder="e.g. 221005"
                   value={pincode}
                   onChange={(e) => setPincode(e.target.value)}
-                  placeholder="e.g. 221002"
-                  className="bg-background/50 text-xs"
+                  className="text-xs"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Working Hours</Label>
+              <Label className="text-xs font-semibold">Office Working Hours</Label>
               <Input
+                placeholder="e.g. Mon - Sat: 9:00 AM - 6:00 PM IST"
                 value={workingHours}
                 onChange={(e) => setWorkingHours(e.target.value)}
-                placeholder="e.g. Monday - Saturday: 9:00 AM - 6:00 PM IST"
-                className="bg-background/50 text-xs"
+                className="text-xs"
               />
             </div>
 
-            {/* Multiple Titled Phone Numbers */}
-            <div className="space-y-3 rounded-xl border border-border bg-muted/10 p-4">
+            <label className="flex items-center gap-2 text-xs font-medium cursor-pointer p-2 rounded-lg border bg-muted/20">
+              <Checkbox checked={isPrimary} onCheckedChange={(c) => setIsPrimary(Boolean(c))} />
+              <span>Mark as Primary / Main Campus Headquarters</span>
+            </label>
+
+            {/* Titled Phone Numbers Section */}
+            <div className="space-y-2 pt-2 border-t border-border">
               <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                    <Phone className="size-3.5 text-primary" /> Multiple Phone Numbers
-                  </Label>
-                  <p className="text-[11px] text-muted-foreground">Add title for each number (e.g. Admissions, Helpline, Accounts).</p>
-                </div>
-                <Button type="button" variant="outline" size="sm" onClick={addPhone} className="h-7 text-xs gap-1">
+                <Label className="text-xs font-bold flex items-center gap-1.5 text-emerald-600">
+                  <Phone className="size-3.5" />
+                  Titled Phone Numbers & Helplines
+                </Label>
+                <Button type="button" size="sm" variant="outline" onClick={addPhone} className="h-7 text-xs gap-1">
                   <Plus className="size-3" /> Add Phone
                 </Button>
               </div>
 
-              {phones.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">No phone numbers added yet.</p>
-              ) : (
-                <div className="space-y-2">
-                  {phones.map((phoneItem, idx) => (
-                    <div key={`phone-${idx}`} className="flex items-center gap-2">
-                      <Input
-                        value={phoneItem.title}
-                        onChange={(e) => updatePhone(idx, "title", e.target.value)}
-                        placeholder="Title (e.g. Admissions)"
-                        className="bg-background/60 text-xs w-1/3"
-                      />
-                      <Input
-                        value={phoneItem.phone}
-                        onChange={(e) => updatePhone(idx, "phone", e.target.value)}
-                        placeholder="Phone Number (e.g. +91 9876543210)"
-                        className="bg-background/60 text-xs font-mono flex-1"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removePhone(idx)}
-                        className="size-8 text-muted-foreground hover:text-destructive shrink-0"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                  ))}
+              {phones.map((phone, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <Input
+                    placeholder="Title (e.g. Admissions Helpline)"
+                    value={phone.title}
+                    onChange={(e) => updatePhone(idx, "title", e.target.value)}
+                    className="w-2/5 text-xs h-8"
+                  />
+                  <Input
+                    placeholder="Number (e.g. +91 9876543210)"
+                    value={phone.phone}
+                    onChange={(e) => updatePhone(idx, "phone", e.target.value)}
+                    className="w-3/5 text-xs h-8"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removePhone(idx)}
+                    className="size-8 text-destructive shrink-0"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
                 </div>
-              )}
+              ))}
             </div>
 
-            {/* Multiple Titled Email Addresses */}
-            <div className="space-y-3 rounded-xl border border-border bg-muted/10 p-4">
+            {/* Titled Email Addresses Section */}
+            <div className="space-y-2 pt-2 border-t border-border">
               <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                    <Mail className="size-3.5 text-primary" /> Multiple Email Addresses
-                  </Label>
-                  <p className="text-[11px] text-muted-foreground">Add title for each email (e.g. General Enquiry, Admissions Desk).</p>
-                </div>
-                <Button type="button" variant="outline" size="sm" onClick={addEmail} className="h-7 text-xs gap-1">
+                <Label className="text-xs font-bold flex items-center gap-1.5 text-blue-600">
+                  <Mail className="size-3.5" />
+                  Titled Email Addresses
+                </Label>
+                <Button type="button" size="sm" variant="outline" onClick={addEmail} className="h-7 text-xs gap-1">
                   <Plus className="size-3" /> Add Email
                 </Button>
               </div>
 
-              {emails.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">No email addresses added yet.</p>
-              ) : (
-                <div className="space-y-2">
-                  {emails.map((emailItem, idx) => (
-                    <div key={`email-${idx}`} className="flex items-center gap-2">
-                      <Input
-                        value={emailItem.title}
-                        onChange={(e) => updateEmail(idx, "title", e.target.value)}
-                        placeholder="Title (e.g. Support Desk)"
-                        className="bg-background/60 text-xs w-1/3"
-                      />
-                      <Input
-                        type="email"
-                        value={emailItem.email}
-                        onChange={(e) => updateEmail(idx, "email", e.target.value)}
-                        placeholder="Email Address (e.g. info@edu.com)"
-                        className="bg-background/60 text-xs flex-1"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeEmail(idx)}
-                        className="size-8 text-muted-foreground hover:text-destructive shrink-0"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                  ))}
+              {emails.map((email, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <Input
+                    placeholder="Title (e.g. Admissions Office)"
+                    value={email.title}
+                    onChange={(e) => updateEmail(idx, "title", e.target.value)}
+                    className="w-2/5 text-xs h-8"
+                  />
+                  <Input
+                    placeholder="Email (e.g. admissions@campus.edu)"
+                    value={email.email}
+                    onChange={(e) => updateEmail(idx, "email", e.target.value)}
+                    className="w-3/5 text-xs h-8"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeEmail(idx)}
+                    className="size-8 text-destructive shrink-0"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
                 </div>
-              )}
+              ))}
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-border">
-            <Button variant="ghost" onClick={() => setDialogOpen(false)}>
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="text-xs">
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={submitting} className="gap-1.5 font-semibold">
-              {submitting ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-              {editingBranch ? "Save Changes" : "Create Branch"}
+            <Button
+              size="sm"
+              disabled={submitting}
+              onClick={handleSave}
+              className="text-xs font-semibold gap-1.5 bg-primary text-primary-foreground"
+            >
+              {submitting && <Loader2 className="size-3.5 animate-spin" />}
+              <span>{editingBranch ? "Save Changes" : "Add Branch Contact"}</span>
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Confirm Delete Alert */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent className="bg-card border border-border">
+      {/* Delete Confirmation Alert */}
+      <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Branch Contact?</AlertDialogTitle>
-            <p className="text-xs text-muted-foreground">
-              Are you sure you want to remove &quot;{deleteTarget?.branch_name}&quot;? This will remove its phone numbers and email addresses from the public contact page.
-            </p>
           </AlertDialogHeader>
-          <AlertDialogFooter className="mt-4">
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Confirm Delete
+          <p className="text-xs text-muted-foreground">
+            Are you sure you want to remove &quot;{deleteTarget?.branch_name}&quot;? This branch and its phone numbers will be deleted from your public contact page.
+          </p>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground text-xs">
+              Delete Branch
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -67,26 +67,39 @@ export type ContactBranch = {
   is_primary?: boolean;
 };
 
-export function ContactPageView() {
+export type ContactPageViewProps = {
+  initialInstitutionInfo?: any;
+  initialCompanyPage?: any;
+  initialPrograms?: any[];
+};
+
+export function ContactPageView({
+  initialInstitutionInfo,
+  initialCompanyPage,
+  initialPrograms,
+}: ContactPageViewProps = {}) {
   const searchParams = useSearchParams();
   const { user } = useAuthStore();
-  const { activeInstitutionId } = useActiveInstitution();
+  const { activeInstitutionId, defaultEnvInstitutionId } = useActiveInstitution();
 
   const instIdParam = searchParams.get("institutionId") || searchParams.get("inst");
-  const resolvedInstId = instIdParam ? Number(instIdParam) : activeInstitutionId || user?.memberships?.[0]?.institution_id;
+  const resolvedInstId = instIdParam
+    ? Number(instIdParam)
+    : (initialInstitutionInfo?.id || defaultEnvInstitutionId || null);
 
-  const [institutionInfo, setInstitutionInfo] = useState<any>(null);
-  const [institutionPrograms, setInstitutionPrograms] = useState<any[]>([]);
-  const [companyPage, setCompanyPage] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [institutionInfo, setInstitutionInfo] = useState<any>(initialInstitutionInfo ?? null);
+  const [institutionPrograms, setInstitutionPrograms] = useState<any[]>(initialPrograms ?? []);
+  const [companyPage, setCompanyPage] = useState<any>(initialCompanyPage ?? null);
+  const [loading, setLoading] = useState(!initialInstitutionInfo && !initialCompanyPage);
 
-  // Course Counseling Enquiry Form state matching the screenshot
+  // Initialise selected program if initialPrograms provided
+  const initialProg = initialPrograms && initialPrograms.length > 0 ? initialPrograms[0] : null;
+  const [selectedProgramId, setSelectedProgramId] = useState<string>(initialProg ? String(initialProg.id) : "default");
+  const [selectedProgramTitle, setSelectedProgramTitle] = useState(initialProg?.title || initialProg?.name || "PROFESSIONAL COURSE");
+  const [selectedProgramFee, setSelectedProgramFee] = useState(initialProg?.fee_amount || initialProg?.price || "₹6,000");
   const [studentName, setStudentName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [emailAddress, setEmailAddress] = useState("");
-  const [selectedProgramId, setSelectedProgramId] = useState<string>("default");
-  const [selectedProgramTitle, setSelectedProgramTitle] = useState("PROFESSIONAL COURSE");
-  const [selectedProgramFee, setSelectedProgramFee] = useState("₹6,000");
   const [enquirySource, setEnquirySource] = useState("Website Course Inquiry");
   const [inquiryDetails, setInquiryDetails] = useState("");
   const [submittingEnquiry, setSubmittingEnquiry] = useState(false);
@@ -110,23 +123,30 @@ export function ContactPageView() {
 
   useEffect(() => {
     async function loadData() {
-      setLoading(true);
+      // If we already have server-rendered data for this exact institution, don't trigger loading screen
+      if (!initialInstitutionInfo && !initialCompanyPage) {
+        setLoading(true);
+      }
       try {
         const [compRes, instRes, progRes] = await Promise.all([
-          fetch("/api/public/company/pages/contact-us").then((r) => (r.ok ? r.json() : null)).catch(() => null),
-          resolvedInstId
+          !companyPage
+            ? fetch("/api/public/company/pages/contact-us").then((r) => (r.ok ? r.json() : null)).catch(() => null)
+            : Promise.resolve(null),
+          resolvedInstId && (!institutionInfo || institutionInfo.id !== resolvedInstId)
             ? fetch(`/api/public/institution/info?institutionId=${resolvedInstId}`).then((r) => (r.ok ? r.json() : null)).catch(() => null)
             : Promise.resolve(null),
-          resolvedInstId
+          resolvedInstId && institutionPrograms.length === 0
             ? fetch(`/api/public/courses?limit=50&institutionId=${resolvedInstId}`).then((r) => (r.ok ? r.json() : null)).catch(() => null)
-            : fetch("/api/public/courses?limit=20").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+            : institutionPrograms.length === 0
+            ? fetch("/api/public/courses?limit=20").then((r) => (r.ok ? r.json() : null)).catch(() => null)
+            : Promise.resolve(null),
         ]);
 
         if (compRes?.data) setCompanyPage(compRes.data);
         if (instRes?.data) setInstitutionInfo(instRes.data);
-        if (progRes?.data && Array.isArray(progRes.data)) {
+        if (progRes?.data && Array.isArray(progRes.data) && progRes.data.length > 0) {
           setInstitutionPrograms(progRes.data);
-          if (progRes.data.length > 0) {
+          if (!initialProg) {
             const first = progRes.data[0];
             setSelectedProgramId(String(first.id));
             setSelectedProgramTitle(first.title || first.name || "PROFESSIONAL COURSE");
@@ -264,19 +284,21 @@ export function ContactPageView() {
   return (
     <div className="bg-background min-h-screen">
       {/* Hero Header Banner */}
-      <section className="border-b border-border bg-gradient-to-b from-card/80 via-card/40 to-background py-12 lg:py-16">
+      <section className="border-b border-border bg-gradient-to-b from-card/80 via-card/40 to-background py-8">
         <div className="container mx-auto px-4">
-          <div className="max-w-3xl space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/10 text-[#800000] border border-rose-500/20 text-xs font-bold uppercase tracking-wider">
-              {isInstMode ? <School className="h-3.5 w-3.5" /> : <Building2 className="h-3.5 w-3.5" />}
-              <span>{isInstMode ? "Campus Contact Directory" : "Contact & Support"}</span>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/10 text-[#800000] border border-rose-500/20 text-xs font-bold uppercase tracking-wider">
+                {isInstMode ? <School className="h-3.5 w-3.5" /> : <Building2 className="h-3.5 w-3.5" />}
+                <span>{isInstMode ? "Campus Contact Directory" : "Contact & Support"}</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
+                {isInstMode ? `Contact ${displayName}` : "Contact Us & Campus Helpdesks"}
+              </h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Get in touch with our admission counselors, campus branches, and support helplines.
+              </p>
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              {displayName}
-            </h1>
-            <p className="text-base text-muted-foreground leading-relaxed pt-1">
-              {displaySubtitle}
-            </p>
           </div>
         </div>
       </section>
@@ -413,39 +435,7 @@ export function ContactPageView() {
             </div>
           )}
 
-          {/* General Overview Summary Cards */}
-          <div className="space-y-4">
-            <h2 className="text-xl font-bold text-foreground">Central Contact Information</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl border bg-card p-5 shadow-xs space-y-1.5">
-                <Mail className="h-5 w-5 text-primary" />
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Email Address</p>
-                <a href={`mailto:${primaryEmail}`} className="block text-sm font-bold text-foreground hover:text-primary transition-colors break-all">
-                  {primaryEmail}
-                </a>
-              </div>
 
-              <div className="rounded-xl border bg-card p-5 shadow-xs space-y-1.5">
-                <Phone className="h-5 w-5 text-primary" />
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Helpline Number</p>
-                <a href={`tel:${primaryPhone.replace(/[^0-9]/g, "")}`} className="block text-sm font-bold text-foreground hover:text-primary transition-colors">
-                  {primaryPhone}
-                </a>
-              </div>
-
-              <div className="rounded-xl border bg-card p-5 shadow-xs space-y-1.5">
-                <MapPin className="h-5 w-5 text-primary" />
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Location / Campus Address</p>
-                <p className="text-sm font-medium text-foreground">{primaryAddress}</p>
-              </div>
-
-              <div className="rounded-xl border bg-card p-5 shadow-xs space-y-1.5">
-                <Clock className="h-5 w-5 text-primary" />
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Operating Hours</p>
-                <p className="text-sm font-medium text-foreground">{workingHours}</p>
-              </div>
-            </div>
-          </div>
 
           {/* Interactive Live Chat & Support Ticket System */}
           <div className="space-y-4">
@@ -710,6 +700,7 @@ export function ContactPageView() {
         open={authModalOpen}
         onOpenChange={setAuthModalOpen}
         defaultTab={authModalTab}
+        institutionId={resolvedInstId || undefined}
       />
     </div>
   );

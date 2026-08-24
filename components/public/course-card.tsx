@@ -111,33 +111,33 @@ export function CourseCard({
             </Badge>
           </div>
           <div className="absolute right-3 top-3">
-            <Badge variant="secondary" className="max-w-[190px] truncate bg-background/90 text-foreground">
+            <Badge variant="secondary" className="max-w-[190px] truncate bg-background/90 text-foreground text-[10px] font-bold uppercase tracking-wider shadow-2xs border border-border/60">
               {category}
             </Badge>
           </div>
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <CardHeader className="px-3 pb-3 pt-4">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <Badge variant="outline" className="max-w-full truncate text-xs">
-                {selectedCategory ?? level}
+          <CardHeader className="px-3 pb-3 pt-3.5 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Badge variant="outline" className="max-w-full truncate text-[11px] font-semibold text-muted-foreground uppercase tracking-wide py-0.5 px-2 bg-muted/30">
+                {selectedCategory ?? category}
               </Badge>
-              <span className="text-lg font-bold text-primary">{price}</span>
+              <span className="text-xl font-black text-primary">{price}</span>
             </div>
-            <h3 className="line-clamp-2 text-xl font-semibold text-foreground transition-colors group-hover:text-primary">
-              <Link href={courseUrl} className="hover:underline">
+            <h3 className="line-clamp-2 text-2xl font-black uppercase tracking-tight text-foreground transition-colors group-hover:text-primary leading-tight">
+              <Link href={courseUrl} className="hover:underline uppercase font-black">
                 {title}
               </Link>
             </h3>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <Link href="/institutes" className="hover:text-primary hover:underline">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <Link href="/institutes" className="hover:text-primary hover:underline font-medium">
                 {institute}
               </Link>
               {programType && (
                 <>
                   <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
-                  <span>{programType}</span>
+                  <span className="uppercase text-[10px] tracking-wider font-semibold">{programType}</span>
                 </>
               )}
             </div>

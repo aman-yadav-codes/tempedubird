@@ -604,7 +604,7 @@ export async function GET(req: Request) {
       },
       capabilities: {
         canCreate:
-          !isPlatformAdmin &&
+          isPlatformAdmin ||
           hasPermission(currentUser, "content.practice_exams.create"),
         canBlock: isPlatformAdmin,
         canInherit: !isPlatformAdmin && view === "marketplace",
@@ -619,14 +619,10 @@ export async function POST(req: Request) {
   try {
     const currentUser = await requireAdmin(req);
     await ensurePracticeExamSchema();
-    if (isPlatformAdminUser(currentUser)) {
-      return NextResponse.json(
-        { error: "Platform Admin can review practice exams but cannot create them" },
-        { status: 403 }
-      );
-    }
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const payload = parsePracticeExamMetadataPayload(await req.json());
     if (
+      !isPlatformAdmin &&
       !hasPermission(currentUser, "content.practice_exams.create", {
         institutionId: payload.institutionId,
       })
@@ -650,18 +646,23 @@ export async function POST(req: Request) {
     const client = await db.connect();
     try {
       await client.query("BEGIN");
+      const isPublic = isPlatformAdmin ? payload.isPublic : false;
+      const marketplaceApproved = isPlatformAdmin && payload.isPublic;
       const result = await client.query<{ id: number }>(
         `
           INSERT INTO practice_exam_templates
             (title, description, total_marks, ai_question_format, duration_minutes, is_public,
              marketplace_requested, marketplace_requested_at, marketplace_requested_by,
-             marketplace_approved, is_active, version, source_institution_id,
+             marketplace_approved, marketplace_approved_at, marketplace_approved_by,
+             is_active, version, source_institution_id,
              created_by, updated_by)
           VALUES (
-            $1, $2, $3, $4::jsonb, $5, FALSE,
+            $1, $2, $3, $4::jsonb, $5, $10,
             $6, CASE WHEN $6 THEN CURRENT_TIMESTAMP ELSE NULL END,
             CASE WHEN $6 THEN $9::integer ELSE NULL::integer END,
-            FALSE, $7, 1, $8, $9, $9
+            $11, CASE WHEN $11 THEN CURRENT_TIMESTAMP ELSE NULL END,
+            CASE WHEN $11 THEN $9::integer ELSE NULL::integer END,
+            $7, 1, $8, $9, $9
           )
           RETURNING id
         `,
@@ -675,6 +676,8 @@ export async function POST(req: Request) {
           payload.isActive,
           payload.institutionId,
           currentUser.id,
+          isPublic,
+          marketplaceApproved,
         ]
       );
       const templateId = result.rows[0].id;

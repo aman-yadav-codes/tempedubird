@@ -260,6 +260,7 @@ export function ProgramEnrollmentDialog({
           }
         }}
         defaultTab={authTab}
+        institutionId={program?.institution_id}
       />
     </>
   );

@@ -28,25 +28,16 @@ export type CategoryAvailabilityMap = Record<CategoryKey, CategoryAvailabilityIt
 
 export function useCategoryAvailability() {
   const { user, isAuthenticated } = useAuthStore();
-  const { activeInstitutionId, activeInstitution } = useActiveInstitution();
+  const { activeInstitutionId, activeInstitution, defaultEnvInstitutionId } = useActiveInstitution();
 
-  const isPlatformAdmin = Boolean(
-    user?.is_super_admin || user?.role_codes?.includes("platform_admin")
-  );
-
-  const isInstitutionalAdmin = Boolean(
-    !isPlatformAdmin &&
-      (user?.role_codes?.includes("institution_admin") ||
-        user?.primary_role === "institution_admin" ||
-        user?.memberships?.some((m) => m.role_code === "institution_admin") ||
-        Boolean(activeInstitutionId))
-  );
+  const resolvedInstitutionId = defaultEnvInstitutionId ?? null;
+  const isInstitutionalAdmin = Boolean(resolvedInstitutionId);
+  const isPlatformAdmin = !isInstitutionalAdmin;
 
   const [categories, setCategories] = useState<CategoryAvailabilityMap | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const resolvedInstitutionId = activeInstitutionId || user?.memberships?.[0]?.institution_id || null;
-  const targetInstitutionId = isInstitutionalAdmin || Boolean(resolvedInstitutionId) ? resolvedInstitutionId : null;
+  const targetInstitutionId = resolvedInstitutionId;
 
   const fetchAvailability = useCallback(async () => {
     setLoading(true);

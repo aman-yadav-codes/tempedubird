@@ -19,53 +19,74 @@ import {
   Sparkles,
   Phone,
   ArrowRight,
+  Layers,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { useAuthStore } from "@/store";
 
-type GalleryItem = {
-  id: number;
+export type FacilityGalleryItem = {
+  id: number | string;
+  facility_id: number;
   institution_id: number;
   institution_name: string;
   media_type: string;
-  category_slug?: string;
-  category_name?: string;
+  category_slug: string;
+  category_name: string;
   url: string;
   title: string;
   description?: string;
   category?: string;
+  media?: Array<{ id: number; url: string; title?: string; media_type?: string }>;
+  total_photos?: number;
 };
 
 const DEFAULT_ALBUM_CATEGORIES = [
-  { key: "all", label: "All Photos" },
-  { key: "campus", label: "Campus & Architecture" },
+  { key: "all", label: "All Facilities" },
   { key: "labs", label: "Laboratories & Tech" },
   { key: "library", label: "Central Library" },
-  { key: "hostels", label: "Hostels & Living" },
   { key: "classrooms", label: "Smart Classrooms" },
-  { key: "events", label: "Events & Fests" },
+  { key: "sports", label: "Sports Complex" },
+  { key: "hostels", label: "Hostel Living" },
+  { key: "auditorium", label: "Auditorium" },
 ];
 
-export function GalleryPageView() {
+export type GalleryPageViewProps = {
+  initialProfile?: any;
+  initialGalleryItems?: FacilityGalleryItem[];
+  initialCategories?: { key: string; label: string }[];
+};
+
+export function GalleryPageView({
+  initialProfile,
+  initialGalleryItems,
+  initialCategories,
+}: GalleryPageViewProps = {}) {
   const searchParams = useSearchParams();
   const { user } = useAuthStore();
-  const { activeInstitution, activeInstitutionId } = useActiveInstitution();
+  const { activeInstitution, activeInstitutionId, defaultEnvInstitutionId } = useActiveInstitution();
 
   const instIdParam = searchParams.get("institutionId") || searchParams.get("inst");
-  const resolvedInstId = instIdParam ? Number(instIdParam) : activeInstitutionId || user?.memberships?.[0]?.institution_id;
+  const resolvedInstId = instIdParam
+    ? Number(instIdParam)
+    : initialProfile?.id || activeInstitutionId || defaultEnvInstitutionId || user?.memberships?.[0]?.institution_id;
 
-  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
-  const [categories, setCategories] = useState<{ key: string; label: string }[]>(DEFAULT_ALBUM_CATEGORIES);
+  const [galleryItems, setGalleryItems] = useState<FacilityGalleryItem[]>(initialGalleryItems ?? []);
+  const [categories, setCategories] = useState<{ key: string; label: string }[]>(
+    initialCategories ?? DEFAULT_ALBUM_CATEGORIES
+  );
   const [selectedCategory, setSelectedCategory] = useState("all");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialGalleryItems || initialGalleryItems.length === 0);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  const institutionName = initialProfile?.name || activeInstitution?.name || "Campus";
 
   useEffect(() => {
     async function loadGallery() {
-      setLoading(true);
+      if (!initialGalleryItems || initialGalleryItems.length === 0) {
+        setLoading(true);
+      }
       try {
         const url = resolvedInstId
           ? `/api/public/gallery?institutionId=${resolvedInstId}`
@@ -73,13 +94,15 @@ export function GalleryPageView() {
         const res = await fetch(url);
         if (res.ok) {
           const json = await res.json();
-          setGalleryItems(json.data || []);
+          if (json.data && Array.isArray(json.data)) {
+            setGalleryItems(json.data);
+          }
           if (Array.isArray(json.categories) && json.categories.length > 0) {
             setCategories(json.categories);
           }
         }
       } catch (err) {
-        console.error("Failed to load gallery:", err);
+        console.error("Failed to load gallery facilities:", err);
       } finally {
         setLoading(false);
       }
@@ -91,11 +114,11 @@ export function GalleryPageView() {
     ? galleryItems
     : galleryItems.filter(
         (item) =>
-          item.category_slug?.toLowerCase() === selectedCategory ||
-          item.category_name?.toLowerCase() === selectedCategory ||
-          item.media_type?.toLowerCase() === selectedCategory ||
-          item.category?.toLowerCase() === selectedCategory ||
-          item.title?.toLowerCase().includes(selectedCategory)
+          item.category_slug?.toLowerCase() === selectedCategory.toLowerCase() ||
+          item.category_name?.toLowerCase() === selectedCategory.toLowerCase() ||
+          item.media_type?.toLowerCase() === selectedCategory.toLowerCase() ||
+          item.category?.toLowerCase() === selectedCategory.toLowerCase() ||
+          item.title?.toLowerCase().includes(selectedCategory.toLowerCase())
       );
 
   const activeLightboxItem = lightboxIndex !== null ? filteredItems[lightboxIndex] : null;
@@ -117,14 +140,14 @@ export function GalleryPageView() {
         <div className="container mx-auto px-4">
           <div className="max-w-3xl space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/10 text-[#800000] border border-rose-500/20 text-xs font-bold uppercase tracking-wider">
-              <ImageIcon className="h-3.5 w-3.5" />
-              <span>Campus Photo Gallery</span>
+              <Building2 className="h-3.5 w-3.5" />
+              <span>Campus Facilities & Gallery</span>
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Life & Infrastructure at Campus
+              Facilities & Infrastructure at {institutionName}
             </h1>
             <p className="text-base text-muted-foreground leading-relaxed">
-              Explore our world-class academic infrastructure, high-tech research labs, smart lecture halls, campus hostels, and vibrant student activities.
+              Explore our world-class academic facilities, high-tech research laboratories, modern lecture halls, campus libraries, and student amenities.
             </p>
           </div>
 
@@ -151,19 +174,19 @@ export function GalleryPageView() {
         </div>
       </section>
 
-      {/* Main Gallery Grid */}
+      {/* Main Facilities Gallery Grid */}
       <section className="container mx-auto px-4 py-12">
         {loading ? (
           <div className="flex items-center justify-center py-24 text-muted-foreground">
-            <Sparkles className="h-6 w-6 animate-spin mr-2 text-primary" /> Loading campus photo gallery...
+            <Sparkles className="h-6 w-6 animate-spin mr-2 text-primary" /> Loading campus facilities...
           </div>
         ) : filteredItems.length === 0 ? (
           <div className="text-center py-20 border rounded-2xl bg-card space-y-3">
             <ImageIcon className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <h3 className="text-lg font-bold text-foreground">No photos found in this category</h3>
-            <p className="text-xs text-muted-foreground">Select another category or view all photos.</p>
+            <h3 className="text-lg font-bold text-foreground">No facilities found in this category</h3>
+            <p className="text-xs text-muted-foreground">Select another category or view all facilities.</p>
             <Button size="sm" onClick={() => setSelectedCategory("all")}>
-              View All Photos
+              View All Facilities
             </Button>
           </div>
         ) : (
@@ -186,23 +209,35 @@ export function GalleryPageView() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
                     <div className="text-white space-y-1">
                       <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-300">
-                        <Maximize2 className="h-3.5 w-3.5" /> Click to enlarge
+                        <Maximize2 className="h-3.5 w-3.5" /> Click to view full facility
                       </span>
-                      <p className="text-xs text-slate-200 line-clamp-2">{item.description}</p>
+                      {item.description && (
+                        <p className="text-xs text-slate-200 line-clamp-2">{item.description}</p>
+                      )}
                     </div>
                   </div>
+
+                  {item.media && item.media.length > 0 && (
+                    <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-lg flex items-center gap-1">
+                      <Layers className="h-3 w-3" />
+                      <span>+{item.media.length} Photos</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Card Title & Badge */}
                 <div className="p-4 space-y-1 border-t bg-card">
                   <div className="flex items-center justify-between gap-2">
                     <Badge variant="outline" className="text-[10px] font-semibold">
-                      {item.category_name || item.media_type || "Campus"}
+                      {item.category_name || item.media_type || "Facility"}
                     </Badge>
                   </div>
                   <h4 className="font-bold text-sm text-foreground leading-snug line-clamp-1 group-hover:text-primary transition-colors">
                     {item.title}
                   </h4>
+                  {item.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-2">{item.description}</p>
+                  )}
                 </div>
               </div>
             ))}
@@ -252,6 +287,9 @@ export function GalleryPageView() {
               />
             </div>
             <div className="text-white space-y-1 max-w-2xl px-4">
+              <div className="inline-block px-2.5 py-0.5 rounded-full bg-white/20 text-amber-300 text-[10px] font-bold mb-1">
+                {activeLightboxItem.category_name}
+              </div>
               <h3 className="text-lg font-bold">{activeLightboxItem.title}</h3>
               {activeLightboxItem.description && (
                 <p className="text-xs text-slate-300">{activeLightboxItem.description}</p>

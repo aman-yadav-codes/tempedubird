@@ -130,7 +130,7 @@ export default function NotesPublicPage() {
 
                 <div className="pt-4 border-t border-border flex items-center justify-between gap-3">
                   <span className="text-xs text-muted-foreground">
-                    {n.institution_name || "Apex Institute of Engineering & Technology"}
+                    {n.institution_name || "EduBird Partner Institute"}
                   </span>
 
                   <a href={n.file_url || "#"} target="_blank" rel="noopener noreferrer">

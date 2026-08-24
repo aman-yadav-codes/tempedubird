@@ -47,7 +47,7 @@ const fallbackBanners = [
 ];
 
 export function PublicInstituteDetailClient({ data }: { data: any }) {
-  const { profile, programs = [], facilities = [], placements = [], cutoffs = [], scholarships = [], branches = [], mediaList = [], facultyList = [], hostels = [], libraries = [] } = data;
+  const { profile, programs = [], courses = [], facilities = [], placements = [], cutoffs = [], scholarships = [], branches = [], mediaList = [], facultyList = [], hostels = [], libraries = [] } = data;
   const [activeTab, setActiveTab] = useState("overview");
   const [enrollModalOpen, setEnrollModalOpen] = useState(false);
   const [selectedEnrollProgram, setSelectedEnrollProgram] = useState<ProgramEnrollmentTarget | null>(null);
@@ -442,76 +442,139 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                 )}
               </TabsContent>
 
-              {/* 2. PROGRAMS TAB */}
-              <TabsContent value="programs" className="mt-6 space-y-4">
+              {/* 2. PROGRAMS & COURSES TAB */}
+              <TabsContent value="programs" className="mt-6 space-y-6">
                 <h2 className="text-xl font-bold text-foreground flex items-center justify-between">
                   <span>Degree & Diploma Programs Offered</span>
-                  <Badge variant="outline" className="text-xs font-normal">{programs.length} Active Courses</Badge>
+                  <Badge variant="outline" className="text-xs font-normal">
+                    {programs.length + courses.length} Active Courses & Programs
+                  </Badge>
                 </h2>
 
-                {programs.length > 0 ? (
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {programs.map((prog: any) => (
-                      <Card key={prog.id} className="p-5 hover:border-primary/50 transition-colors shadow-2xs">
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <Badge variant="secondary" className="font-medium text-xs">
-                            {prog.program_type_name || "Degree Course"}
-                          </Badge>
-                          <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
-                            {prog.seats_available || 60} Seats
-                          </Badge>
-                        </div>
-
-                        <h3 className="text-lg font-bold text-foreground mb-1">{prog.title}</h3>
-                        <p className="text-xs text-muted-foreground line-clamp-2 mb-4">{prog.about || "Comprehensive degree program with modern syllabus and lab practice."}</p>
-
-                        <div className="pt-3 border-t border-border flex items-center justify-between text-xs mb-3">
-                          <div>
-                            <span className="text-muted-foreground">Course Fee: </span>
-                            <span className="font-extrabold text-foreground text-sm">₹{Number(prog.fee_amount || 120000).toLocaleString("en-IN")}</span>
-                            <span className="text-muted-foreground"> / {prog.fee_unit || "year"}</span>
+                {/* Courses List */}
+                {courses.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <GraduationCap className="h-4 w-4 text-primary" />
+                      Courses & Streams ({courses.length})
+                    </h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {courses.map((course: any) => (
+                        <Card key={course.id} className="p-5 hover:border-primary/50 transition-colors shadow-2xs space-y-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h4 className="text-base font-bold text-foreground">{course.course_name}</h4>
+                              {course.stream && (
+                                <Badge variant="secondary" className="text-xs font-semibold mt-1">
+                                  {course.stream}
+                                </Badge>
+                              )}
+                            </div>
+                            {course.board_or_university && (
+                              <Badge variant="outline" className="text-[11px] font-medium">
+                                {course.board_or_university}
+                              </Badge>
+                            )}
                           </div>
 
-                          <div className="text-right">
-                            <span className="font-medium text-muted-foreground">{prog.duration_value || 4} {prog.duration_unit || "Years"}</span>
-                          </div>
-                        </div>
+                          {course.description && (
+                            <p className="text-xs text-muted-foreground line-clamp-2">{course.description}</p>
+                          )}
 
-                        <div className="flex items-center justify-between gap-2 pt-3 border-t border-border mt-3">
-                          <Button
-                            onClick={() => {
-                              setSelectedUniversalTarget({
-                                type: "program",
-                                id: prog.id,
-                                title: prog.title,
-                                subtitle: `${prog.program_type_name || 'Degree Program'} • ${prog.duration_value || 4} Years`,
-                                avg_rating: 4.9,
-                                review_count: 3,
-                              });
-                              setUniversalFeedbackOpen(true);
-                            }}
-                            variant="outline"
-                            size="sm"
-                            className="w-full text-xs font-semibold gap-1.5 hover:bg-primary hover:text-white"
-                          >
-                            <MessageSquare className="h-3.5 w-3.5 text-primary" />
-                            Rate & Review Program
-                          </Button>
-                          <Button
-                            onClick={() => handleEnrollProgramClick(prog)}
-                            className="w-full font-bold text-xs gap-1.5 shadow-xs"
-                            size="sm"
-                          >
-                            <GraduationCap className="h-4 w-4" />
-                            Enroll Now
-                          </Button>
-                        </div>
-                      </Card>
-                    ))}
+                          <div className="pt-2 border-t border-border flex items-center justify-between text-xs">
+                            {course.price ? (
+                              <div>
+                                <span className="text-muted-foreground">Fee / Price: </span>
+                                <span className="font-extrabold text-foreground text-sm">{course.price}</span>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">Contact for fees</span>
+                            )}
+
+                            {course.duration && (
+                              <span className="font-medium text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
+                                {course.duration}
+                              </span>
+                            )}
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
                   </div>
-                ) : (
-                  <Card className="p-8 text-center text-muted-foreground">No academic programs listed yet.</Card>
                 )}
+
+                {/* Programs List */}
+                {programs.length > 0 ? (
+                  <div className="space-y-3">
+                    {courses.length > 0 && (
+                      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 pt-2">
+                        <BookOpen className="h-4 w-4 text-primary" />
+                        Academic Programs ({programs.length})
+                      </h3>
+                    )}
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {programs.map((prog: any) => (
+                        <Card key={prog.id} className="p-5 hover:border-primary/50 transition-colors shadow-2xs">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <Badge variant="secondary" className="font-medium text-xs">
+                              {prog.program_type_name || "Degree Course"}
+                            </Badge>
+                            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
+                              {prog.seats_available || 60} Seats
+                            </Badge>
+                          </div>
+
+                          <h3 className="text-lg font-bold text-foreground mb-1">{prog.title}</h3>
+                          <p className="text-xs text-muted-foreground line-clamp-2 mb-4">{prog.about || "Comprehensive degree program with modern syllabus and lab practice."}</p>
+
+                          <div className="pt-3 border-t border-border flex items-center justify-between text-xs mb-3">
+                            <div>
+                              <span className="text-muted-foreground">Course Fee: </span>
+                              <span className="font-extrabold text-foreground text-sm">₹{Number(prog.fee_amount || 120000).toLocaleString("en-IN")}</span>
+                              <span className="text-muted-foreground"> / {prog.fee_unit || "year"}</span>
+                            </div>
+
+                            <div className="text-right">
+                              <span className="font-medium text-muted-foreground">{prog.duration_value || 4} {prog.duration_unit || "Years"}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 pt-3 border-t border-border mt-3">
+                            <Button
+                              onClick={() => {
+                                setSelectedUniversalTarget({
+                                  type: "program",
+                                  id: prog.id,
+                                  title: prog.title,
+                                  subtitle: `${prog.program_type_name || 'Degree Program'} • ${prog.duration_value || 4} Years`,
+                                  avg_rating: 4.9,
+                                  review_count: 3,
+                                });
+                                setUniversalFeedbackOpen(true);
+                              }}
+                              variant="outline"
+                              size="sm"
+                              className="w-full text-xs font-semibold gap-1.5 hover:bg-primary hover:text-white"
+                            >
+                              <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                              Rate & Review Program
+                            </Button>
+                            <Button
+                              onClick={() => handleEnrollProgramClick(prog)}
+                              className="w-full font-bold text-xs gap-1.5 shadow-xs"
+                              size="sm"
+                            >
+                              <GraduationCap className="h-4 w-4" />
+                              Enroll Now
+                            </Button>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                ) : courses.length === 0 ? (
+                  <Card className="p-8 text-center text-muted-foreground">No academic programs or courses listed yet.</Card>
+                ) : null}
               </TabsContent>
 
               {/* 3. FACILITIES TAB */}

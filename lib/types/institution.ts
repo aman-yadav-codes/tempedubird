@@ -58,6 +58,7 @@ export interface InstitutionProfile {
   location_name?: string | null;
   latitude?: string | number | null;
   longitude?: string | number | null;
+  is_marketplace_enabled?: boolean | null;
   is_active: boolean;
   is_deleted: boolean;
   created_by?: number | null;
@@ -166,6 +167,7 @@ export interface CreateInstitutionData {
   parentUniversityId?: number | null;
   boardId?: number | null;
   categoryIds?: number[];
+  isMarketplaceEnabled?: boolean | null;
   createdBy?: number | null;
 }
 
@@ -188,6 +190,7 @@ export interface InstitutionProgram {
   seats_available?: number | null;
   teaching_method?: string | null;
   board_id?: number | null;
+  board_name?: string | null;
   university_id?: number | null;
   academic_year_id?: number | null;
   academic_year_name?: string | null;
@@ -235,7 +238,16 @@ export interface CreateProgramData {
   subjectIds?: number[];
   subjectCategoryIds?: number[];
   sectionIds?: number[];
-  feeComponents?: { title: string; amount: number; unit?: string | null }[];
+  feeComponents?: {
+    title: string;
+    amount: number;
+    unit?: string | null;
+    payment_mode?: string | null;
+    discount_type?: string | null;
+    discount_value?: number | null;
+    final_amount?: number | null;
+    installments_count?: number | null;
+  }[];
   createdBy?: number | null;
 }
 
@@ -477,3 +489,37 @@ export interface CreateInstitutionBranchInput {
   sortOrder?: number;
   isActive?: boolean;
 }
+
+export interface InstitutionCourse {
+  id: number;
+  institution_id: number;
+  course_name: string;
+  stream?: string | null;
+  board_or_university?: string | null;
+  duration?: string | null;
+  price?: string | null;
+  fee_amount?: number | null;
+  eligibility?: string | null;
+  description?: string | null;
+  seats_available?: number | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateInstitutionCourseInput {
+  institutionId: number;
+  courseName: string;
+  stream?: string | null;
+  boardOrUniversity?: string | null;
+  duration?: string | null;
+  price?: string | null;
+  feeAmount?: number | null;
+  eligibility?: string | null;
+  description?: string | null;
+  seatsAvailable?: number | null;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+

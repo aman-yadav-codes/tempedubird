@@ -312,8 +312,6 @@ export function AsyncSearchPopover<T>({
                                 </div>
                             ) : (
                                 <>
-                                    <CommandEmpty>{emptyText}</CommandEmpty>
-
                                     <CommandGroup className={commandGroupClassName}>
                                         {showDefaultOption &&
                                             (!hideDefaultOptionOnSearch || !search.trim()) && (
@@ -335,6 +333,27 @@ export function AsyncSearchPopover<T>({
                                                     </div>
                                                 </CommandItem>
                                             )}
+
+                                        {allowCustomValue && search.trim() && !displayedItems.some((item) => {
+                                            const label = getLabel(item).trim().toLowerCase();
+                                            return label === search.trim().toLowerCase();
+                                        }) && (
+                                            <CommandItem
+                                                className={cn("border-b font-medium text-primary cursor-pointer", itemClassName)}
+                                                value={`__custom__${search.trim()}`}
+                                                onSelect={() => {
+                                                    const val = search.trim();
+                                                    onChange(val);
+                                                    onCreateCustomValue?.(val);
+                                                    setInternalLabel(val);
+                                                    setOpen(false);
+                                                }}
+                                            >
+                                                <Plus className="mr-2 h-4 w-4 text-primary shrink-0" />
+                                                <span className="truncate">{customValueLabel(search.trim())}</span>
+                                            </CommandItem>
+                                        )}
+
                                         {displayedItems.map((item) => {
                                             const itemValue = getValue(item);
 
@@ -370,25 +389,7 @@ export function AsyncSearchPopover<T>({
                                             );
                                         })}
                                     </CommandGroup>
-
-                                    {allowCustomValue && search.trim() && !displayedItems.some((item) => {
-                                        const label = getLabel(item).trim().toLowerCase();
-                                        return label === search.trim().toLowerCase();
-                                    }) && (
-                                    <CommandItem
-                                        value={`__create__${search.trim()}`}
-                                        onSelect={() => {
-                                            const value = search.trim();
-                                            onChange(value);
-                                            onCreateCustomValue?.(value);
-                                            setInternalLabel(value);
-                                            setOpen(false);
-                                        }}
-                                    >
-                                        <Plus className="mr-2 h-4 w-4" />
-                                        <span className="truncate">{customValueLabel(search.trim())}</span>
-                                    </CommandItem>
-                                )}
+                                    {(!allowCustomValue || !search.trim()) && <CommandEmpty>{emptyText}</CommandEmpty>}
                                 </>
                             )}
 

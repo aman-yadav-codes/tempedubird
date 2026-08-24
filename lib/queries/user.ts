@@ -27,10 +27,20 @@ let staffSalaryStructureSchemaReady: Promise<void> | null = null;
 
 async function ensureUserProfileCompleteSchema(db: Queryable) {
   if (!userProfileCompleteSchemaReady) {
-    userProfileCompleteSchemaReady = db.query(`
-      ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS is_profile_complete BOOLEAN NOT NULL DEFAULT FALSE
-    `).then(() => undefined).catch((error) => {
+    userProfileCompleteSchemaReady = (async () => {
+      await db.query(`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS is_profile_complete BOOLEAN NOT NULL DEFAULT FALSE
+      `);
+      await db.query(`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS is_marketplace_enabled BOOLEAN DEFAULT TRUE
+      `);
+      await db.query(`
+        ALTER TABLE user_profiles
+        ADD COLUMN IF NOT EXISTS is_marketplace_enabled BOOLEAN DEFAULT TRUE
+      `);
+    })().catch((error) => {
       userProfileCompleteSchemaReady = null;
       throw error;
     });

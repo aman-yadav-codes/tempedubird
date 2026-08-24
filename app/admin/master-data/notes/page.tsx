@@ -581,8 +581,9 @@ export default function MasterDataNotesPage() {
   const authHeader = useMemo(() => ({ Authorization: `Bearer ${accessToken}` }), [accessToken]);
   const currentUserId = user?.id ?? null;
   const canModifyNote = useCallback((row: NoteRow | null | undefined) => {
+    if (isPlatformAdmin) return true;
     return Boolean(row && currentUserId && row.created_by === currentUserId);
-  }, [currentUserId]);
+  }, [currentUserId, isPlatformAdmin]);
 
   const startNoteEditorResize = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const container = noteEditorSplitRef.current;
@@ -1035,7 +1036,7 @@ export default function MasterDataNotesPage() {
             {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
             Refresh
           </Button>
-          {notesView === "my" && (
+          {(notesView === "my" || isPlatformAdmin) && (
             <Button onClick={openCreate}>
               <Plus className="size-4" />
               Add Note
@@ -1052,7 +1053,7 @@ export default function MasterDataNotesPage() {
             setPagination((current) => ({ ...current, pageIndex: 0 }));
           }}
         >
-          My Notes
+          {isPlatformAdmin ? "All Notes" : "My Notes"}
         </Button>
         {isPlatformAdmin && (
           <Button

@@ -3,10 +3,14 @@ import { FileText } from "lucide-react";
 import { db } from "@/lib/db/db";
 import { getCompanyPageBySlug } from "@/lib/queries/company";
 
-export const metadata = {
-  title: "Terms & Conditions | EduBird",
-  description: "Read the terms and conditions governing the use of EduBird services.",
-};
+import { resolvePageMetadata } from "@/lib/seo/metadata";
+
+export async function generateMetadata() {
+  return resolvePageMetadata("/terms", null, {
+    title: "Terms & Conditions | EduBird",
+    description: "Read the terms and conditions governing the use of EduBird services.",
+  });
+}
 
 export default async function TermsPage() {
   const page = await getCompanyPageBySlug(db, "terms-and-conditions");

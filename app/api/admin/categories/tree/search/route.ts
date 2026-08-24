@@ -102,71 +102,37 @@ export async function GET(req: Request) {
                 [search, searchId, categoryIds, limit, offset, boardId]
             );
 
-            if (result.rows.length === 0 && categoryIds.length > 0 && !boardId) {
-                const leafCategories = await db.query(
+            if (result.rows.length === 0) {
+                const masterSubjects = await db.query(
                     `
-    WITH RECURSIVE selected_categories AS (
-        SELECT c.id
-        FROM categories c
-        WHERE c.id = ANY($3::int[])
-          AND c.is_deleted = FALSE
-
-        UNION ALL
-
-        SELECT child.id
-        FROM categories child
-        INNER JOIN selected_categories parent
-            ON parent.id = child.parent_id
-        WHERE child.is_deleted = FALSE
-    )
-    SELECT
-        c.id,
-        c.name,
-        c.slug,
-        c.parent_id,
-        c.id AS category_id,
-        NULL::int AS board_id,
-        c.depth,
-        'category_subject' AS type,
-        (
-            SELECT string_agg(c2.name, ' -> ' ORDER BY cc.depth DESC)
-            FROM category_closure cc
-            INNER JOIN categories c2
-                ON c2.id = cc.ancestor_id
-            WHERE cc.descendant_id = c.id
-        ) AS breadcrumb,
-        ARRAY(
-            SELECT ancestor_id
-            FROM category_closure cc
-            WHERE cc.descendant_id = c.id
-              AND cc.depth > 0
-            ORDER BY cc.depth DESC
-        ) AS category_path_ids
-    FROM categories c
-    WHERE c.id IN (SELECT id FROM selected_categories)
-      AND c.is_deleted = FALSE
-      AND c.is_active = TRUE
-      AND NOT EXISTS (
-        SELECT 1
-        FROM categories child
-        WHERE child.parent_id = c.id
-          AND child.is_deleted = FALSE
-      )
-      AND (
-        $1 = ''
-        OR c.name ILIKE '%' || $1 || '%'
-        OR c.slug ILIKE '%' || $1 || '%'
-        OR ($2::int IS NOT NULL AND c.id = $2)
-      )
-    ORDER BY c.name ASC
-    LIMIT $4 OFFSET $5
-    `,
-                    [search, searchId, categoryIds, limit, offset]
+                    SELECT
+                        s.id,
+                        s.name,
+                        s.slug,
+                        NULL::int AS parent_id,
+                        NULL::int AS category_id,
+                        NULL::int AS board_id,
+                        4 AS depth,
+                        'subject' AS type,
+                        s.name AS breadcrumb,
+                        ARRAY[]::int[] AS category_path_ids
+                    FROM subjects s
+                    WHERE s.is_deleted = FALSE
+                      AND (
+                        $1 = ''
+                        OR s.name ILIKE '%' || $1 || '%'
+                        OR s.slug ILIKE '%' || $1 || '%'
+                        OR ($2::int IS NOT NULL AND s.id = $2)
+                      )
+                    ORDER BY s.name ASC
+                    LIMIT $3 OFFSET $4
+                    `,
+                    [search, searchId, limit, offset]
                 );
 
                 return NextResponse.json({
-                    data: leafCategories.rows,
-                    pageCount: leafCategories.rows.length < limit ? page : page + 1,
+                    data: masterSubjects.rows,
+                    pageCount: masterSubjects.rows.length < limit ? page : page + 1,
                 });
             }
 

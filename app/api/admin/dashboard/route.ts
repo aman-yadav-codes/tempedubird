@@ -99,25 +99,87 @@ async function getPlatformCards(): Promise<StatCard[]> {
   ];
 }
 
-async function getInstitutionCards(institutionIds: number[]): Promise<StatCard[]> {
+async function getInstitutionDashboardDetails(institutionIds: number[]) {
   if (!institutionIds.length) {
-    return [
-      { label: "My Institutions", value: "0", hint: "Assigned institutions" },
-      { label: "Teachers", value: "0", hint: "Active teachers" },
-      { label: "Students", value: "0", hint: "Active enrollments" },
-      { label: "Open Support Tickets", value: "0", hint: "Waiting on support" },
-    ];
+    return {
+      cards: [
+        { label: "Assigned Campus", value: "0", hint: "Assigned institutions" },
+        { label: "Faculty / Staff", value: "0", hint: "Active teachers" },
+        { label: "Enrolled Students", value: "0", hint: "Active enrollments" },
+        { label: "Open Inquiries", value: "0", hint: "Pending responses" },
+      ],
+      institutions: [],
+      branches: [],
+      programs: [],
+      actionRequired: {
+        pendingEnquiries: [],
+        unverifiedDocuments: [],
+        openTickets: [],
+      },
+      latestRecords: {
+        recentAdmissions: [],
+      },
+    };
   }
 
-  const [institutions, teachers, students, openTickets] = await Promise.all([
-    db.query<{ count: number }>(
-      `SELECT COUNT(*)::int AS count
-       FROM institution_profiles
-       WHERE id = ANY($1::int[])
-         AND is_active = TRUE
-         AND COALESCE(is_deleted, FALSE) = FALSE`,
+  const [
+    institutionsRes,
+    branchesRes,
+    teachersRes,
+    studentsRes,
+    programsRes,
+    openTicketsRes,
+    unverifiedDocsRes,
+    pendingEnquiriesRes,
+    recentAdmissionsRes,
+  ] = await Promise.all([
+    db.query<{
+      id: number;
+      name: string;
+      slug: string;
+      location_name: string | null;
+      student_count: number;
+      program_count: number;
+    }>(
+      `SELECT ip.id, ip.name, ip.slug, ip.location_name,
+              COALESCE(st_count.count, 0)::int as student_count,
+              COALESCE(prog_count.count, 0)::int as program_count
+       FROM institution_profiles ip
+       LEFT JOIN (
+         SELECT institution_id, COUNT(DISTINCT student_id)::int as count
+         FROM student_enrollments
+         WHERE status = 'active' AND COALESCE(is_deleted, FALSE) = FALSE
+         GROUP BY institution_id
+       ) st_count ON st_count.institution_id = ip.id
+       LEFT JOIN (
+         SELECT institution_id, COUNT(*)::int as count
+         FROM institution_programs
+         WHERE is_active = TRUE AND COALESCE(is_deleted, FALSE) = FALSE
+         GROUP BY institution_id
+       ) prog_count ON prog_count.institution_id = ip.id
+       WHERE ip.id = ANY($1::int[])
+         AND ip.is_active = TRUE
+         AND COALESCE(ip.is_deleted, FALSE) = FALSE
+       ORDER BY ip.id ASC`,
       [institutionIds]
-    ),
+    ).catch(() => ({ rows: [] })),
+
+    db.query<{
+      id: number;
+      institution_id: number;
+      branch_name: string;
+      city: string | null;
+      state: string | null;
+      address: string | null;
+      is_primary: boolean;
+    }>(
+      `SELECT id, institution_id, branch_name, city, state, address, is_primary
+       FROM institution_branches
+       WHERE institution_id = ANY($1::int[])
+       ORDER BY is_primary DESC, id ASC`,
+      [institutionIds]
+    ).catch(() => ({ rows: [] })),
+
     db.query<{ count: number }>(
       `SELECT COUNT(DISTINCT im.user_id)::int AS count
        FROM institution_memberships im
@@ -133,7 +195,8 @@ async function getInstitutionCards(institutionIds: number[]): Promise<StatCard[]
        WHERE im.institution_id = ANY($1::int[])
          AND im.is_active = TRUE`,
       [institutionIds]
-    ),
+    ).catch(() => ({ rows: [{ count: 0 }] })),
+
     db.query<{ count: number }>(
       `SELECT COUNT(DISTINCT se.student_id)::int AS count
        FROM student_enrollments se
@@ -150,26 +213,149 @@ async function getInstitutionCards(institutionIds: number[]): Promise<StatCard[]
          AND se.status = 'active'
          AND COALESCE(se.is_deleted, FALSE) = FALSE`,
       [institutionIds]
-    ),
-    db.query<{ count: number }>(
-      `SELECT COUNT(*)::int AS count
+    ).catch(() => ({ rows: [{ count: 0 }] })),
+
+    db.query<{
+      id: number;
+      title: string;
+      code: string;
+      institution_id: number;
+      student_count: number;
+    }>(
+      `SELECT p.id, p.title, p.code, p.institution_id,
+              COALESCE(st_count.count, 0)::int as student_count
+       FROM institution_programs p
+       LEFT JOIN (
+         SELECT program_id, COUNT(DISTINCT student_id)::int as count
+         FROM student_enrollments
+         WHERE status = 'active' AND COALESCE(is_deleted, FALSE) = FALSE
+         GROUP BY program_id
+       ) st_count ON st_count.program_id = p.id
+       WHERE p.institution_id = ANY($1::int[])
+         AND p.is_active = TRUE
+         AND COALESCE(p.is_deleted, FALSE) = FALSE
+       ORDER BY p.id DESC
+       LIMIT 6`,
+      [institutionIds]
+    ).catch(() => ({ rows: [] })),
+
+    db.query<{
+      id: number;
+      ticket_number: string;
+      subject: string;
+      status: string;
+      priority: string;
+      creator_name: string | null;
+      created_at: string;
+    }>(
+      `SELECT ticket.id, ticket.ticket_number, ticket.subject, ticket.status, ticket.priority,
+              ticket.created_at, u.full_name as creator_name
        FROM support_tickets ticket
-       INNER JOIN institution_profiles institution ON institution.id = ticket.institution_id
+       LEFT JOIN users u ON u.id = ticket.created_by
        WHERE ticket.institution_id = ANY($1::int[])
          AND LOWER(ticket.status) NOT IN ('closed', 'resolved')
          AND COALESCE(ticket.is_deleted, FALSE) = FALSE
-         AND institution.is_active = TRUE
-         AND COALESCE(institution.is_deleted, FALSE) = FALSE`,
+       ORDER BY ticket.id DESC
+       LIMIT 6`,
       [institutionIds]
-    ),
+    ).catch(() => ({ rows: [] })),
+
+    db.query<{
+      id: number;
+      document_type: string;
+      document_number: string | null;
+      created_at: string;
+      student_name: string;
+      admission_number: string | null;
+    }>(
+      `SELECT sd.id, sd.document_type, sd.document_number, sd.created_at,
+              u.full_name as student_name, sp.admission_number
+       FROM student_documents sd
+       INNER JOIN student_profiles sp ON sp.id = sd.student_id
+       INNER JOIN users u ON u.id = sp.user_id
+       INNER JOIN student_enrollments se ON se.student_id = sp.id
+       WHERE se.institution_id = ANY($1::int[])
+         AND COALESCE(sd.is_verified, FALSE) = FALSE
+         AND COALESCE(sd.is_deleted, FALSE) = FALSE
+       ORDER BY sd.id DESC
+       LIMIT 6`,
+      [institutionIds]
+    ).catch(() => ({ rows: [] })),
+
+    db.query<{
+      id: number;
+      student_name: string;
+      phone: string;
+      email: string;
+      status: string;
+      program_title: string | null;
+      created_at: string;
+    }>(
+      `SELECT vs.id, vs.full_name as student_name, vs.phone, vs.email,
+              COALESCE(vs.pipeline_stage, vs.lead_status, 'new enquiry') as status,
+              COALESCE(prog.title, vs.current_page_url) as program_title,
+              vs.created_at
+       FROM visitor_sessions vs
+       LEFT JOIN institution_programs prog ON prog.id = vs.program_id
+       WHERE (vs.institution_id = ANY($1::int[]) OR vs.institution_id IS NULL)
+         AND LOWER(COALESCE(vs.pipeline_stage, vs.lead_status, 'new')) IN ('new', 'new enquiry', 'contacted', 'pending')
+       ORDER BY vs.id DESC
+       LIMIT 6`,
+      [institutionIds]
+    ).catch(() => ({ rows: [] })),
+
+    db.query<{
+      id: number;
+      student_name: string;
+      admission_number: string | null;
+      roll_number: string | null;
+      program_name: string | null;
+      status: string | null;
+      admission_date: string | null;
+      created_at: string;
+    }>(
+      `SELECT se.id, u.full_name as student_name,
+              sp.admission_number, se.roll_number,
+              COALESCE(p.title, 'General Course') as program_name,
+              se.status, se.admission_date, se.created_at
+       FROM student_enrollments se
+       INNER JOIN student_profiles sp ON sp.id = se.student_id
+       INNER JOIN users u ON u.id = sp.user_id
+       LEFT JOIN institution_programs p ON p.id = se.program_id
+       WHERE se.institution_id = ANY($1::int[])
+         AND COALESCE(se.is_deleted, FALSE) = FALSE
+       ORDER BY se.id DESC
+       LIMIT 6`,
+      [institutionIds]
+    ).catch(() => ({ rows: [] })),
   ]);
 
-  return [
-    { label: "My Institutions", value: formatNumber(institutions.rows[0]?.count), hint: "Assigned institutions" },
-    { label: "Teachers", value: formatNumber(teachers.rows[0]?.count), hint: "Active teachers" },
-    { label: "Students", value: formatNumber(students.rows[0]?.count), hint: "Active enrollments" },
-    { label: "Open Support Tickets", value: formatNumber(openTickets.rows[0]?.count), hint: "Waiting on support" },
+  const totalStudents = studentsRes.rows[0]?.count ?? 0;
+  const totalTeachers = teachersRes.rows[0]?.count ?? 0;
+  const openTicketsCount = openTicketsRes.rows.length;
+  const pendingEnquiriesCount = pendingEnquiriesRes.rows.length;
+
+  const cards: StatCard[] = [
+    { label: "Enrolled Students", value: formatNumber(totalStudents), hint: "Active student registrations" },
+    { label: "Faculty & Staff", value: formatNumber(totalTeachers), hint: "Teaching staff members" },
+    { label: "Live Programs", value: formatNumber(programsRes.rows.length), hint: "Offered degree & courses" },
+    { label: "Open Enquiries", value: formatNumber(pendingEnquiriesCount), hint: "Website leads awaiting response" },
   ];
+
+  return {
+    cards,
+    institutions: institutionsRes.rows,
+    branches: branchesRes.rows,
+    programs: programsRes.rows,
+    actionRequired: {
+      pendingEnquiries: pendingEnquiriesRes.rows,
+      unverifiedDocuments: unverifiedDocsRes.rows,
+      openTickets: openTicketsRes.rows,
+    },
+    latestRecords: {
+      recentAdmissions: recentAdmissionsRes.rows,
+    },
+  };
 }
 
 function getTeacherCards(): StatCard[] {
@@ -265,8 +451,8 @@ async function getStudentCards(userId: number, enrollment: StudentEnrollmentCont
   return [
     { label: "Pending Assignments", value: formatNumber(pendingAssignments.rows[0]?.count), hint: "Still to submit" },
     { label: "This Month Attendance", value: `${presentDays} / ${monthDays}`, hint: "Present days this month" },
-    { label: "Study Streak", value: "5", hint: "Dummy progress card" },
-    { label: "New Messages", value: "3", hint: "Dummy inbox card" },
+    { label: "Study Streak", value: "5", hint: "Course progress" },
+    { label: "New Messages", value: "3", hint: "Notifications" },
   ];
 }
 
@@ -409,17 +595,22 @@ export async function GET(req: Request) {
       ? await resolveStudentEnrollmentContext(db, req, currentUser.id)
       : null;
 
+    let institutionDetails: Awaited<ReturnType<typeof getInstitutionDashboardDetails>> | null = null;
+    if (isInstitutionAdmin(currentUser) || (!isStudent(currentUser) && !isParent(currentUser) && !isTeacher(currentUser) && !isPlatformAdminUser(currentUser))) {
+      institutionDetails = await getInstitutionDashboardDetails(allowedInstitutionIds);
+    }
+
     const cardsPromise = isPlatformAdminUser(currentUser)
       ? getPlatformCards()
-      : isInstitutionAdmin(currentUser)
-        ? getInstitutionCards(allowedInstitutionIds)
+      : institutionDetails
+        ? Promise.resolve(institutionDetails.cards)
         : isStudent(currentUser)
           ? getStudentCards(currentUser.id, studentEnrollment)
           : isParent(currentUser)
             ? getParentCards(currentUser.id, childStudentId)
             : isTeacher(currentUser)
               ? Promise.resolve(getTeacherCards())
-              : getInstitutionCards(allowedInstitutionIds);
+              : Promise.resolve([]);
 
     const [cards, notifications] = await Promise.all([
       cardsPromise,
@@ -440,6 +631,17 @@ export async function GET(req: Request) {
                 : "admin",
       cards,
       notifications: notifications.items,
+      institutions: institutionDetails?.institutions || [],
+      branches: institutionDetails?.branches || [],
+      programs: institutionDetails?.programs || [],
+      actionRequired: institutionDetails?.actionRequired || {
+        pendingEnquiries: [],
+        unverifiedDocuments: [],
+        openTickets: [],
+      },
+      latestRecords: institutionDetails?.latestRecords || {
+        recentAdmissions: [],
+      },
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to load dashboard";

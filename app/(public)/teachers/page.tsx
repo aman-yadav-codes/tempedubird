@@ -22,7 +22,9 @@ export const metadata: Metadata = {
   },
 };
 
-export default function TeachersPage() {
+export const dynamic = "force-dynamic";
+
+export default function PublicTeachersDirectoryPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-6 sm:px-6 lg:py-8">

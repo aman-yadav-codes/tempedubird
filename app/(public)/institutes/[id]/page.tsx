@@ -291,9 +291,22 @@ async function fetchInstitutionFullData(idOrSlug: string) {
       libraries = [];
     }
 
+    // 12. Fetch Courses
+    let courses: any[] = [];
+    try {
+      const coursesRes = await db.query(
+        `SELECT * FROM institution_courses WHERE institution_id = $1 AND COALESCE(is_active, TRUE) = TRUE ORDER BY sort_order ASC, id ASC`,
+        [institutionId]
+      );
+      courses = coursesRes.rows;
+    } catch {
+      courses = [];
+    }
+
     return {
       profile,
       programs: programsRes.rows,
+      courses,
       facilities: facilitiesRes.rows,
       placements: placementsRes.rows,
       cutoffs: cutoffsRes.rows,

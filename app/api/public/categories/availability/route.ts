@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
             WHERE (im.institution_id = $1 OR up.under_institution_id = $1)
               AND u.is_active = TRUE
               AND COALESCE(u.is_deleted, FALSE) = FALSE
-              AND (r.code = 'teacher' OR COALESCE(up.is_teacher, FALSE) = TRUE OR u.email LIKE '%teacher%')
+              AND (r.code ILIKE '%teacher%' OR r.code ILIKE '%faculty%' OR COALESCE(up.is_teacher, FALSE) = TRUE OR u.email ILIKE '%teacher%' OR u.email ILIKE '%faculty%')
           `,
           [institutionId]
         ).catch(() => ({ rows: [{ count: 0 }] })),
@@ -87,9 +87,9 @@ export async function GET(req: NextRequest) {
           [institutionId]
         ).catch(() => ({ rows: [{ count: 0 }] })),
 
-        // 10. Gallery / Media Photos
+        // 10. Gallery / Facilities
         db.query(
-          `SELECT COUNT(*)::int AS count FROM institution_media WHERE institution_id = $1 AND COALESCE(is_deleted, FALSE) = FALSE AND url IS NOT NULL AND url <> ''`,
+          `SELECT COUNT(*)::int AS count FROM institution_facilities WHERE institution_id = $1 AND COALESCE(is_deleted, FALSE) = FALSE AND COALESCE(is_active, TRUE) = TRUE`,
           [institutionId]
         ).catch(() => ({ rows: [{ count: 0 }] })),
       ]);

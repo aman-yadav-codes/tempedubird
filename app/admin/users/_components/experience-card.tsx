@@ -105,15 +105,15 @@ export function ExperienceCard({
                         value={experience.company_id || experience.company_name}
                         onChange={(value) => onChange({ company_id: value })}
                         allowCustomValue
-                        customValueLabel={(value) => `Add new company: ${value}`}
+                        customValueLabel={(value) => `Use custom company: "${value}"`}
                         onCreateCustomValue={(value) =>
                             onChange({
                                 company_id: "",
                                 company_name: value,
                             })
                         }
-                        placeholder="Select company"
-                        searchPlaceholder="Search company..."
+                        placeholder="Select or type company"
+                        searchPlaceholder="Search company or type name..."
                         emptyText="No company found"
                         selectedLabel={experience.company_name}
                         fetcher={async (search, page) => {

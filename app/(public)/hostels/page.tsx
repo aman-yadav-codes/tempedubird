@@ -106,7 +106,7 @@ export default function HostelsPublicPage() {
                     <div>
                       <span className="text-xs font-bold text-primary flex items-center gap-1 mb-1">
                         <Building2 className="h-3.5 w-3.5" />
-                        {h.institution_name || "Apex Institute of Engineering & Technology"}
+                        {h.institution_name || "EduBird Partner Institute"}
                       </span>
                       <h3 className="text-xl font-bold text-foreground leading-tight">{h.name}</h3>
                       {h.institution_city && (

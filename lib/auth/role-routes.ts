@@ -5,7 +5,22 @@ type RoleRouteUser = {
   permissions?: string[];
 } | null | undefined;
 
-const KNOWN_ROLE_PREFIXES = new Set(["admin", "institutionadmin", "institution-admin", "institute", "teacher", "student", "parent", "driver", "accountant", "guest"]);
+const KNOWN_ROLE_PREFIXES = new Set([
+  "admin",
+  "platformadmin",
+  "instituteadmin",
+  "institutionadmin",
+  "institution-admin",
+  "institute",
+  "teacher",
+  "student",
+  "students",
+  "parent",
+  "parents",
+  "driver",
+  "accountant",
+  "guest",
+]);
 const PUBLIC_TOP_LEVEL_SEGMENTS = new Set([
   "about",
   "account-suspended",
@@ -67,20 +82,20 @@ const ADMIN_CHILD_SEGMENTS = new Set([
 ]);
 
 const ROLE_PREFIX_MAP: Record<string, string> = {
-  platform_admin: "admin",
-  accountant: "admin",
-  guest: "admin",
-  institution_admin: "institutionadmin",
-  professional_organization: "institutionadmin",
-  school_owner: "institutionadmin",
-  college_owner: "institutionadmin",
-  university_owner: "institutionadmin",
-  library_owner: "institutionadmin",
-  pg_owner: "institutionadmin",
-  teacher: "admin",
-  student: "student",
-  parent: "parent",
-  guardian: "parent",
+  platform_admin: "platformadmin",
+  accountant: "platformadmin",
+  guest: "platformadmin",
+  institution_admin: "instituteadmin",
+  professional_organization: "instituteadmin",
+  school_owner: "instituteadmin",
+  college_owner: "instituteadmin",
+  university_owner: "instituteadmin",
+  library_owner: "instituteadmin",
+  pg_owner: "instituteadmin",
+  teacher: "instituteadmin",
+  student: "students",
+  parent: "parents",
+  guardian: "parents",
   driver: "driver",
 };
 
@@ -114,7 +129,7 @@ export function sanitizeRolePathSegment(value: string | null | undefined) {
 }
 
 export function getRoleRoutePrefix(user: RoleRouteUser) {
-  if (user?.is_super_admin || user?.role_codes?.includes("platform_admin")) return "admin";
+  if (user?.is_super_admin || user?.role_codes?.includes("platform_admin")) return "platformadmin";
 
   const roleCodes = user?.role_codes ?? [];
   const mappedRole = PREFIX_PRIORITY.find((roleCode) => roleCodes.includes(roleCode));
@@ -136,8 +151,9 @@ export function toCanonicalAdminPath(pathname: string) {
   const parts = pathOnly.split("/").filter(Boolean);
   const firstSegment = parts[0];
 
-  if (!firstSegment || firstSegment === "admin") {
-    return `${pathOnly.replace(/\/+$/, "") || "/admin"}${query ? `?${query}` : ""}`;
+  if (!firstSegment || firstSegment === "admin" || firstSegment === "platformadmin" || firstSegment === "instituteadmin" || firstSegment === "institutionadmin") {
+    const rest = parts.slice(1).join("/");
+    return `/admin${rest ? `/${rest}` : ""}${query ? `?${query}` : ""}`;
   }
 
   if (PUBLIC_TOP_LEVEL_SEGMENTS.has(firstSegment) || firstSegment.startsWith("_next") || firstSegment.includes(".")) {
@@ -166,9 +182,19 @@ export function toRoleRoutePath(pathname: string, user: RoleRouteUser) {
   }
   const base = getRoleRouteBase(user);
 
-  if (base === "/admin") return canonical;
+  if (base === "/students") {
+    if (canonical === "/admin") return "/students";
+    if (canonical.startsWith("/admin/")) return `/students${canonical.slice("/admin".length)}`;
+    return "/students";
+  }
+
+  if (base === "/parents") {
+    if (canonical === "/admin") return "/parents";
+    if (canonical.startsWith("/admin/")) return `/parents${canonical.slice("/admin".length)}`;
+    return "/parents";
+  }
+
   if (canonical === "/admin") {
-    if (base === "/student") return "/student/dashboard";
     return base;
   }
   if (canonical.startsWith("/admin/")) return `${base}${canonical.slice("/admin".length)}`;

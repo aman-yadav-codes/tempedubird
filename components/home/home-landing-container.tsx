@@ -5,24 +5,37 @@ import { PlatformAdminLanding } from "@/components/home/platform-admin-landing";
 import { InstitutionalAdminLanding } from "@/components/home/institutional-admin-landing";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
 
-export function HomeLandingContainer() {
+type HomeLandingContainerProps = {
+  initialIsInstitutionEdition?: boolean;
+};
+
+export function HomeLandingContainer({
+  initialIsInstitutionEdition,
+}: HomeLandingContainerProps = {}) {
   const searchParams = useSearchParams();
-  const { activeInstitutionId } = useActiveInstitution();
 
-  // 1. Check if an institution ID is explicitly configured in .env.local
-  const envInstIdRaw = process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID || process.env.DEFAULT_INSTITUTION_ID;
-  const envInstId = envInstIdRaw && !isNaN(Number(envInstIdRaw)) && Number(envInstIdRaw) > 0
-    ? Number(envInstIdRaw)
-    : null;
+  // Only show institution landing if explicitly requested via URL parameter
+  const paramInstId =
+    searchParams?.get("institution_id") ||
+    searchParams?.get("institute_id") ||
+    searchParams?.get("inst_id") ||
+    searchParams?.get("institution") ||
+    searchParams?.get("institutionId") ||
+    searchParams?.get("inst");
 
-  // 2. Or if explicitly passed via URL search parameters
-  const paramInstId = searchParams?.get("institution_id") || searchParams?.get("institute_id") || searchParams?.get("inst_id") || searchParams?.get("institution");
   const urlInstId = paramInstId && !isNaN(Number(paramInstId)) && Number(paramInstId) > 0
     ? Number(paramInstId)
     : null;
 
-  const effectiveInstitutionId = urlInstId || envInstId;
-  const isInstitutionEdition = Boolean(effectiveInstitutionId && effectiveInstitutionId > 0);
+  const envDefaultInstId = process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
+    ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
+    : null;
+
+  const isInstitutionEdition = Boolean(
+    initialIsInstitutionEdition ||
+    (urlInstId && urlInstId > 0) ||
+    (envDefaultInstId && envDefaultInstId > 0)
+  );
 
   return (
     <div className="flex flex-col min-h-full">

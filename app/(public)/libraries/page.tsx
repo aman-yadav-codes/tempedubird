@@ -107,7 +107,7 @@ export default function LibrariesPublicPage() {
                     <div>
                       <span className="text-xs font-bold text-primary flex items-center gap-1 mb-1">
                         <Library className="h-3.5 w-3.5" />
-                        {l.institution_name || "Apex Institute of Engineering & Technology"}
+                        {l.institution_name || "EduBird Partner Institute"}
                       </span>
                       <h3 className="text-xl font-bold text-foreground leading-tight">{l.name}</h3>
                       {l.institution_city && (

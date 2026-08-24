@@ -95,6 +95,7 @@ export type AddUserForm = {
     is_active: boolean;
     is_verified: boolean;
     is_profile_complete: boolean;
+    is_marketplace_enabled?: boolean;
     about: string;
     is_teacher: boolean;
     teacher_type: string;

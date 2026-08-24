@@ -1,6 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/db";
 
+const PLATFORM_EDITORIAL_BLOGS = [
+  {
+    id: 1001,
+    institution_id: null,
+    title: "National Education Policy Guidelines & Academic Modernization",
+    body: "Comprehensive analysis of NEP standards, modern curriculum frameworks, and skill-based academic pathways across Indian educational institutions.",
+    category: "Education Policy",
+    created_at: new Date().toISOString(),
+    price: "Free",
+    is_free: true,
+    institution_name: "EduBird Editorial Board",
+    institution_slug: "edubird",
+  },
+  {
+    id: 1002,
+    institution_id: null,
+    title: "Smart Learning Technologies & Digital Classrooms in 2026",
+    body: "How hybrid pedagogical models and intelligent assessment tools are elevating student performance and institute operational efficiency nationwide.",
+    category: "EdTech Trends",
+    created_at: new Date().toISOString(),
+    price: "Free",
+    is_free: true,
+    institution_name: "EduBird Editorial Board",
+    institution_slug: "edubird",
+  },
+  {
+    id: 1003,
+    institution_id: null,
+    title: "Career Navigation: Choosing the Right Specialization After 12th",
+    body: "In-depth guide for learners and guardians on competitive exam preparation, university selection, and emerging technology careers.",
+    category: "Career Guidance",
+    created_at: new Date().toISOString(),
+    price: "Free",
+    is_free: true,
+    institution_name: "EduBird Editorial Board",
+    institution_slug: "edubird",
+  },
+];
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -13,6 +52,9 @@ export async function GET(req: NextRequest) {
     if (institutionId && Number.isInteger(institutionId) && institutionId > 0) {
       params.push(institutionId);
       whereConditions.push(`n.institution_id = $${params.length}`);
+    } else {
+      // Platform Marketplace mode: strictly show only platform admin added blogs (where institution_id IS NULL)
+      whereConditions.push(`n.institution_id IS NULL`);
     }
 
     if (search) {
@@ -41,9 +83,16 @@ export async function GET(req: NextRequest) {
       LIMIT 50
     `, params);
 
+    let rows = blogsRes.rows;
+
+    // For marketplace mode, if no platform blogs added yet in DB, show EduBird editorial blogs
+    if (!institutionId && rows.length === 0 && !search) {
+      rows = PLATFORM_EDITORIAL_BLOGS;
+    }
+
     return NextResponse.json({
       success: true,
-      blogs: blogsRes.rows,
+      blogs: rows,
     });
   } catch (err: any) {
     console.error("GET /api/public/blogs error:", err);

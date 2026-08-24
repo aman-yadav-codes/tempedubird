@@ -402,6 +402,7 @@ export function CourseEnquiryDialog({
         open={authModalOpen}
         onOpenChange={setAuthModalOpen}
         defaultTab={authTab}
+        institutionId={course?.institution_id}
       />
     </>
   );

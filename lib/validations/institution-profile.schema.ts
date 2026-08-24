@@ -32,6 +32,7 @@ export const institutionProfileCreateSchema = z.object({
     parentUniversityId: z.number().int().nullable().optional(),
     boardId: z.number().int().positive().nullable().optional(),
     categoryIds: z.array(z.number().int().positive()).nullable().optional(),
+    isMarketplaceEnabled: z.boolean().nullable().optional(),
     createdBy: z.number().int().nullable().optional(),
 });
 

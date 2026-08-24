@@ -29,6 +29,7 @@ export type PublicInstitutionProfile = {
   logo_url: string | null;
   banner_url: string | null;
   image_url: string | null;
+  branches?: any[];
 };
 
 function getPositiveInt(value: string | null, fallback: number) {
@@ -162,7 +163,18 @@ export async function handlePublicInstitutionsGet(req: Request) {
 }
 
 export async function getCurrentPublicInstitutionProfile(host: string | null | undefined) {
-  const tenant = await getInstitutionTenantByHost(db, host);
+  let tenant = await getInstitutionTenantByHost(db, host);
+  const defaultEnvId = process.env.DEFAULT_INSTITUTION_ID || process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID;
+  if (!tenant && defaultEnvId && /^\d+$/.test(defaultEnvId.trim()) && Number(defaultEnvId.trim()) > 0) {
+    tenant = {
+      institution_id: Number(defaultEnvId.trim()),
+      institution_name: "Institution",
+      institution_slug: null,
+      domain: host || null,
+      is_primary: true,
+      config: {},
+    };
+  }
   if (!tenant) return null;
 
   const result = await db.query<PublicInstitutionProfile>(
@@ -216,7 +228,24 @@ export async function getCurrentPublicInstitutionProfile(host: string | null | u
             media.sort_order ASC,
             media.id ASC
           LIMIT 1
-        ) AS banner_url
+        ) AS banner_url,
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', ib.id,
+              'branch_name', ib.branch_name,
+              'address', ib.address,
+              'city', ib.city,
+              'state', ib.state,
+              'pincode', ib.pincode,
+              'phones', ib.phones,
+              'emails', ib.emails,
+              'working_hours', ib.working_hours
+            )
+          )
+          FROM institution_branches ib
+          WHERE ib.institution_id = p.id AND COALESCE(ib.is_active, TRUE) = TRUE
+        ) AS branches
       FROM institution_profiles p
       LEFT JOIN institution_types it ON it.id = p.institution_type_id
       LEFT JOIN institution_subtypes ist ON ist.id = p.institution_subtype_id

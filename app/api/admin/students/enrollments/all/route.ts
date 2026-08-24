@@ -37,6 +37,8 @@ export async function GET(req: Request) {
 
     const whereSql = `WHERE ${whereClauses.join(" AND ")}`;
 
+    await db.query(`ALTER TABLE institution_profiles ADD COLUMN IF NOT EXISTS logo_url TEXT`);
+
     const [countRes, dataRes] = await Promise.all([
       db.query<{ count: number }>(
         `
@@ -58,7 +60,7 @@ export async function GET(req: Request) {
           u.full_name AS student_name,
           u.email AS student_email,
           u.phone AS student_phone,
-          sp.avatar_url AS student_avatar,
+          u.avatar_url AS student_avatar,
           se.institution_id,
           inst.name AS institution_name,
           inst.logo_url AS institution_logo,
