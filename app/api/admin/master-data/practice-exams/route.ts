@@ -6,7 +6,7 @@ import {
   getRequestedInstitutionId,
   getScopedInstitutionIds,
 } from "@/lib/auth/institution-scope";
-import { hasPermission, isPlatformAdminUser } from "@/lib/auth/permissions";
+import { hasPermission, isPlatformAdminUser, isInstitutionAdminUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
 import {
   ensurePracticeExamSchema,
