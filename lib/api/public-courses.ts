@@ -19,9 +19,10 @@ function formatPrice(amount: number | null) {
 }
 
 function formatDuration(value: number | null, unit: string | null) {
-  if (!value || !unit) return "Flexible";
+  if (!value) return "Regular Duration";
 
-  return `${value} ${unit}`;
+  const u = unit ? unit.trim() : "Months";
+  return `${value} ${u}`;
 }
 
 async function ensureProgramFeeComponentUnitColumn() {
@@ -85,6 +86,9 @@ function mapPublicCourseRow(row: Record<string, unknown>) {
       )
     : [];
 
+  const rawDurationValue = row.duration_value ? Number(row.duration_value) : null;
+  const rawDurationUnit = typeof row.duration_unit === "string" && row.duration_unit.trim() ? row.duration_unit.trim() : null;
+
   return {
     id: Number(row.id),
     slug: typeof row.slug === "string" ? row.slug : String(row.id),
@@ -96,9 +100,9 @@ function mapPublicCourseRow(row: Record<string, unknown>) {
     categoryId: row.root_category_id ? Number(row.root_category_id) : null,
     selectedCategory: typeof row.category_name === "string" ? row.category_name : null,
     selectedCategoryId: row.category_id ? Number(row.category_id) : null,
-    duration: formatDuration(row.duration_value ? Number(row.duration_value) : null, typeof row.duration_unit === "string" ? row.duration_unit : null),
-    durationValue: row.duration_value ? Number(row.duration_value) : null,
-    durationUnit: typeof row.duration_unit === "string" ? row.duration_unit : null,
+    duration: formatDuration(rawDurationValue, rawDurationUnit),
+    durationValue: rawDurationValue,
+    durationUnit: rawDurationUnit,
     level:
       typeof row.category_name === "string"
         ? row.category_name
@@ -122,6 +126,7 @@ function mapPublicCourseRow(row: Record<string, unknown>) {
     images,
     feeComponents,
     tags,
+    iconUrl: typeof row.icon_url === "string" && row.icon_url ? row.icon_url : (images[0]?.url || null),
   };
 }
 

@@ -896,7 +896,7 @@ export default function CardTemplatesPage() {
               : "View templates assigned to your institutions and discover the marketplace."}
           </p>
         </div>
-        {isPlatformAdmin && (
+        {(isPlatformAdmin || isInstitutionAdmin) && (
           <Button onClick={() => setGeneratorOpen(true)}>
             <Plus className="size-4" />
             Add Template

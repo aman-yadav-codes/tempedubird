@@ -28,6 +28,7 @@ import {
   ListPlus,
   ClipboardPaste,
   MoreHorizontal,
+  Upload,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -203,6 +204,50 @@ export default function MasterCoursesPage() {
   // Subject multi-select search in popover
   const [subjectSearch, setSubjectSearch] = useState("");
   const [subjectPopoverOpen, setSubjectPopoverOpen] = useState(false);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
+
+  const handleCourseIconUpload = async (file: File) => {
+    if (!accessToken) {
+      toast.error("Authentication required");
+      return;
+    }
+    const allowed = ["image/webp", "image/svg+xml", "image/png", "image/jpeg", "image/jpg", "image/gif", "image/avif"];
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    const isAcceptedExt = ["webp", "svg", "png", "jpg", "jpeg", "gif", "avif"].includes(ext || "");
+    if (!allowed.includes(file.type) && !isAcceptedExt) {
+      toast.error("Please select a WebP, SVG, PNG, or JPEG image file.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File size must be less than 5MB.");
+      return;
+    }
+
+    setUploadingIcon(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/admin/uploads/image", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: formData,
+      });
+      const json = await res.json();
+      const uploadedUrl = json.data?.url || json.url;
+      if (res.ok && uploadedUrl) {
+        setIconUrl(uploadedUrl);
+        toast.success("Course icon uploaded successfully");
+      } else {
+        toast.error(json.error || "Failed to upload icon");
+      }
+    } catch {
+      toast.error("Failed to upload icon");
+    } finally {
+      setUploadingIcon(false);
+    }
+  };
 
   // View sheet state
   const [viewingCourse, setViewingCourse] = useState<MasterCourse | null>(null);
@@ -988,7 +1033,7 @@ export default function MasterCoursesPage() {
 
       {/* Add / Edit Course Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl sm:max-w-4xl max-h-[90vh] overflow-y-auto w-full">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <BookCheck className="h-5 w-5 text-primary" />
@@ -1004,13 +1049,13 @@ export default function MasterCoursesPage() {
             <div className="space-y-1.5 p-3.5 rounded-2xl border border-border/80 bg-muted/20">
               <Label className="text-xs font-bold text-foreground flex items-center justify-between">
                 <span>1. Main Category (from Manage Categories) *</span>
-                {categoryName && (
-                  <span className="text-[11px] text-primary font-semibold">
-                    Detected: {authorityType === "board" ? "School Board" : authorityType === "university" ? "University Degree" : "Certification / Exam"}
+                {categoryId && (
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    Category ID: #{categoryId}
                   </span>
                 )}
               </Label>
-              <AsyncSearchPopover<{ id: number; name: string; slug: string; parent_name?: string; depth?: number }>
+              <AsyncSearchPopover<{ id: number; name: string; breadcrumb?: string; depth?: number }>
                 value={categoryId}
                 onChange={(val) => {
                   setCategoryId(val);
@@ -1019,16 +1064,14 @@ export default function MasterCoursesPage() {
                     setCategoryBreadcrumb("");
                   }
                 }}
-                onSelectItem={(item) => {
-                  handleCategorySelect(item);
-                }}
+                onSelectItem={(item) => handleCategorySelect(item)}
                 selectedLabel={categoryName || undefined}
                 placeholder="Select main category from categories table..."
-                searchPlaceholder="Search main categories..."
-                emptyText="No main categories found"
+                searchPlaceholder="Search categories by name..."
+                emptyText="No category found"
                 fetcher={async (search, page) => {
                   const res = await fetch(
-                    `/api/admin/categories?onlyRoot=true&page=${page}&limit=50&search=${encodeURIComponent(search)}`,
+                    `/api/admin/categories?page=${page}&limit=20&search=${encodeURIComponent(search)}`,
                     { headers: authHeader }
                   );
                   if (!res.ok) throw new Error("Failed to load categories");
@@ -1036,16 +1079,13 @@ export default function MasterCoursesPage() {
                   return { data: json.data || [], hasMore: page < (json.pageCount || 1) };
                 }}
                 getValue={(item) => String(item.id)}
-                getLabel={(item) => item.name}
-                renderItem={(c) => (
-                  <div className="flex items-center justify-between py-1.5 w-full text-left gap-2">
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-bold text-foreground truncate">{c.name}</span>
-                      <span className="text-[10px] text-muted-foreground font-mono">{c.slug}</span>
-                    </div>
-                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-background font-semibold shrink-0">
-                      Main Category
-                    </Badge>
+                getLabel={(item) => item.breadcrumb || item.name}
+                renderItem={(item) => (
+                  <div className="flex flex-col py-0.5">
+                    <span className="font-semibold text-xs text-foreground">{item.name}</span>
+                    {item.breadcrumb && (
+                      <span className="text-[10px] text-muted-foreground">{item.breadcrumb}</span>
+                    )}
                   </div>
                 )}
               />
@@ -1080,6 +1120,76 @@ export default function MasterCoursesPage() {
               <p className="text-[11px] text-muted-foreground">
                 Enter the exact course/program title to display across the platform.
               </p>
+            </div>
+
+            {/* Course / Program Icon Upload (Same as Subject Icon) */}
+            <div className="space-y-2 p-3.5 rounded-2xl border border-border/80 bg-muted/20">
+              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <ImageIcon className="h-4 w-4 text-primary" />
+                Course / Program Icon
+              </Label>
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-xl border border-border bg-background flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
+                  {iconUrl ? (
+                    <img
+                      src={iconUrl}
+                      alt="Course Icon"
+                      className="h-full w-full object-contain p-1"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <GraduationCap className="h-6 w-6 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="flex-1 flex items-center gap-2">
+                  <input
+                    type="file"
+                    id="course-icon-upload-input"
+                    accept=".webp,.svg,.png,.jpg,.jpeg,image/webp,image/svg+xml,image/png,image/jpeg"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        handleCourseIconUpload(file);
+                        e.target.value = "";
+                      }
+                    }}
+                  />
+                  <label
+                    htmlFor="course-icon-upload-input"
+                    className={`px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 ${
+                      uploadingIcon ? "pointer-events-none opacity-60" : ""
+                    }`}
+                  >
+                    {uploadingIcon ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5" />
+                    )}
+                    Upload Icon
+                  </label>
+                  <Input
+                    placeholder="or paste icon URL (https://...)"
+                    value={iconUrl}
+                    onChange={(e) => setIconUrl(e.target.value)}
+                    className="h-8 text-xs flex-1"
+                  />
+                  {iconUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                      onClick={() => setIconUrl("")}
+                      title="Clear icon"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Step 3: Single Context-Aware Authority Dropdown based on Category */}
@@ -1208,7 +1318,7 @@ export default function MasterCoursesPage() {
 
             {/* Step 4: Curriculum Subjects to Add */}
             <div className="space-y-3 p-3.5 rounded-2xl border border-border/80 bg-muted/10">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                   <ListPlus className="h-4 w-4 text-primary" />
                   4. Subjects to Add
@@ -1217,17 +1327,39 @@ export default function MasterCoursesPage() {
                   </Badge>
                 </Label>
 
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowBulkPaste(!showBulkPaste)}
-                  className="h-7 px-2 text-[11px] font-semibold text-primary hover:text-primary gap-1"
-                >
-                  <ClipboardPaste className="h-3.5 w-3.5" />
-                  {showBulkPaste ? "Hide Quick Paste" : "Quick Bulk Paste"}
-                </Button>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSubjectPopoverOpen(true)}
+                    className="h-7 px-2 text-[11px] font-semibold text-primary border-primary/30 hover:bg-primary/10 gap-1"
+                  >
+                    <BookOpen className="h-3.5 w-3.5" />
+                    Fetch from Subject Table
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowBulkPaste(!showBulkPaste)}
+                    className="h-7 px-2 text-[11px] font-semibold text-muted-foreground hover:text-foreground gap-1"
+                  >
+                    <ClipboardPaste className="h-3.5 w-3.5" />
+                    {showBulkPaste ? "Hide Paste" : "Bulk Paste"}
+                  </Button>
+                </div>
               </div>
+
+              {/* Datalist for fast subject name autocomplete from subjects table */}
+              <datalist id="existing-master-subjects-list">
+                {masterSubjects.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.code ? `Code: ${s.code}` : s.name}
+                  </option>
+                ))}
+              </datalist>
 
               {/* Bulk Paste Box */}
               {showBulkPaste && (
@@ -1265,27 +1397,41 @@ export default function MasterCoursesPage() {
               )}
 
               {/* Dynamic Subject Rows */}
-              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                 {subjectRows.map((row, idx) => (
                   <div
                     key={row.id}
                     className="p-2.5 rounded-xl border border-border/80 bg-card/60 flex items-center gap-2 group hover:border-primary/40 transition-colors shadow-2xs"
                   >
-                    <span className="text-[11px] font-bold text-muted-foreground w-5 text-center shrink-0">
+                    <span className="text-[11px] font-bold text-muted-foreground w-6 text-center shrink-0">
                       #{idx + 1}
                     </span>
+
+                    {/* Autocomplete input with datalist */}
                     <Input
+                      list="existing-master-subjects-list"
                       placeholder={`Subject #${idx + 1} Name (e.g. Mathematics)`}
                       value={row.name}
-                      onChange={(e) => updateSubjectRow(row.id, "name", e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        updateSubjectRow(row.id, "name", val);
+                        const matched = masterSubjects.find(
+                          (s) => s.name.toLowerCase() === val.trim().toLowerCase()
+                        );
+                        if (matched && matched.code && !row.code) {
+                          updateSubjectRow(row.id, "code", matched.code);
+                        }
+                      }}
                       className="h-8 text-xs flex-1"
                     />
+
                     <Input
                       placeholder="Code (Optional)"
                       value={row.code}
                       onChange={(e) => updateSubjectRow(row.id, "code", e.target.value)}
-                      className="h-8 text-xs w-28 shrink-0"
+                      className="h-8 text-xs w-36 sm:w-44 shrink-0"
                     />
+
                     {subjectRows.length > 1 && (
                       <Button
                         type="button"
@@ -1301,15 +1447,17 @@ export default function MasterCoursesPage() {
                 ))}
               </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addSubjectRow}
-                className="w-full h-8 text-xs font-semibold border-dashed gap-1.5 hover:border-primary hover:text-primary"
-              >
-                <Plus className="h-3.5 w-3.5" /> Add Another Subject
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addSubjectRow}
+                  className="flex-1 h-8 text-xs font-semibold border-dashed gap-1.5 hover:border-primary hover:text-primary"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add Another Subject
+                </Button>
+              </div>
             </div>
 
             {/* Step 5: Duration */}
@@ -1473,6 +1621,130 @@ export default function MasterCoursesPage() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Fetch from Subject Table Modal Dialog */}
+      <Dialog open={subjectPopoverOpen} onOpenChange={setSubjectPopoverOpen}>
+        <DialogContent className="max-w-xl max-h-[85vh] flex flex-col p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-primary" />
+              Fetch Subjects from Subject Table
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Select existing subjects from the master subjects database to add to this course.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 flex-1 overflow-hidden flex flex-col">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search subject by name or code..."
+                value={subjectSearch}
+                onChange={(e) => setSubjectSearch(e.target.value)}
+                className="pl-9 text-xs"
+              />
+            </div>
+
+            <div className="flex-1 overflow-y-auto border rounded-xl p-2 space-y-1.5 min-h-60 max-h-72">
+              {loadingSubjects ? (
+                <div className="flex items-center justify-center py-10 text-muted-foreground text-xs gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading subjects from database...
+                </div>
+              ) : masterSubjects.filter((s) =>
+                  !subjectSearch.trim() ||
+                  s.name.toLowerCase().includes(subjectSearch.toLowerCase()) ||
+                  (s.code && s.code.toLowerCase().includes(subjectSearch.toLowerCase()))
+                ).length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground text-xs">
+                  No subjects found matching &quot;{subjectSearch}&quot;.
+                </div>
+              ) : (
+                masterSubjects
+                  .filter((s) =>
+                    !subjectSearch.trim() ||
+                    s.name.toLowerCase().includes(subjectSearch.toLowerCase()) ||
+                    (s.code && s.code.toLowerCase().includes(subjectSearch.toLowerCase()))
+                  )
+                  .map((sub) => {
+                    const isSelected =
+                      selectedSubjectIds.includes(sub.id) ||
+                      subjectRows.some(
+                        (r) => r.name.trim().toLowerCase() === sub.name.trim().toLowerCase()
+                      );
+                    return (
+                      <div
+                        key={sub.id}
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedSubjectIds((prev) => prev.filter((id) => id !== sub.id));
+                            setSubjectRows((prev) => {
+                              const remaining = prev.filter(
+                                (r) => r.name.trim().toLowerCase() !== sub.name.trim().toLowerCase()
+                              );
+                              return remaining.length > 0
+                                ? remaining
+                                : [{ id: String(Date.now()), name: "", code: "" }];
+                            });
+                          } else {
+                            setSelectedSubjectIds((prev) => [...prev, sub.id]);
+                            setSubjectRows((prev) => {
+                              const filtered = prev.filter((r) => r.name.trim() !== "");
+                              return [
+                                ...filtered,
+                                {
+                                  id: String(sub.id),
+                                  name: sub.name,
+                                  code: sub.code || "",
+                                },
+                              ];
+                            });
+                          }
+                        }}
+                        className={`p-2.5 rounded-xl border flex items-center justify-between gap-3 cursor-pointer transition-colors ${
+                          isSelected
+                            ? "border-primary/60 bg-primary/10 text-foreground"
+                            : "border-border/60 hover:bg-muted/40 text-foreground/80"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Checkbox checked={isSelected} className="rounded" />
+                          <div className="min-w-0">
+                            <span className="font-semibold text-xs block truncate">{sub.name}</span>
+                            {sub.code && (
+                              <span className="text-[10px] text-muted-foreground">Code: {sub.code}</span>
+                            )}
+                          </div>
+                        </div>
+                        {sub.board_name && (
+                          <Badge variant="outline" className="text-[10px] shrink-0">
+                            {sub.board_name}
+                          </Badge>
+                        )}
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="flex items-center justify-between gap-2 pt-2 border-t">
+            <span className="text-xs text-muted-foreground font-medium">
+              {subjectRows.filter((r) => r.name.trim()).length} subjects selected
+            </span>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSubjectPopoverOpen(false)}
+              >
+                Done
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Alert */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>

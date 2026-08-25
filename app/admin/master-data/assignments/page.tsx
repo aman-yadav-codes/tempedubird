@@ -692,17 +692,18 @@ export default function AssignmentsPage() {
               : "Create reusable assignments with objective and subjective questions."}
           </p>
         </div>
-        {(canCreate || isPlatformAdmin) && assignmentView === "my" && (
-          <Button
-            onClick={() => {
-              setEditing(null);
-              setEditorOpen(true);
-            }}
-          >
-            <Plus className="size-4" />
-            Add Assignment
-          </Button>
-        )}
+        <Button
+          onClick={() => {
+            if (assignmentView !== "my") {
+              setAssignmentView("my");
+            }
+            setEditing(null);
+            setEditorOpen(true);
+          }}
+        >
+          <Plus className="size-4" />
+          Add Assignment
+        </Button>
       </div>
 
       <div className="flex flex-wrap gap-2">

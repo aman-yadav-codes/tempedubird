@@ -39,7 +39,10 @@ type PaymentHistoryRow = {
   salary_month: string;
   base_salary: string | number;
   deduction_amount: string | number;
+  bonus_amount?: string | number;
+  manual_deduction?: string | number;
   payable_salary: string | number;
+  remarks?: string | null;
   status: "PAID";
   paid_at?: string | null;
   paid_by_name?: string | null;
@@ -49,7 +52,8 @@ type SalaryRow = {
   staff_user_id: number;
   full_name: string;
   email?: string | null;
-  role_code: "teacher" | "driver";
+  role_code: string;
+  role_name?: string;
   join_date?: string | null;
   components: SalaryComponent[];
   base_salary: number;
@@ -69,6 +73,9 @@ type SalaryRow = {
   payout_id?: number | null;
   payout_status?: "PAID" | null;
   paid_amount?: number | null;
+  paid_bonus?: number;
+  paid_manual_deduction?: number;
+  paid_remarks?: string;
   paid_at?: string | null;
   paid_by_name?: string | null;
   payment_history?: PaymentHistoryRow[];
@@ -86,12 +93,16 @@ type PaidHistoryRow = {
   staff_user_id: number;
   full_name: string;
   email?: string | null;
-  role_code: "teacher" | "driver";
+  role_code: string;
+  role_name?: string;
   join_date?: string | null;
   salary_month: string;
   base_salary: number;
   deduction_amount: number;
+  bonus_amount?: number;
+  manual_deduction?: number;
   payable_salary: number;
+  remarks?: string;
   status: "PAID";
   paid_at?: string | null;
   paid_by_name?: string | null;
@@ -103,7 +114,8 @@ type UnpaidSalaryRow = {
   staff_user_id: number;
   full_name: string;
   email?: string | null;
-  role_code: "teacher" | "driver";
+  role_code: string;
+  role_name?: string;
   salary_month: string;
   base_salary: number;
   per_day_salary: number;
@@ -145,8 +157,15 @@ function currency(value: number | string) {
   });
 }
 
-function roleLabel(roleCode: string) {
-  return roleCode === "driver" ? "Driver" : "Teacher";
+function roleLabel(roleCode: string, roleName?: string) {
+  if (roleName) return roleName;
+  if (!roleCode) return "Staff";
+  if (roleCode.toLowerCase() === "teacher") return "Teacher";
+  if (roleCode.toLowerCase() === "driver") return "Driver";
+  return roleCode
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 function formatMonth(value: string) {
@@ -361,13 +380,31 @@ function PaidHistoryDetailSurface({
                 <span className="font-semibold">{currency(row.base_salary)}</span>
               </div>
               <div className="flex items-center justify-between gap-3 border-b border-border/70 px-3 py-2.5">
-                <span className="text-muted-foreground">Deduction</span>
+                <span className="text-muted-foreground">Attendance Deductions</span>
                 <span className="font-semibold text-destructive">{currency(row.deduction_amount)}</span>
               </div>
+              {Number(row.bonus_amount || 0) > 0 && (
+                <div className="flex items-center justify-between gap-3 border-b border-border/70 px-3 py-2.5">
+                  <span className="text-emerald-500 font-medium">+ Extra Bonus / Incentive</span>
+                  <span className="font-semibold text-emerald-400">+{currency(row.bonus_amount || 0)}</span>
+                </div>
+              )}
+              {Number(row.manual_deduction || 0) > 0 && (
+                <div className="flex items-center justify-between gap-3 border-b border-border/70 px-3 py-2.5">
+                  <span className="text-rose-500 font-medium">- Extra Manual Deduction</span>
+                  <span className="font-semibold text-rose-400">-{currency(row.manual_deduction || 0)}</span>
+                </div>
+              )}
               <div className="flex items-center justify-between gap-3 bg-muted/30 px-3 py-2.5">
-                <span className="font-medium text-foreground">Paid Amount</span>
+                <span className="font-medium text-foreground">Net Paid Amount</span>
                 <span className="font-semibold text-emerald-200">{currency(row.payable_salary)}</span>
               </div>
+              {row.remarks && (
+                <div className="border-t border-border/70 px-3 py-2.5 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Remarks: </span>
+                  {row.remarks}
+                </div>
+              )}
             </div>
           </section>
 
@@ -663,6 +700,10 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
     [filteredRows]
   );
 
+  const [adjustments, setAdjustments] = useState<
+    Record<string, { bonus: string; deduction: string; remarks: string }>
+  >({});
+
   const payPlanRows = useMemo<PayPlanRow[]>(() => {
     if (!payTarget) return [];
     const targetRows = payTarget === "selected" ? selectedPayableRows : [payTarget];
@@ -694,16 +735,27 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
 
     const uniqueRows = new Map<string, PayPlanRow>();
     [...previousPayments, ...currentPayments]
-      .filter((row) => row.payable_salary > 0)
+      .filter((row) => payTarget !== "selected" || row.payable_salary > 0)
       .forEach((row) => uniqueRows.set(`${row.staff_user_id}-${row.salary_month}`, row));
     return Array.from(uniqueRows.values()).sort((a, b) =>
       a.full_name.localeCompare(b.full_name) || a.salary_month.localeCompare(b.salary_month)
     );
   }, [month, payTarget, selectedPayableRows, unpaidSalary]);
 
+  const getRowNetPayable = useCallback(
+    (row: PayPlanRow) => {
+      const key = `${row.staff_user_id}-${row.salary_month}`;
+      const adj = adjustments[key] || { bonus: "", deduction: "" };
+      const bonus = Number(adj.bonus) || 0;
+      const deduction = Number(adj.deduction) || 0;
+      return Math.max(0, Number((row.payable_salary + bonus - deduction).toFixed(2)));
+    },
+    [adjustments]
+  );
+
   const payPlanTotal = useMemo(
-    () => payPlanRows.reduce((sum, row) => sum + row.payable_salary, 0),
-    [payPlanRows]
+    () => payPlanRows.reduce((sum, row) => sum + getRowNetPayable(row), 0),
+    [payPlanRows, getRowNetPayable]
   );
 
   async function markPaid(target: Exclude<PayTarget, null>) {
@@ -711,10 +763,21 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
     const staffUserIds = target === "selected"
       ? selectedPayableRows.map((row) => row.staff_user_id)
       : [target.staff_user_id];
-    const payments = payPlanRows.map((row) => ({
-      staffUserId: row.staff_user_id,
-      month: row.salary_month,
-    }));
+    const payments = payPlanRows.map((row) => {
+      const key = `${row.staff_user_id}-${row.salary_month}`;
+      const adj = adjustments[key] || { bonus: "", deduction: "", remarks: "" };
+      const bonus = Math.max(0, Number(adj.bonus) || 0);
+      const deduction = Math.max(0, Number(adj.deduction) || 0);
+      const netPayable = Math.max(0, Number((row.payable_salary + bonus - deduction).toFixed(2)));
+      return {
+        staffUserId: row.staff_user_id,
+        month: row.salary_month,
+        bonusAmount: bonus,
+        manualDeduction: deduction,
+        customPayableSalary: netPayable,
+        remarks: adj.remarks || undefined,
+      };
+    });
     if (payments.length === 0) return;
 
     setPaying(true);
@@ -731,8 +794,9 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to mark salary paid");
-      toast.success(payments.length === 1 ? "Salary marked paid." : "Selected salary months marked paid.");
+      toast.success(payments.length === 1 ? "Salary marked paid with adjustments." : "Selected salary payouts processed.");
       setPayTarget(null);
+      setAdjustments({});
       setSelectedIds([]);
       void loadSalary();
     } catch (err) {
@@ -779,10 +843,10 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
           <h1 className="text-2xl font-bold tracking-tight">
             {mode === "self" ? "My Salary" : "Staff Salary"}
           </h1>
-          <p className="hidden text-muted-foreground sm:block">
+          <p className="text-muted-foreground">
             {mode === "self"
-              ? "View your monthly salary calculated from attendance."
-              : "Review teacher and driver salary calculated from attendance."}
+              ? "View monthly attendance breakdown, salary deductions, and paid history."
+              : "Review staff salary structure, calculate payouts from attendance, and track payment history."}
           </p>
         </div>
         <Badge variant="outline" className="rounded-md">{activeInstitution.name}</Badge>
@@ -951,10 +1015,10 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
                             event.stopPropagation();
                             setPayTarget(row);
                           }}
-                          disabled={paying || row.payable_salary <= 0}
+                          disabled={paying}
                         >
                           <IndianRupee className="size-4" />
-                          {row.payout_status === "PAID" ? "Re-mark" : "Pay"}
+                          {row.payout_status === "PAID" ? "Re-mark Paid" : "Mark Paid"}
                         </Button>
                       </div>
                     </div>
@@ -1008,7 +1072,11 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
                             <div className="font-semibold">{row.full_name}</div>
                             <div className="text-xs text-muted-foreground">{row.email}</div>
                           </td>
-                          <td className="px-4 py-3">{roleLabel(row.role_code)}</td>
+                          <td className="px-4 py-3">
+                            <Badge variant="outline" className="font-normal text-xs">
+                              {roleLabel(row.role_code, row.role_name)}
+                            </Badge>
+                          </td>
                           <td className="px-4 py-3"><AttendanceText row={row} /></td>
                           <td className="px-4 py-3">
                             <div className="font-semibold text-emerald-200">{currency(row.payable_salary)}</div>
@@ -1020,7 +1088,7 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
                               size="sm"
                               variant={row.payout_status === "PAID" ? "outline" : "default"}
                               onClick={() => setPayTarget(row)}
-                              disabled={paying || row.payable_salary <= 0}
+                              disabled={paying}
                             >
                               <IndianRupee className="size-4" />
                               {row.payout_status === "PAID" ? "Re-mark Paid" : "Mark Paid"}
@@ -1124,17 +1192,17 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
       />
 
       <AlertDialog open={Boolean(payTarget)} onOpenChange={(open) => !paying && !open && setPayTarget(null)}>
-        <AlertDialogContent className="max-w-md gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <AlertDialogContent className="max-w-md gap-0 overflow-hidden p-0 sm:max-w-xl">
           <AlertDialogHeader className="px-6 pb-4 pt-6">
             <AlertDialogTitle>
-              {payTarget === "selected" ? "Pay selected salaries?" : "Mark salary as paid?"}
+              {payTarget === "selected" ? "Pay selected salaries?" : "Process Staff Salary Payout"}
             </AlertDialogTitle>
             <AlertDialogDescription asChild className="text-left">
               <div className="w-full space-y-4">
-                <p>
+                <p className="text-sm text-muted-foreground">
                   {payTarget === "selected"
-                    ? `This will mark ${payPlanRows.length} salary month(s) as paid for ${selectedPayableRows.length} selected staff member(s).`
-                    : `This will mark salary as paid for ${payTarget?.full_name ?? "this staff member"}.`}
+                    ? `Review and adjust payouts for ${payPlanRows.length} salary month(s) across ${selectedPayableRows.length} selected staff member(s).`
+                    : `Confirm attendance calculation and add any manual bonus, incentives, or deductions for ${payTarget?.full_name ?? "this staff member"}.`}
                 </p>
                 {payPlanRows.some((row) => row.isPreviousDue) && (
                   <Alert variant="warning">
@@ -1144,45 +1212,134 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
                     </AlertDescription>
                   </Alert>
                 )}
-                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                  {payPlanRows.map((row) => (
-                    <div
-                      key={`${row.staff_user_id}-${row.salary_month}`}
-                      className="w-full rounded-md border border-border bg-card/60 p-3"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate font-semibold text-foreground">{row.full_name}</div>
-                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                            <span className="font-medium text-foreground">{formatMonth(row.salary_month)}</span>
-                            {row.isPreviousDue && (
-                              <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-amber-100">
-                                Previous unpaid
-                              </span>
-                            )}
+                <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
+                  {payPlanRows.map((row) => {
+                    const rowKey = `${row.staff_user_id}-${row.salary_month}`;
+                    const adj = adjustments[rowKey] || { bonus: "", deduction: "", remarks: "" };
+                    const netPayable = getRowNetPayable(row);
+
+                    return (
+                      <div
+                        key={rowKey}
+                        className="w-full rounded-lg border border-border bg-card/60 p-3.5 shadow-sm space-y-3"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate font-semibold text-foreground">{row.full_name}</div>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs">
+                              <span className="font-medium text-foreground">{formatMonth(row.salary_month)}</span>
+                              {row.isPreviousDue && (
+                                <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-amber-100">
+                                  Previous unpaid
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <div className="text-[11px] text-muted-foreground">Attendance Pay</div>
+                            <div className="font-semibold text-foreground">{currency(row.payable_salary)}</div>
                           </div>
                         </div>
-                        <div className="shrink-0 text-right">
-                          <div className="text-xs text-muted-foreground">Amount</div>
-                          <div className="font-semibold text-emerald-200">{currency(row.payable_salary)}</div>
+
+                        <div className="rounded-md border border-border/70 bg-card/40 px-3 py-2 text-xs">
+                          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                            <span>{row.paid_days} paid day(s) x {currency(row.per_day_salary)}</span>
+                            <span className="text-muted-foreground">{row.working_days} working days</span>
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                            <span className="text-emerald-400">
+                              Calculated: {currency(row.payable_salary)}
+                            </span>
+                            <span className="text-destructive">
+                              Attendance Deduction: {currency(row.deduction_amount)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Manual Extra Adjustments Section */}
+                        <div className="rounded-md border border-border/60 bg-muted/20 p-2.5 space-y-2">
+                          <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                            Manual Adjustments (Optional)
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <Label className="text-[11px] text-emerald-500 font-medium">
+                                + Extra Bonus / Incentive (₹)
+                              </Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="any"
+                                placeholder="0.00"
+                                value={adj.bonus}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setAdjustments((prev) => ({
+                                    ...prev,
+                                    [rowKey]: {
+                                      bonus: val,
+                                      deduction: prev[rowKey]?.deduction || "",
+                                      remarks: prev[rowKey]?.remarks || "",
+                                    },
+                                  }));
+                                }}
+                                className="h-7 text-xs font-mono bg-background"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[11px] text-rose-500 font-medium">
+                                - Manual Deduction (₹)
+                              </Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="any"
+                                placeholder="0.00"
+                                value={adj.deduction}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setAdjustments((prev) => ({
+                                    ...prev,
+                                    [rowKey]: {
+                                      deduction: val,
+                                      bonus: prev[rowKey]?.bonus || "",
+                                      remarks: prev[rowKey]?.remarks || "",
+                                    },
+                                  }));
+                                }}
+                                className="h-7 text-xs font-mono bg-background"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <Input
+                              type="text"
+                              placeholder="Notes / reason (e.g. Festival bonus, Advance recovery, Overtime)"
+                              value={adj.remarks}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setAdjustments((prev) => ({
+                                  ...prev,
+                                  [rowKey]: {
+                                    remarks: val,
+                                    bonus: prev[rowKey]?.bonus || "",
+                                    deduction: prev[rowKey]?.deduction || "",
+                                  },
+                                }));
+                              }}
+                              className="h-7 text-[11px] bg-background"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between pt-1 text-xs font-medium">
+                            <span className="text-muted-foreground">Net Payout to credit:</span>
+                            <span className="font-semibold text-emerald-400 text-sm">
+                              {currency(netPayable)}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                      <div className="mt-3 rounded-md border border-border/70 bg-card/40 px-3 py-2 text-xs">
-                        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                          <span>{row.paid_days} paid day(s) x {currency(row.per_day_salary)}</span>
-                          <span className="text-muted-foreground">{row.working_days} working days</span>
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                          <span className="text-emerald-200">
-                            Present amount: {currency(row.payable_salary)}
-                          </span>
-                          <span className="text-destructive">
-                            Deduction: {currency(row.deduction_amount)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {payPlanRows.length === 0 && (
                     <Alert>
                       <AlertDescription className="text-center">
@@ -1191,26 +1348,33 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
                     </Alert>
                   )}
                 </div>
-                <Alert>
+                <Alert className="border-emerald-500/30 bg-emerald-500/10">
                   <div className="flex items-center justify-between gap-3">
-                    <AlertTitle className="mb-0">Total to mark paid</AlertTitle>
-                    <div className="shrink-0 font-semibold text-emerald-200">{currency(payPlanTotal)}</div>
+                    <AlertTitle className="mb-0 text-foreground font-semibold">
+                      Total Payout Amount
+                    </AlertTitle>
+                    <div className="shrink-0 font-bold text-base text-emerald-400">
+                      {currency(payPlanTotal)}
+                    </div>
                   </div>
                 </Alert>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="border-t border-border bg-muted/30 px-6 py-4">
-            <AlertDialogCancel disabled={paying}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={paying} onClick={() => setAdjustments({})}>
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               disabled={paying}
               onClick={(event) => {
                 event.preventDefault();
                 if (payTarget) void markPaid(payTarget);
               }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
             >
               {paying && <Loader2 className="size-4 animate-spin" />}
-              Confirm Paid
+              Confirm & Mark Paid
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

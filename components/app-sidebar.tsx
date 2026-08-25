@@ -254,7 +254,7 @@ const navItems: SidebarItem[] = [
         url: "/admin/marketing/packages",
         icon: Megaphone,
         children: [
-            { title: "Packages", url: "/admin/marketing/packages", icon: CreditCard },
+            { title: "Pricing Packages", url: "/admin/marketing/packages", icon: CreditCard },
             { title: "Social Media", url: "/admin/marketing/social-media", icon: Share2 },
             { title: "Form Builder", url: "/admin/marketing/form-builder", icon: FileText },
             { title: "Email Template Builder", url: "/admin/marketing/email-templates", icon: Mail },
@@ -288,6 +288,7 @@ const navItems: SidebarItem[] = [
             { title: "Subjects", url: "/admin/content/subjects", icon: GraduationCap },
             { title: "Courses & Programs", url: "/admin/content/courses", icon: BookCheck },
             { title: "Syllabus", url: "/admin/content/syllabus", icon: BookOpen },
+            { title: "Card Templates", url: "/admin/content/card-templates", icon: IdCard },
             { title: "Assignments", url: "/admin/content/assignments", icon: ClipboardList },
             { title: "Practice Exams", url: "/admin/content/practice-exams", icon: ClipboardCheck },
             { title: "Exams", url: "/admin/content/exams", icon: FileText },
@@ -388,6 +389,16 @@ const navItems: SidebarItem[] = [
                 title: "Library Facilities",
                 url: "/admin/institutions/libraries",
                 icon: LibraryBig,
+            },
+            {
+                title: "Institute Calendar",
+                url: "/admin/master-data/institute-calendar",
+                icon: CalendarDays,
+            },
+            {
+                title: "Timetable Setup",
+                url: "/admin/master-data/timetable-setup",
+                icon: CalendarDays,
             },
             {
                 title: "Noticeboard",
@@ -614,6 +625,25 @@ export function AppSidebar() {
             }
             if (item.url === "/admin/marketing/packages") {
                 return isPlatformAdmin || isInstitutionAdmin ? [item] : [];
+            }
+            if (item.url === "/admin/content" && item.children) {
+                if (isInstitutionAdmin) {
+                    const institutionExcludedUrls = new Set([
+                        "/admin/content/tree",
+                        "/admin/content/categories",
+                        "/admin/content/boards",
+                        "/admin/content/universities",
+                        "/admin/content/certifications",
+                        "/admin/content/subjects",
+                        "/admin/content/courses",
+                        "/admin/content/syllabus",
+                    ]);
+                    return [{
+                        ...item,
+                        children: item.children.filter((child) => !institutionExcludedUrls.has(child.url)),
+                    }];
+                }
+                return isPlatformAdmin ? [item] : [];
             }
             if (item.url === "/admin/sales/leads") {
                 return isPlatformAdmin || isInstitutionAdmin ? [item] : [];

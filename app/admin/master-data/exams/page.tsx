@@ -1324,18 +1324,19 @@ export default function ExamsPage() {
               : "Create scheduled exams with targets, marketplace sharing, and result controls."}
           </p>
         </div>
-        {(canCreate || isPlatformAdmin) && examView === "my" && (
-          <Button
-            onClick={() => {
-              setEditing(null);
-              setActiveSeries(null);
-              setEditorOpen(true);
-            }}
-          >
-            <Plus className="size-4" />
-            Add Exam
-          </Button>
-        )}
+        <Button
+          onClick={() => {
+            if (examView !== "my") {
+              setExamView("my");
+            }
+            setEditing(null);
+            setActiveSeries(null);
+            setEditorOpen(true);
+          }}
+        >
+          <Plus className="size-4" />
+          Add Exam
+        </Button>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -1493,7 +1494,7 @@ export default function ExamsPage() {
 
       {!isPlatformAdmin && (
         <Dialog open={seriesEditorOpen} onOpenChange={setSeriesEditorOpen}>
-          <DialogContent className="sm:max-w-2xl">
+          <DialogContent className="max-w-4xl sm:max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingSeries ? "Edit Exam" : "Add Exam"}</DialogTitle>
               <DialogDescription>

@@ -117,13 +117,12 @@ export function StaffProfileList() {
       const params = new URLSearchParams({
         page: String(pagination.pageIndex + 1),
         limit: String(pagination.pageSize),
-        roleCodes: filters.roleCode === "all"
-          ? STAFF_TABLE_ROLE_CODES.join(",")
-          : filters.roleCode,
         includeCurrentUser: "true",
-        includePlatformAdmins: "true",
-        staffScope: "teacher_driver",
+        staffScope: "all",
       });
+      if (filters.roleCode && filters.roleCode !== "all") {
+        params.set("roleCode", filters.roleCode);
+      }
       if (filters.search.trim()) params.set("search", filters.search.trim());
       if (filters.status !== "all") params.set("status", filters.status);
       if (activeInstitution) {
@@ -191,7 +190,7 @@ export function StaffProfileList() {
         type: "institutionRoles",
         search: "",
         page: "1",
-        limit: "50",
+        limit: "100",
       });
       const res = await fetch(`/api/admin/access/options?${params.toString()}`, {
         headers: authHeader(),
@@ -203,11 +202,7 @@ export function StaffProfileList() {
         throw new Error(getApiErrorMessage(json, "Failed to fetch staff roles"));
       }
 
-      setRoles(
-        (json.data ?? []).filter(
-          (role: RoleOption) => role.code === "teacher" || role.code === "driver"
-        )
-      );
+      setRoles(json.data ?? []);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err));
     }
@@ -279,8 +274,14 @@ export function StaffProfileList() {
     setViewOpen(true);
   }, [fetchUserDetails]);
 
-  const canEditStaff = hasPermission(currentUser, "managestaff.allstaff.edit");
-  const canDeleteStaff = hasPermission(currentUser, "managestaff.allstaff.delete");
+  const canEditStaff =
+    hasPermission(currentUser, "managestaff.allstaff.edit") ||
+    hasPermission(currentUser, "users.allusers.edit") ||
+    Boolean(currentUser?.role_codes?.includes("platform_admin") || currentUser?.is_super_admin);
+  const canDeleteStaff =
+    hasPermission(currentUser, "managestaff.allstaff.delete") ||
+    hasPermission(currentUser, "users.allusers.delete") ||
+    Boolean(currentUser?.role_codes?.includes("platform_admin") || currentUser?.is_super_admin);
 
   const updateFilters = useCallback((nextFilters: StaffFilters) => {
     setFilters(nextFilters);
@@ -363,16 +364,45 @@ export function StaffProfileList() {
     removingUser,
   ]);
 
+  const handleChangeEmploymentStatus = useCallback(
+    async (user: User, status: string) => {
+      if (!accessToken) return;
+      try {
+        const res = await fetch(`/api/admin/users/employment-status`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...authHeader(),
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            employmentStatus: status,
+          }),
+        });
+        const json = await readJsonResponse(res);
+        if (!res.ok) {
+          throw new Error(getApiErrorMessage(json, "Failed to update employment status"));
+        }
+        toast.success(`Employment status changed to ${status.replace("_", " ")}`);
+        fetchStaff();
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err));
+      }
+    },
+    [accessToken, authHeader, fetchStaff]
+  );
+
   const columns = useMemo(
     () =>
       buildUserColumns({
         onViewProfile: handleViewProfile,
         onEditUser: handleEditUser,
+        onChangeEmploymentStatus: handleChangeEmploymentStatus,
         onRemoveUser: setRemovingUser,
         removalLabel: "Remove staff member",
         entityLabel: "Staff member",
       }),
-    [handleEditUser, handleViewProfile]
+    [handleChangeEmploymentStatus, handleEditUser, handleViewProfile]
   );
 
   if (loading && !hasLoadedStaff) {
@@ -395,7 +425,7 @@ export function StaffProfileList() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">All Staff</h1>
-          <p className="text-muted-foreground">Manage teacher and driver profiles for your institution.</p>
+          <p className="text-muted-foreground">Manage staff, faculty, and administrative profiles for your institution.</p>
         </div>
         <AddUserDialog
           roles={roles}
@@ -404,7 +434,7 @@ export function StaffProfileList() {
           createPermission="managestaff.allstaff.create"
           createLabel="Add Staff"
           entityLabel="Staff member"
-          submitUrl="/api/admin/users?roleCodes=teacher,driver"
+          submitUrl="/api/admin/users"
           preferredInstitution={activeInstitution}
         />
       </div>
@@ -423,6 +453,7 @@ export function StaffProfileList() {
             />
             <StaffFiltersDrawer
               filters={filters}
+              roles={roles}
               activeCount={activeFilterCount}
               onApply={updateFilters}
               onReset={resetFilters}

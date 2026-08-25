@@ -8,13 +8,24 @@ import {
   ChevronRight,
   BadgeDollarSign,
   Briefcase,
+  Calendar,
+  Clock,
+  DollarSign,
   FileText,
   GraduationCap,
+  IndianRupee,
+  Layers,
   Lock,
   Loader2,
+  Percent,
   Plus,
+  Sparkles,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
   UserPlus,
   UserRound,
+  Wallet,
   MapPin,
   Image as ImageIcon,
   X as XIcon,
@@ -68,6 +79,8 @@ import {
 } from "@/lib/utils/user-form.constants";
 import {
   blankCertification,
+  blankCommission,
+  blankCommissionRule,
   blankEducation,
   blankExperience,
   blankSalaryComponent,
@@ -91,6 +104,8 @@ import { TeacherSection } from "@/app/admin/users/_components/teacher-section";
 import type {
   AddUserForm,
   CertificationForm,
+  CommissionForm,
+  CommissionRuleItem,
   DesignationOption,
   EducationForm,
   ExperienceForm,
@@ -205,16 +220,46 @@ function getRoleDisplay(role: RoleOption) {
   const code = (role.code || "").toLowerCase();
   const name = (role.name || "").toLowerCase();
 
-  if (code === "student" || name.includes("student")) return { label: "Student", icon: "🎓" };
-  if (code === "teacher" || name.includes("teacher")) return { label: "Teacher", icon: "👨‍🏫" };
-  if (code === "school_owner" || name.includes("school")) return { label: "School Owner", icon: "🏫" };
-  if (code === "college_owner" || name.includes("college")) return { label: "College Owner", icon: "🏛️" };
-  if (code === "university_owner" || name.includes("university")) return { label: "University Owner", icon: "🎓" };
-  if (code === "library_owner" || name.includes("library")) return { label: "Library Owner", icon: "📚" };
-  if (code === "pg_owner" || name.includes("pg")) return { label: "PG Owner", icon: "🏠" };
-  if (code === "parent" || code === "guardian" || name.includes("parent") || name.includes("guardian")) return { label: "Guardian / Parent", icon: "👨‍👩‍👧" };
-  if (code === "institution_admin" || name.includes("institution admin")) return { label: "Institution Owner / Admin", icon: "🏫" };
-  if (code === "platform_admin" || name.includes("platform admin")) return { label: "Platform Admin", icon: "🛡️" };
+  if (code === "student" || name.includes("student")) return { label: role.name || "Student", icon: "🎓" };
+  if (code === "teacher" || name.includes("teacher")) return { label: role.name || "Teacher", icon: "👨‍🏫" };
+  if (code === "faculty" || name.includes("faculty")) return { label: role.name || "Faculty", icon: "👨‍🏫" };
+  if (code === "tutor" || name.includes("tutor")) return { label: role.name || "Tutor", icon: "📖" };
+  if (code === "director" || name.includes("director")) return { label: role.name || "Director", icon: "👔" };
+  if (code === "principal" || name.includes("principal")) return { label: role.name || "Principal", icon: "🏛️" };
+  if (code === "vice_principal" || name.includes("vice principal")) return { label: role.name || "Vice Principal", icon: "🏛️" };
+  if (code === "dean" || name.includes("dean")) return { label: role.name || "Dean", icon: "🎓" };
+  if (code === "center_head" || name.includes("center head")) return { label: role.name || "Center Head", icon: "🏢" };
+  if (code === "branch_manager" || name.includes("branch manager")) return { label: role.name || "Branch Manager", icon: "💼" };
+  if (code === "academic_coordinator" || name.includes("academic coordinator")) return { label: role.name || "Academic Coordinator", icon: "📋" };
+  if (code === "hod" || name.includes("head of department")) return { label: role.name || "Head of Department", icon: "🔬" };
+  if (code === "teaching_assistant" || name.includes("teaching assistant")) return { label: role.name || "Teaching Assistant", icon: "🧑‍🏫" };
+  if (code === "doubt_expert" || name.includes("doubt")) return { label: role.name || "Doubt Expert", icon: "💡" };
+  if (code === "admission_counselor" || name.includes("admission")) return { label: role.name || "Admission Counselor", icon: "🤝" };
+  if (code === "counselor" || name.includes("counselor")) return { label: role.name || "Counselor", icon: "💬" };
+  if (code === "telecaller" || name.includes("telecaller")) return { label: role.name || "Telecaller", icon: "📞" };
+  if (code === "marketing_executive" || name.includes("marketing")) return { label: role.name || "Marketing Executive", icon: "📢" };
+  if (code === "institution_accountant" || code === "accountant" || name.includes("accountant")) return { label: role.name || "Accountant", icon: "💰" };
+  if (code === "fee_collector" || name.includes("fee")) return { label: role.name || "Fee Collector", icon: "💳" };
+  if (code === "exam_controller" || name.includes("exam")) return { label: role.name || "Exam Controller", icon: "📝" };
+  if (code === "curriculum_developer" || name.includes("curriculum")) return { label: role.name || "Curriculum Developer", icon: "📚" };
+  if (code === "librarian" || name.includes("librarian") || name.includes("library")) return { label: role.name || "Librarian", icon: "📚" };
+  if (code === "placement_officer" || name.includes("placement")) return { label: role.name || "Placement Officer", icon: "🎯" };
+  if (code === "lab_assistant" || name.includes("lab")) return { label: role.name || "Lab Assistant", icon: "🧪" };
+  if (code === "it_support" || name.includes("it support")) return { label: role.name || "IT Support", icon: "💻" };
+  if (code === "hostel_warden" || name.includes("hostel")) return { label: role.name || "Hostel Warden", icon: "🏠" };
+  if (code === "transport_coordinator" || name.includes("transport")) return { label: role.name || "Transport Coordinator", icon: "🚌" };
+  if (code === "driver" || name.includes("driver")) return { label: role.name || "Driver", icon: "🚖" };
+  if (code === "security_guard" || name.includes("security")) return { label: role.name || "Security Guard", icon: "🛡️" };
+  if (code === "sports_coach" || name.includes("sports") || name.includes("coach")) return { label: role.name || "Sports Coach", icon: "⚽" };
+  if (code === "administrative_staff" || name.includes("admin") || name.includes("staff")) return { label: role.name || "Administrative Staff", icon: "📂" };
+  if (code === "school_owner" || name.includes("school")) return { label: role.name || "School Owner", icon: "🏫" };
+  if (code === "college_owner" || name.includes("college")) return { label: role.name || "College Owner", icon: "🏛️" };
+  if (code === "university_owner" || name.includes("university")) return { label: role.name || "University Owner", icon: "🎓" };
+  if (code === "library_owner" || name.includes("library")) return { label: role.name || "Library Owner", icon: "📚" };
+  if (code === "pg_owner" || name.includes("pg")) return { label: role.name || "PG Owner", icon: "🏠" };
+  if (code === "parent" || code === "guardian" || name.includes("parent") || name.includes("guardian")) return { label: role.name || "Guardian / Parent", icon: "👨‍👩‍👧" };
+  if (code === "institution_admin" || name.includes("institution admin")) return { label: role.name || "Institution Owner / Admin", icon: "🏫" };
+  if (code === "platform_admin" || name.includes("platform admin")) return { label: role.name || "Platform Admin", icon: "🛡️" };
   return { label: role.name, icon: "👤" };
 }
 
@@ -234,11 +279,14 @@ function getRoleDisplay(role: RoleOption) {
       { label: "Account Details", icon: UserRound },
       { label: "Background & Education", icon: Briefcase },
       { label: "Upload Documents", icon: FileText },
+      { label: "Salary Details", icon: IndianRupee },
+      { label: "Commission Assigned", icon: BadgeDollarSign },
     ],
     []
   );
   const documentsStepIndex = 2;
-  const salaryStepIndex = -1;
+  const salaryStepIndex = 3;
+  const commissionStepIndex = 4;
   const securityStepIndex = -1;
   const reviewStepIndex = -1;
   const isLastStep = activeStep === dialogSteps.length - 1;
@@ -1040,7 +1088,12 @@ function getRoleDisplay(role: RoleOption) {
         }
       }
 
-      if (showAccountInstitution && form.institution_ids.length === 0) {
+      if (
+        showAccountInstitution &&
+        form.institution_ids.length === 0 &&
+        !form.under_institution_id &&
+        !preferredInstitution
+      ) {
         nextErrors.under_institution_id = "Select at least one institution for this role.";
       }
     }
@@ -1159,6 +1212,10 @@ function getRoleDisplay(role: RoleOption) {
             ? Number(form.designation_id)
             : null,
         gender: form.gender === NO_GENDER ? null : normalizeText(form.gender),
+        joining_date: form.joining_date || null,
+        date_of_birth: form.date_of_birth || null,
+        shift_timing: safeTrim(form.shift_timing) || null,
+        employment_status: form.employment_status || "ACTIVE",
         hourly_charges: showHourlyCharges && safeTrim(form.hourly_charges)
           ? Number(form.hourly_charges)
           : null,
@@ -1204,14 +1261,12 @@ function getRoleDisplay(role: RoleOption) {
             is_verified: document.is_verified,
           }))
         ),
-      salary_components: selectedRoleIsStaff
-        ? form.salary_components
-          .filter((component) => hasAnyValue([component.label, component.amount]))
-          .map((component) => ({
-            label: normalizeText(component.label),
-            amount: Number(component.amount || 0),
-          }))
-        : [],
+      salary_components: form.salary_components
+        .filter((component) => hasAnyValue([component.label, component.amount]) && safeTrim(component.label))
+        .map((component) => ({
+          label: normalizeText(component.label),
+          amount: Math.max(0, Number(component.amount || 0)),
+        })),
       teaching_categories: selectedRoleIsTeacher
         ? form.teaching_categories
           .map((value) => Number(value))
@@ -1222,17 +1277,57 @@ function getRoleDisplay(role: RoleOption) {
           .map((option) => Number(option.value))
           .filter((value) => Number.isInteger(value) && value > 0)
         : [],
+      commission: form.commission?.commission_type && form.commission.commission_type !== "NONE"
+        ? {
+            commission_type: form.commission.commission_type,
+            commission_rate: safeTrim(form.commission.commission_rate) || "0",
+            commission_trigger: form.commission.commission_trigger || "course_admission",
+            minimum_threshold: safeTrim(form.commission.minimum_threshold) || null,
+            payout_frequency: form.commission.payout_frequency || "MONTHLY",
+            notes: safeTrim(form.commission.notes) || null,
+            rules: Array.isArray(form.commission.rules)
+              ? form.commission.rules
+                  .filter((r) => hasAnyValue([r.condition_trigger, r.rate]))
+                  .map((r) => ({
+                    id: r.id,
+                    condition_trigger: r.condition_trigger,
+                    condition_label: r.condition_label || "",
+                    reward_type: r.reward_type || "PERCENTAGE",
+                    rate: safeTrim(r.rate) || "0",
+                    minimum_threshold: safeTrim(r.minimum_threshold || "") || null,
+                    payout_frequency: r.payout_frequency || "MONTHLY",
+                    notes: safeTrim(r.notes || "") || null,
+                  }))
+              : [],
+          }
+        : null,
     };
   };
 
-  const salaryTotal = useMemo(
+  const grossSalary = useMemo(
     () =>
-      form.salary_components.reduce((total, component) => {
-        const amount = Number(component.amount);
-        return total + (Number.isFinite(amount) ? amount : 0);
-      }, 0),
+      form.salary_components
+        .filter((c) => c.type !== "DEDUCTION")
+        .reduce((total, component) => {
+          const amount = Number(component.amount);
+          return total + (Number.isFinite(amount) && amount > 0 ? amount : 0);
+        }, 0),
     [form.salary_components]
   );
+
+  const totalDeductions = useMemo(
+    () =>
+      form.salary_components
+        .filter((c) => c.type === "DEDUCTION")
+        .reduce((total, component) => {
+          const amount = Number(component.amount);
+          return total + (Number.isFinite(amount) && amount > 0 ? amount : 0);
+        }, 0),
+    [form.salary_components]
+  );
+
+  const netTakeHome = Math.max(0, grossSalary - totalDeductions);
+  const salaryTotal = grossSalary;
 
   const handleSubmit = async () => {
     for (let index = 0; index < dialogSteps.length - 1; index += 1) {
@@ -1514,45 +1609,163 @@ function getRoleDisplay(role: RoleOption) {
           </div>
 
           {activeStep === 0 && (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="add-user-name">Full name *</Label>
-                <Input
-                  id="add-user-name"
-                  value={form.full_name}
-                  onChange={(event) =>
-                    updateForm("full_name", event.target.value)
-                  }
-                  placeholder="Jane Cooper"
-                  autoComplete="off"
-                />
-                <FieldError message={errors.full_name} />
+            <div className="space-y-4">
+              {/* Personal Details */}
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="add-user-name" className="text-xs font-semibold">Full Name *</Label>
+                  <Input
+                    id="add-user-name"
+                    value={form.full_name}
+                    onChange={(event) =>
+                      updateForm("full_name", event.target.value)
+                    }
+                    placeholder="e.g. Jane Cooper"
+                    autoComplete="off"
+                    className="h-9 text-xs"
+                  />
+                  <FieldError message={errors.full_name} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="add-user-email" className="text-xs font-semibold">Email *</Label>
+                  <Input
+                    id="add-user-email"
+                    value={form.email}
+                    onChange={(event) => updateForm("email", event.target.value)}
+                    onBlur={() => {
+                      void checkEmailAvailability();
+                    }}
+                    placeholder="jane@example.com"
+                    type="email"
+                    autoComplete="off"
+                    className="h-9 text-xs"
+                  />
+                  <FieldError message={errors.email} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="add-user-phone" className="text-xs font-semibold">Phone</Label>
+                  <Input
+                    id="add-user-phone"
+                    value={form.phone}
+                    onChange={(event) => updateForm("phone", event.target.value)}
+                    placeholder="10-digit phone number"
+                    autoComplete="off"
+                    className="h-9 text-xs"
+                  />
+                  <FieldError message={errors.phone} />
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="add-user-email">Email *</Label>
-                <Input
-                  id="add-user-email"
-                  value={form.email}
-                  onChange={(event) => updateForm("email", event.target.value)}
-                  onBlur={() => {
-                    void checkEmailAvailability();
-                  }}
-                  placeholder="jane@example.com"
-                  type="email"
-                  autoComplete="off"
-                />
-                <FieldError message={errors.email} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="add-user-phone">Phone</Label>
-                <Input
-                  id="add-user-phone"
-                  value={form.phone}
-                  onChange={(event) => updateForm("phone", event.target.value)}
-                  placeholder="9876543210"
-                  autoComplete="off"
-                />
-                <FieldError message={errors.phone} />
+
+              {/* Employment Dates & Shift Timing Card */}
+              <div className="p-3.5 rounded-lg border bg-card/60 shadow-xs space-y-3">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                    <Calendar className="size-3.5 text-primary" />
+                    Employment Dates & Work Schedule
+                  </Label>
+                  <span className="text-[11px] text-muted-foreground">Joining, birthday, and shift details</span>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="add-user-joining-date" className="text-xs font-medium">Joining Date</Label>
+                    <Input
+                      id="add-user-joining-date"
+                      type="date"
+                      value={form.joining_date || ""}
+                      onChange={(e) => updateForm("joining_date", e.target.value)}
+                      className="h-9 text-xs bg-background"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="add-user-dob" className="text-xs font-medium">Date of Birth</Label>
+                    <Input
+                      id="add-user-dob"
+                      type="date"
+                      value={form.date_of_birth || ""}
+                      onChange={(e) => updateForm("date_of_birth", e.target.value)}
+                      className="h-9 text-xs bg-background"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="add-user-shift" className="text-xs font-medium flex items-center gap-1">
+                      <Clock className="size-3 text-muted-foreground" />
+                      Shift Timing
+                    </Label>
+                    <Select
+                      value={
+                        [
+                          "09:00 AM - 05:00 PM (General Shift)",
+                          "08:00 AM - 02:00 PM (Morning Shift)",
+                          "10:00 AM - 06:00 PM (Regular Day Shift)",
+                          "02:00 PM - 08:00 PM (Evening Shift)",
+                          "08:00 PM - 06:00 AM (Night Shift)",
+                        ].includes(form.shift_timing || "")
+                          ? form.shift_timing
+                          : form.shift_timing
+                          ? "custom"
+                          : "09:00 AM - 05:00 PM (General Shift)"
+                      }
+                      onValueChange={(val) => {
+                        if (val !== "custom") {
+                          updateForm("shift_timing", val);
+                        }
+                      }}
+                    >
+                      <SelectTrigger id="add-user-shift" className="h-9 text-xs bg-background">
+                        <SelectValue placeholder="Select shift timing" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="09:00 AM - 05:00 PM (General Shift)">09:00 AM - 05:00 PM (General Shift)</SelectItem>
+                        <SelectItem value="08:00 AM - 02:00 PM (Morning Shift)">08:00 AM - 02:00 PM (Morning Shift)</SelectItem>
+                        <SelectItem value="10:00 AM - 06:00 PM (Regular Day Shift)">10:00 AM - 06:00 PM (Day Shift)</SelectItem>
+                        <SelectItem value="02:00 PM - 08:00 PM (Evening Shift)">02:00 PM - 08:00 PM (Evening Shift)</SelectItem>
+                        <SelectItem value="08:00 PM - 06:00 AM (Night Shift)">08:00 PM - 06:00 AM (Night Shift)</SelectItem>
+                        <SelectItem value="custom">✍️ Custom Timing...</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="add-user-emp-status" className="text-xs font-medium">Employment Status</Label>
+                    <Select
+                      value={form.employment_status || "ACTIVE"}
+                      onValueChange={(val) => updateForm("employment_status", val)}
+                    >
+                      <SelectTrigger id="add-user-emp-status" className="h-9 text-xs bg-background font-medium">
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ACTIVE">🟢 Active</SelectItem>
+                        <SelectItem value="PROBATION">⏳ On Probation</SelectItem>
+                        <SelectItem value="ON_LEAVE">🗓️ On Leave</SelectItem>
+                        <SelectItem value="NOTICE_PERIOD">⚠️ Notice Period</SelectItem>
+                        <SelectItem value="RETIRED">👴 Retired</SelectItem>
+                        <SelectItem value="TERMINATED">🚫 Fired / Terminated</SelectItem>
+                        <SelectItem value="RESIGNED">📄 Resigned</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {(![
+                  "09:00 AM - 05:00 PM (General Shift)",
+                  "08:00 AM - 02:00 PM (Morning Shift)",
+                  "10:00 AM - 06:00 PM (Regular Day Shift)",
+                  "02:00 PM - 08:00 PM (Evening Shift)",
+                  "08:00 PM - 06:00 AM (Night Shift)",
+                ].includes(form.shift_timing || "") || form.shift_timing === "custom") && (
+                  <div className="pt-1">
+                    <Input
+                      placeholder="Enter custom shift timing (e.g. 07:30 AM - 01:30 PM / Rotational)"
+                      value={form.shift_timing === "custom" ? "" : form.shift_timing || ""}
+                      onChange={(e) => updateForm("shift_timing", e.target.value)}
+                      className="h-8 text-xs bg-background"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Location selection based on map pin & address search */}
@@ -1696,134 +1909,124 @@ function getRoleDisplay(role: RoleOption) {
                 )}
               </div>
               )}
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="add-user-about" className="text-xs font-semibold">About Staff / Bio</Label>
-                <Textarea
-                  id="add-user-about"
-                  value={form.about || ""}
-                  onChange={(e) => updateForm("about", e.target.value)}
-                  placeholder="Brief background, bio summary, or introduction about this staff member..."
-                  rows={2}
-                  className="text-xs font-medium resize-none"
-                />
-              </div>
+              {/* Bio & Avatar in a balanced 2-column layout to reduce scrolling */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {/* Profile Picture / Avatar */}
+                <div className="space-y-2 rounded-lg border bg-muted/10 p-2.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                      <ImageIcon className="h-3.5 w-3.5 text-primary" />
+                      Profile Picture
+                    </Label>
+                    <span className="text-[10px] text-muted-foreground">Upload or paste URL</span>
+                  </div>
 
-              {/* Picture Upload Option (Computer / Mobile) + URL */}
-              <div className="space-y-2 sm:col-span-2 rounded-lg border bg-muted/10 p-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-semibold flex items-center gap-1.5">
-                    <ImageIcon className="h-3.5 w-3.5 text-primary" />
-                    Profile Picture / Avatar
-                  </Label>
-                  <span className="text-[11px] text-muted-foreground">Upload from device or paste image URL</span>
-                </div>
+                  <div className="flex items-center gap-2.5">
+                    {form.avatar_url ? (
+                      <div className="relative group shrink-0">
+                        <img
+                          src={form.avatar_url}
+                          alt="Avatar"
+                          className="h-11 w-11 rounded-full object-cover border-2 border-primary/30 shadow-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateForm("avatar_url", "")}
+                          className="absolute -top-1 -right-1 bg-destructive text-white rounded-full p-0.5 shadow-xs hover:scale-110 transition-transform"
+                          title="Remove photo"
+                        >
+                          <XIcon className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="h-11 w-11 rounded-full bg-primary/10 border-2 border-dashed border-primary/30 grid place-items-center text-[11px] font-black text-primary shrink-0">
+                        {form.full_name?.slice(0, 2)?.toUpperCase() || "AV"}
+                      </div>
+                    )}
 
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                  {form.avatar_url ? (
-                    <div className="relative group shrink-0">
-                      <img
-                        src={form.avatar_url}
-                        alt="Avatar"
-                        className="h-14 w-14 rounded-full object-cover border-2 border-primary/30 shadow-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => updateForm("avatar_url", "")}
-                        className="absolute -top-1 -right-1 bg-destructive text-white rounded-full p-0.5 shadow-sm hover:scale-110 transition-transform"
-                        title="Remove photo"
-                      >
-                        <XIcon className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="h-14 w-14 rounded-full bg-primary/10 border-2 border-dashed border-primary/30 grid place-items-center text-xs font-black text-primary shrink-0">
-                      {form.full_name?.slice(0, 2)?.toUpperCase() || "AV"}
-                    </div>
-                  )}
-
-                  <div className="flex-1 w-full space-y-2">
-                    <DocumentFileUpload
-                      accessToken={accessToken}
-                      files={
-                        form.avatar_url
-                          ? [
-                              {
-                                url: form.avatar_url,
-                                publicId: "",
-                                resourceType: "image",
-                                fileType: "image/*",
-                                name: "Profile Photo",
-                              },
-                            ]
-                          : []
-                      }
-                      onFilesChange={(files) => {
-                        if (files.length > 0) {
-                          updateForm("avatar_url", files[0].url);
-                        } else {
-                          updateForm("avatar_url", "");
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <DocumentFileUpload
+                        accessToken={accessToken}
+                        files={
+                          form.avatar_url
+                            ? [
+                                {
+                                  url: form.avatar_url,
+                                  publicId: "",
+                                  resourceType: "image",
+                                  fileType: "image/*",
+                                  name: "Profile Photo",
+                                },
+                              ]
+                            : []
                         }
-                      }}
-                      maxFiles={1}
-                      maxSize={5 * 1024 * 1024}
-                      compact
-                      buttonLabel="Upload Photo"
-                      emptyText="Drop profile photo here or click to browse (mobile & desktop)"
-                    />
-
-                    <div className="flex items-center gap-2">
+                        onFilesChange={(files) => {
+                          if (files.length > 0) {
+                            updateForm("avatar_url", files[0].url);
+                          } else {
+                            updateForm("avatar_url", "");
+                          }
+                        }}
+                        maxFiles={1}
+                        maxSize={5 * 1024 * 1024}
+                        compact
+                        buttonLabel="Upload"
+                        emptyText="Drop or browse image"
+                      />
                       <Input
                         type="text"
-                        placeholder="Or paste direct image URL (https://...)"
+                        placeholder="Image URL (https://...)"
                         value={form.avatar_url || ""}
                         onChange={(e) => updateForm("avatar_url", e.target.value)}
-                        className="h-8 text-xs flex-1 bg-background"
+                        className="h-7 text-[11px] bg-background"
                       />
                     </div>
                   </div>
+                  <FieldError message={errors.avatar_url} />
                 </div>
-                <FieldError message={errors.avatar_url} />
+
+                {/* About Staff / Bio */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="add-user-about" className="text-xs font-semibold">About Staff / Bio</Label>
+                  <Textarea
+                    id="add-user-about"
+                    value={form.about || ""}
+                    onChange={(e) => updateForm("about", e.target.value)}
+                    placeholder="Brief background, bio summary, or introduction..."
+                    rows={4}
+                    className="text-xs font-medium resize-none h-[106px]"
+                  />
+                </div>
               </div>
 
+              {/* Account Options - Active & Marketplace */}
               {showAdminControls && (
-              <div className="grid gap-3 sm:col-span-2 sm:grid-cols-3">
-                <div className="flex h-12 items-center gap-3 rounded-md border p-3 bg-muted/20">
-                  <Checkbox
-                    id="add-user-active"
-                    checked={Boolean(form.is_active)}
-                    onCheckedChange={(checked) =>
-                      updateForm("is_active", checked === true)
-                    }
-                  />
-                  <Label htmlFor="add-user-active" className="cursor-pointer text-xs font-medium">
-                    Active
-                  </Label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="flex h-10 items-center gap-2.5 rounded-md border px-3 bg-muted/20">
+                    <Checkbox
+                      id="add-user-active"
+                      checked={Boolean(form.is_active)}
+                      onCheckedChange={(checked) =>
+                        updateForm("is_active", checked === true)
+                      }
+                    />
+                    <Label htmlFor="add-user-active" className="cursor-pointer text-xs font-medium">
+                      Active Account
+                    </Label>
+                  </div>
+                  <div className="flex h-10 items-center gap-2.5 rounded-md border px-3 bg-primary/5 border-primary/20">
+                    <Checkbox
+                      id="add-user-marketplace"
+                      checked={Boolean(form.is_marketplace_enabled ?? true)}
+                      onCheckedChange={(checked) =>
+                        updateForm("is_marketplace_enabled", checked === true)
+                      }
+                    />
+                    <Label htmlFor="add-user-marketplace" className="cursor-pointer text-xs font-medium">
+                      Show on marketplace
+                    </Label>
+                  </div>
                 </div>
-                <div className="flex h-12 items-center gap-3 rounded-md border p-3 bg-muted/20">
-                  <Checkbox
-                    id="add-user-verified"
-                    checked={Boolean(form.is_verified)}
-                    onCheckedChange={(checked) =>
-                      updateForm("is_verified", checked === true)
-                    }
-                  />
-                  <Label htmlFor="add-user-verified" className="cursor-pointer text-xs font-medium">
-                    Genuine user
-                  </Label>
-                </div>
-                <div className="flex h-12 items-center gap-3 rounded-md border p-3 bg-primary/5 border-primary/20">
-                  <Checkbox
-                    id="add-user-marketplace"
-                    checked={Boolean(form.is_marketplace_enabled ?? true)}
-                    onCheckedChange={(checked) =>
-                      updateForm("is_marketplace_enabled", checked === true)
-                    }
-                  />
-                  <Label htmlFor="add-user-marketplace" className="cursor-pointer text-xs font-medium">
-                    Show on market place
-                  </Label>
-                </div>
-              </div>
               )}
             </div>
           )}
@@ -2137,9 +2340,755 @@ function getRoleDisplay(role: RoleOption) {
             </div>
           )}
 
+          {activeStep === 3 && (
+            <div className="space-y-4">
+              <div className="rounded-lg border bg-card p-4 space-y-4 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
+                  <div className="space-y-0.5">
+                    <h3 className="text-sm font-semibold flex items-center gap-2">
+                      <IndianRupee className="size-4 text-primary" />
+                      Employee Salary & Compensation Structure
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Configure basic pay, allowances, deductions, and salary disbursement cycle.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs font-medium text-muted-foreground">Salary Cycle:</Label>
+                    <Select
+                      value={form.salary_frequency || "MONTHLY"}
+                      onValueChange={(val: any) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          salary_frequency: val,
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-xs font-semibold w-36 bg-background">
+                        <SelectValue placeholder="Select cycle" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="MONTHLY">📅 Monthly Basis</SelectItem>
+                        <SelectItem value="WEEKLY">🗓️ Weekly Basis</SelectItem>
+                        <SelectItem value="DAILY">☀️ Daily Basis</SelectItem>
+                        <SelectItem value="YEARLY">📆 Yearly (Annual CTC)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Salary KPI Summary Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-3 rounded-lg border bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40">
+                    <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                      <TrendingUp className="size-3.5" />
+                      Total Gross Earnings
+                    </span>
+                    <p className="text-lg font-bold text-emerald-800 dark:text-emerald-300 mt-1 font-mono">
+                      ₹{grossSalary.toLocaleString("en-IN")}
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-lg border bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40">
+                    <span className="text-[11px] font-medium text-rose-700 dark:text-rose-400 flex items-center gap-1">
+                      <TrendingDown className="size-3.5" />
+                      Total Deductions
+                    </span>
+                    <p className="text-lg font-bold text-rose-800 dark:text-rose-300 mt-1 font-mono">
+                      ₹{totalDeductions.toLocaleString("en-IN")}
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-lg border bg-primary/5 border-primary/20">
+                    <span className="text-[11px] font-medium text-primary flex items-center gap-1">
+                      <Wallet className="size-3.5" />
+                      Net Take-Home Pay ({(form.salary_frequency || "MONTHLY").toLowerCase()})
+                    </span>
+                    <p className="text-lg font-bold text-primary mt-1 font-mono">
+                      ₹{netTakeHome.toLocaleString("en-IN")}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Earnings & Allowances */}
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <TrendingUp className="size-3.5 text-emerald-600" />
+                        Earnings & Allowances
+                      </Label>
+                      <p className="text-[11px] text-muted-foreground">
+                        Basic pay, house rent (HRA), dearness allowance (DA), travel, and special allowances.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setForm((prev) => ({
+                          ...prev,
+                          salary_components: [
+                            ...prev.salary_components,
+                            blankSalaryComponent("", "", "EARNING"),
+                          ],
+                        }));
+                      }}
+                      className="h-7 text-xs gap-1 font-semibold"
+                    >
+                      <Plus className="size-3" />
+                      Add Allowance
+                    </Button>
+                  </div>
+
+                  {/* Quick Preset Buttons for Earnings */}
+                  <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-md bg-muted/25 border border-dashed">
+                    <span className="text-[11px] text-muted-foreground font-semibold shrink-0 mr-0.5">Quick Add:</span>
+                    {[
+                      "Basic Pay",
+                      "House Rent Allowance (HRA)",
+                      "Dearness Allowance (DA)",
+                      "Medical Allowance",
+                      "Conveyance / Travel Allowance",
+                      "Special Allowance",
+                      "Performance Incentive",
+                    ].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          const exists = form.salary_components.some(
+                            (c) => c.label.toLowerCase() === preset.toLowerCase()
+                          );
+                          if (exists) {
+                            toast.info(`${preset} is already in salary components.`);
+                            return;
+                          }
+                          setForm((prev) => ({
+                            ...prev,
+                            salary_components: [
+                              ...prev.salary_components,
+                              blankSalaryComponent(preset, "", "EARNING"),
+                            ],
+                          }));
+                        }}
+                        className="inline-flex items-center text-[11px] px-2.5 py-1 rounded-full border bg-background hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-colors shadow-2xs font-medium cursor-pointer"
+                      >
+                        + {preset}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="space-y-2">
+                    {form.salary_components
+                      .map((component, globalIndex) => ({ component, globalIndex }))
+                      .filter(({ component }) => component.type !== "DEDUCTION")
+                      .map(({ component, globalIndex }) => (
+                        <div
+                          key={component.id || globalIndex}
+                          className="flex items-center gap-2 p-2.5 rounded-lg border bg-muted/20 hover:bg-muted/30 transition-colors"
+                        >
+                          <div className="flex-1">
+                            <Input
+                              placeholder="e.g. Basic Pay, HRA, Medical..."
+                              value={component.label}
+                              onChange={(e) => {
+                                const newLabel = e.target.value;
+                                setForm((prev) => ({
+                                  ...prev,
+                                  salary_components: prev.salary_components.map((c, i) =>
+                                    i === globalIndex ? { ...c, label: newLabel } : c
+                                  ),
+                                }));
+                              }}
+                              className="h-8 text-xs bg-background"
+                            />
+                          </div>
+
+                          <div className="w-40 relative">
+                            <Input
+                              type="number"
+                              placeholder="0.00"
+                              value={component.amount}
+                              onChange={(e) => {
+                                const newAmount = e.target.value;
+                                setForm((prev) => ({
+                                  ...prev,
+                                  salary_components: prev.salary_components.map((c, i) =>
+                                    i === globalIndex ? { ...c, amount: newAmount } : c
+                                  ),
+                                }));
+                              }}
+                              className="h-8 text-xs bg-background pl-6 font-mono font-medium"
+                            />
+                            <span className="absolute left-2 top-2 text-[11px] text-muted-foreground pointer-events-none font-bold">
+                              ₹
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm((prev) => ({
+                                ...prev,
+                                salary_components: prev.salary_components.filter(
+                                  (_, i) => i !== globalIndex
+                                ),
+                              }));
+                            }}
+                            className="text-muted-foreground hover:text-destructive p-1 rounded-md transition-colors"
+                            title="Remove allowance"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+
+                {/* Deductions Section */}
+                <div className="space-y-3 pt-3 border-t">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <TrendingDown className="size-3.5 text-rose-600" />
+                        Deductions & Retentions
+                      </Label>
+                      <p className="text-[11px] text-muted-foreground">
+                        Provident Fund (PF), ESI, Professional Tax (PT), TDS/Income Tax, and other deductions.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setForm((prev) => ({
+                          ...prev,
+                          salary_components: [
+                            ...prev.salary_components,
+                            blankSalaryComponent("", "", "DEDUCTION"),
+                          ],
+                        }));
+                      }}
+                      className="h-7 text-xs gap-1 font-semibold"
+                    >
+                      <Plus className="size-3" />
+                      Add Deduction
+                    </Button>
+                  </div>
+
+                  {/* Quick Preset Buttons for Deductions */}
+                  <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-md bg-muted/25 border border-dashed">
+                    <span className="text-[11px] text-muted-foreground font-semibold shrink-0 mr-0.5">Quick Add:</span>
+                    {[
+                      "Provident Fund (PF)",
+                      "Employee State Insurance (ESI)",
+                      "Professional Tax (PT)",
+                      "TDS / Income Tax Deduction",
+                      "Loan / Advance Recovery",
+                      "Other Deductions",
+                    ].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          const exists = form.salary_components.some(
+                            (c) => c.label.toLowerCase() === preset.toLowerCase()
+                          );
+                          if (exists) {
+                            toast.info(`${preset} is already in salary components.`);
+                            return;
+                          }
+                          setForm((prev) => ({
+                            ...prev,
+                            salary_components: [
+                              ...prev.salary_components,
+                              blankSalaryComponent(preset, "", "DEDUCTION"),
+                            ],
+                          }));
+                        }}
+                        className="inline-flex items-center text-[11px] px-2.5 py-1 rounded-full border bg-background hover:bg-rose-500/10 hover:border-rose-500/40 hover:text-rose-600 transition-colors shadow-2xs font-medium cursor-pointer"
+                      >
+                        + {preset}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="space-y-2">
+                    {form.salary_components
+                      .map((component, globalIndex) => ({ component, globalIndex }))
+                      .filter(({ component }) => component.type === "DEDUCTION")
+                      .map(({ component, globalIndex }) => (
+                        <div
+                          key={component.id || globalIndex}
+                          className="flex items-center gap-2 p-2.5 rounded-lg border bg-rose-50/20 dark:bg-rose-950/10 border-rose-100 dark:border-rose-900/30 transition-colors"
+                        >
+                          <div className="flex-1">
+                            <Input
+                              placeholder="e.g. Provident Fund (PF), Tax..."
+                              value={component.label}
+                              onChange={(e) => {
+                                const newLabel = e.target.value;
+                                setForm((prev) => ({
+                                  ...prev,
+                                  salary_components: prev.salary_components.map((c, i) =>
+                                    i === globalIndex ? { ...c, label: newLabel } : c
+                                  ),
+                                }));
+                              }}
+                              className="h-8 text-xs bg-background"
+                            />
+                          </div>
+
+                          <div className="w-40 relative">
+                            <Input
+                              type="number"
+                              placeholder="0.00"
+                              value={component.amount}
+                              onChange={(e) => {
+                                const newAmount = e.target.value;
+                                setForm((prev) => ({
+                                  ...prev,
+                                  salary_components: prev.salary_components.map((c, i) =>
+                                    i === globalIndex ? { ...c, amount: newAmount } : c
+                                  ),
+                                }));
+                              }}
+                              className="h-8 text-xs bg-background pl-6 font-mono font-medium text-rose-600"
+                            />
+                            <span className="absolute left-2 top-2 text-[11px] text-muted-foreground pointer-events-none font-bold">
+                              ₹
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm((prev) => ({
+                                ...prev,
+                                salary_components: prev.salary_components.filter(
+                                  (_, i) => i !== globalIndex
+                                ),
+                              }));
+                            }}
+                            className="text-muted-foreground hover:text-destructive p-1 rounded-md transition-colors"
+                            title="Remove deduction"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+
+                {/* Salary Remarks */}
+                <div className="space-y-1.5 pt-2 border-t">
+                  <Label className="text-xs font-medium">Salary Terms & Remarks (Optional)</Label>
+                  <Textarea
+                    placeholder="Bank details, probation terms, revision period, appraisal notes..."
+                    value={form.salary_notes || ""}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        salary_notes: e.target.value,
+                      }))
+                    }
+                    className="min-h-[60px] text-xs resize-none"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeStep === 4 && (
+            <div className="space-y-4">
+              <div className="rounded-lg border bg-card p-4 space-y-4 shadow-sm">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <div className="space-y-0.5">
+                    <h3 className="text-sm font-semibold flex items-center gap-2">
+                      <BadgeDollarSign className="size-4 text-primary" />
+                      Commission & Incentive Structure
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Configure multi-condition commission rules, lead incentives, admission rewards, and payout terms.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="space-y-1.5 max-w-sm">
+                    <Label className="text-xs font-semibold">Commission Model</Label>
+                    <Select
+                      value={form.commission?.commission_type || "RULES_BASED"}
+                      onValueChange={(val: any) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          commission: {
+                            ...(prev.commission || blankCommission()),
+                            commission_type: val,
+                          },
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue placeholder="Select commission model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="RULES_BASED">Condition-Based Rules (Enrollment, Leads, Fees, Custom)</SelectItem>
+                        <SelectItem value="PERCENTAGE">Flat Percentage (%) on All Admissions</SelectItem>
+                        <SelectItem value="FIXED_AMOUNT">Flat Fixed Amount (₹) per Admission</SelectItem>
+                        <SelectItem value="NONE">No Commission (Standard Salary Only)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {form.commission?.commission_type === "RULES_BASED" && (
+                    <div className="space-y-3 pt-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                            <Sparkles className="size-3.5 text-amber-500" />
+                            Condition-Specific Commission Rules
+                          </Label>
+                          <p className="text-[11px] text-muted-foreground">
+                            Specify distinct payouts based on whether the staff achieves a confirmed enrollment, brings a raw lead, recovers student fees, etc.
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const newRule = blankCommissionRule("custom", "Custom Condition / Milestone", "PERCENTAGE", "5");
+                            setForm((prev) => ({
+                              ...prev,
+                              commission: {
+                                ...(prev.commission || blankCommission()),
+                                rules: [...(prev.commission?.rules || []), newRule],
+                              },
+                            }));
+                          }}
+                          className="h-7 text-xs gap-1 font-semibold"
+                        >
+                          <Plus className="size-3" />
+                          Add Condition Rule
+                        </Button>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        {(form.commission?.rules || []).map((rule, idx) => (
+                          <div
+                            key={rule.id || idx}
+                            className="p-3 rounded-lg border bg-muted/25 hover:bg-muted/40 transition-colors space-y-2.5"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                                Rule #{idx + 1}
+                              </span>
+                              {(form.commission?.rules || []).length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setForm((prev) => ({
+                                      ...prev,
+                                      commission: {
+                                        ...(prev.commission || blankCommission()),
+                                        rules: (prev.commission?.rules || []).filter((_, i) => i !== idx),
+                                      },
+                                    }));
+                                  }}
+                                  className="text-muted-foreground hover:text-destructive p-1 rounded-md transition-colors"
+                                  title="Delete condition rule"
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="grid gap-2.5 sm:grid-cols-12 items-start">
+                              <div className="sm:col-span-5 space-y-1">
+                                <Label className="text-[11px] font-medium">Trigger Condition</Label>
+                                <Select
+                                  value={rule.condition_trigger || "successful_enrollment"}
+                                  onValueChange={(val) => {
+                                    const labelMap: Record<string, string> = {
+                                      successful_enrollment: "Successful Student Enrollment / Admission",
+                                      lead_generated: "Lead / Inquiry Brought (Lead Generation)",
+                                      fee_collected: "Student Fee Collection Recovery",
+                                      spot_admission: "Spot Admission / Walk-in Closure",
+                                      course_completion: "Course Completion Milestone",
+                                      custom: "Custom Condition",
+                                    };
+                                    setForm((prev) => ({
+                                      ...prev,
+                                      commission: {
+                                        ...(prev.commission || blankCommission()),
+                                        rules: (prev.commission?.rules || []).map((r, i) =>
+                                          i === idx
+                                            ? {
+                                                ...r,
+                                                condition_trigger: val,
+                                                condition_label: labelMap[val] || val,
+                                              }
+                                            : r
+                                        ),
+                                      },
+                                    }));
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 text-xs bg-background">
+                                    <SelectValue placeholder="Select trigger" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="successful_enrollment">🎓 Successful Student Enrollment / Admission</SelectItem>
+                                    <SelectItem value="lead_generated">🎯 Lead / Inquiry Brought (Lead Generation)</SelectItem>
+                                    <SelectItem value="fee_collected">💳 Student Fee Collection Recovery</SelectItem>
+                                    <SelectItem value="spot_admission">⚡ Spot Admission / Walk-in Closure</SelectItem>
+                                    <SelectItem value="course_completion">🏆 Course Completion Milestone</SelectItem>
+                                    <SelectItem value="custom">✍️ Custom Condition / Milestone</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div className="sm:col-span-3 space-y-1">
+                                <Label className="text-[11px] font-medium">Reward Type</Label>
+                                <Select
+                                  value={rule.reward_type || "PERCENTAGE"}
+                                  onValueChange={(val: any) =>
+                                    setForm((prev) => ({
+                                      ...prev,
+                                      commission: {
+                                        ...(prev.commission || blankCommission()),
+                                        rules: (prev.commission?.rules || []).map((r, i) =>
+                                          i === idx ? { ...r, reward_type: val } : r
+                                        ),
+                                      },
+                                    }))
+                                  }
+                                >
+                                  <SelectTrigger className="h-8 text-xs bg-background">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="PERCENTAGE">% Percentage</SelectItem>
+                                    <SelectItem value="FIXED_AMOUNT">₹ Fixed Amount</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div className="sm:col-span-4 space-y-1">
+                                <Label className="text-[11px] font-medium">
+                                  {rule.reward_type === "PERCENTAGE" ? "Commission Rate (%)" : "Payout Amount (₹)"}
+                                </Label>
+                                <div className="relative">
+                                  <Input
+                                    type="number"
+                                    placeholder={rule.reward_type === "PERCENTAGE" ? "e.g. 10" : "e.g. 1000"}
+                                    value={rule.rate || ""}
+                                    onChange={(e) =>
+                                      setForm((prev) => ({
+                                        ...prev,
+                                        commission: {
+                                          ...(prev.commission || blankCommission()),
+                                          rules: (prev.commission?.rules || []).map((r, i) =>
+                                            i === idx ? { ...r, rate: e.target.value } : r
+                                          ),
+                                        },
+                                      }))
+                                    }
+                                    className="h-8 text-xs bg-background pr-7 font-mono font-medium"
+                                  />
+                                  <span className="absolute right-2 top-2 text-[11px] text-muted-foreground pointer-events-none font-bold">
+                                    {rule.reward_type === "PERCENTAGE" ? "%" : "₹"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <Input
+                                placeholder="Condition threshold (e.g. Minimum 5 leads / On fee > ₹20,000)"
+                                value={rule.minimum_threshold || ""}
+                                onChange={(e) =>
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    commission: {
+                                      ...(prev.commission || blankCommission()),
+                                      rules: (prev.commission?.rules || []).map((r, i) =>
+                                        i === idx ? { ...r, minimum_threshold: e.target.value } : r
+                                      ),
+                                    },
+                                  }))
+                                }
+                                className="h-7 text-[11px] bg-background"
+                              />
+                              <Input
+                                placeholder="Rule notes / eligibility conditions..."
+                                value={rule.notes || ""}
+                                onChange={(e) =>
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    commission: {
+                                      ...(prev.commission || blankCommission()),
+                                      rules: (prev.commission?.rules || []).map((r, i) =>
+                                        i === idx ? { ...r, notes: e.target.value } : r
+                                      ),
+                                    },
+                                  }))
+                                }
+                                className="h-7 text-[11px] bg-background"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* FLAT RATE FALLBACK */}
+                  {form.commission?.commission_type &&
+                    form.commission.commission_type !== "NONE" &&
+                    form.commission.commission_type !== "RULES_BASED" && (
+                      <div className="grid gap-4 sm:grid-cols-2 pt-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium">
+                            {form.commission.commission_type === "PERCENTAGE"
+                              ? "Commission Rate (%)"
+                              : "Fixed Amount (₹)"}
+                          </Label>
+                          <Input
+                            type="number"
+                            placeholder={form.commission.commission_type === "PERCENTAGE" ? "e.g. 10" : "e.g. 1000"}
+                            value={form.commission.commission_rate || ""}
+                            onChange={(e) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                commission: {
+                                  ...(prev.commission || blankCommission()),
+                                  commission_rate: e.target.value,
+                                },
+                              }))
+                            }
+                            className="h-9 text-xs"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium">Commission Applicable On</Label>
+                          <Select
+                            value={form.commission.commission_trigger || "course_admission"}
+                            onValueChange={(val) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                commission: {
+                                  ...(prev.commission || blankCommission()),
+                                  commission_trigger: val,
+                                },
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="h-9 text-xs">
+                              <SelectValue placeholder="Select trigger" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="course_admission">Course / Batch Enrollment</SelectItem>
+                              <SelectItem value="lead_conversion">Sales / Lead Conversion</SelectItem>
+                              <SelectItem value="fee_collection">Student Fee Collection</SelectItem>
+                              <SelectItem value="all">All Sales & Admissions</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+
+                  {/* GLOBAL COMMISSION SETTINGS */}
+                  {form.commission?.commission_type && form.commission.commission_type !== "NONE" && (
+                    <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t mt-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium">Payout Frequency</Label>
+                        <Select
+                          value={form.commission.payout_frequency || "MONTHLY"}
+                          onValueChange={(val) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              commission: {
+                                ...(prev.commission || blankCommission()),
+                                payout_frequency: val,
+                              },
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="h-9 text-xs">
+                            <SelectValue placeholder="Select payout schedule" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="MONTHLY">Monthly with Salary</SelectItem>
+                            <SelectItem value="PER_TRANSACTION">Per Successful Event (Instant Payout)</SelectItem>
+                            <SelectItem value="QUARTERLY">Quarterly Settlement</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium">Overall Minimum Target / Threshold (Optional)</Label>
+                        <Input
+                          placeholder="e.g. Min ₹50,000 total sales or 5 admissions"
+                          value={form.commission.minimum_threshold || ""}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              commission: {
+                                ...(prev.commission || blankCommission()),
+                                minimum_threshold: e.target.value,
+                              },
+                            }))
+                          }
+                          className="h-9 text-xs"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label className="text-xs font-medium">Commission Notes & Terms</Label>
+                        <Textarea
+                          placeholder="Any special terms, bonus criteria, conditions, or payout guidelines..."
+                          value={form.commission.notes || ""}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              commission: {
+                                ...(prev.commission || blankCommission()),
+                                notes: e.target.value,
+                              },
+                            }))
+                          }
+                          className="min-h-[70px] text-xs resize-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center justify-between gap-2 border-t pt-4">
             <ProgressiveSaveIndicator status={saveStatus} />
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              {activeStep > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setActiveStep((prev) => Math.max(prev - 1, 0))}
+                  disabled={submitting}
+                  className="gap-1.5"
+                >
+                  <ArrowLeft className="size-4" />
+                  Previous
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -2148,14 +3097,26 @@ function getRoleDisplay(role: RoleOption) {
               >
                 Cancel
               </Button>
-              <Button
-                type="button"
-                disabled={submitting}
-                onClick={handleSubmit}
-              >
-                {submitting && <Loader2 className="size-4 animate-spin" />}
-                {isEdit ? "Save Changes" : "Create User"}
-              </Button>
+              {!isLastStep ? (
+                <Button
+                  type="button"
+                  onClick={goNext}
+                  className="gap-1.5"
+                >
+                  Next
+                  <ArrowRight className="size-4" />
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  disabled={submitting}
+                  onClick={handleSubmit}
+                  className="gap-1.5"
+                >
+                  {submitting && <Loader2 className="size-4 animate-spin" />}
+                  {isEdit ? "Save Changes" : "Create User"}
+                </Button>
+              )}
             </div>
           </div>
         </form>

@@ -703,17 +703,18 @@ export default function PracticeExamsPage() {
               : "Create reusable practice exams with objective and true / false questions."}
           </p>
         </div>
-        {(canCreate || isPlatformAdmin) && practiceExamView === "my" && (
-          <Button
-            onClick={() => {
-              setEditing(null);
-              setEditorOpen(true);
-            }}
-          >
-            <Plus className="size-4" />
-            Add Practice Exam
-          </Button>
-        )}
+        <Button
+          onClick={() => {
+            if (practiceExamView !== "my") {
+              setPracticeExamView("my");
+            }
+            setEditing(null);
+            setEditorOpen(true);
+          }}
+        >
+          <Plus className="size-4" />
+          Add Practice Exam
+        </Button>
       </div>
 
       <div className="flex flex-wrap gap-2">

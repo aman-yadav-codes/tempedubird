@@ -775,7 +775,7 @@ export default function SubjectsPage() {
 
       {/* Add / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl sm:max-w-4xl max-h-[90vh] overflow-y-auto w-full">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <GraduationCap className="h-5 w-5 text-primary" />

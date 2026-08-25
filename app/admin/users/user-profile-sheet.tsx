@@ -5,6 +5,7 @@ import {
   Award,
   Building2,
   BriefcaseBusiness,
+  Calendar,
   CalendarClock,
   FileText,
   GraduationCap,
@@ -260,6 +261,21 @@ export function UserProfileContent({
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {Boolean((user.profile as any)?.employment_status) && (
+                    <Badge
+                      className={
+                        (user.profile as any)?.employment_status === "ACTIVE"
+                          ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                          : (user.profile as any)?.employment_status === "PROBATION"
+                          ? "bg-amber-100 text-amber-800 border border-amber-200"
+                          : (user.profile as any)?.employment_status === "TERMINATED"
+                          ? "bg-rose-100 text-rose-800 border border-rose-200"
+                          : "bg-muted text-muted-foreground border"
+                      }
+                    >
+                      {(user.profile as any)?.employment_status?.replace("_", " ")}
+                    </Badge>
+                  )}
                   <Badge
                     className={
                       user.is_active
@@ -302,6 +318,41 @@ export function UserProfileContent({
                 <span>{user.phone || "-"}</span>
               </div>
             </div>
+
+            {((user.profile as any)?.joining_date || (user.profile as any)?.date_of_birth || (user.profile as any)?.shift_timing || (user.profile as any)?.employment_status) && (
+              <section className="space-y-2">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Calendar className="size-4 text-primary" />
+                  Employment & Schedule
+                </h3>
+                <div className="grid gap-3 sm:grid-cols-2 text-xs rounded-md border p-3 bg-muted/10">
+                  <div>
+                    <span className="text-muted-foreground font-medium">Employment Status:</span>
+                    <p className="font-semibold text-foreground mt-0.5 capitalize">
+                      {((user.profile as any)?.employment_status || "Active").toLowerCase().replace("_", " ")}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground font-medium">Shift Timing:</span>
+                    <p className="font-semibold text-foreground mt-0.5">
+                      {(user.profile as any)?.shift_timing || "-"}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground font-medium">Joining Date:</span>
+                    <p className="font-semibold text-foreground mt-0.5">
+                      {(user.profile as any)?.joining_date ? formatStudentDate(String((user.profile as any)?.joining_date)) : "-"}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground font-medium">Date of Birth:</span>
+                    <p className="font-semibold text-foreground mt-0.5">
+                      {(user.profile as any)?.date_of_birth ? formatStudentDate(String((user.profile as any)?.date_of_birth)) : "-"}
+                    </p>
+                  </div>
+                </div>
+              </section>
+            )}
 
 
 

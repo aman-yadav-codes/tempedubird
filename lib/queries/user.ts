@@ -40,6 +40,13 @@ async function ensureUserProfileCompleteSchema(db: Queryable) {
         ALTER TABLE user_profiles
         ADD COLUMN IF NOT EXISTS is_marketplace_enabled BOOLEAN DEFAULT TRUE
       `);
+      await db.query(`
+        ALTER TABLE user_profiles
+        ADD COLUMN IF NOT EXISTS joining_date DATE,
+        ADD COLUMN IF NOT EXISTS date_of_birth DATE,
+        ADD COLUMN IF NOT EXISTS shift_timing VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS employment_status VARCHAR(50) DEFAULT 'ACTIVE'
+      `);
     })().catch((error) => {
       userProfileCompleteSchemaReady = null;
       throw error;
@@ -146,11 +153,13 @@ export async function ensureStaffSalaryStructureSchema(db: Queryable) {
           user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
           label VARCHAR(120) NOT NULL,
           amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+          component_type VARCHAR(20) DEFAULT 'EARNING',
           sort_order INTEGER NOT NULL DEFAULT 0,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
           CONSTRAINT staff_salary_components_amount_check CHECK (amount >= 0)
-        )
+        );
+        ALTER TABLE staff_salary_components ADD COLUMN IF NOT EXISTS component_type VARCHAR(20) DEFAULT 'EARNING';
       `);
       await db.query(`
         CREATE INDEX IF NOT EXISTS idx_staff_salary_components_user
@@ -327,8 +336,10 @@ export const getUserById = async (
         u.email,
         u.phone,
         u.is_active,
-        u.is_verified
+        u.is_verified,
+        up.under_institution_id
       FROM users u
+      LEFT JOIN user_profiles up ON up.user_id = u.id
       WHERE u.id = $1
       AND COALESCE(u.is_deleted, FALSE) = FALSE
     `, [id]),
@@ -506,6 +517,7 @@ export const getUserById = async (
     role_codes: roleCodes,
     permissions,
     memberships: Array.from(membershipMap.values()),
+    under_institution_id: user.under_institution_id ? Number(user.under_institution_id) : null,
   };
 };
 
@@ -524,7 +536,7 @@ export const getUsersPaginatedQuery = async (
     isActive?: boolean | null;
     includeCurrentUser?: boolean;
     includePlatformAdmins?: boolean;
-    staffScope?: "teacher_driver" | null;
+    staffScope?: "all" | "institution_staff" | "teacher_driver" | null;
   } = {}
 ) => {
   await ensureUserProfileCompleteSchema(db);
@@ -745,7 +757,34 @@ export const getUsersPaginatedQuery = async (
       `);
   }
 
-  if (filters.staffScope === "teacher_driver") {
+  if (filters.staffScope === "all" || filters.staffScope === "institution_staff") {
+    if (institutionFilterIndex) {
+      filtersWhere.push(`
+        EXISTS (
+          SELECT 1
+          FROM institution_memberships staff_member
+          INNER JOIN roles staff_role ON staff_role.id = staff_member.role_id
+          WHERE staff_member.user_id = u.id
+            AND staff_member.institution_id = $${institutionFilterIndex}
+            AND staff_member.is_active = TRUE
+            AND COALESCE(staff_member.is_deleted, FALSE) = FALSE
+            AND staff_role.code <> 'student'
+        )
+      `);
+    } else {
+      filtersWhere.push(`
+        EXISTS (
+          SELECT 1
+          FROM institution_memberships staff_member
+          INNER JOIN roles staff_role ON staff_role.id = staff_member.role_id
+          WHERE staff_member.user_id = u.id
+            AND staff_member.is_active = TRUE
+            AND COALESCE(staff_member.is_deleted, FALSE) = FALSE
+            AND staff_role.code <> 'student'
+        )
+      `);
+    }
+  } else if (filters.staffScope === "teacher_driver") {
     if (institutionFilterIndex) {
       filtersWhere.push(`
         EXISTS (
@@ -796,9 +835,11 @@ export const getUsersPaginatedQuery = async (
         u.is_profile_complete,
         u.created_at,
         ugp.plain_password AS generated_password,
+        COALESCE(up.employment_status, 'ACTIVE') AS employment_status,
         COALESCE(role_names.roles, '{}') AS roles
       FROM users u
       LEFT JOIN user_generated_passwords ugp ON ugp.user_id = u.id
+      LEFT JOIN user_profiles up ON up.user_id = u.id
       LEFT JOIN LATERAL (
         SELECT array_agg(DISTINCT role_name ORDER BY role_name) AS roles
         FROM (
@@ -1378,14 +1419,16 @@ const replaceStaffSalaryComponents = async (
           user_id,
           label,
           amount,
+          component_type,
           sort_order
         )
-        VALUES ($1,$2,$3,$4)
+        VALUES ($1, $2, $3, $4, $5)
       `,
       [
         userId,
         component.label,
         component.amount,
+        (component as any).type || "EARNING",
         index,
       ]
     );
@@ -1479,9 +1522,13 @@ export const createAdminUserWithDetails = async (
           is_teacher,
           teacher_type,
           under_institution_id,
-          designation_id
+          designation_id,
+          joining_date,
+          date_of_birth,
+          shift_timing,
+          employment_status
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT (user_id) DO UPDATE SET
           about = COALESCE(EXCLUDED.about, user_profiles.about),
           gender = COALESCE(EXCLUDED.gender, user_profiles.gender),
@@ -1489,7 +1536,11 @@ export const createAdminUserWithDetails = async (
           is_teacher = user_profiles.is_teacher OR EXCLUDED.is_teacher,
           teacher_type = COALESCE(EXCLUDED.teacher_type, user_profiles.teacher_type),
           under_institution_id = COALESCE(user_profiles.under_institution_id, EXCLUDED.under_institution_id),
-          designation_id = COALESCE(EXCLUDED.designation_id, user_profiles.designation_id)
+          designation_id = COALESCE(EXCLUDED.designation_id, user_profiles.designation_id),
+          joining_date = COALESCE(EXCLUDED.joining_date, user_profiles.joining_date),
+          date_of_birth = COALESCE(EXCLUDED.date_of_birth, user_profiles.date_of_birth),
+          shift_timing = COALESCE(EXCLUDED.shift_timing, user_profiles.shift_timing),
+          employment_status = COALESCE(EXCLUDED.employment_status, user_profiles.employment_status)
       `,
       [
         user.id,
@@ -1500,6 +1551,10 @@ export const createAdminUserWithDetails = async (
         data.profile.is_teacher ? data.profile.teacher_type ?? null : null,
         data.profile.under_institution_id ?? null,
         data.profile.designation_id ?? null,
+        data.profile.joining_date ? new Date(data.profile.joining_date) : null,
+        data.profile.date_of_birth ? new Date(data.profile.date_of_birth) : null,
+        data.profile.shift_timing ?? null,
+        (data.profile as any).employment_status || "ACTIVE",
       ]
     );
 
@@ -1730,6 +1785,10 @@ export const getAdminUserDetails = async (
           up.about,
           up.gender,
           up.hourly_charges,
+          up.joining_date,
+          up.date_of_birth,
+          up.shift_timing,
+          COALESCE(up.employment_status, 'ACTIVE') AS employment_status,
           COALESCE(up.is_teacher, FALSE) AS is_teacher,
           up.teacher_type,
           CASE
@@ -1923,6 +1982,7 @@ ORDER BY ue.to_year DESC, ue.from_year DESC, ue.id DESC
           id,
           label,
           amount::text AS amount,
+          COALESCE(component_type, 'EARNING') AS type,
           sort_order
         FROM staff_salary_components
         WHERE user_id = $1
@@ -2095,9 +2155,13 @@ export const updateAdminUserWithDetails = async (
           is_teacher,
           teacher_type,
           under_institution_id,
-          designation_id
+          designation_id,
+          joining_date,
+          date_of_birth,
+          shift_timing,
+          employment_status
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT (user_id)
         DO UPDATE SET
           about = EXCLUDED.about,
@@ -2107,6 +2171,10 @@ export const updateAdminUserWithDetails = async (
           teacher_type = EXCLUDED.teacher_type,
           under_institution_id = EXCLUDED.under_institution_id,
           designation_id = EXCLUDED.designation_id,
+          joining_date = EXCLUDED.joining_date,
+          date_of_birth = EXCLUDED.date_of_birth,
+          shift_timing = EXCLUDED.shift_timing,
+          employment_status = COALESCE(EXCLUDED.employment_status, user_profiles.employment_status),
           updated_at = CURRENT_TIMESTAMP
       `,
       [
@@ -2118,6 +2186,10 @@ export const updateAdminUserWithDetails = async (
         data.profile.is_teacher ? data.profile.teacher_type ?? null : null,
         data.profile.under_institution_id ?? null,
         data.profile.designation_id ?? null,
+        data.profile.joining_date ? new Date(data.profile.joining_date) : null,
+        data.profile.date_of_birth ? new Date(data.profile.date_of_birth) : null,
+        data.profile.shift_timing ?? null,
+        (data.profile as any).employment_status || "ACTIVE",
       ]
     );
 

@@ -138,12 +138,52 @@ export default function SalesCommissionsPage() {
   const [ruleDesc, setRuleDesc] = useState("");
   const [ruleActive, setRuleActive] = useState(true);
   const [savingRule, setSavingRule] = useState(false);
+  const [roles, setRoles] = useState<{ id: number; name: string; code: string }[]>([]);
+  const [courses, setCourses] = useState<{ id: number; title: string; slug?: string }[]>([]);
 
   const resolvedInstId = activeInstitutionId || user?.memberships?.[0]?.institution_id || 1;
 
   useEffect(() => {
     fetchCommissionsData();
+    fetchRolesAndCourses();
   }, [resolvedInstId]);
+
+  const fetchRolesAndCourses = async () => {
+    // 1. Fetch all roles added by platform admin
+    try {
+      const rolesRes = await fetch("/api/admin/access/options?type=institutionRoles&limit=100");
+      if (rolesRes.ok) {
+        const rolesJson = await rolesRes.json();
+        if (Array.isArray(rolesJson.data) && rolesJson.data.length > 0) {
+          setRoles(rolesJson.data);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching roles:", err);
+    }
+
+    // 2. Fetch all courses / programs added by institution
+    try {
+      const coursesRes = await fetch(`/api/admin/institutions/programs?institutionId=${resolvedInstId}&limit=100`);
+      if (coursesRes.ok) {
+        const coursesJson = await coursesRes.json();
+        if (Array.isArray(coursesJson.data) && coursesJson.data.length > 0) {
+          setCourses(coursesJson.data);
+        } else {
+          // Fallback to content courses if institution programs are not present
+          const fallbackRes = await fetch("/api/admin/content/courses?limit=100");
+          if (fallbackRes.ok) {
+            const fallbackJson = await fallbackRes.json();
+            if (Array.isArray(fallbackJson.data)) {
+              setCourses(fallbackJson.data);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching institution courses:", err);
+    }
+  };
 
   const fetchCommissionsData = async () => {
     setLoading(true);
@@ -678,14 +718,20 @@ export default function SalesCommissionsPage() {
                 <Label className="text-xs font-semibold">Employee Role</Label>
                 <Select value={empRole} onValueChange={setEmpRole}>
                   <SelectTrigger className="text-xs h-9">
-                    <SelectValue />
+                    <SelectValue placeholder="Select role" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {EMPLOYEE_ROLES.map((role) => (
-                      <SelectItem key={role} value={role} className="text-xs">
-                        {role}
-                      </SelectItem>
-                    ))}
+                  <SelectContent className="max-h-60">
+                    {roles.length > 0
+                      ? roles.map((role) => (
+                          <SelectItem key={role.id || role.code} value={role.name} className="text-xs">
+                            {role.name}
+                          </SelectItem>
+                        ))
+                      : EMPLOYEE_ROLES.map((role) => (
+                          <SelectItem key={role} value={role} className="text-xs">
+                            {role}
+                          </SelectItem>
+                        ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -694,13 +740,28 @@ export default function SalesCommissionsPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">Course / Program Sold *</Label>
-                <Input
-                  required
-                  placeholder="e.g. B.Tech CS & AI"
-                  value={courseTitle}
-                  onChange={(e) => setCourseTitle(e.target.value)}
-                  className="text-xs h-9"
-                />
+                {courses.length > 0 ? (
+                  <Select value={courseTitle} onValueChange={setCourseTitle}>
+                    <SelectTrigger className="text-xs h-9">
+                      <SelectValue placeholder="Select enrolled course" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {courses.map((course) => (
+                        <SelectItem key={course.id} value={course.title} className="text-xs">
+                          {course.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    required
+                    placeholder="e.g. B.Tech CS & AI"
+                    value={courseTitle}
+                    onChange={(e) => setCourseTitle(e.target.value)}
+                    className="text-xs h-9"
+                  />
+                )}
               </div>
 
               <div className="space-y-1">
@@ -849,15 +910,21 @@ export default function SalesCommissionsPage() {
                 <Label className="text-xs font-semibold">Applicable Staff Role</Label>
                 <Select value={ruleRole} onValueChange={setRuleRole}>
                   <SelectTrigger className="text-xs h-9">
-                    <SelectValue />
+                    <SelectValue placeholder="Select staff role" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Roles</SelectItem>
-                    {EMPLOYEE_ROLES.map((role) => (
-                      <SelectItem key={role} value={role} className="text-xs">
-                        {role}
-                      </SelectItem>
-                    ))}
+                  <SelectContent className="max-h-60">
+                    <SelectItem value="all" className="font-semibold text-xs">All Roles</SelectItem>
+                    {roles.length > 0
+                      ? roles.map((role) => (
+                          <SelectItem key={role.id || role.code} value={role.name} className="text-xs">
+                            {role.name}
+                          </SelectItem>
+                        ))
+                      : EMPLOYEE_ROLES.map((role) => (
+                          <SelectItem key={role} value={role} className="text-xs">
+                            {role}
+                          </SelectItem>
+                        ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -865,12 +932,19 @@ export default function SalesCommissionsPage() {
 
             <div className="space-y-1">
               <Label className="text-xs font-semibold">Course / Department Scope</Label>
-              <Input
-                placeholder="e.g. B.Tech / MBA Programs or All Courses"
-                value={ruleCourse}
-                onChange={(e) => setRuleCourse(e.target.value)}
-                className="text-xs h-9"
-              />
+              <Select value={ruleCourse} onValueChange={setRuleCourse}>
+                <SelectTrigger className="text-xs h-9">
+                  <SelectValue placeholder="Select course scope" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  <SelectItem value="All Courses" className="font-semibold text-xs">All Courses</SelectItem>
+                  {courses.map((course) => (
+                    <SelectItem key={course.id} value={course.title} className="text-xs">
+                      {course.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1">

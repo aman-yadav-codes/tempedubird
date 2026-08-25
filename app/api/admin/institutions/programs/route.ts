@@ -47,6 +47,7 @@ function canReadProgramLookup(
   user: PermissionUser,
   institutionId?: number | null,
 ) {
+  if (isPlatformAdminUser(user) || isInstitutionAdminUser(user)) return true;
   return PROGRAM_LOOKUP_PERMISSIONS.some((permission) =>
     hasPermission(user, permission, { institutionId }),
   );

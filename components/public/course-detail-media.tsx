@@ -54,12 +54,8 @@ export function CourseDetailMedia({
     });
   }, [activeIndex]);
 
-  if (!active) {
-    return (
-      <div className="flex aspect-[16/7] min-h-[260px] items-center justify-center rounded-xl border border-dashed border-border bg-card/70 text-sm text-muted-foreground sm:min-h-[340px]">
-        Program media coming soon
-      </div>
-    );
+  if (!active || orderedItems.length === 0) {
+    return null;
   }
 
   return (

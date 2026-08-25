@@ -38,7 +38,8 @@ type StaffRow = {
   staff_user_id: number;
   full_name: string;
   email?: string | null;
-  role_code: "teacher" | "driver";
+  role_code: string;
+  role_name?: string;
   status: StaffAttendanceStatus | null;
   check_in_time?: string | null;
   check_out_time?: string | null;
@@ -60,7 +61,8 @@ type HistoryRow = SelfAttendanceRow & {
   staff_user_id: number;
   full_name: string;
   email?: string | null;
-  role_code: "teacher" | "driver";
+  role_code: string;
+  role_name?: string;
   marked_by_name?: string | null;
   updated_at?: string | null;
 };
@@ -69,7 +71,8 @@ type LeaveRow = {
   id: number;
   staff_user_id: number;
   full_name: string;
-  role_code: "teacher" | "driver";
+  role_code: string;
+  role_name?: string;
   from_date: string;
   to_date: string;
   message: string;
@@ -138,8 +141,15 @@ function StatusBadge({ status }: { status: StaffAttendanceStatus | LeaveStatus |
   return <Badge variant="outline" className={cn("border", meta.className)}>{meta.label}</Badge>;
 }
 
-function roleLabel(roleCode: string) {
-  return roleCode === "driver" ? "Driver" : "Teacher";
+function roleLabel(roleCode: string, roleName?: string) {
+  if (roleName) return roleName;
+  if (!roleCode) return "Staff";
+  if (roleCode.toLowerCase() === "teacher") return "Teacher";
+  if (roleCode.toLowerCase() === "driver") return "Driver";
+  return roleCode
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 function PaginationControls({
@@ -515,7 +525,7 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
           <p className="text-muted-foreground">
             {mode === "self"
               ? "View, mark attendance, and send leave requests to the institute admin."
-              : "Mark teacher and driver attendance, review leave requests, and audit attendance history."}
+              : "Mark staff attendance, coming & leaving times, review leave requests, and audit attendance history."}
           </p>
         </div>
         <Badge variant="outline" className="rounded-md">{activeInstitution.name}</Badge>
@@ -639,12 +649,12 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
                 ) : (
                   <>
                     <div className="space-y-2">
-                      <Label>Check In</Label>
-                      <TimePicker value={bulkCheckIn} onChange={setBulkCheckIn} placeholder="Check in" />
+                      <Label>Check In (Coming)</Label>
+                      <TimePicker value={bulkCheckIn} onChange={setBulkCheckIn} placeholder="Coming time" />
                     </div>
                     <div className="space-y-2">
-                      <Label>Check Out</Label>
-                      <TimePicker value={bulkCheckOut} onChange={setBulkCheckOut} placeholder="Check out" />
+                      <Label>Check Out (Leaving)</Label>
+                      <TimePicker value={bulkCheckOut} onChange={setBulkCheckOut} placeholder="Leaving time" />
                     </div>
                   </>
                 )}
@@ -678,7 +688,7 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
                     <th className="px-4 py-3">Staff</th>
                     <th className="px-4 py-3">Role</th>
                     <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Time / Leave Dates</th>
+                    <th className="px-4 py-3">Coming & Leaving / Leave Dates</th>
                     <th className="px-4 py-3">Remarks</th>
                   </tr>
                 </thead>
@@ -700,7 +710,11 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
                         <div className="font-medium">{row.full_name}</div>
                         <div className="text-xs text-muted-foreground">{row.email || `User #${row.staff_user_id}`}</div>
                       </td>
-                      <td className="px-4 py-3">{roleLabel(row.role_code)}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant="outline" className="font-normal text-xs">
+                          {roleLabel(row.role_code, row.role_name)}
+                        </Badge>
+                      </td>
                       <td className="px-4 py-3">
                         <Select
                           value={row.status ?? UNMARKED_VALUE}
@@ -791,7 +805,7 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
                       </td>
                     </tr>
                   )) : (
-                    <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">No teachers or drivers found.</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">No staff members found for this institution.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -875,7 +889,11 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
                         <div className="font-medium">{row.full_name}</div>
                         <div className="text-xs text-muted-foreground">{row.email || `User #${row.staff_user_id}`}</div>
                       </td>
-                      <td className="px-4 py-3">{roleLabel(row.role_code)}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant="outline" className="font-normal text-xs">
+                          {roleLabel(row.role_code, row.role_name)}
+                        </Badge>
+                      </td>
                       <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
                       <td className="px-4 py-3">{formatTime(row.check_in_time) || "-"}</td>
                       <td className="px-4 py-3">{formatTime(row.check_out_time) || "-"}</td>

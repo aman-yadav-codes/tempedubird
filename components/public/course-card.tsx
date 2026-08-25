@@ -30,6 +30,7 @@ export interface CourseCardProps {
   price: string;
   image?: string;
   images?: { id: number; url: string; mediaType?: "image" | "video" }[];
+  iconUrl?: string | null;
   verified: boolean;
   category: string;
   students: string;
@@ -57,6 +58,7 @@ export function CourseCard({
   price,
   image,
   images = [],
+  iconUrl,
   verified,
   category,
   students,
@@ -74,7 +76,12 @@ export function CourseCard({
   onEnroll,
   onEnquire,
 }: CourseCardProps) {
-  const displayImage = images[0]?.url || image || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=80";
+  const hasCustomMedia = Boolean(
+    (images && images.length > 0 && images[0]?.url) ||
+    (image && image.trim()) ||
+    (iconUrl && iconUrl.trim())
+  );
+  const displayImage = (images && images.length > 0 && images[0]?.url) ? images[0].url : (image && image.trim() ? image : (iconUrl && iconUrl.trim() ? iconUrl : null));
   const courseUrl = buildCourseUrl(id, title, institute);
   const isList = viewMode === "list";
   const subjectPreview = subjects.slice(0, 2).join(", ");
@@ -84,8 +91,8 @@ export function CourseCard({
   return (
     <Card className="group h-full gap-0 overflow-hidden rounded-lg border-border bg-card/90 p-0 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-primary/70 hover:shadow-[0_0_0_1px_rgba(239,68,68,0.25)]">
       <div className={`h-full p-3 ${isList ? "grid gap-4 sm:grid-cols-[280px_1fr]" : "flex flex-col"}`}>
-        <div className={`relative overflow-hidden rounded-md bg-muted ${isList ? "min-h-[190px]" : "h-[170px]"}`}>
-          {displayImage ? (
+        <div className={`relative overflow-hidden rounded-md bg-muted ${isList ? "min-h-[190px]" : "h-[165px]"}`}>
+          {hasCustomMedia && displayImage ? (
             <Image
               src={displayImage}
               alt={title}
@@ -100,44 +107,46 @@ export function CourseCard({
               unoptimized
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
-              No media uploaded
+            <div className="relative h-full w-full bg-gradient-to-br from-primary/10 via-muted/40 to-primary/5 flex items-center justify-center p-4 transition-colors group-hover:from-primary/15">
+              <div className="size-8 sm:size-9 rounded-lg bg-background/95 border border-primary/20 shadow-2xs flex items-center justify-center text-primary group-hover:scale-105 transition-transform duration-300">
+                <GraduationCap className="size-4 text-primary" />
+              </div>
             </div>
           )}
           <div className="absolute left-3 top-3">
-            <Badge className={verified ? "bg-green-500/90 text-white" : "bg-muted"}>
+            <Badge className={verified ? "bg-green-500/95 text-white text-[10px] font-bold shadow-xs" : "bg-muted text-[10px]"}>
               {verified && <CheckCircle2 className="mr-1 h-3 w-3" />}
               {verified ? "Verified" : "Standard"}
             </Badge>
           </div>
           <div className="absolute right-3 top-3">
-            <Badge variant="secondary" className="max-w-[190px] truncate bg-background/90 text-foreground text-[10px] font-bold uppercase tracking-wider shadow-2xs border border-border/60">
-              {category}
+            <Badge variant="secondary" className="max-w-[170px] truncate bg-background/90 text-foreground text-[10px] font-bold uppercase tracking-wider shadow-xs border border-border/60">
+              {selectedCategory ?? category}
             </Badge>
           </div>
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <CardHeader className="px-3 pb-3 pt-3.5 space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <Badge variant="outline" className="max-w-full truncate text-[11px] font-semibold text-muted-foreground uppercase tracking-wide py-0.5 px-2 bg-muted/30">
+          <CardHeader className="px-3 pb-2.5 pt-3.5 space-y-1.5">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                 {selectedCategory ?? category}
-              </Badge>
+              </span>
               <span className="text-xl font-black text-primary">{price}</span>
             </div>
-            <h3 className="line-clamp-2 text-2xl font-black uppercase tracking-tight text-foreground transition-colors group-hover:text-primary leading-tight">
+            <h3 className="line-clamp-1 text-lg sm:text-xl font-black uppercase tracking-tight text-foreground transition-colors group-hover:text-primary leading-snug">
               <Link href={courseUrl} className="hover:underline uppercase font-black">
                 {title}
               </Link>
             </h3>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <Link href="/institutes" className="hover:text-primary hover:underline font-medium">
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+              <Link href="/institutes" className="hover:text-primary hover:underline font-semibold text-muted-foreground">
                 {institute}
               </Link>
               {programType && (
                 <>
                   <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
-                  <span className="uppercase text-[10px] tracking-wider font-semibold">{programType}</span>
+                  <span className="uppercase text-[10px] tracking-wider font-semibold text-muted-foreground/80">{programType}</span>
                 </>
               )}
             </div>

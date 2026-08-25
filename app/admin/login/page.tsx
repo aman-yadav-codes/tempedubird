@@ -169,8 +169,15 @@ export default function AdminLoginPage() {
       }
 
       setAuth(json.user, json.accessToken);
-      const roleLabel = role === "student" ? "Student" : role === "guardian" ? "Guardian" : role === "professional" ? "Professional" : "Platform Admin";
-      toast.success(`Signed in as Demo ${roleLabel}`);
+      const roleLabel =
+        role === "student"
+          ? "Student"
+          : role === "guardian"
+          ? "Guardian"
+          : role === "professional"
+          ? "Maa Sharda Institute"
+          : "Platform Admin";
+      toast.success(`Signed in as ${roleLabel}`);
 
       router.replace(getRedirectPath(json.user));
     } catch {
@@ -399,7 +406,7 @@ export default function AdminLoginPage() {
                 >
                   <Briefcase className="h-4 w-4 text-blue-400 mb-1 group-hover:scale-110 transition-transform" />
                   <span className="text-xs font-semibold text-zinc-200 group-hover:text-white">Professional</span>
-                  <span className="text-[9px] text-zinc-500 mt-0.5">Institute</span>
+                  <span className="text-[9px] text-zinc-500 mt-0.5">Maa Sharda (160)</span>
                 </button>
 
                 <button

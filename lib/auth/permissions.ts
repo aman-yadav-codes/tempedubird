@@ -21,14 +21,50 @@ export type AdminPermissionModule = {
 export const MANAGED_PLATFORM_ROLE_CODES = ["platform_admin", "accountant", "guest"] as const;
 export const MANAGED_INSTITUTION_ROLE_CODES = [
   "institution_admin",
+  "director",
+  "principal",
+  "vice_principal",
+  "dean",
+  "center_head",
+  "branch_manager",
+  "academic_coordinator",
+  "hod",
   "teacher",
+  "faculty",
+  "tutor",
+  "teaching_assistant",
+  "doubt_expert",
   "student",
   "parent",
+  "counselor",
+  "admission_counselor",
+  "telecaller",
+  "marketing_executive",
+  "institution_accountant",
+  "fee_collector",
+  "exam_controller",
+  "curriculum_developer",
+  "librarian",
+  "lab_assistant",
+  "it_support",
+  "placement_officer",
+  "hostel_warden",
+  "transport_coordinator",
   "driver",
+  "security_guard",
+  "administrative_staff",
+  "sports_coach",
 ] as const;
 
 export function isManagedPlatformRoleCode(roleCode: string | null | undefined) {
   return MANAGED_PLATFORM_ROLE_CODES.includes(roleCode as (typeof MANAGED_PLATFORM_ROLE_CODES)[number]);
+}
+
+export function isManagedInstitutionRoleCode(roleCode: string | null | undefined) {
+  if (!roleCode) return false;
+  return MANAGED_INSTITUTION_ROLE_CODES.includes(
+    roleCode.toLowerCase() as (typeof MANAGED_INSTITUTION_ROLE_CODES)[number]
+  );
 }
 
 export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
@@ -113,28 +149,30 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "sales.pipeline", label: "Sales Pipeline", description: "sales pipeline", scope: "institution", page: "/admin/sales/pipeline" },
   { key: "sales.enquiries", label: "Sales Enquiry", description: "sales enquiries", scope: "institution", page: "/admin/sales/enquiries" },
   { key: "sales.enrollments", label: "Course Enrollments", description: "course enrollments", scope: "institution", page: "/admin/sales/enrollments" },
-  { key: "content.category_tree", label: "Category Tree", description: "content category tree", scope: "platform", page: "/admin/content/tree" },
-  { key: "content.categories", label: "Categories", description: "content categories", scope: "platform", page: "/admin/content/categories" },
-  { key: "content.boards", label: "Boards", description: "content boards", scope: "platform", page: "/admin/content/boards" },
-  { key: "content.universities", label: "Universities", description: "content universities registry", scope: "platform", page: "/admin/content/universities" },
-  { key: "content.subjects", label: "Subjects", description: "content subjects", scope: "platform", page: "/admin/content/subjects" },
+  { key: "content.category_tree", label: "Category Tree", description: "content category tree", scope: "institution", page: "/admin/content/tree" },
+  { key: "content.categories", label: "Categories", description: "content categories", scope: "institution", page: "/admin/content/categories" },
+  { key: "content.boards", label: "Boards", description: "content boards", scope: "institution", page: "/admin/content/boards" },
+  { key: "content.universities", label: "Universities", description: "content universities registry", scope: "institution", page: "/admin/content/universities" },
+  { key: "content.certifications", label: "Affiliated By / Certifications", description: "certification providers and university affiliations", scope: "institution", page: "/admin/content/certifications" },
+  { key: "content.subjects", label: "Subjects", description: "content subjects", scope: "institution", page: "/admin/content/subjects" },
+  { key: "content.courses", label: "Courses & Programs", description: "courses and program catalog", scope: "institution", page: "/admin/content/courses" },
   { key: "content.skills", label: "Skills", description: "content skills", scope: "platform", page: "/admin/master-data/skills" },
   { key: "content.designations", label: "Designations", description: "content designations", scope: "platform", page: "/admin/master-data/designations" },
   { key: "content.locations", label: "Locations", description: "content locations", scope: "platform", page: "/admin/master-data/locations" },
-  { key: "content.syllabus", label: "Syllabus", description: "universal and institution syllabi", scope: "platform", page: "/admin/content/syllabus" },
+  { key: "content.syllabus", label: "Syllabus", description: "universal and institution syllabi", scope: "institution", page: "/admin/content/syllabus" },
   { key: "content.card_categories", label: "Card Categories", description: "global card and document categories", scope: "platform", page: "/admin/master-data/card-categories" },
-  { key: "content.card_templates", label: "Card Templates", description: "assigned and marketplace card templates", scope: "institution", page: "/admin/master-data/card-templates" },
-  { key: "content.assignments", label: "Assignments", description: "institution assignment templates", scope: "institution", page: "/admin/master-data/assignments" },
-  { key: "content.exams", label: "Exams", description: "institution exam templates", scope: "institution", page: "/admin/master-data/exams" },
-  { key: "content.notes", label: "Notes", description: "institution study notes", scope: "institution", page: "/admin/master-data/notes" },
+  { key: "content.card_templates", label: "Card Templates", description: "assigned and marketplace card templates", scope: "institution", page: "/admin/content/card-templates" },
+  { key: "content.assignments", label: "Assignments", description: "institution assignment templates", scope: "institution", page: "/admin/content/assignments" },
+  { key: "content.exams", label: "Exams", description: "institution exam templates", scope: "institution", page: "/admin/content/exams" },
+  { key: "content.notes", label: "Notes", description: "institution study notes", scope: "institution", page: "/admin/content/notes" },
   { key: "content.default_calendar", label: "Default Calendar", description: "platform default holidays, notices, and academic events", scope: "platform", page: "/admin/master-data/default-calendar" },
   { key: "content.exam_reviews", label: "Exam Reviews", description: "exam marketplace reviews", scope: "platform", page: "/admin/master-data/exams" },
-  { key: "content.practice_exams", label: "Practice Exams", description: "institution practice exam templates", scope: "institution", page: "/admin/master-data/practice-exams" },
+  { key: "content.practice_exams", label: "Practice Exams", description: "institution practice exam templates", scope: "institution", page: "/admin/content/practice-exams" },
   { key: "content.practice_exam_reviews", label: "Practice Exam Reviews", description: "practice exam marketplace reviews", scope: "platform", page: "/admin/master-data/practice-exams" },
   { key: "content.institute_calendar", label: "Institute Calendar", description: "institution holidays, notices, and events", scope: "institution", page: "/admin/master-data/institute-calendar" },
   { key: "content.timetable_setup", label: "Timetable Setup", description: "subject teacher mappings and timetable slots", scope: "institution", page: "/admin/master-data/timetable-setup" },
   { key: "content.blog", label: "Blog", description: "institution website blog posts", scope: "institution", page: "/admin/content/blog" },
-  { key: "content.media", label: "Media", description: "content media", scope: "platform", page: "/admin/content/media" },
+  { key: "content.media", label: "Media", description: "content media", scope: "institution", page: "/admin/content/media" },
   { key: "institution.types", label: "Institution Types", description: "institution types", scope: "platform", page: "/admin/institutions/types" },
   { key: "institution.subtypes", label: "Institution Subtypes", description: "institution subtypes", scope: "platform", page: "/admin/institutions/subtypes" },
   { key: "institution.program_types", label: "Program Types", description: "program types", scope: "platform", page: "/admin/institutions/program-types" },
@@ -506,8 +544,8 @@ export function isPermissionAssignableToRole(permission: string, roleCode?: stri
     return roleCode === "institution_admin";
   }
 
-  if (permissionModule.key === "content.notes") {
-    return roleCode === "institution_admin";
+  if (permissionModule.key.startsWith("content.")) {
+    return roleCode === "platform_admin" || roleCode === "institution_admin" || roleCode === "teacher";
   }
 
   if (permissionModule.key === "settings.payments") {
@@ -783,6 +821,15 @@ export function hasPermission(
 
   if (!isInstitutionScopedPermission(permission)) return false;
 
+  if (isInstitutionAdminUser(user)) {
+    if (target.institutionId) {
+      const allowedIds = (user.memberships ?? []).map((m) => m.institution_id);
+      if ((user as any).under_institution_id) allowedIds.push((user as any).under_institution_id);
+      return allowedIds.includes(target.institutionId);
+    }
+    return true;
+  }
+
   if (target.institutionId) {
     return user.memberships?.some((membership) => {
       if (membership.institution_id !== target.institutionId) return false;
@@ -846,11 +893,32 @@ function isSharedLookupRequest(pathname: string, verb: string) {
     pathname.includes("/api/admin/categories/tree") ||
     pathname.includes("/api/admin/categories") ||
     pathname.includes("/api/admin/boards") ||
+    pathname.includes("/api/admin/universities") ||
+    pathname.includes("/api/admin/certifications") ||
     pathname.includes("/api/admin/subjects") ||
     pathname.includes("/api/admin/sections") ||
+    pathname.includes("/api/admin/content/courses") ||
     pathname.includes("/api/admin/master-data/skills") ||
     pathname.includes("/api/admin/master-data/designations") ||
-    pathname.includes("/api/admin/master-data/syllabi/subjects")
+    pathname.includes("/api/admin/master-data/syllabi") ||
+    pathname.includes("/api/admin/master-data/assignments") ||
+    pathname.includes("/api/admin/master-data/notes") ||
+    pathname.includes("/api/admin/master-data/exams") ||
+    pathname.includes("/api/admin/master-data/practice-exams") ||
+    pathname.includes("/api/admin/master-data/card-templates") ||
+    pathname.includes("/api/admin/master-data/institute-calendar") ||
+    pathname.includes("/api/admin/institutions/programs") ||
+    pathname.includes("/api/admin/institutions/profiles") ||
+    pathname.includes("/api/admin/institutions/facilities") ||
+    pathname.includes("/api/admin/institutions/gallery") ||
+    pathname.includes("/api/admin/institutions/hostels") ||
+    pathname.includes("/api/admin/institutions/libraries") ||
+    pathname.includes("/api/admin/institutions/placements") ||
+    pathname.includes("/api/admin/institutions/scholarships") ||
+    pathname.includes("/api/admin/sales/enquiries") ||
+    pathname.includes("/api/admin/sales/pipeline") ||
+    pathname.includes("/api/admin/sales/enrollments") ||
+    pathname.includes("/api/program-types")
   );
 }
 
@@ -942,14 +1010,13 @@ export function getRequestPermission(method: string, url: string) {
   if (pathname.includes("/api/admin/analytics/sales")) return permissionForAction("analytics.sales", verb);
   if (pathname.includes("/api/admin/analytics/reports")) return permissionForAction("analytics.reports", verb);
   if (pathname.includes("/api/admin/analytics")) return permissionForAction("analytics.overview", verb);
-  if (pathname.includes("/api/admin/content/courses")) {
-    return verb === "GET" ? AUTHENTICATED_LOOKUP_PERMISSION : permissionForAction("content.category_tree", verb);
-  }
+  if (pathname.includes("/api/admin/content/courses")) return permissionForAction("content.courses", verb);
   if (pathname.includes("/api/admin/categories/tree")) return permissionForAction("content.category_tree", verb);
   if (pathname.includes("/api/admin/categories")) return permissionForAction("content.categories", verb);
   if (pathname.includes("/api/admin/content/blog")) return permissionForAction("content.blog", verb);
   if (pathname.includes("/api/admin/boards")) return permissionForAction("content.boards", verb);
   if (pathname.includes("/api/admin/universities")) return permissionForAction("content.universities", verb);
+  if (pathname.includes("/api/admin/certifications")) return permissionForAction("content.certifications", verb);
   if (pathname.includes("/api/admin/subjects")) return permissionForAction("content.subjects", verb);
   if (pathname.includes("/api/admin/master-data/skills")) return permissionForAction("content.skills", verb);
   if (pathname.includes("/api/admin/master-data/designations")) return permissionForAction("content.designations", verb);
@@ -992,6 +1059,10 @@ export function getRequestPermission(method: string, url: string) {
   if (pathname.includes("/api/admin/institutions/academic-years")) {
     return verb === "GET" ? AUTHENTICATED_LOOKUP_PERMISSION : permissionForAction("settings.academic_sessions", verb);
   }
+  if (pathname.includes("/api/admin/sales/enquiries")) return permissionForAction("sales.enquiries", verb);
+  if (pathname.includes("/api/admin/sales/pipeline")) return permissionForAction("sales.pipeline", verb);
+  if (pathname.includes("/api/admin/sales/enrollments")) return permissionForAction("sales.enrollments", verb);
+  if (pathname.includes("/api/admin/sales/leads")) return permissionForAction("sales.leads", verb);
   if (pathname.includes("/api/admin/institutions/profiles")) return permissionForAction("institution.institutions", verb);
   if (pathname.includes("/api/admin/institutions")) return permissionForAction("institution.institutions", verb);
   if (pathname.includes("/api/admin/institution-notification-settings")) return permissionForAction("notifications.controls", verb);
@@ -1038,9 +1109,17 @@ export function getPageViewPermission(pathname: string) {
 }
 
 export function getStaffPermissionModule(roleCode: string | null | undefined) {
-  if (roleCode === "teacher") return "managestaff.allstaff";
-  if (roleCode === "driver") return "managestaff.allstaff";
-  if (roleCode === "parent") return "managestaff.allstaff";
+  if (!roleCode) return null;
+  const normalized = roleCode.toLowerCase();
+  if (normalized === "student") return "managestudents.allstudents";
+  if (
+    isManagedInstitutionRoleCode(normalized) ||
+    normalized === "teacher" ||
+    normalized === "driver" ||
+    normalized === "parent"
+  ) {
+    return "managestaff.allstaff";
+  }
   return null;
 }
 
@@ -1098,6 +1177,10 @@ export function hasAdminPagePermission(
   }
 
   if (normalized === "/admin/company" || normalized.startsWith("/admin/company")) {
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+  }
+
+  if (normalized === "/admin/content" || normalized.startsWith("/admin/content")) {
     return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
   }
 

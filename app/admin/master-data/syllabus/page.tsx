@@ -966,13 +966,13 @@ export default function SyllabusPage() {
     setSaving(true);
     setSaveStatus("saving");
     try {
-      const selectedSub = subjectsList.find((s) => String(s.id) === form.subject_id);
-      const subjectName = selectedSub?.name || form.subject_label || "Subject";
-      const selectedCourse = courses.find((c) => String(c.id) === selectedCourseId);
-      const autoTitle = form.title.trim() || (selectedCourse ? `${selectedCourse.name} - ${subjectName}` : `${subjectName} Syllabus`);
+      const effectiveInstitutionId = !isPlatformAdmin
+        ? (activeInstitutionId ?? (user as any)?.under_institution_id ?? user?.memberships?.[0]?.institution_id ?? null)
+        : null;
 
       const body = {
         subject_id: Number(form.subject_id),
+        institution_id: effectiveInstitutionId,
         title: autoTitle,
         description: form.description.trim() || null,
         version: Number(form.version) || 1,
@@ -1733,7 +1733,7 @@ export default function SyllabusPage() {
       />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[92vh] overflow-y-auto sm:!max-w-2xl">
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:!max-w-4xl max-w-4xl w-full">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2">
               <BookOpen className="h-5 w-5 text-primary" />

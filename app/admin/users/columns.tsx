@@ -1,7 +1,7 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { ArrowUpDown, KeyRound, MoreHorizontal } from "lucide-react"
+import { ArrowUpDown, KeyRound, MoreHorizontal, UserCheck, ShieldAlert } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -11,6 +11,9 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { formatIndianDate } from "@/lib/format-time"
@@ -25,12 +28,14 @@ export type User = {
   created_at: string
   roles: string[]
   generated_password?: string | null
+  employment_status?: string | null
 }
 
 type UserColumnsOptions = {
   onViewProfile: (user: User) => void
   onEditUser: (user: User) => void
   onGeneratePassword?: (user: User) => void
+  onChangeEmploymentStatus?: (user: User, status: string) => void
   onRemoveUser: (user: User) => void
   removalLabel: string
   entityLabel?: string
@@ -40,6 +45,7 @@ export function buildUserColumns({
   onViewProfile,
   onEditUser,
   onGeneratePassword,
+  onChangeEmploymentStatus,
   onRemoveUser,
   removalLabel,
   entityLabel = "user",
@@ -125,7 +131,7 @@ export function buildUserColumns({
         );
       },
     },
-    // Status
+    // Status & Employment Status
     {
       accessorKey: "is_active",
       header: ({ column }) => (
@@ -139,20 +145,28 @@ export function buildUserColumns({
         </Button>
       ),
       cell: ({ row }) => {
-        const isActive = row.getValue("is_active") as boolean
+        const user = row.original;
+        const isActive = user.is_active;
+        const empStatus = (user.employment_status || (isActive ? "ACTIVE" : "INACTIVE")).toUpperCase();
+
+        const statusBadges: Record<string, { label: string; className: string }> = {
+          ACTIVE: { label: "Active", className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200" },
+          PROBATION: { label: "Probation", className: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200" },
+          ON_LEAVE: { label: "On Leave", className: "bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200" },
+          NOTICE_PERIOD: { label: "Notice Period", className: "bg-orange-100 text-orange-800 dark:bg-orange-950/40 dark:text-orange-300 border-orange-200" },
+          RETIRED: { label: "Retired", className: "bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200" },
+          TERMINATED: { label: "Terminated / Fired", className: "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200" },
+          RESIGNED: { label: "Resigned", className: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-200" },
+          INACTIVE: { label: "Inactive", className: "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200" },
+        };
+
+        const config = statusBadges[empStatus] || { label: empStatus, className: "bg-muted text-muted-foreground border-border" };
 
         return (
-          <Badge
-            variant="default"
-            className={
-              isActive
-                ? "bg-green-100 text-green-700 hover:bg-green-100"
-                : "bg-red-100 text-red-700 hover:bg-red-100"
-            }
-          >
-            {isActive ? "Active" : "Inactive"}
-          </Badge>
-        )
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${config.className}`}>
+            {config.label}
+          </span>
+        );
       },
     },
     // Joined
@@ -190,7 +204,7 @@ export function buildUserColumns({
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuItem
                 onClick={() => navigator.clipboard.writeText(user.email)}
@@ -210,6 +224,46 @@ export function buildUserColumns({
                   Generate password
                 </DropdownMenuItem>
               )}
+
+              {onChangeEmploymentStatus && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="cursor-pointer">
+                      <UserCheck className="mr-2 h-4 w-4 text-primary" />
+                      Employment Status
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-48">
+                      <DropdownMenuItem onClick={() => onChangeEmploymentStatus(user, "ACTIVE")}>
+                        🟢 Active
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onChangeEmploymentStatus(user, "PROBATION")}>
+                        ⏳ On Probation
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onChangeEmploymentStatus(user, "ON_LEAVE")}>
+                        🗓️ On Leave
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onChangeEmploymentStatus(user, "NOTICE_PERIOD")}>
+                        ⚠️ Notice Period
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onChangeEmploymentStatus(user, "RETIRED")}>
+                        👴 Retired
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onChangeEmploymentStatus(user, "RESIGNED")}>
+                        📄 Resigned
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive font-medium"
+                        onClick={() => onChangeEmploymentStatus(user, "TERMINATED")}
+                      >
+                        🚫 Fired / Terminated
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                </>
+              )}
+
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"

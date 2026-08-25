@@ -99,6 +99,22 @@ export const adminCreateUserSchema = z.object({
         emptyToNull,
         z.union([z.string().max(20).transform((val) => val.toLowerCase()), z.null()]).optional()
       ),
+      joining_date: z.preprocess(
+        emptyToNull,
+        z.union([z.string().max(50), z.null()]).optional()
+      ),
+      date_of_birth: z.preprocess(
+        emptyToNull,
+        z.union([z.string().max(50), z.null()]).optional()
+      ),
+      shift_timing: z.preprocess(
+        emptyToNull,
+        z.union([z.string().max(100), z.null()]).optional()
+      ),
+      employment_status: z.preprocess(
+        emptyToNull,
+        z.union([z.string().max(50).transform((val) => val.toUpperCase()), z.null()]).optional()
+      ),
       hourly_charges: z.preprocess(
         (val) => {
           if (val === "" || val === null) return null;

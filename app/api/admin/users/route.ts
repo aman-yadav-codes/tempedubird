@@ -208,10 +208,9 @@ async function getTargetPermissionModule(userId: number) {
   if (await isStudentUser(userId)) return "managestudents.allstudents";
 
   const roleCodes = await getTargetRoleCodes(userId);
-  for (const roleCode of ["teacher", "driver", "parent"]) {
-    if (roleCodes.includes(roleCode)) {
-      return getStaffPermissionModule(roleCode) ?? "users.allusers";
-    }
+  for (const roleCode of roleCodes) {
+    const module = getStaffPermissionModule(roleCode);
+    if (module) return module;
   }
 
   return "users.allusers";
@@ -232,6 +231,8 @@ function canCreateRoleInTargetInstitutions(
   roleCode: string | null | undefined,
   targetInstitutionIds: number[]
 ) {
+  if (isPlatformAdminUser(currentUser)) return true;
+
   const isGuardianOrParent =
     currentUser.role_codes.includes("guardian") ||
     currentUser.role_codes.includes("parent") ||
@@ -242,11 +243,20 @@ function canCreateRoleInTargetInstitutions(
     return true;
   }
 
-  const requiredPermission = `${getCreatePermissionModule(roleCode)}.create`;
-  if (!targetInstitutionIds.length) return hasPermission(currentUser, requiredPermission);
+  const requiredModule = getCreatePermissionModule(roleCode);
+  const requiredPermission = `${requiredModule}.create`;
 
-  return targetInstitutionIds.every((institutionId) =>
-    hasPermission(currentUser, requiredPermission, { institutionId })
+  if (!targetInstitutionIds.length) {
+    return (
+      hasPermission(currentUser, requiredPermission) ||
+      hasPermission(currentUser, "managestaff.allstaff.create")
+    );
+  }
+
+  return targetInstitutionIds.every(
+    (institutionId) =>
+      hasPermission(currentUser, requiredPermission, { institutionId }) ||
+      hasPermission(currentUser, "managestaff.allstaff.create", { institutionId })
   );
 }
 
@@ -398,7 +408,18 @@ export async function POST(req: Request) {
 
     const userData = normalizeRoleProfile(parsed.data, roleMeta);
     const allowedInstitutionIds = getAllowedInstitutionIds(currentUser);
-    const targetInstitutionIds = getTargetInstitutionIds(userData);
+    let targetInstitutionIds = getTargetInstitutionIds(userData);
+
+    if (
+      targetInstitutionIds.length === 0 &&
+      allowedInstitutionIds &&
+      allowedInstitutionIds.length > 0 &&
+      roleMeta?.scope_code === "institution"
+    ) {
+      userData.profile.under_institution_id = allowedInstitutionIds[0];
+      userData.profile.institution_ids = [allowedInstitutionIds[0]];
+      targetInstitutionIds = [allowedInstitutionIds[0]];
+    }
 
     if (!isGuardianCreatingStudent && !canCreateRoleInTargetInstitutions(currentUser, roleMeta?.code, targetInstitutionIds)) {
       return NextResponse.json(

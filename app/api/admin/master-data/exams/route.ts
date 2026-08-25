@@ -39,15 +39,17 @@ function permissionInstitutionIds(
   permission: string
 ) {
   return Array.from(
-    new Set(
-      (user.memberships ?? [])
+    new Set([
+      ...(user.memberships ?? [])
         .filter(
           (membership) =>
+            isInstitutionAdminUser(user) ||
             membership.permissions.includes("*") ||
             membership.permissions.includes(permission)
         )
-        .map((membership) => membership.institution_id)
-    )
+        .map((membership) => membership.institution_id),
+      ...((user as any).under_institution_id ? [(user as any).under_institution_id as number] : []),
+    ])
   );
 }
 
@@ -404,15 +406,17 @@ export async function GET(req: Request) {
       );
       const search = url.searchParams.get("search")?.trim() ?? "";
       const institutionIds = Array.from(
-        new Set(
-          (currentUser.memberships ?? [])
+        new Set([
+          ...(currentUser.memberships ?? [])
             .filter((membership) =>
+              isInstitutionAdminUser(currentUser) ||
               membership.permissions.includes("*") ||
               membership.permissions.includes("content.exams.create") ||
               membership.permissions.includes("content.exams.edit")
             )
-            .map((membership) => membership.institution_id)
-        )
+            .map((membership) => membership.institution_id),
+          ...((currentUser as any).under_institution_id ? [(currentUser as any).under_institution_id as number] : []),
+        ])
       );
       const [result, countResult] = await Promise.all([
         db.query(

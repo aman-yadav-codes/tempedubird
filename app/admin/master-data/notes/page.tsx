@@ -1036,12 +1036,17 @@ export default function MasterDataNotesPage() {
             {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
             Refresh
           </Button>
-          {(notesView === "my" || isPlatformAdmin) && (
-            <Button onClick={openCreate}>
-              <Plus className="size-4" />
-              Add Note
-            </Button>
-          )}
+          <Button
+            onClick={() => {
+              if (notesView !== "my") {
+                setNotesView("my");
+              }
+              openCreate();
+            }}
+          >
+            <Plus className="size-4" />
+            Add Note
+          </Button>
         </div>
       </div>
 
@@ -1122,7 +1127,7 @@ export default function MasterDataNotesPage() {
       />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[92vh] overflow-y-auto sm:!max-w-3xl">
+        <DialogContent className="max-h-[92vh] overflow-y-auto max-w-4xl sm:!max-w-4xl w-full">
           <DialogHeader>
             <DialogTitle>{form.id ? "Edit Note Details" : "Add Note Details"}</DialogTitle>
             <DialogDescription>

@@ -53,6 +53,7 @@ type CourseListItem = (typeof featuredCourses)[number] & {
   fee_amount?: any;
   institutionId?: number;
   institution_id?: number;
+  iconUrl?: string | null;
 };
 
 type PublicCourseCategory = {

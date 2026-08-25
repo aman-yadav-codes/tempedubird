@@ -38,15 +38,17 @@ function permissionInstitutionIds(
   permission: string
 ) {
   return Array.from(
-    new Set(
-      (user.memberships ?? [])
+    new Set([
+      ...(user.memberships ?? [])
         .filter(
           (membership) =>
+            isInstitutionAdminUser(user) ||
             membership.permissions.includes("*") ||
             membership.permissions.includes(permission)
         )
-        .map((membership) => membership.institution_id)
-    )
+        .map((membership) => membership.institution_id),
+      ...((user as any).under_institution_id ? [(user as any).under_institution_id as number] : []),
+    ])
   );
 }
 

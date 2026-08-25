@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useAuthStore } from "@/store";
+import { isPlatformAdminUser, isInstitutionAdminUser } from "@/lib/auth/permissions";
 import {
   FolderTree,
   Edit2,
@@ -10,6 +12,7 @@ import {
   BadgeCheck,
   GraduationCap,
   FileText,
+  IdCard,
   Image,
   ArrowRight,
   Sparkles,
@@ -17,6 +20,17 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+
+const INSTITUTION_EXCLUDED_HREFS = new Set([
+  "/admin/content/tree",
+  "/admin/content/categories",
+  "/admin/content/boards",
+  "/admin/content/universities",
+  "/admin/content/certifications",
+  "/admin/content/subjects",
+  "/admin/content/courses",
+  "/admin/content/syllabus",
+]);
 
 const CONTENT_MODULES = [
   {
@@ -84,6 +98,14 @@ const CONTENT_MODULES = [
     color: "from-fuchsia-500/20 to-pink-500/20 text-fuchsia-600 dark:text-fuchsia-400 border-fuchsia-500/30",
   },
   {
+    title: "Card Templates",
+    description: "Design and customize student ID cards, certificates, hall tickets, and document templates.",
+    href: "/admin/content/card-templates",
+    icon: IdCard,
+    badge: "Templates",
+    color: "from-violet-500/20 to-indigo-500/20 text-indigo-600 dark:text-indigo-400 border-indigo-500/30",
+  },
+  {
     title: "Assignments",
     description: "Curriculum assignment templates with objective & subjective questions and rubrics.",
     href: "/admin/content/assignments",
@@ -134,6 +156,12 @@ const CONTENT_MODULES = [
 ];
 
 export default function ContentHubPage() {
+  const { user } = useAuthStore();
+  const isInstitutionAdmin = isInstitutionAdminUser(user) && !isPlatformAdminUser(user);
+  const visibleModules = isInstitutionAdmin
+    ? CONTENT_MODULES.filter((mod) => !INSTITUTION_EXCLUDED_HREFS.has(mod.href))
+    : CONTENT_MODULES;
+
   return (
     <div className="space-y-8 w-full max-w-full">
       {/* Header Banner */}
@@ -145,10 +173,12 @@ export default function ContentHubPage() {
               Content Management Hub
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
-              Content & Master Curriculum
+              {isInstitutionAdmin ? "Campus Content & Curriculum" : "Content & Master Curriculum"}
             </h1>
             <p className="text-sm text-muted-foreground max-w-2xl">
-              Configure course classification trees, educational boards, university affiliations, certification authorities, and subject taxonomies across EduBird.
+              {isInstitutionAdmin
+                ? "Manage curriculum assignments, question banks, practice exams, exams, campus notes, blog articles, and media."
+                : "Configure course classification trees, educational boards, university affiliations, certification authorities, and subject taxonomies across EduBird."}
             </p>
           </div>
         </div>
@@ -156,7 +186,7 @@ export default function ContentHubPage() {
 
       {/* Grid of Content Modules */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {CONTENT_MODULES.map((mod) => {
+        {visibleModules.map((mod) => {
           const Icon = mod.icon;
           return (
             <Link key={mod.href} href={mod.href} className="group">

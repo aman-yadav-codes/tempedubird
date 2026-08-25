@@ -264,6 +264,9 @@ async function runPermissionRegistrySync(db: Queryable) {
   const paymentSettingsPermissionCodes = getManagedPermissionCodes().filter((code) =>
     code.startsWith("settings.payments.")
   );
+  const contentPermissionCodes = getManagedPermissionCodes().filter((code) =>
+    code.startsWith("content.")
+  );
   const blogPermissionCodes = getManagedPermissionCodes().filter((code) =>
     code.startsWith("content.blog.")
   );
@@ -489,6 +492,20 @@ async function runPermissionRegistrySync(db: Queryable) {
       ON CONFLICT DO NOTHING
     `,
     [paymentSettingsPermissionCodes]
+  );
+
+  await db.query(
+    `
+      INSERT INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id
+      FROM roles r
+      INNER JOIN permissions p
+        ON p.code = ANY($1::text[])
+       AND COALESCE(p.is_deleted, FALSE) = FALSE
+      WHERE r.code = 'institution_admin'
+      ON CONFLICT DO NOTHING
+    `,
+    [contentPermissionCodes]
   );
 
   await db.query(

@@ -105,10 +105,9 @@ async function getTargetPermissionModule(userId: number) {
   if (await isStudentUser(userId)) return "managestudents.allstudents";
 
   const roleCodes = await getTargetRoleCodes(userId);
-  for (const roleCode of ["teacher", "driver", "parent"]) {
-    if (roleCodes.includes(roleCode)) {
-      return getStaffPermissionModule(roleCode) ?? "users.allusers";
-    }
+  for (const roleCode of roleCodes) {
+    const staffModule = getStaffPermissionModule(roleCode);
+    if (staffModule) return staffModule;
   }
 
   return "users.allusers";
@@ -179,22 +178,39 @@ async function hasLiveInstitutionPermission(
 
 async function requireTargetUserPermission(req: Request, targetUserId: number) {
   const currentUser = await getAuthenticatedUser(req);
+  if (isPlatformAdminUser(currentUser) || currentUser.id === targetUserId) {
+    return currentUser;
+  }
+
   const permission = await getTargetPermission(req.method, targetUserId);
+  const action = req.method === "DELETE" ? "delete" : req.method === "GET" ? "view" : "edit";
   const targetInstitutionIds = await getUserInstitutionIds(db, targetUserId);
-  const allowed =
+  const currentInstitutionIds = getAllowedInstitutionIds(currentUser);
+
+  const candidateInstitutionIds =
     targetInstitutionIds.length > 0
+      ? targetInstitutionIds.filter((instId) => canAccessInstitution(currentUser, instId))
+      : currentInstitutionIds;
+
+  const allowed =
+    candidateInstitutionIds && candidateInstitutionIds.length > 0
       ? (
           await Promise.all(
-            targetInstitutionIds.map((institutionId) =>
-              hasLiveInstitutionPermission(
-                currentUser,
-                permission,
-                institutionId,
-              ),
+            candidateInstitutionIds.map(async (institutionId) =>
+              (await hasLiveInstitutionPermission(currentUser, permission, institutionId)) ||
+              (await hasLiveInstitutionPermission(currentUser, `managestaff.allstaff.${action}`, institutionId)) ||
+              (await hasLiveInstitutionPermission(currentUser, `managestaff.allstaff.view`, institutionId)) ||
+              hasPermission(currentUser, permission, { institutionId }) ||
+              hasPermission(currentUser, `managestaff.allstaff.${action}`, { institutionId }) ||
+              hasPermission(currentUser, `managestaff.allstaff.view`, { institutionId }) ||
+              hasPermission(currentUser, `users.allusers.${action}`, { institutionId })
             ),
           )
         ).some(Boolean)
-      : hasPermission(currentUser, permission);
+      : hasPermission(currentUser, permission) ||
+        hasPermission(currentUser, `managestaff.allstaff.${action}`) ||
+        hasPermission(currentUser, `managestaff.allstaff.view`) ||
+        hasPermission(currentUser, `users.allusers.${action}`);
 
   if (!allowed) {
     throw new Error("Forbidden: Admin access required");

@@ -18,13 +18,15 @@ export function getAllowedInstitutionIds(user: PermissionUser) {
     return null;
   }
 
-  return Array.from(
-    new Set(
-      (user.memberships ?? [])
-        .map((membership) => membership.institution_id)
-        .filter((id): id is number => Number.isInteger(id) && id > 0),
-    ),
-  );
+  const ids = (user.memberships ?? [])
+    .map((membership) => membership.institution_id)
+    .filter((id): id is number => Number.isInteger(id) && id > 0);
+
+  if (user.under_institution_id && Number.isInteger(user.under_institution_id)) {
+    ids.push(user.under_institution_id);
+  }
+
+  return Array.from(new Set(ids));
 }
 
 export function getRequestedInstitutionId(searchParams: URLSearchParams) {

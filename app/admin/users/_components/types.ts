@@ -84,6 +84,29 @@ export type SalaryComponentForm = {
     id: string;
     label: string;
     amount: string;
+    type?: "EARNING" | "DEDUCTION";
+};
+
+export type CommissionRuleItem = {
+    id: string;
+    condition_trigger: "successful_enrollment" | "lead_generated" | "fee_collected" | "spot_admission" | "course_completion" | "custom" | string;
+    condition_label?: string;
+    reward_type: "PERCENTAGE" | "FIXED_AMOUNT";
+    rate: string;
+    minimum_threshold?: string;
+    payout_frequency?: string;
+    notes?: string;
+};
+
+export type CommissionForm = {
+    enabled?: boolean;
+    commission_type: "PERCENTAGE" | "FIXED_AMOUNT" | "RULES_BASED" | "TIERED" | "NONE";
+    commission_rate: string;
+    commission_trigger: string;
+    minimum_threshold: string;
+    payout_frequency: string;
+    notes: string;
+    rules: CommissionRuleItem[];
 };
 
 export type AddUserForm = {
@@ -105,6 +128,10 @@ export type AddUserForm = {
     designation_id: string;
     designation_name: string;
     gender: string;
+    joining_date?: string;
+    date_of_birth?: string;
+    shift_timing?: string;
+    employment_status?: "ACTIVE" | "PROBATION" | "NOTICE_PERIOD" | "ON_LEAVE" | "RETIRED" | "TERMINATED" | "RESIGNED" | string;
     hourly_charges: string;
     location: PickedLocation | null;
     full_address: string;
@@ -112,9 +139,12 @@ export type AddUserForm = {
     education: EducationForm[];
     certifications: CertificationForm[];
     documents: UserDocumentForm[];
+    salary_frequency?: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
+    salary_notes?: string;
     salary_components: SalaryComponentForm[];
     teaching_categories: string[];
     teaching_subjects: string[];
+    commission?: CommissionForm;
 };
 
 export type TeachingOption = {

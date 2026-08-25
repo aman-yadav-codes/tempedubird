@@ -63,7 +63,11 @@ function canManageStaffAttendance(user: PermissionUser, institutionId: number) {
   return (
     isPlatformFullAccess(user) ||
     isPlatformAdminUser(user) ||
-    (isInstitutionAdminUser(user) && hasPermission(user, "managestaff.attendance.view", { institutionId }))
+    (isInstitutionAdminUser(user) &&
+      (hasPermission(user, "managestaff.attendance.view", { institutionId }) ||
+       hasPermission(user, "managestaff.allstaff.view", { institutionId }))) ||
+    hasPermission(user, "managestaff.attendance.view") ||
+    hasPermission(user, "managestaff.allstaff.view")
   );
 }
 
@@ -139,8 +143,15 @@ async function assertStaffMembership(
   queryable: Queryable,
   userId: number,
   institutionId: number,
-  allowedRoles = ["teacher", "driver"]
+  allowedRoles?: string[]
 ) {
+  const params: unknown[] = [userId, institutionId];
+  let roleCondition = "r.code <> 'student'";
+  if (allowedRoles && allowedRoles.length > 0) {
+    params.push(allowedRoles);
+    roleCondition = `r.code = ANY($${params.length}::text[])`;
+  }
+
   const result = await queryable.query<{ role_code: string }>(
     `
       SELECT r.code AS role_code
@@ -150,12 +161,25 @@ async function assertStaffMembership(
       WHERE im.user_id = $1
         AND im.institution_id = $2
         AND im.is_active = TRUE
-        AND r.code = ANY($3::text[])
+        AND ${roleCondition}
+        AND u.is_active = TRUE
+        AND COALESCE(u.is_deleted, FALSE) = FALSE
+
+      UNION
+
+      SELECT r.code AS role_code
+      FROM user_profiles up
+      INNER JOIN user_roles ur ON ur.user_id = up.user_id
+      INNER JOIN roles r ON r.id = ur.role_id
+      INNER JOIN users u ON u.id = up.user_id
+      WHERE up.user_id = $1
+        AND up.under_institution_id = $2
+        AND ${roleCondition}
         AND u.is_active = TRUE
         AND COALESCE(u.is_deleted, FALSE) = FALSE
       LIMIT 1
     `,
-    [userId, institutionId, allowedRoles]
+    params
   );
 
   if (!result.rows[0]) {
@@ -193,44 +217,94 @@ async function listStaffAttendance(
   const offset = (input.page - 1) * input.limit;
   const countResult = await queryable.query<{ total: number }>(
     `
-      SELECT COUNT(*)::int AS total
-      FROM institution_memberships im
-      INNER JOIN users u ON u.id = im.user_id
-      INNER JOIN roles r ON r.id = im.role_id
-      WHERE im.institution_id = $1
-        AND im.is_active = TRUE
-        AND r.code IN ('teacher', 'driver')
-        AND u.is_active = TRUE
-        AND COALESCE(u.is_deleted, FALSE) = FALSE
+      SELECT COUNT(DISTINCT staff_list.staff_user_id)::int AS total
+      FROM (
+        SELECT im.user_id AS staff_user_id
+        FROM institution_memberships im
+        INNER JOIN users u ON u.id = im.user_id
+        INNER JOIN roles r ON r.id = im.role_id
+        WHERE im.institution_id = $1
+          AND im.is_active = TRUE
+          AND r.code <> 'student'
+          AND u.is_active = TRUE
+          AND COALESCE(u.is_deleted, FALSE) = FALSE
+        UNION
+        SELECT up.user_id AS staff_user_id
+        FROM user_profiles up
+        INNER JOIN users u ON u.id = up.user_id
+        INNER JOIN user_roles ur ON ur.user_id = up.user_id
+        INNER JOIN roles r ON r.id = ur.role_id
+        WHERE up.under_institution_id = $1
+          AND r.code <> 'student'
+          AND u.is_active = TRUE
+          AND COALESCE(u.is_deleted, FALSE) = FALSE
+      ) staff_list
     `,
     [institutionId]
   );
 
   const result = await queryable.query(
     `
+      WITH scoped_staff AS (
+        SELECT
+          im.user_id AS staff_user_id,
+          u.full_name,
+          u.email,
+          r.code AS role_code,
+          r.name AS role_name
+        FROM institution_memberships im
+        INNER JOIN users u ON u.id = im.user_id
+        INNER JOIN roles r ON r.id = im.role_id
+        WHERE im.institution_id = $1
+          AND im.is_active = TRUE
+          AND r.code <> 'student'
+          AND u.is_active = TRUE
+          AND COALESCE(u.is_deleted, FALSE) = FALSE
+
+        UNION
+
+        SELECT
+          up.user_id AS staff_user_id,
+          u.full_name,
+          u.email,
+          r.code AS role_code,
+          r.name AS role_name
+        FROM user_profiles up
+        INNER JOIN users u ON u.id = up.user_id
+        INNER JOIN user_roles ur ON ur.user_id = up.user_id
+        INNER JOIN roles r ON r.id = ur.role_id
+        WHERE up.under_institution_id = $1
+          AND r.code <> 'student'
+          AND u.is_active = TRUE
+          AND COALESCE(u.is_deleted, FALSE) = FALSE
+      ),
+      distinct_staff AS (
+        SELECT DISTINCT ON (staff_user_id)
+          staff_user_id,
+          full_name,
+          email,
+          role_code,
+          role_name
+        FROM scoped_staff
+        ORDER BY staff_user_id, role_code DESC
+      )
       SELECT
-        u.id AS staff_user_id,
-        u.full_name,
-        u.email,
-        r.code AS role_code,
+        ds.staff_user_id,
+        ds.full_name,
+        ds.email,
+        ds.role_code,
+        ds.role_name,
         sa.id AS attendance_id,
         sa.status,
         sa.check_in_time,
         sa.check_out_time,
         COALESCE(sa.remarks, '') AS remarks
-      FROM institution_memberships im
-      INNER JOIN users u ON u.id = im.user_id
-      INNER JOIN roles r ON r.id = im.role_id
+      FROM distinct_staff ds
       LEFT JOIN staff_attendance sa
-        ON sa.institution_id = im.institution_id
-       AND sa.staff_user_id = im.user_id
+        ON sa.institution_id = $1
+       AND sa.staff_user_id = ds.staff_user_id
        AND sa.attendance_date = $2
-      WHERE im.institution_id = $1
-        AND im.is_active = TRUE
-        AND r.code IN ('teacher', 'driver')
-        AND u.is_active = TRUE
-        AND COALESCE(u.is_deleted, FALSE) = FALSE
-      ORDER BY r.code DESC, u.full_name ASC
+      ORDER BY ds.full_name ASC
       LIMIT $3
       OFFSET $4
     `,
@@ -252,7 +326,7 @@ async function listLeaveRequests(queryable: Queryable, institutionId: number, st
         slr.id,
         slr.staff_user_id,
         u.full_name,
-        r.code AS role_code,
+        COALESCE(r.code, 'staff') AS role_code,
         slr.from_date,
         slr.to_date,
         slr.message,
@@ -263,11 +337,11 @@ async function listLeaveRequests(queryable: Queryable, institutionId: number, st
         slr.decided_at
       FROM staff_leave_requests slr
       INNER JOIN users u ON u.id = slr.staff_user_id
-      INNER JOIN institution_memberships im
+      LEFT JOIN institution_memberships im
         ON im.institution_id = slr.institution_id
        AND im.user_id = slr.staff_user_id
        AND im.is_active = TRUE
-      INNER JOIN roles r ON r.id = im.role_id AND r.code IN ('teacher', 'driver')
+      LEFT JOIN roles r ON r.id = im.role_id
       LEFT JOIN users approver ON approver.id = slr.decided_by
       WHERE slr.institution_id = $1
         ${staffFilter}
@@ -320,7 +394,7 @@ async function listAttendanceHistory(
     "sa.institution_id = $1",
     "sa.attendance_date BETWEEN $2 AND $3",
   ];
-  if (input.roleCode === "teacher" || input.roleCode === "driver") {
+  if (input.roleCode && input.roleCode !== "all") {
     params.push(input.roleCode);
     filters.push(`r.code = $${params.length}`);
   }
@@ -334,11 +408,11 @@ async function listAttendanceHistory(
       SELECT COUNT(*)::int AS total
       FROM staff_attendance sa
       INNER JOIN users u ON u.id = sa.staff_user_id
-      INNER JOIN institution_memberships im
+      LEFT JOIN institution_memberships im
         ON im.institution_id = sa.institution_id
        AND im.user_id = sa.staff_user_id
        AND im.is_active = TRUE
-      INNER JOIN roles r ON r.id = im.role_id AND r.code IN ('teacher', 'driver')
+      LEFT JOIN roles r ON r.id = im.role_id
       WHERE ${whereClause}
     `,
     params
@@ -352,7 +426,7 @@ async function listAttendanceHistory(
         sa.staff_user_id,
         u.full_name,
         u.email,
-        r.code AS role_code,
+        COALESCE(r.code, 'staff') AS role_code,
         sa.status,
         sa.check_in_time,
         sa.check_out_time,
@@ -361,11 +435,11 @@ async function listAttendanceHistory(
         sa.updated_at
       FROM staff_attendance sa
       INNER JOIN users u ON u.id = sa.staff_user_id
-      INNER JOIN institution_memberships im
+      LEFT JOIN institution_memberships im
         ON im.institution_id = sa.institution_id
        AND im.user_id = sa.staff_user_id
        AND im.is_active = TRUE
-      INNER JOIN roles r ON r.id = im.role_id AND r.code IN ('teacher', 'driver')
+      LEFT JOIN roles r ON r.id = im.role_id
       LEFT JOIN users marker ON marker.id = sa.marked_by
       WHERE ${whereClause}
       ORDER BY sa.attendance_date DESC, u.full_name ASC

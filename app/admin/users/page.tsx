@@ -409,11 +409,40 @@ export default function UsersPage() {
     }
   }, [accessToken, authHeader, bulkDeleteTargets, canDeleteUsers, fetchUsers, handleAuthError])
 
+  const handleChangeEmploymentStatus = useCallback(
+    async (user: User, status: string) => {
+      if (!accessToken) return;
+      try {
+        const res = await fetch(`/api/admin/users/employment-status`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...authHeader(),
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            employmentStatus: status,
+          }),
+        });
+        const json = await readJsonResponse(res);
+        if (!res.ok) {
+          throw new Error(getApiErrorMessage(json, "Failed to update employment status"));
+        }
+        toast.success(`Employment status changed to ${status.replace("_", " ")}`);
+        fetchUsers();
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err));
+      }
+    },
+    [accessToken, authHeader, fetchUsers]
+  );
+
   const userColumns = useMemo(
     () =>
       buildUserColumns({
         onViewProfile: handleViewProfile,
         onEditUser: handleEditUser,
+        onChangeEmploymentStatus: handleChangeEmploymentStatus,
         onGeneratePassword: (user) => {
           setPasswordUser(user)
           setPasswordDialogOpen(true)
@@ -421,7 +450,7 @@ export default function UsersPage() {
         onRemoveUser: setRemovingUser,
         removalLabel,
       }),
-    [handleEditUser, handleViewProfile, removalLabel]
+    [handleChangeEmploymentStatus, handleEditUser, handleViewProfile, removalLabel]
   )
 
   if (loading && !hasLoadedUsers) {

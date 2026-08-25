@@ -46,7 +46,11 @@ function canManageStaffSalary(user: PermissionUser, institutionId: number) {
   return (
     isPlatformFullAccess(user) ||
     isPlatformAdminUser(user) ||
-    (isInstitutionAdminUser(user) && hasPermission(user, "managestaff.salary.view", { institutionId }))
+    (isInstitutionAdminUser(user) &&
+      (hasPermission(user, "managestaff.salary.view", { institutionId }) ||
+       hasPermission(user, "managestaff.allstaff.view", { institutionId }))) ||
+    hasPermission(user, "managestaff.salary.view") ||
+    hasPermission(user, "managestaff.allstaff.view")
   );
 }
 
@@ -133,6 +137,8 @@ async function ensureAttendanceLookupSchema(queryable: Queryable) {
       salary_month CHAR(7) NOT NULL,
       base_salary NUMERIC(12,2) NOT NULL DEFAULT 0,
       deduction_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+      bonus_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+      manual_deduction NUMERIC(12,2) NOT NULL DEFAULT 0,
       payable_salary NUMERIC(12,2) NOT NULL DEFAULT 0,
       status VARCHAR(20) NOT NULL DEFAULT 'PAID',
       paid_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -143,6 +149,9 @@ async function ensureAttendanceLookupSchema(queryable: Queryable) {
       CONSTRAINT staff_salary_payouts_status_check CHECK (status IN ('PAID')),
       CONSTRAINT uq_staff_salary_payout_month UNIQUE (institution_id, staff_user_id, salary_month)
     );
+
+    ALTER TABLE staff_salary_payouts ADD COLUMN IF NOT EXISTS bonus_amount NUMERIC(12,2) DEFAULT 0;
+    ALTER TABLE staff_salary_payouts ADD COLUMN IF NOT EXISTS manual_deduction NUMERIC(12,2) DEFAULT 0;
 
     CREATE INDEX IF NOT EXISTS idx_staff_salary_payouts_institution_month
       ON staff_salary_payouts (institution_id, salary_month, paid_at DESC);
@@ -171,7 +180,18 @@ async function assertStaffMembership(userId: number, institutionId: number) {
         AND im.institution_id = $2
         AND im.is_active = TRUE
         AND COALESCE(im.is_deleted, FALSE) = FALSE
-        AND r.code IN ('teacher', 'driver')
+        AND r.code <> 'student'
+        AND u.is_active = TRUE
+        AND COALESCE(u.is_deleted, FALSE) = FALSE
+      UNION
+      SELECT 1
+      FROM user_profiles up
+      INNER JOIN user_roles ur ON ur.user_id = up.user_id
+      INNER JOIN roles r ON r.id = ur.role_id
+      INNER JOIN users u ON u.id = up.user_id
+      WHERE up.user_id = $1
+        AND up.under_institution_id = $2
+        AND r.code <> 'student'
         AND u.is_active = TRUE
         AND COALESCE(u.is_deleted, FALSE) = FALSE
       LIMIT 1
@@ -187,15 +207,16 @@ async function listMonthlySalary(institutionId: number, month: string, staffUser
 
   const result = await db.query(
     `
-      WITH staff_scope AS (
-        SELECT DISTINCT
-          u.id AS staff_user_id,
+      WITH raw_staff_scope AS (
+        SELECT
+          im.user_id AS staff_user_id,
           u.full_name,
           u.email,
           r.code AS role_code,
+          r.name AS role_name,
           im.join_date
         FROM institution_memberships im
-        INNER JOIN roles r ON r.id = im.role_id AND r.code IN ('teacher', 'driver')
+        INNER JOIN roles r ON r.id = im.role_id AND r.code <> 'student'
         INNER JOIN users u ON u.id = im.user_id
         WHERE im.institution_id = $1
           AND im.is_active = TRUE
@@ -203,6 +224,35 @@ async function listMonthlySalary(institutionId: number, month: string, staffUser
           AND u.is_active = TRUE
           AND COALESCE(u.is_deleted, FALSE) = FALSE
           ${staffFilter}
+
+        UNION
+
+        SELECT
+          up.user_id AS staff_user_id,
+          u.full_name,
+          u.email,
+          r.code AS role_code,
+          r.name AS role_name,
+          up.joining_date AS join_date
+        FROM user_profiles up
+        INNER JOIN user_roles ur ON ur.user_id = up.user_id
+        INNER JOIN roles r ON r.id = ur.role_id AND r.code <> 'student'
+        INNER JOIN users u ON u.id = up.user_id
+        WHERE up.under_institution_id = $1
+          AND u.is_active = TRUE
+          AND COALESCE(u.is_deleted, FALSE) = FALSE
+          ${staffFilter}
+      ),
+      staff_scope AS (
+        SELECT DISTINCT ON (staff_user_id)
+          staff_user_id,
+          full_name,
+          email,
+          role_code,
+          role_name,
+          join_date
+        FROM raw_staff_scope
+        ORDER BY staff_user_id, role_code DESC
       ),
       month_bounds AS (
         SELECT
@@ -248,10 +298,17 @@ async function listMonthlySalary(institutionId: number, month: string, staffUser
       salary_totals AS (
         SELECT
           ssc.user_id,
-          COALESCE(SUM(ssc.amount), 0)::numeric(12,2) AS base_salary,
+          COALESCE(
+            SUM(CASE WHEN COALESCE(ssc.component_type, 'EARNING') = 'DEDUCTION' THEN -ssc.amount ELSE ssc.amount END),
+            0
+          )::numeric(12,2) AS base_salary,
           COALESCE(
             json_agg(
-              json_build_object('label', ssc.label, 'amount', ssc.amount)
+              json_build_object(
+                'label', ssc.label,
+                'amount', ssc.amount,
+                'type', COALESCE(ssc.component_type, 'EARNING')
+              )
               ORDER BY ssc.sort_order, ssc.id
             ) FILTER (WHERE ssc.id IS NOT NULL),
             '[]'::json
@@ -279,6 +336,9 @@ async function listMonthlySalary(institutionId: number, month: string, staffUser
           ssp.id AS payout_id,
           ssp.status AS payout_status,
           ssp.payable_salary::text AS paid_amount,
+          COALESCE(ssp.bonus_amount, 0)::text AS paid_bonus,
+          COALESCE(ssp.manual_deduction, 0)::text AS paid_manual_deduction,
+          ssp.remarks AS paid_remarks,
           ssp.paid_at,
           payer.full_name AS paid_by_name
         FROM staff_salary_payouts ssp
@@ -295,7 +355,10 @@ async function listMonthlySalary(institutionId: number, month: string, staffUser
                 'salary_month', ssp.salary_month,
                 'base_salary', ssp.base_salary,
                 'deduction_amount', ssp.deduction_amount,
+                'bonus_amount', COALESCE(ssp.bonus_amount, 0),
+                'manual_deduction', COALESCE(ssp.manual_deduction, 0),
                 'payable_salary', ssp.payable_salary,
+                'remarks', ssp.remarks,
                 'status', ssp.status,
                 'paid_at', ssp.paid_at,
                 'paid_by_name', payer.full_name
@@ -334,6 +397,9 @@ async function listMonthlySalary(institutionId: number, month: string, staffUser
         payout_totals.payout_id,
         payout_totals.payout_status,
         payout_totals.paid_amount,
+        payout_totals.paid_bonus,
+        payout_totals.paid_manual_deduction,
+        payout_totals.paid_remarks,
         payout_totals.paid_at,
         payout_totals.paid_by_name,
         COALESCE(payment_history.history, '[]'::json) AS payment_history
@@ -360,6 +426,8 @@ async function listMonthlySalary(institutionId: number, month: string, staffUser
     const perDaySalary = workingDays > 0 ? baseSalary / workingDays : 0;
     const deductionAmount = perDaySalary * deductionDays;
     const payableSalary = perDaySalary * paidDays;
+    const paidBonus = Number(row.paid_bonus || 0);
+    const paidManualDeduction = Number(row.paid_manual_deduction || 0);
 
     return {
       ...row,
@@ -372,6 +440,9 @@ async function listMonthlySalary(institutionId: number, month: string, staffUser
       payout_id: row.payout_id ? Number(row.payout_id) : null,
       payout_status: row.payout_status ?? null,
       paid_amount: row.paid_amount == null ? null : Number(Number(row.paid_amount).toFixed(2)),
+      paid_bonus: Number(paidBonus.toFixed(2)),
+      paid_manual_deduction: Number(paidManualDeduction.toFixed(2)),
+      paid_remarks: row.paid_remarks || "",
     };
   });
 }
@@ -410,23 +481,26 @@ async function listPaidHistory(institutionId: number, month: string, staffUserId
         ssp.staff_user_id,
         u.full_name,
         u.email,
-        r.code AS role_code,
+        COALESCE(r.code, 'staff') AS role_code,
         im.join_date,
         ssp.salary_month,
         ssp.base_salary::text AS base_salary,
         ssp.deduction_amount::text AS deduction_amount,
+        COALESCE(ssp.bonus_amount, 0)::text AS bonus_amount,
+        COALESCE(ssp.manual_deduction, 0)::text AS manual_deduction,
         ssp.payable_salary::text AS payable_salary,
+        ssp.remarks,
         ssp.status,
         ssp.paid_at,
         payer.full_name AS paid_by_name
       FROM staff_salary_payouts ssp
       INNER JOIN users u ON u.id = ssp.staff_user_id
-      INNER JOIN institution_memberships im
+      LEFT JOIN institution_memberships im
         ON im.user_id = ssp.staff_user_id
        AND im.institution_id = ssp.institution_id
        AND im.is_active = TRUE
        AND COALESCE(im.is_deleted, FALSE) = FALSE
-      INNER JOIN roles r ON r.id = im.role_id AND r.code IN ('teacher', 'driver')
+      LEFT JOIN roles r ON r.id = im.role_id
       LEFT JOIN users payer ON payer.id = ssp.paid_by
       WHERE ssp.institution_id = $1
         AND ssp.salary_month = $2
@@ -442,7 +516,10 @@ async function listPaidHistory(institutionId: number, month: string, staffUserId
     staff_user_id: Number(row.staff_user_id),
     base_salary: Number(Number(row.base_salary || 0).toFixed(2)),
     deduction_amount: Number(Number(row.deduction_amount || 0).toFixed(2)),
+    bonus_amount: Number(Number(row.bonus_amount || 0).toFixed(2)),
+    manual_deduction: Number(Number(row.manual_deduction || 0).toFixed(2)),
     payable_salary: Number(Number(row.payable_salary || 0).toFixed(2)),
+    remarks: row.remarks || "",
   }));
 }
 
@@ -530,14 +607,38 @@ export async function POST(req: Request) {
     const staffUserIds = Array.isArray(body.staffUserIds)
       ? body.staffUserIds.map(positive).filter(Boolean)
       : [];
-    const payments: { staffUserId: number; month: string }[] = Array.isArray(body.payments)
+    const payments: {
+      staffUserId: number;
+      month: string;
+      bonusAmount?: number;
+      manualDeduction?: number;
+      customPayableSalary?: number;
+      remarks?: string;
+    }[] = Array.isArray(body.payments)
       ? body.payments
-          .map((payment: { staffUserId?: unknown; month?: unknown }) => ({
+          .map((payment: {
+            staffUserId?: unknown;
+            month?: unknown;
+            bonusAmount?: unknown;
+            manualDeduction?: unknown;
+            customPayableSalary?: unknown;
+            remarks?: unknown;
+          }) => ({
             staffUserId: positive(payment?.staffUserId),
             month: monthValue(payment?.month ?? month),
+            bonusAmount: Math.max(0, Number(payment?.bonusAmount) || 0),
+            manualDeduction: Math.max(0, Number(payment?.manualDeduction) || 0),
+            customPayableSalary: payment?.customPayableSalary != null ? Number(payment?.customPayableSalary) : undefined,
+            remarks: payment?.remarks ? String(payment.remarks).trim() : undefined,
           }))
           .filter((payment) => payment.staffUserId > 0)
-      : staffUserIds.map((staffUserId) => ({ staffUserId, month }));
+      : staffUserIds.map((staffUserId) => ({
+          staffUserId,
+          month,
+          bonusAmount: Math.max(0, Number(body.bonusAmount) || 0),
+          manualDeduction: Math.max(0, Number(body.manualDeduction) || 0),
+          remarks: body.remarks ? String(body.remarks).trim() : undefined,
+        }));
 
     if (!institutionId) throw new Error("Select an institution");
     if (payments.length === 0) throw new Error("Select at least one staff member");
@@ -558,6 +659,15 @@ export async function POST(req: Request) {
         const salaryRows = salaryRowsByMonth.get(payment.month) ?? [];
         const salary = salaryRows.find((row) => Number(row.staff_user_id) === payment.staffUserId);
         if (!salary) continue;
+
+        const bonusAmount = payment.bonusAmount ?? (Math.max(0, Number(body.bonusAmount) || 0));
+        const manualDeduction = payment.manualDeduction ?? (Math.max(0, Number(body.manualDeduction) || 0));
+        const totalDeductions = Number((Number(salary.deduction_amount) + manualDeduction).toFixed(2));
+        const finalPayable = payment.customPayableSalary != null
+          ? Math.max(0, Number(payment.customPayableSalary.toFixed(2)))
+          : Math.max(0, Number((Number(salary.payable_salary) + bonusAmount - manualDeduction).toFixed(2)));
+        const paymentRemarks = payment.remarks || String(body.remarks || "").trim();
+
         await client.query(
           `
             INSERT INTO staff_salary_payouts (
@@ -566,6 +676,8 @@ export async function POST(req: Request) {
               salary_month,
               base_salary,
               deduction_amount,
+              bonus_amount,
+              manual_deduction,
               payable_salary,
               status,
               paid_by,
@@ -573,11 +685,13 @@ export async function POST(req: Request) {
               remarks,
               updated_at
             )
-            VALUES ($1,$2,$3,$4,$5,$6,'PAID',$7,timezone('Asia/Kolkata', NOW()),NULLIF($8, ''),timezone('Asia/Kolkata', NOW()))
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PAID', $9, timezone('Asia/Kolkata', NOW()), NULLIF($10, ''), timezone('Asia/Kolkata', NOW()))
             ON CONFLICT (institution_id, staff_user_id, salary_month)
             DO UPDATE SET
               base_salary = EXCLUDED.base_salary,
               deduction_amount = EXCLUDED.deduction_amount,
+              bonus_amount = EXCLUDED.bonus_amount,
+              manual_deduction = EXCLUDED.manual_deduction,
               payable_salary = EXCLUDED.payable_salary,
               status = 'PAID',
               paid_by = EXCLUDED.paid_by,
@@ -590,10 +704,12 @@ export async function POST(req: Request) {
             payment.staffUserId,
             payment.month,
             salary.base_salary,
-            salary.deduction_amount,
-            salary.payable_salary,
+            totalDeductions,
+            bonusAmount,
+            manualDeduction,
+            finalPayable,
             currentUser.id,
-            String(body.remarks || "").trim(),
+            paymentRemarks,
           ]
         );
       }

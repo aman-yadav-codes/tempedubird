@@ -24,7 +24,7 @@ export const STAFF_TABLE_ROLE_CODES = [
   "platform_admin",
 ] as const
 
-export type StaffRoleFilter = "all" | typeof STAFF_TABLE_ROLE_CODES[number]
+export type StaffRoleFilter = string
 
 export type StaffFilters = {
   search: string
@@ -40,6 +40,7 @@ const defaultStaffFilters: StaffFilters = {
 
 type StaffFiltersDrawerProps = {
   filters: StaffFilters
+  roles?: { id: number; name: string; code?: string | null }[]
   activeCount: number
   onApply: (filters: StaffFilters) => void
   onReset: () => void
@@ -50,7 +51,7 @@ export function getDefaultStaffFilters() {
 }
 
 export function isStaffRoleFilter(value: unknown): value is StaffRoleFilter {
-  return value === "all" || STAFF_TABLE_ROLE_CODES.includes(value as typeof STAFF_TABLE_ROLE_CODES[number])
+  return typeof value === "string" && value.length > 0
 }
 
 export function isStaffFilters(value: unknown): value is StaffFilters {
@@ -65,6 +66,7 @@ export function isStaffFilters(value: unknown): value is StaffFilters {
 
 export function StaffFiltersDrawer({
   filters,
+  roles = [],
   activeCount,
   onApply,
   onReset,
@@ -87,8 +89,10 @@ export function StaffFiltersDrawer({
     <Drawer
       open={open}
       onOpenChange={(nextOpen) => {
-        if (nextOpen) setDraft(filters)
         setOpen(nextOpen)
+        if (nextOpen) {
+          setDraft(filters)
+        }
       }}
       direction="bottom"
     >
@@ -125,12 +129,22 @@ export function StaffFiltersDrawer({
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="All roles" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-60">
                 <SelectItem value="all">All roles</SelectItem>
-                <SelectItem value="institution_admin">Institution Admin</SelectItem>
-                <SelectItem value="teacher">Teacher</SelectItem>
-                <SelectItem value="driver">Driver</SelectItem>
-                <SelectItem value="platform_admin">Platform Admin</SelectItem>
+                {roles.length > 0 ? (
+                  roles.map((r) => (
+                    <SelectItem key={r.id || r.code} value={r.code || String(r.id)}>
+                      {r.name}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <>
+                    <SelectItem value="institution_admin">Institution Admin</SelectItem>
+                    <SelectItem value="teacher">Teacher</SelectItem>
+                    <SelectItem value="driver">Driver</SelectItem>
+                    <SelectItem value="platform_admin">Platform Admin</SelectItem>
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>

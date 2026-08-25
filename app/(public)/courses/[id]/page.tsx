@@ -36,6 +36,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { getPublicCourseById } from "@/lib/api/public-courses";
+import { buildInstituteUrl } from "@/lib/utils/seo-slug";
+import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -98,9 +100,6 @@ function formatFeeAmount(fee: FeeComponent) {
 function compactText(text: string, fallback: string) {
   return text.trim().replace(/\s+/g, " ") || fallback;
 }
-
-import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
-import { buildInstituteUrl } from "@/lib/utils/seo-slug";
 
 export async function generateMetadata({ params }: Props) {
   const { id } = await params;
@@ -216,12 +215,40 @@ export default async function CourseDetailPage({ params }: Props) {
                 )}
               </div>
 
-              <h1 className="text-4xl font-black uppercase tracking-tight text-foreground sm:text-5xl leading-tight">
-                {course.title}
-              </h1>
-              <p className="mt-3 text-base text-muted-foreground">
-                Offered by <span className="font-semibold text-primary">{course.institute}</span>
-              </p>
+              <div className="flex items-start gap-3.5">
+                {course.iconUrl ? (
+                  <div className="size-12 sm:size-14 rounded-xl overflow-hidden border border-border shadow-xs bg-muted/30 shrink-0 flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={course.iconUrl}
+                      alt={course.title}
+                      className="size-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="size-12 sm:size-14 rounded-xl border border-primary/20 bg-primary/10 text-primary shadow-xs shrink-0 flex items-center justify-center">
+                    <GraduationCap className="size-6 sm:size-7 text-primary" />
+                  </div>
+                )}
+                <div>
+                  <h1 className="text-3xl font-black uppercase tracking-tight text-foreground sm:text-4xl md:text-5xl leading-tight">
+                    {course.title}
+                  </h1>
+                  <p className="mt-2 text-base text-muted-foreground">
+                    Offered by{" "}
+                    <Link
+                      href={
+                        (course.institutionId || course.institution_id)
+                          ? buildInstituteUrl(course.institutionId || course.institution_id, course.institute)
+                          : "/institutes"
+                      }
+                      className="font-semibold text-primary hover:underline hover:text-primary/80 transition-colors"
+                    >
+                      {course.institute}
+                    </Link>
+                  </p>
+                </div>
+              </div>
 
               <div className="mt-5 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1.5 text-yellow-400">
@@ -231,12 +258,19 @@ export default async function CourseDetailPage({ params }: Props) {
                 <span className="h-4 w-px bg-border" />
                 <span className="flex items-center gap-1.5">
                   <Users className="h-4 w-4" />
-                  {course.seatsAvailable ? `${course.seatsAvailable} Seats Available` : "2,450 Enrolled"}
+                  {course.seatsAvailable ? `${course.seatsAvailable} Seats Available` : "Admissions Open"}
                 </span>
+                {course.duration ? (
+                  <>
+                    <span className="h-4 w-px bg-border" />
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="h-4 w-4" />
+                      {course.duration}
+                    </span>
+                  </>
+                ) : null}
               </div>
             </section>
-
-            <CourseDetailMedia items={course.images} title={course.title} />
 
             <div className="grid gap-3 rounded-xl border border-border bg-card/80 p-4 sm:grid-cols-2 xl:grid-cols-4">
               <Feature icon={<BookOpen />} title="Engaging Lessons" text="Curriculum designed for learners" />
@@ -248,19 +282,23 @@ export default async function CourseDetailPage({ params }: Props) {
             <section className="space-y-4">
               <h2 className="text-2xl font-semibold text-foreground">About This Program</h2>
               <p className="text-sm leading-7 text-muted-foreground">{aboutText}</p>
-              <div className="space-y-3">
-                {fallbackLearnings.map((item) => (
-                  <div key={item} className="flex gap-3 text-sm text-muted-foreground">
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                    <span>{item}</span>
-                  </div>
-                ))}
-              </div>
             </section>
+
+            {course.images && course.images.length > 0 ? (
+              <section className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-semibold text-foreground">Program Gallery & Media</h2>
+                  <span className="text-xs text-muted-foreground font-medium">
+                    {course.images.length} {course.images.length === 1 ? "File" : "Files"}
+                  </span>
+                </div>
+                <CourseDetailMedia items={course.images} title={course.title} />
+              </section>
+            ) : null}
 
             <section className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-2xl font-semibold text-foreground">Curriculum Details</h2>
+                <h2 className="text-2xl font-semibold text-foreground">What You&apos;ll Learn</h2>
                 <Button variant="outline" size="sm" className="gap-2">
                   View Full Curriculum
                   <ArrowRight className="h-4 w-4" />
@@ -289,18 +327,7 @@ export default async function CourseDetailPage({ params }: Props) {
               </div>
             </section>
 
-            <div className="grid gap-5 lg:grid-cols-3">
-              <Panel title="What You'll Learn">
-                <ul className="space-y-3 text-sm text-muted-foreground">
-                  {fallbackLearnings.map((item) => (
-                    <li key={item} className="flex gap-2">
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </Panel>
-
+            <div className="grid gap-5 md:grid-cols-2">
               <Panel title="Meet Your Instructor">
                 <div className="flex items-center gap-4">
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/15 text-2xl font-bold text-primary">
@@ -522,26 +549,47 @@ function SidebarSummary({
 }) {
   if (!course) return null;
 
-  const languagesText = course.languages && course.languages.length > 0 ? course.languages.join(", ") : "English";
+  const institutionId = course.institutionId || course.institution_id;
+  const instituteUrl = institutionId
+    ? buildInstituteUrl(institutionId, course.institute)
+    : "/institutes";
+
+  const durationText =
+    course.duration && course.duration.trim() && course.duration !== "Flexible"
+      ? course.duration
+      : course.durationValue
+      ? `${course.durationValue} ${course.durationUnit || "Months"}`
+      : "Regular / Flexible";
+
+  const seatsText = course.seatsAvailable
+    ? `${course.seatsAvailable} Seats Available`
+    : "Admissions Open";
+
+  const languagesText =
+    course.languages && course.languages.length > 0
+      ? course.languages.join(", ")
+      : "English, Hindi";
+
   const methodText = course.teachingMethod
-    ? course.teachingMethod.includes("class") || course.teachingMethod.includes("off")
+    ? course.teachingMethod.toLowerCase().includes("class") ||
+      course.teachingMethod.toLowerCase().includes("off")
       ? "Classroom / Offline"
-      : course.teachingMethod.includes("onl")
+      : course.teachingMethod.toLowerCase().includes("onl")
       ? "Online Live"
-      : "Hybrid / Blended"
+      : course.teachingMethod.toLowerCase().includes("hyb")
+      ? "Hybrid / Blended"
+      : course.teachingMethod
     : "Classroom / Offline";
 
   return (
     <Card className="border-border bg-card/95 shadow-md">
       <CardContent className="space-y-5 p-6">
         <div className="space-y-3.5 text-sm">
-          <DetailRow icon={<Clock className="h-4 w-4" />} label="Duration" value={course.duration} />
-          <DetailRow icon={<GraduationCap className="h-4 w-4" />} label="Level / Class" value={course.selectedCategory ?? course.level} />
+          <DetailRow icon={<Clock className="h-4 w-4" />} label="Duration" value={durationText} />
+          <DetailRow icon={<GraduationCap className="h-4 w-4" />} label="Level / Class" value={course.selectedCategory ?? course.level ?? course.title} />
           <DetailRow icon={<Languages className="h-4 w-4" />} label="Language" value={languagesText} />
           <DetailRow icon={<Users className="h-4 w-4" />} label="Teaching Method" value={methodText} />
-          {course.seatsAvailable ? (
-            <DetailRow icon={<Users className="h-4 w-4" />} label="Seats Available" value={`${course.seatsAvailable} Seats`} />
-          ) : null}
+          <DetailRow icon={<Users className="h-4 w-4" />} label="Seats Available" value={seatsText} />
           {(course as any).boardName ? (
             <DetailRow icon={<Award className="h-4 w-4" />} label="Affiliated Board" value={(course as any).boardName} />
           ) : null}
@@ -560,16 +608,21 @@ function SidebarSummary({
         <Separator />
 
         <div className="space-y-3.5 text-sm">
-          <DetailRow icon={<BookOpen className="h-4 w-4" />} label="Category" value={course.category} />
+          <DetailRow icon={<BookOpen className="h-4 w-4" />} label="Category" value={course.category || "Academic Course"} />
           <DetailRow icon={<Award className="h-4 w-4" />} label="Program" value={course.selectedCategory ?? course.title} />
           {course.sections && course.sections.length > 0 ? (
             <DetailRow icon={<Award className="h-4 w-4" />} label="Sections" value={course.sections.join(", ")} />
           ) : null}
+          {course.subjects && course.subjects.length > 0 ? (
+            <DetailRow icon={<BookOpen className="h-4 w-4" />} label="Subjects" value={course.subjects.slice(0, 3).join(", ") + (course.subjects.length > 3 ? ` +${course.subjects.length - 3} more` : "")} />
+          ) : null}
         </div>
 
         <CourseDetailEnrollButton course={course} />
-        <Button variant="outline" className="w-full font-bold" size="lg" data-tracker-trigger="contact">
-          Contact Institute
+        <Button variant="outline" className="w-full font-bold" size="lg" asChild>
+          <Link href={instituteUrl}>
+            View Institute Profile
+          </Link>
         </Button>
         <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
           <ShieldCheck className="h-4 w-4 text-green-500" />

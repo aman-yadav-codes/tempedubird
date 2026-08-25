@@ -843,7 +843,7 @@ export function InstituteCalendarPageContent({
       </section>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl sm:max-w-4xl w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{form.id ? "Edit Calendar Event" : "Add Calendar Event"}</DialogTitle>
             <DialogDescription>
