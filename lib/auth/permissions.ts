@@ -965,7 +965,7 @@ export function getRequestPermission(method: string, url: string) {
 
     const staffPermissionModules = requestedRoleCodes
       .map((roleCode) => getStaffPermissionModule(roleCode))
-      .filter((module): module is string => Boolean(module));
+      .filter((module): module is "managestudents.allstudents" | "managestaff.allstaff" => module !== null);
 
     if (
       requestedRoleCodes.length > 0 &&
