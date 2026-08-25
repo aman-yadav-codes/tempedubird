@@ -13,7 +13,7 @@ import {
   assertRowsWithinInstitutionScope,
 } from "@/lib/auth/institution-scope";
 import { notifyInstitutionModuleUpdated } from "@/lib/notifications/admin-events";
-import { hasPermission, type PermissionUser } from "@/lib/auth/permissions";
+import { hasPermission, isPlatformAdminUser, isInstitutionAdminUser, type PermissionUser } from "@/lib/auth/permissions";
 
 const PROGRAM_LOOKUP_PERMISSIONS = [
   "institution.programs.view",
