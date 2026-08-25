@@ -178,7 +178,28 @@ function getUserDocumentName(url?: string | null) {
     }
 }
 
-export function getInitialForm(user?: AdminUserDetails | null): AddUserForm {
+export function getInitialForm(
+    roles?: RoleOption[],
+    user?: AdminUserDetails | null
+): AddUserForm;
+export function getInitialForm(
+    user?: AdminUserDetails | null
+): AddUserForm;
+export function getInitialForm(
+    rolesOrUser?: RoleOption[] | AdminUserDetails | null,
+    maybeUser?: AdminUserDetails | null
+): AddUserForm {
+    const roles: RoleOption[] = Array.isArray(rolesOrUser) ? rolesOrUser : [];
+    const user: AdminUserDetails | null | undefined = Array.isArray(rolesOrUser)
+        ? maybeUser
+        : (rolesOrUser as AdminUserDetails | null | undefined);
+
+    const defaultRole =
+        roles.find((role) => role.code === "guest") ??
+        roles.find((role) => role.code === "platform_admin") ??
+        roles[0];
+
+    const institutions = user?.institutions ?? [];
     const experiences = user?.experiences ?? [];
     const education = user?.education ?? [];
     const certifications = user?.certifications ?? [];
@@ -192,17 +213,27 @@ export function getInitialForm(user?: AdminUserDetails | null): AddUserForm {
         email: asString(user?.email),
         phone: asString(user?.phone),
         avatar_url: asString(user?.avatar_url),
-        role_id: user?.roles?.[0]?.id ? String(user.roles[0].id) : "",
+        role_id: user
+            ? user.roles?.[0]?.id
+                ? String(user.roles[0].id)
+                : (user as any)?.role_id
+                    ? String((user as any).role_id)
+                    : ""
+            : defaultRole
+                ? String(defaultRole.id)
+                : "",
         is_active: user?.is_active ?? true,
         is_verified: user?.is_verified ?? false,
         is_profile_complete: user?.is_profile_complete ?? false,
-        is_marketplace_enabled: user?.profile?.is_marketplace_enabled ?? false,
+        is_marketplace_enabled: (user as any)?.is_marketplace_enabled ?? user?.profile?.is_marketplace_enabled ?? false,
         about: user?.profile?.about ?? "",
         is_teacher: user?.profile?.is_teacher ?? false,
         teacher_type: user?.profile?.teacher_type ?? "",
         under_institution_id: user?.profile?.under_institution_id ? String(user.profile.under_institution_id) : "",
         under_institution_name: asString(user?.profile?.under_institution_name),
-        institution_ids: (user?.profile?.institution_ids ?? []).map(String),
+        institution_ids: institutions.length > 0
+            ? institutions.map((institution) => String(institution.id))
+            : (user?.profile?.institution_ids ?? []).map(String),
         designation_id: user?.profile?.designation_id ? String(user.profile.designation_id) : "",
         designation_name: asString(user?.profile?.designation_name),
         gender: user?.profile?.gender ?? NO_GENDER,
@@ -211,12 +242,13 @@ export function getInitialForm(user?: AdminUserDetails | null): AddUserForm {
         shift_timing: (user?.profile as any)?.shift_timing ? String((user?.profile as any)?.shift_timing) : "09:00 AM - 05:00 PM (General Shift)",
         employment_status: (user?.profile as any)?.employment_status ? String((user?.profile as any)?.employment_status) : "ACTIVE",
         hourly_charges: user?.profile?.hourly_charges ? String(user.profile.hourly_charges) : "",
-        location: user?.location ?? null,
-        full_address: user?.location?.formatted_address ?? "",
+        location: normalizeLocation(user?.location ?? null),
+        full_address: user?.location?.full_address ?? user?.location?.formatted_address ?? "",
         experiences:
             experiences.length > 0
                 ? experiences.map((experience) => ({
                     id: String(experience.id),
+                    company_id: (experience as any).company_id ? String((experience as any).company_id) : "",
                     company_name: asString(experience.company_name),
                     job_title: asString(experience.job_title),
                     from_month: asString(experience.from_month),
@@ -271,12 +303,13 @@ export function getInitialForm(user?: AdminUserDetails | null): AddUserForm {
                     id: String(component.id),
                     label: component.label ?? "",
                     amount: component.amount ? String(component.amount) : "",
-                    type: component.label?.toLowerCase().includes("deduction") ||
+                    type: component.type ?? (
+                          component.label?.toLowerCase().includes("deduction") ||
                           component.label?.toLowerCase().includes("pf") ||
                           component.label?.toLowerCase().includes("tax") ||
                           component.label?.toLowerCase().includes("esi")
                         ? "DEDUCTION"
-                        : "EARNING",
+                        : "EARNING"),
                 }))
                 : [
                     blankSalaryComponent("Basic Pay", "", "EARNING"),
