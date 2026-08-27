@@ -8,6 +8,9 @@ export type MarketingPackageRow = {
   package_for_types: string[];
   price: number;
   price_unit: string;
+  price_monthly: number | null;
+  price_yearly: number | null;
+  price_once: number | null;
   storage_limit_gb: number | null;
   validity_count: number;
   validity_unit: string;
@@ -57,6 +60,9 @@ export async function listMarketingPackages(options?: {
         COALESCE(package_for_types, '[]'::jsonb) AS package_for_types,
         CAST(price AS DOUBLE PRECISION) AS price,
         price_unit,
+        CAST(price_monthly AS DOUBLE PRECISION) AS price_monthly,
+        CAST(price_yearly  AS DOUBLE PRECISION) AS price_yearly,
+        CAST(price_once    AS DOUBLE PRECISION) AS price_once,
         CAST(storage_limit_gb AS DOUBLE PRECISION) AS storage_limit_gb,
         validity_count,
         validity_unit,
@@ -81,6 +87,9 @@ export async function createMarketingPackage(input: {
   packageForTypes?: string[];
   price: number;
   priceUnit?: string;
+  priceMonthly?: number | null;
+  priceYearly?: number | null;
+  priceOnce?: number | null;
   storageLimitGb?: number | null;
   validityCount?: number;
   validityUnit?: string;
@@ -93,13 +102,16 @@ export async function createMarketingPackage(input: {
     `
       INSERT INTO sales_packages (
         name, package_for, package_for_types, price, price_unit,
+        price_monthly, price_yearly, price_once,
         storage_limit_gb, validity_count, validity_unit, description, is_active
       )
-      VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10)
+      VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING 
         id, name, package_for, package_for_types,
-        CAST(price AS DOUBLE PRECISION) AS price,
-        price_unit,
+        CAST(price AS DOUBLE PRECISION) AS price, price_unit,
+        CAST(price_monthly AS DOUBLE PRECISION) AS price_monthly,
+        CAST(price_yearly  AS DOUBLE PRECISION) AS price_yearly,
+        CAST(price_once    AS DOUBLE PRECISION) AS price_once,
         CAST(storage_limit_gb AS DOUBLE PRECISION) AS storage_limit_gb,
         validity_count, validity_unit, description, is_active, created_at, updated_at
     `,
@@ -109,6 +121,9 @@ export async function createMarketingPackage(input: {
       JSON.stringify(input.packageForTypes || []),
       input.price || 0,
       input.priceUnit || "month",
+      input.priceMonthly ?? null,
+      input.priceYearly  ?? null,
+      input.priceOnce    ?? null,
       input.storageLimitGb ?? null,
       input.validityCount || 1,
       input.validityUnit || "month",
@@ -128,6 +143,9 @@ export async function updateMarketingPackage(
     packageForTypes?: string[];
     price?: number;
     priceUnit?: string;
+    priceMonthly?: number | null;
+    priceYearly?: number | null;
+    priceOnce?: number | null;
     storageLimitGb?: number | null;
     validityCount?: number;
     validityUnit?: string;
@@ -141,22 +159,27 @@ export async function updateMarketingPackage(
     `
       UPDATE sales_packages
       SET 
-        name = COALESCE($1, name),
-        package_for = COALESCE($2, package_for),
+        name             = COALESCE($1,  name),
+        package_for      = COALESCE($2,  package_for),
         package_for_types = CASE WHEN $3::jsonb IS NOT NULL THEN $3::jsonb ELSE package_for_types END,
-        price = COALESCE($4, price),
-        price_unit = COALESCE($5, price_unit),
-        storage_limit_gb = $6,
-        validity_count = COALESCE($7, validity_count),
-        validity_unit = COALESCE($8, validity_unit),
-        description = COALESCE($9, description),
-        is_active = COALESCE($10, is_active),
-        updated_at = NOW()
-      WHERE id = $11 AND COALESCE(is_deleted, FALSE) = FALSE
+        price            = COALESCE($4,  price),
+        price_unit       = COALESCE($5,  price_unit),
+        price_monthly    = $6,
+        price_yearly     = $7,
+        price_once       = $8,
+        storage_limit_gb = $9,
+        validity_count   = COALESCE($10, validity_count),
+        validity_unit    = COALESCE($11, validity_unit),
+        description      = COALESCE($12, description),
+        is_active        = COALESCE($13, is_active),
+        updated_at       = NOW()
+      WHERE id = $14 AND COALESCE(is_deleted, FALSE) = FALSE
       RETURNING 
         id, name, package_for, package_for_types,
-        CAST(price AS DOUBLE PRECISION) AS price,
-        price_unit,
+        CAST(price AS DOUBLE PRECISION) AS price, price_unit,
+        CAST(price_monthly AS DOUBLE PRECISION) AS price_monthly,
+        CAST(price_yearly  AS DOUBLE PRECISION) AS price_yearly,
+        CAST(price_once    AS DOUBLE PRECISION) AS price_once,
         CAST(storage_limit_gb AS DOUBLE PRECISION) AS storage_limit_gb,
         validity_count, validity_unit, description, is_active, created_at, updated_at
     `,
@@ -166,6 +189,9 @@ export async function updateMarketingPackage(
       input.packageForTypes ? JSON.stringify(input.packageForTypes) : null,
       input.price !== undefined ? input.price : null,
       input.priceUnit || null,
+      input.priceMonthly !== undefined ? input.priceMonthly : null,
+      input.priceYearly  !== undefined ? input.priceYearly  : null,
+      input.priceOnce    !== undefined ? input.priceOnce    : null,
       input.storageLimitGb !== undefined ? input.storageLimitGb : null,
       input.validityCount || null,
       input.validityUnit || null,

@@ -31,6 +31,7 @@ import {
   Users,
   User,
   Settings,
+  Sparkles,
 } from "lucide-react";
 import { useAuthStore } from "@/store";
 import { clearBrowserSessionData } from "@/lib/auth/clear-browser-session";
@@ -181,6 +182,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
           icon: GraduationCap,
           badge: hasEnrolledCourses ? "Enrolled" : undefined,
         },
+        { label: "My Subscription", href: "/student/subscription", icon: Sparkles },
         { label: "My Enquiries", href: "/student/enquiries", icon: HelpCircle },
         { label: "My Guardians", href: "/student/guardians", icon: Users },
         ...(hasEnrolledCourses

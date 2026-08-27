@@ -67,6 +67,9 @@ export type MarketingPackage = {
   package_for_types: string[];
   price: number;
   price_unit: "month" | "year" | "once" | string;
+  price_monthly: number | null;
+  price_yearly: number | null;
+  price_once: number | null;
   storage_limit_gb: number | null;
   validity_count: number;
   validity_unit: "month" | "year" | "once" | string;
@@ -92,6 +95,12 @@ export type ProgramFee = {
   is_active: boolean;
 };
 
+export const PACKAGE_AUDIENCE_OPTIONS = [
+  { value: "All Institutions", label: "🏢 All Institutions", type: "institution" },
+  { value: "Students", label: "🎓 Students & Learners", type: "student" },
+  { value: "Parents & Guardians", label: "👨‍👩‍👧 Parents & Guardians", type: "parent" },
+];
+
 export default function PricingPackagesPage() {
   const { accessToken } = useAuthStore();
   const [activeTab, setActiveTab] = useState<"platform" | "program">("platform");
@@ -101,18 +110,22 @@ export default function PricingPackagesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [frequencyFilter, setFrequencyFilter] = useState<string>("all");
+  const [audienceFilter, setAudienceFilter] = useState<string>("all");
 
   // Dialog State: Create / Edit Package
   const [packageDialogOpen, setPackageDialogOpen] = useState(false);
   const [editingPackage, setEditingPackage] = useState<MarketingPackage | null>(null);
   const [savingPackage, setSavingPackage] = useState(false);
+  const [selectedAudiencePreset, setSelectedAudiencePreset] = useState("All Institutions");
   const [packageFormData, setPackageFormData] = useState({
     name: "",
     packageFor: "All Institutions",
-    price: "4999",
-    priceUnit: "month", // "month" | "year" | "once"
+    packageForTypes: ["institution"] as string[],
+    priceMonthly: "",
+    priceYearly: "",
+    priceOnce: "",
     validityCount: "1",
-    validityUnit: "month", // "month" | "year" | "once"
+    validityUnit: "month",
     storageLimitGb: "50",
     description: "Unlimited Students Access\nOnline Examination & Results\nLMS & Study Notes\nSMS & WhatsApp Integration\nPriority Support",
     isActive: true,
@@ -171,9 +184,24 @@ export default function PricingPackagesPage() {
       if (frequencyFilter !== "all" && pkg.price_unit !== frequencyFilter) {
         return false;
       }
+      if (audienceFilter !== "all") {
+        const pkgFor = (pkg.package_for || "").toLowerCase();
+        if (audienceFilter === "institution" && !pkgFor.includes("inst") && !pkgFor.includes("school") && !pkgFor.includes("college") && !pkgFor.includes("coach")) {
+          return false;
+        }
+        if (audienceFilter === "student" && !pkgFor.includes("student") && !pkgFor.includes("learn")) {
+          return false;
+        }
+        if (audienceFilter === "teacher" && !pkgFor.includes("teach") && !pkgFor.includes("tutor") && !pkgFor.includes("facult")) {
+          return false;
+        }
+        if (audienceFilter === "parent" && !pkgFor.includes("parent") && !pkgFor.includes("guard")) {
+          return false;
+        }
+      }
       return true;
     });
-  }, [packages, frequencyFilter]);
+  }, [packages, frequencyFilter, audienceFilter]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -188,11 +216,14 @@ export default function PricingPackagesPage() {
   // Open Create Modal
   const handleOpenCreatePackage = () => {
     setEditingPackage(null);
+    setSelectedAudiencePreset("All Institutions");
     setPackageFormData({
       name: "",
       packageFor: "All Institutions",
-      price: "4999",
-      priceUnit: "month",
+      packageForTypes: ["institution"],
+      priceMonthly: "",
+      priceYearly: "",
+      priceOnce: "",
       validityCount: "1",
       validityUnit: "month",
       storageLimitGb: "50",
@@ -205,11 +236,16 @@ export default function PricingPackagesPage() {
   // Open Edit Modal
   const handleOpenEditPackage = (pkg: MarketingPackage) => {
     setEditingPackage(pkg);
+    const existingVal = pkg.package_for || "All Institutions";
+    const matchedPreset = PACKAGE_AUDIENCE_OPTIONS.find((opt) => opt.value.toLowerCase() === existingVal.toLowerCase());
+    setSelectedAudiencePreset(matchedPreset ? matchedPreset.value : "Custom");
     setPackageFormData({
       name: pkg.name,
-      packageFor: pkg.package_for || "All Institutions",
-      price: String(pkg.price),
-      priceUnit: pkg.price_unit || "month",
+      packageFor: existingVal,
+      packageForTypes: Array.isArray(pkg.package_for_types) ? pkg.package_for_types : [],
+      priceMonthly: pkg.price_monthly != null ? String(pkg.price_monthly) : "",
+      priceYearly:  pkg.price_yearly  != null ? String(pkg.price_yearly)  : "",
+      priceOnce:    pkg.price_once    != null ? String(pkg.price_once)    : "",
       validityCount: String(pkg.validity_count || 1),
       validityUnit: pkg.validity_unit || "month",
       storageLimitGb: pkg.storage_limit_gb ? String(pkg.storage_limit_gb) : "",
@@ -228,11 +264,27 @@ export default function PricingPackagesPage() {
 
     setSavingPackage(true);
     try {
+      const pm = packageFormData.priceMonthly ? parseFloat(packageFormData.priceMonthly) : null;
+      const py = packageFormData.priceYearly  ? parseFloat(packageFormData.priceYearly)  : null;
+      const po = packageFormData.priceOnce    ? parseFloat(packageFormData.priceOnce)    : null;
+
+      if (pm === null && py === null && po === null) {
+        return toast.error("Enter at least one price (monthly, yearly, or one-time)");
+      }
+
+      // primary price = first non-null; priceUnit reflects that period
+      const primaryPrice = pm ?? py ?? po ?? 0;
+      const primaryUnit  = pm != null ? "month" : py != null ? "year" : "once";
+
       const payload = {
         name: packageFormData.name.trim(),
         packageFor: packageFormData.packageFor.trim(),
-        price: parseFloat(packageFormData.price) || 0,
-        priceUnit: packageFormData.priceUnit,
+        packageForTypes: packageFormData.packageForTypes,
+        price: primaryPrice,
+        priceUnit: primaryUnit,
+        priceMonthly: pm,
+        priceYearly:  py,
+        priceOnce:    po,
         validityCount: parseInt(packageFormData.validityCount, 10) || 1,
         validityUnit: packageFormData.validityUnit,
         storageLimitGb: packageFormData.storageLimitGb ? parseFloat(packageFormData.storageLimitGb) : null,
@@ -471,8 +523,8 @@ export default function PricingPackagesPage() {
             </div>
           </div>
 
-          {/* Search & Frequency Filter Bar */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-muted/20 p-3 rounded-2xl border border-border/80">
+          {/* Search & Frequency / Audience Filter Bar */}
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-muted/20 p-3 rounded-2xl border border-border/80">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -483,21 +535,41 @@ export default function PricingPackagesPage() {
               />
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
-                <SlidersHorizontal className="h-3.5 w-3.5" /> Billing:
-              </span>
-              <Select value={frequencyFilter} onValueChange={setFrequencyFilter}>
-                <SelectTrigger className="h-9 w-40 text-xs bg-background font-semibold">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Frequencies</SelectItem>
-                  <SelectItem value="month">Monthly Only</SelectItem>
-                  <SelectItem value="year">Yearly Only</SelectItem>
-                  <SelectItem value="once">One-Time Only</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                  Audience:
+                </span>
+                <Select value={audienceFilter} onValueChange={setAudienceFilter}>
+                  <SelectTrigger className="h-9 w-36 text-xs bg-background font-semibold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Audiences</SelectItem>
+                    <SelectItem value="institution">Institutions</SelectItem>
+                    <SelectItem value="student">Students</SelectItem>
+                    <SelectItem value="teacher">Teachers</SelectItem>
+                    <SelectItem value="parent">Parents</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                  <SlidersHorizontal className="h-3.5 w-3.5" /> Billing:
+                </span>
+                <Select value={frequencyFilter} onValueChange={setFrequencyFilter}>
+                  <SelectTrigger className="h-9 w-36 text-xs bg-background font-semibold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Frequencies</SelectItem>
+                    <SelectItem value="month">Monthly Only</SelectItem>
+                    <SelectItem value="year">Yearly Only</SelectItem>
+                    <SelectItem value="once">One-Time Only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
@@ -749,68 +821,97 @@ export default function PricingPackagesPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div className="space-y-1.5">
-                <Label htmlFor="pkg-for" className="text-xs font-bold">Package For (Audience)</Label>
-                <Input
-                  id="pkg-for"
-                  placeholder="e.g. Schools, Colleges, Coaching..."
-                  value={packageFormData.packageFor}
-                  onChange={(e) => setPackageFormData({ ...packageFormData, packageFor: e.target.value })}
-                  className="h-10 text-xs font-semibold"
-                />
-              </div>
-
-              {/* Billing Basis (Monthly, Yearly, One-Time) */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold">Billing Frequency *</Label>
+                <Label htmlFor="pkg-for" className="text-xs font-bold">Package For (Audience / User Type) *</Label>
                 <Select
-                  value={packageFormData.priceUnit}
+                  value={selectedAudiencePreset}
                   onValueChange={(val) => {
-                    setPackageFormData({
-                      ...packageFormData,
-                      priceUnit: val,
-                      validityUnit: val === "once" ? "year" : val,
-                    });
+                    setSelectedAudiencePreset(val);
+                    if (val !== "Custom") {
+                      const matched = PACKAGE_AUDIENCE_OPTIONS.find((opt) => opt.value === val);
+                      setPackageFormData({
+                        ...packageFormData,
+                        packageFor: val,
+                        packageForTypes: matched?.type ? [matched.type] : [],
+                      });
+                    }
                   }}
                 >
                   <SelectTrigger className="h-10 text-xs font-semibold">
-                    <SelectValue />
+                    <SelectValue placeholder="Select target user type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="month">Monthly (Per Month)</SelectItem>
-                    <SelectItem value="year">Yearly (Per Year)</SelectItem>
-                    <SelectItem value="once">One-Time (Lifetime)</SelectItem>
+                    {PACKAGE_AUDIENCE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                        {opt.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Multi-Pricing: Monthly / Yearly / One-Time */}
+              <div className="space-y-2">
+                <Label className="text-xs font-bold">Pricing (set any or all billing periods)</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="pkg-price-monthly" className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                      <span className="inline-block w-2 h-2 rounded-full bg-blue-500" /> Monthly (₹/mo)
+                    </Label>
+                    <Input
+                      id="pkg-price-monthly"
+                      type="number"
+                      min="0"
+                      placeholder="e.g. 2999"
+                      value={packageFormData.priceMonthly}
+                      onChange={(e) => setPackageFormData({ ...packageFormData, priceMonthly: e.target.value })}
+                      className="h-10 text-xs font-semibold"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="pkg-price-yearly" className="text-[11px] font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                      <span className="inline-block w-2 h-2 rounded-full bg-purple-500" /> Yearly (₹/yr)
+                    </Label>
+                    <Input
+                      id="pkg-price-yearly"
+                      type="number"
+                      min="0"
+                      placeholder="e.g. 24999"
+                      value={packageFormData.priceYearly}
+                      onChange={(e) => setPackageFormData({ ...packageFormData, priceYearly: e.target.value })}
+                      className="h-10 text-xs font-semibold"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="pkg-price-once" className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" /> One-Time (₹)
+                    </Label>
+                    <Input
+                      id="pkg-price-once"
+                      type="number"
+                      min="0"
+                      placeholder="e.g. 49999"
+                      value={packageFormData.priceOnce}
+                      onChange={(e) => setPackageFormData({ ...packageFormData, priceOnce: e.target.value })}
+                      className="h-10 text-xs font-semibold"
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Leave blank to hide that billing option. At least one price is required.</p>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3.5">
-              <div className="space-y-1.5">
-                <Label htmlFor="pkg-price" className="text-xs font-bold">Price (₹ INR) *</Label>
-                <Input
-                  id="pkg-price"
-                  type="number"
-                  placeholder="4999"
-                  value={packageFormData.price}
-                  onChange={(e) => setPackageFormData({ ...packageFormData, price: e.target.value })}
-                  required
-                  className="h-10 text-xs font-semibold"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="pkg-storage" className="text-xs font-bold">Storage Limit (GB)</Label>
-                <Input
-                  id="pkg-storage"
-                  type="number"
-                  placeholder="50 (or leave blank for unlimited)"
-                  value={packageFormData.storageLimitGb}
-                  onChange={(e) => setPackageFormData({ ...packageFormData, storageLimitGb: e.target.value })}
-                  className="h-10 text-xs font-semibold"
-                />
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="pkg-storage" className="text-xs font-bold">Storage Limit (GB)</Label>
+              <Input
+                id="pkg-storage"
+                type="number"
+                placeholder="50 (or leave blank for unlimited)"
+                value={packageFormData.storageLimitGb}
+                onChange={(e) => setPackageFormData({ ...packageFormData, storageLimitGb: e.target.value })}
+                className="h-10 text-xs font-semibold"
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3.5">

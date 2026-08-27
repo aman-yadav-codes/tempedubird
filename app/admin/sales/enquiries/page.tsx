@@ -5,6 +5,7 @@ import { ColumnDef, PaginationState } from "@tanstack/react-table";
 import {
     ArrowUpDown,
     BookOpen,
+    Building2,
     Calendar,
     CheckCircle2,
     Clock,
@@ -433,12 +434,27 @@ export default function SalesEnquiriesPage() {
         },
         {
             accessorKey: "source",
-            header: "Source",
-            cell: ({ row }) => (
-                <Badge variant="secondary" className="font-normal">
-                    {row.original.source}
-                </Badge>
-            ),
+            header: "Origin / Source",
+            cell: ({ row }) => {
+                const src = row.original.source || "EduBird Platform";
+                const isEdubird = src.toLowerCase().includes("edubird");
+                const isInstWeb = src.toLowerCase().includes("institution");
+                return (
+                    <Badge
+                        variant="outline"
+                        className={`font-semibold text-[11px] py-0.5 px-2 flex items-center gap-1 w-fit ${
+                            isEdubird
+                                ? "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800"
+                                : isInstWeb
+                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                                : "bg-muted text-muted-foreground"
+                        }`}
+                    >
+                        {isEdubird ? <Globe className="w-3 h-3 text-purple-600" /> : isInstWeb ? <Building2 className="w-3 h-3 text-emerald-600" /> : null}
+                        {src}
+                    </Badge>
+                );
+            },
         },
         {
             accessorKey: "status",

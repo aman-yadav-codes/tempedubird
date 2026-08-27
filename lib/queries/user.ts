@@ -45,7 +45,20 @@ async function ensureUserProfileCompleteSchema(db: Queryable) {
         ADD COLUMN IF NOT EXISTS joining_date DATE,
         ADD COLUMN IF NOT EXISTS date_of_birth DATE,
         ADD COLUMN IF NOT EXISTS shift_timing VARCHAR(100),
-        ADD COLUMN IF NOT EXISTS employment_status VARCHAR(50) DEFAULT 'ACTIVE'
+        ADD COLUMN IF NOT EXISTS employment_status VARCHAR(50) DEFAULT 'ACTIVE',
+        ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS bank_name VARCHAR(120),
+        ADD COLUMN IF NOT EXISTS account_holder_name VARCHAR(150),
+        ADD COLUMN IF NOT EXISTS account_number VARCHAR(60),
+        ADD COLUMN IF NOT EXISTS ifsc_code VARCHAR(30),
+        ADD COLUMN IF NOT EXISTS branch_name VARCHAR(120),
+        ADD COLUMN IF NOT EXISTS account_type VARCHAR(30),
+        ADD COLUMN IF NOT EXISTS upi_id VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS pan_number VARCHAR(30),
+        ADD COLUMN IF NOT EXISTS uan_number VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS esi_number VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS salary_frequency VARCHAR(30),
+        ADD COLUMN IF NOT EXISTS salary_notes TEXT
       `);
     })().catch((error) => {
       userProfileCompleteSchemaReady = null;
@@ -954,7 +967,14 @@ export const insertUserRole = async (db: Queryable, userId: number, roleId: numb
   );
 };
 
-export const listRolesQuery = async (db: Queryable) => {
+export const listRolesQuery = async (db: Queryable, institutionId?: number | null) => {
+  const params: unknown[] = [];
+  let institutionFilter = "r.institution_id IS NULL";
+  if (institutionId) {
+    params.push(institutionId);
+    institutionFilter = `(r.institution_id IS NULL OR r.institution_id = $${params.length})`;
+  }
+
   const result = await db.query<RoleRow>(`
     SELECT
       r.id,
@@ -964,8 +984,9 @@ export const listRolesQuery = async (db: Queryable) => {
     FROM roles r
     LEFT JOIN scope_types st ON st.id = r.scope_id
     WHERE COALESCE(r.is_deleted, FALSE) = FALSE
-    ORDER BY st.code ASC NULLS LAST, r.name ASC
-  `);
+      AND ${institutionFilter}
+    ORDER BY st.code ASC NULLS LAST, (r.institution_id IS NOT NULL) ASC, r.name ASC
+  `, params);
 
   return result.rows;
 };
@@ -1526,9 +1547,22 @@ export const createAdminUserWithDetails = async (
           joining_date,
           date_of_birth,
           shift_timing,
-          employment_status
+          employment_status,
+          payment_mode,
+          bank_name,
+          account_holder_name,
+          account_number,
+          ifsc_code,
+          branch_name,
+          account_type,
+          upi_id,
+          pan_number,
+          uan_number,
+          esi_number,
+          salary_frequency,
+          salary_notes
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
         ON CONFLICT (user_id) DO UPDATE SET
           about = COALESCE(EXCLUDED.about, user_profiles.about),
           gender = COALESCE(EXCLUDED.gender, user_profiles.gender),
@@ -1540,7 +1574,20 @@ export const createAdminUserWithDetails = async (
           joining_date = COALESCE(EXCLUDED.joining_date, user_profiles.joining_date),
           date_of_birth = COALESCE(EXCLUDED.date_of_birth, user_profiles.date_of_birth),
           shift_timing = COALESCE(EXCLUDED.shift_timing, user_profiles.shift_timing),
-          employment_status = COALESCE(EXCLUDED.employment_status, user_profiles.employment_status)
+          employment_status = COALESCE(EXCLUDED.employment_status, user_profiles.employment_status),
+          payment_mode = COALESCE(EXCLUDED.payment_mode, user_profiles.payment_mode),
+          bank_name = COALESCE(EXCLUDED.bank_name, user_profiles.bank_name),
+          account_holder_name = COALESCE(EXCLUDED.account_holder_name, user_profiles.account_holder_name),
+          account_number = COALESCE(EXCLUDED.account_number, user_profiles.account_number),
+          ifsc_code = COALESCE(EXCLUDED.ifsc_code, user_profiles.ifsc_code),
+          branch_name = COALESCE(EXCLUDED.branch_name, user_profiles.branch_name),
+          account_type = COALESCE(EXCLUDED.account_type, user_profiles.account_type),
+          upi_id = COALESCE(EXCLUDED.upi_id, user_profiles.upi_id),
+          pan_number = COALESCE(EXCLUDED.pan_number, user_profiles.pan_number),
+          uan_number = COALESCE(EXCLUDED.uan_number, user_profiles.uan_number),
+          esi_number = COALESCE(EXCLUDED.esi_number, user_profiles.esi_number),
+          salary_frequency = COALESCE(EXCLUDED.salary_frequency, user_profiles.salary_frequency),
+          salary_notes = COALESCE(EXCLUDED.salary_notes, user_profiles.salary_notes)
       `,
       [
         user.id,
@@ -1555,6 +1602,19 @@ export const createAdminUserWithDetails = async (
         data.profile.date_of_birth ? new Date(data.profile.date_of_birth) : null,
         data.profile.shift_timing ?? null,
         (data.profile as any).employment_status || "ACTIVE",
+        (data as any).salary_account?.payment_mode ?? (data.profile as any)?.payment_mode ?? null,
+        (data as any).salary_account?.bank_name ?? (data.profile as any)?.bank_name ?? null,
+        (data as any).salary_account?.account_holder_name ?? (data.profile as any)?.account_holder_name ?? null,
+        (data as any).salary_account?.account_number ?? (data.profile as any)?.account_number ?? null,
+        (data as any).salary_account?.ifsc_code ?? (data.profile as any)?.ifsc_code ?? null,
+        (data as any).salary_account?.branch_name ?? (data.profile as any)?.branch_name ?? null,
+        (data as any).salary_account?.account_type ?? (data.profile as any)?.account_type ?? null,
+        (data as any).salary_account?.upi_id ?? (data.profile as any)?.upi_id ?? null,
+        (data as any).salary_account?.pan_number ?? (data.profile as any)?.pan_number ?? null,
+        (data as any).salary_account?.uan_number ?? (data.profile as any)?.uan_number ?? null,
+        (data as any).salary_account?.esi_number ?? (data.profile as any)?.esi_number ?? null,
+        (data as any).salary_frequency ?? (data.profile as any)?.salary_frequency ?? "MONTHLY",
+        (data as any).salary_notes ?? (data.profile as any)?.salary_notes ?? null,
       ]
     );
 
@@ -1789,6 +1849,19 @@ export const getAdminUserDetails = async (
           up.date_of_birth,
           up.shift_timing,
           COALESCE(up.employment_status, 'ACTIVE') AS employment_status,
+          up.payment_mode,
+          up.bank_name,
+          up.account_holder_name,
+          up.account_number,
+          up.ifsc_code,
+          up.branch_name,
+          up.account_type,
+          up.upi_id,
+          up.pan_number,
+          up.uan_number,
+          up.esi_number,
+          COALESCE(up.salary_frequency, 'MONTHLY') AS salary_frequency,
+          up.salary_notes,
           COALESCE(up.is_teacher, FALSE) AS is_teacher,
           up.teacher_type,
           CASE
@@ -2159,9 +2232,22 @@ export const updateAdminUserWithDetails = async (
           joining_date,
           date_of_birth,
           shift_timing,
-          employment_status
+          employment_status,
+          payment_mode,
+          bank_name,
+          account_holder_name,
+          account_number,
+          ifsc_code,
+          branch_name,
+          account_type,
+          upi_id,
+          pan_number,
+          uan_number,
+          esi_number,
+          salary_frequency,
+          salary_notes
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
         ON CONFLICT (user_id)
         DO UPDATE SET
           about = EXCLUDED.about,
@@ -2175,6 +2261,19 @@ export const updateAdminUserWithDetails = async (
           date_of_birth = EXCLUDED.date_of_birth,
           shift_timing = EXCLUDED.shift_timing,
           employment_status = COALESCE(EXCLUDED.employment_status, user_profiles.employment_status),
+          payment_mode = COALESCE(EXCLUDED.payment_mode, user_profiles.payment_mode),
+          bank_name = COALESCE(EXCLUDED.bank_name, user_profiles.bank_name),
+          account_holder_name = COALESCE(EXCLUDED.account_holder_name, user_profiles.account_holder_name),
+          account_number = COALESCE(EXCLUDED.account_number, user_profiles.account_number),
+          ifsc_code = COALESCE(EXCLUDED.ifsc_code, user_profiles.ifsc_code),
+          branch_name = COALESCE(EXCLUDED.branch_name, user_profiles.branch_name),
+          account_type = COALESCE(EXCLUDED.account_type, user_profiles.account_type),
+          upi_id = COALESCE(EXCLUDED.upi_id, user_profiles.upi_id),
+          pan_number = COALESCE(EXCLUDED.pan_number, user_profiles.pan_number),
+          uan_number = COALESCE(EXCLUDED.uan_number, user_profiles.uan_number),
+          esi_number = COALESCE(EXCLUDED.esi_number, user_profiles.esi_number),
+          salary_frequency = COALESCE(EXCLUDED.salary_frequency, user_profiles.salary_frequency),
+          salary_notes = COALESCE(EXCLUDED.salary_notes, user_profiles.salary_notes),
           updated_at = CURRENT_TIMESTAMP
       `,
       [
@@ -2190,6 +2289,19 @@ export const updateAdminUserWithDetails = async (
         data.profile.date_of_birth ? new Date(data.profile.date_of_birth) : null,
         data.profile.shift_timing ?? null,
         (data.profile as any).employment_status || "ACTIVE",
+        (data as any).salary_account?.payment_mode ?? (data.profile as any)?.payment_mode ?? null,
+        (data as any).salary_account?.bank_name ?? (data.profile as any)?.bank_name ?? null,
+        (data as any).salary_account?.account_holder_name ?? (data.profile as any)?.account_holder_name ?? null,
+        (data as any).salary_account?.account_number ?? (data.profile as any)?.account_number ?? null,
+        (data as any).salary_account?.ifsc_code ?? (data.profile as any)?.ifsc_code ?? null,
+        (data as any).salary_account?.branch_name ?? (data.profile as any)?.branch_name ?? null,
+        (data as any).salary_account?.account_type ?? (data.profile as any)?.account_type ?? null,
+        (data as any).salary_account?.upi_id ?? (data.profile as any)?.upi_id ?? null,
+        (data as any).salary_account?.pan_number ?? (data.profile as any)?.pan_number ?? null,
+        (data as any).salary_account?.uan_number ?? (data.profile as any)?.uan_number ?? null,
+        (data as any).salary_account?.esi_number ?? (data.profile as any)?.esi_number ?? null,
+        (data as any).salary_frequency ?? (data.profile as any)?.salary_frequency ?? "MONTHLY",
+        (data as any).salary_notes ?? (data.profile as any)?.salary_notes ?? null,
       ]
     );
 

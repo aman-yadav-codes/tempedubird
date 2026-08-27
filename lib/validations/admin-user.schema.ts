@@ -58,7 +58,22 @@ const userDocumentSchema = z.object({
 const salaryComponentSchema = z.object({
   label: z.string().trim().min(1, "Salary label is required").max(120).transform(capitalize),
   amount: z.coerce.number().finite().min(0, "Amount must be zero or more"),
+  type: z.string().optional(),
 });
+
+const salaryAccountSchema = z.object({
+  payment_mode: z.string().trim().max(50).optional().nullable(),
+  bank_name: z.string().trim().max(120).optional().nullable(),
+  account_holder_name: z.string().trim().max(150).optional().nullable(),
+  account_number: z.string().trim().max(60).optional().nullable(),
+  ifsc_code: z.string().trim().max(30).optional().nullable(),
+  branch_name: z.string().trim().max(120).optional().nullable(),
+  account_type: z.string().trim().max(30).optional().nullable(),
+  upi_id: z.string().trim().max(100).optional().nullable(),
+  pan_number: z.string().trim().max(30).optional().nullable(),
+  uan_number: z.string().trim().max(50).optional().nullable(),
+  esi_number: z.string().trim().max(50).optional().nullable(),
+}).optional().nullable();
 
 export const adminCreateUserSchema = z.object({
   full_name: z
@@ -192,7 +207,10 @@ export const adminCreateUserSchema = z.object({
     .max(30)
     .default([]),
   documents: z.array(userDocumentSchema).max(50).default([]),
-  salary_components: z.array(salaryComponentSchema).max(30).default([]),
+  salary_components: z.array(salaryComponentSchema.passthrough()).max(30).default([]),
+  salary_account: salaryAccountSchema,
+  salary_frequency: z.string().trim().max(30).optional().nullable(),
+  salary_notes: z.string().trim().max(2000).optional().nullable(),
   teaching_categories: z
     .array(z.coerce.number().int().positive())
     .default([]),

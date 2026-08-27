@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
-import { BadgeDollarSign, Ban, CheckCircle2, Database, Loader2, MoreHorizontal, RefreshCw, Search } from "lucide-react";
+import { BadgeDollarSign, Ban, CheckCircle2, CreditCard, Database, Loader2, MoreHorizontal, RefreshCw, Search } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
@@ -22,6 +22,7 @@ import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { isInstitutionAdminUser, isPlatformAdminUser } from "@/lib/auth/permissions";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store";
+import { DummyRazorpayModal } from "@/components/subscriptions/razorpay-dummy-checkout-modal";
 
 type SubscriptionRow = {
   id: number | null;
@@ -127,6 +128,8 @@ export default function SubscriptionSettingsPage() {
   const [savingPlanId, setSavingPlanId] = useState<number | null>(null);
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [revokingId, setRevokingId] = useState<number | null>(null);
+  const [selectedPlanForPayment, setSelectedPlanForPayment] = useState<PlanRow | null>(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
 
   const canChoosePlan = Boolean(
     !isPlatformAdmin &&
@@ -456,10 +459,30 @@ export default function SubscriptionSettingsPage() {
                     {storageLabel(plan.storage_limit_gb)}
                   </div>
                   {plan.description && <p className="mt-4 line-clamp-3 text-sm text-muted-foreground">{plan.description}</p>}
-                  <Button className="mt-auto w-full" disabled={!canChoosePlan || savingPlanId !== null || active || pending} onClick={() => void choosePlan(plan.id)}>
-                    {savingPlanId === plan.id && <Loader2 className="size-4 animate-spin" />}
-                    {active ? "Current Plan" : pending ? "Waiting Approval" : "Choose Plan"}
-                  </Button>
+                  <div className="mt-auto space-y-2 pt-4">
+                    {!active && !pending && (
+                      <Button
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold gap-1.5"
+                        disabled={!canChoosePlan}
+                        onClick={() => {
+                          setSelectedPlanForPayment(plan);
+                          setPaymentModalOpen(true);
+                        }}
+                      >
+                        <CreditCard className="size-4" />
+                        Pay with Razorpay
+                      </Button>
+                    )}
+                    <Button
+                      variant={active || pending ? "default" : "outline"}
+                      className="w-full"
+                      disabled={!canChoosePlan || savingPlanId !== null || active || pending}
+                      onClick={() => void choosePlan(plan.id)}
+                    >
+                      {savingPlanId === plan.id && <Loader2 className="size-4 animate-spin" />}
+                      {active ? "Current Active Plan" : pending ? "Waiting Approval" : "Request Admin Approval"}
+                    </Button>
+                  </div>
                 </div>
               );
             })}
@@ -470,6 +493,15 @@ export default function SubscriptionSettingsPage() {
               No active plans are available for this institution type yet.
             </div>
           )}
+
+          <DummyRazorpayModal
+            open={paymentModalOpen}
+            onOpenChange={setPaymentModalOpen}
+            packageItem={selectedPlanForPayment}
+            institutionId={requestedInstitutionId}
+            roleTarget="institution_admin"
+            onSuccess={loadSubscriptions}
+          />
         </div>
       )}
     </div>

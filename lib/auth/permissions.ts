@@ -80,8 +80,8 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "managestaff.salary_slips", label: "Salary Slips", description: "staff salary slips", scope: "institution", page: "/admin/staff/salary-slips" },
   { key: "rolespermissions.scopetypes", label: "Scope Types", description: "scope types", scope: "platform", page: "/admin/access-control/scope-types" },
   { key: "rolespermissions.permissions", label: "Permissions", description: "permission codes", scope: "platform", page: "/admin/access-control/permissions" },
-  { key: "rolespermissions.roles", label: "Roles", description: "roles", scope: "platform", page: "/admin/access-control/roles" },
-  { key: "rolespermissions.rolepermissions", label: "Role Permissions", description: "default role permissions", scope: "platform", page: "/admin/access-control/role-permissions" },
+  { key: "rolespermissions.roles", label: "Roles", description: "roles", scope: "institution", page: "/admin/access-control/roles" },
+  { key: "rolespermissions.rolepermissions", label: "Role Permissions", description: "default role permissions", scope: "institution", page: "/admin/access-control/role-permissions" },
   { key: "rolespermissions.institutionmemberships", label: "Institution Memberships", description: "institution memberships", scope: "institution", page: "/admin/access-control/institution-memberships" },
   { key: "rolespermissions.institutionrolepermissions", label: "Institution Role Permissions", description: "institution role permissions", scope: "institution", page: "/admin/access-control/institution-role-permissions" },
   { key: "rolespermissions.personalpermissions", label: "Personal Permissions", description: "user-specific institution permissions", scope: "institution", page: "/admin/access-control/personal-permissions" },
@@ -540,32 +540,8 @@ export function isPermissionAssignableToRole(permission: string, roleCode?: stri
     return roleCode === "platform_admin" || roleScope === "platform";
   }
 
-  if (permissionModule.key === "institution.complaints") {
-    return roleCode === "institution_admin";
-  }
-
-  if (permissionModule.key.startsWith("content.")) {
-    return roleCode === "platform_admin" || roleCode === "institution_admin" || roleCode === "teacher";
-  }
-
-  if (permissionModule.key === "settings.payments") {
-    return roleCode === "platform_admin" || roleCode === "institution_admin" || roleCode === "teacher";
-  }
-
-  if (permissionModule.key === "settings.subscription") {
-    return roleCode === "platform_admin" || roleCode === "institution_admin";
-  }
-
   if (permissionModule.key.startsWith("finance.platform.")) {
     return roleCode === "platform_admin" || roleScope === "platform";
-  }
-
-  if (permissionModule.key.startsWith("finance.")) {
-    return roleCode === "institution_admin";
-  }
-
-  if (permissionModule.key.startsWith("sales.")) {
-    return roleCode === "platform_admin" || roleCode === "institution_admin";
   }
 
   const roleOwnedPrefix = permissionModule.key.split(".")[0];
@@ -624,14 +600,6 @@ export function isPermissionAssignableToRole(permission: string, roleCode?: stri
 
   if (roleCode === "parent") {
     return false;
-  }
-
-  if (permissionModule.key === "settings.recycle_bin") {
-    return roleCode === "platform_admin" || roleCode === "institution_admin";
-  }
-
-  if (permissionModule.key === "dashboard") {
-    return roleCode === "platform_admin" || roleCode === "institution_admin";
   }
 
   return true;
@@ -965,7 +933,7 @@ export function getRequestPermission(method: string, url: string) {
 
     const staffPermissionModules = requestedRoleCodes
       .map((roleCode) => getStaffPermissionModule(roleCode))
-      .filter((module): module is "managestudents.allstudents" | "managestaff.allstaff" => module !== null);
+      .filter((module): module is string => Boolean(module));
 
     if (
       requestedRoleCodes.length > 0 &&
@@ -1108,7 +1076,7 @@ export function getPageViewPermission(pathname: string) {
   return match?.[1] ?? FULL_ACCESS_PERMISSION;
 }
 
-export function getStaffPermissionModule(roleCode: string | null | undefined) {
+export function getStaffPermissionModule(roleCode: string | null | undefined): string | null {
   if (!roleCode) return null;
   const normalized = roleCode.toLowerCase();
   if (normalized === "student") return "managestudents.allstudents";

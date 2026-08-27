@@ -161,11 +161,14 @@ export function PublicNavbar({
     PLATFORM_MARKETPLACE_KEYS.includes(item.key)
   );
 
-  // Institution edition menu: WITHOUT the "Institute" tab, but WITH dynamic record checking!
+  // Institution edition menu: WITHOUT "institutes", "contact", "hostels", "libraries" as standalone items
+  // (Hostel and Library appear under About Us dropdown when added by the institute)
   const institutionCategoryItems = CATEGORY_ITEMS.filter(
     (item) =>
       item.key !== "institutes" &&
       item.key !== "contact" &&
+      item.key !== "hostels" &&
+      item.key !== "libraries" &&
       (!mounted || isCategoryVisible(item.key))
   );
   const effectiveInstitutionItems = institutionCategoryItems;
@@ -298,6 +301,32 @@ export function PublicNavbar({
                       </div>
                     </Link>
                   </DropdownMenuItem>
+
+                  {/* If institute has added Hostel, show under About Us */}
+                  {isCategoryVisible("hostels") && (
+                    <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
+                      <Link href="/hostels" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
+                        <Building2 className="h-4 w-4 text-rose-600 shrink-0" />
+                        <div className="flex flex-col leading-tight">
+                          <span className="font-bold">Hostel Facilities</span>
+                          <span className="text-[10px] text-gray-500 font-normal">Residential campus accommodation</span>
+                        </div>
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+
+                  {/* If institute has added Library, show under About Us */}
+                  {isCategoryVisible("libraries") && (
+                    <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
+                      <Link href="/libraries" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
+                        <Library className="h-4 w-4 text-rose-600 shrink-0" />
+                        <div className="flex flex-col leading-tight">
+                          <span className="font-bold">Library & Resource Center</span>
+                          <span className="text-[10px] text-gray-500 font-normal">Books, journals & reading hall</span>
+                        </div>
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
 
@@ -449,34 +478,36 @@ export function PublicNavbar({
             </Link>
           )}
 
-          {/* Location Dropdown - Icon Only */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex items-center justify-center h-9 w-9 rounded-xl border border-gray-200 bg-white text-gray-800 hover:bg-gray-50 shadow-2xs transition-colors outline-none cursor-pointer"
-                title={selectedLocation}
-                aria-label="Select Location"
-              >
-                <MapPin className="h-4 w-4 text-gray-700" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuLabel className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Select Location
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {LOCATIONS.map((loc) => (
-                <DropdownMenuItem
-                  key={loc}
-                  onClick={() => setSelectedLocation(loc)}
-                  className={cn("cursor-pointer", selectedLocation === loc && "font-semibold text-rose-700")}
+          {/* Location Dropdown - Icon Only (Hidden on Institution Website) */}
+          {!isInstitutionView && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center justify-center h-9 w-9 rounded-xl border border-gray-200 bg-white text-gray-800 hover:bg-gray-50 shadow-2xs transition-colors outline-none cursor-pointer"
+                  title={selectedLocation}
+                  aria-label="Select Location"
                 >
-                  {loc}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  <MapPin className="h-4 w-4 text-gray-700" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuLabel className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Select Location
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {LOCATIONS.map((loc) => (
+                  <DropdownMenuItem
+                    key={loc}
+                    onClick={() => setSelectedLocation(loc)}
+                    className={cn("cursor-pointer", selectedLocation === loc && "font-semibold text-rose-700")}
+                  >
+                    {loc}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           {/* Language Dropdown - Icon Only */}
           <DropdownMenu>

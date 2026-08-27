@@ -565,7 +565,7 @@ export function AddStudentDialog({
   const [internalOpen, setInternalOpen] = useState(false);
   const actualOpen = isControlled ? controlledOpen : internalOpen;
   const [activeStep, setActiveStep] = useState(0);
-  const [form, setForm] = useState<AddUserForm>(() => getInitialForm(roles, user));
+  const [form, setForm] = useState<AddUserForm>(() => getInitialForm(user));
   const [studentRecords, setStudentRecords] = useState<StudentRecordsForm>(() => blankStudentRecords());
   const [savedEnrollments, setSavedEnrollments] = useState<StudentEnrollmentRecord[]>([]);
   const [enrollmentDrafts, setEnrollmentDrafts] = useState<StudentEnrollmentDraft[]>(() => [blankEnrollmentDraft()]);
@@ -1778,7 +1778,7 @@ export function AddStudentDialog({
   };
 
   const getDefaultStudentForm = useCallback(() => {
-    const nextForm = getInitialForm(roles, user);
+    const nextForm = getInitialForm(user);
     if (!isEdit && defaultStudentRole) {
       nextForm.role_id = String(defaultStudentRole.id);
       nextForm.is_teacher = false;
@@ -2425,7 +2425,7 @@ export function AddStudentDialog({
 
   const saveStudentRecords = async (studentUserId: number) => {
     if (!accessToken) return;
-    const res = await fetch(`/api/admin/student-records/${studentUserId}`, {
+    const res = await fetch(`/api/admin/students/${studentUserId}/records`, {
       method: "PUT",
       headers: {
         Authorization: `Bearer ${accessToken}`,

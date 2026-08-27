@@ -463,11 +463,17 @@ const navItems: SidebarItem[] = [
         ],
     },
     {
+        title: "Vendors",
+        url: "/admin/vendors",
+        icon: Briefcase,
+    },
+    {
         title: "Company & Legal",
-        url: "/admin/company?tab=faqs",
+        url: "/admin/company?tab=contact-branches",
         permissionPath: "/admin/company",
         icon: Building2,
         children: [
+            { title: "Contact & Branches", url: "/admin/company?tab=contact-branches", icon: MapPin },
             { title: "FAQs", url: "/admin/company?tab=faqs", icon: HelpCircle },
             { title: "Privacy Policy", url: "/admin/company?tab=privacy-policy", icon: ShieldCheck },
             { title: "Terms & Conditions", url: "/admin/company?tab=terms-and-conditions", icon: FileText },

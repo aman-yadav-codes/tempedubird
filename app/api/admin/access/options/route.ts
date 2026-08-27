@@ -49,6 +49,8 @@ function getOptionQuery(
             r.id,
             r.name,
             r.code,
+            r.institution_id,
+            COALESCE(r.is_system, r.institution_id IS NULL) AS is_system,
             st.code AS scope_code,
             COALESCE(default_permissions.permission_ids, '[]'::jsonb) AS default_permission_ids
           FROM roles r
@@ -61,11 +63,12 @@ function getOptionQuery(
               AND COALESCE(p.is_deleted, FALSE) = FALSE
           ) default_permissions ON TRUE
           WHERE COALESCE(r.is_deleted, FALSE) = FALSE
+            AND ($3::int IS NULL OR r.institution_id IS NULL OR r.institution_id = $3)
             AND ($1 = '' OR r.name ILIKE $2 OR r.code ILIKE $2 OR st.code ILIKE $2)
-          ORDER BY st.code ASC NULLS LAST, r.name ASC
-          LIMIT $3 OFFSET $4
+          ORDER BY st.code ASC NULLS LAST, (r.institution_id IS NOT NULL) ASC, r.name ASC
+          LIMIT $4 OFFSET $5
         `,
-        params: [search, like],
+        params: [search, like, selectedInstitutionId],
       };
     case "institutionRoles":
       return {
@@ -74,6 +77,8 @@ function getOptionQuery(
             r.id,
             r.name,
             r.code,
+            r.institution_id,
+            COALESCE(r.is_system, r.institution_id IS NULL) AS is_system,
             st.code AS scope_code,
             COALESCE(default_permissions.permission_ids, '[]'::jsonb) AS default_permission_ids
           FROM roles r
@@ -87,12 +92,13 @@ function getOptionQuery(
           ) default_permissions ON TRUE
           WHERE st.code = 'institution'
             AND COALESCE(r.is_deleted, FALSE) = FALSE
+            AND ($3::int IS NULL OR r.institution_id IS NULL OR r.institution_id = $3)
             ${membershipOnly ? "AND r.code <> 'institution_admin'" : ""}
             AND ($1 = '' OR r.name ILIKE $2 OR r.code ILIKE $2)
-          ORDER BY r.name ASC
-          LIMIT $3 OFFSET $4
+          ORDER BY (r.institution_id IS NOT NULL) ASC, r.name ASC
+          LIMIT $4 OFFSET $5
         `,
-        params: [search, like],
+        params: [search, like, selectedInstitutionId],
       };
     case "permissions":
       return {

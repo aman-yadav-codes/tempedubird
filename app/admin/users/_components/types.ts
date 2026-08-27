@@ -109,6 +109,20 @@ export type CommissionForm = {
     rules: CommissionRuleItem[];
 };
 
+export type SalaryAccountDetails = {
+    payment_mode?: "BANK_TRANSFER" | "UPI" | "CHEQUE" | "CASH" | string;
+    bank_name?: string;
+    account_holder_name?: string;
+    account_number?: string;
+    ifsc_code?: string;
+    branch_name?: string;
+    account_type?: "SALARY" | "SAVINGS" | "CURRENT" | string;
+    upi_id?: string;
+    pan_number?: string;
+    uan_number?: string;
+    esi_number?: string;
+};
+
 export type AddUserForm = {
     full_name: string;
     email: string;
@@ -142,6 +156,7 @@ export type AddUserForm = {
     salary_frequency?: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
     salary_notes?: string;
     salary_components: SalaryComponentForm[];
+    salary_account?: SalaryAccountDetails;
     teaching_categories: string[];
     teaching_subjects: string[];
     commission?: CommissionForm;

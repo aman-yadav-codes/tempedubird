@@ -85,7 +85,7 @@ export default function AccountPage() {
   const [activeView, setActiveView] = useState<"view" | "edit">("view");
 
   // Form State
-  const [form, setForm] = useState<AddUserForm>(getInitialForm([], null));
+  const [form, setForm] = useState<AddUserForm>(getInitialForm(null));
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Password Modal
@@ -112,7 +112,7 @@ export default function AccountPage() {
 
       const userData = json.data as AdminUserDetails;
       setUser(userData);
-      setForm(getInitialForm([], userData));
+      setForm(getInitialForm(userData));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load account profile");
     } finally {
@@ -285,7 +285,7 @@ export default function AccountPage() {
       toast.success("Profile records updated successfully!");
       const updatedUser = json.data as AdminUserDetails;
       setUser(updatedUser);
-      setForm(getInitialForm([], updatedUser));
+      setForm(getInitialForm(updatedUser));
       setActiveView("view");
 
       // Update global auth store

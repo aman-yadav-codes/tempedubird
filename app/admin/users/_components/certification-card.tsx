@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,30 @@ export function CertificationCard({
     onDelete,
 }: CertificationCardProps) {
     const { value: durationValue, unit: durationUnit } = parseDuration(certification.duration);
+    const [authoritySuggestions, setAuthoritySuggestions] = useState<string[]>([
+        "EduBird Central Examination Board",
+        "National Skill Assessment Council",
+        "State Technical Education Council",
+        "Microsoft Certified Educator",
+        "Amazon Web Services (AWS)",
+        "Google Cloud Academy",
+        "Cisco Networking Academy",
+        "Institution Academic Dean",
+    ]);
+
+    useEffect(() => {
+        fetch("/api/admin/certifications/authorities")
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data) => {
+                if (data?.authorities && Array.isArray(data.authorities)) {
+                    const list = data.authorities.map((a: any) => a.authority_name).filter(Boolean);
+                    if (list.length > 0) {
+                        setAuthoritySuggestions((prev) => Array.from(new Set([...list, ...prev])));
+                    }
+                }
+            })
+            .catch(() => {});
+    }, []);
 
     const handleDurationChange = (nextValue: string, nextUnit: string) => {
         if (!nextValue.trim()) {
@@ -54,6 +79,8 @@ export function CertificationCard({
             onChange({ duration: `${nextValue.trim()} ${nextUnit}` });
         }
     };
+
+    const datalistId = `auth-suggestions-${index}`;
 
     return (
         <div className="grid gap-3 rounded-md border p-3 sm:grid-cols-[1fr_1fr_1.3fr_auto]">
@@ -74,10 +101,16 @@ export function CertificationCard({
                     </HelpPopover>
                 </Label>
                 <Input
+                    list={datalistId}
                     value={certification.issued_authority}
                     onChange={(event) => onChange({ issued_authority: event.target.value })}
-                    placeholder="e.g. Amazon / Microsoft"
+                    placeholder="Choose or type issuing authority..."
                 />
+                <datalist id={datalistId}>
+                    {authoritySuggestions.map((auth, aIdx) => (
+                        <option key={aIdx} value={auth} />
+                    ))}
+                </datalist>
             </div>
             <div className="space-y-1.5">
                 <Label className="h-5">

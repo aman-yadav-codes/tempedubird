@@ -154,8 +154,7 @@ async function getAccessScope(req: Request, resource: string) {
 
   if (
     isPlatformAdmin &&
-    institutionScopedResources.has(resource) &&
-    resource !== "personal-permissions"
+    (resource === "institution-memberships" || resource === "institution-role-permissions")
   ) {
     throw new Error("Forbidden: Admin access required");
   }
@@ -164,7 +163,13 @@ async function getAccessScope(req: Request, resource: string) {
     throw new MissingPermissionError(permission);
   }
 
-  if (!isPlatformAdmin && institutionScopedResources.has(resource) && institutionIds.length === 0) {
+  if (
+    !isPlatformAdmin &&
+    (resource === "institution-memberships" ||
+      resource === "institution-role-permissions" ||
+      resource === "personal-permissions") &&
+    institutionIds.length === 0
+  ) {
     throw new Error("Forbidden: Admin access required");
   }
 
@@ -562,9 +567,27 @@ async function listResource(
     case "roles": {
       const params: unknown[] = [];
       const whereParts = ["COALESCE(r.is_deleted, FALSE) = FALSE"];
+
+      if (!scope.isPlatformAdmin) {
+        if (filters.institutionId) {
+          assertInstitutionAllowed(scope, filters.institutionId);
+          params.push(filters.institutionId);
+          whereParts.push(`(r.institution_id IS NULL OR r.institution_id = $${params.length})`);
+        } else if (scope.institutionIds.length > 0) {
+          params.push(scope.institutionIds);
+          whereParts.push(`(r.institution_id IS NULL OR r.institution_id = ANY($${params.length}::int[]))`);
+        } else {
+          whereParts.push(`r.institution_id IS NULL`);
+        }
+        whereParts.push(`st.code = 'institution'`);
+      } else if (filters.institutionId) {
+        params.push(filters.institutionId);
+        whereParts.push(`(r.institution_id IS NULL OR r.institution_id = $${params.length})`);
+      }
+
       if (search) {
         params.push(like);
-        whereParts.push(`(r.code ILIKE $${params.length} OR r.name ILIKE $${params.length} OR st.name ILIKE $${params.length})`);
+        whereParts.push(`(r.code ILIKE $${params.length} OR r.name ILIKE $${params.length} OR st.name ILIKE $${params.length} OR ip.name ILIKE $${params.length})`);
       }
       if (filters.scope) {
         params.push(filters.scope);
@@ -572,13 +595,23 @@ async function listResource(
       }
       const where = `WHERE ${whereParts.join(" AND ")}`;
       return countAndRows(
-        `SELECT COUNT(*)::int AS count FROM roles r LEFT JOIN scope_types st ON st.id = r.scope_id ${where}`,
+        `SELECT COUNT(*)::int AS count FROM roles r LEFT JOIN scope_types st ON st.id = r.scope_id LEFT JOIN institution_profiles ip ON ip.id = r.institution_id ${where}`,
         `
-          SELECT r.id, r.name, r.code, r.scope_id, st.name AS scope_name, st.code AS scope_code
+          SELECT
+            r.id,
+            r.name,
+            r.code,
+            r.scope_id,
+            r.institution_id,
+            COALESCE(r.is_system, r.institution_id IS NULL) AS is_system,
+            ip.name AS institution_name,
+            st.name AS scope_name,
+            st.code AS scope_code
           FROM roles r
           LEFT JOIN scope_types st ON st.id = r.scope_id
+          LEFT JOIN institution_profiles ip ON ip.id = r.institution_id
           ${where}
-          ORDER BY st.code ASC NULLS LAST, r.name ASC
+          ORDER BY st.code ASC NULLS LAST, (r.institution_id IS NOT NULL) ASC, r.name ASC
           LIMIT $${params.length + 1} OFFSET $${params.length + 2}
         `,
         params,
@@ -591,6 +624,24 @@ async function listResource(
       const whereParts = [
         "COALESCE(r.is_deleted, FALSE) = FALSE",
       ];
+
+      if (!scope.isPlatformAdmin) {
+        if (filters.institutionId) {
+          assertInstitutionAllowed(scope, filters.institutionId);
+          params.push(filters.institutionId);
+          whereParts.push(`(r.institution_id IS NULL OR r.institution_id = $${params.length})`);
+        } else if (scope.institutionIds.length > 0) {
+          params.push(scope.institutionIds);
+          whereParts.push(`(r.institution_id IS NULL OR r.institution_id = ANY($${params.length}::int[]))`);
+        } else {
+          whereParts.push(`r.institution_id IS NULL`);
+        }
+        whereParts.push(`st.code = 'institution'`);
+      } else if (filters.institutionId) {
+        params.push(filters.institutionId);
+        whereParts.push(`(r.institution_id IS NULL OR r.institution_id = $${params.length})`);
+      }
+
       if (search) {
         params.push(like);
         whereParts.push(`
@@ -629,6 +680,8 @@ async function listResource(
             r.id AS role_id,
             r.name AS role_name,
             r.code AS role_code,
+            r.institution_id,
+            COALESCE(r.is_system, r.institution_id IS NULL) AS is_system,
             st.code AS scope_code,
             COALESCE(permission_summary.permission_count, 0)::int AS permission_count,
             COALESCE(permission_summary.permissions, '[]'::jsonb) AS permissions
@@ -658,7 +711,7 @@ async function listResource(
               )
           ) permission_summary ON TRUE
           ${where}
-          ORDER BY r.name ASC
+          ORDER BY st.code ASC NULLS LAST, (r.institution_id IS NOT NULL) ASC, r.name ASC
           LIMIT $${params.length + 1} OFFSET $${params.length + 2}
         `,
         params,
@@ -1027,11 +1080,45 @@ async function createResource(resource: string, body: Body, scope: AccessScope) 
         `INSERT INTO permissions (code, name, description) VALUES ($1,$2,$3) RETURNING *`,
         [asText(body.code), asText(body.name), asNullableText(body.description)]
       );
-    case "roles":
+    case "roles": {
+      const name = asText(body.name);
+      if (!name) throw new Error("Role name is required");
+
+      let code = asText(body.code).toLowerCase().replace(/[^a-z0-9_]/g, "_");
+      if (!code) {
+        code = name.toLowerCase().replace(/[^a-z0-9_]/g, "_");
+      }
+
+      let scopeId = asNumber(body.scope_id);
+      let institutionId: number | null = null;
+      let isSystem = false;
+
+      if (!scope.isPlatformAdmin) {
+        const instScope = await db.query<{ id: number }>(`SELECT id FROM scope_types WHERE code = 'institution' LIMIT 1`);
+        scopeId = instScope.rows[0]?.id ?? 2;
+
+        const targetInstId = asNumber(body.institution_id) ?? scope.institutionIds[0];
+        assertInstitutionAllowed(scope, targetInstId);
+        institutionId = targetInstId;
+        isSystem = false;
+
+        if (!code.startsWith(`inst_${institutionId}_`)) {
+          code = `inst_${institutionId}_${code}`;
+        }
+      } else {
+        institutionId = asNumber(body.institution_id);
+        isSystem = institutionId === null;
+        if (!scopeId) {
+          const instScope = await db.query<{ id: number }>(`SELECT id FROM scope_types WHERE code = 'institution' LIMIT 1`);
+          scopeId = instScope.rows[0]?.id ?? 2;
+        }
+      }
+
       return db.query(
-        `INSERT INTO roles (name, code, scope_id) VALUES ($1,$2,$3) RETURNING *`,
-        [asText(body.name), asText(body.code), asNumber(body.scope_id)]
+        `INSERT INTO roles (name, code, scope_id, institution_id, is_system) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+        [name, code, scopeId, institutionId, isSystem]
       );
+    }
     case "role-permissions": {
       const roleId = asNumber(body.role_id);
       const permissionIds = requirePermissionIds(body);
@@ -1295,14 +1382,29 @@ async function updateResource(resource: string, body: Body, scope: AccessScope) 
         asNumber(body.id),
       ]);
       return;
-    case "roles":
-      await db.query(`UPDATE roles SET name = $1, code = $2, scope_id = $3 WHERE id = $4`, [
+    case "roles": {
+      const roleId = asNumber(body.id);
+      if (!roleId) throw new Error("Role ID is required");
+
+      const existing = await db.query<{ is_system: boolean; institution_id: number | null }>(
+        `SELECT is_system, institution_id FROM roles WHERE id = $1`,
+        [roleId]
+      );
+      if (existing.rowCount === 0) throw new Error("Role not found");
+
+      if (!scope.isPlatformAdmin) {
+        if (existing.rows[0]?.is_system || !existing.rows[0]?.institution_id) {
+          throw new Error("System roles cannot be modified by institutions");
+        }
+        assertInstitutionAllowed(scope, existing.rows[0]?.institution_id);
+      }
+
+      await db.query(`UPDATE roles SET name = $1 WHERE id = $2`, [
         asText(body.name),
-        asText(body.code),
-        asNumber(body.scope_id),
-        asNumber(body.id),
+        roleId,
       ]);
       return;
+    }
     case "role-permissions": {
       const roleId = asNumber(body.role_id ?? body.id);
       const permissionIds = requirePermissionIds(body);
@@ -1559,6 +1661,29 @@ async function deleteResource(resource: string, ids: string[], scope: AccessScop
           remarks: "Membership removed from access control",
         });
       }
+      return;
+    }
+    case "roles": {
+      const roleIds = ids.map(Number).filter((id) => Number.isInteger(id) && id > 0);
+      if (roleIds.length === 0) return;
+
+      const rolesToDelete = await db.query<{ id: number; is_system: boolean; institution_id: number | null }>(
+        `SELECT id, is_system, institution_id FROM roles WHERE id = ANY($1::int[])`,
+        [roleIds]
+      );
+
+      for (const r of rolesToDelete.rows) {
+        if (!scope.isPlatformAdmin) {
+          if (r.is_system || !r.institution_id) {
+            throw new Error("System roles cannot be deleted by institutions");
+          }
+          assertInstitutionAllowed(scope, r.institution_id);
+        } else if (r.is_system) {
+          throw new Error("Standard system roles cannot be deleted");
+        }
+      }
+
+      await db.query(`UPDATE roles SET is_deleted = TRUE, deleted_at = NOW() WHERE id = ANY($1::int[])`, [roleIds]);
       return;
     }
     case "role-permissions":

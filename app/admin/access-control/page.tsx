@@ -31,6 +31,7 @@ import {
   isInstitutionScopedPermission,
   isAdminPathVisibleForRole,
   isPermissionAssignableToRole,
+  isPlatformAdminUser,
   isPlatformOnlyPermission,
 } from "@/lib/auth/permissions";
 import { toRoleRoutePath } from "@/lib/auth/role-routes";
@@ -128,7 +129,7 @@ const resources: Record<ResourceKey, ResourceConfig> = {
   },
   roles: {
     title: "Roles",
-    description: "Manage platform and institution roles with their dynamic scope.",
+    description: "Manage platform and institution roles with standard and custom permissions.",
     addLabel: "Add Role",
     searchKey: "name",
     canEdit: true,
@@ -141,6 +142,7 @@ const resources: Record<ResourceKey, ResourceConfig> = {
       { key: "name", label: "Name" },
       { key: "code", label: "Code", kind: "badge" },
       { key: "scope_name", label: "Scope" },
+      { key: "role_type", label: "Type", kind: "badge" },
     ],
   },
   "role-permissions": {
@@ -999,6 +1001,7 @@ export default function AccessControlPage() {
   const { user, accessToken, hasPermission } = useAuthStore();
   const { activeInstitution } = useActiveInstitution();
   const isSuperAdmin = hasPermission(FULL_ACCESS_PERMISSION);
+  const isPlatformAdmin = isPlatformAdminUser(user);
   const allowedResourceOrder = useMemo<ResourceKey[]>(
     () => {
       return resourceOrder.filter(
@@ -1369,6 +1372,22 @@ export default function AccessControlPage() {
       header: ({ column: tableColumn }) => <SortHeader label={column.label} column={tableColumn} />,
       cell: ({ row }) => {
         const value = row.original[column.key];
+        if (column.key === "role_type") {
+          const isSystem = Boolean(row.original.is_system);
+          return (
+            <Badge
+              variant="outline"
+              className={cn(
+                "capitalize font-medium",
+                isSystem
+                  ? "border-sky-500/40 bg-sky-500/10 text-sky-400"
+                  : "border-purple-500/40 bg-purple-500/10 text-purple-400"
+              )}
+            >
+              {isSystem ? "Standard / System" : "Custom Institution"}
+            </Badge>
+          );
+        }
         if (column.kind === "badge") return <Badge variant="outline">{formatValue(value)}</Badge>;
         if (column.key === "permission_count") {
           const shouldShowCoverage =
@@ -1447,7 +1466,7 @@ export default function AccessControlPage() {
                 <DropdownMenuSeparator />
               </>
             )}
-            {config.canEdit && canEditRecord && (
+            {config.canEdit && canEditRecord && (resource !== "roles" || !row.original.is_system || isPlatformAdmin) && (
               <DropdownMenuItem
                 onClick={() => {
                   setEditingRow(row.original);
@@ -1457,7 +1476,7 @@ export default function AccessControlPage() {
                 Edit
               </DropdownMenuItem>
             )}
-            {canDeleteRecord && (
+            {canDeleteRecord && (resource !== "roles" || !row.original.is_system || isPlatformAdmin) && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive" onClick={() => deleteRecords([getRowId(row.original)])}>
@@ -1475,7 +1494,7 @@ export default function AccessControlPage() {
         </DropdownMenu>
       ),
     },
-  ], [canDeleteRecord, canEditRecord, config, deleteRecords, options, optionsLoading, resource]);
+  ], [canDeleteRecord, canEditRecord, config, deleteRecords, isPlatformAdmin, options, optionsLoading, resource]);
 
   const hasSearch = searchTerm.trim().length > 0;
   const tableData = hasSearch ? (remoteRows ?? []) : rows;

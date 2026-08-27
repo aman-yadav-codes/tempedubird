@@ -72,6 +72,33 @@ export function CourseEnquiryDialog({
   const [source, setSource] = useState("Website Course Inquiry");
   const [notes, setNotes] = useState("");
 
+  // Parent specific state
+  const isParent = Boolean(
+    user?.role_codes?.some((c) => c.toLowerCase().includes("parent") || c.toLowerCase().includes("guardian")) ||
+    user?.roles?.some((r) => r.toLowerCase().includes("parent") || r.toLowerCase().includes("guardian"))
+  );
+  const [childrenList, setChildrenList] = useState<Array<{ student_profile_id: number; full_name: string; class_category_name?: string }>>([]);
+  const [selectedChildId, setSelectedChildId] = useState<string>("");
+
+  useEffect(() => {
+    if (isParent && accessToken) {
+      fetch("/api/parent/children", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.children && Array.isArray(data.children)) {
+            setChildrenList(data.children);
+            if (data.children.length > 0) {
+              setSelectedChildId(String(data.children[0].student_profile_id));
+              setStudentName(data.children[0].full_name);
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isParent, accessToken]);
+
   // Store pending enquiry target if user needs to register/login first
   useEffect(() => {
     if (open && course && (!user || !accessToken)) {
@@ -85,12 +112,15 @@ export function CourseEnquiryDialog({
 
   // Pre-fill user profile if logged in
   useEffect(() => {
-    if (user) {
+    if (user && !isParent) {
       if (user.full_name) setStudentName(user.full_name);
       if (user.phone) setPhone(user.phone);
       if (user.email) setEmail(user.email);
+    } else if (user && isParent) {
+      if (user.phone) setPhone(user.phone);
+      if (user.email) setEmail(user.email);
     }
-  }, [user, open]);
+  }, [user, isParent, open]);
 
   // Reset form state when dialog opens with new course
   useEffect(() => {
@@ -134,9 +164,14 @@ export function CourseEnquiryDialog({
           preferred_program: course.title,
           program_id: course.id,
           institution_id: course.institution_id || 1,
-          source: source,
-          notes: notes.trim(),
+          source: isParent ? "Parent Portal Course Inquiry" : source,
+          source_type: "edubird",
+          notes: isParent ? `Enquiry by Parent: ${user?.full_name || ""} (${phone}) on behalf of child ${studentName}. ${notes.trim()}` : notes.trim(),
           user_id: user?.id || null,
+          parent_name: isParent ? user?.full_name : null,
+          parent_phone: isParent ? phone : null,
+          parent_email: isParent ? email : null,
+          child_name: isParent ? studentName : null,
         }),
       });
 
@@ -272,19 +307,53 @@ export function CourseEnquiryDialog({
                 <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between text-xs text-emerald-700 dark:text-emerald-300">
                   <span className="font-semibold flex items-center gap-1.5 truncate">
                     <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                    Enquiring as verified student: <strong className="text-foreground font-bold">{user?.full_name || "Student"}</strong>
+                    {isParent ? (
+                      <span>Enquiring as Parent: <strong className="text-foreground font-bold">{user?.full_name || "Parent"}</strong></span>
+                    ) : (
+                      <span>Enquiring as verified student: <strong className="text-foreground font-bold">{user?.full_name || "Student"}</strong></span>
+                    )}
                   </span>
                   <Badge variant="outline" className="text-[9px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold uppercase shrink-0">
-                    Verified
+                    {isParent ? "Parent Portal" : "Verified"}
                   </Badge>
                 </div>
               ) : null}
 
+              {/* If Parent, prompt for which child's behalf they are making enquiry */}
+              {isParent && childrenList.length > 0 && (
+                <div className="space-y-1.5 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                  <Label className="text-xs font-bold text-purple-900 dark:text-purple-300 flex items-center gap-1">
+                    <GraduationCap className="h-4 w-4 text-purple-600" />
+                    Which child&apos;s behalf are you making this enquiry for? <span className="text-destructive">*</span>
+                  </Label>
+                  <Select
+                    value={selectedChildId}
+                    onValueChange={(val) => {
+                      setSelectedChildId(val);
+                      const c = childrenList.find((ch) => String(ch.student_profile_id) === val);
+                      if (c) setStudentName(c.full_name);
+                    }}
+                  >
+                    <SelectTrigger className="bg-background text-xs h-10 font-bold">
+                      <SelectValue placeholder="Select child" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {childrenList.map((ch) => (
+                        <SelectItem key={ch.student_profile_id} value={String(ch.student_profile_id)}>
+                          {ch.full_name} {ch.class_category_name ? `(${ch.class_category_name})` : ""}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="other">Other / New Child</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Student Name */}
+                {/* Student / Child Name */}
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-foreground flex items-center gap-1">
-                    Student Name <span className="text-destructive">*</span>
+                    {isParent ? "Child / Student Name" : "Student Name"} <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     placeholder="e.g. Rahul Verma"
@@ -298,7 +367,7 @@ export function CourseEnquiryDialog({
                 {/* Phone Number */}
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-foreground flex items-center gap-1">
-                    Contact Phone Number <span className="text-destructive">*</span>
+                    {isParent ? "Parent Contact Phone" : "Contact Phone Number"} <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     type="tel"

@@ -973,7 +973,7 @@ export default function SyllabusPage() {
       const body = {
         subject_id: Number(form.subject_id),
         institution_id: effectiveInstitutionId,
-        title: form.title.trim() || null,
+        title: form.title.trim() || form.subject_label || "Academic Syllabus",
         description: form.description.trim() || null,
         version: Number(form.version) || 1,
         is_template: isPlatformAdmin,

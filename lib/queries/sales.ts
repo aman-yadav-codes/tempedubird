@@ -173,6 +173,13 @@ export async function ensureSalesSchema(db: Queryable) {
       await db.query(`CREATE INDEX IF NOT EXISTS idx_sales_packages_active ON sales_packages (is_deleted, is_active, name)`);
       await db.query(`CREATE INDEX IF NOT EXISTS idx_sales_packages_target_types ON sales_packages USING GIN (package_for_types)`);
       await db.query(`ALTER TABLE sales_contacts ALTER COLUMN pipeline_stage SET DEFAULT 'lead'`);
+      // Multi-pricing: per-period price columns on a single package
+      await db.query(`
+        ALTER TABLE sales_packages
+          ADD COLUMN IF NOT EXISTS price_monthly NUMERIC(12,2),
+          ADD COLUMN IF NOT EXISTS price_yearly  NUMERIC(12,2),
+          ADD COLUMN IF NOT EXISTS price_once    NUMERIC(12,2)
+      `);
     })().catch((error) => {
       schemaReady = null;
       throw error;

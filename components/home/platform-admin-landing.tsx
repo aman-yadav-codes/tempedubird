@@ -154,8 +154,18 @@ export function PlatformAdminLanding() {
   const [partnerInstitutes, setPartnerInstitutes] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
   const [blogs, setBlogs] = useState<any[]>([]);
+  const [platformBranches, setPlatformBranches] = useState<any[]>([]);
 
   useEffect(() => {
+    // 0. Fetch Platform Branches
+    fetch("/api/public/branches")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (json?.branches && Array.isArray(json.branches)) {
+          setPlatformBranches(json.branches);
+        }
+      })
+      .catch(() => undefined);
     // 1. Fetch Contact Details from Platform Admin Panel
     fetch("/api/public/company/pages/contact-us")
       .then((res) => (res.ok ? res.json() : null))
@@ -901,6 +911,50 @@ export function PlatformAdminLanding() {
               <p className="text-[11px] text-gray-500">Corporate & Technical Center</p>
             </Card>
           </div>
+
+          {/* Regional Branches Grid */}
+          {platformBranches.length > 0 && (
+            <div className="pt-8 max-w-5xl mx-auto space-y-4">
+              <div className="flex items-center justify-between border-b pb-2">
+                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-rose-600" />
+                  Our Regional Branches & Offices
+                </h3>
+                <Link href="/contact" className="text-xs font-semibold text-rose-600 hover:underline flex items-center gap-1">
+                  View Full Directory <ChevronRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {platformBranches.map((b) => (
+                  <div
+                    key={b.id}
+                    className="p-4 rounded-xl border border-gray-200/80 bg-white shadow-xs hover:border-rose-300 transition-all space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-bold text-sm text-gray-900">{b.branch_name}</h4>
+                      <Badge variant="outline" className="text-[10px] font-bold text-rose-600 border-rose-200 bg-rose-50">
+                        {b.city}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-gray-600 line-clamp-2">{b.address}</p>
+                    <div className="pt-2 flex flex-wrap items-center gap-3 text-[11px] text-gray-500 border-t">
+                      {b.phone && (
+                        <span className="flex items-center gap-1">
+                          <Phone className="h-3 w-3 text-rose-500" /> {b.phone}
+                        </span>
+                      )}
+                      {b.email && (
+                        <span className="flex items-center gap-1">
+                          <Mail className="h-3 w-3 text-blue-500" /> {b.email}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

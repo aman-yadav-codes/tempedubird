@@ -11,7 +11,11 @@ function getErrorMessage(err: unknown) {
 export async function GET(req: Request) {
   try {
     const currentUser = await requireAdmin(req);
-    const roles = await listRolesQuery(db);
+    const url = new URL(req.url);
+    const institutionId = url.searchParams.get("institutionId")
+      ? Number(url.searchParams.get("institutionId"))
+      : currentUser.under_institution_id ?? (currentUser.memberships?.[0]?.institution_id ?? null);
+    const roles = await listRolesQuery(db, institutionId);
     const canAssignPlatformAdmin = isPlatformAdminUser(currentUser);
     const canAssignInstitutionRoles =
       canAssignPlatformAdmin || currentUser.role_codes.includes("institution_admin");

@@ -5,6 +5,7 @@ import {
   getPermissionDescription,
   getPermissionName,
   isPlatformOnlyPermission,
+  MANAGED_INSTITUTION_ROLE_CODES,
   MANAGED_PLATFORM_ROLE_CODES,
 } from "@/lib/auth/permissions";
 
@@ -15,6 +16,43 @@ type Queryable = {
 let lastSyncAt = 0;
 let syncPromise: Promise<void> | null = null;
 const SYNC_INTERVAL_MS = 10 * 60_000;
+
+export const MANAGED_INSTITUTION_ROLE_NAMES: Record<string, string> = {
+  institution_admin: "Institution Admin",
+  director: "Director",
+  principal: "Principal",
+  vice_principal: "Vice Principal",
+  dean: "Dean",
+  center_head: "Center Head",
+  branch_manager: "Branch Manager",
+  academic_coordinator: "Academic Coordinator",
+  hod: "Head of Department",
+  teacher: "Teacher",
+  faculty: "Faculty",
+  tutor: "Tutor",
+  teaching_assistant: "Teaching Assistant",
+  doubt_expert: "Doubt Expert",
+  student: "Student",
+  parent: "Parent",
+  counselor: "Counselor",
+  admission_counselor: "Admission Counselor",
+  telecaller: "Telecaller",
+  marketing_executive: "Marketing Executive",
+  institution_accountant: "Institution Accountant",
+  fee_collector: "Fee Collector",
+  exam_controller: "Exam Controller",
+  curriculum_developer: "Curriculum Developer",
+  librarian: "Librarian",
+  lab_assistant: "Lab Assistant",
+  it_support: "IT Support",
+  placement_officer: "Placement Officer",
+  hostel_warden: "Hostel Warden",
+  transport_coordinator: "Transport Coordinator",
+  driver: "Driver",
+  security_guard: "Security Guard",
+  administrative_staff: "Administrative Staff",
+  sports_coach: "Sports Coach",
+};
 
 export async function syncPermissionRegistry(db: Queryable, force = false) {
   const now = Date.now();
@@ -33,9 +71,10 @@ export async function syncPermissionRegistry(db: Queryable, force = false) {
 }
 
 async function runPermissionRegistrySync(db: Queryable) {
+  // 1. Seed / update managed platform roles
   await db.query(
     `
-      INSERT INTO roles (name, code, scope_id, is_deleted, deleted_at, deleted_by)
+      INSERT INTO roles (name, code, scope_id, is_system, is_deleted, deleted_at, deleted_by)
       SELECT
         CASE role_code
           WHEN 'accountant' THEN 'Accountant'
@@ -44,6 +83,7 @@ async function runPermissionRegistrySync(db: Queryable) {
         END AS name,
         role_code AS code,
         scope.id AS scope_id,
+        TRUE,
         FALSE,
         NULL,
         NULL
@@ -54,6 +94,7 @@ async function runPermissionRegistrySync(db: Queryable) {
       DO UPDATE SET
         name = EXCLUDED.name,
         scope_id = EXCLUDED.scope_id,
+        is_system = TRUE,
         is_deleted = FALSE,
         deleted_at = NULL,
         deleted_by = NULL
@@ -61,6 +102,39 @@ async function runPermissionRegistrySync(db: Queryable) {
     [MANAGED_PLATFORM_ROLE_CODES]
   );
 
+  // 2. Seed / update managed institution roles
+  const institutionRoleCodes = [...MANAGED_INSTITUTION_ROLE_CODES];
+  const institutionRoleNames = institutionRoleCodes.map(
+    (code) => MANAGED_INSTITUTION_ROLE_NAMES[code] ?? code
+  );
+
+  await db.query(
+    `
+      INSERT INTO roles (name, code, scope_id, is_system, is_deleted, deleted_at, deleted_by)
+      SELECT
+        r.name,
+        r.code,
+        scope.id AS scope_id,
+        TRUE,
+        FALSE,
+        NULL,
+        NULL
+      FROM unnest($1::text[], $2::text[]) AS r(code, name)
+      CROSS JOIN scope_types scope
+      WHERE scope.code = 'institution'
+      ON CONFLICT (code)
+      DO UPDATE SET
+        name = EXCLUDED.name,
+        scope_id = EXCLUDED.scope_id,
+        is_system = TRUE,
+        is_deleted = FALSE,
+        deleted_at = NULL,
+        deleted_by = NULL
+    `,
+    [institutionRoleCodes, institutionRoleNames]
+  );
+
+  // 3. Seed / update managed permissions
   const codes = [
     FULL_ACCESS_PERMISSION,
     ...getManagedPermissionCodes(),
@@ -86,6 +160,7 @@ async function runPermissionRegistrySync(db: Queryable) {
     [uniqueCodes, names, descriptions]
   );
 
+  // 4. Handle legacy permissions
   const legacyEntries = getLegacyPermissionCodeEntries();
 
   if (legacyEntries.length) {
@@ -170,67 +245,7 @@ async function runPermissionRegistrySync(db: Queryable) {
     );
   }
 
-  await db.query(`
-    WITH dashboard_map(role_code, current_code) AS (
-      VALUES
-        ('student', 'student.dashboard.view'),
-        ('parent', 'parent.dashboard.view'),
-        ('teacher', 'teacher.dashboard.view')
-    ),
-    old_permission AS (
-      SELECT id FROM permissions WHERE code = 'dashboard.view'
-    ),
-    moved_defaults AS (
-      INSERT INTO role_permissions (role_id, permission_id)
-      SELECT rp.role_id, current_permission.id
-      FROM role_permissions rp
-      INNER JOIN roles r ON r.id = rp.role_id
-      INNER JOIN dashboard_map mapped ON mapped.role_code = r.code
-      INNER JOIN permissions current_permission ON current_permission.code = mapped.current_code
-      WHERE rp.permission_id = (SELECT id FROM old_permission)
-      ON CONFLICT DO NOTHING
-    ),
-    moved_overrides AS (
-      INSERT INTO institution_role_permissions (institution_id, role_id, permission_id)
-      SELECT irp.institution_id, irp.role_id, current_permission.id
-      FROM institution_role_permissions irp
-      INNER JOIN roles r ON r.id = irp.role_id
-      INNER JOIN dashboard_map mapped ON mapped.role_code = r.code
-      INNER JOIN permissions current_permission ON current_permission.code = mapped.current_code
-      WHERE irp.permission_id = (SELECT id FROM old_permission)
-      ON CONFLICT DO NOTHING
-    ),
-    moved_denials AS (
-      INSERT INTO institution_role_permission_denials (institution_id, role_id, permission_id)
-      SELECT denied.institution_id, denied.role_id, current_permission.id
-      FROM institution_role_permission_denials denied
-      INNER JOIN roles r ON r.id = denied.role_id
-      INNER JOIN dashboard_map mapped ON mapped.role_code = r.code
-      INNER JOIN permissions current_permission ON current_permission.code = mapped.current_code
-      WHERE denied.permission_id = (SELECT id FROM old_permission)
-      ON CONFLICT DO NOTHING
-    ),
-    removed_defaults AS (
-      DELETE FROM role_permissions rp
-      USING roles r
-      WHERE rp.role_id = r.id
-        AND rp.permission_id = (SELECT id FROM old_permission)
-        AND r.code IN ('student', 'parent', 'teacher')
-    ),
-    removed_overrides AS (
-      DELETE FROM institution_role_permissions irp
-      USING roles r
-      WHERE irp.role_id = r.id
-        AND irp.permission_id = (SELECT id FROM old_permission)
-        AND r.code IN ('student', 'parent', 'teacher')
-    )
-    DELETE FROM institution_role_permission_denials denied
-    USING roles r
-    WHERE denied.role_id = r.id
-      AND denied.permission_id = (SELECT id FROM old_permission)
-      AND r.code IN ('student', 'parent', 'teacher')
-  `);
-
+  // 5. Clean up deleted / obsolete permissions
   await db.query(`
     WITH removed_permissions AS (
       SELECT id
@@ -258,35 +273,8 @@ async function runPermissionRegistrySync(db: Queryable) {
   const institutionOnlyPermissionCodes = getManagedPermissionCodes().filter(
     (code) => !isPlatformOnlyPermission(code)
   );
-  const recycleBinPermissionCodes = getManagedPermissionCodes().filter((code) =>
-    code.startsWith("settings.recycle_bin.")
-  );
-  const paymentSettingsPermissionCodes = getManagedPermissionCodes().filter((code) =>
-    code.startsWith("settings.payments.")
-  );
-  const contentPermissionCodes = getManagedPermissionCodes().filter((code) =>
-    code.startsWith("content.")
-  );
-  const blogPermissionCodes = getManagedPermissionCodes().filter((code) =>
-    code.startsWith("content.blog.")
-  );
-  const institutionFinancePermissionCodes = getManagedPermissionCodes().filter((code) =>
-    code.startsWith("finance.") && !code.startsWith("finance.platform.")
-  );
 
-  await db.query(
-    `
-      DELETE FROM role_permissions rp
-      USING roles r, scope_types st, permissions p
-      WHERE rp.role_id = r.id
-        AND r.scope_id = st.id
-        AND rp.permission_id = p.id
-        AND st.code = 'institution'
-        AND p.code = ANY($1::text[])
-    `,
-    [platformOnlyPermissionCodes]
-  );
-
+  // Platform roles must not have institution-only permissions
   await db.query(
     `
       DELETE FROM role_permissions rp
@@ -300,54 +288,21 @@ async function runPermissionRegistrySync(db: Queryable) {
     [institutionOnlyPermissionCodes]
   );
 
-  await db.query(
-    `
-      DELETE FROM institution_role_permissions irp
-      USING roles r, scope_types st, permissions p
-      WHERE irp.role_id = r.id
-        AND r.scope_id = st.id
-        AND irp.permission_id = p.id
-        AND st.code = 'institution'
-        AND p.code = ANY($1::text[])
-    `,
-    [platformOnlyPermissionCodes]
-  );
-
-  await db.query(
-    `
-      DELETE FROM institution_role_permission_denials irpd
-      USING roles r, scope_types st, permissions p
-      WHERE irpd.role_id = r.id
-        AND r.scope_id = st.id
-        AND irpd.permission_id = p.id
-        AND st.code = 'institution'
-        AND p.code = ANY($1::text[])
-    `,
-    [platformOnlyPermissionCodes]
-  );
-
-  await db.query(
-    `
-      DELETE FROM institution_user_permissions iup
-      USING permissions p
-      WHERE iup.permission_id = p.id
-        AND p.code = ANY($1::text[])
-    `,
-    [platformOnlyPermissionCodes]
-  );
-
+  // Institution roles must not have platform-only permissions
   await db.query(
     `
       DELETE FROM role_permissions rp
-      USING roles r, permissions p
+      USING roles r, scope_types st, permissions p
       WHERE rp.role_id = r.id
+        AND r.scope_id = st.id
         AND rp.permission_id = p.id
+        AND st.code = 'institution'
         AND p.code = ANY($1::text[])
-        AND r.code NOT IN ('platform_admin', 'institution_admin')
     `,
-    [recycleBinPermissionCodes]
+    [platformOnlyPermissionCodes]
   );
 
+  // Clean personal role namespaces (student.*, parent.*, driver.myinstitution.*) from wrong roles
   await db.query(`
     DELETE FROM role_permissions rp
     USING roles r, permissions p
@@ -355,117 +310,16 @@ async function runPermissionRegistrySync(db: Queryable) {
       AND rp.permission_id = p.id
       AND (
         (p.code LIKE 'student.%' AND r.code <> 'student')
-        OR (p.code LIKE 'teachers.%' AND r.code <> 'teacher')
         OR (p.code LIKE 'parent.%' AND r.code <> 'parent')
-        OR (p.code LIKE 'teacher.%' AND r.code <> 'teacher')
         OR (r.code = 'student' AND p.code NOT LIKE 'student.%')
         OR (r.code = 'parent' AND p.code NOT LIKE 'parent.%' AND p.code NOT LIKE 'notifications.%' AND p.code <> 'parents.support.view')
         OR (r.code = 'driver'
             AND p.code NOT IN ('driver.support.view', 'driver.myinstitution.noticeboard.view', 'driver.myinstitution.myattendance.view', 'driver.myinstitution.myattendance.create', 'driver.myinstitution.mysalary.view', 'driver.myinstitution.myletters.view')
             AND p.code NOT LIKE 'driver.myinstitution.complaints.%')
-        OR (
-          r.code = 'teacher'
-          AND p.code NOT LIKE 'teacher.%'
-          AND p.code NOT LIKE 'teachers.%'
-          AND p.code NOT LIKE 'managestudents.%'
-          AND p.code NOT LIKE 'content.%'
-          AND p.code NOT LIKE 'notifications.%'
-          AND p.code NOT LIKE 'support.%'
-          AND p.code NOT LIKE 'settings.payments.%'
-        )
       )
   `);
 
-  await db.query(`
-    DELETE FROM institution_role_permissions irp
-    USING roles r, permissions p
-    WHERE irp.role_id = r.id
-      AND irp.permission_id = p.id
-      AND (
-        (p.code LIKE 'student.%' AND r.code <> 'student')
-        OR (p.code LIKE 'teachers.%' AND r.code <> 'teacher')
-        OR (p.code LIKE 'parent.%' AND r.code <> 'parent')
-        OR (p.code LIKE 'teacher.%' AND r.code <> 'teacher')
-        OR (r.code = 'student' AND p.code NOT LIKE 'student.%')
-        OR (r.code = 'parent' AND p.code NOT LIKE 'parent.%' AND p.code NOT LIKE 'notifications.%' AND p.code <> 'parents.support.view')
-        OR (r.code = 'driver'
-            AND p.code NOT IN ('driver.support.view', 'driver.myinstitution.noticeboard.view', 'driver.myinstitution.myattendance.view', 'driver.myinstitution.myattendance.create', 'driver.myinstitution.mysalary.view', 'driver.myinstitution.myletters.view')
-            AND p.code NOT LIKE 'driver.myinstitution.complaints.%')
-        OR (
-          r.code = 'teacher'
-          AND p.code NOT LIKE 'teacher.%'
-          AND p.code NOT LIKE 'teachers.%'
-          AND p.code NOT LIKE 'managestudents.%'
-          AND p.code NOT LIKE 'content.%'
-          AND p.code NOT LIKE 'notifications.%'
-          AND p.code NOT LIKE 'support.%'
-          AND p.code NOT LIKE 'settings.payments.%'
-        )
-      )
-  `);
-
-  await db.query(`
-    DELETE FROM institution_role_permission_denials irpd
-    USING roles r, permissions p
-    WHERE irpd.role_id = r.id
-      AND irpd.permission_id = p.id
-      AND (
-        (p.code LIKE 'student.%' AND r.code <> 'student')
-        OR (p.code LIKE 'teachers.%' AND r.code <> 'teacher')
-        OR (p.code LIKE 'parent.%' AND r.code <> 'parent')
-        OR (p.code LIKE 'teacher.%' AND r.code <> 'teacher')
-        OR (r.code = 'student' AND p.code NOT LIKE 'student.%')
-        OR (r.code = 'parent' AND p.code NOT LIKE 'parent.%' AND p.code NOT LIKE 'notifications.%' AND p.code <> 'parents.support.view')
-        OR (r.code = 'driver'
-            AND p.code NOT IN ('driver.support.view', 'driver.myinstitution.noticeboard.view', 'driver.myinstitution.myattendance.view', 'driver.myinstitution.myattendance.create', 'driver.myinstitution.mysalary.view', 'driver.myinstitution.myletters.view')
-            AND p.code NOT LIKE 'driver.myinstitution.complaints.%')
-        OR (
-          r.code = 'teacher'
-          AND p.code NOT LIKE 'teacher.%'
-          AND p.code NOT LIKE 'teachers.%'
-          AND p.code NOT LIKE 'managestudents.%'
-          AND p.code NOT LIKE 'content.%'
-          AND p.code NOT LIKE 'notifications.%'
-          AND p.code NOT LIKE 'support.%'
-          AND p.code NOT LIKE 'settings.payments.%'
-        )
-      )
-  `);
-
-  await db.query(
-    `
-      DELETE FROM institution_role_permissions irp
-      USING roles r, permissions p
-      WHERE irp.role_id = r.id
-        AND irp.permission_id = p.id
-        AND p.code = ANY($1::text[])
-        AND r.code NOT IN ('institution_admin')
-    `,
-    [recycleBinPermissionCodes]
-  );
-
-  await db.query(
-    `
-      DELETE FROM institution_role_permission_denials irpd
-      USING roles r, permissions p
-      WHERE irpd.role_id = r.id
-        AND irpd.permission_id = p.id
-        AND p.code = ANY($1::text[])
-        AND r.code NOT IN ('institution_admin')
-    `,
-    [recycleBinPermissionCodes]
-  );
-
-  await db.query(
-    `
-      DELETE FROM institution_user_permissions iup
-      USING permissions p
-      WHERE iup.permission_id = p.id
-        AND p.code = ANY($1::text[])
-    `,
-    [recycleBinPermissionCodes]
-  );
-
+  // 6. Assign Default Automatic Permissions for Platform Admin
   await db.query(
     `
       INSERT INTO role_permissions (role_id, permission_id)
@@ -480,262 +334,357 @@ async function runPermissionRegistrySync(db: Queryable) {
     [platformOnlyPermissionCodes]
   );
 
-  await db.query(
-    `
-      INSERT INTO role_permissions (role_id, permission_id)
-      SELECT r.id, p.id
-      FROM roles r
-      INNER JOIN permissions p
-        ON p.code = ANY($1::text[])
-       AND COALESCE(p.is_deleted, FALSE) = FALSE
-      WHERE r.code IN ('platform_admin', 'institution_admin')
-      ON CONFLICT DO NOTHING
-    `,
-    [paymentSettingsPermissionCodes]
-  );
+  // 7. Seed comprehensive default permissions for all standard Institution Roles
+  const allManagedPerms = getManagedPermissionCodes();
 
-  await db.query(
-    `
-      INSERT INTO role_permissions (role_id, permission_id)
-      SELECT r.id, p.id
-      FROM roles r
-      INNER JOIN permissions p
-        ON p.code = ANY($1::text[])
-       AND COALESCE(p.is_deleted, FALSE) = FALSE
-      WHERE r.code = 'institution_admin'
-      ON CONFLICT DO NOTHING
-    `,
-    [contentPermissionCodes]
-  );
+  const rolePermissionDefinitions: Array<{
+    roleCodes: string[];
+    permissionFilter: (code: string) => boolean;
+  }> = [
+    // --- Full Institution Admin ---
+    {
+      roleCodes: ["institution_admin"],
+      permissionFilter: (code) =>
+        !isPlatformOnlyPermission(code) &&
+        !code.startsWith("student.") &&
+        !code.startsWith("parent.") &&
+        !code.startsWith("driver.") &&
+        !code.startsWith("teacher.myinstitution.myattendance") &&
+        !code.startsWith("teacher.myinstitution.mysalary") &&
+        !code.startsWith("teacher.myinstitution.myletters"),
+    },
 
-  await db.query(
-    `
-      INSERT INTO role_permissions (role_id, permission_id)
-      SELECT r.id, p.id
-      FROM roles r
-      INNER JOIN permissions p
-        ON p.code = ANY($1::text[])
-       AND COALESCE(p.is_deleted, FALSE) = FALSE
-      WHERE r.code = 'institution_admin'
-      ON CONFLICT DO NOTHING
-    `,
-    [blogPermissionCodes]
-  );
+    // --- Leadership & Executive Roles (Director, Principal, Vice Principal, Dean, Center Head, Branch Manager, Academic Coordinator) ---
+    {
+      roleCodes: [
+        "director",
+        "principal",
+        "vice_principal",
+        "dean",
+        "center_head",
+        "branch_manager",
+        "academic_coordinator",
+      ],
+      permissionFilter: (code) =>
+        code === "dashboard.view" ||
+        code.startsWith("managestudents.") ||
+        code.startsWith("managestaff.allstaff.view") ||
+        code.startsWith("managestaff.attendance.view") ||
+        code.startsWith("content.") ||
+        code.startsWith("institution.programs.") ||
+        code.startsWith("institution.facilities.view") ||
+        code.startsWith("institution.gallery.view") ||
+        code.startsWith("institution.hostels.view") ||
+        code.startsWith("institution.libraries.view") ||
+        code.startsWith("institution.cutoffs.view") ||
+        code.startsWith("institution.scholarships.view") ||
+        code.startsWith("institution.noticeboard.") ||
+        code.startsWith("institution.complaints.view") ||
+        code.startsWith("institution.general_settings.view") ||
+        code.startsWith("notifications.inbox.") ||
+        code.startsWith("support.tickets."),
+    },
 
-  await db.query(
-    `
-      INSERT INTO role_permissions (role_id, permission_id)
-      SELECT r.id, p.id
-      FROM roles r
-      INNER JOIN permissions p
-        ON p.code = ANY($1::text[])
-       AND COALESCE(p.is_deleted, FALSE) = FALSE
-      WHERE r.code = 'institution_admin'
-      ON CONFLICT DO NOTHING
-    `,
-    [institutionFinancePermissionCodes]
-  );
+    // --- Academic & Teaching Roles (HOD, Teacher, Faculty, Tutor, Teaching Assistant, Doubt Expert) ---
+    {
+      roleCodes: ["hod", "teacher", "faculty", "tutor", "teaching_assistant", "doubt_expert"],
+      permissionFilter: (code) =>
+        code === "teacher.dashboard.view" ||
+        code === "dashboard.view" ||
+        code.startsWith("managestudents.allstudents.view") ||
+        code.startsWith("managestudents.attendance.") ||
+        code.startsWith("managestudents.achievements.") ||
+        code.startsWith("managestudents.assignments.") ||
+        code.startsWith("managestudents.exams.") ||
+        code.startsWith("managestudents.practice.") ||
+        code.startsWith("managestudents.result.") ||
+        code.startsWith("managestudents.notes.") ||
+        code === "content.subjects.view" ||
+        code === "content.courses.view" ||
+        code === "content.syllabus.view" ||
+        code.startsWith("content.assignments.") ||
+        code.startsWith("content.exams.") ||
+        code.startsWith("content.notes.") ||
+        code.startsWith("content.practice_exams.") ||
+        code.startsWith("content.institute_calendar.view") ||
+        code.startsWith("content.timetable_setup.view") ||
+        code === "content.media.view" ||
+        code === "institution.noticeboard.view" ||
+        code === "institution.programs.view" ||
+        code === "teacher.myclassroom.timetable.view" ||
+        code === "teacher.myinstitution.noticeboard.view" ||
+        code === "teacher.myinstitution.complaints.view" ||
+        code === "teacher.myinstitution.complaints.create" ||
+        code === "teacher.myinstitution.myattendance.view" ||
+        code === "teacher.myinstitution.myattendance.create" ||
+        code === "teacher.myinstitution.mysalary.view" ||
+        code === "teacher.myinstitution.myletters.view" ||
+        code === "teacher.support.view" ||
+        code.startsWith("notifications.inbox.view"),
+    },
 
-  await db.query(
-    `
-      INSERT INTO role_permissions (role_id, permission_id)
-      SELECT r.id, p.id
-      FROM roles r
-      INNER JOIN permissions p
-        ON p.code = ANY($1::text[])
-       AND COALESCE(p.is_deleted, FALSE) = FALSE
-      WHERE r.code = 'institution_admin'
-      ON CONFLICT DO NOTHING
-    `,
-    [
-      getManagedPermissionCodes().filter((code) =>
-        code.startsWith("managestaff.allstaff.")
-      ),
-    ]
-  );
+    // --- Admissions, Sales & Counseling (Counselor, Admission Counselor, Telecaller, Marketing Executive) ---
+    {
+      roleCodes: ["counselor", "admission_counselor", "telecaller", "marketing_executive"],
+      permissionFilter: (code) =>
+        code === "dashboard.view" ||
+        code.startsWith("sales.leads.") ||
+        code.startsWith("sales.pipeline.") ||
+        code.startsWith("sales.enquiries.") ||
+        code.startsWith("sales.enrollments.") ||
+        code === "managestudents.allstudents.view" ||
+        code === "managestudents.allstudents.create" ||
+        code === "content.courses.view" ||
+        code === "institution.programs.view" ||
+        code === "institution.facilities.view" ||
+        code === "institution.gallery.view" ||
+        code === "institution.cutoffs.view" ||
+        code === "institution.scholarships.view" ||
+        code === "institution.noticeboard.view" ||
+        code === "notifications.inbox.view",
+    },
 
-  await db.query(
-    `
-      INSERT INTO role_permissions (role_id, permission_id)
-      SELECT r.id, p.id
-      FROM roles r
-      INNER JOIN permissions p
-        ON p.code LIKE 'managestudents.fee_management.%'
-       AND COALESCE(p.is_deleted, FALSE) = FALSE
-      WHERE r.code = 'institution_admin'
-      ON CONFLICT DO NOTHING
-    `
-  );
+    // --- Finance & Fee Collection (Institution Accountant, Fee Collector) ---
+    {
+      roleCodes: ["institution_accountant", "fee_collector"],
+      permissionFilter: (code) =>
+        code === "dashboard.view" ||
+        code === "managestudents.allstudents.view" ||
+        code.startsWith("managestudents.fee_management.") ||
+        code.startsWith("finance.income.") ||
+        code.startsWith("finance.expense.") ||
+        code.startsWith("finance.invoice.") ||
+        code.startsWith("finance.allowance.") ||
+        code.startsWith("finance.recurring_expenses.") ||
+        code === "settings.payments.view" ||
+        code === "notifications.inbox.view",
+    },
 
-  await db.query(
-    `
-      INSERT INTO role_permissions (role_id, permission_id)
-      SELECT r.id, p.id
-      FROM roles r
-      INNER JOIN permissions p
-        ON p.code = ANY($1::text[])
-       AND COALESCE(p.is_deleted, FALSE) = FALSE
-      WHERE r.code = 'institution_admin'
-      ON CONFLICT DO NOTHING
-    `,
-    [recycleBinPermissionCodes]
-  );
+    // --- Exam Controller ---
+    {
+      roleCodes: ["exam_controller"],
+      permissionFilter: (code) =>
+        code === "dashboard.view" ||
+        code === "managestudents.allstudents.view" ||
+        code.startsWith("managestudents.exams.") ||
+        code.startsWith("managestudents.practice.") ||
+        code.startsWith("managestudents.result.") ||
+        code.startsWith("content.exams.") ||
+        code.startsWith("content.practice_exams.") ||
+        code === "content.courses.view" ||
+        code === "content.subjects.view" ||
+        code === "content.institute_calendar.view" ||
+        code === "institution.noticeboard.view" ||
+        code === "notifications.inbox.view",
+    },
 
-  await db.query(
-    `
-      INSERT INTO role_permissions (role_id, permission_id)
-      SELECT r.id, p.id
-      FROM roles r
-      INNER JOIN permissions p
-        ON p.code = 'teacher.myclassroom.timetable.view'
-       AND COALESCE(p.is_deleted, FALSE) = FALSE
-      WHERE r.code = 'teacher'
-      ON CONFLICT DO NOTHING
-    `
-  );
+    // --- Curriculum Developer ---
+    {
+      roleCodes: ["curriculum_developer"],
+      permissionFilter: (code) =>
+        code === "dashboard.view" ||
+        code.startsWith("content.category_tree.") ||
+        code.startsWith("content.categories.") ||
+        code.startsWith("content.boards.") ||
+        code.startsWith("content.universities.") ||
+        code.startsWith("content.certifications.") ||
+        code.startsWith("content.subjects.") ||
+        code.startsWith("content.courses.") ||
+        code.startsWith("content.syllabus.") ||
+        code.startsWith("content.assignments.") ||
+        code.startsWith("content.notes.") ||
+        code.startsWith("content.media.") ||
+        code === "notifications.inbox.view",
+    },
 
-  await db.query(`
-    INSERT INTO role_permissions (role_id, permission_id)
-    SELECT r.id, p.id
-    FROM roles r
-    INNER JOIN permissions p
-      ON p.code = CASE r.code
-        WHEN 'student' THEN 'student.myclassroom.exams.view'
-        WHEN 'parent' THEN 'parent.childclassroom.exams.view'
-      END
-     AND COALESCE(p.is_deleted, FALSE) = FALSE
-    WHERE r.code IN ('student', 'parent')
-    ON CONFLICT DO NOTHING
-  `);
+    // --- Librarian ---
+    {
+      roleCodes: ["librarian"],
+      permissionFilter: (code) =>
+        code === "dashboard.view" ||
+        code.startsWith("institution.libraries.") ||
+        code === "content.notes.view" ||
+        code === "content.media.view" ||
+        code === "institution.noticeboard.view" ||
+        code === "notifications.inbox.view",
+    },
 
-  await db.query(`
-    INSERT INTO role_permissions (role_id, permission_id)
-    SELECT r.id, p.id
-    FROM roles r
-    INNER JOIN permissions p
-      ON p.code = CASE r.code
-        WHEN 'student' THEN 'student.myclassroom.fees.view'
-        WHEN 'parent' THEN 'parent.childclassroom.fees.view'
-      END
-     AND COALESCE(p.is_deleted, FALSE) = FALSE
-    WHERE r.code IN ('student', 'parent')
-    ON CONFLICT DO NOTHING
-  `);
+    // --- Lab Assistant ---
+    {
+      roleCodes: ["lab_assistant"],
+      permissionFilter: (code) =>
+        code === "dashboard.view" ||
+        code === "institution.facilities.view" ||
+        code === "content.media.view" ||
+        code === "institution.noticeboard.view" ||
+        code === "notifications.inbox.view",
+    },
 
-  await db.query(`
-    INSERT INTO role_permissions (role_id, permission_id)
-    SELECT r.id, p.id
-    FROM roles r
-    INNER JOIN permissions p
-      ON p.code = 'student.myclassroom.results.view'
-     AND COALESCE(p.is_deleted, FALSE) = FALSE
-    WHERE r.code = 'student'
-    ON CONFLICT DO NOTHING
-  `);
+    // --- IT Support ---
+    {
+      roleCodes: ["it_support"],
+      permissionFilter: (code) =>
+        code === "dashboard.view" ||
+        code === "institution.ai_settings.view" ||
+        code.startsWith("content.media.") ||
+        code.startsWith("support.tickets.") ||
+        code.startsWith("notifications.inbox.") ||
+        code === "notifications.controls.view",
+    },
 
-  await db.query(`
-    INSERT INTO role_permissions (role_id, permission_id)
-    SELECT r.id, p.id
-    FROM roles r
-    INNER JOIN permissions p
-      ON p.code = 'student.myclassroom.achievements.view'
-     AND COALESCE(p.is_deleted, FALSE) = FALSE
-    WHERE r.code = 'student'
-    ON CONFLICT DO NOTHING
-  `);
+    // --- Placement Officer ---
+    {
+      roleCodes: ["placement_officer"],
+      permissionFilter: (code) =>
+        code === "dashboard.view" ||
+        code.startsWith("institution.placements.") ||
+        code === "managestudents.allstudents.view" ||
+        code === "institution.noticeboard.view" ||
+        code === "notifications.inbox.view",
+    },
 
-  await db.query(`
-    INSERT INTO role_permissions (role_id, permission_id)
-    SELECT r.id, p.id
-    FROM roles r
-    INNER JOIN permissions p
-      ON p.code = 'student.myclassroom.notes.view'
-     AND COALESCE(p.is_deleted, FALSE) = FALSE
-    WHERE r.code = 'student'
-    ON CONFLICT DO NOTHING
-  `);
+    // --- Hostel Warden ---
+    {
+      roleCodes: ["hostel_warden"],
+      permissionFilter: (code) =>
+        code === "dashboard.view" ||
+        code.startsWith("institution.hostels.") ||
+        code === "managestudents.allstudents.view" ||
+        code.startsWith("institution.complaints.") ||
+        code === "institution.noticeboard.view" ||
+        code === "notifications.inbox.view",
+    },
 
-  await db.query(`
-    INSERT INTO role_permissions (role_id, permission_id)
-    SELECT r.id, p.id
-    FROM roles r
-    INNER JOIN permissions p
-      ON p.code = CASE r.code
-        WHEN 'teacher' THEN 'teacher.support.view'
-        WHEN 'driver' THEN 'driver.support.view'
-      END
-     AND COALESCE(p.is_deleted, FALSE) = FALSE
-    WHERE r.code IN ('teacher', 'driver')
-    ON CONFLICT DO NOTHING
-  `);
+    // --- Transport Coordinator ---
+    {
+      roleCodes: ["transport_coordinator"],
+      permissionFilter: (code) =>
+        code === "dashboard.view" ||
+        code === "managestaff.allstaff.view" ||
+        code === "institution.complaints.view" ||
+        code === "institution.complaints.create" ||
+        code === "institution.noticeboard.view" ||
+        code === "notifications.inbox.view",
+    },
 
-  await db.query(`
-    DELETE FROM role_permissions rp
-    USING roles r, permissions p
-    WHERE rp.role_id = r.id
-      AND rp.permission_id = p.id
-      AND (
-        (r.code = 'student' AND p.code = 'student.support.view')
-        OR (r.code = 'parent' AND p.code = 'parents.support.view')
-      )
-  `);
+    // --- Driver ---
+    {
+      roleCodes: ["driver"],
+      permissionFilter: (code) =>
+        code === "driver.myinstitution.noticeboard.view" ||
+        code === "driver.myinstitution.complaints.view" ||
+        code === "driver.myinstitution.complaints.create" ||
+        code === "driver.myinstitution.myattendance.view" ||
+        code === "driver.myinstitution.myattendance.create" ||
+        code === "driver.myinstitution.mysalary.view" ||
+        code === "driver.myinstitution.myletters.view" ||
+        code === "driver.support.view" ||
+        code === "notifications.inbox.view",
+    },
 
-  await db.query(`
-    INSERT INTO role_permissions (role_id, permission_id)
-    SELECT r.id, p.id
-    FROM roles r
-    INNER JOIN permissions p
-      ON p.code LIKE CASE r.code
-        WHEN 'student' THEN 'student.myinstitution.complaints.%'
-        WHEN 'teacher' THEN 'teacher.myinstitution.complaints.%'
-        WHEN 'parent' THEN 'parent.myinstitution.complaints.%'
-        WHEN 'driver' THEN 'driver.myinstitution.complaints.%'
-        WHEN 'institution_admin' THEN 'institution.complaints.%'
-      END
-     AND COALESCE(p.is_deleted, FALSE) = FALSE
-    WHERE r.code IN ('student', 'teacher', 'parent', 'driver', 'institution_admin')
-    ON CONFLICT DO NOTHING
-  `);
+    // --- Security Guard ---
+    {
+      roleCodes: ["security_guard"],
+      permissionFilter: (code) =>
+        code === "institution.noticeboard.view" ||
+        code === "institution.complaints.create" ||
+        code === "institution.complaints.view" ||
+        code === "notifications.inbox.view",
+    },
 
-  await db.query(`
-    INSERT INTO role_permissions (role_id, permission_id)
-    SELECT r.id, p.id
-    FROM roles r
-    INNER JOIN permissions p
-      ON (
-        (r.code = 'teacher' AND p.code LIKE 'teacher.myinstitution.noticeboard.%')
-        OR (r.code = 'institution_admin' AND p.code LIKE 'institution.noticeboard.%')
-      )
-     AND COALESCE(p.is_deleted, FALSE) = FALSE
-    WHERE r.code IN ('teacher', 'institution_admin')
-    ON CONFLICT DO NOTHING
-  `);
+    // --- Administrative Staff ---
+    {
+      roleCodes: ["administrative_staff"],
+      permissionFilter: (code) =>
+        code === "dashboard.view" ||
+        code.startsWith("managestudents.allstudents.") ||
+        code.startsWith("managestudents.attendance.") ||
+        code.startsWith("managestudents.tc.") ||
+        code.startsWith("managestudents.cards.") ||
+        code === "managestudents.notes.view" ||
+        code === "managestaff.allstaff.view" ||
+        code.startsWith("managestaff.attendance.") ||
+        code.startsWith("managestaff.letters.") ||
+        code.startsWith("managestaff.salary_slips.") ||
+        code.startsWith("institution.noticeboard.") ||
+        code.startsWith("content.institute_calendar.") ||
+        code === "notifications.inbox.view",
+    },
 
-  await db.query(`
-    INSERT INTO role_permissions (role_id, permission_id)
-    SELECT r.id, p.id
-    FROM roles r
-    INNER JOIN permissions p
-      ON p.code = CASE r.code
-        WHEN 'student' THEN 'student.myinstitution.noticeboard.view'
-        WHEN 'teacher' THEN 'teacher.myinstitution.noticeboard.view'
-        WHEN 'parent' THEN 'parent.myinstitution.noticeboard.view'
-        WHEN 'driver' THEN 'driver.myinstitution.noticeboard.view'
-      END
-     AND COALESCE(p.is_deleted, FALSE) = FALSE
-    WHERE r.code IN ('student', 'teacher', 'parent', 'driver')
-    ON CONFLICT DO NOTHING
-  `);
+    // --- Sports Coach ---
+    {
+      roleCodes: ["sports_coach"],
+      permissionFilter: (code) =>
+        code === "dashboard.view" ||
+        code === "managestudents.allstudents.view" ||
+        code.startsWith("managestudents.achievements.") ||
+        code === "content.institute_calendar.view" ||
+        code === "institution.noticeboard.view" ||
+        code === "notifications.inbox.view",
+    },
 
-  await db.query(`
-    INSERT INTO role_permissions (role_id, permission_id)
-    SELECT r.id, p.id
-    FROM roles r
-    INNER JOIN permissions p
-      ON p.code LIKE 'support.tickets.%'
-     AND COALESCE(p.is_deleted, FALSE) = FALSE
-    WHERE r.code = 'institution_admin'
-    ON CONFLICT DO NOTHING
-  `);
+    // --- Student ---
+    {
+      roleCodes: ["student"],
+      permissionFilter: (code) =>
+        code === "student.dashboard.view" ||
+        code === "student.myclassroom.attendance.view" ||
+        code === "student.myclassroom.achievements.view" ||
+        code === "student.myclassroom.assignments.view" ||
+        code === "student.myclassroom.practice_exams.view" ||
+        code === "student.myclassroom.exams.view" ||
+        code === "student.myclassroom.results.view" ||
+        code === "student.myclassroom.timetable.view" ||
+        code === "student.myclassroom.idcard.view" ||
+        code === "student.myclassroom.notes.view" ||
+        code === "student.myclassroom.fees.view" ||
+        code === "student.myprogram.view" ||
+        code === "student.guardians.view" ||
+        code === "student.myinstitution.calendar.view" ||
+        code === "student.myinstitution.complaints.view" ||
+        code === "student.myinstitution.complaints.create" ||
+        code === "student.myinstitution.noticeboard.view" ||
+        code === "student.notification.all.view",
+    },
 
+    // --- Parent ---
+    {
+      roleCodes: ["parent"],
+      permissionFilter: (code) =>
+        code === "parent.dashboard.view" ||
+        code === "parent.childclassroom.attendance.view" ||
+        code === "parent.childclassroom.assignments.view" ||
+        code === "parent.childclassroom.practice_exams.view" ||
+        code === "parent.childclassroom.exams.view" ||
+        code === "parent.childclassroom.timetable.view" ||
+        code === "parent.childclassroom.idcard.view" ||
+        code === "parent.childclassroom.fees.view" ||
+        code === "parent.childinstitution.calendar.view" ||
+        code === "parent.myinstitution.complaints.view" ||
+        code === "parent.myinstitution.complaints.create" ||
+        code === "parent.myinstitution.noticeboard.view" ||
+        code === "notifications.inbox.view" ||
+        code === "parents.support.view",
+    },
+  ];
+
+  for (const def of rolePermissionDefinitions) {
+    const matchedPermCodes = allManagedPerms.filter(def.permissionFilter);
+    if (matchedPermCodes.length === 0) continue;
+
+    await db.query(
+      `
+        INSERT INTO role_permissions (role_id, permission_id)
+        SELECT r.id, p.id
+        FROM roles r
+        CROSS JOIN permissions p
+        WHERE r.code = ANY($1::text[])
+          AND p.code = ANY($2::text[])
+          AND COALESCE(r.is_deleted, FALSE) = FALSE
+          AND COALESCE(p.is_deleted, FALSE) = FALSE
+        ON CONFLICT DO NOTHING
+      `,
+      [def.roleCodes, matchedPermCodes]
+    );
+  }
 }

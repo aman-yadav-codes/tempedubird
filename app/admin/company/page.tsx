@@ -79,6 +79,7 @@ type FaqItem = {
 };
 
 const PAGE_TABS = [
+  { slug: "contact-branches", label: "Contact & Branches", icon: MapPin },
   { slug: "faqs", label: "FAQs", icon: HelpCircle },
   { slug: "privacy-policy", label: "Privacy Policy", icon: ShieldCheck },
   { slug: "terms-and-conditions", label: "Terms & Conditions", icon: FileText },
@@ -199,6 +200,36 @@ export default function AdminCompanyPage() {
     }
   }, [authHeader]);
 
+  // Branch State
+  const [branches, setBranches] = useState<any[]>([]);
+  const [loadingBranches, setLoadingBranches] = useState(false);
+  const [branchDialogOpen, setBranchDialogOpen] = useState(false);
+  const [editingBranch, setEditingBranch] = useState<any | null>(null);
+  const [branchName, setBranchName] = useState("");
+  const [branchCity, setBranchCity] = useState("");
+  const [branchAddress, setBranchAddress] = useState("");
+  const [branchPhone, setBranchPhone] = useState("");
+  const [branchEmail, setBranchEmail] = useState("");
+  const [branchMapUrl, setBranchMapUrl] = useState("");
+  const [branchManagerName, setBranchManagerName] = useState("");
+  const [branchStatus, setBranchStatus] = useState("active");
+  const [savingBranch, setSavingBranch] = useState(false);
+
+  const fetchBranches = useCallback(async () => {
+    setLoadingBranches(true);
+    try {
+      const res = await fetch("/api/admin/company/branches", { headers: authHeader });
+      if (res.ok) {
+        const json = await res.json();
+        setBranches(json.branches || []);
+      }
+    } catch (err) {
+      console.error("Failed to load branches:", err);
+    } finally {
+      setLoadingBranches(false);
+    }
+  }, [authHeader]);
+
   // Fetch all company pages and FAQs
   const fetchAllData = useCallback(async () => {
     setLoadingPages(true);
@@ -224,13 +255,14 @@ export default function AdminCompanyPage() {
 
       void fetchHostels();
       void fetchLibraries();
+      void fetchBranches();
     } catch (err) {
       console.error("Failed to load company data:", err);
       toast.error("Failed to load company pages data.");
     } finally {
       setLoadingPages(false);
     }
-  }, [authHeader, fetchHostels, fetchLibraries]);
+  }, [authHeader, fetchHostels, fetchLibraries, fetchBranches]);
 
   useEffect(() => {
     if (isReady && canAccessCompany) {
@@ -581,6 +613,88 @@ export default function AdminCompanyPage() {
     }
   };
 
+  // Branch Handlers
+  const handleOpenAddBranch = () => {
+    setEditingBranch(null);
+    setBranchName("");
+    setBranchCity("");
+    setBranchAddress("");
+    setBranchPhone("");
+    setBranchEmail("");
+    setBranchMapUrl("");
+    setBranchManagerName("");
+    setBranchStatus("active");
+    setBranchDialogOpen(true);
+  };
+
+  const handleOpenEditBranch = (b: any) => {
+    setEditingBranch(b);
+    setBranchName(b.branch_name || "");
+    setBranchCity(b.city || "");
+    setBranchAddress(b.address || "");
+    setBranchPhone(b.phone || "");
+    setBranchEmail(b.email || "");
+    setBranchMapUrl(b.map_url || "");
+    setBranchManagerName(b.manager_name || "");
+    setBranchStatus(b.status || "active");
+    setBranchDialogOpen(true);
+  };
+
+  const handleSaveBranch = async () => {
+    if (!branchName.trim() || !branchCity.trim() || !branchAddress.trim()) {
+      toast.error("Branch name, city, and address are required");
+      return;
+    }
+    setSavingBranch(true);
+    try {
+      const method = editingBranch ? "PUT" : "POST";
+      const res = await fetch("/api/admin/company/branches", {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeader,
+        },
+        body: JSON.stringify({
+          id: editingBranch?.id,
+          branch_name: branchName,
+          city: branchCity,
+          address: branchAddress,
+          phone: branchPhone,
+          email: branchEmail,
+          map_url: branchMapUrl,
+          manager_name: branchManagerName,
+          status: branchStatus,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to save branch");
+      toast.success(editingBranch ? "Branch updated!" : "Branch added!");
+      setBranchDialogOpen(false);
+      void fetchBranches();
+    } catch (e: any) {
+      toast.error(e.message || "Could not save branch");
+    } finally {
+      setSavingBranch(false);
+    }
+  };
+
+  const handleDeleteBranch = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this branch?")) return;
+    try {
+      const res = await fetch(`/api/admin/company/branches?id=${id}`, {
+        method: "DELETE",
+        headers: authHeader,
+      });
+      if (res.ok) {
+        toast.success("Branch deleted!");
+        void fetchBranches();
+      }
+    } catch (e) {
+      toast.error("Failed to delete branch");
+    }
+  };
+
   if (!isReady || loadingPages) {
     return (
       <div className="flex h-96 items-center justify-center">
@@ -906,6 +1020,90 @@ export default function AdminCompanyPage() {
             </CardContent>
           </Card>
         </TabsContent>
+        {/* Contact & Branches Tab */}
+        <TabsContent value="contact-branches" className="space-y-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between border-b bg-card px-6 py-4">
+              <div>
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-primary" />
+                  Platform Contact & Branches Directory
+                </CardTitle>
+                <CardDescription>
+                  Manage official EduBird regional branch offices, contact centers, and headquarters displayed on the home and contact pages.
+                </CardDescription>
+              </div>
+              <Button onClick={handleOpenAddBranch} size="sm" className="flex items-center gap-1.5">
+                <Plus className="h-4 w-4" /> Add Branch
+              </Button>
+            </CardHeader>
+
+            <CardContent className="p-6 space-y-4">
+              {loadingBranches ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" /> Loading branches...
+                </div>
+              ) : branches.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground border rounded-lg bg-muted/20">
+                  <MapPin className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3" />
+                  <p className="font-medium text-base">No branch offices added yet.</p>
+                  <p className="text-sm text-muted-foreground mb-4">Add regional branches to showcase your platform presence across cities.</p>
+                  <Button onClick={handleOpenAddBranch} size="sm">
+                    <Plus className="mr-1.5 h-4 w-4" /> Add Branch
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {branches.map((b) => (
+                    <div
+                      key={b.id}
+                      className="p-5 rounded-2xl border bg-card hover:border-primary/50 transition-all shadow-xs flex flex-col justify-between space-y-4"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="font-bold text-base text-foreground block">{b.branch_name}</span>
+                            <Badge variant="outline" className="text-xs font-semibold text-primary mt-0.5">
+                              {b.city}
+                            </Badge>
+                          </div>
+                          <Badge variant={b.status === "active" ? "default" : "secondary"} className="text-[10px]">
+                            {b.status}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{b.address}</p>
+                        {b.phone && (
+                          <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-zinc-300">
+                            <Phone className="w-3.5 h-3.5 text-primary" /> {b.phone}
+                          </div>
+                        )}
+                        {b.email && (
+                          <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-zinc-300">
+                            <Mail className="w-3.5 h-3.5 text-primary" /> {b.email}
+                          </div>
+                        )}
+                        {b.manager_name && (
+                          <p className="text-[11px] text-muted-foreground pt-1">
+                            Branch Manager: <span className="font-medium text-foreground">{b.manager_name}</span>
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                        <Button variant="outline" size="sm" onClick={() => handleOpenEditBranch(b)}>
+                          <Edit className="h-4 w-4 mr-1" /> Edit
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteBranch(b.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Add / Edit FAQ Dialog */}
@@ -982,6 +1180,108 @@ export default function AdminCompanyPage() {
             <Button onClick={handleSaveFaq} disabled={savingFaq}>
               {savingFaq ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
               {editingFaq ? "Update FAQ" : "Save FAQ"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add / Edit Branch Dialog */}
+      <Dialog open={branchDialogOpen} onOpenChange={setBranchDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editingBranch ? "Edit Branch Office" : "Add Branch Office"}</DialogTitle>
+            <DialogDescription>
+              Provide regional branch details to feature on the public platform.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="br-name">Branch / Office Name *</Label>
+                <Input
+                  id="br-name"
+                  value={branchName}
+                  onChange={(e) => setBranchName(e.target.value)}
+                  placeholder="e.g. EduBird North Regional Office"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="br-city">City *</Label>
+                <Input
+                  id="br-city"
+                  value={branchCity}
+                  onChange={(e) => setBranchCity(e.target.value)}
+                  placeholder="e.g. New Delhi, Bengaluru"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="br-addr">Full Address *</Label>
+              <Textarea
+                id="br-addr"
+                rows={2}
+                value={branchAddress}
+                onChange={(e) => setBranchAddress(e.target.value)}
+                placeholder="e.g. Plot 102, Knowledge Park III..."
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="br-phone">Contact Phone</Label>
+                <Input
+                  id="br-phone"
+                  value={branchPhone}
+                  onChange={(e) => setBranchPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="br-email">Email Address</Label>
+                <Input
+                  id="br-email"
+                  type="email"
+                  value={branchEmail}
+                  onChange={(e) => setBranchEmail(e.target.value)}
+                  placeholder="delhi@edubird.com"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="br-mgr">Branch Manager</Label>
+                <Input
+                  id="br-mgr"
+                  value={branchManagerName}
+                  onChange={(e) => setBranchManagerName(e.target.value)}
+                  placeholder="e.g. Rajesh Sharma"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="br-status">Status</Label>
+                <select
+                  id="br-status"
+                  value={branchStatus}
+                  onChange={(e) => setBranchStatus(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBranchDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveBranch} disabled={savingBranch}>
+              {savingBranch ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+              {editingBranch ? "Update Branch" : "Save Branch"}
             </Button>
           </DialogFooter>
         </DialogContent>

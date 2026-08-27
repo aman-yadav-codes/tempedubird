@@ -174,15 +174,15 @@ export default function ParentLayout({ children }: { children: React.ReactNode }
           ? [
               {
                 label: "Classroom & Academics",
-                href: "/admin/classroom/attendance",
+                href: "/student/classroom/attendance",
                 icon: School,
                 children: [
-                  { label: "Attendance", href: "/admin/classroom/attendance" },
-                  { label: "Assignments", href: "/admin/classroom/assignments" },
-                  { label: "Exams & Results", href: "/admin/classroom/exams" },
-                  { label: "Timetable", href: "/admin/classroom/my-timetable" },
-                  { label: "ID Card", href: "/admin/classroom/id-card" },
-                  { label: "Fee Management", href: "/admin/classroom/fees" },
+                  { label: "Attendance", href: "/student/classroom/attendance" },
+                  { label: "Assignments", href: "/student/classroom/assignments" },
+                  { label: "Exams & Results", href: "/student/classroom/exams" },
+                  { label: "Timetable", href: "/student/classroom/my-timetable" },
+                  { label: "ID Card", href: "/student/classroom/id-card" },
+                  { label: "Fee Management", href: "/student/classroom/fees" },
                 ],
               },
             ]

@@ -29,6 +29,11 @@ import {
   MapPin,
   Image as ImageIcon,
   X as XIcon,
+  Landmark,
+  CreditCard,
+  Building2,
+  QrCode,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useProgressiveSave } from "@/hooks/use-progressive-save";
@@ -83,6 +88,7 @@ import {
   blankCommissionRule,
   blankEducation,
   blankExperience,
+  blankSalaryAccount,
   blankSalaryComponent,
   blankUserDocument,
   getInitialForm,
@@ -173,7 +179,7 @@ export function AddUserDialog({
   const [internalOpen, setInternalOpen] = useState(false);
   const actualOpen = isControlled ? controlledOpen : internalOpen;
   const [activeStep, setActiveStep] = useState(0);
-  const [form, setForm] = useState<AddUserForm>(() => getInitialForm(roles, user));
+  const [form, setForm] = useState<AddUserForm>(() => getInitialForm(user));
   const [passwordForm, setPasswordForm] = useState({ password: "", confirmPassword: "" });
   const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>({});
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
@@ -941,7 +947,7 @@ function getRoleDisplay(role: RoleOption) {
     setErrors({});
     setPasswordErrors({});
     setPasswordForm({ password: "", confirmPassword: "" });
-    setForm(applyPreferredInstitution(getInitialForm(roles, user)));
+    setForm(applyPreferredInstitution(getInitialForm(user)));
     setSelectedInstitutionBoardId(
       preferredInstitution?.boardId ??
         user?.profile.under_institution_board_id ??
@@ -964,7 +970,7 @@ function getRoleDisplay(role: RoleOption) {
       setErrors({});
       setPasswordErrors({});
       setPasswordForm({ password: "", confirmPassword: "" });
-      setForm(applyPreferredInstitution(getInitialForm(roles, user)));
+      setForm(applyPreferredInstitution(getInitialForm(user)));
       setSelectedInstitutionBoardId(
         preferredInstitution?.boardId ??
           user?.profile.under_institution_board_id ??
@@ -2681,6 +2687,262 @@ function getRoleDisplay(role: RoleOption) {
                           </button>
                         </div>
                       ))}
+                  </div>
+                </div>
+
+                {/* ─── SALARY ACCOUNT & BANKING DETAILS ─── */}
+                <div className="space-y-3 pt-3 border-t">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <Landmark className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                        Salary Account & Bank Details
+                      </Label>
+                      <p className="text-[11px] text-muted-foreground">
+                        Direct salary disbursement account, UPI ID, and statutory compliance numbers (PAN, PF, ESI).
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      Disbursement Ready
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl border bg-muted/20 space-y-3.5">
+                    {/* Payment Mode & Account Type */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Disbursement / Payment Method</Label>
+                        <Select
+                          value={form.salary_account?.payment_mode || "BANK_TRANSFER"}
+                          onValueChange={(val) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              salary_account: {
+                                ...(prev.salary_account || blankSalaryAccount()),
+                                payment_mode: val,
+                              },
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="h-8 text-xs bg-background">
+                            <SelectValue placeholder="Select Payment Mode" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="BANK_TRANSFER">🏦 Direct Bank Transfer (NEFT / RTGS / IMPS)</SelectItem>
+                            <SelectItem value="UPI">📱 UPI / VPA Transfer</SelectItem>
+                            <SelectItem value="CHEQUE">📝 Company Cheque</SelectItem>
+                            <SelectItem value="CASH">💵 Cash Disbursement</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Account Type</Label>
+                        <Select
+                          value={form.salary_account?.account_type || "SALARY"}
+                          onValueChange={(val) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              salary_account: {
+                                ...(prev.salary_account || blankSalaryAccount()),
+                                account_type: val,
+                              },
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="h-8 text-xs bg-background">
+                            <SelectValue placeholder="Select Account Type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="SALARY">💼 Salary Account (Zero Balance)</SelectItem>
+                            <SelectItem value="SAVINGS">🏦 Savings Account</SelectItem>
+                            <SelectItem value="CURRENT">🏢 Current Account</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* Bank Name & Account Holder Name */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Bank Name</Label>
+                        <Input
+                          placeholder="e.g. State Bank of India, HDFC, ICICI..."
+                          value={form.salary_account?.bank_name || ""}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              salary_account: {
+                                ...(prev.salary_account || blankSalaryAccount()),
+                                bank_name: e.target.value,
+                              },
+                            }))
+                          }
+                          className="h-8 text-xs bg-background"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Account Holder Name</Label>
+                        <Input
+                          placeholder="Full name as per bank records"
+                          value={form.salary_account?.account_holder_name || ""}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              salary_account: {
+                                ...(prev.salary_account || blankSalaryAccount()),
+                                account_holder_name: e.target.value,
+                              },
+                            }))
+                          }
+                          className="h-8 text-xs bg-background"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Account Number & IFSC Code */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Bank Account Number</Label>
+                        <Input
+                          placeholder="e.g. 12345678901234"
+                          value={form.salary_account?.account_number || ""}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              salary_account: {
+                                ...(prev.salary_account || blankSalaryAccount()),
+                                account_number: e.target.value,
+                              },
+                            }))
+                          }
+                          className="h-8 text-xs bg-background font-mono"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">IFSC Code</Label>
+                        <Input
+                          placeholder="e.g. SBIN0001234"
+                          value={form.salary_account?.ifsc_code || ""}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              salary_account: {
+                                ...(prev.salary_account || blankSalaryAccount()),
+                                ifsc_code: e.target.value.toUpperCase(),
+                              },
+                            }))
+                          }
+                          className="h-8 text-xs bg-background uppercase font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Branch Name & UPI ID */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Branch Name / Location</Label>
+                        <Input
+                          placeholder="e.g. Connaught Place, New Delhi"
+                          value={form.salary_account?.branch_name || ""}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              salary_account: {
+                                ...(prev.salary_account || blankSalaryAccount()),
+                                branch_name: e.target.value,
+                              },
+                            }))
+                          }
+                          className="h-8 text-xs bg-background"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">UPI ID / VPA (Optional)</Label>
+                        <Input
+                          placeholder="e.g. staff@okhdfcbank / 9876543210@paytm"
+                          value={form.salary_account?.upi_id || ""}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              salary_account: {
+                                ...(prev.salary_account || blankSalaryAccount()),
+                                upi_id: e.target.value.toLowerCase().trim(),
+                              },
+                            }))
+                          }
+                          className="h-8 text-xs bg-background font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Statutory Compliance Identifiers: PAN, UAN/PF, ESI */}
+                    <div className="pt-2 border-t border-border/60">
+                      <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">
+                        Statutory Identification (PAN / PF / ESI)
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold">PAN Card Number</Label>
+                          <Input
+                            placeholder="e.g. ABCDE1234F"
+                            maxLength={10}
+                            value={form.salary_account?.pan_number || ""}
+                            onChange={(e) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                salary_account: {
+                                  ...(prev.salary_account || blankSalaryAccount()),
+                                  pan_number: e.target.value.toUpperCase().trim(),
+                                },
+                              }))
+                            }
+                            className="h-8 text-xs bg-background uppercase font-mono"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold">EPF / UAN Number</Label>
+                          <Input
+                            placeholder="12-digit UAN"
+                            maxLength={12}
+                            value={form.salary_account?.uan_number || ""}
+                            onChange={(e) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                salary_account: {
+                                  ...(prev.salary_account || blankSalaryAccount()),
+                                  uan_number: e.target.value.trim(),
+                                },
+                              }))
+                            }
+                            className="h-8 text-xs bg-background font-mono"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold">ESI Number</Label>
+                          <Input
+                            placeholder="17-digit ESI Number"
+                            maxLength={17}
+                            value={form.salary_account?.esi_number || ""}
+                            onChange={(e) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                salary_account: {
+                                  ...(prev.salary_account || blankSalaryAccount()),
+                                  esi_number: e.target.value.trim(),
+                                },
+                              }))
+                            }
+                            className="h-8 text-xs bg-background font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 

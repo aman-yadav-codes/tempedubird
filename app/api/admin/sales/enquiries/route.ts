@@ -64,6 +64,10 @@ export async function GET(req: Request) {
                 SELECT
                     'vs_' || vs.id::text AS id,
                     vs.full_name AS student_name,
+                    COALESCE(vs.metadata->>'parent_name', NULLIF(TRIM(SUBSTRING(vs.follow_up FROM 'Parent:\\s*([^(|]+)')), '')) AS parent_name,
+                    COALESCE(vs.metadata->>'parent_phone', NULLIF(TRIM(SUBSTRING(vs.follow_up FROM 'Parent:\\s*[^(]+\\(([^)]+)\\)')), '')) AS parent_phone,
+                    COALESCE(vs.metadata->>'parent_email', '') AS parent_email,
+                    COALESCE(vs.metadata->>'child_name', '') AS child_name,
                     vs.phone,
                     vs.email,
                     vs.lead_status AS status,
@@ -71,7 +75,11 @@ export async function GET(req: Request) {
                     COALESCE(vs.estimated_value, 25000)::numeric AS estimated_value,
                     vs.follow_up AS notes,
                     vs.current_page_url AS preferred_program,
-                    COALESCE(NULLIF(TRIM(SUBSTRING(vs.follow_up FROM 'Source:\\s*([^|]+)')), ''), 'Website') AS source,
+                    CASE 
+                        WHEN vs.metadata->>'source_type' = 'institution_website' OR vs.follow_up ILIKE '%Origin: Institution Website%' THEN 'Institution Website'
+                        WHEN vs.metadata->>'source_type' = 'edubird' OR vs.follow_up ILIKE '%Origin: EduBird%' THEN 'EduBird Platform'
+                        ELSE COALESCE(NULLIF(TRIM(SUBSTRING(vs.follow_up FROM 'Source:\\s*([^|]+)')), ''), 'EduBird Platform')
+                    END AS source,
                     vs.created_at,
                     vs.institution_id
                 FROM visitor_sessions vs
@@ -82,14 +90,18 @@ export async function GET(req: Request) {
                 SELECT
                     'se_' || se.id::text AS id,
                     u.full_name AS student_name,
+                    NULL AS parent_name,
+                    NULL AS parent_phone,
+                    NULL AS parent_email,
+                    NULL AS child_name,
                     COALESCE(u.phone, '') AS phone,
                     COALESCE(u.email, '') AS email,
-                    'new enquiry' AS status,
-                    'new enquiry' AS pipeline_stage,
+                    'enrolled' AS status,
+                    'enrolled' AS pipeline_stage,
                     COALESCE(p.fee_amount, 25000)::numeric AS estimated_value,
                     'Direct Student Enrollment Application' AS notes,
                     COALESCE(p.title, 'Academic Course') AS preferred_program,
-                    'Student Enrollment' AS source,
+                    'EduBird Platform' AS source,
                     se.created_at,
                     se.institution_id
                 FROM student_enrollments se

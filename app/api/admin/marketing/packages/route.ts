@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     await requireAdmin(req);
 
     const body = await req.json().catch(() => ({}));
-    const { name, packageFor, packageForTypes, price, priceUnit, storageLimitGb, validityCount, validityUnit, description, isActive } = body;
+    const { name, packageFor, packageForTypes, price, priceUnit, priceMonthly, priceYearly, priceOnce, storageLimitGb, validityCount, validityUnit, description, isActive } = body;
 
     if (!name || typeof name !== "string" || !name.trim()) {
       return NextResponse.json({ error: "Package name is required" }, { status: 400 });
@@ -69,6 +69,9 @@ export async function POST(req: Request) {
       packageForTypes: Array.isArray(packageForTypes) ? packageForTypes : [],
       price: typeof price === "number" ? price : parseFloat(price) || 0,
       priceUnit: priceUnit || "month",
+      priceMonthly: priceMonthly != null ? parseFloat(priceMonthly) : null,
+      priceYearly:  priceYearly  != null ? parseFloat(priceYearly)  : null,
+      priceOnce:    priceOnce    != null ? parseFloat(priceOnce)    : null,
       storageLimitGb: storageLimitGb ? parseFloat(storageLimitGb) : null,
       validityCount: parseInt(validityCount, 10) || 1,
       validityUnit: validityUnit || "month",
@@ -104,7 +107,7 @@ export async function PUT(req: Request) {
       return NextResponse.json({ success: ok });
     }
 
-    const { id, name, packageFor, packageForTypes, price, priceUnit, storageLimitGb, validityCount, validityUnit, description, isActive } = body;
+    const { id, name, packageFor, packageForTypes, price, priceUnit, priceMonthly, priceYearly, priceOnce, storageLimitGb, validityCount, validityUnit, description, isActive } = body;
 
     const pkgId = parseInt(id, 10);
     if (isNaN(pkgId) || pkgId <= 0) {
@@ -117,6 +120,9 @@ export async function PUT(req: Request) {
       packageForTypes: Array.isArray(packageForTypes) ? packageForTypes : undefined,
       price: price !== undefined ? (typeof price === "number" ? price : parseFloat(price) || 0) : undefined,
       priceUnit: priceUnit || undefined,
+      priceMonthly: priceMonthly !== undefined ? (priceMonthly != null ? parseFloat(priceMonthly) : null) : undefined,
+      priceYearly:  priceYearly  !== undefined ? (priceYearly  != null ? parseFloat(priceYearly)  : null) : undefined,
+      priceOnce:    priceOnce    !== undefined ? (priceOnce    != null ? parseFloat(priceOnce)    : null) : undefined,
       storageLimitGb: storageLimitGb !== undefined ? (storageLimitGb ? parseFloat(storageLimitGb) : null) : undefined,
       validityCount: validityCount ? parseInt(validityCount, 10) : undefined,
       validityUnit: validityUnit || undefined,

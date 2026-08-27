@@ -55,6 +55,31 @@ export function ProgramEnrollmentDialog({
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authTab, setAuthTab] = useState<"signin" | "signup">("signup");
 
+  const isParent = Boolean(
+    user?.role_codes?.some((c) => c.toLowerCase().includes("parent") || c.toLowerCase().includes("guardian")) ||
+    user?.roles?.some((r) => r.toLowerCase().includes("parent") || r.toLowerCase().includes("guardian"))
+  );
+  const [childrenList, setChildrenList] = useState<Array<{ student_profile_id: number; full_name: string; class_category_name?: string }>>([]);
+  const [selectedChildId, setSelectedChildId] = useState<string>("");
+
+  useEffect(() => {
+    if (isParent && accessToken) {
+      fetch("/api/parent/children", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.children && Array.isArray(data.children)) {
+            setChildrenList(data.children);
+            if (data.children.length > 0) {
+              setSelectedChildId(String(data.children[0].student_profile_id));
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isParent, accessToken]);
+
   // Store pending enrollment target if user needs to register/login first
   useEffect(() => {
     if (open && program && (!user || !accessToken)) {
@@ -78,17 +103,30 @@ export function ProgramEnrollmentDialog({
       return;
     }
 
+    const selectedChild = childrenList.find((c) => String(c.student_profile_id) === selectedChildId);
+
     setSubmitting(true);
     try {
-      const res = await fetch("/api/student/enrollments", {
+      const res = await fetch("/api/public/enrollments", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          programId: program.id,
-          institutionId: program.institution_id,
+          program_id: program.id,
+          institution_id: program.institution_id || 1,
+          student_name: isParent ? (selectedChild?.full_name || user.full_name) : user.full_name,
+          phone: user.phone || "+91 9876543210",
+          email: user.email,
+          source: isParent ? "Parent Portal Enrollment" : "EduBird Course Page",
+          source_type: "edubird",
+          notes: isParent ? `Enrolled by Parent: ${user.full_name} (${user.phone || ""}) on behalf of child ${selectedChild?.full_name || ""}` : "Direct Student Enrollment",
+          user_id: user.id,
+          parent_name: isParent ? user.full_name : null,
+          parent_phone: isParent ? user.phone : null,
+          parent_email: isParent ? user.email : null,
+          child_name: isParent ? selectedChild?.full_name : null,
         }),
       });
 
@@ -102,12 +140,7 @@ export function ProgramEnrollmentDialog({
         throw new Error(json.error || "Enrollment failed");
       }
 
-      if (json.alreadyEnrolled) {
-        toast.info(json.message || "You are already enrolled in this course!");
-      } else {
-        toast.success(json.message || `Successfully enrolled in ${program.title}!`);
-      }
-
+      toast.success(json.message || `Successfully enrolled in ${program.title}!`);
       sessionStorage.removeItem("pending_enrollment_program");
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("student_enrollment_updated"));

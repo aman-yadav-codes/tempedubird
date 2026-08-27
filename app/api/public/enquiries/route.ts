@@ -83,10 +83,19 @@ export async function POST(req: NextRequest) {
       phone = "Not provided";
     }
 
+    const parentName = String(body.parent_name || "").trim();
+    const parentPhone = String(body.parent_phone || "").trim();
+    const parentEmail = String(body.parent_email || "").trim();
+    const childName = String(body.child_name || "").trim();
+    const sourceOrigin = String(body.source_type || (body.source?.toLowerCase().includes("institution") ? "institution_website" : "edubird"));
+
     const trackingToken = randomUUID();
     const fullNotes = [
       notes,
       `Program: ${preferredProgram}`,
+      `Origin: ${sourceOrigin === "institution_website" ? "Institution Website" : "EduBird Platform"}`,
+      parentName ? `Parent: ${parentName} (${parentPhone || "No phone"})` : "",
+      childName ? `Child: ${childName}` : "",
       `Source: ${source}`,
     ].filter(Boolean).join(" | ");
 
@@ -105,10 +114,11 @@ export async function POST(req: NextRequest) {
         estimated_value,
         follow_up,
         current_page_url,
+        metadata,
         created_at,
         last_seen_at
       )
-      VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, 'new enquiry', 'new enquiry', 25000, $8, $9, NOW(), NOW())
+      VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, 'new enquiry', 'new enquiry', 25000, $8, $9, $10, NOW(), NOW())
       RETURNING id
       `,
       [
@@ -121,6 +131,13 @@ export async function POST(req: NextRequest) {
         email || null,
         fullNotes,
         preferredProgram || "/courses",
+        JSON.stringify({
+          source_type: sourceOrigin,
+          parent_name: parentName || null,
+          parent_phone: parentPhone || null,
+          parent_email: parentEmail || null,
+          child_name: childName || null,
+        }),
       ]
     );
 
@@ -128,6 +145,7 @@ export async function POST(req: NextRequest) {
       success: true,
       id: res.rows[0]?.id,
       institution_id: institutionId,
+      source_type: sourceOrigin,
       message: "Enquiry submitted successfully",
     });
   } catch (err: any) {
