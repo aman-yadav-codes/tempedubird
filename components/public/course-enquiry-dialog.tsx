@@ -45,7 +45,9 @@ export interface CourseEnquiryTarget {
   title: string;
   institute?: string;
   institution_id?: number;
+  institutionId?: number;
   price?: string;
+  fee_amount?: string | number;
   duration?: string;
 }
 
@@ -144,10 +146,9 @@ export function CourseEnquiryDialog({
       return;
     }
 
-    if (!studentName.trim() || !phone.trim()) {
-      toast.error("Please enter student name and contact phone number.");
-      return;
-    }
+    const resolvedName = String(studentName || user?.full_name || "Student").trim();
+    const resolvedPhone = String(phone || user?.phone || "Not provided").trim();
+    const resolvedEmail = String(email || user?.email || "").trim();
 
     setSubmitting(true);
     try {
@@ -158,20 +159,22 @@ export function CourseEnquiryDialog({
         method: "POST",
         headers,
         body: JSON.stringify({
-          student_name: studentName.trim(),
-          phone: phone.trim(),
-          email: email.trim(),
+          student_name: resolvedName,
+          phone: resolvedPhone,
+          email: resolvedEmail,
           preferred_program: course.title,
           program_id: course.id,
           institution_id: course.institution_id || 1,
-          source: isParent ? "Parent Portal Course Inquiry" : source,
+          source: isParent ? "Parent Portal Course Inquiry" : (source || "Website Course Inquiry"),
           source_type: "edubird",
-          notes: isParent ? `Enquiry by Parent: ${user?.full_name || ""} (${phone}) on behalf of child ${studentName}. ${notes.trim()}` : notes.trim(),
+          notes: isParent
+            ? `Enquiry by Parent: ${user?.full_name || ""} (${resolvedPhone}) on behalf of child ${resolvedName}. ${notes.trim()}`
+            : notes.trim(),
           user_id: user?.id || null,
           parent_name: isParent ? user?.full_name : null,
-          parent_phone: isParent ? phone : null,
-          parent_email: isParent ? email : null,
-          child_name: isParent ? studentName : null,
+          parent_phone: isParent ? resolvedPhone : null,
+          parent_email: isParent ? resolvedEmail : null,
+          child_name: isParent ? resolvedName : null,
         }),
       });
 
@@ -195,8 +198,8 @@ export function CourseEnquiryDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg bg-card border-border p-6 shadow-2xl rounded-2xl">
-          <DialogHeader className="space-y-1.5 border-b border-border pb-4">
+        <DialogContent className="max-w-lg max-h-[88vh] flex flex-col p-0 overflow-hidden bg-card border-border shadow-2xl rounded-2xl">
+          <DialogHeader className="p-5 pb-3.5 border-b border-border space-y-1.5 shrink-0 bg-muted/30">
             <div className="flex items-center justify-between">
               <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
@@ -211,13 +214,14 @@ export function CourseEnquiryDialog({
             </DialogDescription>
           </DialogHeader>
 
-          {submitted ? (
-            <div className="py-8 text-center space-y-4">
-              <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-full w-14 h-14 mx-auto flex items-center justify-center ring-4 ring-emerald-500/20">
-                <CheckCircle2 className="h-7 w-7" />
-              </div>
-              <div className="space-y-1">
-                <h4 className="font-extrabold text-foreground text-lg">Enquiry Successfully Submitted!</h4>
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            {submitted ? (
+              <div className="py-8 text-center space-y-4">
+                <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-full w-14 h-14 mx-auto flex items-center justify-center ring-4 ring-emerald-500/20">
+                  <CheckCircle2 className="h-7 w-7" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="font-extrabold text-foreground text-lg">Enquiry Successfully Submitted!</h4>
                 <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
                   Your inquiry for <strong className="text-foreground">{course.title}</strong> has been sent to the institution. You can track updates under <strong className="text-primary">Student Portal &gt; My Enquiries</strong>.
                 </p>
@@ -304,18 +308,25 @@ export function CourseEnquiryDialog({
 
               {/* Verified Account Notice if logged in */}
               {user ? (
-                <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between text-xs text-emerald-700 dark:text-emerald-300">
-                  <span className="font-semibold flex items-center gap-1.5 truncate">
-                    <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                    {isParent ? (
-                      <span>Enquiring as Parent: <strong className="text-foreground font-bold">{user?.full_name || "Parent"}</strong></span>
-                    ) : (
-                      <span>Enquiring as verified student: <strong className="text-foreground font-bold">{user?.full_name || "Student"}</strong></span>
-                    )}
-                  </span>
-                  <Badge variant="outline" className="text-[9px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold uppercase shrink-0">
-                    {isParent ? "Parent Portal" : "Verified"}
-                  </Badge>
+                <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1.5 text-xs text-emerald-800 dark:text-emerald-300">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold flex items-center gap-1.5 truncate text-foreground text-sm">
+                      <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                      {isParent ? (
+                        <span>Enquiring as Parent: <strong className="font-black">{user?.full_name || "Parent"}</strong></span>
+                      ) : (
+                        <span>Enquiring as student: <strong className="font-black">{user?.full_name || "Student"}</strong></span>
+                      )}
+                    </span>
+                    <Badge variant="outline" className="text-[9px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold uppercase shrink-0">
+                      {isParent ? "Parent Portal" : "Verified Account"}
+                    </Badge>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground pt-0.5 font-medium">
+                    {user?.phone && <span>📞 {user.phone}</span>}
+                    {user?.email && <span>✉️ {user.email}</span>}
+                  </div>
                 </div>
               ) : null}
 
@@ -349,88 +360,16 @@ export function CourseEnquiryDialog({
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Student / Child Name */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-foreground flex items-center gap-1">
-                    {isParent ? "Child / Student Name" : "Student Name"} <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    placeholder="e.g. Rahul Verma"
-                    value={studentName}
-                    onChange={(e) => setStudentName(e.target.value)}
-                    className="bg-background text-xs h-10"
-                    required
-                  />
-                </div>
-
-                {/* Phone Number */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-foreground flex items-center gap-1">
-                    {isParent ? "Parent Contact Phone" : "Contact Phone Number"} <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    type="tel"
-                    placeholder="+91 98765 43210"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="bg-background text-xs h-10"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Email Address */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-foreground">Email Address</Label>
-                  <Input
-                    type="email"
-                    placeholder="applicant@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="bg-background text-xs h-10"
-                  />
-                </div>
-
-                {/* Preferred Program / Class */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-foreground">Selected Program</Label>
-                  <Input
-                    value={course.title}
-                    readOnly
-                    disabled
-                    className="bg-muted text-xs h-10 font-bold text-foreground cursor-not-allowed"
-                  />
-                </div>
-              </div>
-
-              {/* Enquiry Source */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-foreground">Enquiry Type / Source</Label>
-                <Select value={source} onValueChange={setSource}>
-                  <SelectTrigger className="bg-background text-xs h-10">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Website Course Inquiry">Website Course Inquiry</SelectItem>
-                    <SelectItem value="Online Counseling">Online Counseling Desk</SelectItem>
-                    <SelectItem value="Admission Question">Admission & Fee Question</SelectItem>
-                    <SelectItem value="Syllabus & Curriculum">Syllabus & Curriculum Request</SelectItem>
-                    <SelectItem value="Scholarship Query">Scholarship & Discount Query</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
               {/* Enquiry Notes & Details */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-foreground">Question / Inquiry Details</Label>
                 <Textarea
-                  placeholder="Enter your specific question about course schedule, fees, eligibility..."
+                  placeholder="Enter your specific question about course schedule, syllabus, batch timings, fees..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  rows={3}
+                  rows={4}
                   className="bg-background text-xs resize-none"
+                  required
                 />
               </div>
 
@@ -463,6 +402,7 @@ export function CourseEnquiryDialog({
               </div>
             </form>
           )}
+          </div>
         </DialogContent>
       </Dialog>
 

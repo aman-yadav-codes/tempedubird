@@ -1,47 +1,106 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/db";
 import { ensureFeatureSchema } from "@/lib/db/ensure-feature-schema";
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
     await ensureFeatureSchema();
-    const url = new URL(req.url);
-    const slot = url.searchParams.get("slot") || "home_hero_banner";
+    const { searchParams } = new URL(req.url);
 
-    const res = await db.query(
-      `
-      SELECT * FROM ads_campaigns
-      WHERE placement_slot = $1
-        AND status = 'active'
-        AND (start_date IS NULL OR start_date <= CURRENT_DATE)
-        AND (end_date IS NULL OR end_date >= CURRENT_DATE)
-      ORDER BY id DESC
-      LIMIT 1
-      `,
-      [slot]
+    const section = searchParams.get("section")?.trim().toLowerCase() || "course";
+    const placement = searchParams.get("placement")?.trim().toLowerCase() || "all";
+
+    const conditions: string[] = [
+      `status = 'active'`,
+      `(start_datetime IS NULL OR start_datetime <= NOW())`,
+      `(end_datetime IS NULL OR end_datetime >= NOW())`,
+      `(max_impressions = 0 OR impressions < max_impressions)`,
+      `(max_clicks = 0 OR clicks < max_clicks)`,
+    ];
+    const params: any[] = [];
+
+    // Target Section Match: specific section or general
+    params.push(section);
+    conditions.push(
+      `(LOWER(COALESCE(target_section, target_entity, 'course')) = $${params.length} OR LOWER(COALESCE(target_section, target_entity, '')) = 'general')`
     );
 
-    if (res.rows.length) {
-      // Auto increment impressions asynchronously
-      db.query(`UPDATE ads_campaigns SET impressions_count = impressions_count + 1 WHERE id = $1`, [res.rows[0].id]).catch(() => {});
+    // Placement Zone Match: top, middle, right_sidebar
+    if (placement !== "all") {
+      params.push(placement);
+      conditions.push(
+        `(LOWER(COALESCE(ads_type, placement_zone, 'top')) = $${params.length})`
+      );
     }
 
-    return NextResponse.json({ ad: res.rows[0] || null });
+    const whereClause = `WHERE ${conditions.join(" AND ")}`;
+    const query = `
+      SELECT 
+        id,
+        title,
+        institution_id,
+        institution_name,
+        ads_type,
+        placement_zone,
+        target_section,
+        target_entity,
+        COALESCE(image_url, creative_url) AS image_url,
+        headline,
+        description,
+        COALESCE(cta_text, 'Learn More') AS cta_text,
+        COALESCE(target_url, '#') AS target_url,
+        COALESCE(open_in_new_tab, true) AS open_in_new_tab,
+        start_datetime,
+        end_datetime,
+        impressions,
+        clicks
+      FROM ads_campaigns
+      ${whereClause}
+      ORDER BY 
+        (CASE WHEN LOWER(COALESCE(target_section, target_entity, '')) = $1 THEN 0 ELSE 1 END) ASC,
+        id DESC
+      LIMIT 10
+    `;
+
+    const res = await db.query(query, params);
+    const ads = res.rows;
+
+    // Increment impressions asynchronously for served ads
+    if (ads.length > 0) {
+      const adIds = ads.map((a: any) => a.id);
+      db.query(`UPDATE ads_campaigns SET impressions = impressions + 1 WHERE id = ANY($1::int[])`, [adIds]).catch(() => {});
+    }
+
+    return NextResponse.json({
+      success: true,
+      ads,
+      primaryAd: ads[0] || null,
+    });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Failed to load ads" }, { status: 500 });
+    console.error("[Public Ads API GET Error]:", error);
+    return NextResponse.json({ success: false, ads: [], primaryAd: null }, { status: 200 });
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     await ensureFeatureSchema();
     const body = await req.json();
-    const { id } = body;
-    if (id) {
-      await db.query(`UPDATE ads_campaigns SET clicks_count = clicks_count + 1 WHERE id = $1`, [id]);
+    const { id, event } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "Ad ID required" }, { status: 400 });
     }
+
+    if (event === "click") {
+      await db.query(`UPDATE ads_campaigns SET clicks = clicks + 1 WHERE id = $1`, [Number(id)]);
+    } else {
+      await db.query(`UPDATE ads_campaigns SET impressions = impressions + 1 WHERE id = $1`, [Number(id)]);
+    }
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Failed to track ad click" }, { status: 500 });
+    console.error("[Public Ads Track Error]:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

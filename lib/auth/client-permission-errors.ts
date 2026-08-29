@@ -21,6 +21,14 @@ export function getApiErrorMessage(json: unknown, fallback: string) {
     return fallback;
   }
 
+  if (json && typeof json === "object" && "issues" in json && json.issues && typeof json.issues === "object") {
+    const issueEntries = Object.entries(json.issues as Record<string, unknown>)
+      .flatMap(([field, msgs]) => Array.isArray(msgs) ? msgs.map((m) => `${field}: ${m}`) : [`${field}: ${msgs}`]);
+    if (issueEntries.length > 0) {
+      return `${error || "Validation failed"} (${issueEntries.join(", ")})`;
+    }
+  }
+
   return error || fallback;
 }
 

@@ -240,6 +240,7 @@ export function PublicFooter() {
   // Quick links: Institutes and duplicate About Us removed, replaced with Blogs
   const quickLinks = [
     { label: "All Courses", href: "/courses" },
+    { label: "Products & Store", href: "/products" },
     { label: "Blogs", href: "/blogs" },
     { label: "Contact Us", href: "/contact" },
     { label: "FAQs", href: "/faqs" },

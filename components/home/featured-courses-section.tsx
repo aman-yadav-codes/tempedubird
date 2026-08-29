@@ -9,9 +9,11 @@ import { Card } from "@/components/ui/card";
 import { CourseCard } from "@/components/public/course-card";
 import { featuredCourses } from "@/lib/data/home-data";
 import { useCategoryAvailability } from "@/hooks/use-category-availability";
+import { useUserLocation } from "@/hooks/use-user-location";
 
 export function FeaturedCoursesSection() {
   const { isInstitutionalAdmin, activeInstitutionId, activeInstitutionName } = useCategoryAvailability();
+  const { location } = useUserLocation();
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -21,17 +23,29 @@ export function FeaturedCoursesSection() {
     async function loadCourses() {
       setLoading(true);
       try {
+        const locParam = !isInstitutionalAdmin && location && location !== "All Locations" ? `&search=${encodeURIComponent(location)}` : "";
         const url =
           isInstitutionalAdmin && activeInstitutionId
             ? `/api/courses?limit=6&institutionId=${activeInstitutionId}`
-            : "/api/courses?limit=6";
+            : `/api/courses?limit=6${locParam}`;
 
         const res = await fetch(url, { cache: "no-store" });
         if (res.ok) {
           const json = await res.json();
           const rows = Array.isArray(json?.data) ? json.data : [];
           if (!ignore) {
-            setCourses(rows);
+            if (rows.length > 0) {
+              setCourses(rows);
+            } else if (locParam) {
+              // Fallback to all if none in specific city
+              const fallbackRes = await fetch("/api/courses?limit=6");
+              if (fallbackRes.ok) {
+                const fbJson = await fallbackRes.json();
+                setCourses(Array.isArray(fbJson?.data) ? fbJson.data : []);
+              }
+            } else {
+              setCourses([]);
+            }
           }
         } else if (!ignore) {
           setCourses([]);
@@ -52,7 +66,7 @@ export function FeaturedCoursesSection() {
     return () => {
       ignore = true;
     };
-  }, [activeInstitutionId, isInstitutionalAdmin]);
+  }, [activeInstitutionId, isInstitutionalAdmin, location]);
 
   return (
     <section className="bg-muted/30 py-16">
@@ -61,13 +75,19 @@ export function FeaturedCoursesSection() {
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold mb-2">
               <BookOpen className="h-3.5 w-3.5" />
-              <span>Marketplace Showcase</span>
+              <span>
+                {location && location !== "All Locations"
+                  ? `Recommended Programs in ${location}`
+                  : "Marketplace Showcase"}
+              </span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight">
               Featured Marketplace Courses
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Handpicked courses from top verified institutes across India.
+              {location && location !== "All Locations"
+                ? `Handpicked courses and certifications from verified institutes in & around ${location}.`
+                : "Handpicked courses from top verified institutes across India."}
             </p>
           </div>
           <Button variant="outline" className="gap-2 shrink-0" asChild>

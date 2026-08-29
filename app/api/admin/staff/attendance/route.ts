@@ -594,8 +594,8 @@ export async function PUT(req: Request) {
             $3::integer,
             attendance_day::date,
             $6::varchar(20),
-            CASE WHEN $6::text = 'LEAVE' THEN NULL ELSE NULLIF($7::text, '')::time END,
-            CASE WHEN $6::text = 'LEAVE' THEN NULL ELSE NULLIF($8::text, '')::time END,
+            CASE WHEN $6::text IN ('LEAVE', 'ABSENT') THEN NULL ELSE NULLIF($7::text, '')::time END,
+            CASE WHEN $6::text IN ('LEAVE', 'ABSENT') THEN NULL ELSE NULLIF($8::text, '')::time END,
             NULLIF($9::text, ''),
             $10::integer,
             timezone('Asia/Kolkata', NOW())
@@ -784,8 +784,8 @@ export async function POST(req: Request) {
             $3,
             attendance_day::date,
             $6,
-            NULLIF($7, '')::time,
-            NULLIF($8, '')::time,
+            CASE WHEN $6::text IN ('LEAVE', 'ABSENT') THEN NULL ELSE NULLIF($7, '')::time END,
+            CASE WHEN $6::text IN ('LEAVE', 'ABSENT') THEN NULL ELSE NULLIF($8, '')::time END,
             NULLIF($9, ''),
             $3,
             timezone('Asia/Kolkata', NOW())

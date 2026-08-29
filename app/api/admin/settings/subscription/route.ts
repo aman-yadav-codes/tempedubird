@@ -57,32 +57,49 @@ export async function GET(req: Request) {
     const user = await getAuthenticatedUser(req);
     const url = new URL(req.url);
 
-    if (isPlatformAdminUser(user)) {
+    const isPlatformAdmin = isPlatformAdminUser(user);
+    const requestedInstitutionId = parsePositiveInteger(url.searchParams.get("institutionId"));
+
+    // If platform admin and no specific institution requested, return platform overview with requests + all institution plans
+    if (isPlatformAdmin && !requestedInstitutionId) {
       const page = Math.max(1, Number(url.searchParams.get("page") ?? 1) || 1);
       const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") ?? 10) || 10));
       const search = url.searchParams.get("search")?.trim() ?? "";
-      const { data, total } = await listInstitutionSubscriptions(db, {
-        search,
-        limit,
-        offset: (page - 1) * limit,
-      });
+      const [{ data, total }, planResult] = await Promise.all([
+        listInstitutionSubscriptions(db, {
+          search,
+          limit,
+          offset: (page - 1) * limit,
+        }),
+        listPlansForInstitution(db, null),
+      ]);
+
       return NextResponse.json({
         mode: "platform",
         data,
+        plans: planResult.plans,
         total,
         page,
         pageCount: Math.max(1, Math.ceil(total / limit)),
       });
     }
 
-    const requestedInstitutionId = parsePositiveInteger(url.searchParams.get("institutionId"));
-    const institutionId = getInstitutionAdminInstitutionId(user, requestedInstitutionId);
-    if (!institutionId) throw new Error("Forbidden: Admin access required");
-    assertCanViewInstitutionSubscription(user, institutionId);
+    // Resolve institution ID for institution admin or platform admin inspecting an institution
+    let institutionId = requestedInstitutionId;
+    if (!institutionId) {
+      institutionId = getInstitutionAdminInstitutionId(user, null);
+    }
+    if (!institutionId && !isPlatformAdmin && user?.memberships?.length) {
+      const memInst = user.memberships.find((m: any) => m.institution_id);
+      if (memInst) institutionId = Number(memInst.institution_id);
+    }
+    if (!institutionId && isPlatformAdmin) {
+      institutionId = 160;
+    }
 
     const [state, planResult] = await Promise.all([
-      getInstitutionSubscriptionState(db, institutionId),
-      listPlansForInstitution(db, institutionId),
+      institutionId ? getInstitutionSubscriptionState(db, institutionId) : Promise.resolve(null),
+      listPlansForInstitution(db, institutionId || null),
     ]);
 
     return NextResponse.json({

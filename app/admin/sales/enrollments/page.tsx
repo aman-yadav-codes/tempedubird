@@ -84,6 +84,12 @@ type EnrollmentRecord = {
   institution_id: number;
   institution_name: string;
   institution_slug?: string;
+  guardian_info?: {
+    guardian_name?: string;
+    guardian_phone?: string;
+    guardian_email?: string;
+    relationship?: string;
+  } | null;
 };
 
 type Stats = {
@@ -365,6 +371,11 @@ export default function AdminSalesEnrollmentsPage() {
                         {item.admission_number && (
                           <Badge variant="secondary" className="text-[10px] font-bold font-mono">
                             {item.admission_number}
+                          </Badge>
+                        )}
+                        {item.guardian_info?.guardian_name && (
+                          <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20 font-bold">
+                            👨‍👩‍👧 Parent: {item.guardian_info.guardian_name} {item.guardian_info.guardian_phone ? `(${item.guardian_info.guardian_phone})` : ""}
                           </Badge>
                         )}
                         <Badge variant="outline" className={`text-[11px] font-bold ${statusCfg.color}`}>

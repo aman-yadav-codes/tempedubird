@@ -13,17 +13,20 @@ export async function GET(req: Request) {
     const userPhone = user.phone ? user.phone.trim() : "";
     const userFullName = user.full_name ? user.full_name.trim() : "";
 
-    // Auto-link any unlinked visitor_sessions for this user strictly by verified email
-    if (userEmail) {
+    // Auto-link any unlinked visitor_sessions for this user by verified email or phone
+    if (userEmail || userPhone) {
       try {
         await db.query(
           `
           UPDATE visitor_sessions
           SET user_id = $1
           WHERE user_id IS NULL
-            AND LOWER(email) = $2
+            AND (
+              ($2 <> '' AND LOWER(email) = $2)
+              OR ($3 <> '' AND phone IS NOT NULL AND REGEXP_REPLACE(phone, '[^0-9]', '', 'g') = REGEXP_REPLACE($3, '[^0-9]', '', 'g'))
+            )
           `,
-          [user.id, userEmail]
+          [user.id, userEmail, userPhone]
         );
       } catch (linkErr) {
         console.error("Error auto-linking visitor sessions:", linkErr);
@@ -40,13 +43,13 @@ export async function GET(req: Request) {
         vs.full_name AS student_name,
         vs.phone,
         vs.email,
-        vs.lead_status AS status,
+        COALESCE(vs.pipeline_stage, vs.lead_status, 'new enquiry') AS status,
         COALESCE(vs.pipeline_stage, 'new enquiry') AS pipeline_stage,
-        vs.follow_up AS notes,
-        vs.current_page_url AS preferred_program,
+        COALESCE(vs.notes, vs.follow_up, 'Direct Course Enquiry') AS notes,
+        COALESCE(prog.title, vs.current_page_url, 'Course Program') AS preferred_program,
         vs.created_at,
         vs.institution_id,
-        COALESCE(ip.name, ip.slug, 'Institution') AS institution_name,
+        COALESCE(ip.name, ip.slug, 'EduBird Partner Institute') AS institution_name,
         prog.id AS program_id,
         prog.title AS program_title
       FROM visitor_sessions vs
@@ -54,7 +57,8 @@ export async function GET(req: Request) {
       LEFT JOIN institution_programs prog ON prog.id = vs.program_id
       WHERE (
         vs.user_id = $1
-        OR (vs.user_id IS NULL AND $2 <> '' AND LOWER(vs.email) = $2)
+        OR ($2 <> '' AND LOWER(vs.email) = $2)
+        OR ($3 <> '' AND vs.phone IS NOT NULL AND REGEXP_REPLACE(vs.phone, '[^0-9]', '', 'g') = REGEXP_REPLACE($3, '[^0-9]', '', 'g'))
         OR vs.user_id IN (
           SELECT sp.user_id
           FROM student_guardians sg
@@ -71,7 +75,7 @@ export async function GET(req: Request) {
       )
     `;
 
-    const params: unknown[] = [user.id, userEmail];
+    const params: unknown[] = [user.id, userEmail, userPhone];
     if (childUserId) {
       params.push(childUserId);
       query += ` AND vs.user_id = $${params.length}`;

@@ -1,7 +1,10 @@
+import { cache } from "react";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db/db";
+import { extractIdFromSlug } from "@/lib/utils/seo-slug";
+import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
 import { PublicInstituteDetailClient } from "./public-institute-detail-client";
 
 export const dynamic = "force-dynamic";
@@ -10,11 +13,15 @@ interface Props {
   params: Promise<{ id: string }> | { id: string };
 }
 
-async function fetchInstitutionFullData(idOrSlug: string) {
+/**
+ * Deduplicated & Parallelized institution data fetcher.
+ * React cache() ensures generateMetadata and Page share the single database execution.
+ */
+const fetchInstitutionFullData = cache(async (idOrSlug: string) => {
   try {
     const { id: instIdNum } = extractIdFromSlug(idOrSlug);
 
-    // 1. Fetch Profile
+    // 1. Fetch Profile First
     const profileRes = await db.query(
       `
       SELECT
@@ -81,108 +88,120 @@ async function fetchInstitutionFullData(idOrSlug: string) {
     const profile = profileRes.rows[0];
     const institutionId = profile.id;
 
-    // 2. Fetch Programs
-    const programsRes = await db.query(
-      `
-      SELECT
-        ip.id,
-        ip.title,
-        ip.slug,
-        ip.about,
-        ip.duration_value,
-        ip.duration_unit,
-        ip.fee_amount,
-        ip.fee_unit,
-        ip.admission_fee,
-        ip.teaching_method,
-        ip.seats_available,
-        pt.name AS program_type_name
-      FROM institution_programs ip
-      LEFT JOIN program_types pt ON pt.id = ip.program_type_id
-      WHERE ip.institution_id = $1
-        AND COALESCE(ip.is_deleted, FALSE) = FALSE
-      ORDER BY ip.id ASC
-      `,
-      [institutionId]
-    );
+    // 2. Fetch All Sub-Resources Concurrently using Promise.allSettled
+    const [
+      programsSettled,
+      facilitiesSettled,
+      placementsSettled,
+      cutoffsSettled,
+      scholarshipsSettled,
+      branchesSettled,
+      mediaSettled,
+      facultySettled,
+      hostelsSettled,
+      librariesSettled,
+      coursesSettled,
+    ] = await Promise.allSettled([
+      // Programs
+      db.query(
+        `
+        SELECT
+          ip.id,
+          ip.title,
+          ip.slug,
+          ip.about,
+          ip.duration_value,
+          ip.duration_unit,
+          ip.fee_amount,
+          ip.fee_unit,
+          ip.admission_fee,
+          ip.teaching_method,
+          ip.seats_available,
+          pt.name AS program_type_name
+        FROM institution_programs ip
+        LEFT JOIN program_types pt ON pt.id = ip.program_type_id
+        WHERE ip.institution_id = $1
+          AND COALESCE(ip.is_deleted, FALSE) = FALSE
+        ORDER BY ip.id ASC
+        `,
+        [institutionId]
+      ),
 
-    // 3. Fetch Facilities
-    const facilitiesRes = await db.query(
-      `
-      SELECT
-        f.id,
-        f.title,
-        f.description,
-        f.display_order,
-        ft.name AS facility_type_name,
-        COALESCE(ROUND(AVG(fr.rating), 1), 4.8) AS avg_rating,
-        COALESCE(COUNT(fr.id), 3)::int AS review_count
-      FROM institution_facilities f
-      LEFT JOIN facility_types ft ON ft.id = f.facility_type_id
-      LEFT JOIN facility_reviews fr ON fr.facility_id = f.id
-      WHERE f.institution_id = $1
-        AND COALESCE(f.is_active, TRUE) = TRUE
-      GROUP BY f.id, ft.name
-      ORDER BY f.display_order ASC, f.id ASC
-      `,
-      [institutionId]
-    );
+      // Facilities
+      db.query(
+        `
+        SELECT
+          f.id,
+          f.title,
+          f.description,
+          f.display_order,
+          ft.name AS facility_type_name,
+          COALESCE(ROUND(AVG(fr.rating), 1), 4.8) AS avg_rating,
+          COALESCE(COUNT(fr.id), 3)::int AS review_count
+        FROM institution_facilities f
+        LEFT JOIN facility_types ft ON ft.id = f.facility_type_id
+        LEFT JOIN facility_reviews fr ON fr.facility_id = f.id
+        WHERE f.institution_id = $1
+          AND COALESCE(f.is_active, TRUE) = TRUE
+        GROUP BY f.id, ft.name
+        ORDER BY f.display_order ASC, f.id ASC
+        `,
+        [institutionId]
+      ),
 
-    // 4. Fetch Placements
-    const placementsRes = await db.query(
-      `
-      SELECT
-        id,
-        year,
-        total_students,
-        placed_students,
-        placement_percentage,
-        average_package,
-        highest_package,
-        lowest_package
-      FROM institution_placements
-      WHERE institution_id = $1
-        AND COALESCE(is_deleted, FALSE) = FALSE
-      ORDER BY year DESC
-      `,
-      [institutionId]
-    );
+      // Placements
+      db.query(
+        `
+        SELECT
+          id,
+          year,
+          total_students,
+          placed_students,
+          placement_percentage,
+          average_package,
+          highest_package,
+          lowest_package
+        FROM institution_placements
+        WHERE institution_id = $1
+          AND COALESCE(is_deleted, FALSE) = FALSE
+        ORDER BY year DESC
+        `,
+        [institutionId]
+      ),
 
-    // 5. Fetch Cutoffs
-    const cutoffsRes = await db.query(
-      `
-      SELECT
-        c.id,
-        c.exam_name,
-        c.ai_response,
-        ip.title AS program_title
-      FROM institution_cutoffs c
-      LEFT JOIN institution_programs ip ON ip.id = c.program_id
-      WHERE c.institution_id = $1
-        AND COALESCE(c.is_deleted, FALSE) = FALSE
-      ORDER BY c.id DESC
-      `,
-      [institutionId]
-    );
+      // Cutoffs
+      db.query(
+        `
+        SELECT
+          c.id,
+          c.exam_name,
+          c.ai_response,
+          ip.title AS program_title
+        FROM institution_cutoffs c
+        LEFT JOIN institution_programs ip ON ip.id = c.program_id
+        WHERE c.institution_id = $1
+          AND COALESCE(c.is_deleted, FALSE) = FALSE
+        ORDER BY c.id DESC
+        `,
+        [institutionId]
+      ),
 
-    // 6. Fetch Scholarships
-    const scholarshipsRes = await db.query(
-      `
-      SELECT
-        s.id,
-        s.ai_response
-      FROM institution_scholarships s
-      WHERE s.institution_id = $1
-        AND COALESCE(s.is_deleted, FALSE) = FALSE
-      ORDER BY s.id DESC
-      `,
-      [institutionId]
-    );
+      // Scholarships
+      db.query(
+        `
+        SELECT
+          s.id,
+          s.ai_response
+        FROM institution_scholarships s
+        WHERE s.institution_id = $1
+          AND COALESCE(s.is_deleted, FALSE) = FALSE
+        ORDER BY s.id DESC
+        `,
+        [institutionId]
+      ),
 
-    // 7. Fetch Branches
-    let branches: any[] = [];
-    try {
-      const branchesRes = await db.query(
+      // Branches
+      db.query(
         `
         SELECT
           id,
@@ -201,16 +220,10 @@ async function fetchInstitutionFullData(idOrSlug: string) {
         ORDER BY sort_order ASC, is_primary DESC, id ASC
         `,
         [institutionId]
-      );
-      branches = branchesRes.rows;
-    } catch {
-      branches = [];
-    }
+      ),
 
-    // 8. Fetch Media (Images and Videos)
-    let mediaList: any[] = [];
-    try {
-      const mediaRes = await db.query(
+      // Media
+      db.query(
         `
         SELECT
           id,
@@ -224,16 +237,10 @@ async function fetchInstitutionFullData(idOrSlug: string) {
         ORDER BY sort_order ASC, id ASC
         `,
         [institutionId]
-      );
-      mediaList = mediaRes.rows;
-    } catch {
-      mediaList = [];
-    }
+      ),
 
-    // 9. Fetch Faculty & Staff
-    let facultyList: any[] = [];
-    try {
-      const facultyRes = await db.query(
+      // Faculty
+      db.query(
         `
         SELECT DISTINCT ON (u.id)
           u.id,
@@ -260,71 +267,46 @@ async function fetchInstitutionFullData(idOrSlug: string) {
         ORDER BY u.id DESC
         `,
         [institutionId]
-      );
-      facultyList = facultyRes.rows;
-    } catch (err) {
-      console.error("Error loading faculty members:", err);
-      facultyList = [];
-    }
+      ),
 
-    // 10. Fetch Hostels
-    let hostels: any[] = [];
-    try {
-      const hostelRes = await db.query(
+      // Hostels
+      db.query(
         `SELECT * FROM institution_hostels WHERE institution_id = $1 AND COALESCE(is_active, TRUE) = TRUE ORDER BY id ASC`,
         [institutionId]
-      );
-      hostels = hostelRes.rows;
-    } catch {
-      hostels = [];
-    }
+      ),
 
-    // 11. Fetch Libraries
-    let libraries: any[] = [];
-    try {
-      const libRes = await db.query(
+      // Libraries
+      db.query(
         `SELECT * FROM institution_libraries WHERE institution_id = $1 AND COALESCE(is_active, TRUE) = TRUE ORDER BY id ASC`,
         [institutionId]
-      );
-      libraries = libRes.rows;
-    } catch {
-      libraries = [];
-    }
+      ),
 
-    // 12. Fetch Courses
-    let courses: any[] = [];
-    try {
-      const coursesRes = await db.query(
+      // Courses
+      db.query(
         `SELECT * FROM institution_courses WHERE institution_id = $1 AND COALESCE(is_active, TRUE) = TRUE ORDER BY sort_order ASC, id ASC`,
         [institutionId]
-      );
-      courses = coursesRes.rows;
-    } catch {
-      courses = [];
-    }
+      ),
+    ]);
 
     return {
       profile,
-      programs: programsRes.rows,
-      courses,
-      facilities: facilitiesRes.rows,
-      placements: placementsRes.rows,
-      cutoffs: cutoffsRes.rows,
-      scholarships: scholarshipsRes.rows,
-      branches,
-      mediaList,
-      facultyList,
-      hostels,
-      libraries,
+      programs: programsSettled.status === "fulfilled" ? programsSettled.value.rows : [],
+      facilities: facilitiesSettled.status === "fulfilled" ? facilitiesSettled.value.rows : [],
+      placements: placementsSettled.status === "fulfilled" ? placementsSettled.value.rows : [],
+      cutoffs: cutoffsSettled.status === "fulfilled" ? cutoffsSettled.value.rows : [],
+      scholarships: scholarshipsSettled.status === "fulfilled" ? scholarshipsSettled.value.rows : [],
+      branches: branchesSettled.status === "fulfilled" ? branchesSettled.value.rows : [],
+      mediaList: mediaSettled.status === "fulfilled" ? mediaSettled.value.rows : [],
+      facultyList: facultySettled.status === "fulfilled" ? facultySettled.value.rows : [],
+      hostels: hostelsSettled.status === "fulfilled" ? hostelsSettled.value.rows : [],
+      libraries: librariesSettled.status === "fulfilled" ? librariesSettled.value.rows : [],
+      courses: coursesSettled.status === "fulfilled" ? coursesSettled.value.rows : [],
     };
   } catch (err) {
     console.error("Error loading institution data:", err);
     return null;
   }
-}
-
-import { extractIdFromSlug } from "@/lib/utils/seo-slug";
-import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
+});
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const resolvedParams = await params;

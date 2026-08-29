@@ -216,13 +216,6 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
         { label: "Practice Tests", href: "/practice", icon: CheckSquare, badge: "Quizzes" },
         { label: "Lecture Notes", href: "/notes", icon: BookMarked },
         { label: "Explore Courses", href: "/courses", icon: BookOpen },
-      ],
-    },
-    {
-      title: "Campus & Services",
-      items: [
-        { label: "Hostels & Residence", href: "/hostels", icon: Building2 },
-        { label: "Digital Libraries", href: "/libraries", icon: Library },
         { label: "Top Institutes", href: "/institutes", icon: Building2 },
         { label: "Expert Faculty", href: "/teachers", icon: UserCheck },
       ],

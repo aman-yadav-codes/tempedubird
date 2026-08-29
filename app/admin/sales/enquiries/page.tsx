@@ -84,6 +84,9 @@ type EnquiryRecord = {
     id: number;
     student_name: string;
     parent_name?: string | null;
+    parent_phone?: string | null;
+    parent_email?: string | null;
+    child_name?: string | null;
     email?: string | null;
     phone: string;
     preferred_program?: string | null;
@@ -92,6 +95,8 @@ type EnquiryRecord = {
     notes?: string | null;
     created_at: string;
     updated_at?: string;
+    institution_id?: number | null;
+    institution_name?: string | null;
 };
 
 type EnquiryStatusValue =
@@ -359,21 +364,34 @@ export default function SalesEnquiriesPage() {
             accessorKey: "student_name",
             header: "Applicant / Student",
             cell: ({ row }) => (
-                <div>
-                    <p className="font-semibold text-foreground">{row.original.student_name}</p>
+                <div className="space-y-0.5">
+                    <p className="font-bold text-foreground text-sm">{row.original.student_name}</p>
                     {row.original.parent_name && (
-                        <p className="text-xs text-muted-foreground">Parent: {row.original.parent_name}</p>
+                        <div className="flex items-center gap-1 text-[11px] text-purple-600 dark:text-purple-400 font-semibold">
+                            <span>👨‍👩‍👧 Parent: {row.original.parent_name}</span>
+                            {row.original.parent_phone && <span>({row.original.parent_phone})</span>}
+                        </div>
                     )}
                 </div>
             ),
         },
         {
-            accessorKey: "phone",
-            header: "Contact",
+            accessorKey: "institution_name",
+            header: "Target Institution",
             cell: ({ row }) => (
-                <div>
-                    <p className="text-sm font-medium">{row.original.phone}</p>
-                    {row.original.email && <p className="text-xs text-muted-foreground">{row.original.email}</p>}
+                <div className="flex items-center gap-1.5 text-xs text-foreground font-semibold">
+                    <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                    <span>{row.original.institution_name || "EduBird Platform"}</span>
+                </div>
+            ),
+        },
+        {
+            accessorKey: "phone",
+            header: "Contact Details",
+            cell: ({ row }) => (
+                <div className="space-y-0.5">
+                    <p className="text-xs font-semibold text-foreground">{row.original.phone}</p>
+                    {row.original.email && <p className="text-[11px] text-muted-foreground">{row.original.email}</p>}
                 </div>
             ),
         },
@@ -778,8 +796,11 @@ export default function SalesEnquiriesPage() {
                             <div className="rounded-lg border p-4 space-y-2 bg-muted/20">
                                 <p className="font-semibold text-foreground">Applicant Info</p>
                                 <p><span className="text-muted-foreground">Student:</span> {selectedEnquiry?.student_name}</p>
-                                <p><span className="text-muted-foreground">Parent:</span> {selectedEnquiry?.parent_name || "N/A"}</p>
-                                <p><span className="text-muted-foreground">Phone:</span> {selectedEnquiry?.phone}</p>
+                                {selectedEnquiry?.parent_name && (
+                                    <p><span className="text-muted-foreground">Parent:</span> {selectedEnquiry?.parent_name} {selectedEnquiry?.parent_phone ? `(${selectedEnquiry.parent_phone})` : ""}</p>
+                                )}
+                                <p><span className="text-muted-foreground">Target Institution:</span> <strong className="text-foreground">{selectedEnquiry?.institution_name || "EduBird Platform"}</strong></p>
+                                <p><span className="text-muted-foreground">Contact Phone:</span> {selectedEnquiry?.phone}</p>
                                 <p><span className="text-muted-foreground">Email:</span> {selectedEnquiry?.email || "N/A"}</p>
                                 <p><span className="text-muted-foreground">Program:</span> {selectedEnquiry?.preferred_program || "General"}</p>
                                 <p><span className="text-muted-foreground">Source:</span> {selectedEnquiry?.source}</p>

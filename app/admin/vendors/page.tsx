@@ -24,8 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { UniversalLocationPicker } from "@/components/shared/universal-location-picker";
 import {
   Briefcase,
   Building,
@@ -78,6 +78,8 @@ export type Vendor = {
   address: string | null;
   city: string | null;
   location: string | null;
+  country?: string | null;
+  state?: string | null;
   map_url: string | null;
   rating: number;
   status: "active" | "inactive";
@@ -93,7 +95,10 @@ export default function AdminVendorsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [locationFilter, setLocationFilter] = useState("all");
+  const [cityFilter, setCityFilter] = useState("all");
+  const [areaFilter, setAreaFilter] = useState("all");
+  const [availableCities, setAvailableCities] = useState<string[]>([]);
+  const [availableAreas, setAvailableAreas] = useState<string[]>([]);
 
   // Dialog State
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -106,9 +111,11 @@ export default function AdminVendorsPage() {
   const [formPhone, setFormPhone] = useState("");
   const [formEmail, setFormEmail] = useState("");
   const [formImage, setFormImage] = useState("");
-  const [formAddress, setFormAddress] = useState("");
+  const [formCountry, setFormCountry] = useState("India");
+  const [formState, setFormState] = useState("");
   const [formCity, setFormCity] = useState("");
   const [formLocation, setFormLocation] = useState("");
+  const [formAddress, setFormAddress] = useState("");
   const [formRating, setFormRating] = useState("4.8");
   const [formDescription, setFormDescription] = useState("");
   const [formStatus, setFormStatus] = useState<"active" | "inactive">("active");
@@ -118,19 +125,22 @@ export default function AdminVendorsPage() {
     try {
       const params = new URLSearchParams();
       if (selectedCategory && selectedCategory !== "all") params.set("category", selectedCategory);
-      if (locationFilter && locationFilter !== "all") params.set("location", locationFilter);
+      if (cityFilter && cityFilter !== "all") params.set("city", cityFilter);
+      if (areaFilter && areaFilter !== "all") params.set("area", areaFilter);
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
 
       const res = await fetch(`/api/admin/vendors?${params.toString()}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load vendors");
       setVendors(data.vendors || []);
+      if (Array.isArray(data.cities)) setAvailableCities(data.cities);
+      if (Array.isArray(data.areas)) setAvailableAreas(data.areas);
     } catch (err: any) {
       toast.error(err.message || "Failed to fetch vendor records");
     } finally {
       setLoading(false);
     }
-  }, [selectedCategory, locationFilter, searchQuery]);
+  }, [selectedCategory, cityFilter, areaFilter, searchQuery]);
 
   useEffect(() => {
     fetchVendors();
@@ -143,9 +153,11 @@ export default function AdminVendorsPage() {
     setFormPhone("");
     setFormEmail("");
     setFormImage("");
+    setFormCountry("India");
+    setFormState("");
+    setFormCity(cityFilter !== "all" ? cityFilter : "");
+    setFormLocation(areaFilter !== "all" ? areaFilter : "");
     setFormAddress("");
-    setFormCity("");
-    setFormLocation("");
     setFormRating("4.8");
     setFormDescription("");
     setFormStatus("active");
@@ -159,9 +171,11 @@ export default function AdminVendorsPage() {
     setFormPhone(v.phone || "");
     setFormEmail(v.email || "");
     setFormImage(v.profile_image || "");
-    setFormAddress(v.address || "");
+    setFormCountry(v.country || "India");
+    setFormState(v.state || "");
     setFormCity(v.city || "");
     setFormLocation(v.location || "");
+    setFormAddress(v.address || "");
     setFormRating(String(v.rating || 4.5));
     setFormDescription(v.description || "");
     setFormStatus(v.status || "active");
@@ -235,10 +249,6 @@ export default function AdminVendorsPage() {
     }
   };
 
-  const uniqueCities = Array.from(
-    new Set(vendors.map((v) => v.city).filter((c): c is string => Boolean(c && c.trim())))
-  );
-
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header Banner */}
@@ -264,33 +274,8 @@ export default function AdminVendorsPage() {
         </div>
       </div>
 
-      {/* Category Pills Slider */}
-      <div className="overflow-x-auto pb-2 scrollbar-thin">
-        <div className="flex gap-2 min-w-max">
-          {VENDOR_CATEGORIES.map((cat) => {
-            const Icon = cat.icon;
-            const isSelected = selectedCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
-                  isSelected
-                    ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                    : "bg-card text-muted-foreground border-border hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{cat.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Search & Location Filter Bar */}
-      <div className="flex flex-col sm:flex-row items-center gap-3 bg-muted/30 p-3 rounded-2xl border">
+      {/* Search & Filters Bar (Category, City, Area) */}
+      <div className="flex flex-col md:flex-row items-center gap-3 bg-muted/30 p-3 rounded-2xl border">
         <div className="relative flex-1 w-full">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -302,16 +287,85 @@ export default function AdminVendorsPage() {
         </div>
 
         <div className="w-full sm:w-56">
-          <Select value={locationFilter} onValueChange={setLocationFilter}>
-            <SelectTrigger className="h-10 text-xs bg-background rounded-xl">
-              <MapPin className="w-3.5 h-3.5 mr-1.5 text-primary" />
-              <SelectValue placeholder="All Locations" />
+          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <SelectTrigger className="h-10 text-xs bg-background rounded-xl font-medium">
+              <div className="flex items-center gap-2 truncate">
+                <Briefcase className="w-3.5 h-3.5 text-primary shrink-0" />
+                <SelectValue placeholder="All Categories" />
+              </div>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Cities & Locations</SelectItem>
-              {uniqueCities.map((city) => (
-                <SelectItem key={city} value={city}>
-                  {city}
+              {VENDOR_CATEGORIES.map((cat) => {
+                const Icon = cat.icon;
+                return (
+                  <SelectItem key={cat.id} value={cat.id} className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span>{cat.label}</span>
+                    </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* City Filter */}
+        <div className="w-full sm:w-48">
+          <Select
+            value={cityFilter}
+            onValueChange={(val) => {
+              setCityFilter(val);
+              setAreaFilter("all");
+            }}
+          >
+            <SelectTrigger className="h-10 text-xs bg-background rounded-xl font-medium">
+              <div className="flex items-center gap-2 truncate">
+                <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                <SelectValue placeholder="All Cities" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span>All Cities</span>
+                </div>
+              </SelectItem>
+              {availableCities.map((city) => (
+                <SelectItem key={city} value={city} className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-amber-500" />
+                    <span>{city}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Area Filter */}
+        <div className="w-full sm:w-48">
+          <Select value={areaFilter} onValueChange={setAreaFilter}>
+            <SelectTrigger className="h-10 text-xs bg-background rounded-xl font-medium">
+              <div className="flex items-center gap-2 truncate">
+                <MapPin className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                <SelectValue placeholder="All Areas" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span>All Areas</span>
+                </div>
+              </SelectItem>
+              {availableAreas.map((area) => (
+                <SelectItem key={area} value={area} className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-purple-500" />
+                    <span>{area}</span>
+                  </div>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -383,12 +437,25 @@ export default function AdminVendorsPage() {
                       <span className="truncate">{vendor.email}</span>
                     </div>
                   )}
-                  {(vendor.location || vendor.city || vendor.address) && (
-                    <div className="flex items-start gap-2">
+                  {(vendor.city || vendor.location) && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      {vendor.city && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800">
+                          <MapPin className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                          {vendor.city}
+                        </span>
+                      )}
+                      {vendor.location && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200/80 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800">
+                          Area: {vendor.location}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {vendor.address && (
+                    <div className="flex items-start gap-2 text-[11px] text-muted-foreground">
                       <MapPin className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
-                      <span>
-                        {[vendor.location, vendor.city, vendor.address].filter(Boolean).join(", ")}
-                      </span>
+                      <span>{vendor.address}</span>
                     </div>
                   )}
                   <div className="flex items-center gap-1.5 pt-1">
@@ -484,27 +551,28 @@ export default function AdminVendorsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="v-city">City</Label>
-                  <Input
-                    id="v-city"
-                    value={formCity}
-                    onChange={(e) => setFormCity(e.target.value)}
-                    placeholder="e.g. New Delhi, Pune"
-                  />
-                </div>
+              {/* Standard Address & Map Pin Location */}
+              <div className="pt-2 border-t">
+                <UniversalLocationPicker
+                  value={{
+                    country: formCountry,
+                    state: formState,
+                    city: formCity,
+                    area: formLocation,
+                    address: formAddress,
+                  }}
+                  onChange={(loc) => {
+                    setFormCountry(loc.country || "India");
+                    setFormState(loc.state || "");
+                    setFormCity(loc.city || "");
+                    setFormLocation(loc.area || "");
+                    setFormAddress(loc.address || "");
+                  }}
+                  showCoordinates={false}
+                />
+              </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="v-loc">Location / Area</Label>
-                  <Input
-                    id="v-loc"
-                    value={formLocation}
-                    onChange={(e) => setFormLocation(e.target.value)}
-                    placeholder="e.g. Sector 62, North Campus"
-                  />
-                </div>
-
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="v-rating">Rating (1 to 5)</Label>
                   <Input
@@ -517,27 +585,15 @@ export default function AdminVendorsPage() {
                     onChange={(e) => setFormRating(e.target.value)}
                   />
                 </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="v-image">Profile Picture / Logo URL</Label>
-                <Input
-                  id="v-image"
-                  value={formImage}
-                  onChange={(e) => setFormImage(e.target.value)}
-                  placeholder="https://images.unsplash.com/... or /images/..."
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="v-addr">Full Address</Label>
-                <Textarea
-                  id="v-addr"
-                  rows={2}
-                  value={formAddress}
-                  onChange={(e) => setFormAddress(e.target.value)}
-                  placeholder="Street address, shop number, landmark..."
-                />
+                <div className="space-y-1.5">
+                  <Label htmlFor="v-img">Profile Picture / Logo URL</Label>
+                  <Input
+                    id="v-img"
+                    value={formImage}
+                    onChange={(e) => setFormImage(e.target.value)}
+                    placeholder="https://images.unsplash.com/..."
+                  />
+                </div>
               </div>
 
               <div className="space-y-1.5">

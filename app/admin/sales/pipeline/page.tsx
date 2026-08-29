@@ -516,27 +516,6 @@ export default function SalesPipelinePage() {
                   className="pl-9 h-9 text-xs font-semibold bg-white"
                 />
               </div>
-
-              <div className="flex items-center gap-1 bg-slate-200/70 p-1 rounded-xl">
-                <button
-                  onClick={() => setViewMode("tabs")}
-                  title="Tab View"
-                  className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    viewMode === "tabs" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  <LayoutGrid className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode("board")}
-                  title="Kanban Board View"
-                  className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    viewMode === "board" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  <Columns className="h-4 w-4" />
-                </button>
-              </div>
             </div>
           </div>
 

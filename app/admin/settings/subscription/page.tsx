@@ -164,6 +164,14 @@ export default function SubscriptionSettingsPage() {
       if (json.mode === "platform") {
         setPlatformRows(json.data ?? []);
         setPlatformTotal(Number(json.total ?? 0));
+        if (json.plans) {
+          setInstitutionData({
+            institution: null,
+            subscription: null,
+            is_valid: false,
+            plans: json.plans ?? [],
+          });
+        }
       } else {
         setInstitutionData(json.data ?? null);
       }

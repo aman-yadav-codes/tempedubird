@@ -58,6 +58,7 @@ type Guardian = {
 export default function StudentGuardiansPage() {
   const { user, accessToken } = useAuthStore();
   const [guardians, setGuardians] = useState<Guardian[]>([]);
+  const [parentPackages, setParentPackages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -77,12 +78,19 @@ export default function StudentGuardiansPage() {
       const headers: Record<string, string> = {};
       if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
 
-      const res = await fetch("/api/student/guardians", { headers });
-      const json = await res.json();
-      if (res.ok) {
+      const [guardiansRes, packagesRes] = await Promise.allSettled([
+        fetch("/api/student/guardians", { headers }),
+        fetch("/api/public/packages?audience=parent"),
+      ]);
+
+      if (guardiansRes.status === "fulfilled" && guardiansRes.value.ok) {
+        const json = await guardiansRes.value.json();
         setGuardians(json.data || []);
-      } else {
-        toast.error(json.error || "Failed to load guardians");
+      }
+
+      if (packagesRes.status === "fulfilled" && packagesRes.value.ok) {
+        const pJson = await packagesRes.value.json();
+        setParentPackages(pJson.packages || []);
       }
     } catch (err) {
       toast.error("Error loading guardian records");
@@ -350,6 +358,83 @@ export default function StudentGuardiansPage() {
           </div>
         </div>
       )}
+
+      {/* PARENT PACKAGES CREATED BY PLATFORM ADMIN */}
+      <div className="space-y-4 pt-6 border-t border-border">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 text-xs font-bold uppercase tracking-wider mb-0.5">
+              <ShieldCheck className="h-4 w-4" /> Parent & Guardian Care Plans
+            </div>
+            <h2 className="text-xl font-bold text-foreground">Guardian Monitoring & Analytics Packages</h2>
+            <p className="text-xs text-muted-foreground">
+              Official packages created by platform administration for parent SMS alerts, attendance logs, and academic progress tracking.
+            </p>
+          </div>
+
+          <Link href="/packages?audience=parent">
+            <Button variant="outline" size="sm" className="font-bold text-xs gap-1 h-9 rounded-xl">
+              View All Parent Plans
+            </Button>
+          </Link>
+        </div>
+
+        <div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 pt-2">
+          {parentPackages.length > 0 ? (
+            parentPackages.map((pkg) => {
+              const features = pkg.description
+                ? pkg.description.split("\n").map((f: string) => f.trim()).filter(Boolean)
+                : ["Instant SMS & WhatsApp Alerts", "Attendance & Leave Tracking", "Fee Payment & Receipt Receipts", "Direct Tutor Connect"];
+
+              return (
+                <Card
+                  key={pkg.id}
+                  className="p-6 rounded-2xl border border-border bg-card shadow-2xs hover:border-rose-500/40 hover:shadow-md transition-all flex flex-col justify-between space-y-5"
+                >
+                  <div className="space-y-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 text-[10px] font-bold mb-1.5">
+                          Parent Tier
+                        </Badge>
+                        <h3 className="font-extrabold text-lg text-foreground">{pkg.name}</h3>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-2xl font-black text-rose-600 dark:text-rose-400">
+                          ₹{Number(pkg.price).toLocaleString("en-IN")}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground block font-semibold">
+                          / {pkg.price_unit || "month"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t border-border/60">
+                      {features.map((feat: string, fIdx: number) => (
+                        <div key={fIdx} className="flex items-start gap-2 text-xs text-muted-foreground">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                          <span>{feat}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <Link href="/packages?audience=parent" className="block pt-2">
+                    <Button className="w-full text-xs font-bold rounded-xl bg-rose-600 text-white hover:bg-rose-700 shadow-xs cursor-pointer">
+                      Subscribe Guardian Plan
+                    </Button>
+                  </Link>
+                </Card>
+              );
+            })
+          ) : (
+            <Card className="p-8 text-center text-xs text-muted-foreground col-span-full border-dashed">
+              Loading available parent packages...
+            </Card>
+          )}
+        </div>
+      </div>
 
       {/* MANAGE GUARDIANS DIALOG (EXACT SAME OPTIONS AS INSTITUTION ADMIN) */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

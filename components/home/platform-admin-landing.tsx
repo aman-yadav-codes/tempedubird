@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -45,9 +45,13 @@ import {
   MessageSquare,
   Compass,
   ArrowUpRight,
+  Loader2,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { parseSearchIntent } from "@/lib/utils/search-intent";
+import { useUserLocation } from "@/hooks/use-user-location";
 import { Card, CardContent } from "@/components/ui/card";
 import { CategoriesSection } from "@/components/home/categories-section";
 import { FeaturedCoursesSection } from "@/components/home/featured-courses-section";
@@ -61,12 +65,7 @@ const PLATFORM_STATS = [
   { value: "1.2M+", label: "Active Students & Parents", icon: TrendingUp },
 ];
 
-const SEARCH_TABS = [
-  { id: "courses", label: "Top Courses", placeholder: "Search courses by name, stream, degree (e.g. B.Tech, NEET, MBA)...", href: "/courses" },
-  { id: "institutes", label: "Institutions & Colleges", placeholder: "Search universities, schools, coaching institutes by name or city...", href: "/institutes" },
-  { id: "teachers", label: "Expert Teachers", placeholder: "Search verified faculty by subject, specialization, or institute...", href: "/teachers" },
-  { id: "practice", label: "Practice & Exams", placeholder: "Search mock tests, practice quizzes, exam series & past papers...", href: "/practice" },
-];
+
 
 const CORE_VALUE_PROPOSITIONS = [
   {
@@ -132,9 +131,69 @@ const CORE_VALUE_PROPOSITIONS = [
 ];
 
 export function PlatformAdminLanding() {
-  const [activeSearchTab, setActiveSearchTab] = useState("courses");
+  const { location, isDetected } = useUserLocation();
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<{
+    courses: any[];
+    institutes: any[];
+    teachers: any[];
+    practice: any[];
+    notes: any[];
+  } | null>(null);
+  const [searchTotal, setSearchTotal] = useState(0);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchCategoryFilter, setSearchCategoryFilter] = useState<string>("all");
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  // Close search dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setIsSearchOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Debounced live search fetching
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setSearchResults(null);
+      setSearchTotal(0);
+      setIsSearching(false);
+      setSearchCategoryFilter("all");
+      return;
+    }
+
+    const detected = parseSearchIntent(q);
+    if (detected.isIntentDetected) {
+      setSearchCategoryFilter(detected.category);
+    }
+
+    setIsSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/public/search?q=${encodeURIComponent(q)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setSearchResults(data.results);
+            setSearchTotal(data.total);
+          }
+        }
+      } catch (err) {
+        console.error("Instant search error:", err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Dynamic Platform Settings & Contact Details
   const [contactData, setContactData] = useState<{
@@ -183,13 +242,23 @@ export function PlatformAdminLanding() {
       })
       .catch(() => undefined);
 
-    // 2. Fetch Partner Institutes for Marketplace Showcase
-    fetch("/api/institutions?limit=6")
+    // 2. Fetch Partner Institutes for Marketplace Showcase (Location-aware)
+    const locParam = location && location !== "All Locations" ? `&location=${encodeURIComponent(location)}` : "";
+    fetch(`/api/institutions?limit=6${locParam}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
         const rows = Array.isArray(json?.data) ? json.data : Array.isArray(json?.institutions) ? json.institutions : [];
         if (rows.length > 0) {
           setPartnerInstitutes(rows);
+        } else if (locParam) {
+          // Fallback to all if none in specific city
+          fetch("/api/institutions?limit=6")
+            .then((r) => (r.ok ? r.json() : null))
+            .then((allJson) => {
+              const allRows = Array.isArray(allJson?.data) ? allJson.data : [];
+              setPartnerInstitutes(allRows);
+            })
+            .catch(() => undefined);
         }
       })
       .catch(() => undefined);
@@ -215,25 +284,19 @@ export function PlatformAdminLanding() {
         }
       })
       .catch(() => undefined);
-  }, []);
+  }, [location]);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSearchSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     const query = searchQuery.trim();
     if (!query) return;
+    setIsSearchOpen(false);
 
-    if (activeSearchTab === "institutes") {
-      router.push(`/institutes?search=${encodeURIComponent(query)}`);
-    } else if (activeSearchTab === "teachers") {
-      router.push(`/teachers?search=${encodeURIComponent(query)}`);
-    } else if (activeSearchTab === "practice") {
-      router.push(`/practice?search=${encodeURIComponent(query)}`);
-    } else {
-      router.push(`/courses?search=${encodeURIComponent(query)}`);
-    }
+    const intent = parseSearchIntent(query);
+    const finalParam = intent.cleanQuery ? encodeURIComponent(intent.cleanQuery) : "";
+    const targetUrl = finalParam ? `${intent.targetRoute}?search=${finalParam}` : intent.targetRoute;
+    router.push(targetUrl);
   };
-
-  const currentTabInfo = SEARCH_TABS.find((t) => t.id === activeSearchTab) || SEARCH_TABS[0];
 
   return (
     <div className="space-y-0 animate-in fade-in duration-300">
@@ -263,26 +326,8 @@ export function PlatformAdminLanding() {
               Compare institutions by verified ratings, enroll in top-rated courses, learn from premier educators, practice mock exams, and track your child&apos;s academic performance in real time.
             </p>
 
-            {/* 4-in-1 Smart Search with Category Tabs */}
-            <div className="bg-white p-3 sm:p-4 rounded-3xl shadow-xl border border-gray-200/80 max-w-3xl mx-auto text-left space-y-3">
-              {/* Tab Selector */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-                {SEARCH_TABS.map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveSearchTab(tab.id)}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
-                      activeSearchTab === tab.id
-                        ? "bg-rose-600 text-white shadow-sm"
-                        : "bg-gray-100 hover:bg-gray-200/80 text-gray-600"
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
+            {/* Universal Instant Live Search Bar */}
+            <div ref={searchContainerRef} className="relative bg-white p-3 sm:p-4 rounded-3xl shadow-xl border border-gray-200/80 max-w-3xl mx-auto text-left space-y-3">
               {/* Search Form */}
               <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row items-center gap-2">
                 <div className="relative flex-1 w-full flex items-center">
@@ -290,10 +335,29 @@ export function PlatformAdminLanding() {
                   <input
                     type="text"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={currentTabInfo.placeholder}
-                    className="w-full bg-slate-50 hover:bg-slate-100/70 focus:bg-white text-gray-900 text-sm font-medium py-3 pl-11 pr-4 rounded-xl border border-gray-200 outline-none transition-all placeholder:text-gray-400"
+                    onFocus={() => setIsSearchOpen(true)}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setIsSearchOpen(true);
+                    }}
+                    placeholder="Search courses, institutes, teachers, practice exams, notes..."
+                    className="w-full bg-slate-50 hover:bg-slate-100/70 focus:bg-white text-gray-900 text-sm font-medium py-3 pl-11 pr-10 rounded-xl border border-gray-200 outline-none transition-all placeholder:text-gray-400"
                   />
+                  {isSearching ? (
+                    <Loader2 className="absolute right-3.5 h-4 w-4 animate-spin text-rose-600" />
+                  ) : searchQuery ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setSearchResults(null);
+                        setSearchTotal(0);
+                      }}
+                      className="absolute right-3.5 p-1 text-gray-400 hover:text-gray-600 rounded-full cursor-pointer"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
                 </div>
                 <button
                   type="submit"
@@ -303,6 +367,256 @@ export function PlatformAdminLanding() {
                   <span>Search</span>
                 </button>
               </form>
+
+              {/* Instant Search Results Dropdown Popover */}
+              {isSearchOpen && searchQuery.trim().length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl border border-gray-200 shadow-2xl z-50 overflow-hidden max-h-[460px] flex flex-col animate-in fade-in slide-in-from-top-2 duration-150">
+                  {/* Category Filter Chips inside Results Header */}
+                  <div className="flex items-center gap-1.5 p-3 border-b border-gray-100 bg-gray-50/80 overflow-x-auto scrollbar-none text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setSearchCategoryFilter("all")}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                        searchCategoryFilter === "all"
+                          ? "bg-rose-600 text-white shadow-xs"
+                          : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-100"
+                      }`}
+                    >
+                      All ({searchTotal})
+                    </button>
+                    {Boolean(searchResults?.courses?.length) && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchCategoryFilter("courses")}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                          searchCategoryFilter === "courses"
+                            ? "bg-rose-600 text-white shadow-xs"
+                            : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-100"
+                        }`}
+                      >
+                        Courses ({searchResults?.courses.length})
+                      </button>
+                    )}
+                    {Boolean(searchResults?.institutes?.length) && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchCategoryFilter("institutes")}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                          searchCategoryFilter === "institutes"
+                            ? "bg-rose-600 text-white shadow-xs"
+                            : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-100"
+                        }`}
+                      >
+                        Institutes ({searchResults?.institutes.length})
+                      </button>
+                    )}
+                    {Boolean(searchResults?.teachers?.length) && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchCategoryFilter("teachers")}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                          searchCategoryFilter === "teachers"
+                            ? "bg-rose-600 text-white shadow-xs"
+                            : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-100"
+                        }`}
+                      >
+                        Teachers ({searchResults?.teachers.length})
+                      </button>
+                    )}
+                    {Boolean(searchResults?.practice?.length) && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchCategoryFilter("practice")}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                          searchCategoryFilter === "practice"
+                            ? "bg-rose-600 text-white shadow-xs"
+                            : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-100"
+                        }`}
+                      >
+                        Practice ({searchResults?.practice.length})
+                      </button>
+                    )}
+                    {Boolean(searchResults?.notes?.length) && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchCategoryFilter("notes")}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                          searchCategoryFilter === "notes"
+                            ? "bg-rose-600 text-white shadow-xs"
+                            : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-100"
+                        }`}
+                      >
+                        Notes ({searchResults?.notes.length})
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Scrollable Results List */}
+                  <div className="overflow-y-auto p-2 divide-y divide-gray-50 flex-1">
+                    {isSearching ? (
+                      <div className="flex items-center justify-center py-10 text-gray-400 gap-2 text-xs">
+                        <Loader2 className="h-4 w-4 animate-spin text-rose-600" />
+                        <span>Searching across courses, institutes, teachers...</span>
+                      </div>
+                    ) : searchTotal === 0 ? (
+                      <div className="text-center py-8 text-xs text-gray-500 space-y-1">
+                        <p className="font-semibold text-gray-800">No instant results found for &ldquo;{searchQuery}&rdquo;</p>
+                        <p className="text-gray-400">Press Enter or click Search to explore marketplace courses.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 p-1">
+                        {/* Courses */}
+                        {(searchCategoryFilter === "all" || searchCategoryFilter === "courses") &&
+                          searchResults?.courses &&
+                          searchResults.courses.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 pt-1 flex items-center gap-1.5">
+                                <BookOpen className="h-3 w-3 text-rose-600" /> Courses & Programs
+                              </p>
+                              {searchResults.courses.map((item: any) => (
+                                <Link
+                                  key={`course-${item.id}`}
+                                  href={item.href}
+                                  onClick={() => setIsSearchOpen(false)}
+                                  className="flex items-center justify-between p-2 rounded-xl hover:bg-rose-50/60 transition-colors group cursor-pointer"
+                                >
+                                  <div className="min-w-0 pr-2">
+                                    <p className="text-xs font-bold text-gray-900 group-hover:text-rose-700 truncate">
+                                      {item.title}
+                                    </p>
+                                    <p className="text-[11px] text-gray-500 truncate">{item.subtitle}</p>
+                                  </div>
+                                  <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-rose-600 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+
+                        {/* Institutes */}
+                        {(searchCategoryFilter === "all" || searchCategoryFilter === "institutes") &&
+                          searchResults?.institutes &&
+                          searchResults.institutes.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 pt-1 flex items-center gap-1.5">
+                                <Building2 className="h-3 w-3 text-rose-600" /> Institutes & Colleges
+                              </p>
+                              {searchResults.institutes.map((item: any) => (
+                                <Link
+                                  key={`inst-${item.id}`}
+                                  href={item.href}
+                                  onClick={() => setIsSearchOpen(false)}
+                                  className="flex items-center justify-between p-2 rounded-xl hover:bg-rose-50/60 transition-colors group cursor-pointer"
+                                >
+                                  <div className="min-w-0 pr-2">
+                                    <p className="text-xs font-bold text-gray-900 group-hover:text-rose-700 truncate">
+                                      {item.title}
+                                    </p>
+                                    <p className="text-[11px] text-gray-500 truncate">{item.subtitle}</p>
+                                  </div>
+                                  <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-rose-600 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+
+                        {/* Teachers */}
+                        {(searchCategoryFilter === "all" || searchCategoryFilter === "teachers") &&
+                          searchResults?.teachers &&
+                          searchResults.teachers.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 pt-1 flex items-center gap-1.5">
+                                <UserCheck className="h-3 w-3 text-rose-600" /> Faculty & Mentors
+                              </p>
+                              {searchResults.teachers.map((item: any) => (
+                                <Link
+                                  key={`teacher-${item.id}`}
+                                  href={item.href}
+                                  onClick={() => setIsSearchOpen(false)}
+                                  className="flex items-center justify-between p-2 rounded-xl hover:bg-rose-50/60 transition-colors group cursor-pointer"
+                                >
+                                  <div className="min-w-0 pr-2">
+                                    <p className="text-xs font-bold text-gray-900 group-hover:text-rose-700 truncate">
+                                      {item.title}
+                                    </p>
+                                    <p className="text-[11px] text-gray-500 truncate">{item.subtitle}</p>
+                                  </div>
+                                  <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-rose-600 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+
+                        {/* Practice Tests */}
+                        {(searchCategoryFilter === "all" || searchCategoryFilter === "practice") &&
+                          searchResults?.practice &&
+                          searchResults.practice.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 pt-1 flex items-center gap-1.5">
+                                <CheckSquare className="h-3 w-3 text-rose-600" /> Practice & Mock Tests
+                              </p>
+                              {searchResults.practice.map((item: any) => (
+                                <Link
+                                  key={`practice-${item.id}`}
+                                  href={item.href}
+                                  onClick={() => setIsSearchOpen(false)}
+                                  className="flex items-center justify-between p-2 rounded-xl hover:bg-rose-50/60 transition-colors group cursor-pointer"
+                                >
+                                  <div className="min-w-0 pr-2">
+                                    <p className="text-xs font-bold text-gray-900 group-hover:text-rose-700 truncate">
+                                      {item.title}
+                                    </p>
+                                    <p className="text-[11px] text-gray-500 truncate">{item.subtitle}</p>
+                                  </div>
+                                  <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-rose-600 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+
+                        {/* Study Notes */}
+                        {(searchCategoryFilter === "all" || searchCategoryFilter === "notes") &&
+                          searchResults?.notes &&
+                          searchResults.notes.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 pt-1 flex items-center gap-1.5">
+                                <BookMarked className="h-3 w-3 text-rose-600" /> Study Notes & Handouts
+                              </p>
+                              {searchResults.notes.map((item: any) => (
+                                <Link
+                                  key={`note-${item.id}`}
+                                  href={item.href}
+                                  onClick={() => setIsSearchOpen(false)}
+                                  className="flex items-center justify-between p-2 rounded-xl hover:bg-rose-50/60 transition-colors group cursor-pointer"
+                                >
+                                  <div className="min-w-0 pr-2">
+                                    <p className="text-xs font-bold text-gray-900 group-hover:text-rose-700 truncate">
+                                      {item.title}
+                                    </p>
+                                    <p className="text-[11px] text-gray-500 truncate">{item.subtitle}</p>
+                                  </div>
+                                  <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-rose-600 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Dropdown Footer Action */}
+                  <div className="p-2.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between text-xs">
+                    <span className="text-gray-500 font-medium">Press <kbd className="px-1.5 py-0.5 rounded bg-white border border-gray-200 font-mono text-[10px]">Enter</kbd> to view all results</span>
+                    <button
+                      type="button"
+                      onClick={() => handleSearchSubmit()}
+                      className="text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>View All Results</span>
+                      <ArrowRight className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Quick Tags under Search */}
               <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground pt-1">
@@ -548,7 +862,11 @@ export function PlatformAdminLanding() {
               <div>
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 border border-rose-200/80 text-rose-700 text-xs font-bold mb-2">
                   <Building2 className="h-3.5 w-3.5 text-rose-600" />
-                  <span>National Institutional Network</span>
+                  <span>
+                    {location && location !== "All Locations"
+                      ? `Institutions in & near ${location}`
+                      : "National Institutional Network"}
+                  </span>
                 </div>
                 <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight">
                   Top Partner Institutions & Universities

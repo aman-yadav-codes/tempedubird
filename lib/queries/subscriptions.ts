@@ -185,12 +185,11 @@ export async function getInstitutionSubscriptionState(db: Queryable, institution
   };
 }
 
-export async function listPlansForInstitution(db: Queryable, institutionId: number) {
+export async function listPlansForInstitution(db: Queryable, institutionId?: number | null) {
   await ensureSubscriptionSchema(db);
-  const institution = await getInstitutionTarget(db, institutionId);
-  if (!institution) return { institution: null, plans: [] as SubscriptionPlanRow[] };
+  const institution = institutionId ? await getInstitutionTarget(db, institutionId) : null;
+  const typeName = institution?.institution_type_name ?? "";
 
-  const typeName = institution.institution_type_name ?? "";
   const result = await db.query<SubscriptionPlanRow>(`
     SELECT
       sp.id,
@@ -211,6 +210,9 @@ export async function listPlansForInstitution(db: Queryable, institutionId: numb
         OR sp.package_for_types ? $1
         OR LOWER(sp.package_for) = LOWER($1)
         OR LOWER(sp.package_for) LIKE LOWER($2)
+        OR LOWER(sp.package_for) LIKE '%all%'
+        OR LOWER(sp.package_for) LIKE '%institution%'
+        OR LOWER(sp.package_for) LIKE '%institute%'
       )
     ORDER BY sp.price ASC, sp.name ASC
   `, [typeName, `%${typeName}%`]);

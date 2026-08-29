@@ -334,12 +334,9 @@ export function AsyncSearchPopover<T>({
                                                 </CommandItem>
                                             )}
 
-                                        {allowCustomValue && search.trim() && !displayedItems.some((item) => {
-                                            const label = getLabel(item).trim().toLowerCase();
-                                            return label === search.trim().toLowerCase();
-                                        }) && (
+                                        {allowCustomValue && search.trim() && (
                                             <CommandItem
-                                                className={cn("border-b font-medium text-primary cursor-pointer", itemClassName)}
+                                                className={cn("border-b font-medium text-primary cursor-pointer bg-primary/5 hover:bg-primary/10", itemClassName)}
                                                 value={`__custom__${search.trim()}`}
                                                 onSelect={() => {
                                                     const val = search.trim();
@@ -389,7 +386,13 @@ export function AsyncSearchPopover<T>({
                                             );
                                         })}
                                     </CommandGroup>
-                                    {(!allowCustomValue || !search.trim()) && <CommandEmpty>{emptyText}</CommandEmpty>}
+                                    {(!allowCustomValue || !search.trim()) && (
+                                        <CommandEmpty>
+                                            {allowCustomValue
+                                                ? "Type in the search box above to enter or add any custom company/item."
+                                                : emptyText}
+                                        </CommandEmpty>
+                                    )}
                                 </>
                             )}
 

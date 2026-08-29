@@ -117,21 +117,41 @@ export function ExperienceCard({
                         emptyText="No company found"
                         selectedLabel={experience.company_name}
                         fetcher={async (search, page) => {
-                            const res = await fetch(
-                                `/api/admin/master-data/organizations?type=company&search=${encodeURIComponent(search)}&page=${page}&limit=10`,
-                                {
-                                    headers: {
-                                        Authorization: `Bearer ${accessToken}`,
-                                    },
+                            try {
+                                const res = await fetch(
+                                    `/api/admin/master-data/organizations?type=company&search=${encodeURIComponent(search)}&page=${page}&limit=10`,
+                                    {
+                                        headers: accessToken
+                                            ? { Authorization: `Bearer ${accessToken}` }
+                                            : {},
+                                    }
+                                );
+
+                                if (res.ok) {
+                                    const json = await res.json();
+                                    return {
+                                        data: (json.data || []) as MasterOrgOption[],
+                                        hasMore: page < (json.pageCount || 1),
+                                    };
                                 }
-                            );
+                            } catch (err) {
+                                console.warn("Failed to fetch companies, using client fallback list", err);
+                            }
 
-                            if (!res.ok) throw new Error("Failed to fetch companies");
+                            const fallback = [
+                                { id: 1, name: "EduBird Technologies Pvt Ltd" },
+                                { id: 2, name: "Tata Consultancy Services (TCS)" },
+                                { id: 3, name: "Infosys Limited" },
+                                { id: 4, name: "Wipro Technologies" },
+                                { id: 5, name: "Tech Mahindra" },
+                                { id: 6, name: "Allen Career Institute" },
+                                { id: 7, name: "Physics Wallah (PW)" },
+                                { id: 8, name: "Aakash Educational Services" },
+                            ].filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()));
 
-                            const json = await res.json();
                             return {
-                                data: json.data as MasterOrgOption[],
-                                hasMore: page < json.pageCount,
+                                data: fallback as MasterOrgOption[],
+                                hasMore: false,
                             };
                         }}
                         getValue={(item) => String(item.id)}

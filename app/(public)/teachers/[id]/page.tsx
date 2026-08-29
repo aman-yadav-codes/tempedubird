@@ -22,6 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { RightInquiryForm } from "@/components/public/right-inquiry-form";
+import { DetailSuggestionSidebar } from "@/components/public/detail-suggestion-sidebar";
 import { extractIdFromSlug } from "@/lib/utils/seo-slug";
 import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
 
@@ -254,14 +255,18 @@ export default function TeacherDetailPage() {
             </div>
           </div>
 
-          {/* Right Column: Inquiry Form */}
-          <RightInquiryForm
-            title={`Consult ${teacher.full_name}`}
-            subtitle="Send your learning query to connect directly with this faculty member."
-            selectedItemName={teacher.full_name}
-            categoryLabel="Preferred Subject"
-            categoryOptions={teacher.subjects}
-          />
+          {/* Right Column: Inquiry Form & Suggestions */}
+          <aside className="space-y-6">
+            <RightInquiryForm
+              title={`Consult ${teacher.full_name}`}
+              subtitle="Send your learning query to connect directly with this faculty member."
+              selectedItemName={teacher.full_name}
+              categoryLabel="Preferred Subject"
+              categoryOptions={teacher.subjects}
+            />
+
+            <DetailSuggestionSidebar type="teachers" currentId={teacher.id} />
+          </aside>
         </div>
       </div>
     </div>

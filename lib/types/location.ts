@@ -1,4 +1,4 @@
-export type LocationType = "state" | "city" | "area";
+export type LocationType = "country" | "state" | "city" | "area";
 export type LocationScope = "global" | "seo" | "user" | "institution";
 
 export interface Location {
@@ -8,6 +8,10 @@ export interface Location {
   type: LocationType;
   parent_id: number | null;
   parent_name: string | null;
+  country_name?: string | null;
+  state_name?: string | null;
+  city_name?: string | null;
+  area_name?: string | null;
   latitude: string | null;
   longitude: string | null;
   is_active: boolean;
@@ -21,6 +25,7 @@ export interface ListLocationsOptions {
   limit?: number;
   offset?: number;
   scopes?: string[];
+  type?: string;
 }
 
 export interface CreateLocationData {

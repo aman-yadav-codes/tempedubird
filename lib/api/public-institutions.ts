@@ -79,7 +79,7 @@ export async function handlePublicInstitutionsGet(req: Request) {
 
   if (locationFilter !== "all") {
     params.push(`%${locationFilter}%`);
-    where.push(`(l.name ILIKE $${params.length})`);
+    where.push(`(l.name ILIKE $${params.length} OR COALESCE(p.city, '') ILIKE $${params.length} OR COALESCE(p.address, '') ILIKE $${params.length})`);
   }
 
   const whereSql = `WHERE ${where.join(" AND ")}`;
@@ -128,7 +128,17 @@ export async function handlePublicInstitutionsGet(req: Request) {
               AND lower(COALESCE(media.media_type, '')) IN ('image', 'photo', 'banner', 'cover')
             ORDER BY media.sort_order ASC, media.id ASC
             LIMIT 1
-          ) AS image_url
+          ) AS image_url,
+          COALESCE((
+            SELECT ROUND(AVG(er.rating), 1)::numeric(3,1)
+            FROM entity_reviews er
+            WHERE er.entity_type = 'institution' AND er.entity_id = p.id
+          ), 4.8) AS avg_rating,
+          COALESCE((
+            SELECT COUNT(*)::int
+            FROM entity_reviews er
+            WHERE er.entity_type = 'institution' AND er.entity_id = p.id
+          ), 0) AS reviews_count
         FROM institution_profiles p
         LEFT JOIN institution_types it ON it.id = p.institution_type_id
         LEFT JOIN institution_subtypes ist ON ist.id = p.institution_subtype_id

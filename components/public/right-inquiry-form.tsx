@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { useAuthStore } from "@/store";
 
 type RightInquiryFormProps = {
   title?: string;
@@ -26,6 +27,8 @@ type RightInquiryFormProps = {
   categoryLabel?: string;
   categoryOptions?: string[];
   selectedItemName?: string | null;
+  institutionId?: number | null;
+  programId?: number | null;
   onClearSelectedItem?: () => void;
 };
 
@@ -44,11 +47,14 @@ export function RightInquiryForm({
     "Library Access",
   ],
   selectedItemName,
+  institutionId,
+  programId,
   onClearSelectedItem,
 }: RightInquiryFormProps) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const { user, accessToken } = useAuthStore();
+  const [name, setName] = useState(user?.full_name || "");
+  const [email, setEmail] = useState(user?.email || "");
+  const [phone, setPhone] = useState(user?.phone || "");
   const [category, setCategory] = useState(categoryOptions[0] || "General Inquiry");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -63,23 +69,35 @@ export function RightInquiryForm({
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/public/live-chat/start", {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+      const res = await fetch("/api/public/enquiries", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
-          fullName: name.trim(),
+          student_name: name.trim(),
           email: email.trim(),
           phone: phone.trim(),
-          subject: `${category} Inquiry ${selectedItemName ? `(${selectedItemName})` : ""}`,
-          initialMessage: message.trim() || `Inquiry for ${category} ${selectedItemName ? `- ${selectedItemName}` : ""}`,
+          preferred_program: selectedItemName || category,
+          institution_id: institutionId || 1,
+          program_id: programId || null,
+          user_id: user?.id || null,
+          source: `Platform Inquiry (${category})`,
+          source_type: "edubird",
+          notes: message.trim() || `Inquiry for ${category} ${selectedItemName ? `- ${selectedItemName}` : ""}`,
         }),
       });
 
       if (!res.ok) throw new Error("Failed to submit inquiry.");
 
       setSubmitted(true);
-      toast.success("Inquiry submitted successfully! Our team will contact you shortly.");
+      toast.success("Inquiry submitted successfully! Our counseling team will reach out to you shortly.");
       setMessage("");
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("student_enrollment_updated"));
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Submission failed.");
     } finally {

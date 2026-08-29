@@ -6,6 +6,7 @@ import { useActiveInstitution } from "@/hooks/use-active-institution";
 
 export type CategoryKey =
   | "courses"
+  | "products"
   | "institutes"
   | "practice"
   | "notes"

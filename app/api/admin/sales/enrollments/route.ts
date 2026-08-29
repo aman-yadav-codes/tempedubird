@@ -14,9 +14,8 @@ export async function GET(req: Request) {
     let institutionId: number | null = null;
 
     const isPlatformAdmin = Boolean(
-      user?.role_codes?.includes("super_admin") ||
-      user?.role_codes?.includes("platform_admin") ||
-      user?.role_codes?.includes("admin")
+      user?.role_codes?.some((r: string) => r.toLowerCase().includes("super_admin") || r.toLowerCase().includes("platform_admin") || r.toLowerCase() === "admin") ||
+      user?.roles?.some((r: string) => r.toLowerCase().includes("super") || r.toLowerCase().includes("platform"))
     );
 
     const whereClauses: string[] = ["COALESCE(se.is_deleted, FALSE) = FALSE"];
@@ -76,12 +75,27 @@ export async function GET(req: Request) {
         se.status AS enrollment_status,
         se.admission_date,
         se.created_at,
+        se.institution_id,
+        COALESCE(ip.name, ip.slug, 'EduBird Partner Institute') AS institution_name,
         u.id AS user_id,
         COALESCE(u.full_name, 'Student Lead') AS student_name,
         COALESCE(u.email, '') AS student_email,
         COALESCE(u.phone, '') AS student_phone,
         sp.id AS student_profile_id,
         sp.admission_number,
+        (
+          SELECT json_build_object(
+            'guardian_name', u_guard.full_name,
+            'guardian_phone', u_guard.phone,
+            'guardian_email', u_guard.email,
+            'relationship', sg.relationship
+          )
+          FROM student_guardians sg
+          INNER JOIN users u_guard ON u_guard.id = sg.guardian_user_id
+          WHERE sg.student_id = sp.id AND COALESCE(sg.is_deleted, FALSE) = FALSE
+          ORDER BY sg.is_primary DESC, sg.id DESC
+          LIMIT 1
+        ) AS guardian_info,
         prog.id AS program_id,
         COALESCE(prog.title, 'Enrolled Academic Program') AS program_title,
         prog.slug AS program_slug,

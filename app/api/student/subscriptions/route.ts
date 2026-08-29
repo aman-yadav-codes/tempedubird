@@ -1,30 +1,39 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth/auth";
+import { getAuthUser } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
 import { ensureFeatureSchema } from "@/lib/db/ensure-feature-schema";
 
 export async function GET(req: Request) {
   try {
     await ensureFeatureSchema();
-    const user = await getAuthenticatedUser(req);
+    const user = await getAuthUser(req);
 
-    // 1. Fetch available student packages
+    // 1. Fetch available student packages created by Platform Admin
     const plansRes = await db.query(`
       SELECT 
         id, 
         name, 
-        price, 
+        CAST(price AS DOUBLE PRECISION) AS price, 
         price_unit, 
         validity_count, 
         validity_unit, 
-        storage_limit_gb, 
+        CAST(storage_limit_gb AS DOUBLE PRECISION) AS storage_limit_gb, 
         description,
-        target_role,
-        is_recurring,
-        badge_text
-      FROM marketing_packages
-      WHERE (target_role = 'student' OR target_role IS NULL OR package_for = 'student')
-        AND is_active = true
+        'student' AS target_role,
+        TRUE AS is_recurring,
+        CASE 
+          WHEN price >= 1000 THEN 'Best Value'
+          WHEN price >= 200 THEN 'Most Popular'
+          ELSE 'Standard'
+        END AS badge_text
+      FROM sales_packages
+      WHERE COALESCE(is_deleted, FALSE) = FALSE
+        AND is_active = TRUE
+        AND (
+          package_for ILIKE '%student%' 
+          OR package_for ILIKE '%learner%'
+          OR package_for_types ? 'student'
+        )
       ORDER BY price ASC
     `);
 
@@ -62,29 +71,32 @@ export async function GET(req: Request) {
       ];
     }
 
-    // 2. Fetch user's active subscription
-    const subRes = await db.query(`
-      SELECT 
-        s.id,
-        s.package_id,
-        p.name as package_name,
-        s.status,
-        s.starts_at,
-        s.expires_at,
-        s.price,
-        s.price_unit,
-        s.is_recurring,
-        s.razorpay_payment_id
-      FROM subscriptions s
-      LEFT JOIN marketing_packages p ON s.package_id = p.id
-      WHERE s.user_id = $1 
-        AND s.status = 'active'
-        AND (s.expires_at IS NULL OR s.expires_at >= CURRENT_DATE)
-      ORDER BY s.id DESC
-      LIMIT 1
-    `, [user.id]);
+    // 2. Fetch user's active subscription if user is logged in
+    let activeSubscription = null;
+    if (user?.id) {
+      const subRes = await db.query(`
+        SELECT 
+          s.id,
+          s.package_id,
+          p.name as package_name,
+          s.status,
+          s.starts_at,
+          s.expires_at,
+          s.price,
+          s.price_unit,
+          s.is_recurring,
+          s.razorpay_payment_id
+        FROM subscriptions s
+        LEFT JOIN sales_packages p ON s.package_id = p.id
+        WHERE s.user_id = $1 
+          AND s.status = 'active'
+          AND (s.expires_at IS NULL OR s.expires_at >= CURRENT_DATE)
+        ORDER BY s.id DESC
+        LIMIT 1
+      `, [user.id]);
 
-    const activeSubscription = subRes.rows[0] || null;
+      activeSubscription = subRes.rows[0] || null;
+    }
 
     return NextResponse.json({
       hasActiveSubscription: Boolean(activeSubscription),

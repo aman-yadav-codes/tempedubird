@@ -37,6 +37,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { RightInquiryForm } from "@/components/public/right-inquiry-form";
+import { DetailSuggestionSidebar } from "@/components/public/detail-suggestion-sidebar";
 import { ProgramEnrollmentDialog, type ProgramEnrollmentTarget } from "@/components/public/program-enrollment-dialog";
 import { UniversalFeedbackDialog, type UniversalEntityTarget } from "@/components/public/universal-feedback-dialog";
 
@@ -227,14 +228,6 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                   <TabsTrigger value="facilities" className="rounded-lg font-semibold gap-2">
                     <School className="h-4 w-4" />
                     <span>Facilities ({facilities.length})</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="hostels" className="rounded-lg font-semibold gap-2">
-                    <Building2 className="h-4 w-4" />
-                    <span>Hostel Facilities ({hostels.length})</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="libraries" className="rounded-lg font-semibold gap-2">
-                    <BookOpen className="h-4 w-4" />
-                    <span>Library & E-Resources ({libraries.length})</span>
                   </TabsTrigger>
                   <TabsTrigger value="gallery" className="rounded-lg font-semibold gap-2">
                     <Film className="h-4 w-4" />
@@ -1183,6 +1176,8 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
             </Card>
 
             <RightInquiryForm />
+
+            <DetailSuggestionSidebar type="institutes" currentId={profile.id} />
           </aside>
         </div>
       </div>

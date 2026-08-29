@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   UserCheck,
   Search,
@@ -27,6 +28,9 @@ import { buildTeacherUrl } from "@/lib/utils/seo-slug";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { UniversalFeedbackDialog, type UniversalEntityTarget } from "@/components/public/universal-feedback-dialog";
+import { SharedPublicSidebar } from "@/components/public/shared-public-sidebar";
+import { SharedInterstitialBanner } from "@/components/public/shared-interstitial-banner";
 import {
   Select,
   SelectContent,
@@ -66,13 +70,25 @@ const SUBJECT_OPTIONS = [
 
 export function TeachersDirectory() {
   const { isInstitutionalAdmin, activeInstitutionId } = useCategoryAvailability();
+  const searchParams = useSearchParams();
+  const initialSearch = searchParams?.get("search") || searchParams?.get("q") || "";
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [selectedSubject, setSelectedSubject] = useState("All Subjects");
+
+  // Sync search parameter from URL when it changes
+  useEffect(() => {
+    const q = searchParams?.get("search") || searchParams?.get("q");
+    if (q !== null && q !== undefined && q !== search) {
+      setSearch(q);
+    }
+  }, [searchParams]);
 
   // Left Sidebar Inquiry Form State
   const [selectedTeacherForInquiry, setSelectedTeacherForInquiry] = useState<Teacher | null>(null);
+  const [feedbackTarget, setFeedbackTarget] = useState<UniversalEntityTarget | null>(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [formName, setFormName] = useState("");
   const [formEmail, setFormEmail] = useState("");
   const [formPhone, setFormPhone] = useState("");
@@ -205,134 +221,180 @@ export function TeachersDirectory() {
         </div>
       </div>
 
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
-            <GraduationCap className="h-5 w-5 text-primary" />
-            Available Faculty Members ({teachers.length})
-          </h3>
-          <span className="text-xs text-muted-foreground">Showing verified educational teachers</span>
+      {/* 2-Column Layout */}
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px] items-start">
+        {/* Main Listings Column */}
+        <div className="space-y-6 min-w-0">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
+              <GraduationCap className="h-5 w-5 text-primary" />
+              Available Faculty Members ({teachers.length})
+            </h3>
+            <span className="text-xs text-muted-foreground">Showing verified educational teachers</span>
+          </div>
+
+          {loading ? (
+            <div className="py-20 text-center flex flex-col items-center justify-center gap-3 text-muted-foreground rounded-2xl border border-border bg-card/70 shadow-2xs">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <span className="text-xs">Loading teacher listings...</span>
+            </div>
+          ) : teachers.length === 0 ? (
+            <div className="rounded-2xl border border-dashed p-12 text-center text-muted-foreground space-y-3 shadow-2xs">
+              <UserCheck className="h-10 w-10 mx-auto opacity-30 text-primary" />
+              <p className="font-semibold text-base text-foreground">No Teachers Found</p>
+              <p className="text-xs">Try clearing search keywords or selecting a different subject filter.</p>
+            </div>
+          ) : (
+            <div className="grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+              {teachers.map((teacher, idx) => {
+                const teacherUrl = buildTeacherUrl(teacher.id, teacher.full_name, teacher.designation, teacher.institution_name, teacher.location);
+                const shouldInsertBanner = (idx + 1) % 3 === 0 && idx !== teachers.length - 1;
+                const bannerIdx = Math.floor(idx / 3);
+
+                return (
+                  <React.Fragment key={teacher.id}>
+                    <div
+                      className="rounded-2xl border border-border bg-card p-5 shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between space-y-4 hover:-translate-y-1"
+                    >
+                      <div className="space-y-3">
+                        {/* Header profile row */}
+                        <div className="flex items-start gap-3">
+                          {teacher.avatar_url ? (
+                            <img
+                              src={teacher.avatar_url}
+                              alt={teacher.full_name}
+                              className="h-12 w-12 rounded-xl object-cover ring-2 ring-primary/20 shrink-0"
+                            />
+                          ) : (
+                            <div className="h-12 w-12 rounded-xl bg-primary text-white font-extrabold text-base flex items-center justify-center ring-2 ring-primary/20 shrink-0">
+                              {teacher.full_name.slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1">
+                              <h4 className="font-bold text-base text-foreground truncate">
+                                <Link
+                                  href={teacherUrl}
+                                  className="hover:text-primary hover:underline"
+                                >
+                                  {teacher.full_name}
+                                </Link>
+                              </h4>
+                              {teacher.is_verified && (
+                                <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                              )}
+                            </div>
+
+                            <p className="text-xs font-semibold text-primary truncate mt-0.5">{teacher.designation}</p>
+                            <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5">
+                              <Building2 className="h-3 w-3 shrink-0" />
+                              <span className="truncate">{teacher.institution_name}</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Stats strip */}
+                        <div className="grid grid-cols-3 gap-1.5 p-2 bg-muted/40 rounded-xl text-center text-xs">
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase font-semibold">Exp</p>
+                            <p className="font-bold text-foreground">{teacher.experience_years}+ Yrs</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase font-semibold">Rating</p>
+                            <p className="font-bold text-amber-500 flex items-center justify-center gap-0.5">
+                              <Star className="h-3 w-3 fill-current" /> {teacher.rating ? Number(teacher.rating).toFixed(1) : "4.8"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase font-semibold">Students</p>
+                            <p className="font-bold text-foreground">{teacher.students_taught}+</p>
+                          </div>
+                        </div>
+
+                        {/* Qualification & Subjects */}
+                        <div className="space-y-1.5 text-xs">
+                          <p className="text-muted-foreground flex items-center gap-1.5 truncate">
+                            <Award className="h-3.5 w-3.5 text-primary shrink-0" />
+                            <span className="font-medium text-foreground truncate">{teacher.qualification}</span>
+                          </p>
+
+                          <div className="flex flex-wrap gap-1 pt-0.5">
+                            {teacher.subjects.slice(0, 3).map((sub, i) => (
+                              <Badge key={i} variant="secondary" className="text-[10px] font-medium bg-primary/10 text-primary">
+                                {sub}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Bio */}
+                        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                          {teacher.bio}
+                        </p>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="pt-3 border-t border-border/60 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFeedbackTarget({
+                              type: "teacher",
+                              id: teacher.id,
+                              title: teacher.full_name,
+                              subtitle: `${teacher.designation} • ${teacher.institution_name}`,
+                              avg_rating: teacher.rating,
+                              review_count: teacher.reviews_count,
+                            });
+                            setFeedbackOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 hover:underline cursor-pointer"
+                        >
+                          <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                          <span>{teacher.reviews_count || 18} reviews</span>
+                        </button>
+
+                        <Link href={teacherUrl}>
+                          <Button
+                            size="sm"
+                            className="text-xs font-bold bg-primary text-primary-foreground shadow-2xs rounded-xl cursor-pointer"
+                          >
+                            <span>Profile</span>
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+
+                    {/* 200px Banner after every 3 items */}
+                    {shouldInsertBanner && (
+                      <SharedInterstitialBanner
+                        bannerIndex={bannerIdx}
+                        pageType="teachers"
+                      />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {loading ? (
-          <div className="py-20 text-center flex flex-col items-center justify-center gap-3 text-muted-foreground">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <span className="text-xs">Loading teacher listings...</span>
-          </div>
-        ) : teachers.length === 0 ? (
-          <div className="rounded-2xl border border-dashed p-12 text-center text-muted-foreground space-y-3">
-            <UserCheck className="h-10 w-10 mx-auto opacity-30 text-primary" />
-            <p className="font-semibold text-base text-foreground">No Teachers Found</p>
-            <p className="text-xs">Try clearing search keywords or selecting a different subject filter.</p>
-          </div>
-        ) : (
-          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {teachers.map((teacher) => {
-              const teacherUrl = buildTeacherUrl(teacher.id, teacher.full_name, teacher.designation, teacher.institution_name, teacher.location);
-              return (
-                <div
-                  key={teacher.id}
-                  className="rounded-2xl border border-border bg-card p-6 shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between space-y-5"
-                >
-                  <div className="space-y-4">
-                    {/* Header profile row */}
-                    <div className="flex items-start gap-4">
-                      {teacher.avatar_url ? (
-                        <img
-                          src={teacher.avatar_url}
-                          alt={teacher.full_name}
-                          className="h-14 w-14 rounded-2xl object-cover ring-2 ring-primary/20 shrink-0"
-                        />
-                      ) : (
-                        <div className="h-14 w-14 rounded-2xl bg-primary text-white font-extrabold text-lg flex items-center justify-center ring-2 ring-primary/20 shrink-0">
-                          {teacher.full_name.slice(0, 2).toUpperCase()}
-                        </div>
-                      )}
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <h4 className="font-bold text-base text-foreground truncate">
-                            <Link
-                              href={teacherUrl}
-                              className="hover:text-primary hover:underline"
-                            >
-                              {teacher.full_name}
-                            </Link>
-                          </h4>
-                          {teacher.is_verified && (
-                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                          )}
-                        </div>
-
-                        <p className="text-xs font-semibold text-primary truncate mt-0.5">{teacher.designation}</p>
-                        <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5">
-                          <Building2 className="h-3 w-3 shrink-0" />
-                          <span className="truncate">{teacher.institution_name}</span>
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Stats strip */}
-                    <div className="grid grid-cols-3 gap-2 p-2.5 bg-muted/40 rounded-xl text-center text-xs">
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-semibold">Exp</p>
-                        <p className="font-bold text-foreground">{teacher.experience_years}+ Yrs</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-semibold">Rating</p>
-                        <p className="font-bold text-amber-500 flex items-center justify-center gap-0.5">
-                          <Star className="h-3 w-3 fill-current" /> {teacher.rating}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-semibold">Students</p>
-                        <p className="font-bold text-foreground">{teacher.students_taught}+</p>
-                      </div>
-                    </div>
-
-                    {/* Qualification & Subjects */}
-                    <div className="space-y-2 text-xs">
-                      <p className="text-muted-foreground flex items-center gap-1.5">
-                        <Award className="h-3.5 w-3.5 text-primary shrink-0" />
-                        <span className="font-medium text-foreground">{teacher.qualification}</span>
-                      </p>
-
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {teacher.subjects.map((sub, i) => (
-                          <Badge key={i} variant="secondary" className="text-[11px] font-medium bg-primary/10 text-primary">
-                            {sub}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Bio */}
-                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                      {teacher.bio}
-                    </p>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="pt-3 border-t border-border flex items-center justify-between gap-3">
-                    <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                      <MapPin className="h-3 w-3" /> {teacher.location}
-                    </span>
-
-                    <Link href={teacherUrl}>
-                      <Button
-                        size="sm"
-                        className="text-xs font-bold bg-primary text-primary-foreground shadow-2xs gap-1.5"
-                      >
-                        <span>View Profile</span>
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {/* Right Sidebar Options & Ads */}
+        <SharedPublicSidebar
+          pageType="teachers"
+          quickCategories={SUBJECT_OPTIONS.filter((s) => s !== "All Subjects")}
+          activeCategory={selectedSubject === "All Subjects" ? undefined : selectedSubject}
+          onSelectCategory={(cat) => setSelectedSubject(cat)}
+        />
       </div>
+
+      {/* Universal Feedback & Comment Dialog for Teachers */}
+      <UniversalFeedbackDialog
+        open={feedbackOpen}
+        onOpenChange={setFeedbackOpen}
+        target={feedbackTarget}
+      />
     </div>
   );
 }

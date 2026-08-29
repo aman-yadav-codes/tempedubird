@@ -76,8 +76,17 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "managestaff.allstaff", label: "All Staff", description: "teacher and driver profiles", scope: "institution", page: "/admin/staff" },
   { key: "managestaff.attendance", label: "Staff Attendance", description: "staff attendance", scope: "institution", page: "/admin/staff/attendance" },
   { key: "managestaff.salary", label: "Staff Salary", description: "staff salary records", scope: "institution", page: "/admin/staff/salary" },
-  { key: "managestaff.letters", label: "Staff Letters", description: "staff joining and experience letters", scope: "institution", page: "/admin/staff/letters" },
+  { key: "managestaff.queries", label: "Staff Queries", description: "staff queries and support tickets", scope: "institution", page: "/admin/staff/queries" },
   { key: "managestaff.salary_slips", label: "Salary Slips", description: "staff salary slips", scope: "institution", page: "/admin/staff/salary-slips" },
+  { key: "managestaff.holidays", label: "Staff Holidays", description: "staff holiday and leave calendar", scope: "institution", page: "/admin/staff/holidays" },
+  { key: "managestaff.offer_letters", label: "Offer Letters", description: "staff offer letters", scope: "institution", page: "/admin/staff/offer-letters" },
+  { key: "managestaff.certificates", label: "Staff Certificates", description: "staff certificates and awards", scope: "institution", page: "/admin/staff/certificates" },
+  { key: "managestaff.experience_letters", label: "Experience Letters", description: "staff experience letters", scope: "institution", page: "/admin/staff/experience-letters" },
+  { key: "managestaff.jobs", label: "Our Jobs", description: "staff vacancies and job postings", scope: "institution", page: "/admin/staff/jobs" },
+  { key: "managestaff.applicants", label: "Staff Applicants", description: "job applicants and recruitment pipeline", scope: "institution", page: "/admin/staff/applicants" },
+  { key: "managestaff.appreciation_certificates", label: "Appreciation Certificates", description: "staff appreciation certificates", scope: "institution", page: "/admin/staff/appreciation-certificates" },
+  { key: "managestaff.tasks", label: "Task Management", description: "staff task and deliverable operations", scope: "institution", page: "/admin/operations/tasks" },
+  { key: "managestaff.letters", label: "Staff Letters", description: "staff joining and experience letters", scope: "institution", page: "/admin/staff/letters" },
   { key: "rolespermissions.scopetypes", label: "Scope Types", description: "scope types", scope: "platform", page: "/admin/access-control/scope-types" },
   { key: "rolespermissions.permissions", label: "Permissions", description: "permission codes", scope: "platform", page: "/admin/access-control/permissions" },
   { key: "rolespermissions.roles", label: "Roles", description: "roles", scope: "institution", page: "/admin/access-control/roles" },
@@ -147,8 +156,10 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "finance.recurring_expenses", label: "Recurring Expenses", description: "institution-scoped recurring expenses", scope: "institution", page: "/admin/finance/recurring-expenses" },
   { key: "sales.leads", label: "Sales Lead", description: "sales leads", scope: "institution", page: "/admin/sales/leads" },
   { key: "sales.pipeline", label: "Sales Pipeline", description: "sales pipeline", scope: "institution", page: "/admin/sales/pipeline" },
+  { key: "sales.proposals", label: "Sales Proposals", description: "commercial course proposals and custom quotes", scope: "institution", page: "/admin/sales/proposals" },
   { key: "sales.enquiries", label: "Sales Enquiry", description: "sales enquiries", scope: "institution", page: "/admin/sales/enquiries" },
   { key: "sales.enrollments", label: "Course Enrollments", description: "course enrollments", scope: "institution", page: "/admin/sales/enrollments" },
+  { key: "sales.commissions", label: "Sales Commissions", description: "sales commissions and incentives", scope: "institution", page: "/admin/sales/commissions" },
   { key: "content.category_tree", label: "Category Tree", description: "content category tree", scope: "institution", page: "/admin/content/tree" },
   { key: "content.categories", label: "Categories", description: "content categories", scope: "institution", page: "/admin/content/categories" },
   { key: "content.boards", label: "Boards", description: "content boards", scope: "institution", page: "/admin/content/boards" },
@@ -206,7 +217,8 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "driver.support", label: "Driver Support", description: "driver support with the institution admin", scope: "institution", page: "/admin/support" },
   { key: "tracker.history", label: "Tracker History", description: "tracker history", scope: "platform", page: "/admin/tracker" },
   { key: "settings.general", label: "General Settings", description: "general settings", scope: "platform", page: "/admin/settings" },
-  { key: "company.pages", label: "Company Pages", description: "company pages and footer content", scope: "platform", page: "/admin/company" },
+  { key: "company.pages", label: "Company Pages", description: "company pages and footer content", scope: "institution", page: "/admin/company" },
+  { key: "company.payment_methods", label: "Company Payment Methods", description: "payment methods, UPI, and bank accounts", scope: "institution", page: "/admin/company" },
   { key: "settings.tracker", label: "Tracker Settings", description: "tracker settings", scope: "platform", page: "/admin/settings/tracker" },
   { key: "settings.notifications", label: "Notification Settings", description: "notification types and templates", scope: "platform", page: "/admin/settings/notifications" },
   { key: "settings.payments", label: "Payment Settings", description: "student payment collection settings", scope: "institution", page: "/admin/settings/payments" },
@@ -439,7 +451,6 @@ export function isParentUser(
 const PLATFORM_ADMIN_HIDDEN_PATHS = [
   "/admin/access-control/institution-memberships",
   "/admin/access-control/institution-role-permissions",
-  "/admin/staff",
   "/admin/students",
   "/admin/institutions/news",
   "/admin/master-data/institute-calendar",
@@ -483,11 +494,11 @@ export function isAdminPathVisibleForRole(
   }
 
   if (normalized === "/admin/staff" || normalized.startsWith("/admin/staff/")) {
-    return isInstitutionAdminUser(user) && !isPlatformAdminUser(user);
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
   }
 
-  if (normalized === "/admin/master-data/institute-calendar") {
-    return !isPlatformAdminUser(user);
+  if (normalized === "/admin/master-data" || normalized.startsWith("/admin/master-data")) {
+    return isPlatformAdminUser(user);
   }
 
   if (normalized === "/admin/finance/allowance") {
@@ -1142,6 +1153,14 @@ export function hasAdminPagePermission(
     normalized.startsWith("/admin/institutions/libraries")
   ) {
     return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized));
+  }
+
+  if (normalized === "/admin/staff" || normalized.startsWith("/admin/staff")) {
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+  }
+
+  if (normalized === "/admin/operations" || normalized.startsWith("/admin/operations")) {
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
   }
 
   if (normalized === "/admin/company" || normalized.startsWith("/admin/company")) {

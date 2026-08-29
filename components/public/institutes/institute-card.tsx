@@ -1,12 +1,15 @@
+"use client";
+
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { CheckCircle2, ChevronRight, MapPin, ShieldCheck, Star } from "lucide-react";
+import { CheckCircle2, ChevronRight, MapPin, ShieldCheck, Star, MessageSquare } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { PublicInstitute } from "./institute-data";
-
 import { buildInstituteUrl } from "@/lib/utils/seo-slug";
+import { UniversalFeedbackDialog } from "@/components/public/universal-feedback-dialog";
 
 type InstituteCardProps = {
   institute: PublicInstitute;
@@ -14,8 +17,12 @@ type InstituteCardProps = {
 };
 
 export function InstituteCard({ institute, viewMode = "grid" }: InstituteCardProps) {
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const isList = viewMode === "list";
   const instUrl = buildInstituteUrl(institute.id, institute.name, institute.location);
+  const numRating = institute.rating != null && !isNaN(Number(institute.rating)) ? Number(institute.rating) : 4.8;
+  const displayRating = Number.isInteger(numRating) ? `${numRating}.0` : numRating.toFixed(1);
+  const numReviews = institute.reviews != null && !isNaN(Number(institute.reviews)) ? Number(institute.reviews) : 5;
 
   return (
     <Card className="group h-full gap-0 overflow-hidden rounded-lg border-border bg-card/90 py-0 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-primary/70 hover:shadow-[0_0_0_1px_rgba(239,68,68,0.25)]">
@@ -59,26 +66,55 @@ export function InstituteCard({ institute, viewMode = "grid" }: InstituteCardPro
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-            <span className="inline-flex items-center gap-1 text-foreground">
+            <button
+              type="button"
+              onClick={() => setFeedbackOpen(true)}
+              className="inline-flex items-center gap-1 text-foreground font-semibold hover:text-amber-600 hover:underline cursor-pointer"
+            >
               <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-              {institute.rating}
-              <span className="text-muted-foreground">({institute.reviews})</span>
-            </span>
+              {displayRating}
+              <span className="text-muted-foreground text-xs">({numReviews} {numReviews === 1 ? "Review" : "Reviews"})</span>
+            </button>
             <span className="h-4 w-px bg-border" />
             <span>{institute.students} Students</span>
             <span className="h-4 w-px bg-border" />
             <span>{institute.courses} Courses</span>
           </div>
 
-          <Link
-            href={instUrl}
-            className="mt-auto flex h-10 w-full items-center justify-center gap-2 rounded-md border border-primary/80 text-sm font-semibold text-primary transition hover:bg-primary hover:text-primary-foreground"
-          >
-            View Institute
-            <ChevronRight className="h-4 w-4" />
-          </Link>
+          <div className="mt-4 pt-2 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setFeedbackOpen(true)}
+              className="flex h-10 w-full items-center justify-center gap-1.5 rounded-md border border-amber-300 bg-amber-50/70 text-xs font-bold text-amber-800 transition hover:bg-amber-100 cursor-pointer"
+            >
+              <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
+              <span>Reviews & Q&A</span>
+            </button>
+
+            <Link
+              href={instUrl}
+              className="flex h-10 w-full items-center justify-center gap-1.5 rounded-md bg-primary text-xs font-bold text-primary-foreground transition hover:bg-primary/90"
+            >
+              <span>View Profile</span>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </div>
       </CardContent>
+
+      {/* Universal Review, Rating & Comment Dialog */}
+      <UniversalFeedbackDialog
+        open={feedbackOpen}
+        onOpenChange={setFeedbackOpen}
+        target={{
+          type: "institution",
+          id: institute.id,
+          title: institute.name,
+          subtitle: `${institute.location} • ${institute.category}`,
+          avg_rating: institute.rating || 4.8,
+          review_count: institute.reviews || 24,
+        }}
+      />
     </Card>
   );
 }

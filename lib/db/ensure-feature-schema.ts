@@ -53,6 +53,66 @@ export async function ensureFeatureSchema() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS subscriptions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        package_id INTEGER REFERENCES sales_packages(id) ON DELETE SET NULL,
+        status VARCHAR(50) NOT NULL DEFAULT 'active',
+        starts_at DATE DEFAULT CURRENT_DATE,
+        expires_at DATE,
+        price NUMERIC(10,2) DEFAULT 0,
+        price_unit VARCHAR(20) DEFAULT 'month',
+        is_recurring BOOLEAN DEFAULT TRUE,
+        razorpay_payment_id VARCHAR(255),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
+
+      CREATE TABLE IF NOT EXISTS user_search_history (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        query TEXT NOT NULL,
+        entity_type VARCHAR(100) DEFAULT 'general',
+        category VARCHAR(100),
+        results_count INTEGER DEFAULT 0,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_user_search_history_user_id ON user_search_history(user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_search_history_created_at ON user_search_history(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS product_categories (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL UNIQUE,
+        slug VARCHAR(255) NOT NULL UNIQUE,
+        description TEXT,
+        icon VARCHAR(100) DEFAULT 'Package',
+        is_active BOOLEAN DEFAULT TRUE,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS category_id INTEGER REFERENCES product_categories(id) ON DELETE SET NULL;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS program_ids JSONB DEFAULT '[]'::jsonb;
+
+      ALTER TABLE ads_campaigns ADD COLUMN IF NOT EXISTS institution_id INTEGER;
+      ALTER TABLE ads_campaigns ADD COLUMN IF NOT EXISTS institution_name VARCHAR(255);
+      ALTER TABLE ads_campaigns ADD COLUMN IF NOT EXISTS ads_type VARCHAR(100) DEFAULT 'top';
+      ALTER TABLE ads_campaigns ADD COLUMN IF NOT EXISTS image_url TEXT;
+      ALTER TABLE ads_campaigns ADD COLUMN IF NOT EXISTS headline VARCHAR(255);
+      ALTER TABLE ads_campaigns ADD COLUMN IF NOT EXISTS description TEXT;
+      ALTER TABLE ads_campaigns ADD COLUMN IF NOT EXISTS cta_text VARCHAR(100) DEFAULT 'Learn More';
+      ALTER TABLE ads_campaigns ADD COLUMN IF NOT EXISTS start_datetime TIMESTAMP;
+      ALTER TABLE ads_campaigns ADD COLUMN IF NOT EXISTS end_datetime TIMESTAMP;
+      ALTER TABLE ads_campaigns ADD COLUMN IF NOT EXISTS max_impressions INTEGER DEFAULT 0;
+      ALTER TABLE ads_campaigns ADD COLUMN IF NOT EXISTS max_clicks INTEGER DEFAULT 0;
+      ALTER TABLE ads_campaigns ADD COLUMN IF NOT EXISTS target_section VARCHAR(100) DEFAULT 'course';
+      ALTER TABLE ads_campaigns ADD COLUMN IF NOT EXISTS target_entity VARCHAR(100) DEFAULT 'course';
+      ALTER TABLE ads_campaigns ADD COLUMN IF NOT EXISTS open_in_new_tab BOOLEAN DEFAULT TRUE;
+      ALTER TABLE ads_campaigns ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
       CREATE TABLE IF NOT EXISTS email_templates (
         id SERIAL PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
@@ -70,16 +130,44 @@ export async function ensureFeatureSchema() {
 
       CREATE TABLE IF NOT EXISTS seo_meta_tags (
         id SERIAL PRIMARY KEY,
-        route_path VARCHAR(255) UNIQUE,
-        entity_type VARCHAR(100),
+        page_path VARCHAR(255) UNIQUE,
+        route_path VARCHAR(255),
+        page_type VARCHAR(50) DEFAULT 'static',
+        entity_type VARCHAR(100) DEFAULT 'general',
         entity_id INT,
-        meta_title VARCHAR(255),
+        meta_title VARCHAR(255) NOT NULL,
         meta_description TEXT,
+        keywords TEXT[] DEFAULT '{}',
         meta_keywords TEXT,
+        og_title VARCHAR(255),
+        og_description TEXT,
         og_image TEXT,
+        og_url TEXT,
         canonical_url TEXT,
+        robots_directive VARCHAR(100) DEFAULT 'index, follow',
+        schema_markup_type VARCHAR(100) DEFAULT 'WebPage',
+        conditional_rules JSONB DEFAULT '[]'::jsonb,
+        template_variables JSONB DEFAULT '[]'::jsonb,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      ALTER TABLE seo_meta_tags ADD COLUMN IF NOT EXISTS page_path VARCHAR(255);
+      ALTER TABLE seo_meta_tags ADD COLUMN IF NOT EXISTS route_path VARCHAR(255);
+      ALTER TABLE seo_meta_tags ADD COLUMN IF NOT EXISTS page_type VARCHAR(50) DEFAULT 'static';
+      ALTER TABLE seo_meta_tags ADD COLUMN IF NOT EXISTS keywords TEXT[] DEFAULT '{}';
+      ALTER TABLE seo_meta_tags ADD COLUMN IF NOT EXISTS meta_keywords TEXT;
+      ALTER TABLE seo_meta_tags ADD COLUMN IF NOT EXISTS og_title VARCHAR(255);
+      ALTER TABLE seo_meta_tags ADD COLUMN IF NOT EXISTS og_description TEXT;
+      ALTER TABLE seo_meta_tags ADD COLUMN IF NOT EXISTS og_url TEXT;
+      ALTER TABLE seo_meta_tags ADD COLUMN IF NOT EXISTS robots_directive VARCHAR(100) DEFAULT 'index, follow';
+      ALTER TABLE seo_meta_tags ADD COLUMN IF NOT EXISTS schema_markup_type VARCHAR(100) DEFAULT 'WebPage';
+      ALTER TABLE seo_meta_tags ADD COLUMN IF NOT EXISTS conditional_rules JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE seo_meta_tags ADD COLUMN IF NOT EXISTS template_variables JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE seo_meta_tags ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+      UPDATE seo_meta_tags SET page_path = route_path WHERE page_path IS NULL AND route_path IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_seo_meta_tags_page_path ON seo_meta_tags(page_path);
 
       CREATE TABLE IF NOT EXISTS institution_offers (
         id SERIAL PRIMARY KEY,
@@ -136,6 +224,79 @@ export async function ensureFeatureSchema() {
         metadata JSONB DEFAULT '{}'::jsonb,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS clients (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        company_name VARCHAR(255),
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        client_type VARCHAR(100) DEFAULT 'corporate',
+        institution_id INT,
+        country VARCHAR(100) DEFAULT 'India',
+        state VARCHAR(100),
+        city VARCHAR(100),
+        area VARCHAR(100),
+        address TEXT,
+        website VARCHAR(255),
+        notes TEXT,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS operations_tasks (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        client_id INT,
+        client_name VARCHAR(255),
+        institution_id INT,
+        price NUMERIC(12, 2) DEFAULT 0.00,
+        details TEXT,
+        assigned_employee_id INT,
+        assigned_employee_name VARCHAR(150),
+        assigned_employee_role VARCHAR(100),
+        assigned_employee_email VARCHAR(150),
+        estimated_hours NUMERIC(6, 2) DEFAULT 0.00,
+        logged_hours NUMERIC(6, 2) DEFAULT 0.00,
+        deadline TIMESTAMP WITH TIME ZONE,
+        status VARCHAR(50) DEFAULT 'pending',
+        urgency VARCHAR(50) DEFAULT 'medium',
+        sub_tasks JSONB DEFAULT '[]'::jsonb,
+        created_by INT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS sub_tasks JSONB DEFAULT '[]'::jsonb;
+
+      -- Products Table for Platform and Institution Store / Marketing
+      CREATE TABLE IF NOT EXISTS products (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) UNIQUE NOT NULL,
+        description TEXT,
+        price NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+        sale_price NUMERIC(12, 2),
+        category VARCHAR(100) DEFAULT 'General',
+        image_url TEXT,
+        gallery JSONB DEFAULT '[]'::jsonb,
+        institution_id INT,
+        institution_name VARCHAR(255),
+        stock_quantity INT DEFAULT 100,
+        sku VARCHAR(100),
+        badge_text VARCHAR(100),
+        features JSONB DEFAULT '[]'::jsonb,
+        status VARCHAR(50) DEFAULT 'active',
+        is_featured BOOLEAN DEFAULT FALSE,
+        created_by INT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_products_institution_id ON products(institution_id);
+      CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
+      CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
 
       DO $$
       BEGIN

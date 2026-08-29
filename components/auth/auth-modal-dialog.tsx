@@ -56,6 +56,18 @@ const REGISTER_ROLES = [
   { value: "institution_admin", label: "Professional / Organization (Manage institution, courses & administration)" },
 ];
 
+async function parseJsonResponse(res: Response) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    if (!res.ok) {
+      throw new Error(`Server error (${res.status}): Please check your connection or try again.`);
+    }
+    throw new Error("Invalid response received from server. Please try again.");
+  }
+}
+
 export function AuthModalDialog({
   open,
   onOpenChange,
@@ -184,8 +196,12 @@ export function AuthModalDialog({
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!signInIdentifier.trim() || !signInPassword.trim()) {
-      toast.error("Please enter email/phone and password.");
+    if (!signInIdentifier.trim()) {
+      toast.error("Please enter your email or phone number.");
+      return;
+    }
+    if (!signInPassword) {
+      toast.error("Please enter your password.");
       return;
     }
 
@@ -200,7 +216,7 @@ export function AuthModalDialog({
         }),
       });
 
-      const json = await res.json();
+      const json = await parseJsonResponse(res);
       if (!res.ok) {
         throw new Error(json.error || "Failed to sign in");
       }
@@ -227,7 +243,7 @@ export function AuthModalDialog({
         body: JSON.stringify({ role }),
       });
 
-      const json = await res.json();
+      const json = await parseJsonResponse(res);
       if (!res.ok) {
         throw new Error(json.error || "Demo sign in failed");
       }
@@ -294,14 +310,18 @@ export function AuthModalDialog({
         }),
       });
 
-      const json = await res.json();
+      const json = await parseJsonResponse(res);
       if (!res.ok) {
         if (json.error === "Phone number already registered" || res.status === 409) {
           // fetch existing profile
-          const lookupRes = await fetch(`/api/auth/phone-lookup?phone=${cleanPhone}`);
-          const lookupData = await lookupRes.json();
-          if (lookupData.exists && lookupData.user) {
-            setExistingPhoneProfile(lookupData.user);
+          try {
+            const lookupRes = await fetch(`/api/auth/phone-lookup?phone=${cleanPhone}`);
+            const lookupData = await parseJsonResponse(lookupRes);
+            if (lookupData.exists && lookupData.user) {
+              setExistingPhoneProfile(lookupData.user);
+            }
+          } catch {
+            // ignore lookup parse error
           }
         }
         throw new Error(json.error || "Registration failed");
@@ -318,7 +338,7 @@ export function AuthModalDialog({
         }),
       });
 
-      const loginJson = await loginRes.json();
+      const loginJson = await parseJsonResponse(loginRes);
       if (loginRes.ok && loginJson.user) {
         setAuth(loginJson.user, loginJson.accessToken);
         toast.success(`Welcome to EduBird, ${signUpFullName.trim()}!`);
@@ -340,9 +360,9 @@ export function AuthModalDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl sm:max-w-2xl p-0 overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl [&>button]:hidden">
+      <DialogContent className="max-w-xl sm:max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl [&>button]:hidden">
         {/* Custom Header with Close Button */}
-        <div className="pt-5 px-6 pb-3 text-center relative bg-gradient-to-b from-slate-50/80 to-white border-b border-slate-100">
+        <div className="pt-5 px-6 pb-3 text-center relative bg-gradient-to-b from-slate-50/80 to-white border-b border-slate-100 shrink-0">
           <button
             type="button"
             onClick={() => onOpenChange(false)}
@@ -378,7 +398,7 @@ export function AuthModalDialog({
         </div>
 
         {/* Form Body */}
-        <div className="px-6 pb-6 pt-3 space-y-3">
+        <div className="flex-1 overflow-y-auto px-6 pb-6 pt-3 space-y-3">
           {activeTab === "signup" ? (
             /* Sign Up Form matching Screenshot Exact Design */
             <form onSubmit={handleSignUp} className="space-y-2.5">

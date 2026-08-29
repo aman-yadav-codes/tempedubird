@@ -11,20 +11,41 @@ export async function GET(req: Request) {
     // Filter by audience type if provided
     let packages = allPackages;
     if (audience && allPackages.length > 0) {
+      const aud = audience.toLowerCase();
       const filtered = allPackages.filter((p) => {
         const pf = (p.package_for || "").toLowerCase();
-        if (audience === "institution") {
-          return pf.includes("institution") || pf.includes("school") || pf.includes("college") || pf.includes("coach");
+        const types = Array.isArray(p.package_for_types)
+          ? p.package_for_types.map((t: string) => String(t).toLowerCase())
+          : [];
+
+        if (aud === "institution" || aud === "institute") {
+          return (
+            pf.includes("institution") ||
+            pf.includes("institute") ||
+            pf.includes("all") ||
+            pf.includes("school") ||
+            pf.includes("college") ||
+            pf.includes("coach") ||
+            types.includes("institution")
+          );
         }
-        if (audience === "student") {
-          return pf.includes("student") || pf.includes("learner");
+        if (aud === "student") {
+          return (
+            pf.includes("student") ||
+            pf.includes("learner") ||
+            types.includes("student")
+          );
         }
-        if (audience === "parent") {
-          return pf.includes("parent") || pf.includes("guardian");
+        if (aud === "parent") {
+          return (
+            pf.includes("parent") ||
+            pf.includes("guardian") ||
+            types.includes("parent")
+          );
         }
         return true;
       });
-      packages = filtered.length > 0 ? filtered : allPackages;
+      packages = filtered;
     }
 
     return NextResponse.json({

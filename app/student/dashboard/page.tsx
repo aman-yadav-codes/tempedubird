@@ -22,6 +22,8 @@ import {
   Layers,
   CheckCircle2,
   Users,
+  ShoppingBag,
+  Search,
 } from "lucide-react";
 import { useAuthStore } from "@/store";
 import { Card, CardContent } from "@/components/ui/card";
@@ -431,7 +433,7 @@ export default function StudentDashboardPage() {
 
       {/* QUICK STUDENT ACTION CARDS */}
       <div className="space-y-4 pt-2">
-        <h2 className="text-xl font-bold text-foreground">Campus Quick Services & Portals</h2>
+        <h2 className="text-xl font-bold text-foreground">Academic & Learning Quick Services</h2>
 
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
           <Link href="/practice">
@@ -439,8 +441,8 @@ export default function StudentDashboardPage() {
               <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 w-fit group-hover:scale-110 transition-transform">
                 <CheckSquare className="h-6 w-6" />
               </div>
-              <h3 className="font-bold text-sm text-foreground">Practice Test Series</h3>
-              <p className="text-xs text-muted-foreground">Attempt timed GATE/JEE speed quizzes & competitive mock exams.</p>
+              <h3 className="font-bold text-sm text-foreground">Practice Tests</h3>
+              <p className="text-xs text-muted-foreground">Attempt timed competitive mock series, speed quizzes & live tests.</p>
             </Card>
           </Link>
 
@@ -454,33 +456,48 @@ export default function StudentDashboardPage() {
             </Card>
           </Link>
 
-          <Link href="/hostels">
+          <Link href="/courses">
             <Card className="p-5 hover:border-primary/60 transition-all hover:-translate-y-0.5 cursor-pointer shadow-2xs space-y-2 group">
               <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 w-fit group-hover:scale-110 transition-transform">
-                <Building2 className="h-6 w-6" />
+                <BookOpen className="h-6 w-6" />
               </div>
-              <h3 className="font-bold text-sm text-foreground">Hostels & Residence</h3>
-              <p className="text-xs text-muted-foreground">Check executive hostel room vacancies, mess menus, and Wi-Fi access.</p>
+              <h3 className="font-bold text-sm text-foreground">Explore Courses</h3>
+              <p className="text-xs text-muted-foreground">Browse academic degree programs, certifications, and career tracks.</p>
             </Card>
           </Link>
 
-          <Link href="/student/guardians">
+          <Link href="/student/products">
+            <Card className="p-5 hover:border-primary/60 transition-all hover:-translate-y-0.5 cursor-pointer shadow-2xs space-y-2 group bg-primary/5 border-primary/20">
+              <div className="p-3 rounded-2xl bg-primary/15 text-primary w-fit group-hover:scale-110 transition-transform">
+                <ShoppingBag className="h-6 w-6" />
+              </div>
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm text-foreground">Recommended Products</h3>
+                <Badge variant="outline" className="text-[10px] font-extrabold bg-primary/10 text-primary border-primary/20">
+                  Curated
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">Study kits, solved paper sets, uniform kits & gadgets tailored for your course.</p>
+            </Card>
+          </Link>
+
+          <Link href="/student/search-history">
             <Card className="p-5 hover:border-primary/60 transition-all hover:-translate-y-0.5 cursor-pointer shadow-2xs space-y-2 group">
-              <div className="p-3 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 w-fit group-hover:scale-110 transition-transform">
-                <Users className="h-6 w-6" />
+              <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 w-fit group-hover:scale-110 transition-transform">
+                <Search className="h-6 w-6" />
               </div>
-              <h3 className="font-bold text-sm text-foreground">My Guardians</h3>
-              <p className="text-xs text-muted-foreground">Manage parent and emergency contacts linked to your institution profile.</p>
+              <h3 className="font-bold text-sm text-foreground">Search History</h3>
+              <p className="text-xs text-muted-foreground">View your search queries, review visited materials, and re-run previous searches.</p>
             </Card>
           </Link>
 
-          <Link href="/libraries">
+          <Link href="/institutes">
             <Card className="p-5 hover:border-primary/60 transition-all hover:-translate-y-0.5 cursor-pointer shadow-2xs space-y-2 group">
               <div className="p-3 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 w-fit group-hover:scale-110 transition-transform">
-                <Library className="h-6 w-6" />
+                <Building2 className="h-6 w-6" />
               </div>
-              <h3 className="font-bold text-sm text-foreground">Digital Library</h3>
-              <p className="text-xs text-muted-foreground">Access DELNET, IEEE Xplore, e-journals, and book borrowing rules.</p>
+              <h3 className="font-bold text-sm text-foreground">Top Institutes</h3>
+              <p className="text-xs text-muted-foreground">Discover verified colleges, partner academies, and campus facilities.</p>
             </Card>
           </Link>
         </div>

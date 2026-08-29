@@ -18,6 +18,8 @@ import {
   HelpCircle,
   CheckCircle2,
   Sparkles,
+  ShoppingBag,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -162,7 +164,19 @@ export default function ParentChildrenPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Link href="/student/products">
+            <Button variant="outline" size="sm" className="font-bold text-xs gap-1.5 h-9 shadow-2xs">
+              <ShoppingBag className="h-3.5 w-3.5 text-primary" /> Recommended Supplies
+            </Button>
+          </Link>
+
+          <Link href="/parent/search-history">
+            <Button variant="outline" size="sm" className="font-bold text-xs gap-1.5 h-9 shadow-2xs">
+              <Search className="h-3.5 w-3.5 text-blue-500" /> Search Activity
+            </Button>
+          </Link>
+
           <Button
             variant="outline"
             size="sm"

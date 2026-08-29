@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { useClientPersistedState } from "@/hooks/use-client-persisted-state";
+import { useUserLocation } from "@/hooks/use-user-location";
 import { InstituteCard } from "./institute-card";
-import { institutes, type PublicInstitute } from "./institute-data";
+import { institutes, locationOptions, type PublicInstitute } from "./institute-data";
 import { InstitutePageHeader } from "./institute-page-header";
 import { InstitutePagination } from "./institute-pagination";
 import { InstituteSearchToolbar, type InstituteFilters } from "./institute-search-toolbar";
-import { RightInquiryForm } from "@/components/public/right-inquiry-form";
+import { SharedPublicSidebar } from "@/components/public/shared-public-sidebar";
+import { SharedInterstitialBanner } from "@/components/public/shared-interstitial-banner";
 import { Loader2 } from "lucide-react";
 
 const PAGE_SIZE = 9;
@@ -108,12 +111,46 @@ function filterInstitutes(list: PublicInstitute[], filters: InstituteFilters) {
 
 export function InstitutesDirectory() {
   const resultsTopRef = useRef<HTMLDivElement | null>(null);
+  const searchParams = useSearchParams();
   const [directoryState, setDirectoryState] = useClientPersistedState<DirectoryState>(
     "public.institutes.directory",
     defaultDirectoryState,
     { version: 1, validate: isDirectoryState },
   );
   const { filters, page, viewMode } = directoryState;
+
+  const { location: userLocation } = useUserLocation();
+
+  // Sync search URL query
+  useEffect(() => {
+    const q = searchParams?.get("search") || searchParams?.get("q");
+    if (q && q.trim() && q.trim() !== filters.search) {
+      setDirectoryState((prev) => ({
+        ...prev,
+        page: 1,
+        filters: { ...prev.filters, search: q.trim() },
+      }));
+    }
+  }, [searchParams]);
+
+  // If user has a detected/selected location and filter is all, sync to userLocation
+  useEffect(() => {
+    if (userLocation && userLocation !== "All Locations" && filters.location === "all") {
+      const matchedOption = locationOptions.find(
+        (o) =>
+          o.label.toLowerCase().includes(userLocation.toLowerCase()) ||
+          userLocation.toLowerCase().includes(o.label.toLowerCase()) ||
+          o.value.toLowerCase().includes(userLocation.toLowerCase())
+      );
+      if (matchedOption && matchedOption.value !== "all") {
+        setDirectoryState((prev) => ({
+          ...prev,
+          page: 1,
+          filters: { ...prev.filters, location: matchedOption.value },
+        }));
+      }
+    }
+  }, [userLocation]);
 
   const [dbInstitutes, setDbInstitutes] = useState<PublicInstitute[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -153,8 +190,8 @@ export function InstitutesDirectory() {
               type: typeName.toLowerCase().includes("school") ? "school" : typeName.toLowerCase().includes("coaching") ? "coaching" : "university",
               course: categoryName,
               courses: row.course_count > 0 ? row.course_count : 12,
-              rating: 4.8,
-              reviews: 85 + (row.id % 45),
+              rating: row.avg_rating != null ? Number(row.avg_rating) : 4.8,
+              reviews: row.reviews_count != null ? Number(row.reviews_count) : 5,
               students: row.student_count > 0 ? `${row.student_count}+` : "400+",
               image: imgUrl,
               category: typeName,
@@ -241,40 +278,64 @@ export function InstitutesDirectory() {
         }}
       />
 
-      <div ref={resultsTopRef} className="scroll-mt-48" />
+      <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px] items-start">
+        {/* Main Directory Listings Column */}
+        <div className="space-y-6 min-w-0">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-border bg-card/70 px-6 py-20 text-center shadow-2xs">
+              <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
+              <p className="text-sm font-medium text-muted-foreground">Loading partner institutes from database...</p>
+            </div>
+          ) : pagedInstitutes.length > 0 ? (
+            <div
+              className={
+                viewMode === "grid"
+                  ? "grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
+                  : "grid gap-5"
+              }
+            >
+              {pagedInstitutes.map((institute, idx) => {
+                const shouldInsertBanner = (idx + 1) % 3 === 0 && idx !== pagedInstitutes.length - 1;
+                const bannerIdx = Math.floor(idx / 3);
 
-      <div className="mt-6 space-y-6">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card/70 px-6 py-20 text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
-            <p className="text-sm font-medium text-muted-foreground">Loading partner institutes from database...</p>
-          </div>
-        ) : pagedInstitutes.length > 0 ? (
-          <div
-            className={
-              viewMode === "grid"
-                ? "grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                : "grid gap-5"
-            }
-          >
-            {pagedInstitutes.map((institute) => (
-              <InstituteCard key={institute.id} institute={institute} viewMode={viewMode} />
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-lg border border-border bg-card/70 px-6 py-12 text-center">
-            <h2 className="text-lg font-semibold text-foreground">No institutes found</h2>
-            <p className="mt-2 text-sm text-muted-foreground">Try changing the search term or clearing a few filters.</p>
-          </div>
-        )}
+                return (
+                  <React.Fragment key={institute.id}>
+                    <InstituteCard institute={institute} viewMode={viewMode} />
 
-        {pageCount > 1 && (
-          <InstitutePagination
-            currentPage={safePage}
-            totalPages={pageCount}
-            onPageChange={changePage}
-          />
-        )}
+                    {shouldInsertBanner && (
+                      <SharedInterstitialBanner
+                        bannerIndex={bannerIdx}
+                        pageType="institutes"
+                      />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-border bg-card/70 px-6 py-12 text-center shadow-2xs">
+              <h2 className="text-lg font-semibold text-foreground">No institutes found</h2>
+              <p className="mt-2 text-sm text-muted-foreground">Try changing the search term or clearing a few filters.</p>
+            </div>
+          )}
+
+          {pageCount > 1 && (
+            <div className="pt-4 border-t border-border/60">
+              <InstitutePagination
+                currentPage={safePage}
+                totalPages={pageCount}
+                onPageChange={changePage}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Right Sidebar Options & Ads */}
+        <SharedPublicSidebar
+          pageType="institutes"
+          activeCategory={filters.type}
+          onSelectCategory={(cat) => updateFilter("type", cat)}
+        />
       </div>
     </section>
   );

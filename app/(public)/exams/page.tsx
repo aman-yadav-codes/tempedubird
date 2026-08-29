@@ -1,14 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { Award, Calendar, CheckCircle2, ExternalLink, Loader2, Search, GraduationCap } from "lucide-react";
+import {
+  Award,
+  Calendar,
+  CheckCircle2,
+  ExternalLink,
+  Loader2,
+  Search,
+  GraduationCap,
+  Sparkles,
+  MessageSquare,
+  Star,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
 import { useCategoryAvailability } from "@/hooks/use-category-availability";
+import { SharedPublicSidebar } from "@/components/public/shared-public-sidebar";
+import { SharedInterstitialBanner } from "@/components/public/shared-interstitial-banner";
+import { UniversalFeedbackDialog, type UniversalEntityTarget } from "@/components/public/universal-feedback-dialog";
 
 type EntranceExam = {
   id: number;
@@ -20,6 +34,8 @@ type EntranceExam = {
   website_url: string;
   description: string;
   institution_name: string;
+  rating?: number;
+  reviews_count?: number;
 };
 
 export default function ExamsPublicPage() {
@@ -27,6 +43,9 @@ export default function ExamsPublicPage() {
   const [exams, setExams] = useState<EntranceExam[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState<string>("all");
+  const [feedbackTarget, setFeedbackTarget] = useState<UniversalEntityTarget | null>(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   useEffect(() => {
     fetchExams();
@@ -51,11 +70,13 @@ export default function ExamsPublicPage() {
     }
   };
 
-  const filtered = exams.filter(
-    (e) =>
+  const filtered = exams.filter((e) => {
+    const matchesQuery =
       e.exam_name.toLowerCase().includes(search.toLowerCase()) ||
-      e.category.toLowerCase().includes(search.toLowerCase())
-  );
+      e.category.toLowerCase().includes(search.toLowerCase());
+    const matchesCategory = activeCategory === "all" || e.category.toLowerCase().includes(activeCategory.toLowerCase());
+    return matchesQuery && matchesCategory;
+  });
 
   return (
     <div className="min-h-screen bg-background pb-16 pt-6">
@@ -75,70 +96,168 @@ export default function ExamsPublicPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search exam name or category..."
-              className="pl-9 text-xs h-10"
+              className="pl-9 text-xs h-10 rounded-xl"
             />
           </div>
         </div>
 
-        {loading ? (
-          <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
-            <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" /> Loading entrance exams...
-          </div>
-        ) : filtered.length === 0 ? (
-          <Card className="p-12 text-center text-muted-foreground">
-            No entrance exams found matching your query.
-          </Card>
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2">
-            {filtered.map((e) => (
-              <Card key={e.id} className="p-6 shadow-xs hover:border-primary/50 transition-colors flex flex-col justify-between space-y-4">
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <span className="text-xs font-bold text-primary flex items-center gap-1 mb-1">
-                        <Award className="h-3.5 w-3.5" />
-                        {e.category || "Engineering Entrance"}
-                      </span>
-                      <h3 className="text-xl font-bold text-foreground leading-tight">{e.exam_name}</h3>
-                    </div>
-
-                    <Badge className="bg-emerald-600 text-white font-bold text-xs gap-1">
-                      <Calendar className="h-3 w-3" /> {e.exam_date || "2026"}
-                    </Badge>
-                  </div>
-
-                  <p className="text-xs text-muted-foreground leading-relaxed">{e.description}</p>
-
-                  <div className="p-3 rounded-xl bg-muted/50 text-xs space-y-1">
-                    <div>
-                      <strong className="text-foreground">Eligibility: </strong>
-                      <span className="text-muted-foreground">{e.eligibility}</span>
-                    </div>
-                    <div>
-                      <strong className="text-foreground">Application Fee: </strong>
-                      <span className="text-emerald-600 dark:text-emerald-400 font-bold">₹{Number(e.application_fee || 1000).toLocaleString("en-IN")}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-border flex items-center justify-between gap-3">
-                  <span className="text-xs text-muted-foreground">
-                    Verified Exam Information
-                  </span>
-
-                  {e.website_url && (
-                    <a href={e.website_url} target="_blank" rel="noopener noreferrer">
-                      <Button size="sm" variant="outline" className="font-bold text-xs gap-1.5 shadow-xs">
-                        Official Exam Portal <ExternalLink className="h-3.5 w-3.5" />
-                      </Button>
-                    </a>
-                  )}
-                </div>
+        {/* 2-Column Layout */}
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px] items-start">
+          {/* Main Listings Column */}
+          <div className="space-y-6 min-w-0">
+            {loading ? (
+              <div className="flex items-center justify-center py-20 text-sm text-muted-foreground rounded-2xl border border-border bg-card/70 shadow-2xs">
+                <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" /> Loading entrance exams...
+              </div>
+            ) : filtered.length === 0 ? (
+              <Card className="p-12 text-center text-muted-foreground rounded-2xl shadow-2xs">
+                No entrance exams found matching your query.
               </Card>
-            ))}
+            ) : (
+              <div className="grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+                {filtered.map((e, idx) => {
+                  const shouldInsertBanner = (idx + 1) % 3 === 0 && idx !== filtered.length - 1;
+                  const bannerIdx = Math.floor(idx / 3);
+
+                  return (
+                    <React.Fragment key={e.id}>
+                      <Card className="p-5 shadow-2xs hover:border-primary/50 transition-all flex flex-col justify-between space-y-4 rounded-2xl border border-border/80 bg-card/95 hover:-translate-y-1">
+                        <div className="space-y-3">
+                          {/* Top Row: Category & Exam Date Badge */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <span className="text-[11px] font-extrabold text-primary flex items-center gap-1 mb-1 truncate">
+                                <Award className="size-3.5 shrink-0" />
+                                <span className="truncate">{e.category || "National Entrance"}</span>
+                              </span>
+                              <h3 className="text-base font-black uppercase text-foreground leading-tight line-clamp-2">
+                                <Link href={`/exams/${e.id}`} className="hover:text-primary hover:underline transition-colors">
+                                  {e.exam_name}
+                                </Link>
+                              </h3>
+                            </div>
+
+                            <Badge className="bg-emerald-600/90 text-white font-bold text-[10px] gap-1 shrink-0 px-2 py-0.5 rounded-lg">
+                              <Calendar className="size-3" /> {e.exam_date || "2026"}
+                            </Badge>
+                          </div>
+
+                          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
+                            {e.description || "Official competitive examination with national level ranking and seat allotment."}
+                          </p>
+
+                          <div className="p-3 rounded-xl bg-muted/40 text-xs space-y-1.5 border border-border/50">
+                            <div className="truncate">
+                              <strong className="text-foreground">Eligibility: </strong>
+                              <span className="text-muted-foreground">{e.eligibility || "Standard Academic Criteria"}</span>
+                            </div>
+                            <div>
+                              <strong className="text-foreground">Application Fee: </strong>
+                              <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                                ₹{Number(e.application_fee || 1000).toLocaleString("en-IN")}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3 pt-2 border-t border-border/60">
+                          {/* Rating & Reviews */}
+                          <div className="flex items-center justify-between text-xs">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFeedbackTarget({
+                                  type: "exam",
+                                  id: e.id,
+                                  title: e.exam_name,
+                                  subtitle: `${e.category} • Official Entrance Exam`,
+                                  avg_rating: e.rating || 4.8,
+                                  review_count: e.reviews_count || 12,
+                                });
+                                setFeedbackOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1 text-amber-500 hover:text-amber-600 font-bold hover:underline cursor-pointer"
+                            >
+                              <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                              <span>{e.rating ? Number(e.rating).toFixed(1) : "4.8"}</span>
+                              <span className="text-muted-foreground font-normal">({e.reviews_count || 12} reviews)</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFeedbackTarget({
+                                  type: "exam",
+                                  id: e.id,
+                                  title: e.exam_name,
+                                  subtitle: `${e.category} • Official Entrance Exam`,
+                                  avg_rating: e.rating || 4.8,
+                                  review_count: e.reviews_count || 12,
+                                });
+                                setFeedbackOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary font-medium cursor-pointer"
+                            >
+                              <MessageSquare className="size-3" />
+                              <span>Feedback</span>
+                            </button>
+                          </div>
+
+                          {/* CTA Button */}
+                          {e.website_url ? (
+                            <a
+                              href={e.website_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block"
+                            >
+                              <Button
+                                size="sm"
+                                className="w-full font-bold text-xs gap-1.5 rounded-xl shadow-xs bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
+                              >
+                                Official Exam Portal <ExternalLink className="size-3.5" />
+                              </Button>
+                            </a>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full font-bold text-xs rounded-xl"
+                            >
+                              View Exam Notice
+                            </Button>
+                          )}
+                        </div>
+                      </Card>
+
+                      {/* 200px Banner after every 3 items */}
+                      {shouldInsertBanner && (
+                        <SharedInterstitialBanner
+                          bannerIndex={bannerIdx}
+                          pageType="exams"
+                        />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
+
+          {/* Right Sidebar Options & Ads */}
+          <SharedPublicSidebar
+            pageType="exams"
+            activeCategory={activeCategory}
+            onSelectCategory={(cat) => setActiveCategory(activeCategory === cat ? "all" : cat)}
+          />
+        </div>
       </div>
+
+      <UniversalFeedbackDialog
+        open={feedbackOpen}
+        onOpenChange={setFeedbackOpen}
+        target={feedbackTarget}
+      />
     </div>
   );
 }

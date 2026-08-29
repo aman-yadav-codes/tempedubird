@@ -1,7 +1,5 @@
 "use client";
 
-import { Grid2X2, List } from "lucide-react";
-
 import {
   Select,
   SelectContent,
@@ -125,27 +123,6 @@ export function InstituteSearchToolbar({
                 ))}
               </SelectContent>
             </Select>
-
-            <div className="flex items-center gap-2">
-            <button
-              aria-label="Grid view"
-              onClick={() => onViewModeChange("grid")}
-              className={`flex h-10 w-10 items-center justify-center rounded-md border ${
-                viewMode === "grid" ? "border-primary text-primary" : "border-border text-muted-foreground"
-              }`}
-            >
-              <Grid2X2 className="h-4 w-4" />
-            </button>
-            <button
-              aria-label="List view"
-              onClick={() => onViewModeChange("list")}
-              className={`flex h-10 w-10 items-center justify-center rounded-md border ${
-                viewMode === "list" ? "border-primary text-primary" : "border-border text-muted-foreground"
-              }`}
-            >
-              <List className="h-4 w-4" />
-            </button>
-            </div>
           </div>
         </div>
       </div>

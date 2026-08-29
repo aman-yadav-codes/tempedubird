@@ -57,17 +57,17 @@ export default function StudentEnquiriesPage() {
         ? window.localStorage.getItem("accessToken") || window.localStorage.getItem("token")
         : null);
 
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
     setLoading(true);
     try {
-      const headers: Record<string, string> = {
-        Authorization: `Bearer ${token}`,
-      };
-      const res = await fetch("/api/student/enquiries", { headers, cache: "no-store" });
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      const res = await fetch("/api/student/enquiries", {
+        headers,
+        cache: "no-store",
+        credentials: "include",
+      });
       const json = await res.json();
       if (res.ok) {
         setEnquiries(json.enquiries || []);

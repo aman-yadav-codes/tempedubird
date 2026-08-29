@@ -1105,41 +1105,7 @@ function getRoleDisplay(role: RoleOption) {
     }
 
     if (stepIndex === 1) {
-      form.experiences.forEach((experience, index) => {
-        const hasValues = hasAnyValue([
-          experience.job_title,
-          experience.company_name,
-          experience.from_month,
-          experience.from_year,
-          experience.to_month,
-          experience.to_year,
-        ]);
-
-        if (!hasValues) return;
-
-        if (!safeTrim(experience.job_title)) {
-          nextErrors[`experience.${index}.job_title`] = "Required.";
-        }
-        if (!safeTrim(experience.company_name)) {
-          nextErrors[`experience.${index}.company_name`] = "Required.";
-        }
-      });
-
-      form.education.forEach((education, index) => {
-        const hasValues = hasAnyValue([
-          education.qualification,
-          education.institution_id,
-          education.institution_name,
-          education.from_year,
-          education.to_year,
-        ]);
-
-        if (!hasValues) return;
-
-        if (!safeTrim(education.qualification)) {
-          nextErrors[`education.${index}.qualification`] = "Required.";
-        }
-      });
+      // Background & Education records are completely optional
     }
 
     setErrors(nextErrors);

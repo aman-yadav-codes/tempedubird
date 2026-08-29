@@ -86,11 +86,14 @@ export function AdminLiveChat() {
   const [isSending, setIsSending] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   };
 
   useEffect(() => {
@@ -513,7 +516,7 @@ export function AdminLiveChat() {
             </div>
 
             {/* Chat Transcript Area */}
-            <div className="flex-1 p-6 overflow-y-auto space-y-4 bg-muted/10">
+            <div ref={messagesContainerRef} className="flex-1 p-6 overflow-y-auto space-y-4 bg-muted/10">
               {isLoadingMessages && messages.length === 0 ? (
                 <div className="h-full flex items-center justify-center">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />

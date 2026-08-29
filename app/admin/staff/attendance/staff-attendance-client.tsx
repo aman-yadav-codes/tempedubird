@@ -402,14 +402,15 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
       toast.error("Select at least one staff member.");
       return;
     }
+    const noTimeStatus = bulkStatus === "LEAVE" || bulkStatus === "ABSENT";
     setStaff((current) =>
       current.map((row) =>
         selectedIds.includes(row.staff_user_id)
           ? {
               ...row,
               status: bulkStatus,
-              check_in_time: bulkStatus === "LEAVE" ? null : bulkCheckIn,
-              check_out_time: bulkStatus === "LEAVE" ? null : bulkCheckOut,
+              check_in_time: noTimeStatus ? null : bulkCheckIn,
+              check_out_time: noTimeStatus ? null : bulkCheckOut,
               remarks: bulkRemarks,
               leave_from_date: bulkStatus === "LEAVE" ? bulkLeaveFromDate : row.leave_from_date,
               leave_to_date: bulkStatus === "LEAVE" ? bulkLeaveToDate : row.leave_to_date,
@@ -435,15 +436,18 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
           institutionId: Number(institutionId),
           academicYearId: activeAcademicYearId,
           date,
-          rows: rowsToSave.map((row) => ({
-            staffUserId: row.staff_user_id,
-            status: row.status,
-            checkInTime: formatTime(row.check_in_time),
-            checkOutTime: formatTime(row.check_out_time),
-            remarks: row.remarks,
-            leaveFromDate: row.leave_from_date || date,
-            leaveToDate: row.leave_to_date || row.leave_from_date || date,
-          })),
+          rows: rowsToSave.map((row) => {
+            const noTime = row.status === "ABSENT" || row.status === "LEAVE";
+            return {
+              staffUserId: row.staff_user_id,
+              status: row.status,
+              checkInTime: noTime ? null : formatTime(row.check_in_time),
+              checkOutTime: noTime ? null : formatTime(row.check_out_time),
+              remarks: row.remarks,
+              leaveFromDate: row.leave_from_date || date,
+              leaveToDate: row.leave_to_date || row.leave_from_date || date,
+            };
+          }),
         }),
       });
       const json = await res.json();
@@ -718,15 +722,17 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
                       <td className="px-4 py-3">
                         <Select
                           value={row.status ?? UNMARKED_VALUE}
-                          onValueChange={(value) =>
+                          onValueChange={(value) => {
+                            const nextStatus = value === UNMARKED_VALUE ? null : (value as StaffAttendanceStatus);
+                            const isNoTime = nextStatus === "LEAVE" || nextStatus === "ABSENT" || !nextStatus;
                             updateStaffRow(row.staff_user_id, {
-                              status: value === UNMARKED_VALUE ? null : value as StaffAttendanceStatus,
-                              check_in_time: value === "LEAVE" ? null : row.check_in_time,
-                              check_out_time: value === "LEAVE" ? null : row.check_out_time,
+                              status: nextStatus,
+                              check_in_time: isNoTime ? null : row.check_in_time,
+                              check_out_time: isNoTime ? null : row.check_out_time,
                               leave_from_date: row.leave_from_date || date,
                               leave_to_date: row.leave_to_date || date,
-                            })
-                          }
+                            });
+                          }}
                         >
                           <SelectTrigger className="w-40">
                             <SelectValue />
@@ -779,18 +785,18 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
                         ) : (
                           <div className="flex flex-wrap gap-2">
                             <TimePicker
-                              value={formatTime(row.check_in_time)}
+                              value={row.status === "ABSENT" ? "" : formatTime(row.check_in_time)}
                               onChange={(value) => updateStaffRow(row.staff_user_id, { check_in_time: value })}
-                              placeholder="Check in"
+                              placeholder={row.status === "ABSENT" ? "Absent" : "Check in"}
                               className="w-32"
-                              disabled={!row.status}
+                              disabled={!row.status || row.status === "ABSENT"}
                             />
                             <TimePicker
-                              value={formatTime(row.check_out_time)}
+                              value={row.status === "ABSENT" ? "" : formatTime(row.check_out_time)}
                               onChange={(value) => updateStaffRow(row.staff_user_id, { check_out_time: value })}
-                              placeholder="Check out"
+                              placeholder={row.status === "ABSENT" ? "Absent" : "Check out"}
                               className="w-32"
-                              disabled={!row.status}
+                              disabled={!row.status || row.status === "ABSENT"}
                             />
                           </div>
                         )}

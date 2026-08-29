@@ -25,11 +25,19 @@ function formatDuration(value: number | null, unit: string | null) {
   return `${value} ${u}`;
 }
 
+let feeUnitColumnReady = false;
+
 async function ensureProgramFeeComponentUnitColumn() {
-  await db.query(`
-    ALTER TABLE program_fee_components
-      ADD COLUMN IF NOT EXISTS fee_unit TEXT NULL
-  `);
+  if (feeUnitColumnReady) return;
+  try {
+    feeUnitColumnReady = true;
+    await db.query(`
+      ALTER TABLE program_fee_components
+        ADD COLUMN IF NOT EXISTS fee_unit TEXT NULL
+    `);
+  } catch {
+    // ignore if column already exists or under read-only mode
+  }
 }
 
 function mapPublicCourseRow(row: Record<string, unknown>) {
@@ -89,6 +97,23 @@ function mapPublicCourseRow(row: Record<string, unknown>) {
   const rawDurationValue = row.duration_value ? Number(row.duration_value) : null;
   const rawDurationUnit = typeof row.duration_unit === "string" && row.duration_unit.trim() ? row.duration_unit.trim() : null;
 
+  const institution = {
+    id: row.institution_id ? Number(row.institution_id) : 1,
+    name: typeof row.institution_name === "string" ? row.institution_name : "Partner Institution",
+    slug: typeof row.institution_slug === "string" ? row.institution_slug : null,
+    city: typeof row.institution_city === "string" ? row.institution_city : null,
+    location: typeof row.institution_location === "string" ? row.institution_location : (typeof row.institution_city === "string" ? row.institution_city : "India"),
+    logo_url: typeof row.institution_logo_url === "string" ? row.institution_logo_url : null,
+    rating: row.institution_rating ? Number(row.institution_rating) : 4.8,
+    reviews_count: row.institution_reviews_count ? Number(row.institution_reviews_count) : 24,
+    verified: true,
+  };
+
+  const reviewsList = Array.isArray(row.course_reviews) ? row.course_reviews : [];
+  const rating = row.course_avg_rating != null ? Number(row.course_avg_rating) : (reviewsList.length > 0 ? Number((reviewsList.reduce((acc: number, r: any) => acc + (Number(r.rating) || 5), 0) / reviewsList.length).toFixed(1)) : 4.8);
+  const reviewsCount = row.course_reviews_count != null ? Number(row.course_reviews_count) : (reviewsList.length || 4);
+  const detailedSubjects = Array.isArray(row.detailed_subjects) ? row.detailed_subjects : [];
+
   return {
     id: Number(row.id),
     slug: typeof row.slug === "string" ? row.slug : String(row.id),
@@ -96,6 +121,13 @@ function mapPublicCourseRow(row: Record<string, unknown>) {
     shortDescription: typeof row.about === "string" ? row.about : "",
     description: typeof row.about === "string" ? row.about : "",
     institute: typeof row.institution_name === "string" ? row.institution_name : "Institute",
+    institution,
+    detailedSubjects,
+    rating,
+    reviews: reviewsCount,
+    reviewsCount,
+    reviews_count: reviewsCount,
+    reviewsList,
     category,
     categoryId: row.root_category_id ? Number(row.root_category_id) : null,
     selectedCategory: typeof row.category_name === "string" ? row.category_name : null,
@@ -303,6 +335,15 @@ export async function handlePublicCoursesGet(req: Request) {
         MIN(amount)::numeric AS min_amount
       FROM program_fee_components
       GROUP BY program_id
+    ),
+    reviews_rollup AS (
+      SELECT
+        entity_id,
+        ROUND(AVG(rating), 1)::numeric(3,1) AS course_avg_rating,
+        COUNT(*)::int AS course_reviews_count
+      FROM entity_reviews
+      WHERE entity_type IN ('course', 'program')
+      GROUP BY entity_id
     )
     SELECT
       ip.id,
@@ -328,7 +369,9 @@ export async function handlePublicCoursesGet(req: Request) {
       COALESCE(subject_rollup.subject_names, ARRAY[]::text[]) AS subject_names,
       COALESCE(section_rollup.section_names, ARRAY[]::text[]) AS section_names,
       COALESCE(media_rollup.images, '[]'::json) AS images,
-      fee_rollup.min_amount
+      fee_rollup.min_amount,
+      COALESCE(reviews_rollup.course_avg_rating, 4.8) AS course_avg_rating,
+      COALESCE(reviews_rollup.course_reviews_count, 0) AS course_reviews_count
     FROM institution_programs ip
     INNER JOIN institution_profiles inst
       ON inst.id = ip.institution_id
@@ -349,6 +392,8 @@ export async function handlePublicCoursesGet(req: Request) {
       ON media_rollup.program_id = ip.id
     LEFT JOIN fee_rollup
       ON fee_rollup.program_id = ip.id
+    LEFT JOIN reviews_rollup
+      ON reviews_rollup.entity_id = ip.id
     ${whereSql}
     ORDER BY ip.updated_at DESC, ip.created_at DESC, ip.id DESC
     LIMIT $${params.length + 1}
@@ -458,6 +503,53 @@ export async function getPublicCourseById(idOrSlug: number | string, opts: { hos
          AND s.is_active = TRUE
         WHERE ps.program_id = $1
       ),
+      subject_detailed_rollup AS (
+        SELECT
+          json_agg(
+            json_build_object(
+              'id', s.id,
+              'name', s.name,
+              'code', s.code,
+              'slug', s.slug,
+              'syllabi', (
+                SELECT json_agg(
+                  json_build_object(
+                    'id', syl.id,
+                    'title', syl.title,
+                    'description', syl.description,
+                    'nodes_count', (
+                      SELECT COUNT(*)::int FROM syllabus_nodes sn WHERE sn.syllabus_id = syl.id AND COALESCE(sn.is_active, TRUE) = TRUE
+                    ),
+                    'topics', (
+                      SELECT json_agg(
+                        json_build_object(
+                          'id', sn.id,
+                          'title', sn.title,
+                          'node_type', sn.node_type,
+                          'estimated_hours', sn.estimated_hours,
+                          'learning_outcomes', sn.learning_outcomes
+                        )
+                        ORDER BY sn.sort_order ASC, sn.id ASC
+                      )
+                      FROM syllabus_nodes sn
+                      WHERE sn.syllabus_id = syl.id AND COALESCE(sn.is_active, TRUE) = TRUE
+                    )
+                  )
+                )
+                FROM syllabi syl
+                WHERE syl.subject_id = s.id
+                  AND COALESCE(syl.is_active, TRUE) = TRUE
+              )
+            )
+            ORDER BY s.name ASC
+          ) AS detailed_subjects
+        FROM program_subjects ps
+        JOIN subjects s
+          ON s.id = ps.subject_id
+         AND COALESCE(s.is_deleted, FALSE) = FALSE
+         AND s.is_active = TRUE
+        WHERE ps.program_id = $1
+      ),
       section_rollup AS (
         SELECT ARRAY_AGG(DISTINCT section.name ORDER BY section.name) AS section_names
         FROM program_sections ps
@@ -511,6 +603,56 @@ export async function getPublicCourseById(idOrSlug: number | string, opts: { hos
         COALESCE(u.name, inst_u.name) AS university_name,
         pt.name AS program_type_name,
         COALESCE(inst.name, inst.slug) AS institution_name,
+        inst.slug AS institution_slug,
+        inst_loc.name AS institution_city,
+        inst_loc.name AS institution_location,
+        (
+          SELECT media.url
+          FROM institution_media media
+          WHERE media.institution_id = inst.id
+            AND COALESCE(media.is_deleted, FALSE) = FALSE
+            AND media.url IS NOT NULL AND media.url <> ''
+            AND (lower(COALESCE(media.media_type, '')) = 'logo' OR lower(COALESCE(media.title, '')) LIKE '%logo%')
+          ORDER BY media.sort_order ASC, media.id ASC
+          LIMIT 1
+        ) AS institution_logo_url,
+        COALESCE((
+          SELECT ROUND(AVG(rating), 1)
+          FROM entity_reviews
+          WHERE entity_type = 'institution' AND entity_id = inst.id
+        ), 4.9) AS institution_rating,
+        COALESCE((
+          SELECT COUNT(*)::int
+          FROM entity_reviews
+          WHERE entity_type = 'institution' AND entity_id = inst.id
+        ), 42) AS institution_reviews_count,
+        (
+          SELECT ROUND(AVG(rating), 1)
+          FROM entity_reviews
+          WHERE entity_type IN ('course', 'program') AND entity_id = ip.id
+        ) AS course_avg_rating,
+        COALESCE((
+          SELECT COUNT(*)::int
+          FROM entity_reviews
+          WHERE entity_type IN ('course', 'program') AND entity_id = ip.id
+        ), 0) AS course_reviews_count,
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', r.id,
+              'reviewer_name', r.reviewer_name,
+              'reviewer_role', r.reviewer_role,
+              'rating', r.rating,
+              'title', r.title,
+              'comment', r.comment,
+              'is_verified_user', r.is_verified_user,
+              'created_at', r.created_at
+            )
+            ORDER BY r.created_at DESC
+          )
+          FROM entity_reviews r
+          WHERE r.entity_type IN ('course', 'program') AND r.entity_id = ip.id
+        ) AS course_reviews,
         primary_category.category_id,
         primary_category.category_name,
         primary_category.root_category_id,
@@ -519,6 +661,7 @@ export async function getPublicCourseById(idOrSlug: number | string, opts: { hos
         COALESCE(category_rollup.root_category_names, ARRAY[]::text[]) AS root_category_names,
         COALESCE(language_rollup.language_names, ARRAY[]::text[]) AS language_names,
         COALESCE(subject_rollup.subject_names, ARRAY[]::text[]) AS subject_names,
+        COALESCE(subject_detailed_rollup.detailed_subjects, '[]'::json) AS detailed_subjects,
         COALESCE(section_rollup.section_names, ARRAY[]::text[]) AS section_names,
         COALESCE(media_rollup.images, '[]'::json) AS images,
         COALESCE(fee_rollup.fee_components, '[]'::json) AS fee_components,
@@ -528,6 +671,8 @@ export async function getPublicCourseById(idOrSlug: number | string, opts: { hos
         ON inst.id = ip.institution_id
        AND COALESCE(inst.is_deleted, FALSE) = FALSE
        AND inst.is_active = TRUE
+      LEFT JOIN locations inst_loc
+        ON inst_loc.id = inst.location_id
       LEFT JOIN program_types pt
         ON pt.id = ip.program_type_id
       LEFT JOIN boards b
@@ -542,6 +687,7 @@ export async function getPublicCourseById(idOrSlug: number | string, opts: { hos
       LEFT JOIN category_rollup ON TRUE
       LEFT JOIN language_rollup ON TRUE
       LEFT JOIN subject_rollup ON TRUE
+      LEFT JOIN subject_detailed_rollup ON TRUE
       LEFT JOIN section_rollup ON TRUE
       LEFT JOIN media_rollup ON TRUE
       LEFT JOIN fee_rollup ON TRUE

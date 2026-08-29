@@ -22,21 +22,33 @@ export async function GET(req: Request) {
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
     const query = `
+      WITH reviews_rollup AS (
+        SELECT
+          entity_id,
+          ROUND(AVG(rating), 1)::numeric(3,1) AS course_avg_rating,
+          COUNT(*)::int AS course_reviews_count
+        FROM entity_reviews
+        WHERE entity_type IN ('course', 'program')
+        GROUP BY entity_id
+      )
       SELECT
         p.id,
-        p.name AS title,
-        p.name,
-        COALESCE(p.description, '') AS description,
-        COALESCE(p.duration, '1 Year') AS duration,
-        COALESCE(p.degree_level, 'Academic') AS degree_level,
-        p.annual_fee,
-        p.seats,
-        p.badge,
+        COALESCE(p.title, p.name) AS title,
+        COALESCE(p.title, p.name) AS name,
+        COALESCE(p.about, p.description, '') AS description,
+        COALESCE(p.duration_value::text || ' ' || COALESCE(p.duration_unit, 'Years'), p.duration, '1 Year') AS duration,
+        COALESCE(p.teaching_method, 'Academic') AS degree_level,
+        COALESCE(p.fee_amount, p.annual_fee) AS annual_fee,
+        COALESCE(p.seats_available, p.seats) AS seats,
         p.category,
         p.institution_id,
-        ip.name AS institution_name
+        ip.name AS institution_name,
+        COALESCE(reviews_rollup.course_avg_rating, 4.8) AS rating,
+        COALESCE(reviews_rollup.course_reviews_count, 0) AS reviews_count,
+        COALESCE(reviews_rollup.course_reviews_count, 0) AS reviews
       FROM institution_programs p
       LEFT JOIN institution_profiles ip ON ip.id = p.institution_id
+      LEFT JOIN reviews_rollup ON reviews_rollup.entity_id = p.id
       ${whereSql}
       ORDER BY p.id ASC
       LIMIT $${params.length + 1}

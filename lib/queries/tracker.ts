@@ -166,14 +166,16 @@ export async function listVisitorSessions(
     const [dataRes, countRes] = await Promise.all([
         db.query(
             `SELECT vs.*,
+                    COALESCE(ip.name, ip.slug, 'EduBird Partner Institute') AS institution_name,
                     (SELECT COUNT(*)::int FROM visitor_activities va WHERE va.tracking_token = vs.tracking_token) AS activity_count
              FROM visitor_sessions vs
+             LEFT JOIN institution_profiles ip ON ip.id = vs.institution_id
              ${whereSql}
              ORDER BY vs.last_seen_at DESC
              LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
             [...params, limit, offset]
         ),
-        db.query(`SELECT COUNT(*)::int AS count FROM visitor_sessions ${whereSql}`, params),
+        db.query(`SELECT COUNT(*)::int AS count FROM visitor_sessions vs ${whereSql}`, params),
     ]);
 
     return { data: dataRes.rows, total: countRes.rows[0].count as number };

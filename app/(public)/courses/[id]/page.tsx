@@ -23,6 +23,10 @@ import {
 
 import { CourseDetailMedia } from "@/components/public/course-detail-media";
 import { CourseDetailEnrollButton } from "@/components/public/course-detail-enroll-button";
+import { CourseInstitutionSidebarCard } from "@/components/public/course-institution-card";
+import { CourseSubjectSyllabusSection } from "@/components/public/course-subject-syllabus";
+import { CourseReviewsSection } from "@/components/public/course-reviews-section";
+import { DetailSuggestionSidebar } from "@/components/public/detail-suggestion-sidebar";
 import { Badge } from "@/components/ui/badge";
 import {
   Breadcrumb,
@@ -251,9 +255,9 @@ export default async function CourseDetailPage({ params }: Props) {
               </div>
 
               <div className="mt-5 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1.5 text-yellow-400">
-                  ★ <span className="font-semibold text-foreground">4.8</span>
-                  <span className="text-muted-foreground">(128 reviews)</span>
+                <span className="flex items-center gap-1.5 text-yellow-400 font-bold">
+                  ★ <span className="text-foreground">{course.rating ? `${course.rating}.0` : "4.8"}</span>
+                  <span className="text-muted-foreground font-normal">({course.reviewsCount || 128} reviews)</span>
                 </span>
                 <span className="h-4 w-px bg-border" />
                 <span className="flex items-center gap-1.5">
@@ -296,75 +300,26 @@ export default async function CourseDetailPage({ params }: Props) {
               </section>
             ) : null}
 
-            <section className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-2xl font-semibold text-foreground">What You&apos;ll Learn</h2>
-                <Button variant="outline" size="sm" className="gap-2">
-                  View Full Curriculum
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="space-y-3">
-                {curriculum.map((item, index) => (
-                  <div key={item.title} className="flex items-center gap-4 rounded-lg border border-border bg-card/80 p-4">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary text-sm font-semibold text-primary">
-                      {index + 1}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-foreground">{item.title}</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {item.tags.slice(0, 4).map((tag) => (
-                          <Badge key={tag} variant="secondary" className="bg-muted text-[10px] text-muted-foreground">
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    <span className="hidden text-sm text-muted-foreground sm:block">{item.lessons} Lessons</span>
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                ))}
-              </div>
-            </section>
+            {/* Subject-Wise Accredited Syllabus & Topics Breakdown */}
+            <CourseSubjectSyllabusSection
+              subjects={
+                (course as any).detailedSubjects && (course as any).detailedSubjects.length > 0
+                  ? (course as any).detailedSubjects
+                  : course.subjects
+              }
+              category={course.category}
+              programTitle={course.title}
+            />
 
-            <div className="grid gap-5 md:grid-cols-2">
-              <Panel title="Meet Your Instructor">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/15 text-2xl font-bold text-primary">
-                    E
-                  </div>
-                  <div>
-                    <p className="font-semibold text-foreground">{course.institute} Team</p>
-                    <p className="text-sm text-muted-foreground">Education Specialist</p>
-                  </div>
-                </div>
-                <p className="mt-4 text-sm leading-6 text-muted-foreground">
-                  Experienced educators focused on making learning clear, practical, and engaging.
-                </p>
-                <p className="mt-4 text-sm text-yellow-400">★ 4.9 <span className="text-muted-foreground">(256 reviews)</span></p>
-              </Panel>
-
-              <Panel title="Student Reviews" action="View All">
-                <div className="flex items-center gap-4">
-                  <span className="text-4xl font-bold text-foreground">4.8</span>
-                  <div>
-                    <p className="text-yellow-400">★★★★★</p>
-                    <p className="text-xs text-muted-foreground">(128 reviews)</p>
-                  </div>
-                </div>
-                <div className="mt-5 space-y-2">
-                  {[88, 9, 2, 1, 0].map((value, index) => (
-                    <div key={index} className="grid grid-cols-[24px_1fr_34px] items-center gap-2 text-xs text-muted-foreground">
-                      <span>{5 - index} ★</span>
-                      <div className="h-2 overflow-hidden rounded-full bg-muted">
-                        <div className="h-full rounded-full bg-primary" style={{ width: `${value}%` }} />
-                      </div>
-                      <span>{value}%</span>
-                    </div>
-                  ))}
-                </div>
-              </Panel>
-            </div>
+            {/* Real Student Reviews & Ratings Breakdown */}
+            <CourseReviewsSection
+              courseId={course.id}
+              courseTitle={course.title}
+              instituteName={course.institute}
+              avgRating={course.rating}
+              totalReviews={course.reviewsCount}
+              reviews={(course as any).reviewsList || []}
+            />
 
             <section className="space-y-4">
               <div className="flex items-center justify-between gap-3">
@@ -397,60 +352,10 @@ export default async function CourseDetailPage({ params }: Props) {
           </main>
 
           <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
-            <SidebarSummary course={course} />
+            <SidebarSummary course={course} feeComponents={feeComponents} />
 
-            <CardBlock title="Fee Structure & Components">
-              {feeComponents.length > 0 ? (
-                <div className="space-y-3">
-                  {feeComponents.map((fee) => {
-                    const origAmount = Number(fee.amount);
-                    const finalAmount = fee.final_amount != null ? Number(fee.final_amount) : origAmount;
-                    const hasDiscount = Boolean(fee.discount_value && Number(fee.discount_value) > 0);
-                    const isInstallment = fee.payment_mode === "installment" || (fee.unit && fee.unit !== "one-time");
-
-                    return (
-                      <div key={fee.id ?? fee.title} className="p-3 rounded-xl border border-border/80 bg-muted/20 space-y-1.5">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="font-semibold text-foreground">{fee.title ?? "Course Fee"}</span>
-                          <Badge variant="outline" className="text-[10px] font-bold">
-                            {fee.unit ? `per ${fee.unit}` : isInstallment ? "Installment" : "One-Time"}
-                          </Badge>
-                        </div>
-
-                        <div className="flex items-baseline justify-between pt-1">
-                          <div className="text-xs text-muted-foreground">
-                            {hasDiscount && (
-                              <span className="line-through text-muted-foreground/80 mr-2">
-                                {formatAmount(origAmount)}
-                              </span>
-                            )}
-                            {hasDiscount && (
-                              <Badge variant="secondary" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-bold mr-1.5">
-                                {fee.discount_type === "percentage" ? `${fee.discount_value}% OFF` : `₹${fee.discount_value} OFF`}
-                              </Badge>
-                            )}
-                          </div>
-                          <span className="font-extrabold text-base text-primary">
-                            {formatFeeAmount(fee)}
-                          </span>
-                        </div>
-
-                        {fee.installments_count && fee.installments_count > 1 ? (
-                          <p className="text-[11px] text-muted-foreground">
-                            {fee.installments_count} installments estimated for full duration
-                          </p>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="flex items-center justify-between text-sm p-3 rounded-xl border border-border/80 bg-muted/20">
-                  <span className="text-muted-foreground">Full Course Fee</span>
-                  <span className="font-bold text-foreground text-base">{course.price}</span>
-                </div>
-              )}
-            </CardBlock>
+            {/* Suggested & Related Courses Widget */}
+            <DetailSuggestionSidebar type="courses" currentId={course.id} />
 
             <CardBlock title="Share this course">
               <div className="flex gap-3">
@@ -460,7 +365,7 @@ export default async function CourseDetailPage({ params }: Props) {
                   "x",
                   <MessageCircle key="chat" className="h-4 w-4" />,
                 ].map((item, index) => (
-                  <button key={index} className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-sm text-muted-foreground transition hover:border-primary hover:text-primary">
+                  <button key={index} className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-sm text-muted-foreground transition hover:border-primary hover:text-primary cursor-pointer">
                     {item}
                   </button>
                 ))}
@@ -476,13 +381,6 @@ export default async function CourseDetailPage({ params }: Props) {
                   </div>
                 ))}
               </div>
-            </CardBlock>
-
-            <CardBlock title="Have a question?">
-              <p className="mb-4 text-sm text-muted-foreground">Our admissions counseling team is here to help you.</p>
-              <Button variant="outline" className="w-full border-primary text-primary hover:bg-primary hover:text-primary-foreground font-bold">
-                Contact Support / Enquiry
-              </Button>
             </CardBlock>
           </aside>
         </div>
@@ -544,8 +442,10 @@ function CardBlock({ title, children }: { title: string; children: React.ReactNo
 
 function SidebarSummary({
   course,
+  feeComponents = [],
 }: {
   course: Awaited<ReturnType<typeof getPublicCourseById>>;
+  feeComponents?: FeeComponent[];
 }) {
   if (!course) return null;
 
@@ -600,33 +500,74 @@ function SidebarSummary({
 
         <Separator />
 
-        <div>
-          <p className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Course Fee</p>
-          <p className="mt-1 text-3xl font-extrabold text-primary">{course.price}</p>
-        </div>
+        <div className="space-y-3">
+          <div>
+            <p className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Course Fee</p>
+            <p className="mt-0.5 text-3xl font-black text-primary">{course.price}</p>
+          </div>
 
-        <Separator />
+          {feeComponents.length > 0 && (
+            <div className="space-y-2 pt-1">
+              {feeComponents.map((fee) => {
+                const origAmount = Number(fee.amount);
+                const finalAmount = fee.final_amount != null ? Number(fee.final_amount) : origAmount;
+                const hasDiscount = Boolean(fee.discount_value && Number(fee.discount_value) > 0);
+                const isInstallment = fee.payment_mode === "installment" || (fee.unit && fee.unit !== "one-time");
 
-        <div className="space-y-3.5 text-sm">
-          <DetailRow icon={<BookOpen className="h-4 w-4" />} label="Category" value={course.category || "Academic Course"} />
-          <DetailRow icon={<Award className="h-4 w-4" />} label="Program" value={course.selectedCategory ?? course.title} />
-          {course.sections && course.sections.length > 0 ? (
-            <DetailRow icon={<Award className="h-4 w-4" />} label="Sections" value={course.sections.join(", ")} />
-          ) : null}
-          {course.subjects && course.subjects.length > 0 ? (
-            <DetailRow icon={<BookOpen className="h-4 w-4" />} label="Subjects" value={course.subjects.slice(0, 3).join(", ") + (course.subjects.length > 3 ? ` +${course.subjects.length - 3} more` : "")} />
-          ) : null}
+                return (
+                  <div key={fee.id ?? fee.title} className="p-3 rounded-xl border border-border/80 bg-muted/20 space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-foreground">{fee.title ?? "Tuition Fee"}</span>
+                      <Badge variant="outline" className="text-[10px] font-bold">
+                        {fee.unit ? `per ${fee.unit}` : isInstallment ? "Installment" : "One-Time"}
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-baseline justify-between pt-0.5">
+                      <div className="text-xs text-muted-foreground">
+                        {hasDiscount && (
+                          <span className="line-through text-muted-foreground/80 mr-1.5 text-[11px]">
+                            {formatAmount(origAmount)}
+                          </span>
+                        )}
+                        {hasDiscount && (
+                          <Badge variant="secondary" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-bold">
+                            {fee.discount_type === "percentage" ? `${fee.discount_value}% OFF` : `₹${fee.discount_value} OFF`}
+                          </Badge>
+                        )}
+                      </div>
+                      <span className="font-extrabold text-sm text-primary">
+                        {formatFeeAmount(fee)}
+                      </span>
+                    </div>
+
+                    {fee.installments_count && fee.installments_count > 1 ? (
+                      <p className="text-[10px] text-muted-foreground">
+                        {fee.installments_count} installments estimated
+                      </p>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <CourseDetailEnrollButton course={course} />
-        <Button variant="outline" className="w-full font-bold" size="lg" asChild>
-          <Link href={instituteUrl}>
-            View Institute Profile
-          </Link>
-        </Button>
-        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <ShieldCheck className="h-4 w-4 text-green-500" />
-          Verified Institution Curriculum
+
+        <div className="pt-1">
+          <CourseInstitutionSidebarCard
+            institution={
+              (course as any).institution || {
+                id: institutionId || 1,
+                name: course.institute,
+                location: (course as any).boardName || (course as any).universityName || "India",
+                rating: 4.9,
+                reviews_count: 24,
+                verified: true,
+              }
+            }
+          />
         </div>
       </CardContent>
     </Card>

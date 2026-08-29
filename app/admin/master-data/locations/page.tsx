@@ -6,6 +6,7 @@ import { useAuthStore } from "@/store";
 import { toast } from "sonner";
 import { MapPin, Plus, Loader2, Trash2, RefreshCw, Power, PowerOff, Edit, MoreHorizontal } from "lucide-react";
 import { StatsCards } from "@/components/master-data/stats-cards";
+import { UniversalLocationPicker } from "@/components/shared/universal-location-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,7 +52,7 @@ import { Location, LocationType } from "@/lib/types/location";
 import { capitalize } from "@/lib/utils/capitalize";
 import { AsyncSearchPopover } from "@/components/shared/async-search-popover";
 
-const LOCATION_TYPES: LocationType[] = ["state", "city", "area"];
+const LOCATION_TYPES: LocationType[] = ["country", "state", "city", "area"];
 
 function toSlug(text: string) {
     return text
@@ -103,64 +104,73 @@ function buildColumns(
         },
         {
             accessorKey: "name",
-            header: "Name",
+            header: "Location / Area",
             cell: ({ row }) => {
-                const name = row.getValue("name") as string;
+                const loc = row.original;
+                const type = loc.type || "state";
+                let badgeClass = "bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-400 border-blue-200";
+                if (type === "country") {
+                    badgeClass = "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400 border-emerald-200";
+                } else if (type === "state") {
+                    badgeClass = "bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-400 border-blue-200";
+                } else if (type === "city") {
+                    badgeClass = "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400 border-amber-200";
+                } else if (type === "area") {
+                    badgeClass = "bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-400 border-purple-200";
+                }
+
                 return (
-                    <div className="max-w-[320px]">
-                        <span
-                            className="font-medium truncate block"
-                            title={name}
-                        >
-                            {name}
+                    <div className="flex items-center gap-2 max-w-[280px]">
+                        <span className="font-semibold text-foreground truncate" title={loc.name}>
+                            {loc.name}
                         </span>
+                        <Badge variant="outline" className={`capitalize font-bold text-[10px] px-1.5 py-0 shrink-0 ${badgeClass}`}>
+                            {type}
+                        </Badge>
                     </div>
                 );
             },
         },
         {
-            accessorKey: "type",
-            header: "Type",
+            id: "city",
+            header: "City",
             cell: ({ row }) => {
-                const type = row.getValue("type") as string;
-                return (
-                    <Badge variant="outline" className="capitalize">
-                        {type}
-                    </Badge>
-                );
+                const loc = row.original;
+                const cityName = loc.city_name || (loc.type === "city" ? loc.name : loc.parent_name);
+                return <span className="text-xs font-medium text-foreground">{cityName || "-"}</span>;
             },
         },
         {
-            accessorKey: "location_scope",
-            header: "Scope",
+            id: "state",
+            header: "State",
             cell: ({ row }) => {
-                const scope = row.original.location_scope || "global";
-                let badgeClass = "bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400";
-                if (scope === "seo") {
-                    badgeClass = "bg-purple-100 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400";
-                } else if (scope === "user") {
-                    badgeClass = "bg-teal-100 text-teal-700 hover:bg-teal-100 dark:bg-teal-900/30 dark:text-teal-400";
-                } else if (scope === "institution") {
-                    badgeClass = "bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400";
+                const loc = row.original;
+                const stateName = loc.state_name || (loc.type === "state" ? loc.name : null);
+                return <span className="text-xs text-muted-foreground">{stateName || "-"}</span>;
+            },
+        },
+        {
+            id: "country",
+            header: "Country",
+            cell: ({ row }) => {
+                const loc = row.original;
+                return <span className="text-xs text-muted-foreground">{loc.country_name || "India"}</span>;
+            },
+        },
+        {
+            id: "coordinates",
+            header: "Latitude & Longitude",
+            cell: ({ row }) => {
+                const loc = row.original;
+                if (loc.latitude && loc.longitude) {
+                    return (
+                        <div className="flex items-center gap-1.5 text-xs text-foreground font-mono bg-muted/30 px-2 py-1 rounded-md border border-border/60 w-fit">
+                            <MapPin className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                            <span>{parseFloat(loc.latitude).toFixed(4)}, {parseFloat(loc.longitude).toFixed(4)}</span>
+                        </div>
+                    );
                 }
-                return (
-                    <Badge variant="default" className={`capitalize ${badgeClass}`}>
-                        {scope}
-                    </Badge>
-                );
-            },
-        },
-        {
-            accessorKey: "parent_name",
-            header: "Parent Location",
-            cell: ({ row }) => {
-                const parentName = row.getValue("parent_name") as string | null;
-                const parentId = row.original.parent_id;
-                return (
-                    <span className="text-sm text-muted-foreground">
-                        {parentName ? `${parentName} (ID: ${parentId})` : "-"}
-                    </span>
-                );
+                return <span className="text-xs text-muted-foreground">-</span>;
             },
         },
         {
@@ -263,13 +273,17 @@ export default function LocationsPage() {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [name, setName] = useState("");
     const [slug, setSlug] = useState("");
-    const [type, setType] = useState<LocationType>("state");
+    const [type, setType] = useState<LocationType>("city");
+    const [country, setCountry] = useState("India");
+    const [stateName, setStateName] = useState("");
+    const [cityName, setCityName] = useState("");
+    const [areaName, setAreaName] = useState("");
     const [parentId, setParentId] = useState("");
     const [parentLabel, setParentLabel] = useState("");
     const [latitude, setLatitude] = useState("");
     const [longitude, setLongitude] = useState("");
     const [locationScope, setLocationScope] = useState<string>("global");
-    const [scopeFilter, setScopeFilter] = useState<string>("all");
+    const [typeFilter, setTypeFilter] = useState<string>("all");
     const [submitting, setSubmitting] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<Location | null>(null);
     const [bulkDeleteTargets, setBulkDeleteTargets] = useState<Location[]>([]);
@@ -303,9 +317,9 @@ export default function LocationsPage() {
         if (!accessToken) return;
         setLoading(true);
         try {
-            const scopesParam = scopeFilter !== "all" ? `&scopes=${scopeFilter}` : "";
+            const typeParam = typeFilter !== "all" ? `&type=${typeFilter}` : "";
             const res = await fetch(
-                `/api/admin/master-data/locations?page=${pagination.pageIndex + 1}&limit=${pagination.pageSize}&search=${encodeURIComponent(debouncedSearch)}${scopesParam}`,
+                `/api/admin/master-data/locations?page=${pagination.pageIndex + 1}&limit=${pagination.pageSize}&search=${encodeURIComponent(debouncedSearch)}${typeParam}`,
                 { headers: authHeader }
             );
             const json = await res.json();
@@ -320,7 +334,7 @@ export default function LocationsPage() {
         } finally {
             setLoading(false);
         }
-    }, [accessToken, pagination.pageIndex, pagination.pageSize, debouncedSearch, scopeFilter]);
+    }, [accessToken, pagination.pageIndex, pagination.pageSize, debouncedSearch, typeFilter]);
 
     useEffect(() => {
         if (isReady) {
@@ -360,8 +374,8 @@ export default function LocationsPage() {
     }, [editingLocation]);
 
     const handleAddLocation = async () => {
-        if (!name.trim() || !slug.trim() || !type) {
-            toast.error("Please fill in required fields");
+        if (!areaName.trim() && !cityName.trim() && !stateName.trim() && !country.trim()) {
+            toast.error("Please pick a location from the map or enter location details");
             return;
         }
 
@@ -371,28 +385,27 @@ export default function LocationsPage() {
                 method: "POST",
                 headers: { ...authHeader, "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    name: capitalize(name.trim()),
-                    slug: slug.trim(),
-                    type,
-                    parent_id: parentId ? parseInt(parentId) : null,
+                    country: country.trim() || "India",
+                    state: stateName.trim(),
+                    city: cityName.trim(),
+                    area: areaName.trim(),
                     latitude: latitude ? parseFloat(latitude) : null,
                     longitude: longitude ? parseFloat(longitude) : null,
-                    location_scope: locationScope,
                 }),
             });
 
             const json = await res.json();
 
             if (res.ok) {
-                toast.success("Location added successfully");
+                toast.success("Location saved successfully");
+                setCountry("India");
+                setStateName("");
+                setCityName("");
+                setAreaName("");
                 setName("");
                 setSlug("");
-                setType("state");
-                setParentId("");
-                setParentLabel("");
                 setLatitude("");
                 setLongitude("");
-                setLocationScope("global");
                 setDialogOpen(false);
                 await fetchLocations();
                 await fetchStats();
@@ -596,7 +609,6 @@ export default function LocationsPage() {
                             setParentLabel("");
                             setLatitude("");
                             setLongitude("");
-                            setLocationScope("global");
                         }
                     }}>
                         <DialogTrigger asChild>
@@ -622,119 +634,34 @@ export default function LocationsPage() {
                                     e.preventDefault();
                                     editingLocation ? handleUpdateLocation() : handleAddLocation();
                                 }}
-                                className="flex flex-col gap-4 pt-2"
+                                className="flex flex-col gap-4 pt-1"
                             >
-                                <div className="flex flex-col gap-1.5">
-                                    <Label htmlFor="location-name">Name *</Label>
-                                    <Input
-                                        id="location-name"
-                                        placeholder="e.g. Maharashtra"
-                                        value={name}
-                                        onChange={(e) => {
-                                            setName(e.target.value);
-                                            setSlug(toSlug(e.target.value));
-                                        }}
-                                        required
-                                    />
-                                </div>
-                                <div className="flex flex-col gap-1.5">
-                                    <Label htmlFor="location-slug">
-                                        Slug{" "}
-                                        <span className="text-xs text-muted-foreground font-normal">
-                                            (auto-generated)
-                                        </span>
-                                    </Label>
-                                    <Input
-                                        id="location-slug"
-                                        value={slug}
-                                        disabled
-                                        className="font-mono text-sm bg-muted/40 cursor-not-allowed"
-                                    />
-                                </div>
-                                <div className="flex flex-col gap-1.5">
-                                    <Label htmlFor="location-type">Type *</Label>
-                                    <Select value={type} onValueChange={(value) => setType(value as LocationType)}>
-                                        <SelectTrigger id="location-type">
-                                            <SelectValue placeholder="Select location type" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {LOCATION_TYPES.map((t) => (
-                                                <SelectItem key={t} value={t}>
-                                                    {capitalize(t)}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="flex flex-col gap-1.5">
-                                    <Label htmlFor="location-scope">Scope *</Label>
-                                    <Select value={locationScope} onValueChange={setLocationScope}>
-                                        <SelectTrigger id="location-scope">
-                                            <SelectValue placeholder="Select location scope" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {["global", "seo", "user", "institution"].map((s) => (
-                                                <SelectItem key={s} value={s}>
-                                                    {capitalize(s)}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="flex flex-col gap-1.5">
-                                    <Label htmlFor="location-parent">Parent Location</Label>
-                                    <AsyncSearchPopover<Location>
-                                        value={parentId}
-                                        onChange={(value) => setParentId(value)}
-                                        selectedLabel={parentLabel}
-                                        placeholder="Select parent location"
-                                        searchPlaceholder="Search locations..."
-                                        emptyText="No location found"
-                                        fetcher={async (search, page) => {
-                                            const res = await fetch(
-                                                `/api/admin/master-data/locations?page=${page}&limit=15&search=${encodeURIComponent(search)}`,
-                                                { headers: authHeader }
-                                            );
-                                            const json = await res.json();
-                                            return {
-                                                data: json.data || [],
-                                                hasMore: page < json.pageCount,
-                                            };
-                                        }}
-                                        getValue={(item) => String(item.id)}
-                                        getLabel={(item) => `${item.name} (${item.type})`}
-                                        onSelectItem={(item) => {
-                                            setParentLabel(`${item.name} (${item.type})`);
-                                        }}
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="flex flex-col gap-1.5">
-                                        <Label htmlFor="location-lat">Latitude</Label>
-                                        <Input
-                                            id="location-lat"
-                                            type="number"
-                                            placeholder="e.g. 19.7515"
-                                            step="0.0001"
-                                            value={latitude}
-                                            onChange={(e) => setLatitude(e.target.value)}
-                                        />
-                                    </div>
-                                    <div className="flex flex-col gap-1.5">
-                                        <Label htmlFor="location-lng">Longitude</Label>
-                                        <Input
-                                            id="location-lng"
-                                            type="number"
-                                            placeholder="e.g. 75.7139"
-                                            step="0.0001"
-                                            value={longitude}
-                                            onChange={(e) => setLongitude(e.target.value)}
-                                        />
-                                    </div>
-                                </div>
-                                <Button type="submit" disabled={submitting}>
+                                <UniversalLocationPicker
+                                    value={{
+                                        country,
+                                        state: stateName,
+                                        city: cityName,
+                                        area: areaName,
+                                        latitude,
+                                        longitude,
+                                    }}
+                                    onChange={(loc) => {
+                                        setCountry(loc.country || "India");
+                                        setStateName(loc.state || "");
+                                        setCityName(loc.city || "");
+                                        setAreaName(loc.area || "");
+                                        setLatitude(loc.latitude || "");
+                                        setLongitude(loc.longitude || "");
+                                        setName(loc.area || loc.city || loc.state || loc.country || "");
+                                        setSlug(toSlug(loc.area || loc.city || loc.state || loc.country || ""));
+                                    }}
+                                    showStructuredFields={true}
+                                    showCoordinates={true}
+                                />
+
+                                <Button type="submit" disabled={submitting} className="w-full">
                                     {submitting && <Loader2 className="mr-2 size-4 animate-spin" />}
-                                    {editingLocation ? "Update Location" : "Create Location"}
+                                    {editingLocation ? "Update Location" : "Save Location"}
                                 </Button>
                             </form>
                         </DialogContent>
@@ -755,24 +682,24 @@ export default function LocationsPage() {
                             placeholder="Search locations..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full sm:w-64"
+                            className="w-full sm:w-64 text-xs"
                         />
                         <Select
-                            value={scopeFilter}
+                            value={typeFilter}
                             onValueChange={(value) => {
-                                setScopeFilter(value);
+                                setTypeFilter(value);
                                 setPagination((prev) => ({ ...prev, pageIndex: 0 }));
                             }}
                         >
-                            <SelectTrigger className="w-full sm:w-[150px]">
-                                <SelectValue placeholder="All Scopes" />
+                            <SelectTrigger className="w-full sm:w-[150px] text-xs">
+                                <SelectValue placeholder="All Types" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">All Scopes</SelectItem>
-                                <SelectItem value="global">Global</SelectItem>
-                                <SelectItem value="seo">SEO</SelectItem>
-                                <SelectItem value="user">User</SelectItem>
-                                <SelectItem value="institution">Institution</SelectItem>
+                                <SelectItem value="all">All Types</SelectItem>
+                                <SelectItem value="country">Country</SelectItem>
+                                <SelectItem value="state">State</SelectItem>
+                                <SelectItem value="city">City</SelectItem>
+                                <SelectItem value="area">Area</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

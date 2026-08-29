@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, Loader2, RefreshCw, Search, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Download, Loader2, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -13,6 +14,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogFooter as DialogFooter,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { useAdminGuard } from "@/hooks/use-admin-guard";
+import { toRoleRoutePath } from "@/lib/auth/role-routes";
 import { useAuthStore } from "@/store";
 
 type StaffLettersMode = "admin" | "self";
@@ -130,8 +133,16 @@ function LetterTable({
 
   if (!rows.length) {
     return (
-      <div className="flex min-h-44 items-center justify-center p-8 text-center text-muted-foreground">
-        No staff letters found.
+      <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center text-muted-foreground">
+        <p>No staff letters found.</p>
+        {mode === "admin" && (
+          <Button asChild size="sm" variant="outline" className="gap-1.5">
+            <Link href="/admin/master-data/card-templates">
+              <Plus className="size-4" />
+              Generate Staff Letter
+            </Link>
+          </Button>
+        )}
       </div>
     );
   }
@@ -218,7 +229,7 @@ function LetterTable({
 
 export function StaffLettersClient({ mode = "admin" }: { mode?: StaffLettersMode }) {
   const { isReady } = useAdminGuard();
-  const { accessToken } = useAuthStore();
+  const { accessToken, user } = useAuthStore();
   const { activeInstitution } = useActiveInstitution();
   const institutionId = activeInstitution?.id ? String(activeInstitution.id) : "";
   const authHeaders = useMemo(
@@ -318,7 +329,17 @@ export function StaffLettersClient({ mode = "admin" }: { mode?: StaffLettersMode
               : "Review offer, joining, and staff letters generated for teachers and drivers."}
           </p>
         </div>
-        <Badge variant="outline" className="rounded-md">{activeInstitution.name}</Badge>
+        <div className="flex items-center gap-3">
+          <Badge variant="outline" className="rounded-md">{activeInstitution.name}</Badge>
+          {mode === "admin" && (
+            <Button asChild className="gap-1.5 font-semibold">
+              <Link href={toRoleRoutePath("/admin/master-data/card-templates", user)}>
+                <Plus className="size-4" />
+                Generate Staff Letter
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="rounded-md border border-border bg-card">

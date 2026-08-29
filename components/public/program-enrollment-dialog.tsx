@@ -33,6 +33,8 @@ export interface ProgramEnrollmentTarget {
   title: string;
   institution_id?: number;
   institution_name?: string;
+  institute?: string;
+  price?: string;
   fee_amount?: string | number;
   fee_unit?: string;
   duration?: string;
@@ -171,8 +173,8 @@ export function ProgramEnrollmentDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-md bg-card border-border p-6 shadow-xl rounded-2xl">
-          <DialogHeader className="space-y-2">
+        <DialogContent className="max-w-md max-h-[88vh] flex flex-col p-0 overflow-hidden bg-card border-border shadow-xl rounded-2xl">
+          <DialogHeader className="p-5 pb-3.5 border-b border-border space-y-1.5 shrink-0 bg-muted/30">
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <GraduationCap className="h-5 w-5 text-primary" />
               Course Enrollment Application
@@ -182,8 +184,9 @@ export function ProgramEnrollmentDialog({
             </DialogDescription>
           </DialogHeader>
 
-          {/* Program Details Card */}
-          <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-3 mt-2">
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            {/* Program Details Card */}
+            <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-3">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <Badge variant="secondary" className="text-[10px] font-semibold">
@@ -279,6 +282,7 @@ export function ProgramEnrollmentDialog({
               </Button>
             </div>
           )}
+          </div>
         </DialogContent>
       </Dialog>
 

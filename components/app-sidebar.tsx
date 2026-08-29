@@ -64,6 +64,9 @@ import {
     RefreshCw,
     Share2,
     Percent,
+    FileSignature,
+    ShoppingBag,
+    Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { readJsonResponse } from "@/lib/api/read-json-response";
@@ -184,9 +187,18 @@ const navItems: SidebarItem[] = [
         icon: Users,
         children: [
             { title: "All Staff", url: "/admin/staff", icon: UsersRound },
+            { title: "Task Management", url: "/admin/operations/tasks", icon: ClipboardList },
             { title: "Attendance", url: "/admin/staff/attendance", icon: ClipboardCheck },
             { title: "Salary", url: "/admin/staff/salary", icon: IndianRupee },
-            { title: "Letters", url: "/admin/staff/letters", icon: FileText },
+            { title: "Queries", url: "/admin/staff/queries", icon: HelpCircle },
+            { title: "Salary Slip", url: "/admin/staff/salary-slips", icon: CreditCard },
+            { title: "Holiday", url: "/admin/staff/holidays", icon: CalendarDays },
+            { title: "Offer Letter", url: "/admin/staff/offer-letters", icon: Mail },
+            { title: "Certificate", url: "/admin/staff/certificates", icon: BadgeCheck },
+            { title: "Experience Letter", url: "/admin/staff/experience-letters", icon: FileCheck2 },
+            { title: "Our Jobs", url: "/admin/staff/jobs", icon: Briefcase },
+            { title: "Applicant", url: "/admin/staff/applicants", icon: UserCheck },
+            { title: "Appreciation Certificate", url: "/admin/staff/appreciation-certificates", icon: Trophy },
         ],
     },
     {
@@ -224,18 +236,6 @@ const navItems: SidebarItem[] = [
             { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
         ],
     },
-
-    {
-        title: "Analytics",
-        url: "/admin/analytics",
-        icon: BarChart3,
-        children: [
-            { title: "Overview", url: "/admin/analytics", icon: TrendingUp },
-            { title: "Leads", url: "/admin/users/leads", icon: UserCheck },
-            { title: "Sales", url: "/admin/analytics/sales", icon: BadgeDollarSign },
-            { title: "Reports", url: "/admin/analytics/reports", icon: PieChart },
-        ],
-    },
     {
         title: "Finance",
         url: "/admin/finance/income",
@@ -254,6 +254,7 @@ const navItems: SidebarItem[] = [
         url: "/admin/marketing/packages",
         icon: Megaphone,
         children: [
+            { title: "Products", url: "/admin/marketing/products", icon: ShoppingBag },
             { title: "Pricing Packages", url: "/admin/marketing/packages", icon: CreditCard },
             { title: "Social Media", url: "/admin/marketing/social-media", icon: Share2 },
             { title: "Form Builder", url: "/admin/marketing/form-builder", icon: FileText },
@@ -261,6 +262,7 @@ const navItems: SidebarItem[] = [
             { title: "Ads Builder", url: "/admin/marketing/ads-builder", icon: Megaphone },
             { title: "New Offers", url: "/admin/marketing/offers", icon: Sparkles },
             { title: "Business Analytics", url: "/admin/marketing/business-analytics", icon: BarChart3 },
+            { title: "Search History", url: "/admin/marketing/search-history", icon: Search },
             { title: "SEO & Meta Tags", url: "/admin/marketing/seo", icon: Globe },
         ],
     },
@@ -269,8 +271,10 @@ const navItems: SidebarItem[] = [
         url: "/admin/sales/pipeline",
         icon: BadgeDollarSign,
         children: [
+            { title: "Clients", url: "/admin/sales/clients", icon: UsersRound },
             { title: "Enrollments", url: "/admin/sales/enrollments", icon: GraduationCap },
             { title: "Pipeline", url: "/admin/sales/pipeline", icon: TrendingUp },
+            { title: "Proposals", url: "/admin/sales/proposals", icon: FileSignature },
             { title: "Enquiry", url: "/admin/sales/enquiries", icon: Mail },
             { title: "Commissions", url: "/admin/sales/commissions", icon: Percent },
         ],
@@ -288,7 +292,6 @@ const navItems: SidebarItem[] = [
             { title: "Subjects", url: "/admin/content/subjects", icon: GraduationCap },
             { title: "Courses & Programs", url: "/admin/content/courses", icon: BookCheck },
             { title: "Syllabus", url: "/admin/content/syllabus", icon: BookOpen },
-            { title: "Card Templates", url: "/admin/content/card-templates", icon: IdCard },
             { title: "Assignments", url: "/admin/content/assignments", icon: ClipboardList },
             { title: "Practice Exams", url: "/admin/content/practice-exams", icon: ClipboardCheck },
             { title: "Exams", url: "/admin/content/exams", icon: FileText },
@@ -381,16 +384,6 @@ const navItems: SidebarItem[] = [
                 icon: Trophy,
             },
             {
-                title: "Hostel Facilities",
-                url: "/admin/institutions/hostels",
-                icon: Building,
-            },
-            {
-                title: "Library Facilities",
-                url: "/admin/institutions/libraries",
-                icon: LibraryBig,
-            },
-            {
                 title: "Institute Calendar",
                 url: "/admin/master-data/institute-calendar",
                 icon: CalendarDays,
@@ -474,6 +467,7 @@ const navItems: SidebarItem[] = [
         icon: Building2,
         children: [
             { title: "Contact & Branches", url: "/admin/company?tab=contact-branches", icon: MapPin },
+            { title: "Payment Methods", url: "/admin/company?tab=payment-methods", icon: CreditCard },
             { title: "FAQs", url: "/admin/company?tab=faqs", icon: HelpCircle },
             { title: "Privacy Policy", url: "/admin/company?tab=privacy-policy", icon: ShieldCheck },
             { title: "Terms & Conditions", url: "/admin/company?tab=terms-and-conditions", icon: FileText },
@@ -627,6 +621,9 @@ export function AppSidebar() {
     const roleAwareNavItems = useMemo(
         () => navItems.flatMap((item) => {
             if (!isStudent && item.url === "/admin/my-program") {
+                return [];
+            }
+            if (isInstitutionAdmin && item.url === "/admin/master-data") {
                 return [];
             }
             if (item.url === "/admin/marketing/packages") {

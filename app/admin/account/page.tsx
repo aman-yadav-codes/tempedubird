@@ -279,7 +279,12 @@ export default function AccountPage() {
 
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(json.error || "Failed to update profile records");
+        const issuesText = json.issues
+          ? Object.entries(json.issues as Record<string, string[]>)
+              .map(([key, msgs]) => `${key}: ${msgs.join(", ")}`)
+              .join("; ")
+          : "";
+        throw new Error(issuesText ? `${json.error || "Validation failed"} (${issuesText})` : json.error || "Failed to update profile records");
       }
 
       toast.success("Profile records updated successfully!");

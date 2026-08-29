@@ -44,12 +44,12 @@ const monthSchema = z.coerce.number().int().min(1).max(12);
 const yearSchema = z.coerce.number().int().min(1900).max(2100);
 const teacherTypeSchema = z.enum(["individual_teacher", "institute_teacher"]);
 const userDocumentSchema = z.object({
-  document_type: z.string().trim().min(2).max(50).transform((value) => value.toUpperCase()),
+  document_type: z.string().trim().min(1).max(100).transform((value) => value.toUpperCase()),
   document_number: z.preprocess(
     emptyToNull,
     z.union([z.string().max(100).transform((value) => value.toUpperCase()), z.null()]).optional()
   ),
-  file_url: z.string().trim().url("Enter a valid document image URL"),
+  file_url: z.string().trim().min(1, "Document file is required"),
   public_id: nullableString(500),
   resource_type: nullableString(50),
   is_verified: z.boolean().default(false),
@@ -132,14 +132,14 @@ export const adminCreateUserSchema = z.object({
       ),
       hourly_charges: z.preprocess(
         (val) => {
-          if (val === "" || val === null) return null;
+          if (val === "" || val === null || val === undefined) return null;
           if (typeof val === "string") {
             const trimmed = val.trim();
             return trimmed === "" ? null : Number(trimmed);
           }
           return val;
         },
-        z.union([z.number().positive("Hourly charges must be greater than 0"), z.null()]).optional()
+        z.union([z.number().nonnegative(), z.null()]).optional()
       ),
     })
     .default({ is_teacher: false, institution_ids: [] }),
@@ -162,14 +162,13 @@ export const adminCreateUserSchema = z.object({
     .array(
       z.object({
         job_title: capitalizedString(150),
-        company_id: z.number().int().nullable().optional(),
+        company_id: z.coerce.number().int().nullable().optional(),
         company_name: capitalizedString(150),
-        from_month: monthSchema,
-        from_year: yearSchema,
-        to_month: monthSchema.nullable().optional(),
-        to_year: yearSchema.nullable().optional(),
+        from_month: z.preprocess(emptyToNull, z.union([monthSchema, z.null()]).optional()),
+        from_year: z.preprocess(emptyToNull, z.union([yearSchema, z.null()]).optional()),
+        to_month: z.preprocess(emptyToNull, z.union([monthSchema, z.null()]).optional()),
+        to_year: z.preprocess(emptyToNull, z.union([yearSchema, z.null()]).optional()),
         is_current: z.boolean().default(false),
-
       })
     )
     .max(20)
@@ -178,10 +177,10 @@ export const adminCreateUserSchema = z.object({
     .array(
       z.object({
         qualification: capitalizedString(150),
-        institution_id: z.number().int().nullable().optional(),
-        institution_name: capitalizedString(200).optional().nullable(),
-        from_year: yearSchema,
-        to_year: yearSchema,
+        institution_id: z.coerce.number().int().nullable().optional(),
+        institution_name: nullableCapitalizedString(200),
+        from_year: z.preprocess(emptyToNull, z.union([yearSchema, z.null()]).optional()),
+        to_year: z.preprocess(emptyToNull, z.union([yearSchema, z.null()]).optional()),
       })
     )
     .max(20)
@@ -191,17 +190,7 @@ export const adminCreateUserSchema = z.object({
       z.object({
         name: capitalizedString(200),
         issued_authority: nullableCapitalizedString(200),
-        duration: z.preprocess(
-          (val) => {
-            if (val === "" || val === null) return null;
-            if (typeof val === "string") {
-              const trimmed = val.trim();
-              return trimmed === "" ? null : Number(trimmed);
-            }
-            return val;
-          },
-          z.union([z.number().int().positive("Duration must be a valid number of months"), z.null()]).optional()
-        ),
+        duration: nullableString(100),
       })
     )
     .max(30)

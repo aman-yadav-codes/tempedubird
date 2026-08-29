@@ -1,30 +1,11 @@
 import { NextResponse } from "next/server";
-
 import { getAuthenticatedUser, requirePermission } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
 import { hasPermission, isPlatformAdminUser, type PermissionUser } from "@/lib/auth/permissions";
 import { cancelActiveJob, scheduleJob } from "@/lib/scheduled-jobs";
+import { ensureBlogPostsTable } from "@/lib/db/ensure-blog-schema";
 
 type BlogStatus = "draft" | "review" | "published";
-
-type BlogPostRow = {
-  id: number;
-  institution_id: number | null;
-  title: string;
-  category: string | null;
-  cover_image: string | null;
-  video_url: string | null;
-  summary: string | null;
-  tags: string | null;
-  content: Record<string, unknown> | null;
-  status: BlogStatus;
-  publish_at: string | null;
-  published_at: string | null;
-  author_id: number | null;
-  author_name: string | null;
-  created_at: string;
-  updated_at: string;
-};
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong";
@@ -41,13 +22,32 @@ function normalizeStatus(value: unknown): BlogStatus {
   return "draft";
 }
 
-function getFirstPermittedInstitutionId(user: PermissionUser, permission: string) {
-  return user.memberships?.find((membership) =>
-    hasPermission(user, permission, { institutionId: membership.institution_id })
-  )?.institution_id ?? null;
+function generateSlug(title: string): string {
+  return (
+    title
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, "")
+      .replace(/[\s_-]+/g, "-")
+      .replace(/^-+|-+$/g, "") +
+    "-" +
+    Math.random().toString(36).substring(2, 7)
+  );
 }
 
-function resolveInstitutionId(user: PermissionUser, permission: string, requestedInstitutionId?: number | null) {
+function getFirstPermittedInstitutionId(user: PermissionUser, permission: string) {
+  return (
+    user.memberships?.find((membership) =>
+      hasPermission(user, permission, { institutionId: membership.institution_id })
+    )?.institution_id ?? null
+  );
+}
+
+function resolveInstitutionId(
+  user: PermissionUser,
+  permission: string,
+  requestedInstitutionId?: number | null
+) {
   if (isPlatformAdminUser(user)) return requestedInstitutionId ?? null;
 
   if (requestedInstitutionId) {
@@ -63,72 +63,17 @@ function resolveInstitutionId(user: PermissionUser, permission: string, requeste
   throw new Error("Forbidden: Admin access required");
 }
 
-async function ensureBlogPostsTable() {
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS blog_posts (
-      id SERIAL PRIMARY KEY,
-      institution_id INTEGER NULL REFERENCES institution_profiles(id) ON DELETE CASCADE,
-      title TEXT NOT NULL,
-      category TEXT DEFAULT 'Academic & Curriculum',
-      cover_image TEXT NULL,
-      video_url TEXT NULL,
-      summary TEXT NULL,
-      tags TEXT NULL,
-      content JSONB NOT NULL DEFAULT '{}'::jsonb,
-      status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'review', 'published')),
-      publish_at TIMESTAMPTZ NULL,
-      published_at TIMESTAMPTZ NULL,
-      author_id INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
-      created_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
-      updated_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  try {
-    await db.query(`
-      ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Academic & Curriculum';
-      ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS cover_image TEXT;
-      ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS video_url TEXT;
-      ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS summary TEXT;
-      ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS tags TEXT;
-    `);
-  } catch {}
-
-  await db.query(`
-    CREATE INDEX IF NOT EXISTS blog_posts_institution_status_idx
-      ON blog_posts(institution_id, status, publish_at)
-  `);
-}
-
-function serializeBlog(row: BlogPostRow) {
-  return {
-    id: row.id,
-    institution_id: row.institution_id,
-    title: row.title,
-    category: row.category || "Academic & Curriculum",
-    cover_image: row.cover_image || null,
-    video_url: row.video_url || null,
-    summary: row.summary || null,
-    tags: row.tags || null,
-    content: row.content,
-    status: row.status,
-    publish_at: row.publish_at,
-    published_at: row.published_at,
-    author_id: row.author_id,
-    author: row.author_name ?? "Unknown",
-    updated_at: row.updated_at,
-    created_at: row.created_at,
-  };
-}
-
 export async function GET(req: Request) {
   try {
     const user = await getAuthenticatedUser(req);
     await ensureBlogPostsTable();
 
-    const requestedInstitutionId = parsePositiveInteger(new URL(req.url).searchParams.get("institutionId"));
+    const url = new URL(req.url);
+    const requestedInstitutionId = parsePositiveInteger(url.searchParams.get("institutionId"));
+    const search = url.searchParams.get("search")?.trim();
+    const category = url.searchParams.get("category")?.trim();
+    const status = url.searchParams.get("status")?.trim();
+
     const canSeePlatform = isPlatformAdminUser(user);
     const institutionIds = user.memberships?.map((membership) => membership.institution_id) ?? [];
 
@@ -147,34 +92,40 @@ export async function GET(req: Request) {
       filters.push(`bp.institution_id = ANY($${values.length}::int[])`);
     }
 
-    const result = await db.query<BlogPostRow>(
+    if (search) {
+      values.push(`%${search}%`);
+      filters.push(`(bp.title ILIKE $${values.length} OR bp.summary ILIKE $${values.length} OR bp.tags ILIKE $${values.length})`);
+    }
+
+    if (category && category !== "all") {
+      values.push(category);
+      filters.push(`bp.category = $${values.length}`);
+    }
+
+    if (status && status !== "all") {
+      values.push(status);
+      filters.push(`bp.status = $${values.length}`);
+    }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+    const result = await db.query(
       `
         SELECT
-          bp.id,
-          bp.institution_id,
-          bp.title,
-          bp.category,
-          bp.cover_image,
-          bp.video_url,
-          bp.summary,
-          bp.tags,
-          bp.content,
-          bp.status,
-          bp.publish_at,
-          bp.published_at,
-          bp.author_id,
-          users.full_name AS author_name,
-          bp.created_at,
-          bp.updated_at
+          bp.*,
+          users.full_name AS created_by_name,
+          ip.name AS institution_name,
+          ip.slug AS institution_slug
         FROM blog_posts bp
         LEFT JOIN users ON users.id = bp.author_id
-        ${filters.length ? `WHERE ${filters.join(" AND ")}` : ""}
+        LEFT JOIN institution_profiles ip ON ip.id = bp.institution_id
+        ${whereClause}
         ORDER BY bp.updated_at DESC, bp.id DESC
       `,
-      values,
+      values
     );
 
-    return NextResponse.json({ data: result.rows.map(serializeBlog) });
+    return NextResponse.json({ data: result.rows });
   } catch (error) {
     const message = getErrorMessage(error);
     const status = message === "Forbidden: Admin access required" ? 403 : 500;
@@ -192,16 +143,28 @@ export async function POST(req: Request) {
     const title = typeof body.title === "string" ? body.title.trim() : "";
     if (!title) return NextResponse.json({ error: "Title is required." }, { status: 400 });
 
+    const slug = typeof body.slug === "string" && body.slug.trim()
+      ? body.slug.trim().toLowerCase().replace(/[^\w-]/g, "")
+      : generateSlug(title);
+
     const category = typeof body.category === "string" ? body.category.trim() : "Academic & Curriculum";
     const coverImage = typeof body.cover_image === "string" ? body.cover_image.trim() : null;
     const videoUrl = typeof body.video_url === "string" ? body.video_url.trim() : null;
     const summary = typeof body.summary === "string" ? body.summary.trim() : null;
     const tags = typeof body.tags === "string" ? body.tags.trim() : null;
+    const contentHtml = typeof body.content_html === "string" ? body.content_html : null;
+    const content = body.content && typeof body.content === "object" ? body.content : {};
+    const authorName = typeof body.author_name === "string" && body.author_name.trim() ? body.author_name.trim() : (currentUser.full_name || "Platform Editor");
+    const authorRole = typeof body.author_role === "string" ? body.author_role.trim() : "Academic Contributor";
+    const authorAvatar = typeof body.author_avatar === "string" ? body.author_avatar.trim() : null;
+    const isFeatured = Boolean(body.is_featured);
+    const readTimeMins = Number(body.read_time_mins) > 0 ? Number(body.read_time_mins) : 5;
 
-    const content =
-      body.content && typeof body.content === "object"
-        ? (body.content as Record<string, unknown>)
-        : {};
+    const metaTitle = typeof body.meta_title === "string" ? body.meta_title.trim() : title;
+    const metaDescription = typeof body.meta_description === "string" ? body.meta_description.trim() : summary;
+    const metaKeywords = typeof body.meta_keywords === "string" ? body.meta_keywords.trim() : tags;
+    const canonicalUrl = typeof body.canonical_url === "string" ? body.canonical_url.trim() : null;
+
     const publishAt = typeof body.publish_at === "string" && body.publish_at ? new Date(body.publish_at) : null;
     const publishAtValue = publishAt && !Number.isNaN(publishAt.getTime()) ? publishAt.toISOString() : null;
     const status = publishAtValue && new Date(publishAtValue).getTime() <= Date.now()
@@ -209,57 +172,68 @@ export async function POST(req: Request) {
       : normalizeStatus(body.status);
 
     await ensureBlogPostsTable();
-    const result = await db.query<BlogPostRow>(
+
+    const result = await db.query(
       `
         INSERT INTO blog_posts (
           institution_id,
           title,
+          slug,
           category,
           cover_image,
           video_url,
           summary,
           tags,
           content,
+          content_html,
           status,
+          is_featured,
+          read_time_mins,
+          author_id,
+          author_name,
+          author_role,
+          author_avatar,
+          meta_title,
+          meta_description,
+          meta_keywords,
+          canonical_url,
           publish_at,
           published_at,
-          author_id,
           created_by,
           updated_by,
           updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, CASE WHEN $9 = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END, $11, $11, $11, CURRENT_TIMESTAMP)
-        RETURNING
-          id,
-          institution_id,
-          title,
-          category,
-          cover_image,
-          video_url,
-          summary,
-          tags,
-          content,
-          status,
-          publish_at,
-          published_at,
-          author_id,
-          (SELECT full_name FROM users WHERE id = $11) AS author_name,
-          created_at,
-          updated_at
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
+          CASE WHEN $11 = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END,
+          $14, $14, CURRENT_TIMESTAMP
+        )
+        RETURNING *
       `,
       [
         institutionId,
         title,
+        slug,
         category,
         coverImage,
         videoUrl,
         summary,
         tags,
         JSON.stringify(content),
+        contentHtml,
         status,
-        publishAtValue,
+        isFeatured,
+        readTimeMins,
         currentUser.id,
-      ],
+        authorName,
+        authorRole,
+        authorAvatar,
+        metaTitle,
+        metaDescription,
+        metaKeywords,
+        canonicalUrl,
+        publishAtValue,
+      ]
     );
 
     const post = result.rows[0];
@@ -281,7 +255,7 @@ export async function POST(req: Request) {
       await cancelActiveJob(jobKey);
     }
 
-    return NextResponse.json({ data: serializeBlog(post) }, { status: 201 });
+    return NextResponse.json({ data: post }, { status: 201 });
   } catch (error) {
     const message = getErrorMessage(error);
     const status = message === "Forbidden: Admin access required" ? 403 : 400;

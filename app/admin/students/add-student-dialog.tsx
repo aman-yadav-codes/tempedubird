@@ -2094,75 +2094,8 @@ export function AddStudentDialog({
       });
     }
 
-    if (stepIndex === 3) {
-      form.experiences.forEach((experience, index) => {
-        const hasValues = hasAnyValue([
-          experience.job_title,
-          experience.company_name,
-          experience.from_month,
-          experience.from_year,
-          experience.to_month,
-          experience.to_year,
-        ]);
-
-        if (!hasValues) return;
-
-        if (!safeTrim(experience.job_title)) {
-          nextErrors[`experience.${index}.job_title`] = "Required.";
-        }
-        if (!safeTrim(experience.company_name)) {
-          nextErrors[`experience.${index}.company_name`] = "Required.";
-        }
-        if (!experience.from_month || !experience.from_year) {
-          nextErrors[`experience.${index}.from`] = "Start date is required.";
-        }
-        if (
-          !experience.is_current &&
-          (!experience.to_month || !experience.to_year)
-        ) {
-          nextErrors[`experience.${index}.to`] = "End date is required.";
-        }
-      });
-
-      form.education.forEach((education, index) => {
-        const hasValues = hasAnyValue([
-          education.qualification,
-          education.institution_name,
-          education.from_year,
-          education.to_year,
-        ]);
-
-        if (!hasValues) return;
-
-        if (!safeTrim(education.qualification)) {
-          nextErrors[`education.${index}.qualification`] = "Required.";
-        }
-        if (!safeTrim(education.institution_name)) {
-          nextErrors[`education.${index}.institution_name`] = "Required.";
-        }
-        if (!education.from_year || !education.to_year) {
-          nextErrors[`education.${index}.years`] = "Years are required.";
-        }
-      });
-
-      form.certifications.forEach((certification, index) => {
-        const hasValues = hasAnyValue([
-          certification.name,
-          certification.issued_authority,
-          certification.duration,
-        ]);
-
-        if (hasValues && !safeTrim(certification.name)) {
-          nextErrors[`certification.${index}.name`] = "Required.";
-        }
-
-        if (hasValues && certification.duration) {
-          const durationNum = Number(certification.duration);
-          if (Number.isNaN(durationNum) || durationNum <= 0 || !Number.isInteger(durationNum)) {
-            nextErrors[`certification.${index}.duration`] = "Enter a valid duration in months.";
-          }
-        }
-      });
+    if (stepIndex === backgroundStepIndex) {
+      // Education, Experience, and Certifications are completely optional
     }
 
     setErrors(nextErrors);
@@ -2254,28 +2187,34 @@ export function AddStudentDialog({
             safeTrim(form.full_address) || form.location.full_address || null,
         }
         : null,
-      experiences: compactExperiences.map((experience) => ({
-        job_title: normalizeText(experience.job_title),
-        company_id: experience.company_id ? Number(experience.company_id) : null,
-        company_name: normalizeText(experience.company_name),
-        from_month: Number(experience.from_month),
-        from_year: Number(experience.from_year),
-        to_month: experience.is_current ? null : Number(experience.to_month),
-        to_year: experience.is_current ? null : Number(experience.to_year),
-        is_current: experience.is_current,
-      })),
-      education: compactEducation.map((education) => ({
-        qualification: normalizeText(education.qualification),
-        institution_id: education.institution_id ? Number(education.institution_id) : null,
-        institution_name: normalizeText(education.institution_name),
-        from_year: Number(education.from_year),
-        to_year: Number(education.to_year),
-      })),
-      certifications: compactCertifications.map((certification) => ({
-        name: normalizeText(certification.name),
-        issued_authority: normalizeNullableText(certification.issued_authority),
-        duration: normalizeNullableText(certification.duration),
-      })),
+      experiences: compactExperiences
+        .filter((exp) => safeTrim(exp.job_title) || safeTrim(exp.company_name))
+        .map((experience) => ({
+          job_title: normalizeText(experience.job_title || "Experience"),
+          company_id: experience.company_id ? Number(experience.company_id) : null,
+          company_name: normalizeText(experience.company_name || "-"),
+          from_month: Number(experience.from_month) || 1,
+          from_year: Number(experience.from_year) || 2026,
+          to_month: experience.is_current ? null : (Number(experience.to_month) || null),
+          to_year: experience.is_current ? null : (Number(experience.to_year) || null),
+          is_current: Boolean(experience.is_current),
+        })),
+      education: compactEducation
+        .filter((edu) => safeTrim(edu.qualification) || safeTrim(edu.institution_name))
+        .map((education) => ({
+          qualification: normalizeText(education.qualification || "Education"),
+          institution_id: education.institution_id ? Number(education.institution_id) : null,
+          institution_name: normalizeText(education.institution_name || "-"),
+          from_year: Number(education.from_year) || 2026,
+          to_year: Number(education.to_year) || 2026,
+        })),
+      certifications: compactCertifications
+        .filter((cert) => safeTrim(cert.name))
+        .map((certification) => ({
+          name: normalizeText(certification.name),
+          issued_authority: normalizeNullableText(certification.issued_authority),
+          duration: normalizeNullableText(certification.duration),
+        })),
       teaching_categories: selectedRoleIsTeacher
         ? form.teaching_categories
           .map((value) => Number(value))

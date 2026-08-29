@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/db";
+import { getAuthenticatedUser } from "@/lib/auth/auth";
 
 async function ensureEntityReviewsTable() {
   await db.query(`
@@ -11,12 +12,15 @@ async function ensureEntityReviewsTable() {
       user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       reviewer_name VARCHAR(255) NOT NULL,
       reviewer_role VARCHAR(100) DEFAULT 'Student',
-      is_verified_user BOOLEAN DEFAULT FALSE,
+      is_verified_user BOOLEAN DEFAULT TRUE,
       rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
       title VARCHAR(255),
       comment TEXT,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-    )
+    );
+
+    ALTER TABLE entity_reviews ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    ALTER TABLE entity_reviews ADD COLUMN IF NOT EXISTS is_verified_user BOOLEAN DEFAULT TRUE;
   `);
 }
 
@@ -84,23 +88,52 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     await ensureEntityReviewsTable();
-    const body = await req.json();
-    const { entity_type, entity_id, reviewer_name, reviewer_role, rating, title, comment, is_verified } = body;
 
-    if (!entity_type || !entity_id || !rating || !reviewer_name?.trim()) {
+    // 1. Mandatory User Login Check
+    let currentUser = null;
+    try {
+      currentUser = await getAuthenticatedUser(req);
+    } catch {
       return NextResponse.json(
-        { error: "entity_type, entity_id, reviewer_name, and rating (1-5) are required." },
+        { error: "You must be signed in to submit a rating or comment." },
+        { status: 401 }
+      );
+    }
+
+    if (!currentUser || !currentUser.id) {
+      return NextResponse.json(
+        { error: "You must be signed in to submit a rating or comment." },
+        { status: 401 }
+      );
+    }
+
+    const body = await req.json();
+    const { entity_type, entity_id, rating, title, comment, reviewer_role } = body;
+
+    if (!entity_type || !entity_id || !rating) {
+      return NextResponse.json(
+        { error: "entity_type, entity_id, and rating (1-5) are required." },
+        { status: 400 }
+      );
+    }
+
+    if (!comment || !comment.trim()) {
+      return NextResponse.json(
+        { error: "Please write a comment or feedback before submitting." },
         { status: 400 }
       );
     }
 
     const numRating = Math.min(5, Math.max(1, Number(rating)));
+    const reviewerName = currentUser.full_name || currentUser.email || "Verified Member";
+    const effectiveRole = reviewer_role || (currentUser.role_name || "Verified Student");
 
     const result = await db.query(
       `
       INSERT INTO entity_reviews (
         entity_type,
         entity_id,
+        user_id,
         reviewer_name,
         reviewer_role,
         is_verified_user,
@@ -108,24 +141,24 @@ export async function POST(req: NextRequest) {
         title,
         comment
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, TRUE, $6, $7, $8)
       RETURNING *
       `,
       [
         entity_type,
         Number(entity_id),
-        reviewer_name.trim(),
-        reviewer_role || "Student",
-        Boolean(is_verified),
+        currentUser.id,
+        reviewerName,
+        effectiveRole,
         numRating,
         title?.trim() || "",
-        comment?.trim() || "",
+        comment.trim(),
       ]
     );
 
     return NextResponse.json({
       success: true,
-      message: "Thank you! Your feedback has been published.",
+      message: "Thank you! Your verified rating and feedback have been published.",
       review: result.rows[0],
     });
   } catch (err: any) {

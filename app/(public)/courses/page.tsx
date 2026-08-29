@@ -1,7 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Grid2X2, List, Loader2, Search } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Grid2X2,
+  List,
+  Loader2,
+  Search,
+  Award,
+  Sparkles,
+  Flame,
+  ArrowRight,
+  ShieldCheck,
+  CheckCircle2,
+  Headphones,
+  BookOpen,
+  GraduationCap,
+  Calendar,
+  Layers,
+  ChevronRight,
+  HelpCircle,
+  ExternalLink,
+} from "lucide-react";
 
 import { CourseCard } from "@/components/public/course-card";
 import {
@@ -12,6 +31,8 @@ import {
 import { InstitutePagination } from "@/components/public/institutes/institute-pagination";
 import { DebouncedSearchInput } from "@/components/shared/debounced-search-input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -30,10 +51,12 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useClientPersistedState } from "@/hooks/use-client-persisted-state";
 import { featuredCourses } from "@/lib/data/home-data";
-import { RightInquiryForm } from "@/components/public/right-inquiry-form";
 import { ProgramEnrollmentDialog, type ProgramEnrollmentTarget } from "@/components/public/program-enrollment-dialog";
 import { CourseEnquiryDialog, type CourseEnquiryTarget } from "@/components/public/course-enquiry-dialog";
+import { PortalBannerAd } from "@/components/public/portal-banner-ad";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useCategoryAvailability } from "@/hooks/use-category-availability";
 
 const PAGE_SIZE = 9;
 
@@ -141,22 +164,6 @@ function countActiveFilters(filters: FilterState) {
   return count;
 }
 
-function isPublicCourseCategory(value: unknown): value is PublicCourseCategory {
-  if (!value || typeof value !== "object") return false;
-  const category = value as Partial<PublicCourseCategory>;
-  return (
-    typeof category.id === "number" &&
-    typeof category.name === "string" &&
-    typeof category.slug === "string"
-  );
-}
-
-function isCourseImage(value: unknown): value is { id: number; url: string; mediaType?: "image" | "video" } {
-  if (!value || typeof value !== "object") return false;
-  const image = value as { id?: unknown; url?: unknown };
-  return typeof image.id === "number" && typeof image.url === "string";
-}
-
 function normalizePublicCourse(value: unknown): CourseListItem | null {
   if (!value || typeof value !== "object") return null;
   const course = value as Record<string, unknown>;
@@ -184,35 +191,38 @@ function normalizePublicCourse(value: unknown): CourseListItem | null {
     selectedCategoryId: typeof course.selectedCategoryId === "number" ? course.selectedCategoryId : null,
     duration: typeof course.duration === "string" ? course.duration : "Flexible",
     level: typeof course.level === "string" ? course.level : "Course",
-    rating: typeof course.rating === "number" ? course.rating : undefined,
-    reviews: typeof course.reviews === "number" ? course.reviews : undefined,
+    rating: typeof course.rating === "number" ? course.rating : (typeof course.course_avg_rating === "number" ? course.course_avg_rating : undefined),
+    reviews: typeof course.reviews === "number" ? course.reviews : (typeof course.reviewsCount === "number" ? course.reviewsCount : (typeof course.course_reviews_count === "number" ? course.course_reviews_count : undefined)),
     price: typeof course.price === "string" ? course.price : "Contact",
     fee_amount: typeof course.fee_amount === "string" || typeof course.fee_amount === "number" ? course.fee_amount : undefined,
     institutionId: typeof course.institutionId === "number" ? course.institutionId : (typeof course.institution_id === "number" ? course.institution_id : undefined),
     institution_id: typeof course.institution_id === "number" ? course.institution_id : (typeof course.institutionId === "number" ? course.institutionId : undefined),
     verified: typeof course.verified === "boolean" ? course.verified : true,
     students: typeof course.students === "string" ? course.students : "Open seats",
+    images: Array.isArray(course.images) ? (course.images as any) : [],
     seatsAvailable: typeof course.seatsAvailable === "number" ? course.seatsAvailable : null,
     teachingMethod: typeof course.teachingMethod === "string" ? course.teachingMethod : null,
     programType: typeof course.programType === "string" ? course.programType : null,
     languages: Array.isArray(course.languages) ? course.languages.filter((item): item is string => typeof item === "string") : [],
     subjects: Array.isArray(course.subjects) ? course.subjects.filter((item): item is string => typeof item === "string") : [],
     sections: Array.isArray(course.sections) ? course.sections.filter((item): item is string => typeof item === "string") : [],
-    images: Array.isArray(course.images) ? course.images.filter(isCourseImage) : [],
     tags: Array.isArray(course.tags) ? course.tags.filter((item): item is string => typeof item === "string") : [],
   };
 }
 
-function filterCourses(state: CoursesDirectoryState, courses: CourseListItem[]) {
-  const query = state.search.trim().toLowerCase();
+function filterCourses(state: CoursesDirectoryState, courses: CourseListItem[]): CourseListItem[] {
   let list = [...courses];
+  const query = state.search.trim().toLowerCase();
 
   if (query) {
-    list = list.filter((course) =>
-      [course.title, course.institute, course.category, ...(course.tags ?? [])]
-        .join(" ")
-        .toLowerCase()
-        .includes(query),
+    list = list.filter(
+      (course) =>
+        course.title.toLowerCase().includes(query) ||
+        course.institute.toLowerCase().includes(query) ||
+        course.category.toLowerCase().includes(query) ||
+        (course.tags ?? []).some((tag) => tag.toLowerCase().includes(query)) ||
+        (course.subjects ?? []).some((sub) => sub.toLowerCase().includes(query)) ||
+        (course.selectedCategory ?? "").toLowerCase().includes(query),
     );
   }
 
@@ -261,52 +271,58 @@ function filterCourses(state: CoursesDirectoryState, courses: CourseListItem[]) 
   return list;
 }
 
-function CourseCardSkeleton({ viewMode }: { viewMode: CoursesDirectoryState["viewMode"] }) {
-  if (viewMode === "list") {
-    return (
-      <div className="grid gap-4 rounded-lg border border-border bg-card/80 p-3 sm:grid-cols-[280px_minmax(0,1fr)]">
-        <Skeleton className="aspect-[16/9] min-h-[180px] rounded-md" />
-        <div className="flex min-w-0 flex-col justify-between gap-5 p-2">
-          <div className="space-y-3">
-            <Skeleton className="h-5 w-28" />
-            <Skeleton className="h-7 w-3/5" />
-            <Skeleton className="h-4 w-40" />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Skeleton className="h-5 w-24" />
-            <Skeleton className="h-5 w-24" />
-            <Skeleton className="h-5 w-24" />
-          </div>
-          <Skeleton className="h-10 w-full" />
-        </div>
-      </div>
-    );
-  }
-
+function CourseCardSkeleton() {
   return (
-    <div className="rounded-lg border border-border bg-card/80 p-3">
-      <Skeleton className="aspect-[16/7] rounded-md" />
-      <div className="space-y-4 p-3">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-5 w-24" />
-          <Skeleton className="h-6 w-20" />
+    <div className="rounded-2xl border border-border bg-card/80 p-5 space-y-4 shadow-2xs">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <Skeleton className="size-9 rounded-xl" />
+          <Skeleton className="h-4 w-20" />
         </div>
-        <div className="space-y-2">
-          <Skeleton className="h-6 w-4/5" />
-          <Skeleton className="h-4 w-36" />
-        </div>
-        <Skeleton className="h-px w-full" />
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-5 w-24" />
-          <Skeleton className="h-5 w-28" />
-        </div>
-        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-6 w-16" />
+      </div>
+      <div className="space-y-2 pt-1">
+        <Skeleton className="h-5 w-4/5" />
+        <Skeleton className="h-4 w-1/2" />
+      </div>
+      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50">
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-4 w-20" />
+      </div>
+      <div className="flex items-center justify-between pt-2 border-t border-border/50">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-4 w-16" />
+      </div>
+      <div className="grid grid-cols-2 gap-2 pt-1">
+        <Skeleton className="h-9 w-full rounded-xl" />
+        <Skeleton className="h-9 w-full rounded-xl" />
       </div>
     </div>
   );
 }
 
-import { useCategoryAvailability } from "@/hooks/use-category-availability";
+// Dynamic Middle Interstitial Banner for Courses
+function CourseListingBanner({
+  bannerIndex,
+  onEnquire,
+}: {
+  bannerIndex: number;
+  onEnquire: () => void;
+}) {
+  return (
+    <PortalBannerAd
+      section="course"
+      placement="middle"
+      onEnquire={onEnquire}
+      fallbackBadge="NATIONAL SCHOLARSHIP 2026"
+      fallbackTitle="Up to 100% Tuition Fee Concession & Merit Grants"
+      fallbackDescription="Apply for verified national scholarship tests, institutional fee waivers & merit concessions across affiliated institutions."
+      fallbackCta="Check Scholarship Eligibility"
+    />
+  );
+}
 
 export default function CoursesPage() {
   const { isInstitutionalAdmin, activeInstitutionId } = useCategoryAvailability();
@@ -319,122 +335,173 @@ export default function CoursesPage() {
   const [selectedEnrollProgram, setSelectedEnrollProgram] = useState<ProgramEnrollmentTarget | null>(null);
   const [enquiryModalOpen, setEnquiryModalOpen] = useState(false);
   const [selectedEnquiryCourse, setSelectedEnquiryCourse] = useState<CourseEnquiryTarget | null>(null);
+
   const [state, setState] = useClientPersistedState<CoursesDirectoryState>(
-    "public.courses.directory",
+    "edubird_courses_directory_state",
     defaultCoursesState,
-    { version: 1, validate: isCoursesDirectoryState },
+    { validate: isCoursesDirectoryState },
   );
 
-  const handleEnrollClick = (prog: any) => {
-    setSelectedEnrollProgram({
-      id: prog.id,
-      title: prog.title,
-      institution_id: prog.institution_id || prog.institutionId,
-      institution_name: prog.institute,
-      fee_amount: prog.fee_amount || prog.price,
-      duration: prog.duration,
-    });
-    setEnrollModalOpen(true);
-  };
-
-  const handleEnquireClick = (prog: any) => {
-    setSelectedEnquiryCourse({
-      id: prog.id,
-      title: prog.title,
-      institute: prog.institute,
-      institution_id: prog.institution_id || prog.institutionId,
-      price: prog.price,
-      duration: prog.duration,
-    });
-    setEnquiryModalOpen(true);
-  };
+  const searchParams = useSearchParams();
 
   useEffect(() => {
-    let ignore = false;
+    const urlCategory = searchParams?.get("category");
+    if (urlCategory && urlCategory.trim() !== "") {
+      setState((current) => ({
+        ...current,
+        category: urlCategory.trim(),
+        page: 1,
+      }));
+    }
+  }, [searchParams, setState]);
+
+  // Record visitor search history
+  useEffect(() => {
+    const query = state.search.trim();
+    if (!query || query.length < 3) return;
+
+    const timer = setTimeout(() => {
+      fetch("/api/public/search-history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query,
+          entity_type: "courses",
+          category: state.category !== "all" ? state.category : "Courses",
+        }),
+      }).catch(() => undefined);
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [state.search, state.category]);
+
+  useEffect(() => {
+    let isCancelled = false;
 
     async function loadCategories() {
-      setCategoriesLoading(true);
       try {
-        const response = await fetch("/api/categories?limit=100", { cache: "no-store" });
-        if (!response.ok) return;
+        setCategoriesLoading(true);
+        const res = await fetch("/api/public/categories?limit=50");
+        if (!res.ok) throw new Error("Failed to load categories");
+        const json = await res.json();
+        const rows: unknown[] = Array.isArray(json?.categories) ? json.categories : [];
+        const nextCategories = rows
+          .map((item) => {
+            if (!item || typeof item !== "object") return null;
+            const category = item as Record<string, unknown>;
+            if (typeof category.id !== "number" || typeof category.name !== "string" || typeof category.slug !== "string") {
+              return null;
+            }
+            return {
+              id: category.id,
+              name: category.name,
+              slug: category.slug,
+            };
+          })
+          .filter((item): item is PublicCourseCategory => item !== null);
 
-        const payload: unknown = await response.json();
-        const rows =
-          payload && typeof payload === "object" && Array.isArray((payload as { data?: unknown }).data)
-            ? (payload as { data: unknown[] }).data.filter(isPublicCourseCategory)
-            : [];
-
-        if (!ignore && rows.length > 0) {
-          setPublicCategories(rows);
+        if (!isCancelled) {
+          setPublicCategories(nextCategories);
         }
       } catch {
-        if (!ignore) {
+        if (!isCancelled) {
           setPublicCategories([]);
         }
       } finally {
-        if (!ignore) {
+        if (!isCancelled) {
           setCategoriesLoading(false);
         }
       }
     }
 
     loadCategories();
-
     return () => {
-      ignore = true;
+      isCancelled = true;
     };
   }, []);
 
   useEffect(() => {
-    let ignore = false;
+    let isCancelled = false;
 
     async function loadCourses() {
-      setCoursesLoading(true);
       try {
+        setCoursesLoading(true);
         const url =
-          activeInstitutionId
+          isInstitutionalAdmin && activeInstitutionId
             ? `/api/courses?limit=100&institutionId=${activeInstitutionId}`
             : "/api/courses?limit=100";
-        const response = await fetch(url, { cache: "no-store" });
-        if (!response.ok) {
-          if (!ignore) setPublicCourses(null);
-          return;
-        }
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Failed to load courses");
+        const json = await res.json();
+        const rows: unknown[] = Array.isArray(json?.data) ? json.data : [];
+        const nextCourses = rows
+          .map(normalizePublicCourse)
+          .filter((item): item is CourseListItem => item !== null);
 
-        const payload: unknown = await response.json();
-        const rows =
-          payload && typeof payload === "object" && Array.isArray((payload as { data?: unknown }).data)
-            ? (payload as { data: unknown[] }).data
-                .map(normalizePublicCourse)
-                .filter((item): item is CourseListItem => item !== null)
-            : [];
-
-        if (!ignore) {
-          setPublicCourses(rows);
+        if (!isCancelled) {
+          setPublicCourses(nextCourses);
         }
       } catch {
-        if (!ignore) {
-          setPublicCourses(null);
+        if (!isCancelled) {
+          setPublicCourses([]);
         }
       } finally {
-        if (!ignore) {
+        if (!isCancelled) {
           setCoursesLoading(false);
         }
       }
     }
 
     loadCourses();
-
     return () => {
-      ignore = true;
+      isCancelled = true;
     };
   }, [activeInstitutionId, isInstitutionalAdmin]);
 
+  const handleEnrollClick = (program: {
+    id: number;
+    title: string;
+    institute: string;
+    price: string;
+    duration: string;
+    institution_id?: number;
+    fee_amount?: string | number;
+  }) => {
+    setSelectedEnrollProgram({
+      id: program.id,
+      title: program.title,
+      institute: program.institute,
+      price: program.price,
+      duration: program.duration,
+      institution_id: program.institution_id,
+      fee_amount: program.fee_amount,
+    });
+    setEnrollModalOpen(true);
+  };
+
+  const handleEnquireClick = (program: {
+    id: number;
+    title: string;
+    institute: string;
+    price: string;
+    duration: string;
+    institution_id?: number;
+  }) => {
+    setSelectedEnquiryCourse({
+      id: program.id,
+      title: program.title,
+      institute: program.institute,
+      price: program.price,
+      duration: program.duration,
+      institution_id: program.institution_id,
+    });
+    setEnquiryModalOpen(true);
+  };
+
   const categoryOptions = useMemo(() => {
     if (publicCategories.length > 0) return publicCategories;
-    if (categoriesLoading) return [];
     return fallbackCategories;
-  }, [categoriesLoading, publicCategories]);
+  }, [publicCategories]);
 
   const fallbackCoursesWithMainCategories = useMemo(() => {
     if (categoryOptions.length === 0) return courseCatalog;
@@ -493,9 +560,9 @@ export default function CoursesPage() {
   const isAnythingActive = state.search || state.category !== "all" || activeFilterCount > 0;
 
   return (
-    <div className="py-8">
-      <div className="container mx-auto px-4">
-        <Breadcrumb className="mb-6">
+    <div className="min-h-screen bg-background py-8">
+      <div className="container mx-auto px-4 space-y-6">
+        <Breadcrumb className="mb-2">
           <BreadcrumbList>
             <BreadcrumbItem>
               <BreadcrumbLink asChild>
@@ -509,36 +576,39 @@ export default function CoursesPage() {
           </BreadcrumbList>
         </Breadcrumb>
 
-        <div className="mb-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,520px)] lg:items-end">
+        {/* Header Title & Search Row */}
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,520px)] lg:items-end border-b border-border/80 pb-6">
           <div>
-            <h1 className="text-3xl font-bold text-foreground sm:text-4xl">Explore Courses</h1>
-            <p className="mt-3 text-sm text-muted-foreground sm:text-base">
-              Browse verified courses from trusted institutes
+            <Badge className="bg-primary/10 text-primary border-primary/20 mb-1.5">Accredited Curriculum</Badge>
+            <h1 className="text-3xl font-extrabold text-foreground tracking-tight sm:text-4xl">Explore Courses & Programs</h1>
+            <p className="mt-1 text-sm text-muted-foreground sm:text-base">
+              Browse verified courses, fee structures, and syllabus modules from top accredited institutes.
             </p>
           </div>
 
-          <div className="flex min-h-11 overflow-hidden rounded-md border border-border bg-background">
+          <div className="flex min-h-11 overflow-hidden rounded-xl border border-border bg-background shadow-2xs">
             <DebouncedSearchInput
               value={state.search}
               onValueChange={(search) => updateState({ search })}
               debounceMs={350}
-              placeholder="Search courses, institute or skill..."
+              placeholder="Search courses, institutes, or subjects..."
               className="h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-4 text-sm shadow-none focus-visible:ring-0"
             />
             <button
               aria-label="Search courses"
-              className="m-1 flex w-12 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground"
+              className="m-1 flex w-12 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground cursor-pointer hover:bg-primary/90 transition"
             >
               <Search className="h-5 w-5" />
             </button>
           </div>
         </div>
 
-        <div className="sticky top-16 z-30 mb-6 rounded-lg border border-border bg-background/95 p-3 shadow-sm backdrop-blur">
+        {/* Filter Bar */}
+        <div className="sticky top-16 z-30 rounded-2xl border border-border bg-background/95 p-3 shadow-xs backdrop-blur">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex min-w-0 flex-wrap items-center gap-3">
               <Select value={state.category} onValueChange={(category) => updateState({ category })}>
-                <SelectTrigger className="h-10 w-[190px] bg-background font-medium">
+                <SelectTrigger className="h-10 w-[190px] bg-background font-medium rounded-xl">
                   <SelectValue />
                   {categoriesLoading && <Loader2 className="ml-2 h-4 w-4 animate-spin text-muted-foreground" />}
                 </SelectTrigger>
@@ -560,7 +630,7 @@ export default function CoursesPage() {
               {isAnythingActive && (
                 <button
                   onClick={clearAll}
-                  className="h-10 rounded-md border border-primary/40 bg-primary/10 px-4 text-sm font-semibold text-primary transition hover:bg-primary hover:text-primary-foreground"
+                  className="h-10 rounded-xl border border-primary/40 bg-primary/10 px-4 text-xs font-bold text-primary transition hover:bg-primary hover:text-primary-foreground cursor-pointer"
                 >
                   Clear Filters
                 </button>
@@ -582,7 +652,7 @@ export default function CoursesPage() {
                   updateState({ filters: { ...state.filters, sort } })
                 }
               >
-                <SelectTrigger className="h-10 w-[190px] bg-background text-muted-foreground">
+                <SelectTrigger className="h-10 w-[190px] bg-background text-muted-foreground rounded-xl">
                   <span className="mr-2 shrink-0">Sort:</span>
                   <SelectValue />
                 </SelectTrigger>
@@ -594,93 +664,213 @@ export default function CoursesPage() {
                   <SelectItem value="price-desc">Price: High to Low</SelectItem>
                 </SelectContent>
               </Select>
-
-              <div className="flex items-center gap-2">
-                <button
-                  aria-label="Grid view"
-                  onClick={() => setState((current) => ({ ...current, viewMode: "grid" }))}
-                  className={`flex h-10 w-10 items-center justify-center rounded-md border ${
-                    state.viewMode === "grid" ? "border-primary text-primary" : "border-border text-muted-foreground"
-                  }`}
-                >
-                  <Grid2X2 className="h-4 w-4" />
-                </button>
-                <button
-                  aria-label="List view"
-                  onClick={() => setState((current) => ({ ...current, viewMode: "list" }))}
-                  className={`flex h-10 w-10 items-center justify-center rounded-md border ${
-                    state.viewMode === "list" ? "border-primary text-primary" : "border-border text-muted-foreground"
-                  }`}
-                >
-                  <List className="h-4 w-4" />
-                </button>
-              </div>
             </div>
           </div>
         </div>
 
         <div ref={resultsTopRef} className="scroll-mt-48" />
 
-        <div className="space-y-6">
-          {isLoading ? (
-            <div
-              className={
-                state.viewMode === "grid"
-                  ? "grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                  : "grid gap-5"
-              }
-              aria-label="Loading courses"
-            >
-              {Array.from({ length: PAGE_SIZE }, (_, index) => (
-                <CourseCardSkeleton key={index} viewMode={state.viewMode} />
-              ))}
-            </div>
-          ) : pageCourses.length > 0 ? (
-            <div
-              className={
-                state.viewMode === "grid"
-                  ? "grid gap-6 opacity-100 transition-opacity duration-300 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                  : "grid gap-5 opacity-100 transition-opacity duration-300"
-              }
-            >
-              {pageCourses.map((course) => (
-                <CourseCard
-                  key={course.courseKey}
-                  {...course}
-                  viewMode={state.viewMode}
-                  onEnroll={handleEnrollClick}
-                  onEnquire={handleEnquireClick}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card/70 px-6 py-20 text-center">
-              <Search className="mb-4 h-12 w-12 text-muted-foreground/40" />
-              <h3 className="mb-1 text-lg font-semibold text-foreground">No courses found</h3>
-              <p className="mb-4 text-sm text-muted-foreground">Try adjusting or clearing your filters.</p>
-              <Button variant="outline" size="sm" onClick={clearAll}>
-                Clear all filters
-              </Button>
-            </div>
-          )}
+        {/* 2-Column Main Layout: Listings Grid (3-per-row) on Left + Options/Ads on Right */}
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px] items-start">
+          {/* Main Listings Column */}
+          <div className="space-y-6 min-w-0">
+            {isLoading ? (
+              <div
+                className={
+                  state.viewMode === "grid"
+                    ? "grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
+                    : "grid gap-4"
+                }
+                aria-label="Loading courses"
+              >
+                {Array.from({ length: 6 }, (_, index) => (
+                  <CourseCardSkeleton key={index} />
+                ))}
+              </div>
+            ) : pageCourses.length > 0 ? (
+              <div
+                className={
+                  state.viewMode === "grid"
+                    ? "grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 items-stretch"
+                    : "grid gap-4"
+                }
+              >
+                {pageCourses.map((course, idx) => {
+                  const shouldInsertBanner = (idx + 1) % 3 === 0 && idx !== pageCourses.length - 1;
+                  const bannerIdx = Math.floor(idx / 3);
 
-          {!isLoading && results.length > PAGE_SIZE && (
-            <div className="mt-8 grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
-              <p className="text-sm text-muted-foreground">
-                Showing{" "}
-                <span className="font-semibold text-foreground">
-                  {pageStart + 1}-{pageStart + pageCourses.length}
-                </span>{" "}
-                of <span className="font-semibold text-foreground">{results.length}</span> courses
+                  return (
+                    <React.Fragment key={course.courseKey}>
+                      <CourseCard
+                        {...course}
+                        viewMode={state.viewMode}
+                        onEnroll={handleEnrollClick}
+                        onEnquire={handleEnquireClick}
+                      />
+
+                      {/* 200px Banner after every 3 listings */}
+                      {shouldInsertBanner && (
+                        <CourseListingBanner
+                          bannerIndex={bannerIdx}
+                          onEnquire={() => {
+                            setSelectedEnquiryCourse({
+                              id: course.id,
+                              title: "General Admission Guidance",
+                              institute: "EduBird Verified Partner",
+                              price: "Free",
+                              duration: "Academic Counseling",
+                            });
+                            setEnquiryModalOpen(true);
+                          }}
+                        />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-border bg-card/70 px-6 py-20 text-center shadow-2xs">
+                <Search className="mb-4 h-12 w-12 text-muted-foreground/40" />
+                <h3 className="mb-1 text-lg font-bold text-foreground">No courses found</h3>
+                <p className="mb-4 text-xs text-muted-foreground">Try adjusting or clearing your active filters.</p>
+                <Button variant="outline" size="sm" onClick={clearAll} className="rounded-xl font-bold">
+                  Clear all filters
+                </Button>
+              </div>
+            )}
+
+            {!isLoading && results.length > PAGE_SIZE && (
+              <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-border/70 pt-6">
+                <p className="text-xs text-muted-foreground font-semibold">
+                  Showing{" "}
+                  <span className="font-bold text-foreground">
+                    {pageStart + 1}-{pageStart + pageCourses.length}
+                  </span>{" "}
+                  of <span className="font-bold text-foreground">{results.length}</span> courses
+                </p>
+                <InstitutePagination
+                  page={safePage}
+                  pageCount={pageCount}
+                  onPageChange={changePage}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Right Sidebar: Options & Advertisements */}
+          <aside className="hidden lg:block space-y-6 sticky top-28 shrink-0">
+            {/* Widget 1: Instant Course Advisory & Admission Helpline */}
+            <Card className="rounded-2xl border border-primary/20 bg-gradient-to-b from-primary/5 via-card to-card p-5 shadow-sm space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-xs">
+                  <Headphones className="size-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-foreground">Free Course Advisory</h4>
+                  <p className="text-[11px] text-muted-foreground">Expert 1-on-1 Guidance</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Connect directly with certified counselors for eligibility verification, fee discount options, and batch timings.
               </p>
-              <InstitutePagination
-                page={safePage}
-                pageCount={pageCount}
-                onPageChange={changePage}
-              />
-              <span />
-            </div>
-          )}
+
+              <Button
+                onClick={() => {
+                  setSelectedEnquiryCourse({
+                    id: 1,
+                    title: "Free Career & Course Counseling",
+                    institute: "Central Academic Advisory",
+                    price: "100% Free",
+                    duration: "Live Consultation",
+                  });
+                  setEnquiryModalOpen(true);
+                }}
+                className="w-full text-xs font-bold rounded-xl shadow-xs bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer gap-1.5"
+              >
+                <Sparkles className="size-3.5" />
+                <span>Request Free Call Back</span>
+              </Button>
+            </Card>
+
+            {/* Widget 2: Dynamic Sponsored Advertisement Banner */}
+            <PortalBannerAd
+              section="course"
+              placement="right_sidebar"
+              fallbackBadge="SPECIAL OFFER"
+              fallbackTitle="Free Entrance Mock Test Pass"
+              fallbackDescription="Get full access to 1,500+ speed quizzes & past year solved papers."
+              fallbackCta="Explore Mock Tests"
+              fallbackUrl="/practice"
+            />
+
+            {/* Widget 3: Popular Course Categories */}
+            <Card className="rounded-2xl border border-border/80 bg-card p-5 shadow-sm space-y-3">
+              <div className="flex items-center gap-2">
+                <Layers className="size-4 text-primary" />
+                <h4 className="text-xs font-black uppercase tracking-wider text-foreground">Top Categories</h4>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                {categoryOptions.slice(0, 8).map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => updateState({ category: cat.name })}
+                    className={`text-xs px-2.5 py-1.5 rounded-lg font-medium transition cursor-pointer ${
+                      state.category === cat.name
+                        ? "bg-primary text-primary-foreground font-bold"
+                        : "bg-muted hover:bg-muted/80 text-foreground border border-border/60"
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+            </Card>
+
+            {/* Widget 4: Quick Academic Portals */}
+            <Card className="rounded-2xl border border-border/80 bg-card p-5 shadow-sm space-y-3">
+              <h4 className="text-xs font-black uppercase tracking-wider text-muted-foreground">Quick Academic Portals</h4>
+              <ul className="space-y-2 text-xs">
+                <li>
+                  <Link href="/institutes" className="flex items-center justify-between text-muted-foreground hover:text-primary font-semibold group">
+                    <span className="flex items-center gap-2">
+                      <GraduationCap className="size-3.5 text-primary" />
+                      Verified Institutes Directory
+                    </span>
+                    <ChevronRight className="size-3.5 opacity-60 group-hover:translate-x-0.5 transition-transform" />
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/exams" className="flex items-center justify-between text-muted-foreground hover:text-primary font-semibold group">
+                    <span className="flex items-center gap-2">
+                      <Calendar className="size-3.5 text-primary" />
+                      Entrance & Competitive Exams
+                    </span>
+                    <ChevronRight className="size-3.5 opacity-60 group-hover:translate-x-0.5 transition-transform" />
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/notes" className="flex items-center justify-between text-muted-foreground hover:text-primary font-semibold group">
+                    <span className="flex items-center gap-2">
+                      <BookOpen className="size-3.5 text-primary" />
+                      Lecture Notes & Formula Sheets
+                    </span>
+                    <ChevronRight className="size-3.5 opacity-60 group-hover:translate-x-0.5 transition-transform" />
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/teachers" className="flex items-center justify-between text-muted-foreground hover:text-primary font-semibold group">
+                    <span className="flex items-center gap-2">
+                      <ShieldCheck className="size-3.5 text-primary" />
+                      Verified Faculty Members
+                    </span>
+                    <ChevronRight className="size-3.5 opacity-60 group-hover:translate-x-0.5 transition-transform" />
+                  </Link>
+                </li>
+              </ul>
+            </Card>
+          </aside>
         </div>
       </div>
 

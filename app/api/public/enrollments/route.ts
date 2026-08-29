@@ -18,11 +18,14 @@ export async function POST(req: Request) {
       applicant_name,
       student_email,
       student_phone,
+      email,
+      phone,
       parent_name,
       parent_phone,
       parent_email,
       child_name,
       child_id,
+      user_id,
       notes,
       source = "edubird", // 'edubird' or 'institution_website'
     } = body;
@@ -48,12 +51,30 @@ export async function POST(req: Request) {
       resolvedInstId = progRes.rows[0].institution_id;
     }
 
-    const sName = student_name || child_name || applicant_name || authUser?.full_name || "Enrolled Applicant";
-    const sPhone = student_phone || authUser?.phone || parent_phone || "";
-    const sEmail = student_email || authUser?.email || parent_email || "";
+    const sName = String(student_name || child_name || applicant_name || authUser?.full_name || "Enrolled Applicant").trim();
+    const sPhone = String(student_phone || phone || authUser?.phone || parent_phone || "").trim();
+    const sEmail = String(student_email || email || authUser?.email || parent_email || "").trim();
 
     // 1. Resolve or create user/profile
-    let studentUserId = authUser?.id || null;
+    let studentUserId = body.user_id ? Number(body.user_id) : (authUser?.id || null);
+
+    if (!studentUserId && (sEmail || sPhone)) {
+      try {
+        const userMatch = await db.query<{ id: number }>(
+          `
+          SELECT id FROM users
+          WHERE ($1 <> '' AND LOWER(email) = LOWER($1))
+             OR ($2 <> '' AND phone IS NOT NULL AND REGEXP_REPLACE(phone, '[^0-9]', '', 'g') = REGEXP_REPLACE($2, '[^0-9]', '', 'g'))
+          LIMIT 1
+          `,
+          [sEmail, sPhone]
+        );
+        if (userMatch.rows.length > 0) {
+          studentUserId = userMatch.rows[0].id;
+        }
+      } catch {}
+    }
+
     let studentProfileId = child_id ? Number(child_id) : null;
 
     if (!studentProfileId && studentUserId) {
@@ -73,7 +94,7 @@ export async function POST(req: Request) {
     }
 
     // 2. Insert into visitor_sessions / sales pipeline
-    const originSource = source === "institution_website" ? "Institution Website" : "EduBird Platform";
+    const originSource = source === "institution_website" ? "institution_website" : "edubird";
     const trackingToken = `ENR-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
     await db.query(
@@ -86,11 +107,16 @@ export async function POST(req: Request) {
         full_name,
         email,
         phone,
-        notes,
+        lead_status,
         pipeline_stage,
+        follow_up,
+        notes,
+        source_type,
         estimated_value,
-        metadata
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'enrolled', $9, $10)
+        metadata,
+        created_at,
+        last_seen_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'enrolled', 'enrolled', $8, $8, $9, $10, $11, NOW(), NOW())
       `,
       [
         trackingToken,
@@ -98,12 +124,13 @@ export async function POST(req: Request) {
         resolvedProgId,
         studentUserId,
         sName,
-        sEmail,
-        sPhone,
-        notes || `Enrolled from ${originSource}`,
+        sEmail || null,
+        sPhone || "Not provided",
+        notes || `Direct Student Enrollment Application | Origin: ${originSource === "institution_website" ? "Institution Website" : "EduBird"}`,
+        originSource,
         Number(progRes.rows[0].fee_amount) || 25000,
         JSON.stringify({
-          source_type: source,
+          source_type: originSource,
           parent_name: parent_name || null,
           parent_phone: parent_phone || null,
           parent_email: parent_email || null,

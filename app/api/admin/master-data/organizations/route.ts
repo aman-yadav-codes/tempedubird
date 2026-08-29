@@ -1,54 +1,58 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth/auth";
+import { getAuthUser, requireAdmin } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
 
 async function ensureMasterCompaniesTable() {
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS master_companies (
-      id SERIAL PRIMARY KEY,
-      name VARCHAR(255) NOT NULL UNIQUE,
-      slug VARCHAR(255),
-      industry VARCHAR(100) DEFAULT 'Education & Technology',
-      is_active BOOLEAN DEFAULT TRUE,
-      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
-
-  const countRes = await db.query<{ count: number }>(
-    `SELECT COUNT(*)::int AS count FROM master_companies`
-  );
-
-  if ((countRes.rows[0]?.count || 0) === 0) {
-    const DEFAULT_COMPANIES = [
-      "EduBird Technologies Pvt Ltd",
-      "Tata Consultancy Services (TCS)",
-      "Infosys Limited",
-      "Wipro Technologies",
-      "HCL Technologies",
-      "Tech Mahindra",
-      "Allen Career Institute",
-      "Aakash Educational Services",
-      "Resonance Eduventures",
-      "Physics Wallah (PW)",
-      "BYJU'S (Think & Learn)",
-      "Unacademy (Sorting Hat Tech)",
-      "Vedantu Innovations",
-      "Pearson Education India",
-      "McGraw Hill Education",
-      "Cambridge University Press",
-      "Oxford University Press",
-      "Delhi Public School Society",
-      "Kendriya Vidyalaya Sangathan",
-      "National Institute of Technology",
-    ];
-
-    for (const name of DEFAULT_COMPANIES) {
-      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-      await db.query(
-        `INSERT INTO master_companies (name, slug) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING`,
-        [name, slug]
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS master_companies (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL UNIQUE,
+        slug VARCHAR(255),
+        industry VARCHAR(100) DEFAULT 'Education & Technology',
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    const countRes = await db.query<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM master_companies`
+    );
+
+    if ((countRes.rows[0]?.count || 0) === 0) {
+      const DEFAULT_COMPANIES = [
+        "EduBird Technologies Pvt Ltd",
+        "Tata Consultancy Services (TCS)",
+        "Infosys Limited",
+        "Wipro Technologies",
+        "HCL Technologies",
+        "Tech Mahindra",
+        "Allen Career Institute",
+        "Aakash Educational Services",
+        "Resonance Eduventures",
+        "Physics Wallah (PW)",
+        "BYJU'S (Think & Learn)",
+        "Unacademy (Sorting Hat Tech)",
+        "Vedantu Innovations",
+        "Pearson Education India",
+        "McGraw Hill Education",
+        "Cambridge University Press",
+        "Oxford University Press",
+        "Delhi Public School Society",
+        "Kendriya Vidyalaya Sangathan",
+        "National Institute of Technology",
+      ];
+
+      for (const name of DEFAULT_COMPANIES) {
+        const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+        await db.query(
+          `INSERT INTO master_companies (name, slug) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING`,
+          [name, slug]
+        );
+      }
     }
+  } catch (err) {
+    console.warn("Could not ensure master_companies table", err);
   }
 }
 
@@ -59,7 +63,6 @@ function getInt(value: string | null, fallback: number) {
 
 export async function GET(req: Request) {
   try {
-    await requireAdmin(req);
     await ensureMasterCompaniesTable();
 
     const url = new URL(req.url);

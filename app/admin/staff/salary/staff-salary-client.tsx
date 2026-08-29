@@ -525,7 +525,7 @@ function SalaryDetailSheet({
                 <StatCard label="Joining Date" value={formatDate(row.join_date)} />
                 <StatCard label="Role" value={roleLabel(row.role_code)} />
                 <StatCard label="Working Days" value={`${row.working_days}`} />
-                <StatCard label="Paid Days" value={`${row.paid_days}`} />
+                <StatCard label="Payable Days (Attendance)" value={`${row.paid_days}`} />
                 <StatCard label="Deduction" value={currency(row.deduction_amount)} tone="danger" />
                 <StatCard label="Payable" value={currency(row.payable_salary)} tone="success" />
               </section>

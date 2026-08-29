@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
         hostelsRes,
         blogsRes,
         galleryRes,
+        productsRes,
       ] = await Promise.all([
         // 1. Courses / Programs
         db.query(
@@ -92,10 +93,17 @@ export async function GET(req: NextRequest) {
           `SELECT COUNT(*)::int AS count FROM institution_facilities WHERE institution_id = $1 AND COALESCE(is_deleted, FALSE) = FALSE AND COALESCE(is_active, TRUE) = TRUE`,
           [institutionId]
         ).catch(() => ({ rows: [{ count: 0 }] })),
+
+        // 11. Products / Store
+        db.query(
+          `SELECT COUNT(*)::int AS count FROM products WHERE (institution_id = $1 OR institution_id IS NULL) AND status = 'active'`,
+          [institutionId]
+        ).catch(() => ({ rows: [{ count: 0 }] })),
       ]);
 
       const counts = {
         courses: Number(coursesRes.rows[0]?.count || 0),
+        products: Number(productsRes.rows[0]?.count || 0),
         institutes: Number(instituteRes.rows[0]?.count || 0),
         practice: Number(practiceRes.rows[0]?.count || 0),
         notes: Number(notesRes.rows[0]?.count || 0),
@@ -109,6 +117,7 @@ export async function GET(req: NextRequest) {
 
       const categories = {
         courses: { hasData: counts.courses > 0, count: counts.courses, label: "Course", href: "/courses" },
+        products: { hasData: counts.products > 0, count: counts.products, label: "Products", href: "/products" },
         institutes: { hasData: counts.institutes > 0, count: counts.institutes, label: "Institute", href: "/institutes" },
         practice: { hasData: counts.practice > 0, count: counts.practice, label: "Practice", href: "/practice" },
         notes: { hasData: counts.notes > 0, count: counts.notes, label: "Notes", href: "/notes" },
@@ -137,6 +146,7 @@ export async function GET(req: NextRequest) {
     // Platform / Marketplace mode: all categories are available by default
     const [
       coursesCount,
+      productsCount,
       institutesCount,
       practiceCount,
       notesCount,
@@ -148,6 +158,7 @@ export async function GET(req: NextRequest) {
       galleryCount,
     ] = await Promise.all([
       db.query(`SELECT COUNT(*)::int AS count FROM programs WHERE COALESCE(is_deleted, FALSE) = FALSE`).catch(() => ({ rows: [{ count: 50 }] })),
+      db.query(`SELECT COUNT(*)::int AS count FROM products WHERE status = 'active'`).catch(() => ({ rows: [{ count: 20 }] })),
       db.query(`SELECT COUNT(*)::int AS count FROM institution_profiles WHERE is_active = TRUE`).catch(() => ({ rows: [{ count: 12 }] })),
       db.query(`SELECT COUNT(*)::int AS count FROM practice_tests`).catch(() => ({ rows: [{ count: 25 }] })),
       db.query(`SELECT COUNT(*)::int AS count FROM notes`).catch(() => ({ rows: [{ count: 40 }] })),
@@ -161,6 +172,7 @@ export async function GET(req: NextRequest) {
 
     const categories = {
       courses: { hasData: true, count: Number(coursesCount.rows[0]?.count || 50), label: "Course", href: "/courses" },
+      products: { hasData: true, count: Number(productsCount.rows[0]?.count || 20), label: "Products", href: "/products" },
       institutes: { hasData: true, count: Number(institutesCount.rows[0]?.count || 12), label: "Institute", href: "/institutes" },
       practice: { hasData: true, count: Number(practiceCount.rows[0]?.count || 25), label: "Practice", href: "/practice" },
       notes: { hasData: true, count: Number(notesCount.rows[0]?.count || 40), label: "Notes", href: "/notes" },

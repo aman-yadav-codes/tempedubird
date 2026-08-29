@@ -380,12 +380,18 @@ export const institutes: PublicInstitute[] = [
 
 export const locationOptions: FilterOption[] = [
   { label: "All Locations", value: "all" },
-  { label: "Delhi", value: "delhi" },
+  { label: "Varanasi", value: "varanasi" },
+  { label: "Delhi / NCR", value: "delhi" },
   { label: "Mumbai", value: "mumbai" },
   { label: "Bangalore", value: "bangalore" },
   { label: "Pune", value: "pune" },
   { label: "Hyderabad", value: "hyderabad" },
   { label: "Kolkata", value: "kolkata" },
+  { label: "Jaipur", value: "jaipur" },
+  { label: "Lucknow", value: "lucknow" },
+  { label: "Patna", value: "patna" },
+  { label: "Ahmedabad", value: "ahmedabad" },
+  { label: "Chandigarh", value: "chandigarh" },
 ];
 
 export const typeOptions: FilterOption[] = [

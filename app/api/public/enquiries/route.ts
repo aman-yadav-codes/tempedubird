@@ -18,6 +18,8 @@ async function ensureEnquiriesSchema() {
       ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS institution_id INTEGER REFERENCES institution_profiles(id) ON DELETE SET NULL;
       ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS pipeline_stage VARCHAR(50) DEFAULT 'new enquiry';
       ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS estimated_value NUMERIC(12,2) DEFAULT 25000;
+      ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
+      ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS source_type VARCHAR(50) DEFAULT 'edubird';
     `);
     schemaEnquiryColumnsReady = true;
   } catch (err) {
@@ -114,11 +116,12 @@ export async function POST(req: NextRequest) {
         estimated_value,
         follow_up,
         current_page_url,
+        source_type,
         metadata,
         created_at,
         last_seen_at
       )
-      VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, 'new enquiry', 'new enquiry', 25000, $8, $9, $10, NOW(), NOW())
+      VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, 'new enquiry', 'new enquiry', 25000, $8, $9, $10, $11, NOW(), NOW())
       RETURNING id
       `,
       [
@@ -131,6 +134,7 @@ export async function POST(req: NextRequest) {
         email || null,
         fullNotes,
         preferredProgram || "/courses",
+        sourceOrigin,
         JSON.stringify({
           source_type: sourceOrigin,
           parent_name: parentName || null,

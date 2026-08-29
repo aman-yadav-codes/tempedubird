@@ -9,6 +9,28 @@ const LOCATION_SELECT = `
     l.type,
     l.parent_id,
     p.name AS parent_name,
+    CASE 
+      WHEN l.type = 'country' THEN l.name
+      WHEN p.type = 'country' THEN p.name
+      WHEN gp.type = 'country' THEN gp.name
+      WHEN ggp.type = 'country' THEN ggp.name
+      ELSE 'India'
+    END AS country_name,
+    CASE 
+      WHEN l.type = 'state' THEN l.name
+      WHEN p.type = 'state' THEN p.name
+      WHEN gp.type = 'state' THEN gp.name
+      ELSE NULL
+    END AS state_name,
+    CASE 
+      WHEN l.type = 'city' THEN l.name
+      WHEN p.type = 'city' THEN p.name
+      ELSE NULL
+    END AS city_name,
+    CASE 
+      WHEN l.type = 'area' THEN l.name
+      ELSE NULL
+    END AS area_name,
     l.latitude,
     l.longitude,
     l.is_active,
@@ -17,6 +39,8 @@ const LOCATION_SELECT = `
     l.location_scope
   FROM locations l
   LEFT JOIN locations p ON p.id = l.parent_id
+  LEFT JOIN locations gp ON gp.id = p.parent_id
+  LEFT JOIN locations ggp ON ggp.id = gp.parent_id
 `;
 
 export async function listLocations(
@@ -27,6 +51,7 @@ export async function listLocations(
   const limit = opts.limit ?? 10;
   const offset = opts.offset ?? 0;
   const scopes = opts.scopes;
+  const locationType = opts.type?.trim();
 
   let dataParams: any[] = [search];
   let countParams: any[] = [search];
@@ -44,6 +69,17 @@ export async function listLocations(
     countParams.push(scopes);
   }
 
+  let dataTypeCondition = "";
+  let countTypeCondition = "";
+
+  if (locationType && locationType !== "all") {
+    dataTypeCondition = `AND l.type = $${dataParamIndex++}`;
+    dataParams.push(locationType);
+
+    countTypeCondition = `AND l.type = $${countParamIndex++}`;
+    countParams.push(locationType);
+  }
+
   const limitParam = dataParamIndex++;
   const offsetParam = dataParamIndex++;
   dataParams.push(limit, offset);
@@ -57,6 +93,7 @@ export async function listLocations(
       OR l.type ILIKE '%' || $1 || '%'
     )
     ${dataScopeCondition}
+    ${dataTypeCondition}
   `;
 
   const countWhereClause = `
@@ -68,6 +105,7 @@ export async function listLocations(
       OR l.type ILIKE '%' || $1 || '%'
     )
     ${countScopeCondition}
+    ${countTypeCondition}
   `;
 
   const [dataResult, countResult] = await Promise.all([
@@ -75,7 +113,13 @@ export async function listLocations(
       `
         ${LOCATION_SELECT}
         ${dataWhereClause}
-        ORDER BY l.type ASC, l.name ASC
+        ORDER BY CASE l.type 
+          WHEN 'country' THEN 1 
+          WHEN 'state' THEN 2 
+          WHEN 'city' THEN 3 
+          WHEN 'area' THEN 4 
+          ELSE 5 
+        END ASC, l.name ASC
         LIMIT $${limitParam} OFFSET $${offsetParam}
       `,
       dataParams

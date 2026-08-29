@@ -50,6 +50,13 @@ type DailyReportMode = "FULL_DAY" | "PERIOD_WISE";
 type InstitutionOption = { id: number; name?: string; organization_name?: string };
 type ProgramOption = { id: number; title: string; institution_id: number };
 type SectionOption = { id: number; name: string };
+type AcademicYearOption = {
+  id: number;
+  name: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  is_active?: boolean;
+};
 type StudentRow = {
   student_id: number;
   full_name: string;
@@ -359,8 +366,32 @@ export default function StudentAttendancePage() {
     }
   }, [authHeader, selectedInstitutionId]);
 
+  const fetchAcademicYears = useCallback(async (search: string, page: number) => {
+    if (!selectedInstitutionId) return { data: [], hasMore: false };
+    setYearsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: "15",
+        search,
+        institutionId: selectedInstitutionId,
+      });
+      const res = await fetch(`/api/admin/institutions/academic-years?${params.toString()}`, {
+        headers: authHeader,
+      });
+      if (!res.ok) throw new Error("Failed to load academic years");
+      const json = await res.json();
+      return { data: json.data || [], hasMore: page < json.pageCount };
+    } catch (err) {
+      console.warn("Error fetching academic years:", err);
+      return { data: [], hasMore: false };
+    } finally {
+      setYearsLoading(false);
+    }
+  }, [authHeader, selectedInstitutionId]);
+
   const loadSelectedAcademicYear = useCallback(async () => {
-    if (!selectedInstitutionId || !activeAcademicYearId) {
+    if (!selectedInstitutionId) {
       setAcademicYearId("");
       setAcademicYearName("");
       setAcademicYearStartDate("");
@@ -368,28 +399,53 @@ export default function StudentAttendancePage() {
       return;
     }
 
-    const year = getStoredActiveAcademicSession(selectedInstitutionId);
-    if (!year || year.id !== activeAcademicYearId || String(year.institutionId) !== selectedInstitutionId) {
-      setAcademicYearId(String(activeAcademicYearId));
-      setAcademicYearName("");
-      setAcademicYearStartDate("");
-      setAcademicYearEndDate("");
-      setYearsLoading(false);
-      return;
+    if (activeAcademicYearId) {
+      const year = getStoredActiveAcademicSession(selectedInstitutionId);
+      if (year && year.id === activeAcademicYearId && String(year.institutionId) === selectedInstitutionId) {
+        setYearsLoading(false);
+        setAcademicYearId(String(year.id));
+        setAcademicYearName(year.name);
+        setAcademicYearStartDate(year.startDate);
+        setAcademicYearEndDate(year.endDate);
+        if (year.startDate) {
+          setDate(year.startDate);
+          setMonth(dateToMonth(year.startDate));
+          setFromDate(year.startDate);
+          setToDate(year.startDate);
+        }
+        return;
+      }
     }
 
-    setYearsLoading(false);
-    setAcademicYearId(String(year.id));
-    setAcademicYearName(year.name);
-    setAcademicYearStartDate(year.startDate);
-    setAcademicYearEndDate(year.endDate);
-    if (year.startDate) {
-      setDate(year.startDate);
-      setMonth(dateToMonth(year.startDate));
-      setFromDate(year.startDate);
-      setToDate(year.startDate);
+    // Auto-fetch active academic year for selected institution if not set
+    try {
+      setYearsLoading(true);
+      const res = await fetch(`/api/admin/institutions/academic-years?institutionId=${selectedInstitutionId}&limit=10`, {
+        headers: authHeader,
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const years: AcademicYearOption[] = json.data || [];
+        const activeYear = years.find((y) => y.is_active) || years[0];
+        if (activeYear) {
+          setAcademicYearId(String(activeYear.id));
+          setAcademicYearName(activeYear.name);
+          setAcademicYearStartDate(activeYear.start_date || "");
+          setAcademicYearEndDate(activeYear.end_date || "");
+          if (activeYear.start_date) {
+            setDate(activeYear.start_date);
+            setMonth(dateToMonth(activeYear.start_date));
+            setFromDate(activeYear.start_date);
+            setToDate(activeYear.start_date);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Could not auto-fetch academic year:", err);
+    } finally {
+      setYearsLoading(false);
     }
-  }, [activeAcademicYearId, selectedInstitutionId]);
+  }, [activeAcademicYearId, authHeader, selectedInstitutionId]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -1023,16 +1079,31 @@ export default function StudentAttendancePage() {
               <Label>Academic Year</Label>
               <Badge variant="outline" className="shrink-0">Step 4</Badge>
             </div>
-            <div className="flex h-10 items-center rounded-md border bg-muted/40 px-3 text-sm font-semibold text-foreground">
-              {yearsLoading ? (
-                <span className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" />
-                  Loading session...
-                </span>
-              ) : (
-                <span className="truncate">{academicYearName || "Select session from top bar"}</span>
-              )}
-            </div>
+            <AsyncSearchPopover<AcademicYearOption>
+              value={academicYearId}
+              selectedLabel={academicYearName}
+              placeholder={selectedInstitutionId ? "Select academic year..." : "Select institution first"}
+              searchPlaceholder="Search academic year / session..."
+              disabled={!selectedInstitutionId}
+              loading={yearsLoading}
+              fetcher={fetchAcademicYears}
+              getValue={(item) => String(item.id)}
+              getLabel={(item) => item.name}
+              onChange={(value) => {
+                setAcademicYearId(value);
+              }}
+              onSelectItem={(item) => {
+                setAcademicYearName(item.name);
+                setAcademicYearStartDate(item.start_date || "");
+                setAcademicYearEndDate(item.end_date || "");
+                if (item.start_date) {
+                  setDate(item.start_date);
+                  setMonth(dateToMonth(item.start_date));
+                  setFromDate(item.start_date);
+                  setToDate(item.start_date);
+                }
+              }}
+            />
           </div>
         </div>
       </div>

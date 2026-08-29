@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -12,12 +12,15 @@ import {
   Languages,
   Monitor,
   Users,
+  Star,
+  MessageSquare,
+  Sparkles,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { Card } from "@/components/ui/card";
 import { buildCourseUrl } from "@/lib/utils/seo-slug";
+import { UniversalFeedbackDialog } from "@/components/public/universal-feedback-dialog";
 
 export interface CourseCardProps {
   id: number;
@@ -73,181 +76,197 @@ export function CourseCard({
   institutionId,
   institution_id,
   fee_amount,
+  rating,
+  reviews,
   onEnroll,
   onEnquire,
 }: CourseCardProps) {
-  const hasCustomMedia = Boolean(
-    (images && images.length > 0 && images[0]?.url) ||
-    (image && image.trim()) ||
-    (iconUrl && iconUrl.trim())
-  );
-  const displayImage = (images && images.length > 0 && images[0]?.url) ? images[0].url : (image && image.trim() ? image : (iconUrl && iconUrl.trim() ? iconUrl : null));
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const courseUrl = buildCourseUrl(id, title, institute);
   const isList = viewMode === "list";
   const subjectPreview = subjects.slice(0, 2).join(", ");
   const sectionPreview = sections.slice(0, 2).join(", ");
   const languagePreview = languages.slice(0, 2).join(", ");
 
-  return (
-    <Card className="group h-full gap-0 overflow-hidden rounded-lg border-border bg-card/90 p-0 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-primary/70 hover:shadow-[0_0_0_1px_rgba(239,68,68,0.25)]">
-      <div className={`h-full p-3 ${isList ? "grid gap-4 sm:grid-cols-[280px_1fr]" : "flex flex-col"}`}>
-        <div className={`relative overflow-hidden rounded-md bg-muted ${isList ? "min-h-[190px]" : "h-[165px]"}`}>
-          {hasCustomMedia && displayImage ? (
-            <Image
-              src={displayImage}
-              alt={title}
-              fill
-              sizes={
-                isList
-                  ? "(min-width: 768px) 280px, 100vw"
-                  : "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-              }
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-              loading="lazy"
-              unoptimized
-            />
-          ) : (
-            <div className="relative h-full w-full bg-gradient-to-br from-primary/10 via-muted/40 to-primary/5 flex items-center justify-center p-4 transition-colors group-hover:from-primary/15">
-              <div className="size-8 sm:size-9 rounded-lg bg-background/95 border border-primary/20 shadow-2xs flex items-center justify-center text-primary group-hover:scale-105 transition-transform duration-300">
-                <GraduationCap className="size-4 text-primary" />
-              </div>
-            </div>
-          )}
-          <div className="absolute left-3 top-3">
-            <Badge className={verified ? "bg-green-500/95 text-white text-[10px] font-bold shadow-xs" : "bg-muted text-[10px]"}>
-              {verified && <CheckCircle2 className="mr-1 h-3 w-3" />}
-              {verified ? "Verified" : "Standard"}
-            </Badge>
-          </div>
-          <div className="absolute right-3 top-3">
-            <Badge variant="secondary" className="max-w-[170px] truncate bg-background/90 text-foreground text-[10px] font-bold uppercase tracking-wider shadow-xs border border-border/60">
-              {selectedCategory ?? category}
-            </Badge>
-          </div>
-        </div>
+  const categoryLabel = selectedCategory || category || "COURSE";
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <CardHeader className="px-3 pb-2.5 pt-3.5 space-y-1.5">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                {selectedCategory ?? category}
+  return (
+    <Card className="group h-full flex flex-col justify-between overflow-hidden rounded-2xl border border-border/80 bg-card/95 p-0 shadow-2xs transition-all duration-200 hover:-translate-y-1 hover:border-primary/60 hover:shadow-md hover:shadow-primary/5">
+      <div className={`h-full p-4 sm:p-5 flex flex-col justify-between ${isList ? "gap-4" : "gap-3"}`}>
+        {/* Compact Card Header */}
+        <div className="space-y-2.5">
+          {/* Top Line: Small Icon & Category on Left, Price on Right */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <div className="size-7 rounded-lg bg-primary/10 text-primary border border-primary/20 flex items-center justify-center shrink-0 transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                <GraduationCap className="size-3.5" />
+              </div>
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground truncate">
+                {categoryLabel}
               </span>
-              <span className="text-xl font-black text-primary">{price}</span>
             </div>
-            <h3 className="line-clamp-1 text-lg sm:text-xl font-black uppercase tracking-tight text-foreground transition-colors group-hover:text-primary leading-snug">
-              <Link href={courseUrl} className="hover:underline uppercase font-black">
+
+            {/* Price Tag */}
+            <div className="text-right shrink-0">
+              <span className="text-lg sm:text-xl font-black text-primary tracking-tight">
+                {price}
+              </span>
+            </div>
+          </div>
+
+          {/* Title & Institute (with green checkmark icon ONLY) */}
+          <div className="space-y-1 pt-0.5">
+            <h3 className="text-base sm:text-lg font-black uppercase tracking-tight text-foreground transition-colors group-hover:text-primary leading-snug line-clamp-2">
+              <Link href={courseUrl} className="hover:underline">
                 {title}
               </Link>
             </h3>
-            <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              <Link href="/institutes" className="hover:text-primary hover:underline font-semibold text-muted-foreground">
-                {institute}
+
+            {/* Institute Name with Green Check Icon immediately following */}
+            <div className="flex items-center flex-wrap gap-1.5 text-xs text-muted-foreground">
+              <Link
+                href="/institutes"
+                className="hover:text-primary hover:underline font-semibold text-muted-foreground inline-flex items-center gap-1 truncate max-w-[200px]"
+              >
+                <span>{institute}</span>
               </Link>
+              {verified && (
+                <span title="Verified Institute" className="inline-flex">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 fill-emerald-500/10 shrink-0 inline-block" />
+                </span>
+              )}
               {programType && (
                 <>
-                  <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
-                  <span className="uppercase text-[10px] tracking-wider font-semibold text-muted-foreground/80">{programType}</span>
+                  <span className="h-1 w-1 rounded-full bg-muted-foreground/40 shrink-0" />
+                  <span className="uppercase text-[10px] tracking-wider font-semibold text-muted-foreground/70 truncate">
+                    {programType}
+                  </span>
                 </>
               )}
             </div>
-          </CardHeader>
+          </div>
+        </div>
 
-          <CardContent className="flex flex-1 flex-col px-3 pb-1">
-            <Separator className="mb-4" />
-            <div className="mb-4 grid grid-cols-2 gap-3 text-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Clock className="h-4 w-4" />
-                {duration}
+        {/* Content Section: Attributes & Meta */}
+        <div className="space-y-3 pt-2 border-t border-border/60">
+          <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5 truncate">
+              <Clock className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+              <span className="truncate">{duration || "1 Year"}</span>
+            </div>
+            <div className="flex items-center gap-1.5 truncate">
+              <Users className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+              <span className="truncate">{seatsAvailable ? `${seatsAvailable} seats` : students}</span>
+            </div>
+            {teachingMethod && (
+              <div className="flex items-center gap-1.5 truncate">
+                <Monitor className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+                <span className="truncate">{teachingMethod}</span>
               </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Users className="h-4 w-4" />
-                {seatsAvailable ? `${seatsAvailable} seats` : students}
+            )}
+            {languagePreview ? (
+              <div className="flex items-center gap-1.5 truncate">
+                <Languages className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+                <span className="truncate">{languagePreview}</span>
               </div>
-              {teachingMethod && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Monitor className="h-4 w-4" />
-                  <span className="truncate">{teachingMethod}</span>
-                </div>
-              )}
-              {languagePreview && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Languages className="h-4 w-4" />
-                  <span className="truncate">{languagePreview}</span>
-                </div>
-              )}
-            </div>
+            ) : (
+              <div className="flex items-center gap-1.5 truncate">
+                <BookOpen className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+                <span className="truncate">{subjectPreview || "Full Curriculum"}</span>
+              </div>
+            )}
+          </div>
 
-            <div className="mb-4 space-y-2 text-sm">
-              {subjectPreview && (
-                <div className="flex items-start gap-2 text-muted-foreground">
-                  <BookOpen className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span className="line-clamp-1">
-                    {subjectPreview}
-                    {subjects.length > 2 ? ` +${subjects.length - 2} more` : ""}
-                  </span>
-                </div>
-              )}
-              {sectionPreview && (
-                <div className="flex items-start gap-2 text-muted-foreground">
-                  <GraduationCap className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span className="line-clamp-1">
-                    {sectionPreview}
-                    {sections.length > 2 ? ` +${sections.length - 2} more` : ""}
-                  </span>
-                </div>
-              )}
-              {!subjectPreview && !sectionPreview && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <BookOpen className="h-4 w-4" />
-                  Curriculum details available soon
-                </div>
-              )}
-            </div>
+          {/* Rating & Review trigger */}
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50 text-xs">
+            <button
+              type="button"
+              onClick={() => setFeedbackOpen(true)}
+              className="inline-flex items-center gap-1 text-amber-500 hover:text-amber-600 font-bold hover:underline cursor-pointer"
+            >
+              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+              <span>
+                {rating != null && !isNaN(Number(rating))
+                  ? (Number.isInteger(Number(rating)) ? `${Number(rating)}.0` : Number(rating).toFixed(1))
+                  : "4.8"}
+              </span>
+              <span className="text-muted-foreground font-normal">
+                ({reviews != null && !isNaN(Number(reviews)) ? Number(reviews) : 4} {Number(reviews) === 1 ? "review" : "reviews"})
+              </span>
+            </button>
 
-            <div className="mb-4 flex flex-wrap gap-2">
-              {programType && (
-                <Badge variant="secondary" className="bg-primary/10 text-primary">
-                  {programType}
-                </Badge>
-              )}
-              {verified && (
-                <Badge variant="outline" className="border-green-500/40 text-green-500">
-                  Verified Institute
-                </Badge>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={() => setFeedbackOpen(true)}
+              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary font-medium cursor-pointer"
+            >
+              <MessageSquare className="h-3 w-3" />
+              <span>Feedback</span>
+            </button>
+          </div>
 
-            <div className="mt-auto grid grid-cols-2 gap-2">
-              {onEnroll && (
-                <button
-                  type="button"
-                  onClick={() => onEnroll({ id, title, institute, price, duration, institution_id: institutionId || institution_id, fee_amount })}
-                  className="flex h-10 w-full items-center justify-center gap-1.5 rounded-md bg-primary font-bold text-xs text-primary-foreground shadow-xs transition hover:bg-primary/90 cursor-pointer"
-                >
-                  <GraduationCap className="h-4 w-4" />
-                  Enroll Now
-                </button>
-              )}
+          {/* Actions */}
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            {onEnroll ? (
               <button
                 type="button"
-                onClick={() => {
-                  if (onEnquire) {
-                    onEnquire({ id, title, institute, price, duration, institution_id: institutionId || institution_id });
-                  } else {
-                    window.location.href = courseUrl;
-                  }
-                }}
-                className={`flex h-10 w-full items-center justify-center gap-1.5 rounded-md border border-primary/80 text-xs font-bold text-primary transition hover:bg-primary hover:text-primary-foreground cursor-pointer ${
-                  !onEnroll ? "col-span-2" : ""
-                }`}
+                onClick={() =>
+                  onEnroll({
+                    id,
+                    title,
+                    institute,
+                    price,
+                    duration,
+                    institution_id: institutionId || institution_id,
+                    fee_amount,
+                  })
+                }
+                className="flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-primary font-bold text-xs text-primary-foreground shadow-2xs transition hover:bg-primary/90 cursor-pointer"
               >
-                <HelpCircle className="h-3.5 w-3.5" />
-                Enquiry
+                <GraduationCap className="h-3.5 w-3.5" />
+                <span>Enroll</span>
               </button>
-            </div>
-          </CardContent>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                if (onEnquire) {
+                  onEnquire({
+                    id,
+                    title,
+                    institute,
+                    price,
+                    duration,
+                    institution_id: institutionId || institution_id,
+                  });
+                } else {
+                  window.location.href = courseUrl;
+                }
+              }}
+              className={`flex h-9 w-full items-center justify-center gap-1.5 rounded-xl border border-primary/70 text-xs font-bold text-primary transition hover:bg-primary hover:text-primary-foreground cursor-pointer ${
+                !onEnroll ? "col-span-2" : ""
+              }`}
+            >
+              <HelpCircle className="h-3.5 w-3.5" />
+              <span>Enquiry</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Universal Feedback & Comment Dialog */}
+      <UniversalFeedbackDialog
+        open={feedbackOpen}
+        onOpenChange={setFeedbackOpen}
+        target={{
+          type: "course",
+          id,
+          title,
+          subtitle: `${institute} • ${duration}`,
+          avg_rating: rating || 4.8,
+          review_count: reviews || 24,
+        }}
+      />
     </Card>
   );
 }

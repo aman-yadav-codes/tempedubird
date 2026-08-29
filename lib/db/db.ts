@@ -142,8 +142,8 @@ async function retryTransient<T>(operation: () => Promise<T>, attempts = 3, labe
   throw lastError;
 }
 
-const connectTimeoutMs = getNumberEnv("DATABASE_CONNECT_TIMEOUT_MS", 5_000);
-const queryTimeoutMs = getNumberEnv("DATABASE_QUERY_TIMEOUT_MS", 10_000);
+const connectTimeoutMs = getNumberEnv("DATABASE_CONNECT_TIMEOUT_MS", 20_000);
+const queryTimeoutMs = getNumberEnv("DATABASE_QUERY_TIMEOUT_MS", 35_000);
 const useDatabaseSsl = process.env.DATABASE_SSL !== "false";
 
 const dbPool = new Pool({

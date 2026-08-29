@@ -10,6 +10,8 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const category = url.searchParams.get("category")?.trim() || "";
     const location = url.searchParams.get("location")?.trim() || "";
+    const city = url.searchParams.get("city")?.trim() || "";
+    const area = url.searchParams.get("area")?.trim() || "";
     const search = url.searchParams.get("search")?.trim() || "";
 
     let query = `SELECT * FROM vendors WHERE 1=1`;
@@ -20,6 +22,16 @@ export async function GET(req: Request) {
       query += ` AND category = $${params.length}`;
     }
 
+    if (city && city !== "all") {
+      params.push(`%${city}%`);
+      query += ` AND (city ILIKE $${params.length} OR address ILIKE $${params.length})`;
+    }
+
+    if (area && area !== "all") {
+      params.push(`%${area}%`);
+      query += ` AND (location ILIKE $${params.length} OR address ILIKE $${params.length})`;
+    }
+
     if (location && location !== "all") {
       params.push(`%${location}%`);
       query += ` AND (city ILIKE $${params.length} OR location ILIKE $${params.length} OR address ILIKE $${params.length})`;
@@ -27,13 +39,45 @@ export async function GET(req: Request) {
 
     if (search) {
       params.push(`%${search}%`);
-      query += ` AND (name ILIKE $${params.length} OR phone ILIKE $${params.length} OR email ILIKE $${params.length} OR description ILIKE $${params.length})`;
+      query += ` AND (name ILIKE $${params.length} OR phone ILIKE $${params.length} OR email ILIKE $${params.length} OR description ILIKE $${params.length} OR city ILIKE $${params.length} OR location ILIKE $${params.length})`;
     }
 
     query += ` ORDER BY id DESC`;
 
     const res = await db.query(query, params);
-    return NextResponse.json({ vendors: res.rows });
+
+    // Fetch distinct cities from Master Data locations
+    const masterCitiesRes = await db.query(`
+      SELECT DISTINCT name as city
+      FROM locations
+      WHERE type = 'city' AND is_deleted = FALSE AND is_active = TRUE
+      ORDER BY name ASC
+    `);
+
+    // Fetch areas from Master Data locations (hierarchically filtered by selected city if applicable)
+    let areasQuery = `
+      SELECT DISTINCT a.name as area
+      FROM locations a
+      LEFT JOIN locations c ON c.id = a.parent_id
+      WHERE a.type = 'area' AND a.is_deleted = FALSE AND a.is_active = TRUE
+    `;
+    const areaParams: any[] = [];
+    if (city && city !== "all") {
+      areaParams.push(`%${city}%`);
+      areasQuery += ` AND (c.name ILIKE $1)`;
+    }
+    areasQuery += ` ORDER BY a.name ASC`;
+
+    const masterAreasRes = await db.query(areasQuery, areaParams);
+
+    const distinctCities = masterCitiesRes.rows.map((r: any) => r.city).filter(Boolean);
+    const distinctAreas = masterAreasRes.rows.map((r: any) => r.area).filter(Boolean);
+
+    return NextResponse.json({ 
+      vendors: res.rows,
+      cities: distinctCities,
+      areas: distinctAreas
+    });
   } catch (error: any) {
     console.error("[Vendors GET] Error:", error);
     return NextResponse.json({ error: error.message || "Failed to fetch vendors" }, { status: 500 });

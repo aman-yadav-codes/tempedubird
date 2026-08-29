@@ -15,6 +15,8 @@ async function ensureEnquiriesColumns() {
         await db.query(`ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS pipeline_stage VARCHAR(40) DEFAULT 'new'`);
         await db.query(`ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS estimated_value NUMERIC(12,2) DEFAULT 25000`);
         await db.query(`ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS institution_id INTEGER REFERENCES institution_profiles(id) ON DELETE SET NULL`);
+        await db.query(`ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb`);
+        await db.query(`ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS source_type VARCHAR(50) DEFAULT 'edubird'`);
         schemaEnquiriesReady = true;
     } catch {
         // ignore
@@ -31,10 +33,15 @@ export async function GET(req: Request) {
         const status = url.searchParams.get("status")?.trim() || "";
         const institutionIdParam = url.searchParams.get("institutionId") || req.headers.get("x-institution-id");
 
+        const isPlatformAdmin = Boolean(
+            user?.role_codes?.some((r: string) => r.toLowerCase().includes("super_admin") || r.toLowerCase().includes("platform_admin") || r.toLowerCase() === "admin") ||
+            user?.roles?.some((r: string) => r.toLowerCase().includes("super") || r.toLowerCase().includes("platform"))
+        );
+
         let institutionId: number | null = null;
-        if (institutionIdParam && !isNaN(Number(institutionIdParam))) {
+        if (institutionIdParam && !isNaN(Number(institutionIdParam)) && institutionIdParam !== "all") {
             institutionId = Number(institutionIdParam);
-        } else if (user?.memberships?.length > 0) {
+        } else if (!isPlatformAdmin && user?.memberships?.length > 0) {
             const instMem = user.memberships.find((m: any) => m.institution_id);
             if (instMem) institutionId = Number(instMem.institution_id);
         }
@@ -49,7 +56,15 @@ export async function GET(req: Request) {
 
         if (search) {
             params.push(`%${search}%`);
-            whereClauses.push(`(ce.student_name ILIKE $${params.length} OR ce.email ILIKE $${params.length} OR ce.phone ILIKE $${params.length} OR ce.preferred_program ILIKE $${params.length} OR ce.notes ILIKE $${params.length})`);
+            whereClauses.push(`(
+                ce.student_name ILIKE $${params.length} OR 
+                ce.parent_name ILIKE $${params.length} OR 
+                ce.email ILIKE $${params.length} OR 
+                ce.phone ILIKE $${params.length} OR 
+                ce.preferred_program ILIKE $${params.length} OR 
+                ce.notes ILIKE $${params.length} OR
+                ip.name ILIKE $${params.length}
+            )`);
         }
 
         if (status && status !== "all") {
@@ -70,19 +85,20 @@ export async function GET(req: Request) {
                     COALESCE(vs.metadata->>'child_name', '') AS child_name,
                     vs.phone,
                     vs.email,
-                    vs.lead_status AS status,
-                    COALESCE(vs.pipeline_stage, 'new') AS pipeline_stage,
+                    COALESCE(vs.pipeline_stage, vs.lead_status, 'new enquiry') AS status,
+                    COALESCE(vs.pipeline_stage, 'new enquiry') AS pipeline_stage,
                     COALESCE(vs.estimated_value, 25000)::numeric AS estimated_value,
-                    vs.follow_up AS notes,
-                    vs.current_page_url AS preferred_program,
+                    COALESCE(vs.notes, vs.follow_up, 'Direct Course Enquiry') AS notes,
+                    COALESCE(prog.title, vs.current_page_url, 'Course Program') AS preferred_program,
                     CASE 
-                        WHEN vs.metadata->>'source_type' = 'institution_website' OR vs.follow_up ILIKE '%Origin: Institution Website%' THEN 'Institution Website'
-                        WHEN vs.metadata->>'source_type' = 'edubird' OR vs.follow_up ILIKE '%Origin: EduBird%' THEN 'EduBird Platform'
-                        ELSE COALESCE(NULLIF(TRIM(SUBSTRING(vs.follow_up FROM 'Source:\\s*([^|]+)')), ''), 'EduBird Platform')
+                        WHEN vs.source_type = 'institution_website' OR vs.metadata->>'source_type' = 'institution_website' OR vs.follow_up ILIKE '%Origin: Institution Website%' THEN 'Institution Website'
+                        WHEN vs.source_type = 'edubird' OR vs.metadata->>'source_type' = 'edubird' OR vs.follow_up ILIKE '%EduBird%' THEN 'EduBird'
+                        ELSE 'EduBird'
                     END AS source,
                     vs.created_at,
                     vs.institution_id
                 FROM visitor_sessions vs
+                LEFT JOIN institution_programs prog ON prog.id = vs.program_id
                 WHERE (COALESCE(vs.full_name, '') != '' OR COALESCE(vs.phone, '') != '' OR COALESCE(vs.email, '') != '')
 
                 UNION ALL
@@ -101,7 +117,7 @@ export async function GET(req: Request) {
                     COALESCE(p.fee_amount, 25000)::numeric AS estimated_value,
                     'Direct Student Enrollment Application' AS notes,
                     COALESCE(p.title, 'Academic Course') AS preferred_program,
-                    'EduBird Platform' AS source,
+                    'EduBird' AS source,
                     se.created_at,
                     se.institution_id
                 FROM student_enrollments se
@@ -114,7 +130,13 @@ export async function GET(req: Request) {
 
         const [countRes, dataRes] = await Promise.all([
             db.query<{ count: number }>(
-                `${baseCte} SELECT COUNT(*)::int AS count FROM combined_enquiries ce ${whereSql}`,
+                `
+                ${baseCte} 
+                SELECT COUNT(*)::int AS count 
+                FROM combined_enquiries ce 
+                LEFT JOIN institution_profiles ip ON ip.id = ce.institution_id
+                ${whereSql}
+                `,
                 params
             ),
             db.query(
@@ -123,6 +145,10 @@ export async function GET(req: Request) {
                 SELECT
                     ce.id,
                     ce.student_name,
+                    ce.parent_name,
+                    ce.parent_phone,
+                    ce.parent_email,
+                    ce.child_name,
                     ce.phone,
                     ce.email,
                     ce.status,
@@ -131,8 +157,11 @@ export async function GET(req: Request) {
                     ce.notes,
                     ce.preferred_program,
                     ce.source,
-                    ce.created_at
+                    ce.created_at,
+                    ce.institution_id,
+                    COALESCE(ip.name, ip.slug, 'EduBird Partner Institute') AS institution_name
                 FROM combined_enquiries ce
+                LEFT JOIN institution_profiles ip ON ip.id = ce.institution_id
                 ${whereSql}
                 ORDER BY ce.created_at DESC
                 LIMIT $${params.length + 1} OFFSET $${params.length + 2}
