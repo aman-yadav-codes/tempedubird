@@ -8,7 +8,7 @@ import { withApiDebug } from "@/lib/api/debug";
 import { db } from "@/lib/db/db";
 import { recordEnrollmentLifecycle } from "@/lib/queries/lifecycle";
 import { canPromoteEnrollment } from "@/lib/queries/student-promotion-permissions";
-import { readStudentRecords } from "@/lib/queries/student-records";
+import { ensureStudentEnrollmentsSchema, readStudentRecords } from "@/lib/queries/student-records";
 import { studentRecordsSchema } from "@/lib/validations/student-records.schema";
 import type { StudentRecordsInput } from "@/lib/validations/student-records.schema";
 
@@ -164,7 +164,7 @@ async function assertStudentIdentifiersAvailable(
   submittedEnrollments: StudentRecordsInput["enrollments"],
   studentProfileId: number
 ) {
-  const aparId = records.profile.apar_id?.trim().toUpperCase();
+  const aparId = records.profile?.apar_id ? String(records.profile.apar_id).trim().toUpperCase() : null;
   if (aparId) {
     const duplicateApar = await client.query<{ student_name: string }>(
       `
@@ -183,7 +183,7 @@ async function assertStudentIdentifiersAvailable(
     }
   }
 
-  const admissionNumber = records.profile.admission_number?.trim().toUpperCase();
+  const admissionNumber = records.profile?.admission_number ? String(records.profile.admission_number).trim().toUpperCase() : null;
   if (admissionNumber) {
     const institutionIds = Array.from(
       new Set(
@@ -425,6 +425,7 @@ async function putStudentRecords(
     }
 
     await client.query("BEGIN");
+    await ensureStudentEnrollmentsSchema(client);
     const studentProfileId = await getStudentProfileId(client, studentUserId, currentUser.id);
     await assertStudentIdentifiersAvailable(client, records, submittedEnrollments, studentProfileId);
     const seenRollNumbers = new Set<string>();
@@ -465,97 +466,172 @@ async function putStudentRecords(
       ]
     );
 
+    if (records.profile.date_of_birth) {
+      await client.query(
+        `UPDATE user_profiles SET date_of_birth = $1 WHERE user_id = $2`,
+        [toSqlDate(records.profile.date_of_birth), studentUserId]
+      );
+    }
+
     const savedEnrollmentIds: number[] = [];
     for (const enrollment of submittedEnrollments) {
-      if (enrollment.institution_id && enrollment.academic_year_id && enrollment.class_category_id) {
-      await assertAcademicYearInInstitution(client, enrollment.academic_year_id, enrollment.institution_id);
-      if (enrollment.program_id) {
-        await assertProgramEnrollmentScope(client, {
-          programId: enrollment.program_id,
-          institutionId: enrollment.institution_id,
-          academicYearId: enrollment.academic_year_id,
-          classCategoryId: enrollment.class_category_id,
-          sectionId: enrollment.section_id ?? null,
-        });
+      if (enrollment.institution_id && enrollment.academic_year_id) {
+        const hasEnrollmentDetails = Boolean(
+          enrollment.program_id ||
+          enrollment.class_category_id ||
+          enrollment.roll_number ||
+          enrollment.section_id
+        );
+        if (!hasEnrollmentDetails && submittedEnrollments.length > 1) {
+          continue;
+        }
+
+        await assertAcademicYearInInstitution(client, enrollment.academic_year_id, enrollment.institution_id);
+        let classCategoryId = enrollment.class_category_id ?? null;
+        if (!classCategoryId && enrollment.program_id) {
+          const defaultCat = await client.query<{ category_id: number }>(
+            `SELECT category_id FROM program_categories WHERE program_id = $1 ORDER BY id ASC LIMIT 1`,
+            [enrollment.program_id]
+          );
+          classCategoryId = defaultCat.rows[0]?.category_id ?? null;
+        }
+        if (enrollment.program_id && classCategoryId) {
+          await assertProgramEnrollmentScope(client, {
+            programId: enrollment.program_id,
+            institutionId: enrollment.institution_id,
+            academicYearId: enrollment.academic_year_id,
+            classCategoryId: classCategoryId,
+            sectionId: enrollment.section_id ?? null,
+          });
+        }
+
+        let savedEnrollment;
+        if (enrollment.id) {
+          savedEnrollment = await client.query<{
+            id: number;
+            student_id: number;
+            institution_id: number;
+            academic_year_id: number;
+            status: string;
+            admission_date: string | null;
+          }>(
+            `
+              UPDATE student_enrollments
+              SET
+                institution_id = $2,
+                program_id = $3,
+                academic_year_id = $4,
+                class_category_id = $5,
+                section_id = $6,
+                roll_number = $7,
+                admission_date = $8,
+                status = $9,
+                remarks = $10,
+                is_current = TRUE,
+                effective_to = NULL,
+                updated_by = $11,
+                updated_at = CURRENT_TIMESTAMP
+              WHERE id = $1 AND student_id = $12
+              RETURNING id, student_id, institution_id, academic_year_id, status, admission_date
+            `,
+            [
+              enrollment.id,
+              enrollment.institution_id,
+              enrollment.program_id ?? null,
+              enrollment.academic_year_id,
+              classCategoryId,
+              enrollment.section_id ?? null,
+              enrollment.roll_number ?? null,
+              toSqlDate(enrollment.admission_date),
+              enrollment.status,
+              enrollment.remarks ?? null,
+              currentUser.id,
+              studentProfileId,
+            ]
+          );
+        }
+
+        if (!savedEnrollment?.rows[0]) {
+          savedEnrollment = await client.query<{
+            id: number;
+            student_id: number;
+            institution_id: number;
+            academic_year_id: number;
+            status: string;
+            admission_date: string | null;
+          }>(
+            `
+              INSERT INTO student_enrollments (
+                student_id,
+                institution_id,
+                program_id,
+                academic_year_id,
+                class_category_id,
+                section_id,
+                roll_number,
+                admission_date,
+                status,
+                remarks,
+                created_by,
+                updated_by,
+                is_current,
+                effective_from
+              )
+              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11,TRUE,COALESCE($8::date::timestamp, CURRENT_TIMESTAMP))
+              ON CONFLICT (student_id, institution_id, program_id, academic_year_id)
+                WHERE status = 'active' AND COALESCE(is_deleted, FALSE) = FALSE
+              DO UPDATE SET
+                institution_id = EXCLUDED.institution_id,
+                program_id = EXCLUDED.program_id,
+                academic_year_id = EXCLUDED.academic_year_id,
+                class_category_id = COALESCE(EXCLUDED.class_category_id, student_enrollments.class_category_id),
+                section_id = EXCLUDED.section_id,
+                roll_number = EXCLUDED.roll_number,
+                admission_date = EXCLUDED.admission_date,
+                status = EXCLUDED.status,
+                remarks = EXCLUDED.remarks,
+                is_current = TRUE,
+                effective_to = NULL,
+                updated_by = EXCLUDED.updated_by,
+                updated_at = CURRENT_TIMESTAMP
+              RETURNING id, student_id, institution_id, academic_year_id, status, admission_date
+            `,
+            [
+              studentProfileId,
+              enrollment.institution_id,
+              enrollment.program_id ?? null,
+              enrollment.academic_year_id,
+              classCategoryId,
+              enrollment.section_id ?? null,
+              enrollment.roll_number ?? null,
+              toSqlDate(enrollment.admission_date),
+              enrollment.status,
+              enrollment.remarks ?? null,
+              currentUser.id,
+            ]
+          );
+        }
+
+        const row = savedEnrollment.rows[0];
+        if (row) {
+          savedEnrollmentIds.push(row.id);
+          await recordEnrollmentLifecycle(client, {
+            enrollmentId: row.id,
+            studentId: row.student_id,
+            institutionId: row.institution_id,
+            academicYearId: row.academic_year_id,
+            status: (row.status || "ACTIVE").toUpperCase(),
+            effectiveFrom: row.admission_date ?? null,
+            actorId: currentUser.id,
+            notes: "Student enrollment saved",
+            metadata: {
+              program_id: enrollment.program_id ?? null,
+              class_category_id: enrollment.class_category_id,
+              section_id: enrollment.section_id ?? null,
+            },
+          });
+        }
       }
-      const savedEnrollment = await client.query<{
-        id: number;
-        student_id: number;
-        institution_id: number;
-        academic_year_id: number;
-        status: string;
-        admission_date: string | null;
-      }>(
-        `
-          INSERT INTO student_enrollments (
-            student_id,
-            institution_id,
-            program_id,
-            academic_year_id,
-            class_category_id,
-            section_id,
-            roll_number,
-            admission_date,
-            status,
-            remarks,
-            created_by,
-            updated_by,
-            is_current,
-            effective_from
-          )
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11,TRUE,COALESCE($8::date::timestamp, CURRENT_TIMESTAMP))
-          ON CONFLICT (student_id, institution_id, program_id, academic_year_id)
-            WHERE status = 'active' AND COALESCE(is_deleted, FALSE) = FALSE
-          DO UPDATE SET
-            institution_id = EXCLUDED.institution_id,
-            program_id = EXCLUDED.program_id,
-            academic_year_id = EXCLUDED.academic_year_id,
-            class_category_id = EXCLUDED.class_category_id,
-            section_id = EXCLUDED.section_id,
-            roll_number = EXCLUDED.roll_number,
-            admission_date = EXCLUDED.admission_date,
-            status = EXCLUDED.status,
-            remarks = EXCLUDED.remarks,
-            is_current = TRUE,
-            effective_to = NULL,
-            updated_by = EXCLUDED.updated_by,
-            updated_at = CURRENT_TIMESTAMP
-          RETURNING id, student_id, institution_id, academic_year_id, status, admission_date
-        `,
-        [
-          studentProfileId,
-          enrollment.institution_id,
-          enrollment.program_id ?? null,
-          enrollment.academic_year_id,
-          enrollment.class_category_id,
-          enrollment.section_id ?? null,
-          enrollment.roll_number ?? null,
-          toSqlDate(enrollment.admission_date),
-          enrollment.status,
-          enrollment.remarks ?? null,
-          currentUser.id,
-        ]
-      );
-      const row = savedEnrollment.rows[0];
-      if (row) {
-        savedEnrollmentIds.push(row.id);
-        await recordEnrollmentLifecycle(client, {
-          enrollmentId: row.id,
-          studentId: row.student_id,
-          institutionId: row.institution_id,
-          academicYearId: row.academic_year_id,
-          status: (row.status || "ACTIVE").toUpperCase(),
-          effectiveFrom: row.admission_date ?? null,
-          actorId: currentUser.id,
-          notes: "Student enrollment saved",
-          metadata: {
-            program_id: enrollment.program_id ?? null,
-            class_category_id: enrollment.class_category_id,
-            section_id: enrollment.section_id ?? null,
-          },
-        });
-      }
-    }
     }
 
     if (records.enrollments.length) {

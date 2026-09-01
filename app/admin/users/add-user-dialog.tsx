@@ -160,6 +160,30 @@ function getDocumentFiles(document: UserDocumentForm): UploadedDocumentFile[] {
   return Array.isArray(document.files) ? document.files : [];
 }
 
+function formatShiftTime12h(timeStr?: string | null) {
+  if (!timeStr) return "";
+  const trimmed = timeStr.trim();
+  if (trimmed.includes("AM") || trimmed.includes("PM")) return trimmed;
+  const parts = trimmed.split(":");
+  if (parts.length < 2) return trimmed;
+  let hours = parseInt(parts[0], 10);
+  const minutes = parts[1].slice(0, 2);
+  if (isNaN(hours)) return trimmed;
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  const strHours = hours < 10 ? "0" + hours : String(hours);
+  return `${strHours}:${minutes} ${ampm}`;
+}
+
+function formatShiftSetupLabel(setup: { title: string; start_time?: string | null; end_time?: string | null }) {
+  const start = formatShiftTime12h(setup.start_time || "09:00");
+  const end = formatShiftTime12h(setup.end_time || "17:00");
+  return `${start} - ${end} (${setup.title})`;
+}
+
+import { useActiveInstitution } from "@/hooks/use-active-institution";
+
 export function AddUserDialog({
   roles,
   accessToken,
@@ -175,6 +199,15 @@ export function AddUserDialog({
   preferredInstitution = null,
 }: AddUserDialogProps) {
   const { user: currentUser } = useAuthStore();
+  const { activeInstitutionId, activeInstitution } = useActiveInstitution();
+  const effectivePreferredInstitution = useMemo(() => {
+    if (preferredInstitution) return preferredInstitution;
+    if (activeInstitutionId && activeInstitution) {
+      return { id: activeInstitution.id, name: activeInstitution.name };
+    }
+    return null;
+  }, [preferredInstitution, activeInstitutionId, activeInstitution]);
+
   const isControlled = controlledOpen !== undefined;
   const [internalOpen, setInternalOpen] = useState(false);
   const actualOpen = isControlled ? controlledOpen : internalOpen;
@@ -185,11 +218,147 @@ export function AddUserDialog({
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [attendanceShifts, setAttendanceShifts] = useState<
+    Array<{ id: number; title: string; start_time: string; end_time: string; target_type: string; is_default?: boolean; is_active?: boolean }>
+  >([]);
   const tabScrollerRef = useRef<HTMLDivElement | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [tabScrollHints, setTabScrollHints] = useState({ left: false, right: false });
   const isEdit = mode === "edit";
   const canCreateUsers = hasPermission(currentUser, createPermission);
+
+  useEffect(() => {
+    if (!actualOpen || !accessToken) return;
+    let isCancelled = false;
+
+    const loadAttendanceSetups = async () => {
+      try {
+        const instId =
+          effectivePreferredInstitution?.id ||
+          user?.institutions?.[0]?.id ||
+          form.under_institution_id;
+        const params = new URLSearchParams();
+        if (instId) params.set("institution_id", String(instId));
+        params.set("target_type", "STAFF");
+
+        const res = await fetch(
+          `/api/admin/master-data/attendance-setup?${params.toString()}`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!isCancelled && Array.isArray(json.data)) {
+          setAttendanceShifts(json.data.filter((item: any) => item.target_type === "STAFF"));
+        }
+      } catch {
+        // silent fallback to standard shifts
+      }
+    };
+
+    loadAttendanceSetups();
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    actualOpen,
+    accessToken,
+    preferredInstitution?.id,
+    user?.institutions,
+    form.under_institution_id,
+  ]);
+
+  const computedShiftOptions = useMemo(() => {
+    const defaultShifts = [
+      "09:00 AM - 05:00 PM (General Shift)",
+      "08:00 AM - 02:00 PM (Morning Shift)",
+      "10:00 AM - 06:00 PM (Regular Day Shift)",
+      "02:00 PM - 08:00 PM (Evening Shift)",
+      "08:00 PM - 06:00 AM (Night Shift)",
+    ];
+
+    const activeSetups = attendanceShifts.filter(
+      (s) => s.is_active !== false && s.target_type === "STAFF"
+    );
+
+    if (!activeSetups.length) {
+      return defaultShifts.map((val) => ({
+        value: val,
+        label: val,
+        isFromSetup: false,
+        title: "",
+      }));
+    }
+
+    const seenValues = new Set<string>();
+    const uniqueFromSetups: Array<{
+      value: string;
+      label: string;
+      isFromSetup: boolean;
+      title: string;
+    }> = [];
+
+    for (const s of activeSetups) {
+      const formatted = formatShiftSetupLabel(s);
+      if (!seenValues.has(formatted)) {
+        seenValues.add(formatted);
+        uniqueFromSetups.push({
+          value: formatted,
+          label: formatted,
+          isFromSetup: true,
+          title: s.title,
+        });
+      }
+    }
+
+    const merged = [...uniqueFromSetups];
+    for (const d of defaultShifts) {
+      if (!seenValues.has(d)) {
+        seenValues.add(d);
+        merged.push({ value: d, label: d, isFromSetup: false, title: "" });
+      }
+    }
+    return merged;
+  }, [attendanceShifts]);
+
+  const isStaffContext =
+    entityLabel?.toLowerCase().includes("staff") ||
+    entityLabel?.toLowerCase().includes("employee") ||
+    entityLabel?.toLowerCase().includes("teacher") ||
+    entityLabel?.toLowerCase().includes("faculty") ||
+    createLabel?.toLowerCase().includes("staff");
+
+  const availableRoles = useMemo(() => {
+    return roles.filter((role) => {
+      const code = (role.code || "").toLowerCase();
+      const name = (role.name || "").toLowerCase();
+
+      if (isStaffContext) {
+        // Exclude Student, Parent / Guardian, Tutor, Guest, Vendor, Platform Admin from Staff Role dropdown
+        if (
+          code === "student" ||
+          name.includes("student") ||
+          code === "parent" ||
+          code === "guardian" ||
+          name.includes("parent") ||
+          name.includes("guardian") ||
+          code === "tutor" ||
+          name.includes("tutor") ||
+          code === "guest" ||
+          name.includes("guest") ||
+          code === "vendor" ||
+          name.includes("vendor") ||
+          code === "platform_admin" ||
+          name.includes("platform admin")
+        ) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [roles, isStaffContext]);
+
   const selectedRole = useMemo(
     () => roles.find((role) => String(role.id) === form.role_id),
     [roles, form.role_id]
@@ -206,7 +375,7 @@ export function AddUserDialog({
     currentUser?.roles?.includes("Platform Admin")
   );
   const lockInstitutionToPreferred = Boolean(
-    preferredInstitution &&
+    effectivePreferredInstitution &&
     selectedRoleIsInstitutionScoped &&
     !currentUserIsPlatformAdmin
   );
@@ -332,20 +501,20 @@ function getRoleDisplay(role: RoleOption) {
   }, [accessToken, actualOpen, editUserId, form.email, isEdit]);
 
   const applyPreferredInstitution = useCallback((nextForm: AddUserForm) => {
-    if (!preferredInstitution || currentUserIsPlatformAdmin) return nextForm;
+    if (!effectivePreferredInstitution || currentUserIsPlatformAdmin) return nextForm;
 
     const role = roles.find((item) => String(item.id) === nextForm.role_id);
     if (role?.scope_code !== "institution") return nextForm;
 
-    const institutionId = String(preferredInstitution.id);
+    const institutionId = String(effectivePreferredInstitution.id);
 
     return {
       ...nextForm,
       under_institution_id: institutionId,
-      under_institution_name: preferredInstitution.name,
+      under_institution_name: effectivePreferredInstitution.name,
       institution_ids: [institutionId],
     };
-  }, [currentUserIsPlatformAdmin, preferredInstitution, roles]);
+  }, [currentUserIsPlatformAdmin, effectivePreferredInstitution, roles]);
 
   const updateTabScrollHints = useCallback(() => {
     const scroller = tabScrollerRef.current;
@@ -411,9 +580,9 @@ function getRoleDisplay(role: RoleOption) {
       form.teacher_type ||
       form.under_institution_id ||
       form.under_institution_name ||
-      form.institution_ids.length > 0 ||
-      form.teaching_categories.length > 0 ||
-      form.teaching_subjects.length > 0
+      (form.institution_ids?.length ?? 0) > 0 ||
+      (form.teaching_categories?.length ?? 0) > 0 ||
+      (form.teaching_subjects?.length ?? 0) > 0
     ) {
       const timeout = window.setTimeout(() => {
         setForm((prev) => ({
@@ -432,11 +601,11 @@ function getRoleDisplay(role: RoleOption) {
     }
   }, [
     form.teacher_type,
-    form.teaching_categories.length,
-    form.teaching_subjects.length,
+    form.teaching_categories?.length,
+    form.teaching_subjects?.length,
     form.under_institution_id,
     form.under_institution_name,
-    form.institution_ids.length,
+    form.institution_ids?.length,
     showAccountInstitution,
     selectedRoleIsTeacher,
   ]);
@@ -782,7 +951,7 @@ function getRoleDisplay(role: RoleOption) {
     if (form.under_institution_id && !selectedInstitutionBoardId) {
       const timeout = window.setTimeout(() => {
         setForm((prev) =>
-          prev.teaching_subjects.length === 0
+          (prev.teaching_subjects?.length ?? 0) === 0
             ? prev
             : { ...prev, teaching_subjects: [] }
         );
@@ -794,7 +963,7 @@ function getRoleDisplay(role: RoleOption) {
     if (selectedCategoryIds.length === 0) {
       const timeout = window.setTimeout(() => {
         setForm((prev) =>
-          prev.teaching_subjects.length === 0
+          (prev.teaching_subjects?.length ?? 0) === 0
             ? prev
             : { ...prev, teaching_subjects: [] }
         );
@@ -854,8 +1023,9 @@ function getRoleDisplay(role: RoleOption) {
         });
 
         setForm((prev) => {
-          const nextSubjects = prev.teaching_subjects.filter((subjectId) => nextAllowed.has(subjectId));
-          if (nextSubjects.length === prev.teaching_subjects.length) {
+          const currentSubjects = prev.teaching_subjects || [];
+          const nextSubjects = currentSubjects.filter((subjectId) => nextAllowed.has(subjectId));
+          if (nextSubjects.length === currentSubjects.length) {
             return prev;
           }
 
@@ -1127,30 +1297,13 @@ function getRoleDisplay(role: RoleOption) {
 
   const buildPayload = () => {
     const compactExperiences = form.experiences.filter((experience) =>
-      hasAnyValue([
-        experience.job_title,
-        experience.company_name,
-        experience.from_month,
-        experience.from_year,
-        experience.to_month,
-        experience.to_year,
-      ])
+      Boolean(safeTrim(experience.job_title) || safeTrim(experience.company_name))
     );
     const compactEducation = form.education.filter((education) =>
-      hasAnyValue([
-        education.qualification,
-        education.institution_id,
-        education.institution_name,
-        education.from_year,
-        education.to_year,
-      ])
+      Boolean(safeTrim(education.qualification) || safeTrim(education.institution_name))
     );
     const compactCertifications = form.certifications.filter((certification) =>
-      hasAnyValue([
-        certification.name,
-        certification.issued_authority,
-        certification.duration,
-      ])
+      Boolean(safeTrim(certification.name))
     );
     const selectedInstitutionIds = showInstitutionMultiSelect
       ? form.institution_ids
@@ -1432,8 +1585,9 @@ function getRoleDisplay(role: RoleOption) {
   };
 
   const selectedRoleIsStudent =
-    selectedRole?.code === "student" ||
-    (selectedRole?.name ?? "").toLowerCase().includes("student");
+    !isStaffContext &&
+    (selectedRole?.code === "student" ||
+      (selectedRole?.name ?? "").toLowerCase().includes("student"));
 
   if (selectedRoleIsStudent && actualOpen) {
     return (
@@ -1463,13 +1617,16 @@ function getRoleDisplay(role: RoleOption) {
         setDialogOpen(nextOpen);
         if (nextOpen) {
           const defaultRole =
-            roles.find((role) => role.name.toLowerCase() === "viewer") ??
-            roles[0];
+            availableRoles.find((role) => role.code === "teacher" || role.name.toLowerCase().includes("teacher")) ??
+            availableRoles[0];
 
-          setForm((prev) => ({
-            ...prev,
-            role_id: prev.role_id || (defaultRole ? String(defaultRole.id) : ""),
-          }));
+          setForm((prev) => {
+            const isInvalidStaffRole = isStaffContext && availableRoles.length > 0 && !availableRoles.some((r) => String(r.id) === prev.role_id);
+            return {
+              ...prev,
+              role_id: (!prev.role_id || isInvalidStaffRole) && defaultRole ? String(defaultRole.id) : prev.role_id,
+            };
+          });
           return;
         }
 
@@ -1668,21 +1825,17 @@ function getRoleDisplay(role: RoleOption) {
                     </Label>
                     <Select
                       value={
-                        [
-                          "09:00 AM - 05:00 PM (General Shift)",
-                          "08:00 AM - 02:00 PM (Morning Shift)",
-                          "10:00 AM - 06:00 PM (Regular Day Shift)",
-                          "02:00 PM - 08:00 PM (Evening Shift)",
-                          "08:00 PM - 06:00 AM (Night Shift)",
-                        ].includes(form.shift_timing || "")
+                        computedShiftOptions.some((opt) => opt.value === form.shift_timing)
                           ? form.shift_timing
                           : form.shift_timing
                           ? "custom"
-                          : "09:00 AM - 05:00 PM (General Shift)"
+                          : (computedShiftOptions[0]?.value || "09:00 AM - 05:00 PM (General Shift)")
                       }
                       onValueChange={(val) => {
                         if (val !== "custom") {
                           updateForm("shift_timing", val);
+                        } else {
+                          updateForm("shift_timing", "custom");
                         }
                       }}
                     >
@@ -1690,11 +1843,16 @@ function getRoleDisplay(role: RoleOption) {
                         <SelectValue placeholder="Select shift timing" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="09:00 AM - 05:00 PM (General Shift)">09:00 AM - 05:00 PM (General Shift)</SelectItem>
-                        <SelectItem value="08:00 AM - 02:00 PM (Morning Shift)">08:00 AM - 02:00 PM (Morning Shift)</SelectItem>
-                        <SelectItem value="10:00 AM - 06:00 PM (Regular Day Shift)">10:00 AM - 06:00 PM (Day Shift)</SelectItem>
-                        <SelectItem value="02:00 PM - 08:00 PM (Evening Shift)">02:00 PM - 08:00 PM (Evening Shift)</SelectItem>
-                        <SelectItem value="08:00 PM - 06:00 AM (Night Shift)">08:00 PM - 06:00 AM (Night Shift)</SelectItem>
+                        {attendanceShifts.length > 0 && (
+                          <div className="px-2 py-1 text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+                            Institution Attendance Shifts
+                          </div>
+                        )}
+                        {computedShiftOptions.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
                         <SelectItem value="custom">✍️ Custom Timing...</SelectItem>
                       </SelectContent>
                     </Select>
@@ -1722,13 +1880,7 @@ function getRoleDisplay(role: RoleOption) {
                   </div>
                 </div>
 
-                {(![
-                  "09:00 AM - 05:00 PM (General Shift)",
-                  "08:00 AM - 02:00 PM (Morning Shift)",
-                  "10:00 AM - 06:00 PM (Regular Day Shift)",
-                  "02:00 PM - 08:00 PM (Evening Shift)",
-                  "08:00 PM - 06:00 AM (Night Shift)",
-                ].includes(form.shift_timing || "") || form.shift_timing === "custom") && (
+                {(!computedShiftOptions.some((opt) => opt.value === form.shift_timing) || form.shift_timing === "custom") && (
                   <div className="pt-1">
                     <Input
                       placeholder="Enter custom shift timing (e.g. 07:30 AM - 01:30 PM / Rotational)"
@@ -1859,7 +2011,7 @@ function getRoleDisplay(role: RoleOption) {
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
                   <SelectContent>
-                    {roles.map((role) => {
+                    {availableRoles.map((role) => {
                       const display = getRoleDisplay(role);
                       return (
                         <SelectItem key={role.id} value={String(role.id)}>

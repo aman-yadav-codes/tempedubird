@@ -51,6 +51,9 @@ export async function PATCH(
       categoryId: body.categoryId,
       boardId: body.boardId,
       courseId: body.courseId !== undefined ? (body.courseId ? Number(body.courseId) : null) : (body.course_id !== undefined ? (body.course_id ? Number(body.course_id) : null) : undefined),
+      termType: body.termType || body.term_type,
+      termNumber: body.termNumber !== undefined ? Number(body.termNumber) : (body.term_number !== undefined ? Number(body.term_number) : undefined),
+      termName: body.termName || body.term_name,
       is_active: body.is_active ?? body.isActive,
     });
 

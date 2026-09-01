@@ -20,19 +20,19 @@ import { useActiveInstitution } from "@/hooks/use-active-institution";
 const INSTITUTION_SCOPED_ADMIN_API_PREFIXES = [
   "/api/admin/users",
   "/api/admin/students",
-  "/api/admin/master-data/syllabi",
-  "/api/admin/master-data/card-templates",
-  "/api/admin/master-data/assignments",
-  "/api/admin/master-data/exams",
-  "/api/admin/master-data/practice-exams",
-  "/api/admin/master-data/institute-calendar",
-  "/api/admin/classroom/my-timetable",
-  "/api/admin/institutions/programs",
-  "/api/admin/institutions/placements",
-  "/api/admin/institutions/cutoffs",
-  "/api/admin/institutions/scholarships",
-  "/api/admin/institutions/news",
-  "/api/admin/institutions/academic-years",
+  "/api/admin/staff",
+  "/api/admin/team",
+  "/api/admin/vendors",
+  "/api/admin/inventory",
+  "/api/admin/finance",
+  "/api/admin/sales",
+  "/api/admin/marketing",
+  "/api/admin/attendance",
+  "/api/admin/operations",
+  "/api/admin/company",
+  "/api/admin/master-data",
+  "/api/admin/classroom",
+  "/api/admin/institutions",
   "/api/admin/timetable",
 ];
 
@@ -68,7 +68,7 @@ function getRequestUrl(input: RequestInfo | URL) {
 }
 
 function shouldScopeInstitution(url: URL) {
-  if (url.searchParams.has("institutionId")) return false;
+  if (url.searchParams.has("institutionId") || url.searchParams.has("institution_id")) return false;
   if (
     (url.pathname === "/api/admin/master-data/syllabi" ||
       url.pathname === "/api/admin/master-data/assignments" ||
@@ -76,6 +76,9 @@ function shouldScopeInstitution(url: URL) {
       url.pathname === "/api/admin/master-data/practice-exams") &&
     url.searchParams.get("view") === "marketplace"
   ) {
+    return false;
+  }
+  if (url.pathname === "/api/admin/institutions/options") {
     return false;
   }
   return INSTITUTION_SCOPED_ADMIN_API_PREFIXES.some((prefix) =>
@@ -132,6 +135,27 @@ export function AdminFetchScope() {
       if (method === "GET" && academicYearId && shouldScopeAcademicYear(url)) {
         url.searchParams.set("academicYearId", String(academicYearId));
         nextInput = toScopedInput(nextInput, url);
+      }
+
+      const isMarketplace = url.searchParams.get("view") === "marketplace";
+      const isAdminApi = url.pathname.startsWith("/api/admin/") && url.pathname !== "/api/admin/institutions/options";
+
+      if (isAdminApi && !isMarketplace && activeInstitutionId) {
+        const headers = new Headers(nextInput instanceof Request ? nextInput.headers : undefined);
+        new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
+        if (!headers.has("x-institution-id")) {
+          headers.set("x-institution-id", String(activeInstitutionId));
+        }
+
+        const enrollmentId = getStoredActiveStudentEnrollmentId();
+        if (
+          enrollmentId &&
+          url.pathname !== "/api/admin/student/enrollments" &&
+          url.pathname !== "/api/admin/notifications"
+        ) {
+          headers.set(ACTIVE_STUDENT_ENROLLMENT_HEADER, String(enrollmentId));
+        }
+        return originalFetch(nextInput, { ...init, headers });
       }
 
       const enrollmentId = getStoredActiveStudentEnrollmentId();

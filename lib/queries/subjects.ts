@@ -32,9 +32,26 @@ export async function ensureSubjectsSchemaAndDeduplicate(db: Pool) {
       ALTER TABLE subjects ADD COLUMN IF NOT EXISTS course_id INT;
       ALTER TABLE subjects ADD COLUMN IF NOT EXISTS code VARCHAR(100);
       ALTER TABLE subjects ADD COLUMN IF NOT EXISTS icon_url VARCHAR(500);
+      ALTER TABLE subjects ADD COLUMN IF NOT EXISTS term_type VARCHAR(50) DEFAULT 'full_course';
+      ALTER TABLE subjects ADD COLUMN IF NOT EXISTS term_number INT DEFAULT 1;
+      ALTER TABLE subjects ADD COLUMN IF NOT EXISTS term_name VARCHAR(100);
       ALTER TABLE subjects ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
       ALTER TABLE subjects ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
       ALTER TABLE subjects ADD COLUMN IF NOT EXISTS deleted_by INT;
+
+      CREATE TABLE IF NOT EXISTS master_course_subjects (
+        course_id INT NOT NULL,
+        subject_id INT NOT NULL,
+        term_type VARCHAR(50) DEFAULT 'full_course',
+        term_number INT DEFAULT 1,
+        term_name VARCHAR(100),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (course_id, subject_id)
+      );
+
+      ALTER TABLE master_course_subjects ADD COLUMN IF NOT EXISTS term_type VARCHAR(50) DEFAULT 'full_course';
+      ALTER TABLE master_course_subjects ADD COLUMN IF NOT EXISTS term_number INT DEFAULT 1;
+      ALTER TABLE master_course_subjects ADD COLUMN IF NOT EXISTS term_name VARCHAR(100);
 
       CREATE INDEX IF NOT EXISTS idx_subjects_name ON subjects (name);
       CREATE INDEX IF NOT EXISTS idx_subjects_slug ON subjects (slug);
@@ -170,6 +187,9 @@ export async function listSubjects(
           mc.authority_type,
           COALESCE(mc.university_name, u.name) AS university_name,
           cp.name AS certification_provider_name,
+          COALESCE(s.term_type, 'full_course') AS term_type,
+          COALESCE(s.term_number, 1) AS term_number,
+          COALESCE(s.term_name, '') AS term_name,
           s.name,
           s.slug,
           s.code,
@@ -214,6 +234,9 @@ export async function createSubject(
   await ensureSubjectsSchemaAndDeduplicate(db);
 
   const cleanName = data.name.trim();
+  const termType = data.termType || data.term_type || "full_course";
+  const termNumber = data.termNumber || data.term_number || 1;
+  const termName = data.termName || data.term_name || null;
 
   // Duplicate Check by normalized name
   const existing = await db.query(
@@ -223,13 +246,30 @@ export async function createSubject(
 
   if (existing.rows.length > 0) {
     const existingSubject = existing.rows[0];
-    if (data.courseId) {
-      await db.query(
-        `INSERT INTO master_course_subjects (course_id, subject_id)
-         VALUES ($1, $2)
-         ON CONFLICT DO NOTHING`,
-        [data.courseId, existingSubject.id]
-      );
+    if (data.courseId || data.categoryId) {
+      if (data.courseId) {
+        await db.query(
+          `INSERT INTO master_course_subjects (course_id, subject_id, term_type, term_number, term_name)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (course_id, subject_id) DO UPDATE
+           SET term_type = EXCLUDED.term_type,
+               term_number = EXCLUDED.term_number,
+               term_name = EXCLUDED.term_name`,
+          [data.courseId, existingSubject.id, termType, termNumber, termName]
+        );
+      }
+      if (data.categoryId) {
+        await db.query(
+          `UPDATE subjects 
+           SET category_id = COALESCE(category_id, $1), 
+               course_id = COALESCE(course_id, $2),
+               term_type = COALESCE(term_type, $3),
+               term_number = COALESCE(term_number, $4),
+               term_name = COALESCE(term_name, $5)
+           WHERE id = $6`,
+          [data.categoryId, data.courseId ?? null, termType, termNumber, termName, existingSubject.id]
+        );
+      }
       return (await getSubjectById(db, existingSubject.id)) || (existingSubject as Subject);
     }
     const error: any = new Error(`A subject named "${existingSubject.name}" already exists`);
@@ -239,18 +279,21 @@ export async function createSubject(
 
   const res = await db.query(
     `
-      INSERT INTO subjects (category_id, board_id, course_id, name, slug, code, icon_url, is_active)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING id, category_id, board_id, course_id, name, slug, code, icon_url, is_active, is_deleted, created_at, updated_at
+      INSERT INTO subjects (category_id, board_id, course_id, term_type, term_number, term_name, name, slug, code, icon_url, is_active)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING id, category_id, board_id, course_id, term_type, term_number, term_name, name, slug, code, icon_url, is_active, is_deleted, created_at, updated_at
     `,
     [
       data.categoryId ?? null,
       data.boardId ?? null,
       data.courseId ?? null,
+      termType,
+      termNumber,
+      termName,
       cleanName,
       data.slug.trim(),
       data.code?.trim() || null,
-      data.icon_url?.trim() || null,
+      data.icon_url?.trim() || "/icons/default-subject.svg",
       data.is_active !== undefined ? data.is_active : true,
     ]
   );
@@ -259,10 +302,13 @@ export async function createSubject(
 
   if (data.courseId) {
     await db.query(
-      `INSERT INTO master_course_subjects (course_id, subject_id)
-       VALUES ($1, $2)
-       ON CONFLICT DO NOTHING`,
-      [data.courseId, createdSubject.id]
+      `INSERT INTO master_course_subjects (course_id, subject_id, term_type, term_number, term_name)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (course_id, subject_id) DO UPDATE
+       SET term_type = EXCLUDED.term_type,
+           term_number = EXCLUDED.term_number,
+           term_name = EXCLUDED.term_name`,
+      [data.courseId, createdSubject.id, termType, termNumber, termName]
     );
   }
 
@@ -288,6 +334,9 @@ export async function getSubjectById(
         mc.authority_type,
         COALESCE(mc.university_name, u.name) AS university_name,
         cp.name AS certification_provider_name,
+        COALESCE(s.term_type, 'full_course') AS term_type,
+        COALESCE(s.term_number, 1) AS term_number,
+        COALESCE(s.term_name, '') AS term_name,
         s.name,
         s.slug,
         s.code,
@@ -362,6 +411,18 @@ export async function updateSubject(
     values.push(data.courseId);
     fields.push(`course_id = $${values.length}`);
   }
+  if (data.termType !== undefined || data.term_type !== undefined) {
+    values.push(data.termType || data.term_type || "full_course");
+    fields.push(`term_type = $${values.length}`);
+  }
+  if (data.termNumber !== undefined || data.term_number !== undefined) {
+    values.push(data.termNumber || data.term_number || 1);
+    fields.push(`term_number = $${values.length}`);
+  }
+  if (data.termName !== undefined || data.term_name !== undefined) {
+    values.push(data.termName || data.term_name || null);
+    fields.push(`term_name = $${values.length}`);
+  }
   if (data.is_active !== undefined) {
     values.push(data.is_active);
     fields.push(`is_active = $${values.length}`);
@@ -378,15 +439,19 @@ export async function updateSubject(
 
   await db.query(query, values);
 
-  if (data.courseId !== undefined) {
-    if (data.courseId) {
-      await db.query(
-        `INSERT INTO master_course_subjects (course_id, subject_id)
-         VALUES ($1, $2)
-         ON CONFLICT DO NOTHING`,
-        [data.courseId, subjectId]
-      );
-    }
+  if (data.courseId !== undefined && data.courseId) {
+    const termType = data.termType || data.term_type || "full_course";
+    const termNumber = data.termNumber || data.term_number || 1;
+    const termName = data.termName || data.term_name || null;
+    await db.query(
+      `INSERT INTO master_course_subjects (course_id, subject_id, term_type, term_number, term_name)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (course_id, subject_id) DO UPDATE
+       SET term_type = EXCLUDED.term_type,
+           term_number = EXCLUDED.term_number,
+           term_name = EXCLUDED.term_name`,
+      [data.courseId, subjectId, termType, termNumber, termName]
+    );
   }
 
   return await getSubjectById(db, subjectId);

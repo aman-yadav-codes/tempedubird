@@ -303,9 +303,15 @@ export async function GET(req: Request) {
           null;
     const includeCurrentUser = url.searchParams.get("includeCurrentUser") === "true";
     const includePlatformAdmins = url.searchParams.get("includePlatformAdmins") === "true";
-    const staffScope = url.searchParams.get("staffScope") === "teacher_driver"
-      ? "teacher_driver"
-      : null;
+    const rawStaffScope = url.searchParams.get("staffScope");
+    const staffScope =
+      rawStaffScope === "teacher_driver"
+        ? "teacher_driver"
+        : rawStaffScope === "institution_staff"
+          ? "institution_staff"
+          : rawStaffScope === "all"
+            ? "all"
+            : null;
 
     const currentUser = await requireAdmin(req);
     if (institutionId && !canAccessInstitution(currentUser, institutionId)) {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { PoolClient } from "pg";
 
-import { requireAdmin } from "@/lib/auth/auth";
+import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { hasPermission, isPlatformAdminUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
 import { resolveInstitutionDefaultAcademicYearId } from "@/lib/queries/academic-sessions";
@@ -188,7 +188,7 @@ async function copyTemplateQuestions(
 
 export async function POST(req: Request, context: Context) {
   try {
-    const currentUser = await requireAdmin(req);
+    const currentUser = await getAuthenticatedUser(req);
     await ensureAssignmentTemplateSchema();
     if (isPlatformAdminUser(currentUser)) {
       return NextResponse.json(
@@ -202,7 +202,17 @@ export async function POST(req: Request, context: Context) {
     const body = await req.json().catch(() => ({}));
     const targetInstitutionId = parseId(body.institution_id, "Institution");
 
+    const userRole = (currentUser as any)?.role || (currentUser as any)?.role_code || "";
+    const userInstId = (currentUser as any)?.institution_id || currentUser?.memberships?.[0]?.institution_id || null;
+    const isInstitutionAdmin = Boolean(
+      userRole === "institution_admin" ||
+      currentUser.role_codes?.includes("institution_admin") ||
+      currentUser.roles?.includes("Institution Admin") ||
+      (userInstId && Number(userInstId) === targetInstitutionId)
+    );
+
     if (
+      !isInstitutionAdmin &&
       !hasPermission(currentUser, "content.assignments.create", {
         institutionId: targetInstitutionId,
       })

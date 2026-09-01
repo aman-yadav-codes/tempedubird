@@ -173,7 +173,7 @@ export function ProgramSyllabusManager({
         const query = searchTerm.trim();
         const searchParam = query ? `&search=${encodeURIComponent(query)}` : "";
         const res = await fetch(
-          `/api/admin/master-data/syllabi?view=marketplace&limit=100${searchParam}`,
+          `/api/admin/master-data/syllabi?limit=150${searchParam}`,
           { headers: authHeader }
         );
         let data: any[] = [];
@@ -182,7 +182,6 @@ export function ProgramSyllabusManager({
           data = json.data || [];
         }
 
-        // If specific search is given, filter matching title/subject/category
         if (query && data.length > 0) {
           const q = query.toLowerCase();
           data = data.filter((item: any) => {
@@ -202,6 +201,87 @@ export function ProgramSyllabusManager({
     },
     [authHeader, categoryName, getCleanClassName]
   );
+
+  // Auto-fetch syllabus configured by platform admin for this program & subject basis
+  const autoFetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (subjectOptions.length === 0 || autoFetchedRef.current) return;
+
+    const existingSubjectIds = new Set(
+      syllabusNodes.map((n) => String(n.subject_id)).filter(Boolean)
+    );
+    const existingSubjectNames = new Set(
+      syllabusNodes.map((n) => (n.subject_name || "").toLowerCase().trim()).filter(Boolean)
+    );
+
+    const hasMissing = subjectOptions.some(
+      (s) => !existingSubjectIds.has(String(s.id)) && !existingSubjectNames.has(s.label.toLowerCase().trim())
+    );
+
+    if (!hasMissing && syllabusNodes.length > 0) return;
+
+    autoFetchedRef.current = true;
+    setLoading(true);
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/admin/master-data/syllabi?limit=150`, {
+          headers: authHeader,
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        const templates = json.data || [];
+
+        let fetchedNodes: EditableSyllabusTopic[] = [];
+
+        for (const subj of subjectOptions) {
+          const subjIdStr = String(subj.id || subj.value);
+          const subjNameLower = subj.label.toLowerCase().trim();
+
+          const alreadyHasNodes = syllabusNodes.some((n) => {
+            const nSubjId = String(n.subject_id || "");
+            const nSubjName = (n.subject_name || "").toLowerCase().trim();
+            return nSubjId === subjIdStr || nSubjName === subjNameLower;
+          });
+
+          if (alreadyHasNodes) continue;
+
+          // Match by subject_id or subject_name from master syllabi
+          const matchedTpl = templates.find((t: any) => {
+            const tSubjId = String(t.subject_id || "");
+            const tSubjName = (t.subject_name || t.title || "").toLowerCase().trim();
+            return tSubjId === subjIdStr || tSubjName === subjNameLower || tSubjName.includes(subjNameLower) || subjNameLower.includes(tSubjName);
+          });
+
+          if (matchedTpl) {
+            const treeRes = await fetch(`/api/admin/master-data/syllabi/${matchedTpl.id}/tree`, {
+              headers: authHeader,
+            });
+            if (treeRes.ok) {
+              const treeJson = await treeRes.json();
+              const nodes = treeJson.data || [];
+              if (nodes.length > 0) {
+                const mapped = nodes.map((n: any) =>
+                  mapApiNodeToEditable(n, subj.id || subj.value, subj.label, `tpl-${matchedTpl.id}`, 0)
+                );
+                fetchedNodes = [...fetchedNodes, ...mapped];
+              }
+            }
+          }
+        }
+
+        if (fetchedNodes.length > 0) {
+          onSyllabusNodesChange([...syllabusNodes, ...fetchedNodes]);
+          setTemplateSource("Platform Master Syllabus");
+        }
+      } catch (err) {
+        console.error("Auto-fetch master syllabus error:", err);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [subjectOptions, syllabusNodes, authHeader, onSyllabusNodesChange]);
 
   const handleOpenMarketplaceModal = () => {
     setMarketplaceModalOpen(true);
@@ -831,29 +911,6 @@ export function ProgramSyllabusManager({
                 </Badge>
               )}
             </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button
-                type="button"
-                onClick={handleOpenAddModule}
-                size="sm"
-                className="text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 h-8 shadow-2xs gap-1.5"
-              >
-                <FolderPlus className="h-3.5 w-3.5" />
-                Add Manually
-              </Button>
-
-              <Button
-                type="button"
-                onClick={handleOpenMarketplaceModal}
-                size="sm"
-                variant="outline"
-                className="text-xs font-bold border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 h-8 gap-1.5 shadow-2xs"
-              >
-                <Sparkles className="h-3.5 w-3.5 text-primary" />
-                Import from Marketplace
-              </Button>
-            </div>
           </div>
 
           <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs no-scrollbar">
@@ -938,34 +995,13 @@ export function ProgramSyllabusManager({
                 {displayedNodes.length} {displayedNodes.length === 1 ? "Module" : "Modules"}
               </Badge>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleOpenAddModule}
-                className="h-7 text-xs font-bold bg-primary text-primary-foreground gap-1 shadow-2xs"
-              >
-                <FolderPlus className="h-3 w-3" />
-                Add Manually
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={handleOpenMarketplaceModal}
-                className="h-7 text-xs font-bold border-primary/40 text-primary hover:bg-primary/10 gap-1 shadow-2xs"
-              >
-                <Sparkles className="h-3 w-3 text-primary" />
-                Import from Marketplace
-              </Button>
-            </div>
           </div>
         )}
 
         {loading ? (
           <div className="py-12 flex flex-col items-center justify-center gap-3 border rounded-2xl bg-muted/10 border-dashed">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm font-semibold text-muted-foreground">Fetching curriculum from database...</p>
+            <p className="text-sm font-semibold text-muted-foreground">Fetching platform master syllabus from database...</p>
           </div>
         ) : displayedNodes.length > 0 ? (
           displayedNodes.map((unit, unitIdx) => (
@@ -1003,24 +1039,6 @@ export function ProgramSyllabusManager({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
-                    onClick={() => handleOpenAddChapter(unit.id)}
-                    className="h-7 text-xs font-bold text-primary hover:bg-primary/10"
-                  >
-                    <Plus className="h-3 w-3 mr-1" /> Add Chapter
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleOpenAddTopic(unit.id)}
-                    className="h-7 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted"
-                  >
-                    <Plus className="h-3 w-3 mr-1" /> Add Topic
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
                     size="icon"
                     onClick={() => handleOpenEdit(unit, null)}
                     className="h-7 w-7 text-muted-foreground hover:text-foreground"
@@ -1051,23 +1069,16 @@ export function ProgramSyllabusManager({
                       return (
                         <div
                           key={child.id}
-                          className="border border-border/70 rounded-xl bg-muted/15 overflow-hidden transition-all"
+                          className="border border-border/70 rounded-xl bg-background overflow-hidden space-y-0"
                         >
-                          {/* Chapter Header */}
-                          <div className="p-2.5 sm:px-3 bg-muted/30 border-b border-border/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <div className="space-y-0.5">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="secondary" className="text-[9px] font-bold bg-primary/10 text-primary border border-primary/20">
-                                  Chapter {unitIdx + 1}.{chapIdx + 1}
-                                </Badge>
-                                <h5 className="font-bold text-xs text-foreground">{child.title}</h5>
-                              </div>
-                              {child.description && (
-                                <p className="text-[11px] text-muted-foreground pl-1">{child.description}</p>
-                              )}
+                          <div className="p-2.5 bg-muted/20 flex items-center justify-between gap-2 border-b border-border/40">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary" className="text-[9px] font-bold bg-muted text-muted-foreground uppercase">
+                                Chap {chapIdx + 1}
+                              </Badge>
+                              <h5 className="font-bold text-xs text-foreground">{child.title}</h5>
                             </div>
-
-                            <div className="flex items-center gap-1 shrink-0">
+                            <div className="flex items-center gap-1">
                               {child.estimated_hours ? (
                                 <span className="text-[10px] text-muted-foreground font-mono mr-1">
                                   {child.estimated_hours}h
@@ -1078,9 +1089,9 @@ export function ProgramSyllabusManager({
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleOpenAddTopic(unit.id, child.id)}
-                                className="h-6 text-[11px] font-bold text-primary hover:bg-primary/10 px-2"
+                                className="h-6 text-[11px] font-semibold text-primary hover:bg-primary/10 px-1.5"
                               >
-                                <Plus className="h-2.5 w-2.5 mr-1" /> Add Topic
+                                <Plus className="h-2.5 w-2.5 mr-0.5" /> Topic
                               </Button>
                               <Button
                                 type="button"
@@ -1105,18 +1116,17 @@ export function ProgramSyllabusManager({
                             </div>
                           </div>
 
-                          {/* Level 3: Topics under Chapter */}
-                          <div className="p-2 divide-y divide-border/30 bg-background/50">
+                          <div className="p-2 space-y-1.5 bg-muted/5">
                             {child.children && child.children.length > 0 ? (
                               child.children.map((topic, topIdx) => (
                                 <div
                                   key={topic.id}
-                                  className="py-1.5 px-2.5 flex items-start justify-between gap-3 hover:bg-muted/30 rounded-lg transition-colors group"
+                                  className="p-2 rounded-lg bg-card border border-border/50 hover:border-primary/30 flex items-center justify-between gap-2 group transition-all"
                                 >
-                                  <div className="space-y-0.5">
+                                  <div className="space-y-0.5 min-w-0">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-[11px] font-bold text-muted-foreground">
-                                        {unitIdx + 1}.{chapIdx + 1}.{topIdx + 1}
+                                      <span className="text-[9px] font-bold text-muted-foreground shrink-0 font-mono">
+                                        #{chapIdx + 1}.{topIdx + 1}
                                       </span>
                                       <p className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors">
                                         {topic.title}
@@ -1179,21 +1189,21 @@ export function ProgramSyllabusManager({
                     return (
                       <div
                         key={child.id}
-                        className="py-2 px-3 flex items-start justify-between gap-3 hover:bg-muted/20 rounded-xl transition-colors group border border-border/40 bg-card"
+                        className="p-2 rounded-xl bg-background border border-border/60 hover:border-primary/30 flex items-center justify-between gap-2 transition-all"
                       >
-                        <div className="space-y-0.5">
+                        <div className="space-y-0.5 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-muted-foreground">{unitIdx + 1}.{chapIdx + 1}</span>
-                            <p className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors">
-                              {child.title}
-                            </p>
+                            <Badge variant="outline" className="text-[9px] font-bold uppercase bg-muted text-muted-foreground">
+                              Topic {chapIdx + 1}
+                            </Badge>
+                            <span className="text-xs font-semibold text-foreground">{child.title}</span>
                           </div>
                           {child.description && (
-                            <p className="text-[11px] text-muted-foreground pl-5">{child.description}</p>
+                            <p className="text-[11px] text-muted-foreground pl-2">{child.description}</p>
                           )}
                         </div>
 
-                        <div className="flex items-center gap-1.5 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-1 shrink-0">
                           {child.estimated_hours ? (
                             <span className="text-[10px] text-muted-foreground font-mono mr-1">
                               {child.estimated_hours}h
@@ -1205,6 +1215,7 @@ export function ProgramSyllabusManager({
                             size="icon"
                             onClick={() => handleOpenEdit(child, unit.id)}
                             className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                            title="Edit Topic"
                           >
                             <Edit2 className="h-3 w-3" />
                           </Button>
@@ -1214,6 +1225,7 @@ export function ProgramSyllabusManager({
                             size="icon"
                             onClick={() => handleDeleteTopic(unit.id, null, child.id)}
                             className="h-6 w-6 text-destructive hover:bg-destructive/10"
+                            title="Delete Topic"
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
@@ -1224,22 +1236,7 @@ export function ProgramSyllabusManager({
                 ) : (
                   <div className="py-4 text-center border border-dashed rounded-xl bg-muted/10">
                     <p className="text-xs text-muted-foreground">
-                      No chapters or topics added under this Unit yet.{" "}
-                      <button
-                        type="button"
-                        onClick={() => handleOpenAddChapter(unit.id)}
-                        className="text-primary font-bold hover:underline"
-                      >
-                        + Add Chapter
-                      </button>
-                      {" or "}
-                      <button
-                        type="button"
-                        onClick={() => handleOpenAddTopic(unit.id)}
-                        className="text-primary font-bold hover:underline"
-                      >
-                        + Add Topic
-                      </button>
+                      No chapters or topics added under this Unit yet.
                     </p>
                   </div>
                 )}
@@ -1247,38 +1244,17 @@ export function ProgramSyllabusManager({
             </div>
           ))
         ) : (
-          <div className="py-12 px-4 text-center space-y-4 border rounded-2xl bg-card border-dashed">
+          <div className="py-12 px-4 text-center space-y-3 border rounded-2xl bg-card border-dashed">
             <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
               <BookOpen className="h-6 w-6" />
             </div>
             <div className="space-y-1">
               <h4 className="font-extrabold text-foreground text-sm">
-                No Syllabus Modules for {activeSubject?.label || "this subject"}
+                No Syllabus Configured for {activeSubject?.label || "this subject"}
               </h4>
               <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                Add curriculum modules or import accredited syllabus for <strong>{activeSubject?.label || "this subject"}</strong> from the marketplace.
+                No master syllabus has been configured by the platform admin for <strong>{activeSubject?.label || "this subject"}</strong> yet.
               </p>
-            </div>
-            <div className="flex items-center justify-center gap-2.5 pt-2 flex-wrap">
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleOpenAddModule}
-                className="text-xs font-bold bg-primary text-primary-foreground gap-1.5 shadow-xs"
-              >
-                <FolderPlus className="h-3.5 w-3.5" />
-                Add Manually
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={handleOpenMarketplaceModal}
-                className="text-xs font-bold border-primary/30 text-primary hover:bg-primary/10 gap-1.5"
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                Import from Marketplace
-              </Button>
             </div>
           </div>
         )}

@@ -3,10 +3,11 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Building2, CheckCircle2, ChevronRight, MapPin, Star, MessageSquare } from "lucide-react";
+import { Building2, CheckCircle2, ChevronRight, MapPin, Star, MessageSquare, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buildInstituteUrl } from "@/lib/utils/seo-slug";
 import { UniversalFeedbackDialog } from "@/components/public/universal-feedback-dialog";
+import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
 
 export type CourseInstitutionProps = {
   id: number;
@@ -28,6 +29,7 @@ export function CourseInstitutionSidebarCard({
   className?: string;
 }) {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [enquiryOpen, setEnquiryOpen] = useState(false);
   const instituteUrl = buildInstituteUrl(institution.id, institution.name, institution.location || institution.city);
 
   return (
@@ -91,13 +93,11 @@ export function CourseInstitutionSidebarCard({
 
         <Button
           size="sm"
-          className="text-xs font-bold bg-[#d92d20] hover:bg-[#b42318] text-white rounded-xl h-10 gap-1 cursor-pointer shadow-2xs"
-          asChild
+          onClick={() => setEnquiryOpen(true)}
+          className="text-xs font-bold bg-[#d92d20] hover:bg-[#b42318] text-white rounded-xl h-10 gap-1.5 cursor-pointer shadow-2xs"
         >
-          <Link href={instituteUrl}>
-            <span>View Profile</span>
-            <ChevronRight className="h-4 w-4" />
-          </Link>
+          <Send className="h-4 w-4" />
+          <span>Enquiry</span>
         </Button>
       </div>
 
@@ -112,6 +112,18 @@ export function CourseInstitutionSidebarCard({
           subtitle: `${institution.location || institution.city || "India"}`,
           avg_rating: institution.rating || 4.9,
           review_count: institution.reviews_count || 24,
+        }}
+      />
+
+      {/* Course Enquiry Dialog */}
+      <CourseEnquiryDialog
+        open={enquiryOpen}
+        onOpenChange={setEnquiryOpen}
+        course={{
+          id: institution.id,
+          title: institution.name,
+          institute: `${institution.location || institution.city || "India"}`,
+          institution_id: institution.id,
         }}
       />
     </div>

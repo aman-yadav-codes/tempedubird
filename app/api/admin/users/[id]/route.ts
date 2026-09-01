@@ -192,8 +192,17 @@ async function requireTargetUserPermission(req: Request, targetUserId: number) {
       ? targetInstitutionIds.filter((instId) => canAccessInstitution(currentUser, instId))
       : currentInstitutionIds;
 
+  const isInstitutionAdmin = Boolean(
+    currentUser.role_codes?.includes("institution_admin") ||
+    currentUser.role_codes?.includes("school_owner") ||
+    currentUser.role_codes?.includes("college_owner") ||
+    currentUser.role_codes?.includes("university_owner") ||
+    currentUser.roles?.includes("Institution Admin")
+  );
+
   const allowed =
-    candidateInstitutionIds && candidateInstitutionIds.length > 0
+    isInstitutionAdmin ||
+    (candidateInstitutionIds && candidateInstitutionIds.length > 0
       ? (
           await Promise.all(
             candidateInstitutionIds.map(async (institutionId) =>
@@ -210,7 +219,7 @@ async function requireTargetUserPermission(req: Request, targetUserId: number) {
       : hasPermission(currentUser, permission) ||
         hasPermission(currentUser, `managestaff.allstaff.${action}`) ||
         hasPermission(currentUser, `managestaff.allstaff.view`) ||
-        hasPermission(currentUser, `users.allusers.${action}`);
+        hasPermission(currentUser, `users.allusers.${action}`));
 
   if (!allowed) {
     throw new Error("Forbidden: Admin access required");

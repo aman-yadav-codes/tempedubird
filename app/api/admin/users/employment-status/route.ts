@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth/auth";
+import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
-import { canAccessInstitution, getUserInstitutionIds } from "@/lib/auth/institution-scope";
-import { hasPermission, isPlatformAdminUser } from "@/lib/auth/permissions";
+import { isPlatformAdminUser } from "@/lib/auth/permissions";
 
 const VALID_EMPLOYMENT_STATUSES = [
   "ACTIVE",
@@ -16,7 +15,7 @@ const VALID_EMPLOYMENT_STATUSES = [
 
 export async function PATCH(req: Request) {
   try {
-    const currentUser = await requireAdmin(req);
+    const currentUser = await getAuthenticatedUser(req);
     const body = await req.json();
     const userId = Number(body.userId);
     const employmentStatus = String(body.employmentStatus || "").toUpperCase().trim();
@@ -32,25 +31,22 @@ export async function PATCH(req: Request) {
       );
     }
 
-    if (!isPlatformAdminUser(currentUser)) {
-      const targetInstitutionIds = await getUserInstitutionIds(db, userId);
-      const canEdit =
-        targetInstitutionIds.length > 0
-          ? targetInstitutionIds.some(
-              (instId) =>
-                canAccessInstitution(currentUser, instId) &&
-                (hasPermission(currentUser, "managestaff.allstaff.edit", { institutionId: instId }) ||
-                  hasPermission(currentUser, "users.allusers.edit", { institutionId: instId }))
-            )
-          : hasPermission(currentUser, "managestaff.allstaff.edit") ||
-            hasPermission(currentUser, "users.allusers.edit");
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
+    const userRole = (currentUser as any)?.role || (currentUser as any)?.role_code || "";
+    const userInstId = (currentUser as any)?.institution_id || currentUser?.memberships?.[0]?.institution_id || null;
+    const isInstitutionAdmin = Boolean(
+      userRole === "institution_admin" ||
+      currentUser.role_codes?.includes("institution_admin") ||
+      currentUser.roles?.includes("Institution Admin") ||
+      currentUser.role_codes?.includes("admin") ||
+      Boolean(userInstId)
+    );
 
-      if (!canEdit) {
-        return NextResponse.json(
-          { error: "You don't have permission to update employment status for this user." },
-          { status: 403 }
-        );
-      }
+    if (!isPlatformAdmin && !isInstitutionAdmin) {
+      return NextResponse.json(
+        { error: "You don't have permission to update employment status for this user." },
+        { status: 403 }
+      );
     }
 
     await db.query(

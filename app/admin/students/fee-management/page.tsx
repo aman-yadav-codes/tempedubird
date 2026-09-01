@@ -7,26 +7,34 @@ import {
   ArrowUpDown,
   CalendarDays,
   CalendarCheck,
+  Check,
   CheckCircle2,
+  Copy,
   CreditCard,
   FileText,
   GraduationCap,
   Hash,
   IdCard,
   IndianRupee,
+  Landmark,
   Loader2,
   Mail,
   MapPin,
   Phone,
   QrCode,
+  Receipt,
   RefreshCw,
+  Smartphone,
   Sparkles,
+  TrendingUp,
   UserRound,
   UsersRound,
   WalletCards,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+
+import type { FinancePaymentMethodRow } from "@/lib/queries/finance";
 
 import { CardTemplateTryout } from "@/components/card-templates/card-template-tryout";
 import {
@@ -217,6 +225,43 @@ type PaymentRequest = {
   search_text?: string;
 };
 
+type FeeTransaction = {
+  id: number;
+  student_user_id: number;
+  student_profile_id: number;
+  enrollment_id: number;
+  institution_id: number;
+  academic_year_id: number | null;
+  period_indexes: number[] | string | null;
+  period_labels: FeePeriod[] | string | null;
+  payment_method: string | null;
+  subtotal_amount: string | number | null;
+  discount_percent: string | number | null;
+  discount_amount: string | number | null;
+  total_amount: string | number | null;
+  transaction_id: string | null;
+  screenshot_url: string | null;
+  screenshot_public_id: string | null;
+  screenshot_resource_type: string | null;
+  remarks: string | null;
+  status: string | null;
+  received_at: string | null;
+  verified_at: string | null;
+  created_at: string | null;
+  student_name: string | null;
+  student_email: string | null;
+  student_phone: string | null;
+  admission_number: string | null;
+  roll_number: string | null;
+  institution_name: string | null;
+  program_name: string | null;
+  academic_year_name: string | null;
+  class_category_name: string | null;
+  section_name: string | null;
+  receiver_name: string | null;
+  search_text?: string;
+};
+
 type Guardian = {
   id: number;
   guardian_user_id: number;
@@ -246,7 +291,7 @@ type FeeStudentDetail = {
   payment_settings: PaymentSettings | null;
 };
 
-type PaymentMethod = "upi" | "qr" | "cash";
+type PaymentMethod = "upi" | "qr" | "cash" | "net_banking";
 
 function getErrorMessage(err: unknown) {
   return err instanceof Error ? err.message : "Something went wrong";
@@ -557,6 +602,187 @@ function PaymentRequestDetailSurface({
   );
 }
 
+function FeeTransactionDetailSurface({
+  transaction,
+  open,
+  isMobile,
+  onOpenChange,
+}: {
+  transaction: FeeTransaction | null;
+  open: boolean;
+  isMobile: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const labels = transaction ? parsePaymentRequestPeriodLabels(transaction.period_labels) : [];
+
+  const handleCopyTransactionId = () => {
+    if (!transaction?.transaction_id) return;
+    navigator.clipboard.writeText(transaction.transaction_id);
+    setCopied(true);
+    toast.success("Transaction ID copied to clipboard");
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const content = transaction ? (
+    <div className="space-y-5">
+      {/* Header Info */}
+      <section className="rounded-xl border bg-card p-4 shadow-2xs">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 mb-1.5">
+              <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-xs font-bold">
+                <CheckCircle2 className="size-3.5 mr-1" />
+                Payment Paid
+              </Badge>
+              <span className="text-xs font-mono font-bold text-muted-foreground">
+                REC-{transaction.id}
+              </span>
+            </div>
+            <h3 className="text-xl font-bold text-foreground">{transaction.student_name ?? "Student"}</h3>
+            <p className="text-xs text-muted-foreground">{transaction.student_email ?? "-"}</p>
+          </div>
+          <div className="rounded-xl border bg-primary/5 border-primary/20 px-4 py-3 text-right">
+            <p className="text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">Total Paid</p>
+            <p className="text-2xl font-black text-primary">{formatAmount(transaction.total_amount)}</p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 text-xs sm:grid-cols-2 pt-3 border-t border-border/50">
+          <DetailField label="Course" value={[
+            transaction.program_name,
+            transaction.section_name ? `Section ${transaction.section_name}` : null,
+            transaction.academic_year_name,
+          ].filter(Boolean).join(" - ") || "-"} />
+          <DetailField label="Institution" value={transaction.institution_name ?? "-"} />
+          <DetailField label="Admission / Roll" value={[
+            transaction.admission_number ? `Adm: #${transaction.admission_number}` : null,
+            transaction.roll_number ? `Roll: #${transaction.roll_number}` : null,
+          ].filter(Boolean).join(" · ") || "-"} />
+          <DetailField label="Student Phone" value={transaction.student_phone || "-"} />
+          <DetailField label="Payment Method" value={formatLabelValue(transaction.payment_method)} />
+          <DetailField label="Transaction Ref" value={
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-xs break-all">{transaction.transaction_id || `FEE-${transaction.id}`}</span>
+              {transaction.transaction_id && (
+                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleCopyTransactionId}>
+                  {copied ? <Check className="size-3 text-emerald-500" /> : <Copy className="size-3 text-muted-foreground" />}
+                </Button>
+              )}
+            </div>
+          } />
+          <DetailField label="Payment Date" value={formatDate(transaction.received_at || transaction.created_at)} />
+          <DetailField label="Received By" value={transaction.receiver_name || "Institution Admin"} />
+        </div>
+      </section>
+
+      {/* Amount Breakdown */}
+      <section className="rounded-xl border bg-card p-4 space-y-2">
+        <h4 className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Amount Summary</h4>
+        <div className="space-y-1.5 text-xs">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span>Subtotal Amount:</span>
+            <span className="font-semibold text-foreground">{formatAmount(transaction.subtotal_amount || transaction.total_amount)}</span>
+          </div>
+          {Number(transaction.discount_amount ?? 0) > 0 && (
+            <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
+              <span>Discount ({Number(transaction.discount_percent ?? 0)}%):</span>
+              <span>- {formatAmount(transaction.discount_amount)}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between pt-2 border-t font-bold text-sm text-foreground">
+            <span>Net Paid Amount:</span>
+            <span className="text-primary text-base font-black">{formatAmount(transaction.total_amount)}</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Month(s) Breakdown */}
+      <section className="space-y-2">
+        <h4 className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Fee Month(s) Covered</h4>
+        <div className="overflow-hidden rounded-xl border bg-card">
+          {labels.length ? labels.map((period) => (
+            <div key={period.index} className="flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0 text-xs">
+              <div>
+                <p className="font-semibold text-foreground">{formatDateRange(period.start_date, period.end_date)}</p>
+                <p className="text-muted-foreground">{period.duration_label}</p>
+              </div>
+              <p className="font-bold text-foreground">{formatAmount(period.amount)}</p>
+            </div>
+          )) : (
+            <div className="p-4 text-xs text-muted-foreground">Academic Fee Period</div>
+          )}
+        </div>
+      </section>
+
+      {/* Screenshot (if available) */}
+      {transaction.screenshot_url && (
+        <section className="space-y-2">
+          <h4 className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Payment Proof Screenshot</h4>
+          <a
+            href={transaction.screenshot_url}
+            target="_blank"
+            rel="noreferrer"
+            className="block overflow-hidden rounded-xl border bg-muted/20 hover:opacity-90 transition-opacity"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={transaction.screenshot_url}
+              alt="Payment screenshot"
+              className="max-h-80 w-full object-contain"
+            />
+          </a>
+        </section>
+      )}
+
+      {/* Remarks */}
+      {transaction.remarks && (
+        <section className="rounded-xl border bg-card p-4 space-y-1">
+          <p className="text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">Remarks / Note</p>
+          <p className="text-xs font-medium text-foreground">{transaction.remarks}</p>
+        </section>
+      )}
+    </div>
+  ) : null;
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={onOpenChange}>
+        <DrawerContent className="max-h-[92dvh]">
+          <DrawerHeader>
+            <DrawerTitle>Fee Transaction Details</DrawerTitle>
+            <DrawerDescription>
+              Verified student fee receipt and transaction details.
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+            {content}
+          </div>
+          <DrawerFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="overflow-y-auto p-0 sm:max-w-lg">
+        <SheetHeader className="border-b px-6 py-5 text-left">
+          <SheetTitle>Fee Transaction Details</SheetTitle>
+          <SheetDescription>
+            Verified student fee receipt and transaction details.
+          </SheetDescription>
+        </SheetHeader>
+        <div className="space-y-4 p-6">{content}</div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 function getEnrollmentLabel(enrollment?: FeeEnrollment | null) {
   if (!enrollment) return "-";
   return [
@@ -631,6 +857,8 @@ function PayNowDialog({
   const [selectedPeriodIndexes, setSelectedPeriodIndexes] = useState<number[]>([]);
   const [discountPercent, setDiscountPercent] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const [configuredMethods, setConfiguredMethods] = useState<FinancePaymentMethodRow[]>([]);
+  const [selectedMethodKey, setSelectedMethodKey] = useState<string>("cash");
   const [transactionId, setTransactionId] = useState("");
   const [remarks, setRemarks] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -639,6 +867,32 @@ function PayNowDialog({
   const summary = enrollment?.fee_summary ?? null;
   const paymentSettings = detail?.payment_settings ?? null;
   const periods = useMemo(() => summary?.periods ?? [], [summary?.periods]);
+
+  useEffect(() => {
+    if (!open || !enrollment?.institution_id || !accessToken) return;
+    fetch(`/api/admin/finance/payment-methods?institutionId=${enrollment.institution_id}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.data && Array.isArray(json.data) && json.data.length > 0) {
+          setConfiguredMethods(json.data);
+          const defaultMethod = json.data.find((m: FinancePaymentMethodRow) => m.is_default) || json.data[0];
+          if (defaultMethod) {
+            setSelectedMethodKey(`pm_${defaultMethod.id}`);
+            const isUpi = ["phonepe", "google_pay", "paytm", "bhim_upi", "other_upi"].includes(defaultMethod.method_type);
+            setPaymentMethod(isUpi ? "upi" : defaultMethod.method_type === "net_banking" ? "net_banking" : "cash");
+          }
+        }
+      })
+      .catch(() => {});
+  }, [open, enrollment?.institution_id, accessToken]);
+
+  const activeConfiguredMethod = useMemo(() => {
+    if (!selectedMethodKey.startsWith("pm_")) return null;
+    const id = selectedMethodKey.replace("pm_", "");
+    return configuredMethods.find((m) => String(m.id) === id) || null;
+  }, [configuredMethods, selectedMethodKey]);
 
   useEffect(() => {
     if (!open) return;
@@ -652,13 +906,15 @@ function PayNowDialog({
         Number(preferredPeriod?.payment?.discount_percent ?? 0) ||
         Number(periods.find((period) => Number(period.payment?.discount_percent ?? 0) > 0)?.payment?.discount_percent ?? 0);
       setDiscountPercent(availableDiscountPercent ? String(availableDiscountPercent) : "");
-      setPaymentMethod(getDefaultPaymentMethod(paymentSettings));
+      if (!selectedMethodKey.startsWith("pm_")) {
+        setPaymentMethod(getDefaultPaymentMethod(paymentSettings));
+      }
       setTransactionId("");
       setRemarks("");
       setConfirmOpen(false);
     }, 0);
     return () => window.clearTimeout(timeout);
-  }, [open, paymentSettings, periods, summary?.current_period]);
+  }, [open, paymentSettings, periods, summary?.current_period, selectedMethodKey]);
 
   const selectedPeriods = useMemo(
     () => periods.filter((period) => selectedPeriodIndexes.includes(period.index)),
@@ -674,8 +930,14 @@ function PayNowDialog({
   const selectedPeriodLabel = selectedPeriods.length
     ? selectedPeriods.map((period) => formatDateRange(period.start_date, period.end_date)).join(", ")
     : "No month selected";
-  const canUseDigitalPayment = Boolean(paymentSettings?.upi_id || paymentSettings?.qr_image_url);
-  const requiresTransaction = paymentMethod === "upi" || paymentMethod === "qr";
+  const canUseDigitalPayment = Boolean(
+    activeConfiguredMethod?.upi_id ||
+    activeConfiguredMethod?.qr_code_url ||
+    activeConfiguredMethod?.account_number ||
+    paymentSettings?.upi_id ||
+    paymentSettings?.qr_image_url
+  );
+  const requiresTransaction = paymentMethod === "upi" || paymentMethod === "qr" || paymentMethod === "net_banking";
   const splitDirection = isMobile ? "vertical" : "horizontal";
   const canSubmit =
     Boolean(detail && enrollment && payablePeriods.length && !paidDetailPeriod) &&
@@ -704,7 +966,7 @@ function PayNowDialog({
       return;
     }
     if (requiresTransaction && !transactionId.trim()) {
-      toast.error("Enter the transaction ID before confirming payment.");
+      toast.error("Enter the transaction / reference ID before confirming payment.");
       return;
     }
     if (paymentMethod !== "cash" && !canUseDigitalPayment) {
@@ -874,9 +1136,21 @@ function PayNowDialog({
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" className="w-full justify-between">
                         <span className="flex min-w-0 items-center gap-2">
-                          <WalletCards className="size-4 shrink-0" />
+                          {paymentMethod === "net_banking" ? (
+                            <Landmark className="size-4 shrink-0 text-blue-500" />
+                          ) : paymentMethod === "upi" || paymentMethod === "qr" ? (
+                            <Smartphone className="size-4 shrink-0 text-purple-500" />
+                          ) : (
+                            <WalletCards className="size-4 shrink-0 text-emerald-500" />
+                          )}
                           <span className="truncate">
-                            {paymentMethod === "upi" ? "UPI" : paymentMethod === "qr" ? "QR Code" : "Cash"}
+                            {activeConfiguredMethod
+                              ? activeConfiguredMethod.title
+                              : paymentMethod === "upi"
+                                ? "UPI"
+                                : paymentMethod === "net_banking"
+                                  ? "Net Banking"
+                                  : "Cash"}
                           </span>
                         </span>
                         <span className="text-xs text-muted-foreground">Change</span>
@@ -890,15 +1164,65 @@ function PayNowDialog({
                       className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[var(--radix-dropdown-menu-trigger-width)]"
                     >
                       <DropdownMenuLabel>Payment method</DropdownMenuLabel>
-                      {(["upi", "qr", "cash"] as PaymentMethod[]).map((method) => (
-                        <DropdownMenuCheckboxItem
-                          key={method}
-                          checked={paymentMethod === method}
-                          onCheckedChange={() => setPaymentMethod(method)}
-                        >
-                          {method === "upi" ? "UPI" : method === "qr" ? "QR Code" : "Cash"}
-                        </DropdownMenuCheckboxItem>
-                      ))}
+                      <DropdownMenuCheckboxItem
+                        checked={selectedMethodKey === "cash"}
+                        onCheckedChange={() => {
+                          setSelectedMethodKey("cash");
+                          setPaymentMethod("cash");
+                        }}
+                      >
+                        💵 Cash
+                      </DropdownMenuCheckboxItem>
+                      {configuredMethods.length > 0 ? (
+                        <>
+                          <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                            Institute Accounts &amp; UPI
+                          </div>
+                          {configuredMethods.map((pm) => {
+                            const isUpi = ["phonepe", "google_pay", "paytm", "bhim_upi", "other_upi"].includes(pm.method_type);
+                            const isBank = pm.method_type === "net_banking";
+                            return (
+                              <DropdownMenuCheckboxItem
+                                key={pm.id}
+                                checked={selectedMethodKey === `pm_${pm.id}`}
+                                onCheckedChange={() => {
+                                  setSelectedMethodKey(`pm_${pm.id}`);
+                                  setPaymentMethod(isUpi ? "upi" : isBank ? "net_banking" : "cash");
+                                }}
+                              >
+                                {isBank && `🏦 ${pm.bank_name || pm.title} (${pm.account_number ? `..${pm.account_number.slice(-4)}` : "A/C"})`}
+                                {pm.method_type === "phonepe" && `🟣 PhonePe (${pm.upi_id || pm.title})`}
+                                {pm.method_type === "google_pay" && `🔵 Google Pay (${pm.upi_id || pm.title})`}
+                                {pm.method_type === "paytm" && `🔷 Paytm (${pm.upi_id || pm.title})`}
+                                {pm.method_type === "bhim_upi" && `🟢 BHIM UPI (${pm.upi_id || pm.title})`}
+                                {pm.method_type === "other_upi" && `⚡ ${pm.title} (${pm.upi_id || ""})`}
+                                {!isBank && !["phonepe", "google_pay", "paytm", "bhim_upi", "other_upi"].includes(pm.method_type) && pm.title}
+                              </DropdownMenuCheckboxItem>
+                            );
+                          })}
+                        </>
+                      ) : (
+                        <>
+                          <DropdownMenuCheckboxItem
+                            checked={selectedMethodKey === "upi"}
+                            onCheckedChange={() => {
+                              setSelectedMethodKey("upi");
+                              setPaymentMethod("upi");
+                            }}
+                          >
+                            ⚡ UPI
+                          </DropdownMenuCheckboxItem>
+                          <DropdownMenuCheckboxItem
+                            checked={selectedMethodKey === "net_banking"}
+                            onCheckedChange={() => {
+                              setSelectedMethodKey("net_banking");
+                              setPaymentMethod("net_banking");
+                            }}
+                          >
+                            🏦 Net Banking
+                          </DropdownMenuCheckboxItem>
+                        </>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -1068,15 +1392,72 @@ function PayNowDialog({
                         Cash Received
                       </Button>
                     </div>
+                  ) : paymentMethod === "net_banking" || activeConfiguredMethod?.method_type === "net_banking" ? (
+                    <div className="rounded-md border bg-blue-500/5 p-4 border-blue-500/20 space-y-3">
+                      <div className="flex items-center justify-between font-semibold text-blue-700 dark:text-blue-400">
+                        <span className="flex items-center gap-1.5"><Landmark className="size-4" /> {activeConfiguredMethod?.bank_name || "Net Banking Transfer"}</span>
+                        <span className="text-xs">{activeConfiguredMethod?.account_type || "Bank Account"}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 text-xs pt-1">
+                        <div>
+                          <p className="text-muted-foreground uppercase text-[10px] font-bold">Account Holder</p>
+                          <p className="font-semibold text-foreground text-sm mt-0.5">{activeConfiguredMethod?.account_holder_name || "-"}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground uppercase text-[10px] font-bold">Branch</p>
+                          <p className="font-semibold text-foreground text-sm mt-0.5">{activeConfiguredMethod?.branch_name || "-"}</p>
+                        </div>
+                        <div className="rounded border bg-background p-2">
+                          <p className="text-muted-foreground uppercase text-[10px] font-bold">Account Number</p>
+                          <div className="flex items-center justify-between gap-1 mt-0.5">
+                            <span className="font-mono font-bold text-sm">{activeConfiguredMethod?.account_number || "-"}</span>
+                            {activeConfiguredMethod?.account_number && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(activeConfiguredMethod.account_number!);
+                                  toast.success("Account Number copied");
+                                }}
+                                className="p-1 text-muted-foreground hover:text-foreground cursor-pointer"
+                              >
+                                <Copy className="size-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="rounded border bg-background p-2">
+                          <p className="text-muted-foreground uppercase text-[10px] font-bold">IFSC Code</p>
+                          <div className="flex items-center justify-between gap-1 mt-0.5">
+                            <span className="font-mono font-bold text-sm">{activeConfiguredMethod?.ifsc_code || "-"}</span>
+                            {activeConfiguredMethod?.ifsc_code && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(activeConfiguredMethod.ifsc_code!);
+                                  toast.success("IFSC Code copied");
+                                }}
+                                className="p-1 text-muted-foreground hover:text-foreground cursor-pointer"
+                              >
+                                <Copy className="size-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="rounded-md border bg-background p-3">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Transaction ID / UTR No</p>
+                        <p className="mt-1 break-all font-semibold">{transactionId.trim() || "Enter transaction ID on left"}</p>
+                      </div>
+                    </div>
                   ) : (
                     <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
                       <div className="flex min-h-48 items-center justify-center rounded-md border bg-background p-3">
-                        {paymentSettings?.qr_image_url ? (
+                        {(activeConfiguredMethod?.qr_code_url || paymentSettings?.qr_image_url) ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={paymentSettings.qr_image_url}
+                            src={activeConfiguredMethod?.qr_code_url || paymentSettings?.qr_image_url || ""}
                             alt="Payment QR code"
-                            className="max-h-44 max-w-full rounded-md object-contain"
+                            className="max-h-48 max-w-full rounded-md object-contain shadow-sm"
                           />
                         ) : (
                           <div className="text-center text-muted-foreground">
@@ -1087,8 +1468,30 @@ function PayNowDialog({
                       </div>
                       <div className="space-y-3">
                         <div className="rounded-md border bg-background p-3">
-                          <p className="text-xs uppercase tracking-wide text-muted-foreground">UPI ID</p>
-                          <p className="mt-1 break-all font-semibold">{paymentSettings?.upi_id || "UPI ID not set"}</p>
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                              {activeConfiguredMethod?.title || "UPI ID"}
+                            </p>
+                            {(activeConfiguredMethod?.upi_id || paymentSettings?.upi_id) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText((activeConfiguredMethod?.upi_id || paymentSettings?.upi_id)!);
+                                  toast.success("UPI ID copied");
+                                }}
+                                className="text-xs text-primary flex items-center gap-1 font-medium hover:underline cursor-pointer"
+                              >
+                                <Copy className="size-3" />
+                                Copy
+                              </button>
+                            )}
+                          </div>
+                          <p className="mt-1 break-all font-semibold font-mono text-sm">
+                            {activeConfiguredMethod?.upi_id || paymentSettings?.upi_id || "UPI ID not set"}
+                          </p>
+                          {activeConfiguredMethod?.merchant_name && (
+                            <p className="text-xs text-muted-foreground mt-0.5">Payee: {activeConfiguredMethod.merchant_name}</p>
+                          )}
                         </div>
                         <div className="rounded-md border bg-background p-3">
                           <p className="text-xs uppercase tracking-wide text-muted-foreground">Transaction ID</p>
@@ -2225,8 +2628,12 @@ export default function FeeManagementPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailSurfaceMode, setDetailSurfaceMode] = useState<"drawer" | "sheet">("sheet");
   const [selectedStudent, setSelectedStudent] = useState<FeeStudentDetail | null>(null);
-  const activeTab: "fees" | "requests" =
-    searchParams.get("tab") === "payment_requests" ? "requests" : "fees";
+  const activeTab: "fees" | "requests" | "transactions" =
+    searchParams.get("tab") === "payment_requests"
+      ? "requests"
+      : searchParams.get("tab") === "transactions"
+        ? "transactions"
+        : "fees";
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([]);
   const [requestSearch, setRequestSearch] = useState("");
   const [requestsLoading, setRequestsLoading] = useState(false);
@@ -2236,6 +2643,11 @@ export default function FeeManagementPage() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [approvingRequest, setApprovingRequest] = useState(false);
   const [rejectingRequest, setRejectingRequest] = useState(false);
+  const [transactions, setTransactions] = useState<FeeTransaction[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+  const [transactionSearch, setTransactionSearch] = useState("");
+  const [transactionMethod, setTransactionMethod] = useState("all");
+  const [selectedTransaction, setSelectedTransaction] = useState<FeeTransaction | null>(null);
   const [filters, setFilters] = usePersistedState<StudentFilters>(
     "admin.students.fee-management.filters",
     getDefaultStudentFilters,
@@ -2249,11 +2661,14 @@ export default function FeeManagementPage() {
   const fetchStudentsAbortRef = useRef<AbortController | null>(null);
   const fetchDetailRequestIdRef = useRef(0);
   const fetchRequestsRequestIdRef = useRef(0);
+  const fetchTransactionsRequestIdRef = useRef(0);
 
-  const updateActiveTab = useCallback((tab: "fees" | "requests") => {
+  const updateActiveTab = useCallback((tab: "fees" | "requests" | "transactions") => {
     const params = new URLSearchParams(searchParams.toString());
     if (tab === "requests") {
       params.set("tab", "payment_requests");
+    } else if (tab === "transactions") {
+      params.set("tab", "transactions");
     } else {
       params.delete("tab");
     }
@@ -2437,6 +2852,59 @@ export default function FeeManagementPage() {
     }
   }, [accessToken, activeInstitution, authHeader, handleAuthError]);
 
+  const fetchTransactions = useCallback(async () => {
+    if (!accessToken) return;
+    const requestId = ++fetchTransactionsRequestIdRef.current;
+    setTransactionsLoading(true);
+    try {
+      const params = new URLSearchParams({ action: "transactions" });
+      if (activeInstitution) {
+        params.set("institutionId", String(activeInstitution.id));
+      }
+      if (activeAcademicYearId) {
+        params.set("academicYearId", String(activeAcademicYearId));
+      }
+      const res = await fetch(`/api/admin/students/fee-management?${params.toString()}`, {
+        headers: authHeader(),
+        cache: "no-store",
+      });
+      const json = await readJsonResponse(res);
+      if (requestId !== fetchTransactionsRequestIdRef.current) return;
+      if (!res.ok) {
+        if (res.status === 401) {
+          handleAuthError();
+          return;
+        }
+        throw new Error(getApiErrorMessage(json, "Failed to fetch fee transactions"));
+      }
+      setTransactions(
+        (json.data ?? []).map((transaction: FeeTransaction) => ({
+          ...transaction,
+          search_text: [
+            transaction.student_name,
+            transaction.student_email,
+            transaction.student_phone,
+            transaction.admission_number,
+            transaction.roll_number,
+            transaction.program_name,
+            transaction.section_name,
+            transaction.transaction_id,
+            transaction.receiver_name,
+            transaction.remarks,
+          ].filter(Boolean).join(" ").toLowerCase(),
+        })),
+      );
+    } catch (err: unknown) {
+      if (requestId === fetchTransactionsRequestIdRef.current) {
+        toast.error(getErrorMessage(err));
+      }
+    } finally {
+      if (requestId === fetchTransactionsRequestIdRef.current) {
+        setTransactionsLoading(false);
+      }
+    }
+  }, [accessToken, activeAcademicYearId, activeInstitution, authHeader, handleAuthError]);
+
   const approvePaymentRequest = useCallback(async () => {
     if (!accessToken || !approvalRequest) return;
     setApprovingRequest(true);
@@ -2464,13 +2932,14 @@ export default function FeeManagementPage() {
       setApprovalRequest(null);
       setSelectedRequest(null);
       await fetchPaymentRequests();
+      void fetchTransactions();
       void fetchStudents();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err));
     } finally {
       setApprovingRequest(false);
     }
-  }, [accessToken, approvalRequest, authHeader, fetchPaymentRequests, fetchStudents, handleAuthError]);
+  }, [accessToken, approvalRequest, authHeader, fetchPaymentRequests, fetchStudents, fetchTransactions, handleAuthError]);
 
   const rejectPaymentRequest = useCallback(async () => {
     if (!accessToken || !rejectionRequest) return;
@@ -2555,6 +3024,14 @@ export default function FeeManagementPage() {
     return () => window.clearTimeout(timeout);
   }, [fetchPaymentRequests]);
 
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void fetchTransactions();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [fetchTransactions]);
+
   const updateFilters = useCallback((nextFilters: StudentFilters) => {
     setFilters(nextFilters);
     setPagination((prev) => ({ ...prev, pageIndex: 0 }));
@@ -2589,6 +3066,48 @@ export default function FeeManagementPage() {
       ].filter(Boolean).join(" ").toLowerCase().includes(search),
     );
   }, [paymentRequests, requestSearch]);
+
+  const filteredTransactions = useMemo(() => {
+    let list = transactions;
+    if (transactionMethod !== "all") {
+      list = list.filter((t) => (t.payment_method || "cash").toLowerCase() === transactionMethod.toLowerCase());
+    }
+    const search = transactionSearch.trim().toLowerCase();
+    if (!search) return list;
+    return list.filter((t) =>
+      [
+        t.student_name,
+        t.transaction_id,
+        t.student_email,
+        t.student_phone,
+        t.admission_number,
+        t.roll_number,
+        t.program_name,
+        t.receiver_name,
+      ].filter(Boolean).join(" ").toLowerCase().includes(search),
+    );
+  }, [transactions, transactionMethod, transactionSearch]);
+
+  const transactionMetrics = useMemo(() => {
+    let totalCollected = 0;
+    let cashCollected = 0;
+    let upiCollected = 0;
+    for (const t of transactions) {
+      const amount = Number(t.total_amount ?? 0) || 0;
+      totalCollected += amount;
+      if ((t.payment_method || "cash").toLowerCase() === "cash") {
+        cashCollected += amount;
+      } else {
+        upiCollected += amount;
+      }
+    }
+    return {
+      totalCollected,
+      cashCollected,
+      upiCollected,
+      count: transactions.length,
+    };
+  }, [transactions]);
 
   const studentColumns = useMemo(() => buildFeeStudentColumns(), []);
 
@@ -2670,6 +3189,142 @@ export default function FeeManagementPage() {
     [],
   );
 
+  const feeTransactionColumns = useMemo<ColumnDef<FeeTransaction>[]>(
+    () => [
+      {
+        accessorKey: "student_name",
+        header: "Student",
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2.5">
+            <Avatar className="h-8 w-8 shrink-0">
+              <AvatarFallback className="text-xs bg-primary/10 text-primary font-bold">
+                {initials(row.original.student_name ?? "S")}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <div className="font-semibold text-sm truncate">{row.original.student_name ?? "Student"}</div>
+              <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-1.5">
+                {row.original.admission_number && <span className="font-mono">Adm #{row.original.admission_number}</span>}
+                {row.original.roll_number && <span className="font-mono">Roll #{row.original.roll_number}</span>}
+                {row.original.student_phone && <span>{row.original.student_phone}</span>}
+              </div>
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: "course",
+        header: "Course / Class",
+        cell: ({ row }) => (
+          <div>
+            <div className="font-medium text-sm">{row.original.program_name ?? "Course"}</div>
+            <div className="text-[11px] text-muted-foreground">
+              {[
+                row.original.class_category_name,
+                row.original.section_name ? `Sec ${row.original.section_name}` : null,
+                row.original.academic_year_name,
+              ].filter(Boolean).join(" · ") || row.original.institution_name || "-"}
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: "periods",
+        header: "Month(s)",
+        cell: ({ row }) => {
+          const labels = parsePaymentRequestPeriodLabels(row.original.period_labels);
+          return (
+            <div className="max-w-60 flex flex-wrap gap-1">
+              {labels.length ? labels.map((period) => (
+                <Badge key={period.index} variant="outline" className="text-[10.5px] bg-muted/40 font-normal">
+                  {period.duration_label || formatDateRange(period.start_date, period.end_date)}
+                </Badge>
+              )) : <span className="text-xs text-muted-foreground">-</span>}
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "total_amount",
+        header: "Amount",
+        cell: ({ row }) => (
+          <div>
+            <div className="font-bold text-sm text-emerald-600 dark:text-emerald-400">
+              {formatAmount(row.original.total_amount)}
+            </div>
+            {Number(row.original.discount_amount ?? 0) > 0 && (
+              <div className="text-[10.5px] text-muted-foreground">
+                Disc: {formatAmount(row.original.discount_amount)} ({Number(row.original.discount_percent ?? 0)}%)
+              </div>
+            )}
+          </div>
+        ),
+      },
+      {
+        accessorKey: "payment_method",
+        header: "Method",
+        cell: ({ row }) => (
+          <Badge variant="outline" className="capitalize text-[11px] font-semibold">
+            {row.original.payment_method === "qr" ? "QR Code" : row.original.payment_method?.toUpperCase() || "Cash"}
+          </Badge>
+        ),
+      },
+      {
+        accessorKey: "transaction_id",
+        header: "Transaction Ref",
+        cell: ({ row }) => (
+          <div className="font-mono text-xs max-w-32 truncate" title={row.original.transaction_id || `FEE-${row.original.id}`}>
+            {row.original.transaction_id || `FEE-${row.original.id}`}
+          </div>
+        ),
+      },
+      {
+        id: "received_by",
+        header: "Collected By / Date",
+        cell: ({ row }) => (
+          <div>
+            <div className="font-medium text-xs">
+              {formatDate(row.original.received_at || row.original.created_at)}
+            </div>
+            <div className="text-[11px] text-muted-foreground truncate max-w-32">
+              {row.original.receiver_name || "Institution Admin"}
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        cell: () => (
+          <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-xs font-semibold">
+            <CheckCircle2 className="size-3 mr-1" />
+            Paid
+          </Badge>
+        ),
+      },
+      {
+        id: "actions",
+        header: "Action",
+        cell: ({ row }) => (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs font-semibold text-primary gap-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedTransaction(row.original);
+            }}
+          >
+            <Receipt className="size-3.5" />
+            Receipt
+          </Button>
+        ),
+      },
+    ],
+    [],
+  );
+
   if (loading && !hasLoadedStudents) {
     return (
       <div className="space-y-4">
@@ -2696,6 +3351,7 @@ export default function FeeManagementPage() {
           type="button"
           variant={activeTab === "fees" ? "default" : "outline"}
           onClick={() => updateActiveTab("fees")}
+          className="gap-2"
         >
           <CreditCard className="size-4" />
           Fee Management
@@ -2703,7 +3359,7 @@ export default function FeeManagementPage() {
         <Button
           type="button"
           variant={activeTab === "requests" ? "default" : "outline"}
-          className="relative pr-8"
+          className="relative pr-8 gap-2"
           onClick={() => updateActiveTab("requests")}
         >
           <WalletCards className="size-4" />
@@ -2711,6 +3367,20 @@ export default function FeeManagementPage() {
           {paymentRequests.length > 0 && (
             <Badge className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold leading-none text-white shadow-sm ring-2 ring-background hover:bg-red-500">
               {paymentRequests.length}
+            </Badge>
+          )}
+        </Button>
+        <Button
+          type="button"
+          variant={activeTab === "transactions" ? "default" : "outline"}
+          onClick={() => updateActiveTab("transactions")}
+          className="gap-2"
+        >
+          <Receipt className="size-4" />
+          Fee Transactions
+          {transactions.length > 0 && (
+            <Badge variant="secondary" className="ml-0.5 text-xs font-semibold">
+              {transactions.length}
             </Badge>
           )}
         </Button>
@@ -2767,7 +3437,7 @@ export default function FeeManagementPage() {
             }
             onRowClick={openStudentDetail}
           />
-        ) : (
+        ) : activeTab === "requests" ? (
           <DataTable
             columns={paymentRequestColumns}
             data={filteredPaymentRequests}
@@ -2796,8 +3466,96 @@ export default function FeeManagementPage() {
             emptyText="No pending payment requests."
             onRowClick={(request) => setSelectedRequest(request)}
           />
+        ) : (
+          <div className="space-y-4">
+            {/* Metric Summary Cards */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-xl border bg-card p-4 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground">Total Collections</p>
+                  <TrendingUp className="size-4 text-emerald-500" />
+                </div>
+                <p className="mt-1.5 text-xl font-bold text-foreground sm:text-2xl">{formatAmount(transactionMetrics.totalCollected)}</p>
+                <p className="text-[11px] text-muted-foreground">{transactionMetrics.count} transactions recorded</p>
+              </div>
+              <div className="rounded-xl border bg-card p-4 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground">Cash Collections</p>
+                  <IndianRupee className="size-4 text-primary" />
+                </div>
+                <p className="mt-1.5 text-xl font-bold text-foreground sm:text-2xl">{formatAmount(transactionMetrics.cashCollected)}</p>
+                <p className="text-[11px] text-muted-foreground">Direct counter cash</p>
+              </div>
+              <div className="rounded-xl border bg-card p-4 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground">UPI / Digital</p>
+                  <QrCode className="size-4 text-indigo-500" />
+                </div>
+                <p className="mt-1.5 text-xl font-bold text-foreground sm:text-2xl">{formatAmount(transactionMetrics.upiCollected)}</p>
+                <p className="text-[11px] text-muted-foreground">UPI, QR & Net Banking</p>
+              </div>
+              <div className="rounded-xl border bg-card p-4 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground">Total Paid Records</p>
+                  <FileText className="size-4 text-muted-foreground" />
+                </div>
+                <p className="mt-1.5 text-xl font-bold text-foreground sm:text-2xl">{transactionMetrics.count}</p>
+                <p className="text-[11px] text-muted-foreground">Verified transactions</p>
+              </div>
+            </div>
+
+            <DataTable
+              columns={feeTransactionColumns}
+              data={filteredTransactions}
+              toolbarLeft={
+                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                  <DebouncedSearchInput
+                    value={transactionSearch}
+                    onValueChange={setTransactionSearch}
+                    placeholder="Search student, adm #, roll, ref..."
+                    className="min-w-0 flex-1 sm:w-72 sm:flex-none"
+                  />
+                  <div className="flex items-center gap-1">
+                    {(["all", "cash", "upi", "qr"] as const).map((method) => (
+                      <Button
+                        key={method}
+                        type="button"
+                        variant={transactionMethod === method ? "default" : "outline"}
+                        size="sm"
+                        className="h-9 text-xs capitalize"
+                        onClick={() => setTransactionMethod(method)}
+                      >
+                        {method === "all" ? "All Methods" : method.toUpperCase()}
+                      </Button>
+                    ))}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    onClick={() => void fetchTransactions()}
+                    disabled={transactionsLoading}
+                    aria-label="Refresh fee transactions"
+                  >
+                    <RefreshCw className={cn("size-4", transactionsLoading && "animate-spin")} />
+                  </Button>
+                </div>
+              }
+              loading={transactionsLoading}
+              emptyText="No fee transactions recorded yet."
+              onRowClick={(transaction) => setSelectedTransaction(transaction)}
+            />
+          </div>
         )}
       </div>
+
+      <FeeTransactionDetailSurface
+        transaction={selectedTransaction}
+        open={Boolean(selectedTransaction)}
+        isMobile={isMobile}
+        onOpenChange={(open) => !open && setSelectedTransaction(null)}
+      />
 
       <FeeDetailSheet
         detail={selectedStudent}

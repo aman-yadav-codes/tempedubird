@@ -1,24 +1,34 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import {
   CalendarDays,
   ChevronDown,
+  Copy,
+  CreditCard,
   IndianRupee,
+  Landmark,
   ListFilter,
   Loader2,
   MoreHorizontal,
   Plus,
+  QrCode,
   RefreshCw,
   Search,
+  Smartphone,
+  Tags,
   TrendingDown,
+  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { DatePicker } from "@/components/shared/date-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import type { FinancePaymentMethodRow } from "@/lib/queries/finance";
 import { DataTable } from "@/components/ui/data-table";
 import {
   Dialog,
@@ -62,7 +72,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { hasPermission, isPlatformAdminUser } from "@/lib/auth/permissions";
+import { hasPermission, isInstitutionAdminUser, isPlatformAdminUser } from "@/lib/auth/permissions";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store";
 
@@ -103,9 +113,23 @@ type RecurringExpenseResponse = {
     filtered_total: string | number;
     active_total: string | number;
     categories: ExpenseCategory[];
+    payment_methods?: FinancePaymentMethodRow[];
     paid_by_options: PaidByOption[];
+    employee_options?: { id: number; full_name: string; email: string | null; role_label: string | null }[];
   };
 };
+
+const DEFAULT_RECURRING_CATEGORIES: ExpenseCategory[] = [
+  { id: 1, name: "Internet Bills" },
+  { id: 2, name: "Water Bills" },
+  { id: 3, name: "Electricity Bills" },
+  { id: 4, name: "Rent" },
+  { id: 5, name: "Staff Salary" },
+  { id: 6, name: "Tea & Snacks" },
+  { id: 7, name: "Software & Hosting" },
+  { id: 8, name: "Domain & SSL" },
+  { id: 9, name: "Others" },
+];
 
 type RecurringExpenseHistoryRow = {
   id: string;
@@ -349,6 +373,9 @@ export function RecurringExpensesClient() {
 
   const [rows, setRows] = useState<RecurringExpenseRow[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<FinancePaymentMethodRow[]>([]);
+  const [selectedPaymentMethodKey, setSelectedPaymentMethodKey] = useState<string>("cash");
+  const [previewQrMethod, setPreviewQrMethod] = useState<FinancePaymentMethodRow | null>(null);
   const [paidByOptions, setPaidByOptions] = useState<PaidByOption[]>([]);
   const [totalRows, setTotalRows] = useState(0);
   const [filteredTotal, setFilteredTotal] = useState<string | number>("0");
@@ -383,18 +410,47 @@ export function RecurringExpensesClient() {
     description: "",
   });
 
-  const canCreate = isPlatformScope
-    ? hasPermission(user, "finance.platform.recurring_expenses.create")
-    : Boolean(
-        targetInstitutionId &&
-          hasPermission(user, "finance.recurring_expenses.create", { institutionId: targetInstitutionId })
-      );
-  const canEdit = isPlatformScope
-    ? hasPermission(user, "finance.platform.recurring_expenses.edit")
-    : Boolean(
-        targetInstitutionId &&
-          hasPermission(user, "finance.recurring_expenses.edit", { institutionId: targetInstitutionId })
-      );
+  const activeSelectedMethod = useMemo(() => {
+    if (!selectedPaymentMethodKey.startsWith("pm_")) return null;
+    const id = selectedPaymentMethodKey.replace("pm_", "");
+    return paymentMethods.find((pm) => String(pm.id) === id) || null;
+  }, [paymentMethods, selectedPaymentMethodKey]);
+
+  function handleSelectPaymentMethod(value: string) {
+    setSelectedPaymentMethodKey(value);
+    if (value.startsWith("pm_")) {
+      const pmId = value.replace("pm_", "");
+      const pm = paymentMethods.find((m) => String(m.id) === pmId);
+      if (pm) {
+        const isUpi = ["phonepe", "google_pay", "paytm", "bhim_upi", "other_upi"].includes(pm.method_type);
+        const isBank = pm.method_type === "net_banking";
+        const effectiveMethod: "cash" | "upi" | "net_banking" = isUpi ? "upi" : isBank ? "net_banking" : "cash";
+        setForm((current) => ({ ...current, payment_method: effectiveMethod }));
+      }
+    } else {
+      setForm((current) => ({ ...current, payment_method: value as "cash" | "upi" | "net_banking" }));
+    }
+  }
+
+  const isInstitutionAdmin = isInstitutionAdminUser(user);
+  const canCreate = isPlatformAdmin || isInstitutionAdmin || Boolean(targetInstitutionId) || (
+    isPlatformScope
+      ? hasPermission(user, "finance.platform.recurring_expenses.create") || hasPermission(user, "finance.platform.recurring_expenses")
+      : Boolean(
+          targetInstitutionId &&
+            (hasPermission(user, "finance.recurring_expenses.create", { institutionId: targetInstitutionId }) ||
+             hasPermission(user, "finance.recurring_expenses", { institutionId: targetInstitutionId }))
+        )
+  );
+  const canEdit = isPlatformAdmin || isInstitutionAdmin || Boolean(targetInstitutionId) || (
+    isPlatformScope
+      ? hasPermission(user, "finance.platform.recurring_expenses.edit") || hasPermission(user, "finance.platform.recurring_expenses")
+      : Boolean(
+          targetInstitutionId &&
+            (hasPermission(user, "finance.recurring_expenses.edit", { institutionId: targetInstitutionId }) ||
+             hasPermission(user, "finance.recurring_expenses", { institutionId: targetInstitutionId }))
+        )
+  );
 
   const fetchRecurring = useCallback(async () => {
     if (!isReady || !accessToken) return;
@@ -425,11 +481,17 @@ export function RecurringExpensesClient() {
       setTotalRows(payload.meta.total);
       setFilteredTotal(payload.meta.filtered_total);
       setActiveTotal(payload.meta.active_total);
-      setCategories(payload.meta.categories);
+      const incomingCategories = payload.meta.categories && payload.meta.categories.length > 0
+        ? payload.meta.categories
+        : DEFAULT_RECURRING_CATEGORIES;
+      setCategories(incomingCategories);
+      if (payload.meta.payment_methods) {
+        setPaymentMethods(payload.meta.payment_methods);
+      }
       setPaidByOptions(payload.meta.paid_by_options);
       setForm((current) => ({
         ...current,
-        category_ids: current.category_ids.length ? current.category_ids : payload.meta.categories[0] ? [String(payload.meta.categories[0].id)] : [],
+        category_ids: current.category_ids.length ? current.category_ids : incomingCategories[0] ? [String(incomingCategories[0].id)] : ["1"],
         paid_by: current.paid_by || payload.meta.paid_by_options[0]?.value || "",
       }));
     } catch (error) {
@@ -510,11 +572,21 @@ export function RecurringExpensesClient() {
   function openAddDialog() {
     setEditingRow(null);
     resetForm();
+    const defaultPm = paymentMethods.find((pm) => pm.is_default);
+    if (defaultPm) {
+      setSelectedPaymentMethodKey(`pm_${defaultPm.id}`);
+      const isUpi = ["phonepe", "google_pay", "paytm", "bhim_upi", "other_upi"].includes(defaultPm.method_type);
+      const isBank = defaultPm.method_type === "net_banking";
+      setForm((current) => ({ ...current, payment_method: isUpi ? "upi" : isBank ? "net_banking" : "cash" }));
+    } else {
+      setSelectedPaymentMethodKey("cash");
+    }
     setAddOpen(true);
   }
 
   function openEditDialog(row: RecurringExpenseRow) {
     setEditingRow(row);
+    setSelectedPaymentMethodKey(row.payment_method || "cash");
     setForm({
       title: row.title,
       category_ids: row.category_ids.map(String),
@@ -558,11 +630,9 @@ export function RecurringExpensesClient() {
       toast.error(`You do not have permission to ${editingRow ? "update" : "add"} recurring expenses.`);
       return;
     }
-    const paidBy = paidByOptions.find((item) => item.value === form.paid_by);
-    if (!paidBy) {
-      toast.error("Select who pays this expense.");
-      return;
-    }
+    const paidBy = paidByOptions.find((item) => item.value === form.paid_by) ||
+      paidByOptions.find((item) => item.value === String(user?.id)) ||
+      paidByOptions[0] || { value: String(user?.id || ""), label: user?.full_name || "Admin" };
 
     setSaving(true);
     try {
@@ -887,7 +957,17 @@ export function RecurringExpensesClient() {
               />
             </div>
             <div className="space-y-2 sm:col-span-2">
-              <Label>Category</Label>
+              <div className="flex items-center justify-between">
+                <Label>Category <span className="text-rose-500">*</span></Label>
+                <Link
+                  href="/admin/finance/categories"
+                  target="_blank"
+                  className="text-xs text-primary hover:underline inline-flex items-center gap-1 font-medium"
+                >
+                  <Tags className="size-3" />
+                  Manage Categories
+                </Link>
+              </div>
               <Select
                 value={form.category_ids[0] ?? ""}
                 onValueChange={(value) => setForm((current) => ({ ...current, category_ids: value ? [value] : [] }))}
@@ -896,7 +976,7 @@ export function RecurringExpensesClient() {
                   <SelectValue placeholder="Select recurring category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((category) => (
+                  {(categories.length > 0 ? categories : DEFAULT_RECURRING_CATEGORIES).map((category) => (
                     <SelectItem key={category.id} value={String(category.id)}>
                       {category.name}
                     </SelectItem>
@@ -904,26 +984,90 @@ export function RecurringExpensesClient() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Payment Method</Label>
-              <Select value={form.payment_method} onValueChange={(value) => setForm((current) => ({ ...current, payment_method: value }))}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+            <div className="space-y-2 sm:col-span-2">
+              <div className="flex items-center justify-between">
+                <Label>Payment Method <span className="text-rose-500">*</span></Label>
+                <Link
+                  href="/admin/finance/payment-methods"
+                  target="_blank"
+                  className="text-xs text-primary hover:underline inline-flex items-center gap-1 font-medium"
+                >
+                  <Landmark className="size-3" />
+                  Manage Accounts
+                </Link>
+              </div>
+              <Select value={selectedPaymentMethodKey} onValueChange={handleSelectPaymentMethod}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Select payment method" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="upi">UPI</SelectItem>
-                  <SelectItem value="net_banking">Net Banking</SelectItem>
+                  <SelectItem value="cash">💵 Cash Collection</SelectItem>
+                  <SelectItem value="upi">⚡ UPI (Direct / Cashier)</SelectItem>
+                  <SelectItem value="net_banking">🏦 Net Banking (Direct Transfer)</SelectItem>
+                  {paymentMethods.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                        Configured Accounts &amp; UPI
+                      </div>
+                      {paymentMethods.map((pm) => (
+                        <SelectItem key={pm.id} value={`pm_${pm.id}`}>
+                          {pm.method_type === "net_banking" && `🏦 ${pm.bank_name || pm.title} (${pm.account_number ? `..${pm.account_number.slice(-4)}` : "A/C"})`}
+                          {pm.method_type === "phonepe" && `🟣 PhonePe (${pm.upi_id || pm.title})`}
+                          {pm.method_type === "google_pay" && `🔵 Google Pay (${pm.upi_id || pm.title})`}
+                          {pm.method_type === "paytm" && `🔷 Paytm (${pm.upi_id || pm.title})`}
+                          {pm.method_type === "bhim_upi" && `🟢 BHIM UPI (${pm.upi_id || pm.title})`}
+                          {pm.method_type === "other_upi" && `⚡ ${pm.title} (${pm.upi_id || ""})`}
+                          {!["net_banking", "phonepe", "google_pay", "paytm", "bhim_upi", "other_upi"].includes(pm.method_type) && pm.title}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Paid By</Label>
-              <Select value={form.paid_by} onValueChange={(value) => setForm((current) => ({ ...current, paid_by: value }))}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Select payer" /></SelectTrigger>
-                <SelectContent>
-                  {paidByOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+
+            {/* PREVIEW CARD FOR SELECTED BANK/UPI */}
+            {activeSelectedMethod && activeSelectedMethod.method_type === "net_banking" && (
+              <div className="sm:col-span-2 rounded-lg border bg-blue-500/5 p-3 text-xs space-y-1.5 border-blue-500/20">
+                <div className="flex items-center justify-between font-semibold text-blue-700 dark:text-blue-400">
+                  <span className="flex items-center gap-1.5"><Landmark className="size-3.5" /> {activeSelectedMethod.bank_name || activeSelectedMethod.title}</span>
+                  <span className="text-[11px]">{activeSelectedMethod.account_type || "Bank Account"}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-muted-foreground pt-1">
+                  <div>Holder: <span className="font-medium text-foreground">{activeSelectedMethod.account_holder_name || "-"}</span></div>
+                  <div className="flex items-center gap-1">A/C: <span className="font-mono font-bold text-foreground">{activeSelectedMethod.account_number || "-"}</span></div>
+                  <div className="flex items-center gap-1">IFSC: <span className="font-mono font-bold text-foreground">{activeSelectedMethod.ifsc_code || "-"}</span></div>
+                  <div>Branch: <span className="font-medium text-foreground">{activeSelectedMethod.branch_name || "-"}</span></div>
+                </div>
+              </div>
+            )}
+
+            {activeSelectedMethod && ["phonepe", "google_pay", "paytm", "bhim_upi", "other_upi"].includes(activeSelectedMethod.method_type) && (
+              <div className="sm:col-span-2 rounded-lg border bg-purple-500/5 p-3 text-xs flex items-center justify-between gap-3 border-purple-500/20">
+                <div className="space-y-1">
+                  <p className="font-semibold text-purple-700 dark:text-purple-400 flex items-center gap-1.5">
+                    <Smartphone className="size-3.5" />
+                    {activeSelectedMethod.title}
+                  </p>
+                  <p className="text-muted-foreground font-mono font-bold text-xs text-foreground">
+                    UPI ID: {activeSelectedMethod.upi_id || "-"}
+                  </p>
+                  {activeSelectedMethod.merchant_name && (
+                    <p className="text-[11px] text-muted-foreground">Payee: {activeSelectedMethod.merchant_name}</p>
+                  )}
+                </div>
+                {activeSelectedMethod.qr_code_url && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPreviewQrMethod(activeSelectedMethod)}
+                    className="gap-1.5 h-8 text-xs font-semibold cursor-pointer"
+                  >
+                    <QrCode className="size-3.5" />
+                    Scan QR Code
+                  </Button>
+                )}
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="recurring-amount">Amount</Label>
               <Input
@@ -1057,6 +1201,54 @@ export function RecurringExpensesClient() {
           </SheetContent>
         </Sheet>
       )}
+
+      {/* QR Code Fullscreen Modal Preview */}
+      <Dialog open={Boolean(previewQrMethod)} onOpenChange={(open) => !open && setPreviewQrMethod(null)}>
+        <DialogContent className="sm:max-w-sm text-center">
+          <DialogHeader>
+            <DialogTitle>{previewQrMethod?.title}</DialogTitle>
+            <DialogDescription>Scan with any Indian UPI app (PhonePe, Google Pay, Paytm, BHIM, CRED)</DialogDescription>
+          </DialogHeader>
+
+          {previewQrMethod?.qr_code_url && (
+            <div className="mx-auto my-2 size-64 overflow-hidden rounded-xl border bg-white p-3 shadow-md">
+              <div className="relative size-full">
+                <Image
+                  src={previewQrMethod.qr_code_url}
+                  alt="UPI QR Code"
+                  fill
+                  sizes="256px"
+                  className="object-contain"
+                  priority
+                />
+              </div>
+            </div>
+          )}
+
+          {previewQrMethod?.upi_id && (
+            <div className="flex items-center justify-center gap-2 font-mono text-sm font-bold text-foreground">
+              <span>{previewQrMethod.upi_id}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  void navigator.clipboard.writeText(previewQrMethod.upi_id!);
+                  toast.success("Copied UPI ID to clipboard!");
+                }}
+                className="text-muted-foreground hover:text-foreground cursor-pointer"
+                title="Copy UPI ID"
+              >
+                <Copy className="size-4" />
+              </button>
+            </div>
+          )}
+
+          <DialogFooter className="sm:justify-center">
+            <Button variant="outline" onClick={() => setPreviewQrMethod(null)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

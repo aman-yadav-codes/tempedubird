@@ -19,6 +19,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       payment_status: body.payment_status ? String(body.payment_status) : undefined,
       paid_by: body.paid_by ? String(body.paid_by) : undefined,
       paid_by_label: body.paid_by_label ? String(body.paid_by_label) : undefined,
+      paid_to: body.paid_to !== undefined ? (body.paid_to ? String(body.paid_to) : null) : undefined,
+      paid_to_label: body.paid_to_label !== undefined ? (body.paid_to_label ? String(body.paid_to_label) : null) : (body.paid_to ? String(body.paid_to) : undefined),
       amount: body.amount !== undefined ? Number(body.amount) : undefined,
       expense_date: body.expense_date ? String(body.expense_date) : undefined,
       description: body.description !== undefined ? String(body.description) : undefined,

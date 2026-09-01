@@ -68,17 +68,21 @@ const ADMIN_CHILD_SEGMENTS = new Set([
   "guardians",
   "institution",
   "institutions",
+  "inventory",
   "marketing",
   "master-data",
   "notifications",
   "profile",
+  "reviews",
   "sales",
   "settings",
   "staff",
   "students",
   "support",
+  "team",
   "tracker",
   "users",
+  "vendors",
 ]);
 
 const ROLE_PREFIX_MAP: Record<string, string> = {

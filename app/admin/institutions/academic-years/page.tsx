@@ -155,11 +155,12 @@ export default function AcademicSessionsPage() {
 
   function openEdit(item: SessionTemplate) {
     setEditing(item);
-    setForm(withGeneratedName({
+    setForm({
+      name: item.name,
       startDate: dateInput(item.start_date),
       endDate: dateInput(item.end_date),
       isActive: item.is_active,
-    }));
+    });
     setDialogOpen(true);
   }
 
@@ -341,19 +342,102 @@ export default function AcademicSessionsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
+            {/* Format quick switcher */}
+            <div className="grid gap-2 sm:col-span-2 rounded-lg border bg-muted/20 p-3">
+              <Label className="text-xs font-semibold text-muted-foreground">Quick Format Presets</Label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs font-bold gap-1.5 cursor-pointer bg-background"
+                  onClick={() => {
+                    const yr = currentCalendarYear();
+                    setForm((curr) => ({
+                      ...curr,
+                      name: `${yr}-${yr + 1}`,
+                      startDate: `${yr}-04-01`,
+                      endDate: `${yr + 1}-03-31`,
+                    }));
+                  }}
+                >
+                  📅 Academic Year ({currentCalendarYear()}-{currentCalendarYear() + 1})
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs font-bold gap-1.5 cursor-pointer bg-background"
+                  onClick={() => {
+                    const yr = currentCalendarYear();
+                    setForm((curr) => ({
+                      ...curr,
+                      name: `${yr}`,
+                      startDate: `${yr}-01-01`,
+                      endDate: `${yr}-12-31`,
+                    }));
+                  }}
+                >
+                  🗓️ Annual Year ({currentCalendarYear()})
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs font-bold gap-1.5 cursor-pointer bg-background"
+                  onClick={() => {
+                    const yr = currentCalendarYear() + 1;
+                    setForm((curr) => ({
+                      ...curr,
+                      name: `${yr}-${yr + 1}`,
+                      startDate: `${yr}-04-01`,
+                      endDate: `${yr + 1}-03-31`,
+                    }));
+                  }}
+                >
+                  Next Academic ({currentCalendarYear() + 1}-{currentCalendarYear() + 2})
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs font-bold gap-1.5 cursor-pointer bg-background"
+                  onClick={() => {
+                    const yr = currentCalendarYear() + 1;
+                    setForm((curr) => ({
+                      ...curr,
+                      name: `${yr}`,
+                      startDate: `${yr}-01-01`,
+                      endDate: `${yr}-12-31`,
+                    }));
+                  }}
+                >
+                  Next Annual ({currentCalendarYear() + 1})
+                </Button>
+              </div>
+            </div>
+
             <div className="grid gap-1.5 sm:col-span-2">
-              <Label>Name</Label>
-              <Input value={form.name} readOnly className="bg-muted/40" placeholder="2026-2027" />
+              <div className="flex items-center justify-between">
+                <Label>Session Name <span className="text-rose-500">*</span></Label>
+                <span className="text-[11px] text-muted-foreground">e.g. 2025-2026 or 2025</span>
+              </div>
+              <Input
+                value={form.name}
+                onChange={(e) => setForm((curr) => ({ ...curr, name: e.target.value }))}
+                className="font-semibold"
+                placeholder="2025-2026 or 2025"
+              />
             </div>
             <div className="grid gap-1.5">
-              <Label>Default Start Date</Label>
+              <Label>Start Date <span className="text-rose-500">*</span></Label>
               <DatePicker
                 value={form.startDate}
                 onChange={(value) => setForm((current) => {
                   const nextEndDate = current.endDate && current.endDate >= value
                     ? current.endDate
                     : defaultEndForStart(value);
-                  return withGeneratedName({ ...current, startDate: value, endDate: nextEndDate });
+                  return { ...current, startDate: value, endDate: nextEndDate };
                 })}
                 fromYear={currentCalendarYear()}
                 toYear={maxSessionYear()}
@@ -361,10 +445,10 @@ export default function AcademicSessionsPage() {
               />
             </div>
             <div className="grid gap-1.5">
-              <Label>Default End Date</Label>
+              <Label>End Date <span className="text-rose-500">*</span></Label>
               <DatePicker
                 value={form.endDate}
-                onChange={(value) => setForm((current) => withGeneratedName({ ...current, endDate: value }))}
+                onChange={(value) => setForm((current) => ({ ...current, endDate: value }))}
                 fromYear={currentCalendarYear()}
                 toYear={maxSessionYear() + 1}
                 disabledDates={{ before: new Date(todayInput()) }}
@@ -372,8 +456,8 @@ export default function AcademicSessionsPage() {
             </div>
             <div className="grid gap-1.5 sm:col-span-2">
               <Label>Status</Label>
-              <Button type="button" variant="outline" className="justify-start" onClick={() => setForm((current) => ({ ...current, isActive: !current.isActive }))}>
-                {form.isActive ? "Active" : "Disabled"}
+              <Button type="button" variant="outline" className="justify-start font-semibold" onClick={() => setForm((current) => ({ ...current, isActive: !current.isActive }))}>
+                {form.isActive ? "🟢 Active Session" : "🔴 Disabled Session"}
               </Button>
             </div>
           </div>

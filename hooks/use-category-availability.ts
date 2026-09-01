@@ -40,27 +40,33 @@ export function useCategoryAvailability() {
 
   const targetInstitutionId = resolvedInstitutionId;
 
-  const fetchAvailability = useCallback(async () => {
-    setLoading(true);
+  const fetchAvailability = useCallback(async (signal?: AbortSignal) => {
     try {
       const url = targetInstitutionId
         ? `/api/public/categories/availability?institutionId=${targetInstitutionId}`
         : "/api/public/categories/availability";
 
-      const res = await fetch(url);
+      const res = await fetch(url, { signal });
       if (res.ok) {
         const json = await res.json();
-        setCategories(json.categories);
+        if (json?.categories) {
+          setCategories(json.categories);
+        }
       }
-    } catch (err) {
-      console.error("Error loading category availability:", err);
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      // Gracefully handle transient network errors
     } finally {
       setLoading(false);
     }
   }, [targetInstitutionId]);
 
   useEffect(() => {
-    fetchAvailability();
+    const controller = new AbortController();
+    void fetchAvailability(controller.signal);
+    return () => {
+      controller.abort();
+    };
   }, [fetchAvailability]);
 
   const isCategoryVisible = useCallback(

@@ -209,7 +209,7 @@ export function getInitialForm(user?: AdminUserDetails | null): AddUserForm {
         email: asString(user?.email),
         phone: asString(user?.phone),
         avatar_url: asString(user?.avatar_url),
-        role_id: (user as any)?.role_codes?.[0] ? String((user as any).role_codes[0]) : (user?.role_id ? String(user.role_id) : ""),
+        role_id: user?.role_id ? String(user.role_id) : (typeof (user as any)?.role_ids?.[0] === "number" ? String((user as any).role_ids[0]) : ""),
         is_active: user?.is_active ?? true,
         is_verified: user?.is_verified ?? false,
         is_profile_complete: user?.is_profile_complete ?? false,
@@ -217,9 +217,9 @@ export function getInitialForm(user?: AdminUserDetails | null): AddUserForm {
         about: user?.profile?.about ?? "",
         is_teacher: user?.profile?.is_teacher ?? false,
         teacher_type: user?.profile?.teacher_type ?? "",
-        under_institution_id: user?.profile?.under_institution_id ? String(user.profile.under_institution_id) : "",
-        under_institution_name: asString(user?.profile?.under_institution_name),
-        institution_ids: ((user?.profile as any)?.institution_ids ?? []).map(String),
+        under_institution_id: user?.profile?.under_institution_id ? String(user.profile.under_institution_id) : (user?.institutions?.[0]?.id ? String(user.institutions[0].id) : ""),
+        under_institution_name: asString(user?.profile?.under_institution_name || user?.institutions?.[0]?.name),
+        institution_ids: ((user?.profile as any)?.institution_ids ?? []).length > 0 ? ((user?.profile as any)?.institution_ids ?? []).map(String) : (user?.institutions ?? []).map((i) => String(i.id)),
         designation_id: user?.profile?.designation_id ? String(user.profile.designation_id) : "",
         designation_name: asString(user?.profile?.designation_name),
         gender: user?.profile?.gender ?? NO_GENDER,
@@ -318,6 +318,28 @@ export function getInitialForm(user?: AdminUserDetails | null): AddUserForm {
             teachingCategories.map((category) => String(category.id)),
         teaching_subjects:
             teachingSubjects.map((subject) => String(subject.id)),
-        commission: (user as any)?.commission ?? (user?.profile as any)?.commission ?? blankCommission(),
+        commission: (user as any)?.commission
+            ? {
+                enabled: (user as any).commission.commission_type !== "NONE",
+                commission_type: (user as any).commission.commission_type || "RULES_BASED",
+                commission_rate: String((user as any).commission.commission_rate ?? ""),
+                commission_trigger: (user as any).commission.commission_trigger || "course_admission",
+                minimum_threshold: String((user as any).commission.minimum_threshold ?? ""),
+                payout_frequency: (user as any).commission.payout_frequency || "MONTHLY",
+                notes: (user as any).commission.notes || "",
+                rules: Array.isArray((user as any).commission.rules) && (user as any).commission.rules.length > 0
+                    ? (user as any).commission.rules.map((rule: any) => ({
+                        id: rule.id || nextId(),
+                        condition_trigger: rule.condition_trigger || "successful_enrollment",
+                        condition_label: rule.condition_label || "",
+                        reward_type: rule.reward_type || "PERCENTAGE",
+                        rate: String(rule.rate ?? ""),
+                        minimum_threshold: String(rule.minimum_threshold ?? ""),
+                        payout_frequency: rule.payout_frequency || "MONTHLY",
+                        notes: rule.notes || "",
+                    }))
+                    : blankCommission().rules,
+            }
+            : ((user?.profile as any)?.commission_data ?? blankCommission()),
     };
 }

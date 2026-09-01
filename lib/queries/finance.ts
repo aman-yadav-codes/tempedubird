@@ -26,6 +26,8 @@ export type FinanceIncomeRow = {
   income_date: string;
   amount: string | number;
   payment_method: "cash" | "upi" | "net_banking";
+  paid_by?: string | null;
+  paid_by_label?: string | null;
   paid_to: string;
   paid_to_label: string;
   category_id: number | null;
@@ -45,6 +47,9 @@ export type FinanceIncomeInput = {
   institution_id: number | null;
   category_id: number;
   payment_method: "cash" | "upi" | "net_banking";
+  paid_by?: string | null;
+  paid_by_label?: string | null;
+  payer_name?: string | null;
   paid_to: string;
   paid_to_label: string;
   amount: number;
@@ -101,6 +106,8 @@ export type FinanceExpenseRow = {
   payment_status: "paid" | "due";
   paid_by: string;
   paid_by_label: string;
+  paid_to?: string | null;
+  paid_to_label?: string | null;
   category_id: number | null;
   category_name: string;
   reference: string | null;
@@ -120,6 +127,8 @@ export type FinanceExpenseInput = {
   payment_status: "paid" | "due";
   paid_by: string;
   paid_by_label: string;
+  paid_to?: string | null;
+  paid_to_label?: string | null;
   amount: number;
   expense_date: string;
   invoice_url?: string | null;
@@ -453,6 +462,15 @@ export async function ensureFinanceIncomeSchema(db: Queryable) {
         ON finance_expense_entries(scope_type, institution_id, payment_status, expense_date DESC)
       `);
       await db.query(`
+        ALTER TABLE finance_income_entries ADD COLUMN IF NOT EXISTS payer_name VARCHAR(180);
+        ALTER TABLE finance_income_entries ADD COLUMN IF NOT EXISTS payer_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+        ALTER TABLE finance_income_entries ADD COLUMN IF NOT EXISTS paid_by VARCHAR(80);
+        ALTER TABLE finance_income_entries ADD COLUMN IF NOT EXISTS paid_by_label VARCHAR(180);
+
+        ALTER TABLE finance_expense_entries ADD COLUMN IF NOT EXISTS paid_to VARCHAR(80);
+        ALTER TABLE finance_expense_entries ADD COLUMN IF NOT EXISTS paid_to_label VARCHAR(180);
+      `);
+      await db.query(`
         CREATE TABLE IF NOT EXISTS finance_recurring_expense_categories (
           id SERIAL PRIMARY KEY,
           scope_type VARCHAR(20) NOT NULL CHECK (scope_type IN ('platform','institution')),
@@ -615,6 +633,63 @@ export async function ensureFinanceIncomeSchema(db: Queryable) {
         CREATE INDEX IF NOT EXISTS idx_finance_recurring_expenses_categories
         ON finance_recurring_expenses USING GIN (category_ids)
       `);
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS finance_payment_methods (
+          id BIGSERIAL PRIMARY KEY,
+          scope_type VARCHAR(20) NOT NULL CHECK (scope_type IN ('platform','institution')),
+          institution_id INTEGER REFERENCES institution_profiles(id) ON DELETE CASCADE,
+          method_type VARCHAR(50) NOT NULL CHECK (method_type IN ('net_banking','phonepe','google_pay','paytm','bhim_upi','other_upi','cash','cheque','pos_card','custom')),
+          title VARCHAR(180) NOT NULL,
+          bank_name VARCHAR(180),
+          account_holder_name VARCHAR(180),
+          account_number VARCHAR(60),
+          ifsc_code VARCHAR(30),
+          branch_name VARCHAR(180),
+          account_type VARCHAR(40),
+          upi_id VARCHAR(180),
+          upi_number VARCHAR(30),
+          upi_provider_name VARCHAR(80),
+          merchant_name VARCHAR(180),
+          qr_code_url TEXT,
+          qr_code_public_id TEXT,
+          instructions TEXT,
+          is_active BOOLEAN NOT NULL DEFAULT TRUE,
+          is_default BOOLEAN NOT NULL DEFAULT FALSE,
+          created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_finance_payment_methods_scope
+        ON finance_payment_methods(scope_type, institution_id, is_active, id DESC);
+        CREATE TABLE IF NOT EXISTS finance_invoices (
+          id BIGSERIAL PRIMARY KEY,
+          invoice_number VARCHAR(60) NOT NULL UNIQUE,
+          scope_type VARCHAR(20) NOT NULL CHECK (scope_type IN ('platform','institution')),
+          institution_id INTEGER REFERENCES institution_profiles(id) ON DELETE CASCADE,
+          income_id BIGINT REFERENCES finance_income_entries(id) ON DELETE SET NULL,
+          source_type VARCHAR(40) NOT NULL DEFAULT 'income',
+          payer_name VARCHAR(180) NOT NULL,
+          receiver_name VARCHAR(180) NOT NULL,
+          category_name VARCHAR(180) NOT NULL,
+          payment_method VARCHAR(30) NOT NULL CHECK (payment_method IN ('cash','upi','net_banking')),
+          amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+          tax_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+          total_amount NUMERIC(12,2) NOT NULL CHECK (total_amount > 0),
+          invoice_date DATE NOT NULL,
+          status VARCHAR(30) NOT NULL DEFAULT 'paid' CHECK (status IN ('paid','due','cancelled')),
+          notes TEXT,
+          created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_finance_invoices_scope_date
+        ON finance_invoices(scope_type, institution_id, invoice_date DESC, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_finance_invoices_number
+        ON finance_invoices(invoice_number);
+        CREATE INDEX IF NOT EXISTS idx_finance_invoices_income
+        ON finance_invoices(income_id);
+      `);
     })().catch((error) => {
       schemaReady = null;
       throw error;
@@ -650,6 +725,8 @@ function paymentCategoryDefaults(scopeType: FinanceScope): Array<{ name: string;
   }
 
   return [
+    { name: "Student Fee", usage_types: ["income"] },
+    { name: "Tuition Fee", usage_types: ["income"] },
     { name: "Activity", usage_types: ["income"] },
     { name: "Donation", usage_types: ["income"] },
     { name: "Exam", usage_types: ["income", "expense"] },
@@ -894,6 +971,19 @@ export async function createFinanceIncomeCategory(
   return upsertIncomeCategory(db, scopeType, institutionId, trimmed, userId);
 }
 
+export async function createFinanceExpenseCategory(
+  db: Queryable,
+  scopeType: FinanceScope,
+  institutionId: number | null,
+  name: string,
+  userId: number
+) {
+  await ensureFinanceIncomeSchema(db);
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Category name is required");
+  return upsertExpenseCategory(db, scopeType, institutionId, trimmed, userId);
+}
+
 export async function listFinancePaymentCategories(
   db: Queryable,
   scopeType: FinanceScope,
@@ -1111,10 +1201,11 @@ export async function createFinanceIncomeEntry(db: Queryable, input: FinanceInco
   const result = await db.query<{ id: string }>(`
     INSERT INTO finance_income_entries (
       scope_type, institution_id, category_id, payment_method, paid_to, paid_to_label,
+      paid_by, paid_by_label, payer_name,
       amount, income_date, invoice_url, invoice_public_id, invoice_resource_type,
       invoice_file_name, description, created_by, updated_by
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17)
     RETURNING id
   `, [
     input.scope_type,
@@ -1123,6 +1214,9 @@ export async function createFinanceIncomeEntry(db: Queryable, input: FinanceInco
     input.payment_method,
     input.paid_to,
     input.paid_to_label,
+    input.paid_by ?? null,
+    input.paid_by_label ?? null,
+    input.payer_name ?? input.paid_by_label ?? null,
     input.amount,
     input.income_date,
     input.invoice_url ?? null,
@@ -1132,6 +1226,64 @@ export async function createFinanceIncomeEntry(db: Queryable, input: FinanceInco
     input.description ?? null,
     input.user_id,
   ]);
+
+  // Auto-generate corresponding Invoice record
+  const incomeId = result.rows[0]?.id;
+  if (incomeId) {
+    try {
+      const now = new Date();
+      const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+      const invoiceNumber = `INV-${datePart}-${String(incomeId).padStart(4, "0")}`;
+
+      const catRes = await db.query<{ name: string }>(
+        `SELECT name FROM finance_income_categories WHERE id = $1 LIMIT 1`,
+        [input.category_id]
+      );
+      const categoryName = catRes.rows[0]?.name || "Income";
+
+      await db.query(
+        `
+          INSERT INTO finance_invoices (
+            invoice_number,
+            scope_type,
+            institution_id,
+            income_id,
+            source_type,
+            payer_name,
+            receiver_name,
+            category_name,
+            payment_method,
+            amount,
+            tax_amount,
+            total_amount,
+            invoice_date,
+            status,
+            notes,
+            created_by
+          )
+          VALUES ($1, $2, $3, $4, 'income', $5, $6, $7, $8, $9, 0, $9, $10, 'paid', $11, $12)
+          ON CONFLICT (invoice_number) DO NOTHING
+        `,
+        [
+          invoiceNumber,
+          input.scope_type,
+          input.institution_id,
+          incomeId,
+          input.payer_name ?? input.paid_by_label ?? "Customer / Payer",
+          input.paid_to_label || input.paid_to || "Receiver",
+          categoryName,
+          input.payment_method,
+          input.amount,
+          input.income_date,
+          input.description || null,
+          input.user_id || null,
+        ]
+      );
+    } catch (invErr) {
+      console.error("Auto-generating invoice error:", invErr);
+    }
+  }
+
   return result.rows[0];
 }
 
@@ -1261,7 +1413,7 @@ export async function updateFinanceRecurringExpense(db: Queryable, input: Recurr
 }
 
 function incomeRowsSql(options: Pick<FinanceIncomeListOptions, "scope_type" | "institution_id">) {
-  const institutionParam = options.scope_type === "institution" ? "$1" : "NULL";
+  const isInstitutionScope = options.scope_type === "institution";
   return `
     WITH income_rows AS (
       SELECT
@@ -1274,11 +1426,13 @@ function incomeRowsSql(options: Pick<FinanceIncomeListOptions, "scope_type" | "i
         fie.income_date,
         fie.amount,
         fie.payment_method::text AS payment_method,
+        fie.paid_by,
+        fie.paid_by_label,
         fie.paid_to,
         fie.paid_to_label,
         fie.category_id,
         COALESCE(fic.name, 'Manual Income') AS category_name,
-        creator.full_name AS payer_name,
+        COALESCE(fie.payer_name, fie.paid_by_label, creator.full_name, 'Payer') AS payer_name,
         NULL::text AS reference,
         fie.invoice_url,
         fie.invoice_public_id,
@@ -1292,8 +1446,8 @@ function incomeRowsSql(options: Pick<FinanceIncomeListOptions, "scope_type" | "i
       LEFT JOIN users creator ON creator.id = fie.created_by
       WHERE ${scopePredicate("fie", options)}
 
-      ${options.scope_type === "institution" ? `
       UNION ALL
+
       SELECT
         ('fee_payment:' || sfp.id)::text AS row_id,
         sfp.id::bigint AS source_id,
@@ -1302,26 +1456,40 @@ function incomeRowsSql(options: Pick<FinanceIncomeListOptions, "scope_type" | "i
         sfp.institution_id,
         ip.name AS institution_name,
         COALESCE(sfp.received_at, sfp.verified_at, sfp.created_at)::date AS income_date,
-        sfp.total_amount AS amount,
-        CASE WHEN sfp.payment_method = 'qr' THEN 'upi' ELSE sfp.payment_method END::text AS payment_method,
-        'institution_account'::text AS paid_to,
-        'Institution Account'::text AS paid_to_label,
+        COALESCE(sfp.total_amount, sfp.subtotal_amount, 0) AS amount,
+        CASE 
+          WHEN sfp.payment_method = 'qr' THEN 'upi'
+          WHEN sfp.payment_method IN ('cash', 'upi', 'net_banking') THEN sfp.payment_method
+          ELSE 'cash'
+        END::text AS payment_method,
+        'student'::text AS paid_by,
+        COALESCE(student.full_name, 'Student #' || sfp.student_user_id)::text AS paid_by_label,
+        CASE WHEN sfp.received_by IS NOT NULL THEN 'admin' ELSE 'institution_account' END::text AS paid_to,
+        COALESCE(receiver.full_name, 'Institution Account')::text AS paid_to_label,
         NULL::int AS category_id,
-        'Student Fee'::text AS category_name,
-        student.full_name AS payer_name,
-        sfp.transaction_id AS reference,
+        CASE 
+          WHEN prog.title IS NOT NULL THEN ('Student Fee (' || prog.title || ')')::text
+          ELSE 'Student Fee'::text
+        END AS category_name,
+        COALESCE(student.full_name, 'Student #' || sfp.student_user_id) AS payer_name,
+        COALESCE(sfp.transaction_id, 'FEE-' || sfp.id)::text AS reference,
         sfp.screenshot_url AS invoice_url,
         sfp.screenshot_public_id AS invoice_public_id,
         sfp.screenshot_resource_type AS invoice_resource_type,
         NULL::varchar AS invoice_file_name,
-        sfp.remarks AS description,
+        COALESCE(sfp.remarks, 'Student Fee Payment') AS description,
         sfp.created_at
       FROM student_fee_payments sfp
-      JOIN institution_profiles ip ON ip.id = sfp.institution_id
+      LEFT JOIN institution_profiles ip ON ip.id = sfp.institution_id
       LEFT JOIN users student ON student.id = sfp.student_user_id
-      WHERE sfp.institution_id = ${institutionParam}
-        AND COALESCE(sfp.status, 'paid') IN ('paid', 'verified')
-      ` : `
+      LEFT JOIN users receiver ON receiver.id = COALESCE(sfp.received_by, sfp.verified_by)
+      LEFT JOIN student_enrollments se ON se.id = sfp.enrollment_id
+      LEFT JOIN institution_programs prog ON prog.id = se.program_id
+      WHERE ${isInstitutionScope || options.institution_id ? `sfp.institution_id = $1` : `1=0`}
+        AND LOWER(COALESCE(sfp.status, 'paid')) IN ('paid', 'verified', 'approved')
+        AND COALESCE(sfp.total_amount, sfp.subtotal_amount, 0) > 0
+
+      ${options.scope_type === "platform" ? `
       UNION ALL
       SELECT
         ('subscription:' || sub.id)::text AS row_id,
@@ -1333,6 +1501,8 @@ function incomeRowsSql(options: Pick<FinanceIncomeListOptions, "scope_type" | "i
         COALESCE(sub.approved_at, sub.starts_at::timestamp, sub.created_at)::date AS income_date,
         sub.price AS amount,
         'net_banking'::text AS payment_method,
+        sub.created_by::text AS paid_by,
+        COALESCE(ip.name, 'Institution')::text AS paid_by_label,
         'platform_account'::text AS paid_to,
         'Platform Account'::text AS paid_to_label,
         NULL::int AS category_id,
@@ -1349,7 +1519,7 @@ function incomeRowsSql(options: Pick<FinanceIncomeListOptions, "scope_type" | "i
       JOIN institution_profiles ip ON ip.id = sub.institution_id
       JOIN sales_packages sp ON sp.id = sub.package_id
       WHERE sub.status = 'active'
-      `}
+      ` : ``}
     )
   `;
 }
@@ -1520,10 +1690,10 @@ export async function createFinanceExpenseEntry(db: Queryable, input: FinanceExp
   const result = await db.query<{ id: string }>(`
     INSERT INTO finance_expense_entries (
       scope_type, institution_id, category_id, payment_method, payment_status,
-      paid_by, paid_by_label, amount, expense_date, invoice_url, invoice_public_id,
+      paid_by, paid_by_label, paid_to, paid_to_label, amount, expense_date, invoice_url, invoice_public_id,
       invoice_resource_type, invoice_file_name, description, created_by, updated_by
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17)
     RETURNING id
   `, [
     input.scope_type,
@@ -1533,6 +1703,8 @@ export async function createFinanceExpenseEntry(db: Queryable, input: FinanceExp
     input.payment_status,
     input.paid_by,
     input.paid_by_label,
+    input.paid_to ?? null,
+    input.paid_to_label ?? null,
     input.amount,
     input.expense_date,
     input.invoice_url ?? null,
@@ -1562,6 +1734,8 @@ function expenseRowsSql(options: Pick<FinanceExpenseListOptions, "scope_type" | 
         fee.payment_status::text AS payment_status,
         fee.paid_by,
         fee.paid_by_label,
+        COALESCE(fee.paid_to, '')::text AS paid_to,
+        COALESCE(fee.paid_to_label, fee.paid_to, '')::text AS paid_to_label,
         fee.category_id,
         COALESCE(fec.name, 'Manual Expense') AS category_name,
         NULL::text AS reference,
@@ -1591,6 +1765,8 @@ function expenseRowsSql(options: Pick<FinanceExpenseListOptions, "scope_type" | 
         'paid'::text AS payment_status,
         'institution_account'::text AS paid_by,
         'Institution Account'::text AS paid_by_label,
+        'platform'::text AS paid_to,
+        'Platform Account'::text AS paid_to_label,
         NULL::int AS category_id,
         'Subscription'::text AS category_name,
         sp.name AS reference,
@@ -1621,6 +1797,8 @@ function expenseRowsSql(options: Pick<FinanceExpenseListOptions, "scope_type" | 
         'paid'::text AS payment_status,
         ('user:' || fae.user_id)::text AS paid_by,
         COALESCE(NULLIF(u.full_name, ''), u.email, 'Allowance user') AS paid_by_label,
+        ('user:' || fae.user_id)::text AS paid_to,
+        COALESCE(NULLIF(u.full_name, ''), u.email, 'Allowance user') AS paid_to_label,
         NULL::int AS category_id,
         'Allowance'::text AS category_name,
         COALESCE(NULLIF(u.full_name, ''), u.email, 'Allowance user') AS reference,
@@ -1649,6 +1827,8 @@ function expenseRowsSql(options: Pick<FinanceExpenseListOptions, "scope_type" | 
         fre.payment_status::text AS payment_status,
         fre.paid_by,
         fre.paid_by_label,
+        COALESCE(fre.paid_by, '')::text AS paid_to,
+        COALESCE(fre.paid_by_label, '')::text AS paid_to_label,
         NULL::int AS category_id,
         COALESCE(category_rollup.category_names_text, 'Recurring Expense') AS category_name,
         fre.title AS reference,
@@ -2037,7 +2217,7 @@ export async function listFinanceAllowanceUserOptions(
   institutionId: number | null
 ) {
   await ensureFinanceIncomeSchema(db);
-  if (scopeType === "platform") {
+  if (scopeType === "platform" || !institutionId) {
     const result = await db.query<FinanceAllowanceUserOption>(`
       SELECT id, full_name, email, role_label
       FROM (
@@ -2045,89 +2225,93 @@ export async function listFinanceAllowanceUserOptions(
           u.id,
           u.full_name,
           u.email,
-          r.name AS role_label,
-          r.code AS role_code
+          COALESCE(d.name, pr.name, r.name, pr.code, r.code, 'Platform Staff') AS role_label,
+          COALESCE(pr.code, r.code, 'staff') AS role_code
         FROM users u
-        JOIN user_roles ur ON ur.user_id = u.id
-        JOIN roles r ON r.id = ur.role_id
-        JOIN scope_types st ON st.id = r.scope_id
-        WHERE st.code = 'platform'
+        LEFT JOIN user_roles ur ON ur.user_id = u.id
+        LEFT JOIN roles pr ON pr.id = ur.role_id
+        LEFT JOIN institution_memberships im ON im.user_id = u.id AND im.is_active = TRUE AND COALESCE(im.is_deleted, FALSE) = FALSE
+        LEFT JOIN roles r ON r.id = im.role_id
+        LEFT JOIN user_profiles up ON up.user_id = u.id
+        LEFT JOIN designations d ON d.id = up.designation_id
+        WHERE (
+          COALESCE(pr.code, '') IN ('platform_admin', 'super_admin', 'platform_staff')
+          OR (im.institution_id IS NULL AND COALESCE(r.code, pr.code, '') NOT IN ('student', 'guardian', 'parent'))
+        )
           AND u.is_active = TRUE
           AND COALESCE(u.is_deleted, FALSE) = FALSE
-          AND COALESCE(r.is_deleted, FALSE) = FALSE
-        ORDER BY u.id, CASE WHEN r.code = 'platform_admin' THEN 0 ELSE 1 END
+        ORDER BY u.id, CASE WHEN COALESCE(pr.code, r.code) = 'platform_admin' THEN 0 WHEN COALESCE(pr.code, r.code) = 'super_admin' THEN 1 ELSE 2 END
       ) platform_user_options
       ORDER BY
-        CASE WHEN role_code = 'platform_admin' THEN 0 ELSE 1 END,
+        CASE WHEN role_code = 'platform_admin' THEN 0 WHEN role_code = 'super_admin' THEN 1 ELSE 2 END,
         full_name ASC
       LIMIT 500
     `);
     return result.rows;
   }
 
-  if (!institutionId) return [];
   const result = await db.query<FinanceAllowanceUserOption>(`
     SELECT id, full_name, email, role_label
     FROM (
       SELECT DISTINCT ON (u.id)
         u.id,
-        u.full_name,
+        COALESCE(NULLIF(TRIM(u.full_name), ''), u.email) AS full_name,
         u.email,
-        r.name AS role_label,
-        r.code AS role_code
+        COALESCE(d.name, r.name, pr.name, r.code, pr.code, 'Staff') AS role_label,
+        COALESCE(r.code, pr.code, 'staff') AS role_code
       FROM users u
-      JOIN institution_memberships im ON im.user_id = u.id
-      JOIN roles r ON r.id = im.role_id
-      WHERE im.institution_id = $1
-        AND r.code IN ('institution_admin', 'teacher')
-        AND im.is_active = TRUE
-        AND COALESCE(im.is_deleted, FALSE) = FALSE
+      LEFT JOIN institution_memberships im ON im.user_id = u.id AND im.institution_id = $1 AND im.is_active = TRUE AND COALESCE(im.is_deleted, FALSE) = FALSE
+      LEFT JOIN roles r ON r.id = im.role_id
+      LEFT JOIN user_roles ur ON ur.user_id = u.id
+      LEFT JOIN roles pr ON pr.id = ur.role_id
+      LEFT JOIN user_profiles up ON up.user_id = u.id
+      LEFT JOIN designations d ON d.id = up.designation_id
+      WHERE (
+        (im.institution_id = $1 AND COALESCE(r.code, pr.code, '') NOT IN ('student', 'guardian', 'parent'))
+        OR (up.under_institution_id = $1 AND COALESCE(r.code, pr.code, '') NOT IN ('student', 'guardian', 'parent'))
+        OR EXISTS (
+          SELECT 1 FROM institution_memberships im2 
+          JOIN roles r2 ON r2.id = im2.role_id
+          WHERE im2.user_id = u.id AND im2.institution_id = $1 AND r2.code NOT IN ('student', 'guardian', 'parent')
+            AND im2.is_active = TRUE AND COALESCE(im2.is_deleted, FALSE) = FALSE
+        )
+      )
         AND u.is_active = TRUE
         AND COALESCE(u.is_deleted, FALSE) = FALSE
-      ORDER BY u.id, CASE WHEN r.code = 'institution_admin' THEN 0 ELSE 1 END
+      ORDER BY u.id, CASE WHEN COALESCE(r.code, pr.code) = 'institution_admin' THEN 0 WHEN COALESCE(r.code, pr.code) = 'teacher' THEN 1 ELSE 2 END
     ) employee_options
     ORDER BY
-      CASE WHEN role_code = 'institution_admin' THEN 0 ELSE 1 END,
+      CASE WHEN role_code = 'institution_admin' THEN 0 WHEN role_code = 'teacher' THEN 1 ELSE 2 END,
       full_name ASC
     LIMIT 500
   `, [institutionId]);
   return result.rows;
 }
 
-async function assertAllowanceUserAllowed(db: Queryable, input: Pick<FinanceAllowanceInput, "scope_type" | "institution_id" | "user_id">) {
-  if (input.scope_type === "platform") {
-    const result = await db.query<{ id: number }>(`
-      SELECT u.id
-      FROM users u
-      JOIN user_roles ur ON ur.user_id = u.id
-      JOIN roles r ON r.id = ur.role_id
-      JOIN scope_types st ON st.id = r.scope_id
-      WHERE u.id = $1
-        AND st.code = 'platform'
-        AND u.is_active = TRUE
-        AND COALESCE(u.is_deleted, FALSE) = FALSE
-        AND COALESCE(r.is_deleted, FALSE) = FALSE
-      LIMIT 1
-    `, [input.user_id]);
-    if (!result.rows[0]) throw new Error("Select a valid platform user");
-    return;
-  }
+export const listFinanceEmployeeOptions = listFinanceAllowanceUserOptions;
 
+async function assertAllowanceUserAllowed(db: Queryable, input: Pick<FinanceAllowanceInput, "scope_type" | "institution_id" | "user_id">) {
   const result = await db.query<{ id: number }>(`
     SELECT u.id
-    FROM institution_memberships im
-    JOIN users u ON u.id = im.user_id
-    JOIN roles r ON r.id = im.role_id
-    WHERE im.institution_id = $1
-      AND u.id = $2
-      AND r.code IN ('institution_admin', 'teacher')
-      AND im.is_active = TRUE
-      AND COALESCE(im.is_deleted, FALSE) = FALSE
+    FROM users u
+    LEFT JOIN institution_memberships im ON im.user_id = u.id
+    LEFT JOIN roles r ON r.id = im.role_id
+    LEFT JOIN user_roles ur ON ur.user_id = u.id
+    LEFT JOIN roles pr ON pr.id = ur.role_id
+    WHERE u.id = $1
+      AND (
+        ($2::INT IS NULL AND COALESCE(r.code, pr.code, '') NOT IN ('student', 'guardian', 'parent'))
+        OR (im.institution_id = $2 AND COALESCE(r.code, '') NOT IN ('student', 'guardian', 'parent'))
+        OR (COALESCE(pr.code, '') IN ('platform_admin', 'super_admin'))
+      )
       AND u.is_active = TRUE
       AND COALESCE(u.is_deleted, FALSE) = FALSE
     LIMIT 1
-  `, [input.institution_id, input.user_id]);
-  if (!result.rows[0]) throw new Error("Select a valid institution employee");
+  `, [input.user_id, input.institution_id]);
+
+  if (!result.rows[0]) {
+    throw new Error("Selected employee is not an active staff member eligible for allowance");
+  }
 }
 
 export async function createFinanceAllowanceEntry(db: Queryable, input: FinanceAllowanceInput) {
@@ -2209,8 +2393,8 @@ function allowanceRowsSql(options: Pick<FinanceAllowanceListOptions, "scope_type
         role_match.role_label,
         fae.allowance_date,
         fae.amount,
-        COALESCE(spend_totals.spent_amount, 0) AS spent_amount,
-        (fae.amount - COALESCE(spend_totals.spent_amount, 0)) AS balance_amount,
+        COALESCE(spend_calc.spent_amount, 0) AS spent_amount,
+        (fae.amount - COALESCE(spend_calc.spent_amount, 0)) AS balance_amount,
         fae.payment_method::text AS payment_method,
         fae.invoice_url,
         fae.invoice_public_id,
@@ -2222,10 +2406,58 @@ function allowanceRowsSql(options: Pick<FinanceAllowanceListOptions, "scope_type
       JOIN users u ON u.id = fae.user_id
       LEFT JOIN institution_profiles ip ON ip.id = fae.institution_id
       LEFT JOIN LATERAL (
-        SELECT COALESCE(SUM(fase.amount), 0) AS spent_amount
-        FROM finance_allowance_spend_entries fase
-        WHERE fase.allowance_id = fae.id
-      ) spend_totals ON TRUE
+        SELECT 
+          CASE 
+            WHEN NOT EXISTS (
+              SELECT 1 FROM finance_allowance_entries fae_next
+              WHERE fae_next.user_id = fae.user_id
+                AND fae_next.scope_type = fae.scope_type
+                AND COALESCE(fae_next.institution_id, 0) = COALESCE(fae.institution_id, 0)
+                AND (
+                  fae_next.allowance_date > fae.allowance_date
+                  OR (fae_next.allowance_date = fae.allowance_date AND fae_next.id > fae.id)
+                )
+            ) THEN 
+              GREATEST(0, COALESCE(user_total_spends.total_spent, 0) - COALESCE(prior_allowances.prior_amount, 0))
+            ELSE 
+              GREATEST(0, LEAST(
+                fae.amount, 
+                COALESCE(user_total_spends.total_spent, 0) - COALESCE(prior_allowances.prior_amount, 0)
+              ))
+          END AS spent_amount
+        FROM (
+          SELECT COALESCE(SUM(combined_spend.amount), 0) AS total_spent
+          FROM (
+            SELECT fase.amount
+            FROM finance_allowance_spend_entries fase
+            WHERE fase.user_id = fae.user_id
+              AND fase.scope_type = fae.scope_type
+              AND COALESCE(fase.institution_id, 0) = COALESCE(fae.institution_id, 0)
+            UNION ALL
+            SELECT fee.amount
+            FROM finance_expense_entries fee
+            WHERE (
+              fee.paid_by = fae.user_id::text
+              OR fee.paid_by = ('user:' || fae.user_id)
+              OR fee.paid_by_label = u.full_name
+              OR (fee.paid_by ~ '^[0-9]+$' AND fee.paid_by::int = fae.user_id)
+            )
+            AND fee.scope_type = fae.scope_type
+            AND COALESCE(fee.institution_id, 0) = COALESCE(fae.institution_id, 0)
+          ) combined_spend
+        ) user_total_spends
+        LEFT JOIN LATERAL (
+          SELECT COALESCE(SUM(fae_prior.amount), 0) AS prior_amount
+          FROM finance_allowance_entries fae_prior
+          WHERE fae_prior.user_id = fae.user_id
+            AND fae_prior.scope_type = fae.scope_type
+            AND COALESCE(fae_prior.institution_id, 0) = COALESCE(fae.institution_id, 0)
+            AND (
+              fae_prior.allowance_date < fae.allowance_date 
+              OR (fae_prior.allowance_date = fae.allowance_date AND fae_prior.id < fae.id)
+            )
+        ) prior_allowances ON TRUE
+      ) spend_calc ON TRUE
       LEFT JOIN LATERAL (
         SELECT r.name AS role_label
         FROM roles r
@@ -2259,7 +2491,7 @@ export async function listFinanceAllowance(db: Queryable, options: FinanceAllowa
   monthStart.setDate(1);
   const monthStartText = monthStart.toISOString().slice(0, 10);
 
-  const [data, total, filteredTotal, thisMonth] = await Promise.all([
+  const [data, total, filteredTotal, thisMonth, cashInHandTotal] = await Promise.all([
     db.query<FinanceAllowanceRow>(`
       ${baseSql}
       SELECT *
@@ -2282,6 +2514,10 @@ export async function listFinanceAllowance(db: Queryable, options: FinanceAllowa
       FROM allowance_rows
       WHERE allowance_date >= $${scopeParams.length + 1}::date
     `, [...scopeParams, monthStartText]),
+    db.query<{ total: string | null }>(`
+      ${baseSql}
+      SELECT COALESCE(SUM(balance_amount), 0) AS total FROM allowance_rows ${filters.where}
+    `, params),
   ]);
 
   return {
@@ -2289,6 +2525,7 @@ export async function listFinanceAllowance(db: Queryable, options: FinanceAllowa
     total: Number(total.rows[0]?.count ?? 0),
     filtered_total: filteredTotal.rows[0]?.total ?? "0",
     this_month_total: thisMonth.rows[0]?.total ?? "0",
+    cash_in_hand_total: cashInHandTotal.rows[0]?.total ?? "0",
   };
 }
 
@@ -2490,6 +2727,9 @@ export async function createFinanceAllowanceSpendEntry(db: Queryable, input: Fin
 export async function updateFinanceIncomeEntry(db: Queryable, id: number, input: {
   category_id?: number;
   payment_method?: string;
+  paid_by?: string;
+  paid_by_label?: string;
+  payer_name?: string;
   paid_to?: string;
   paid_to_label?: string;
   amount?: number;
@@ -2508,6 +2748,18 @@ export async function updateFinanceIncomeEntry(db: Queryable, id: number, input:
   if (input.payment_method !== undefined) {
     params.push(input.payment_method);
     fields.push(`payment_method = $${params.length}`);
+  }
+  if (input.paid_by !== undefined) {
+    params.push(input.paid_by);
+    fields.push(`paid_by = $${params.length}`);
+  }
+  if (input.paid_by_label !== undefined) {
+    params.push(input.paid_by_label);
+    fields.push(`paid_by_label = $${params.length}`);
+  }
+  if (input.payer_name !== undefined) {
+    params.push(input.payer_name);
+    fields.push(`payer_name = $${params.length}`);
   }
   if (input.paid_to !== undefined) {
     params.push(input.paid_to);
@@ -2551,6 +2803,8 @@ export async function updateFinanceExpenseEntry(db: Queryable, id: number, input
   payment_status?: string;
   paid_by?: string;
   paid_by_label?: string;
+  paid_to?: string;
+  paid_to_label?: string;
   amount?: number;
   expense_date?: string;
   description?: string | null;
@@ -2579,6 +2833,14 @@ export async function updateFinanceExpenseEntry(db: Queryable, id: number, input
   if (input.paid_by_label !== undefined) {
     params.push(input.paid_by_label);
     fields.push(`paid_by_label = $${params.length}`);
+  }
+  if (input.paid_to !== undefined) {
+    params.push(input.paid_to);
+    fields.push(`paid_to = $${params.length}`);
+  }
+  if (input.paid_to_label !== undefined) {
+    params.push(input.paid_to_label);
+    fields.push(`paid_to_label = $${params.length}`);
   }
   if (input.amount !== undefined) {
     params.push(input.amount);
@@ -2660,3 +2922,981 @@ export async function deleteFinanceRecurringExpense(db: Queryable, id: number) {
   await ensureFinanceIncomeSchema(db);
   await db.query(`DELETE FROM finance_recurring_expenses WHERE id = $1`, [id]);
 }
+
+export type FinancePaymentMethodType =
+  | "net_banking"
+  | "phonepe"
+  | "google_pay"
+  | "paytm"
+  | "bhim_upi"
+  | "other_upi"
+  | "cash"
+  | "cheque"
+  | "pos_card"
+  | "custom";
+
+export type FinancePaymentMethodRow = {
+  id: string;
+  scope_type: FinanceScope;
+  institution_id: number | null;
+  institution_name?: string | null;
+  method_type: FinancePaymentMethodType;
+  title: string;
+  bank_name: string | null;
+  account_holder_name: string | null;
+  account_number: string | null;
+  ifsc_code: string | null;
+  branch_name: string | null;
+  account_type: string | null;
+  upi_id: string | null;
+  upi_number: string | null;
+  upi_provider_name: string | null;
+  merchant_name: string | null;
+  qr_code_url: string | null;
+  qr_code_public_id: string | null;
+  instructions: string | null;
+  is_active: boolean;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type FinancePaymentMethodInput = {
+  scope_type: FinanceScope;
+  institution_id: number | null;
+  method_type: FinancePaymentMethodType;
+  title: string;
+  bank_name?: string | null;
+  account_holder_name?: string | null;
+  account_number?: string | null;
+  ifsc_code?: string | null;
+  branch_name?: string | null;
+  account_type?: string | null;
+  upi_id?: string | null;
+  upi_number?: string | null;
+  upi_provider_name?: string | null;
+  merchant_name?: string | null;
+  qr_code_url?: string | null;
+  qr_code_public_id?: string | null;
+  instructions?: string | null;
+  is_active?: boolean;
+  is_default?: boolean;
+  user_id: number;
+};
+
+export async function listFinancePaymentMethods(db: Queryable, options: { scope_type: FinanceScope; institution_id: number | null }): Promise<FinancePaymentMethodRow[]> {
+  await ensureFinanceIncomeSchema(db);
+  const where = options.scope_type === "platform" ? "scope_type = 'platform'" : "scope_type = 'institution' AND institution_id = $1";
+  const params = options.scope_type === "platform" ? [] : [options.institution_id];
+  const res = await db.query<FinancePaymentMethodRow>(
+    `SELECT * FROM finance_payment_methods WHERE ${where} ORDER BY is_default DESC, is_active DESC, id DESC`,
+    params
+  );
+  return res.rows;
+}
+
+export async function createFinancePaymentMethod(db: Queryable, input: FinancePaymentMethodInput): Promise<FinancePaymentMethodRow> {
+  await ensureFinanceIncomeSchema(db);
+  if (input.is_default) {
+    const where = input.scope_type === "platform" ? "scope_type = 'platform'" : "scope_type = 'institution' AND institution_id = $1";
+    const params = input.scope_type === "platform" ? [] : [input.institution_id];
+    await db.query(`UPDATE finance_payment_methods SET is_default = FALSE WHERE ${where}`, params);
+  }
+  const res = await db.query<FinancePaymentMethodRow>(
+    `
+      INSERT INTO finance_payment_methods (
+        scope_type, institution_id, method_type, title,
+        bank_name, account_holder_name, account_number, ifsc_code, branch_name, account_type,
+        upi_id, upi_number, upi_provider_name, merchant_name,
+        qr_code_url, qr_code_public_id, instructions,
+        is_active, is_default, created_by, updated_by
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$20)
+      RETURNING *
+    `,
+    [
+      input.scope_type,
+      input.institution_id,
+      input.method_type,
+      input.title,
+      input.bank_name || null,
+      input.account_holder_name || null,
+      input.account_number || null,
+      input.ifsc_code || null,
+      input.branch_name || null,
+      input.account_type || null,
+      input.upi_id || null,
+      input.upi_number || null,
+      input.upi_provider_name || null,
+      input.merchant_name || null,
+      input.qr_code_url || null,
+      input.qr_code_public_id || null,
+      input.instructions || null,
+      input.is_active ?? true,
+      input.is_default ?? false,
+      input.user_id,
+    ]
+  );
+  return res.rows[0];
+}
+
+export async function updateFinancePaymentMethod(db: Queryable, id: number, input: Partial<FinancePaymentMethodInput> & { updated_by?: number }): Promise<FinancePaymentMethodRow | null> {
+  await ensureFinanceIncomeSchema(db);
+  const existingRes = await db.query<FinancePaymentMethodRow>(`SELECT * FROM finance_payment_methods WHERE id = $1`, [id]);
+  const existing = existingRes.rows[0];
+  if (!existing) return null;
+
+  if (input.is_default) {
+    const where = existing.scope_type === "platform" ? "scope_type = 'platform'" : "scope_type = 'institution' AND institution_id = $1";
+    const params = existing.scope_type === "platform" ? [] : [existing.institution_id];
+    await db.query(`UPDATE finance_payment_methods SET is_default = FALSE WHERE ${where}`, params);
+  }
+
+  const fields: string[] = [];
+  const params: any[] = [];
+
+  const addField = (col: string, val: any) => {
+    if (val !== undefined) {
+      params.push(val);
+      fields.push(`${col} = $${params.length}`);
+    }
+  };
+
+  addField("method_type", input.method_type);
+  addField("title", input.title);
+  addField("bank_name", input.bank_name);
+  addField("account_holder_name", input.account_holder_name);
+  addField("account_number", input.account_number);
+  addField("ifsc_code", input.ifsc_code);
+  addField("branch_name", input.branch_name);
+  addField("account_type", input.account_type);
+  addField("upi_id", input.upi_id);
+  addField("upi_number", input.upi_number);
+  addField("upi_provider_name", input.upi_provider_name);
+  addField("merchant_name", input.merchant_name);
+  addField("qr_code_url", input.qr_code_url);
+  addField("qr_code_public_id", input.qr_code_public_id);
+  addField("instructions", input.instructions);
+  addField("is_active", input.is_active);
+  addField("is_default", input.is_default);
+  addField("updated_by", input.updated_by);
+
+  if (fields.length === 0) return existing;
+  fields.push("updated_at = NOW()");
+  params.push(id);
+
+  const res = await db.query<FinancePaymentMethodRow>(
+    `UPDATE finance_payment_methods SET ${fields.join(", ")} WHERE id = $${params.length} RETURNING *`,
+    params
+  );
+  return res.rows[0] ?? null;
+}
+
+export async function deleteFinancePaymentMethod(db: Queryable, id: number): Promise<void> {
+  await ensureFinanceIncomeSchema(db);
+  await db.query(`DELETE FROM finance_payment_methods WHERE id = $1`, [id]);
+}
+
+export type UnifiedFinanceCategory = {
+  name: string;
+  targets: ("income" | "expense" | "recurring")[];
+  income_id: number | null;
+  expense_id: number | null;
+  recurring_id: number | null;
+  is_active: boolean;
+  created_at: string;
+};
+
+export async function listUnifiedFinanceCategories(db: Queryable, options: { scope_type: FinanceScope; institution_id: number | null }): Promise<UnifiedFinanceCategory[]> {
+  await ensureFinanceIncomeSchema(db);
+  const where = options.scope_type === "platform" ? "scope_type = 'platform'" : "scope_type = 'institution' AND institution_id = $1";
+  const params = options.scope_type === "platform" ? [] : [options.institution_id];
+
+  const [incRes, expRes, recRes] = await Promise.all([
+    db.query<{ id: number; name: string; is_active: boolean; created_at: string }>(`SELECT id, name, is_active, created_at FROM finance_income_categories WHERE ${where} AND is_active = TRUE ORDER BY name ASC`, params),
+    db.query<{ id: number; name: string; is_active: boolean; created_at: string }>(`SELECT id, name, is_active, created_at FROM finance_expense_categories WHERE ${where} AND is_active = TRUE ORDER BY name ASC`, params),
+    db.query<{ id: number; name: string; is_active: boolean; created_at: string }>(`SELECT id, name, is_active, created_at FROM finance_recurring_expense_categories WHERE ${where} AND is_active = TRUE ORDER BY name ASC`, params),
+  ]);
+
+  const map = new Map<string, UnifiedFinanceCategory>();
+
+  for (const row of incRes.rows) {
+    const key = row.name.toLowerCase().trim();
+    if (!map.has(key)) {
+      map.set(key, {
+        name: row.name,
+        targets: ["income"],
+        income_id: row.id,
+        expense_id: null,
+        recurring_id: null,
+        is_active: row.is_active,
+        created_at: row.created_at,
+      });
+    } else {
+      const item = map.get(key)!;
+      if (!item.targets.includes("income")) item.targets.push("income");
+      item.income_id = row.id;
+    }
+  }
+
+  for (const row of expRes.rows) {
+    const key = row.name.toLowerCase().trim();
+    if (!map.has(key)) {
+      map.set(key, {
+        name: row.name,
+        targets: ["expense"],
+        income_id: null,
+        expense_id: row.id,
+        recurring_id: null,
+        is_active: row.is_active,
+        created_at: row.created_at,
+      });
+    } else {
+      const item = map.get(key)!;
+      if (!item.targets.includes("expense")) item.targets.push("expense");
+      item.expense_id = row.id;
+    }
+  }
+
+  for (const row of recRes.rows) {
+    const key = row.name.toLowerCase().trim();
+    if (!map.has(key)) {
+      map.set(key, {
+        name: row.name,
+        targets: ["recurring"],
+        income_id: null,
+        expense_id: null,
+        recurring_id: row.id,
+        is_active: row.is_active,
+        created_at: row.created_at,
+      });
+    } else {
+      const item = map.get(key)!;
+      if (!item.targets.includes("recurring")) item.targets.push("recurring");
+      item.recurring_id = row.id;
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function createUnifiedFinanceCategory(db: Queryable, input: {
+  scope_type: FinanceScope;
+  institution_id: number | null;
+  name: string;
+  targets: ("income" | "expense" | "recurring")[];
+  user_id: number;
+}) {
+  await ensureFinanceIncomeSchema(db);
+  const cleanName = input.name.trim();
+  if (!cleanName) throw new Error("Category name is required");
+  if (!input.targets || input.targets.length === 0) throw new Error("Select at least one page for this category");
+
+  for (const target of input.targets) {
+    const table = target === "income"
+      ? "finance_income_categories"
+      : target === "expense"
+        ? "finance_expense_categories"
+        : "finance_recurring_expense_categories";
+
+    const check = await db.query<{ id: number }>(
+      `SELECT id FROM ${table} WHERE scope_type = $1 AND COALESCE(institution_id, 0) = COALESCE($2, 0) AND LOWER(name) = LOWER($3) LIMIT 1`,
+      [input.scope_type, input.institution_id, cleanName]
+    );
+
+    if (check.rows[0]) {
+      await db.query(`UPDATE ${table} SET is_active = TRUE, updated_by = $1, updated_at = NOW() WHERE id = $2`, [input.user_id, check.rows[0].id]);
+    } else {
+      await db.query(
+        `INSERT INTO ${table} (scope_type, institution_id, name, is_active, created_by, updated_by) VALUES ($1, $2, $3, TRUE, $4, $4)`,
+        [input.scope_type, input.institution_id, cleanName, input.user_id]
+      );
+    }
+  }
+}
+
+export async function deleteUnifiedFinanceCategory(db: Queryable, input: {
+  scope_type: FinanceScope;
+  institution_id: number | null;
+  name: string;
+}) {
+  await ensureFinanceIncomeSchema(db);
+  const cleanName = input.name.trim();
+  await Promise.all([
+    db.query(`DELETE FROM finance_income_categories WHERE scope_type = $1 AND COALESCE(institution_id, 0) = COALESCE($2, 0) AND LOWER(name) = LOWER($3)`, [input.scope_type, input.institution_id, cleanName]),
+    db.query(`DELETE FROM finance_expense_categories WHERE scope_type = $1 AND COALESCE(institution_id, 0) = COALESCE($2, 0) AND LOWER(name) = LOWER($3)`, [input.scope_type, input.institution_id, cleanName]),
+    db.query(`DELETE FROM finance_recurring_expense_categories WHERE scope_type = $1 AND COALESCE(institution_id, 0) = COALESCE($2, 0) AND LOWER(name) = LOWER($3)`, [input.scope_type, input.institution_id, cleanName]),
+  ]);
+}
+
+export type FinancePayerSuggestion = {
+  id: string;
+  name: string;
+  type: "student" | "parent" | "contact" | "client" | "vendor" | "employee" | "custom";
+  label: string;
+  subtext?: string;
+  user_id?: number | null;
+};
+
+export async function listFinancePayerSuggestions(
+  dbRunner: Queryable,
+  scope: FinanceScope,
+  institutionId: number | null
+): Promise<FinancePayerSuggestion[]> {
+  await ensureFinanceIncomeSchema(dbRunner);
+  const suggestions: FinancePayerSuggestion[] = [];
+  const seenKeys = new Set<string>();
+
+  const isInst = scope === "institution" && Boolean(institutionId);
+
+  try {
+    if (isInst) {
+      // 1. Institution Students (with Class, Section, Roll Number)
+      try {
+        const studentRes = await dbRunner.query<{
+          user_id: number;
+          full_name: string;
+          class_name: string | null;
+          section_name: string | null;
+          roll_number: string | null;
+        }>(
+          `
+            SELECT DISTINCT ON (u.id)
+              u.id AS user_id,
+              u.full_name,
+              c.name AS class_name,
+              s.name AS section_name,
+              COALESCE(se.roll_number, sp.admission_number) AS roll_number
+            FROM users u
+            LEFT JOIN student_profiles sp ON sp.user_id = u.id
+            LEFT JOIN student_enrollments se ON se.student_id = sp.id AND COALESCE(se.is_deleted, FALSE) = FALSE
+            LEFT JOIN categories c ON c.id = se.class_category_id
+            LEFT JOIN sections s ON s.id = se.section_id
+            LEFT JOIN institution_memberships im ON im.user_id = u.id AND COALESCE(im.is_deleted, FALSE) = FALSE
+            LEFT JOIN roles r ON r.id = im.role_id
+            WHERE (
+              im.institution_id = $1
+              OR se.institution_id = $1
+              OR sp.user_id IN (SELECT user_id FROM institution_memberships WHERE institution_id = $1)
+            )
+              AND (
+                LOWER(COALESCE(r.code, r.name, '')) IN ('student', 'learner')
+                OR sp.id IS NOT NULL
+                OR se.id IS NOT NULL
+              )
+              AND u.is_active = TRUE
+              AND COALESCE(u.is_deleted, FALSE) = FALSE
+            ORDER BY u.id, u.full_name ASC
+            LIMIT 300
+          `,
+          [institutionId]
+        );
+
+        for (const row of studentRes.rows) {
+          if (!row.full_name || seenKeys.has(`student_${row.user_id}`)) continue;
+          seenKeys.add(`student_${row.user_id}`);
+          const classInfo = [
+            row.class_name,
+            row.section_name ? `Sec ${row.section_name}` : null,
+            row.roll_number ? `Roll: ${row.roll_number}` : null,
+          ].filter(Boolean).join(" • ");
+
+          suggestions.push({
+            id: `student_${row.user_id}`,
+            name: row.full_name,
+            type: "student",
+            label: `${row.full_name}${classInfo ? ` (${classInfo})` : ""}`,
+            subtext: classInfo || "Student",
+            user_id: row.user_id,
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching student payer suggestions:", err);
+      }
+
+      // 2. Institution Staff, Faculty, Admins & Employees
+      try {
+        const staffRes = await dbRunner.query<{
+          id: number;
+          full_name: string;
+          role_label: string | null;
+        }>(
+          `
+            SELECT DISTINCT ON (u.id)
+              u.id,
+              u.full_name,
+              COALESCE(d.name, r.name, r.code, 'Staff') AS role_label
+            FROM users u
+            LEFT JOIN institution_memberships im ON im.user_id = u.id AND COALESCE(im.is_deleted, FALSE) = FALSE
+            LEFT JOIN roles r ON r.id = im.role_id
+            LEFT JOIN user_profiles up ON up.user_id = u.id
+            LEFT JOIN designations d ON d.id = up.designation_id
+            WHERE (
+              im.institution_id = $1
+              OR up.institution_id = $1
+            )
+              AND LOWER(COALESCE(r.code, r.name, '')) NOT IN ('student', 'learner', 'guardian', 'parent')
+              AND u.is_active = TRUE
+              AND COALESCE(u.is_deleted, FALSE) = FALSE
+            ORDER BY u.id, u.full_name ASC
+            LIMIT 300
+          `,
+          [institutionId]
+        );
+
+        for (const row of staffRes.rows) {
+          if (!row.full_name || seenKeys.has(`employee_${row.id}`)) continue;
+          seenKeys.add(`employee_${row.id}`);
+          suggestions.push({
+            id: `employee_${row.id}`,
+            name: row.full_name,
+            type: "employee",
+            label: `${row.full_name} (${row.role_label || "Staff"})`,
+            subtext: row.role_label || "Staff Member",
+            user_id: row.id,
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching staff payer suggestions:", err);
+      }
+
+      // 3. Institution Parents & Guardians
+      try {
+        const parentRes = await dbRunner.query<{
+          user_id: number;
+          guardian_name: string;
+          student_name: string | null;
+          relationship: string | null;
+        }>(
+          `
+            SELECT DISTINCT ON (u.id)
+              u.id AS user_id,
+              u.full_name AS guardian_name,
+              student_u.full_name AS student_name,
+              sg.relationship
+            FROM users u
+            INNER JOIN student_guardians sg ON (sg.guardian_user_id = u.id OR sg.guardian_name = u.full_name) AND COALESCE(sg.is_deleted, FALSE) = FALSE
+            LEFT JOIN student_profiles sp ON sp.id = sg.student_id
+            LEFT JOIN users student_u ON student_u.id = sp.user_id
+            LEFT JOIN institution_memberships im ON im.user_id = student_u.id
+            WHERE im.institution_id = $1
+              AND u.is_active = TRUE
+              AND COALESCE(u.is_deleted, FALSE) = FALSE
+            ORDER BY u.id, u.full_name ASC
+            LIMIT 200
+          `,
+          [institutionId]
+        );
+
+        for (const row of parentRes.rows) {
+          if (!row.guardian_name || seenKeys.has(`parent_${row.user_id}`)) continue;
+          seenKeys.add(`parent_${row.user_id}`);
+          const sub = `Parent of ${row.student_name || "Student"}`;
+          suggestions.push({
+            id: `parent_${row.user_id}`,
+            name: row.guardian_name,
+            type: "parent",
+            label: `${row.guardian_name} (${sub})`,
+            subtext: sub,
+            user_id: row.user_id,
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching parent payer suggestions:", err);
+      }
+
+      // 4. Institution Clients
+      try {
+        const clientRes = await dbRunner.query<{
+          id: number;
+          name: string;
+          company_name: string | null;
+          client_type: string | null;
+          phone: string | null;
+        }>(
+          `
+            SELECT id, name, company_name, client_type, phone
+            FROM clients 
+            WHERE institution_id = $1
+            ORDER BY name ASC
+            LIMIT 150
+          `,
+          [institutionId]
+        );
+
+        for (const row of clientRes.rows) {
+          if (!row.name || seenKeys.has(`client_${row.name.toLowerCase().trim()}`)) continue;
+          seenKeys.add(`client_${row.name.toLowerCase().trim()}`);
+          const comp = [row.company_name, row.client_type, row.phone].filter(Boolean).join(" • ");
+          suggestions.push({
+            id: `client_${row.id}`,
+            name: row.name,
+            type: "client",
+            label: `${row.name}${comp ? ` (${comp})` : ""} (Client)`,
+            subtext: comp || "Client",
+            user_id: null,
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching client payer suggestions:", err);
+      }
+
+      // 5. Institution Vendors
+      try {
+        const vendorRes = await dbRunner.query<{
+          id: number;
+          name: string;
+          company_name: string | null;
+          category: string | null;
+          phone: string | null;
+        }>(
+          `
+            SELECT id, name, company_name, category, phone
+            FROM vendors
+            WHERE institution_id = $1
+            ORDER BY name ASC
+            LIMIT 150
+          `,
+          [institutionId]
+        );
+
+        for (const row of vendorRes.rows) {
+          if (!row.name || seenKeys.has(`vendor_${row.name.toLowerCase().trim()}`)) continue;
+          seenKeys.add(`vendor_${row.name.toLowerCase().trim()}`);
+          const comp = [row.category, row.company_name, row.phone].filter(Boolean).join(" • ");
+          suggestions.push({
+            id: `vendor_${row.id}`,
+            name: row.name,
+            type: "vendor",
+            label: `${row.name}${comp ? ` (${comp})` : ""} (Vendor)`,
+            subtext: comp || "Vendor / Supplier",
+            user_id: null,
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching vendor payer suggestions:", err);
+      }
+
+      // 6. Institution Contacts / Enquiries
+      try {
+        const enquiryRes = await dbRunner.query<{
+          id: number;
+          full_name: string;
+          phone: string | null;
+          source: string | null;
+        }>(
+          `
+            SELECT id, full_name, phone, source
+            FROM sales_enquiries
+            WHERE institution_id = $1
+              AND full_name IS NOT NULL AND full_name <> ''
+            ORDER BY id DESC
+            LIMIT 150
+          `,
+          [institutionId]
+        );
+
+        for (const row of enquiryRes.rows) {
+          if (!row.full_name || seenKeys.has(`contact_${row.full_name.toLowerCase().trim()}`)) continue;
+          seenKeys.add(`contact_${row.full_name.toLowerCase().trim()}`);
+          const sub = row.phone ? `Contact: ${row.phone}` : (row.source ? `Lead: ${row.source}` : "Contact Lead");
+          suggestions.push({
+            id: `contact_${row.id}`,
+            name: row.full_name,
+            type: "contact",
+            label: `${row.full_name} (${sub})`,
+            subtext: sub,
+            user_id: null,
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching enquiry payer suggestions:", err);
+      }
+    } else {
+      // Platform Scope: Platform Users, Platform Clients, Platform Vendors, Platform Leads
+      try {
+        const platformUsersRes = await dbRunner.query<{
+          id: number;
+          full_name: string;
+          role_label: string | null;
+        }>(
+          `
+            SELECT DISTINCT ON (u.id)
+              u.id,
+              u.full_name,
+              COALESCE(pr.name, pr.code, 'Platform Staff') AS role_label
+            FROM users u
+            JOIN user_roles ur ON ur.user_id = u.id
+            JOIN roles pr ON pr.id = ur.role_id
+            WHERE u.is_active = TRUE
+              AND COALESCE(u.is_deleted, FALSE) = FALSE
+            ORDER BY u.id, u.full_name ASC
+            LIMIT 200
+          `
+        );
+
+        for (const row of platformUsersRes.rows) {
+          if (!row.full_name || seenKeys.has(`employee_${row.id}`)) continue;
+          seenKeys.add(`employee_${row.id}`);
+          suggestions.push({
+            id: `employee_${row.id}`,
+            name: row.full_name,
+            type: "employee",
+            label: `${row.full_name} (${row.role_label || "Platform Staff"})`,
+            subtext: row.role_label || "Platform Staff",
+            user_id: row.id,
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching platform staff suggestions:", err);
+      }
+
+      try {
+        const clientRes = await dbRunner.query<{
+          id: number;
+          name: string;
+          company_name: string | null;
+          client_type: string | null;
+          phone: string | null;
+        }>(
+          `
+            SELECT id, name, company_name, client_type, phone
+            FROM clients 
+            WHERE institution_id IS NULL
+            ORDER BY name ASC
+            LIMIT 100
+          `
+        );
+        for (const row of clientRes.rows) {
+          if (!row.name || seenKeys.has(`client_${row.name.toLowerCase().trim()}`)) continue;
+          seenKeys.add(`client_${row.name.toLowerCase().trim()}`);
+          suggestions.push({
+            id: `client_${row.id}`,
+            name: row.name,
+            type: "client",
+            label: `${row.name} (Platform Client)`,
+            subtext: row.company_name || "Platform Client",
+            user_id: null,
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching platform client suggestions:", err);
+      }
+
+      try {
+        const vendorRes = await dbRunner.query<{
+          id: number;
+          name: string;
+          company_name: string | null;
+          category: string | null;
+          phone: string | null;
+        }>(
+          `
+            SELECT id, name, company_name, category, phone
+            FROM vendors
+            WHERE institution_id IS NULL
+            ORDER BY name ASC
+            LIMIT 100
+          `
+        );
+        for (const row of vendorRes.rows) {
+          if (!row.name || seenKeys.has(`vendor_${row.name.toLowerCase().trim()}`)) continue;
+          seenKeys.add(`vendor_${row.name.toLowerCase().trim()}`);
+          suggestions.push({
+            id: `vendor_${row.id}`,
+            name: row.name,
+            type: "vendor",
+            label: `${row.name} (Platform Vendor)`,
+            subtext: row.category || "Vendor",
+            user_id: null,
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching platform vendor suggestions:", err);
+      }
+    }
+  } catch (err) {
+    console.error("Error fetching payer suggestions:", err);
+  }
+
+  return suggestions;
+}
+
+export type FinanceVendorSuggestion = {
+  id: string;
+  name: string;
+  category?: string | null;
+  company_name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  subtext?: string | null;
+};
+
+export async function listFinanceVendorSuggestions(
+  dbRunner: Queryable,
+  scope: FinanceScope,
+  institutionId: number | null
+): Promise<FinanceVendorSuggestion[]> {
+  await ensureFinanceIncomeSchema(dbRunner);
+  const suggestions: FinanceVendorSuggestion[] = [];
+  const seenNames = new Set<string>();
+
+  // 1. From vendors table
+  try {
+    const vendorRes = await dbRunner.query<{
+      id: number;
+      name: string;
+      company_name: string | null;
+      category: string | null;
+      phone: string | null;
+      email: string | null;
+      vendor_type: string | null;
+    }>(
+      `
+        SELECT id, name, company_name, category, phone, email, vendor_type
+        FROM vendors
+        WHERE ($1::INT IS NULL OR institution_id = $1 OR institution_id IS NULL)
+        ORDER BY name ASC
+        LIMIT 200
+      `,
+      [institutionId]
+    );
+
+    for (const row of vendorRes.rows) {
+      if (!row.name || seenNames.has(row.name.toLowerCase().trim())) continue;
+      seenNames.add(row.name.toLowerCase().trim());
+      const sub = [row.category || row.vendor_type, row.company_name, row.phone].filter(Boolean).join(" • ");
+      suggestions.push({
+        id: `vendor_${row.id}`,
+        name: row.name,
+        company_name: row.company_name,
+        category: row.category,
+        phone: row.phone,
+        email: row.email,
+        subtext: sub || "Vendor / Supplier",
+      });
+    }
+  } catch {}
+
+  // 2. From clients table
+  try {
+    const clientRes = await dbRunner.query<{
+      id: number;
+      name: string;
+      company_name: string | null;
+      client_type: string | null;
+      phone: string | null;
+      email: string | null;
+    }>(
+      `
+        SELECT id, name, company_name, client_type, phone, email
+        FROM clients
+        WHERE ($1::INT IS NULL OR institution_id = $1 OR institution_id IS NULL)
+        ORDER BY name ASC
+        LIMIT 100
+      `,
+      [institutionId]
+    );
+
+    for (const row of clientRes.rows) {
+      if (!row.name || seenNames.has(row.name.toLowerCase().trim())) continue;
+      seenNames.add(row.name.toLowerCase().trim());
+      const sub = [row.company_name, row.client_type, row.phone].filter(Boolean).join(" • ");
+      suggestions.push({
+        id: `client_${row.id}`,
+        name: row.name,
+        company_name: row.company_name,
+        category: row.client_type,
+        phone: row.phone,
+        email: row.email,
+        subtext: sub || "Client / Supplier",
+      });
+    }
+  } catch {}
+
+  // 3. From recent expense paid_to_label records
+  try {
+    const historyRes = await dbRunner.query<{
+      paid_to_label: string;
+    }>(
+      `
+        SELECT DISTINCT paid_to_label
+        FROM finance_expense_entries
+        WHERE ($1::INT IS NULL OR institution_id = $1)
+          AND paid_to_label IS NOT NULL AND paid_to_label <> ''
+        LIMIT 50
+      `,
+      [institutionId]
+    );
+
+    for (const row of historyRes.rows) {
+      if (!row.paid_to_label || seenNames.has(row.paid_to_label.toLowerCase().trim())) continue;
+      seenNames.add(row.paid_to_label.toLowerCase().trim());
+      suggestions.push({
+        id: `history_${suggestions.length + 1}`,
+        name: row.paid_to_label,
+        subtext: "Recent Recipient",
+      });
+    }
+  } catch {}
+
+  return suggestions;
+}
+
+export type FinanceInvoiceRow = {
+  id: string;
+  invoice_number: string;
+  scope_type: FinanceScope;
+  institution_id: number | null;
+  institution_name: string | null;
+  income_id: string | null;
+  source_type: string;
+  payer_name: string;
+  receiver_name: string;
+  category_name: string;
+  payment_method: "cash" | "upi" | "net_banking";
+  amount: string | number;
+  tax_amount: string | number;
+  total_amount: string | number;
+  invoice_date: string;
+  status: "paid" | "due" | "cancelled";
+  notes: string | null;
+  created_at: string;
+};
+
+export type FinanceInvoiceListOptions = {
+  scope_type: FinanceScope;
+  institution_id: number | null;
+  search?: string;
+  payment_method?: string;
+  status?: string;
+  from_date?: string | null;
+  to_date?: string | null;
+  limit?: number;
+  offset?: number;
+};
+
+export async function listFinanceInvoices(
+  dbRunner: Queryable,
+  options: FinanceInvoiceListOptions
+): Promise<{
+  data: FinanceInvoiceRow[];
+  total: number;
+  total_amount: string | number;
+  this_month_total: string | number;
+}> {
+  await ensureFinanceIncomeSchema(dbRunner);
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  let paramIdx = 1;
+
+  if (options.scope_type === "platform") {
+    conditions.push(`fi.scope_type = 'platform'`);
+  } else {
+    conditions.push(`fi.scope_type = 'institution' AND fi.institution_id = $${paramIdx++}`);
+    params.push(options.institution_id);
+  }
+
+  if (options.search && options.search.trim()) {
+    conditions.push(`(fi.invoice_number ILIKE $${paramIdx} OR fi.payer_name ILIKE $${paramIdx} OR fi.receiver_name ILIKE $${paramIdx} OR fi.category_name ILIKE $${paramIdx})`);
+    params.push(`%${options.search.trim()}%`);
+    paramIdx++;
+  }
+
+  if (options.payment_method && options.payment_method !== "all") {
+    conditions.push(`fi.payment_method = $${paramIdx++}`);
+    params.push(options.payment_method);
+  }
+
+  if (options.status && options.status !== "all") {
+    conditions.push(`fi.status = $${paramIdx++}`);
+    params.push(options.status);
+  }
+
+  if (options.from_date) {
+    conditions.push(`fi.invoice_date >= $${paramIdx++}`);
+    params.push(options.from_date);
+  }
+
+  if (options.to_date) {
+    conditions.push(`fi.invoice_date <= $${paramIdx++}`);
+    params.push(options.to_date);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const countQuery = `
+    SELECT 
+      COUNT(*)::INT AS total,
+      COALESCE(SUM(fi.total_amount), 0)::NUMERIC AS total_amount,
+      COALESCE(SUM(CASE WHEN DATE_TRUNC('month', fi.invoice_date) = DATE_TRUNC('month', CURRENT_DATE) THEN fi.total_amount ELSE 0 END), 0)::NUMERIC AS this_month_total
+    FROM finance_invoices fi
+    ${whereClause}
+  `;
+
+  const limit = options.limit ?? 20;
+  const offset = options.offset ?? 0;
+
+  const dataQuery = `
+    SELECT 
+      fi.id,
+      fi.invoice_number,
+      fi.scope_type,
+      fi.institution_id,
+      ip.name AS institution_name,
+      fi.income_id,
+      fi.source_type,
+      fi.payer_name,
+      fi.receiver_name,
+      fi.category_name,
+      fi.payment_method,
+      fi.amount,
+      fi.tax_amount,
+      fi.total_amount,
+      fi.invoice_date,
+      fi.status,
+      fi.notes,
+      fi.created_at
+    FROM finance_invoices fi
+    LEFT JOIN institution_profiles ip ON ip.id = fi.institution_id
+    ${whereClause}
+    ORDER BY fi.invoice_date DESC, fi.id DESC
+    LIMIT $${paramIdx++} OFFSET $${paramIdx++}
+  `;
+
+  const [countRes, dataRes] = await Promise.all([
+    dbRunner.query<{ total: number; total_amount: string | number; this_month_total: string | number }>(countQuery, params),
+    dbRunner.query<FinanceInvoiceRow>(dataQuery, [...params, limit, offset]),
+  ]);
+
+  return {
+    data: dataRes.rows,
+    total: countRes.rows[0]?.total ?? 0,
+    total_amount: countRes.rows[0]?.total_amount ?? 0,
+    this_month_total: countRes.rows[0]?.this_month_total ?? 0,
+  };
+}
+
+export async function deleteFinanceInvoice(
+  dbRunner: Queryable,
+  id: string,
+  scope: FinanceScope,
+  institutionId: number | null
+) {
+  await ensureFinanceIncomeSchema(dbRunner);
+  const conditions = ["id = $1"];
+  const params: unknown[] = [id];
+
+  if (scope === "platform") {
+    conditions.push("scope_type = 'platform'");
+  } else {
+    conditions.push("scope_type = 'institution' AND institution_id = $2");
+    params.push(institutionId);
+  }
+
+  await dbRunner.query(
+    `DELETE FROM finance_invoices WHERE ${conditions.join(" AND ")}`,
+    params
+  );
+}
+

@@ -31,21 +31,25 @@ export async function GET(req: Request) {
       excludeSql = `AND u.id <> $${params.length}::integer`;
     }
 
-    const result = await db.query<{ exists: boolean }>(
+    const result = await db.query<{ id: number; full_name: string; phone: string | null; avatar_url: string | null }>(
       `
-        SELECT EXISTS (
-          SELECT 1
-          FROM users u
-          WHERE lower(u.email) = lower($1::text)
-            AND COALESCE(u.is_deleted, FALSE) = FALSE
-            ${excludeSql}
-        ) AS exists
+        SELECT u.id, u.full_name, u.phone, u.avatar_url
+        FROM users u
+        WHERE lower(u.email) = lower($1::text)
+          AND COALESCE(u.is_deleted, FALSE) = FALSE
+          ${excludeSql}
+        LIMIT 1
       `,
       params
     );
 
+    const existingUser = result.rows[0] || null;
+
     return NextResponse.json(
-      { exists: Boolean(result.rows[0]?.exists) },
+      {
+        exists: Boolean(existingUser),
+        user: existingUser,
+      },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (err: unknown) {

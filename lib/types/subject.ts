@@ -9,6 +9,9 @@ export interface Subject {
   university_name?: string | null;
   certification_provider_name?: string | null;
   authority_type?: string | null;
+  term_type?: string | null;
+  term_number?: number | null;
+  term_name?: string | null;
   name: string;
   slug: string;
   code?: string | null;
@@ -32,6 +35,12 @@ export interface CreateSubjectData {
   categoryId?: number | null;
   boardId?: number | null;
   courseId?: number | null;
+  term_type?: string | null;
+  term_number?: number | null;
+  term_name?: string | null;
+  termType?: string | null;
+  termNumber?: number | null;
+  termName?: string | null;
   name: string;
   slug: string;
   code?: string | null;
@@ -47,5 +56,11 @@ export interface UpdateSubjectData {
   categoryId?: number | null;
   boardId?: number | null;
   courseId?: number | null;
+  term_type?: string | null;
+  term_number?: number | null;
+  term_name?: string | null;
+  termType?: string | null;
+  termNumber?: number | null;
+  termName?: string | null;
   is_active?: boolean;
 }

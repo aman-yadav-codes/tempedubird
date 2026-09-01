@@ -33,6 +33,9 @@ import {
   Settings,
   CalendarDays,
   Sparkles,
+  Briefcase,
+  ShoppingBag,
+  MessageSquareHeart,
 } from "lucide-react";
 import { useAuthStore } from "@/store";
 import { clearBrowserSessionData } from "@/lib/auth/clear-browser-session";
@@ -60,6 +63,7 @@ import {
 import { AdminAcademicSessionSelector } from "@/components/admin-academic-session-selector";
 import { AdminNotificationCenter } from "@/components/admin-notification-center";
 import { AdminThemeToggle } from "@/components/admin-theme-toggle";
+import { AccountSwitcherDialog } from "@/components/auth/account-switcher-dialog";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -94,6 +98,7 @@ export default function ParentLayout({ children }: { children: React.ReactNode }
   const [mounted, setMounted] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({
     "Classroom & Academics": true,
     "Institution Portal": false,
@@ -188,6 +193,7 @@ export default function ParentLayout({ children }: { children: React.ReactNode }
             ]
           : []),
         { label: "My Enquiries", href: "/parent/enquiries", icon: HelpCircle },
+        { label: "Reviews & Feedback", href: "/parent/reviews", icon: MessageSquareHeart },
         ...(hasLinkedChildren
           ? [
               {
@@ -197,6 +203,7 @@ export default function ParentLayout({ children }: { children: React.ReactNode }
                 children: [
                   { label: "Academic Calendar", href: "/student/institution/calendar" },
                   { label: "Noticeboard", href: "/student/institutions/news" },
+                  { label: "Reviews & Feedback", href: "/parent/reviews" },
                   { label: "Complaints & Help", href: "/student/institution/complaints" },
                 ],
               },
@@ -228,6 +235,8 @@ export default function ParentLayout({ children }: { children: React.ReactNode }
         { label: "Digital Libraries", href: "/libraries", icon: Library },
         { label: "Top Institutes", href: "/institutes", icon: Building2 },
         { label: "Expert Faculty", href: "/teachers", icon: UserCheck },
+        { label: "Academic Store", href: "/products", icon: ShoppingBag },
+        { label: "Vendor Services", href: "/admin/vendors", icon: Briefcase },
       ],
     },
   ];
@@ -646,6 +655,16 @@ export default function ParentLayout({ children }: { children: React.ReactNode }
                     Browse Courses
                   </Link>
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setSwitchAccountOpen(true)}
+                  className="rounded-lg text-xs font-bold text-primary hover:bg-primary/10 cursor-pointer flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-3.5 w-3.5 text-rose-600" />
+                    <span>Switch Account</span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground font-normal">All Roles</span>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={handleSignOut}
@@ -663,6 +682,12 @@ export default function ParentLayout({ children }: { children: React.ReactNode }
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-slate-50/50 dark:bg-zinc-950">
           {children}
         </main>
+
+        {/* Multi-Role Account Switcher Dialog */}
+        <AccountSwitcherDialog
+          open={switchAccountOpen}
+          onOpenChange={setSwitchAccountOpen}
+        />
       </div>
     </div>
   );

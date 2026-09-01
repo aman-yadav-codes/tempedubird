@@ -31,13 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { UniversalFeedbackDialog, type UniversalEntityTarget } from "@/components/public/universal-feedback-dialog";
 import { SharedPublicSidebar } from "@/components/public/shared-public-sidebar";
 import { SharedInterstitialBanner } from "@/components/public/shared-interstitial-banner";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
 import { toast } from "sonner";
 
 type Teacher = {
@@ -85,8 +79,9 @@ export function TeachersDirectory() {
     }
   }, [searchParams]);
 
-  // Left Sidebar Inquiry Form State
+  // Left Sidebar & Modal Inquiry Form State
   const [selectedTeacherForInquiry, setSelectedTeacherForInquiry] = useState<Teacher | null>(null);
+  const [inquiryDialogOpen, setInquiryDialogOpen] = useState(false);
   const [feedbackTarget, setFeedbackTarget] = useState<UniversalEntityTarget | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [formName, setFormName] = useState("");
@@ -125,6 +120,16 @@ export function TeachersDirectory() {
     }
   };
 
+  const handleOpenInquiryDialog = (teacher: Teacher) => {
+    setSelectedTeacherForInquiry(teacher);
+    if (teacher.subjects.length > 0) {
+      setFormSubject(teacher.subjects[0]);
+    }
+    setFormMessage(`Hi, I am interested in mentorship & learning ${teacher.subjects[0] || "subjects"} with ${teacher.full_name}. Please share course details and batch timings.`);
+    setInquirySuccess(false);
+    setInquiryDialogOpen(true);
+  };
+
   const handleSelectTeacherForInquiry = (teacher: Teacher) => {
     setSelectedTeacherForInquiry(teacher);
     if (teacher.subjects.length > 0) {
@@ -160,8 +165,9 @@ export function TeachersDirectory() {
       if (!res.ok) throw new Error(data.error || "Inquiry submission failed.");
 
       setInquirySuccess(true);
-      toast.success("Inquiry submitted successfully!");
+      toast.success("Inquiry submitted successfully! The educator will reach out to you.");
       setFormMessage("");
+      setInquiryDialogOpen(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to submit inquiry.");
     } finally {
@@ -335,9 +341,11 @@ export function TeachersDirectory() {
                       </div>
 
                       {/* Actions */}
-                      <div className="pt-3 border-t border-border/60 flex items-center justify-between gap-2">
-                        <button
+                      <div className="pt-3 border-t border-border/60 grid grid-cols-2 gap-2">
+                        <Button
                           type="button"
+                          variant="outline"
+                          size="sm"
                           onClick={() => {
                             setFeedbackTarget({
                               type: "teacher",
@@ -349,20 +357,21 @@ export function TeachersDirectory() {
                             });
                             setFeedbackOpen(true);
                           }}
-                          className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 hover:underline cursor-pointer"
+                          className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50/70 dark:bg-amber-950/30 text-xs font-bold text-amber-800 dark:text-amber-300 transition hover:bg-amber-100 dark:hover:bg-amber-900/40 cursor-pointer shadow-xs"
                         >
-                          <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                          <span>{teacher.reviews_count || 18} reviews</span>
-                        </button>
+                          <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
+                          <span>Reviews & Q&A</span>
+                        </Button>
 
-                        <Link href={teacherUrl}>
-                          <Button
-                            size="sm"
-                            className="text-xs font-bold bg-primary text-primary-foreground shadow-2xs rounded-xl cursor-pointer"
-                          >
-                            <span>Profile</span>
-                          </Button>
-                        </Link>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => handleOpenInquiryDialog(teacher)}
+                          className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-primary text-xs font-bold text-primary-foreground transition hover:bg-primary/90 cursor-pointer shadow-xs"
+                        >
+                          <Send className="h-3.5 w-3.5" />
+                          <span>Enquiry</span>
+                        </Button>
                       </div>
                     </div>
 
@@ -394,6 +403,22 @@ export function TeachersDirectory() {
         open={feedbackOpen}
         onOpenChange={setFeedbackOpen}
         target={feedbackTarget}
+      />
+
+      {/* Universal Teacher Mentorship & Class Enquiry Dialog */}
+      <CourseEnquiryDialog
+        open={inquiryDialogOpen}
+        onOpenChange={setInquiryDialogOpen}
+        course={
+          selectedTeacherForInquiry
+            ? {
+                id: selectedTeacherForInquiry.id,
+                title: selectedTeacherForInquiry.full_name,
+                institute: `${selectedTeacherForInquiry.designation} • ${selectedTeacherForInquiry.institution_name}`,
+                type: "teacher",
+              }
+            : null
+        }
       />
     </div>
   );

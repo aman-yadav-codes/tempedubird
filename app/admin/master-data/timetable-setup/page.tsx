@@ -787,20 +787,46 @@ export default function TimetableSetupPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Timetable Setup</h1>
-          <p className="text-sm text-muted-foreground">Configure section class teachers and reusable period slots.</p>
+          <p className="text-sm text-muted-foreground">
+            Configure student class timetables, period slot timings, and staff class teacher assignments.
+          </p>
         </div>
       </div>
 
       <div className="flex items-center justify-between gap-3 border-b border-border">
         <div className="flex min-w-0 gap-2 overflow-x-auto">
-          <button className={`px-4 py-2 text-sm font-medium ${tab === "mapping" ? "border-b-2 border-destructive text-foreground" : "text-muted-foreground"}`} onClick={() => setTab("mapping")}>
-            Class Teacher Mapping
+          <button
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === "periods" ? "border-primary text-foreground font-bold" : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setTab("periods")}
+          >
+            <span>Student Timetable</span>
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+              For Students
+            </Badge>
           </button>
-          <button className={`px-4 py-2 text-sm font-medium ${tab === "slots" ? "border-b-2 border-destructive text-foreground" : "text-muted-foreground"}`} onClick={() => setTab("slots")}>
-            Timetable Slots
+          <button
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === "mapping" ? "border-primary text-foreground font-bold" : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setTab("mapping")}
+          >
+            <span>Class Teacher Mapping</span>
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30">
+              For Staff
+            </Badge>
           </button>
-          <button className={`px-4 py-2 text-sm font-medium ${tab === "periods" ? "border-b-2 border-destructive text-foreground" : "text-muted-foreground"}`} onClick={() => setTab("periods")}>
-            Period Teacher Mapping
+          <button
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === "slots" ? "border-primary text-foreground font-bold" : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setTab("slots")}
+          >
+            <span>Timetable Slots</span>
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30">
+              Period Schedule
+            </Badge>
           </button>
         </div>
         <Button

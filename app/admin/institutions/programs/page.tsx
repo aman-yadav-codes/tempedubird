@@ -31,6 +31,14 @@ import {
     BadgePercent,
     Tag,
     Check,
+    BookMarked,
+    Users,
+    Search,
+    CheckCircle2,
+    Layers,
+    Calendar,
+    RotateCcw,
+    Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +53,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { MultiSelect } from "@/components/ui/multi-select";
 import { AsyncSearchPopover } from "@/components/shared/async-search-popover";
@@ -469,6 +478,419 @@ export default function ProgramsAdminPage() {
             .catch(() => undefined)
             .finally(() => setLoadingInstitutions(false));
     }, [accessToken, authHeader, isPlatformAdmin]);
+
+    // ---------- Master Courses Catalog & Adoption State ----------
+    const [selectCoursesModalOpen, setSelectCoursesModalOpen] = useState(false);
+    const [masterCatalogList, setMasterCatalogList] = useState<any[]>([]);
+    const [masterCatalogLoading, setMasterCatalogLoading] = useState(false);
+    const [masterCatalogSearch, setMasterCatalogSearch] = useState("");
+    const [selectedMasterCourseIds, setSelectedMasterCourseIds] = useState<string[]>([]);
+    const [adoptingCourses, setAdoptingCourses] = useState(false);
+    const [catalogCategoryFilter, setCatalogCategoryFilter] = useState("all");
+
+    const fetchMasterCatalog = useCallback(async (searchQuery = "") => {
+        setMasterCatalogLoading(true);
+        try {
+            const effInstId = getEffectiveInstitutionId();
+            const params = new URLSearchParams();
+            if (effInstId) params.set("institutionId", String(effInstId));
+            if (searchQuery.trim()) params.set("search", searchQuery.trim());
+            const res = await fetch(`/api/admin/institutions/programs/master-catalog?${params.toString()}`, {
+                headers: authHeader,
+            });
+            const json = await res.json();
+            if (res.ok) {
+                setMasterCatalogList(json.data || []);
+            } else {
+                toast.error(json.error || "Failed to load master courses catalog");
+            }
+        } catch {
+            toast.error("Failed to load catalog");
+        } finally {
+            setMasterCatalogLoading(false);
+        }
+    }, [authHeader, getEffectiveInstitutionId]);
+
+    const openSelectCoursesModal = () => {
+        setSelectedMasterCourseIds([]);
+        setCatalogCategoryFilter("all");
+        setSelectCoursesModalOpen(true);
+        fetchMasterCatalog(masterCatalogSearch);
+    };
+
+    const handleToggleSelectCourse = (courseId: string) => {
+        setSelectedMasterCourseIds((prev) =>
+            prev.includes(courseId) ? prev.filter((id) => id !== courseId) : [...prev, courseId]
+        );
+    };
+
+    const handleAdoptSelectedCourses = async (directCourses?: any[]) => {
+        const effInstId = getEffectiveInstitutionId();
+        if (!effInstId) {
+            toast.error("No active institution selected");
+            return;
+        }
+
+        const coursesToAdopt = directCourses || masterCatalogList.filter((c) => selectedMasterCourseIds.includes(c.id));
+        if (coursesToAdopt.length === 0) {
+            toast.error("Please select at least one course / program");
+            return;
+        }
+
+        setAdoptingCourses(true);
+        try {
+            const res = await fetch(`/api/admin/institutions/programs/adopt`, {
+                method: "POST",
+                headers: { ...authHeader, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    institutionId: effInstId,
+                    courses: coursesToAdopt,
+                }),
+            });
+            const json = await res.json();
+            if (res.ok) {
+                toast.success(json.message || `Successfully added ${coursesToAdopt.length} course(s) to your institution`);
+                setSelectCoursesModalOpen(false);
+                setSelectedMasterCourseIds([]);
+                await fetchItems();
+            } else {
+                toast.error(json.error || "Failed to add courses");
+            }
+        } catch {
+            toast.error("Failed to add selected courses");
+        } finally {
+            setAdoptingCourses(false);
+        }
+    };
+
+    // ---------- Batch / Section Management State ----------
+    type BatchFeeScheduleOption = {
+        id: string;
+        fee_type: string;
+        custom_title: string;
+        unit: "one-time" | "month" | "quarter" | "half-year" | "year" | "week";
+        amount: string;
+        installments_count: string;
+        has_discount: boolean;
+        discount_type: "percentage" | "fixed";
+        discount_value: string;
+    };
+
+    const createDefaultBatchFeeOption = (
+        type = "Course Tuition Fee",
+        unit: "one-time" | "month" | "quarter" | "half-year" | "year" | "week" = "one-time"
+    ): BatchFeeScheduleOption => {
+        const installmentsMap: Record<string, string> = {
+            "one-time": "1",
+            "month": "12",
+            "quarter": "4",
+            "half-year": "2",
+            "year": "1",
+            "week": "52",
+        };
+        return {
+            id: `batch-fee-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            fee_type: type,
+            custom_title: "",
+            unit,
+            amount: "25000",
+            installments_count: installmentsMap[unit] || "1",
+            has_discount: false,
+            discount_type: "percentage",
+            discount_value: "",
+        };
+    };
+
+    const [batchModalOpen, setBatchModalOpen] = useState(false);
+    const [batchTargetProgram, setBatchTargetProgram] = useState<InstitutionProgram | null>(null);
+    const [programBatches, setProgramBatches] = useState<any[]>([]);
+    const [batchMeta, setBatchMeta] = useState<{
+        sections: any[];
+        languages: any[];
+        subjects: any[];
+        programInfo?: any;
+        courseTerms?: any[];
+        attendanceSetups?: any[];
+    }>({
+        sections: [],
+        languages: [],
+        subjects: [],
+        courseTerms: [],
+        attendanceSetups: [],
+    });
+    const [loadingBatches, setLoadingBatches] = useState(false);
+    const [savingBatch, setSavingBatch] = useState(false);
+    const [batchActiveTab, setBatchActiveTab] = useState<"details" | "fee" | "list">("details");
+
+    const initialBatchFormData = {
+        batchName: "",
+        academicTerm: "",
+        academicYearNumber: "",
+        semesterNumber: "",
+        sectionId: "",
+        sectionName: "",
+        languageId: "",
+        languageName: "",
+        seatsAvailable: "",
+        teachingMethod: "Classroom",
+        attendanceSetupId: "",
+        attendanceSetupTitle: "Daily Attendance (Full Day)",
+    };
+    const [batchForm, setBatchForm] = useState(initialBatchFormData);
+    const [batchFeeOptions, setBatchFeeOptions] = useState<BatchFeeScheduleOption[]>([
+        createDefaultBatchFeeOption("Course Tuition Fee", "one-time"),
+    ]);
+
+    // Derive course year and semester options from course duration and terms
+    const derivedAcademicTerms = useMemo(() => {
+        const terms: Array<{ key: string; label: string; year?: number; semester?: number }> = [];
+
+        // 1. From master_course_subjects if present
+        if (batchMeta.courseTerms && batchMeta.courseTerms.length > 0) {
+            const seen = new Set<string>();
+            for (const ct of batchMeta.courseTerms) {
+                const key = `term-${ct.term_type || "term"}-${ct.term_number || 1}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+
+                if (ct.term_type === "semester") {
+                    const derivedYear = Math.max(1, Math.ceil((ct.term_number || 1) / 2));
+                    terms.push({
+                        key,
+                        label: `Year ${derivedYear} • Semester ${ct.term_number}`,
+                        year: derivedYear,
+                        semester: ct.term_number,
+                    });
+                } else if (ct.term_type === "year") {
+                    terms.push({
+                        key,
+                        label: `Year ${ct.term_number} (Annual)`,
+                        year: ct.term_number,
+                    });
+                } else if (ct.term_name) {
+                    terms.push({
+                        key,
+                        label: ct.term_name,
+                    });
+                }
+            }
+        }
+
+        // 2. Fallback to program/course duration_value
+        if (terms.length === 0) {
+            const rawDur = batchMeta.programInfo?.duration_value || 1;
+            const durVal = typeof rawDur === "number" ? rawDur : parseInt(rawDur) || 1;
+            const durUnit = (batchMeta.programInfo?.duration_unit || "year").toLowerCase();
+
+            if (durUnit.includes("sem") || batchMeta.programInfo?.duration_type === "semester") {
+                for (let s = 1; s <= Math.max(1, durVal); s++) {
+                    const y = Math.max(1, Math.ceil(s / 2));
+                    terms.push({
+                        key: `sem-${s}`,
+                        label: `Year ${y} • Semester ${s}`,
+                        year: y,
+                        semester: s,
+                    });
+                }
+            } else {
+                for (let y = 1; y <= Math.max(1, durVal); y++) {
+                    terms.push({
+                        key: `sem-${y * 2 - 1}`,
+                        label: `Year ${y} • Semester ${y * 2 - 1}`,
+                        year: y,
+                        semester: y * 2 - 1,
+                    });
+                    terms.push({
+                        key: `sem-${y * 2}`,
+                        label: `Year ${y} • Semester ${y * 2}`,
+                        year: y,
+                        semester: y * 2,
+                    });
+                    terms.push({
+                        key: `year-${y}`,
+                        label: `Year ${y} (Annual)`,
+                        year: y,
+                    });
+                }
+            }
+        }
+
+        // Universal option
+        terms.unshift({
+            key: "full_course",
+            label: "Universal / Full Course",
+        });
+
+        return terms;
+    }, [batchMeta.courseTerms, batchMeta.programInfo]);
+
+    const handleAddBatchFeeSchedule = (
+        type = "Course Tuition Fee",
+        unit: "one-time" | "month" | "quarter" | "half-year" | "year" | "week" = "one-time"
+    ) => {
+        setBatchFeeOptions(prev => [...prev, createDefaultBatchFeeOption(type, unit)]);
+    };
+
+    const handleRemoveBatchFeeSchedule = (id: string) => {
+        setBatchFeeOptions(prev => prev.filter(f => f.id !== id));
+    };
+
+    const handleUpdateBatchFeeSchedule = (id: string, updates: Partial<BatchFeeScheduleOption>) => {
+        setBatchFeeOptions(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
+    };
+
+    const handleClearBatchForm = () => {
+        setBatchForm(initialBatchFormData);
+        setBatchFeeOptions([createDefaultBatchFeeOption("Course Tuition Fee", "one-time")]);
+    };
+
+    const fetchProgramBatches = useCallback(async (programId: number) => {
+        setLoadingBatches(true);
+        try {
+            const res = await fetch(`/api/admin/institutions/programs/${programId}/batches`, {
+                headers: authHeader,
+            });
+            const json = await res.json();
+            if (res.ok) {
+                setProgramBatches(json.data || []);
+                if (json.meta) {
+                    setBatchMeta(json.meta);
+                    const setups = json.meta.attendanceSetups || [];
+                    const defaultSetup = setups.find((s: any) => s.is_default) || setups[0];
+                    if (defaultSetup) {
+                        setBatchForm((prev) => ({
+                            ...prev,
+                            attendanceSetupId: prev.attendanceSetupId || String(defaultSetup.id),
+                            attendanceSetupTitle: prev.attendanceSetupTitle || defaultSetup.title,
+                        }));
+                    }
+                }
+            }
+        } catch {
+            // ignore
+        } finally {
+            setLoadingBatches(false);
+        }
+    }, [authHeader]);
+
+    const openBatchModal = (program: InstitutionProgram) => {
+        setBatchTargetProgram(program);
+        setBatchForm(initialBatchFormData);
+        setBatchFeeOptions([createDefaultBatchFeeOption("Course Tuition Fee", "one-time")]);
+        setBatchActiveTab("details");
+        setBatchModalOpen(true);
+        fetchProgramBatches(program.id);
+    };
+
+    const handleAddBatch = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!batchTargetProgram || !batchForm.batchName.trim()) {
+            toast.error("Batch name is required");
+            return;
+        }
+        setSavingBatch(true);
+
+        const primaryFee = batchFeeOptions[0];
+        const computedPrice = primaryFee ? Number(primaryFee.amount) || 0 : undefined;
+        const computedInstallments = primaryFee ? Number(primaryFee.installments_count) || 1 : 1;
+        const computedDiscount = primaryFee?.has_discount && primaryFee.discount_type === "percentage"
+            ? Number(primaryFee.discount_value) || 0
+            : 0;
+
+        try {
+            const res = await fetch(`/api/admin/institutions/programs/${batchTargetProgram.id}/batches`, {
+                method: "POST",
+                headers: { ...authHeader, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    batchName: batchForm.batchName.trim(),
+                    academicTerm: batchForm.academicTerm || undefined,
+                    academicYearNumber: batchForm.academicYearNumber ? Number(batchForm.academicYearNumber) : undefined,
+                    semesterNumber: batchForm.semesterNumber ? Number(batchForm.semesterNumber) : undefined,
+                    attendanceSetupId: batchForm.attendanceSetupId ? batchForm.attendanceSetupId : undefined,
+                    attendanceSetupTitle: batchForm.attendanceSetupTitle || undefined,
+                    sectionId: batchForm.sectionId ? Number(batchForm.sectionId) : undefined,
+                    sectionName: batchForm.sectionName.trim(),
+                    languageId: batchForm.languageId ? Number(batchForm.languageId) : undefined,
+                    languageName: batchForm.languageName.trim(),
+                    seatsAvailable: batchForm.seatsAvailable ? Number(batchForm.seatsAvailable) : undefined,
+                    teachingMethod: batchForm.teachingMethod.trim(),
+                    price: computedPrice,
+                    discountPercent: computedDiscount,
+                    installmentsCount: computedInstallments,
+                    feeOptions: batchFeeOptions,
+                }),
+            });
+            const json = await res.json();
+            if (res.ok) {
+                toast.success(json.message || "Batch and Fee Structure saved successfully!");
+                handleClearBatchForm();
+                fetchProgramBatches(batchTargetProgram.id);
+                setBatchActiveTab("list");
+            } else {
+                toast.error(json.error || "Failed to create batch");
+            }
+        } catch {
+            toast.error("Failed to add batch");
+        } finally {
+            setSavingBatch(false);
+        }
+    };
+
+    const handleRemoveBatch = async (sectionId: number) => {
+        if (!batchTargetProgram) return;
+        try {
+            const res = await fetch(`/api/admin/institutions/programs/${batchTargetProgram.id}/batches?sectionId=${sectionId}`, {
+                method: "DELETE",
+                headers: authHeader,
+            });
+            if (res.ok) {
+                toast.success("Batch removed from program");
+                fetchProgramBatches(batchTargetProgram.id);
+            } else {
+                const json = await res.json();
+                toast.error(json.error || "Failed to remove batch");
+            }
+        } catch {
+            toast.error("Failed to remove batch");
+        }
+    };
+
+    // ---------- Standalone Syllabus Management State ----------
+    const [syllabusModalOpen, setSyllabusModalOpen] = useState(false);
+    const [syllabusTargetProgram, setSyllabusTargetProgram] = useState<InstitutionProgram | null>(null);
+    const [standaloneSyllabusNodes, setStandaloneSyllabusNodes] = useState<EditableSyllabusTopic[]>([]);
+    const [syllabusSubjectOptions, setSyllabusSubjectOptions] = useState<{ id: number; value: string; label: string }[]>([]);
+    const [syllabusSubjectIds, setSyllabusSubjectIds] = useState<string[]>([]);
+    const [loadingSyllabusDetail, setLoadingSyllabusDetail] = useState(false);
+
+    const openSyllabusModal = async (program: InstitutionProgram) => {
+        setSyllabusTargetProgram(program);
+        setSyllabusModalOpen(true);
+        setLoadingSyllabusDetail(true);
+        setStandaloneSyllabusNodes([]);
+        try {
+            const res = await fetch(`/api/admin/institutions/programs/${program.id}`, {
+                headers: authHeader,
+            });
+            const json = await res.json();
+            if (res.ok && json.data) {
+                const full = json.data;
+                const subjectIds: number[] = full.subject_ids || [];
+                const subjectNames: string[] = full.subject_names || [];
+                const options = subjectIds.map((id, idx) => ({
+                    id,
+                    value: String(id),
+                    label: subjectNames[idx] || `Subject #${id}`,
+                }));
+                setSyllabusSubjectOptions(options);
+                setSyllabusSubjectIds(subjectIds.map(String));
+            }
+        } catch {
+            toast.error("Failed to load program subjects for syllabus");
+        } finally {
+            setLoadingSyllabusDetail(false);
+        }
+    };
 
     // ---------- Fetch ----------
     const fetchItems = useCallback(async () => {
@@ -1633,8 +2055,15 @@ export default function ProgramsAdminPage() {
                                 <MoreHorizontal className="h-4 w-4" />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end" className="w-52">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => openBatchModal(item)}>
+                                <Users className="h-4 w-4 mr-2 text-primary" /> Add Batches / Sections
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openSyllabusModal(item)}>
+                                <BookMarked className="h-4 w-4 mr-2 text-purple-600 dark:text-purple-400" /> Syllabus
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem
                                 onClick={async () => {
                                     setViewing(item);
@@ -1658,9 +2087,8 @@ export default function ProgramsAdminPage() {
                                     }
                                 }}
                             >
-                                View
+                                View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEditDialog(item)}>Edit</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleToggle(item)} disabled={activeLoadingId === item.id}>
                                 {activeLoadingId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
                                 {item.is_active ? "Disable" : "Enable"}
@@ -1689,9 +2117,12 @@ export default function ProgramsAdminPage() {
                     <h1 className="text-2xl font-bold tracking-tight">Programs</h1>
                     <p className="text-sm text-muted-foreground">Manage academic curriculum, classification metadata, fees structures, and image gallery.</p>
                 </div>
-                <div>
-                    <Button onClick={openCreateDialog} className="w-full sm:w-auto">
-                        <Plus className="mr-2 h-4 w-4" /> New Program
+                <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+                    <Button
+                        onClick={openSelectCoursesModal}
+                        className="w-full sm:w-auto font-bold gap-1.5 shadow-sm"
+                    >
+                        <BookOpen className="h-4 w-4" /> Select Program / Course
                     </Button>
                 </div>
             </div>
@@ -3302,6 +3733,1024 @@ export default function ProgramsAdminPage() {
                     </div>
                 </SheetContent>
             </Sheet>
+
+            {/* ============================================================ */}
+            {/* MODAL: SELECT MASTER PROGRAMS / COURSES (FROM PLATFORM ADMIN) */}
+            {/* ============================================================ */}
+            <Dialog open={selectCoursesModalOpen} onOpenChange={setSelectCoursesModalOpen}>
+                <DialogContent className="sm:max-w-4xl w-[94vw] max-h-[90vh] flex flex-col p-6 overflow-hidden">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                            <BookOpen className="h-5 w-5 text-primary" />
+                            <span>Select & Add Courses & Programs</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs">
+                            Browse master courses & standard academic curriculum created by platform administration. Select and add them directly to your active institution.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {/* Search & Filter Bar */}
+                    <div className="py-2 space-y-3">
+                        <div className="flex items-center gap-2">
+                            <div className="relative flex-1">
+                                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    value={masterCatalogSearch}
+                                    onChange={(e) => {
+                                        setMasterCatalogSearch(e.target.value);
+                                        fetchMasterCatalog(e.target.value);
+                                    }}
+                                    placeholder="Search by course name, code, stream, or subjects..."
+                                    className="pl-9 text-xs h-9"
+                                />
+                            </div>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => fetchMasterCatalog(masterCatalogSearch)}
+                                disabled={masterCatalogLoading}
+                                className="h-9 text-xs gap-1"
+                            >
+                                <RefreshCw className={cn("w-3.5 h-3.5", masterCatalogLoading && "animate-spin")} /> Refresh
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Catalog List / Grid */}
+                    <div className="flex-1 overflow-y-auto pr-1 space-y-3 min-h-[260px] max-h-[50vh]">
+                        {masterCatalogLoading ? (
+                            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground space-y-2">
+                                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                                <span className="text-xs font-semibold">Loading platform master catalog...</span>
+                            </div>
+                        ) : masterCatalogList.length === 0 ? (
+                            <div className="text-center py-16 border rounded-2xl bg-muted/10 space-y-2">
+                                <BookOpen className="w-10 h-10 text-muted-foreground/40 mx-auto" />
+                                <h4 className="text-sm font-bold">No Courses Found</h4>
+                                <p className="text-xs text-muted-foreground">Try clearing search filters or search with another keyword.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                                {masterCatalogList.map((course) => {
+                                    const isSelected = selectedMasterCourseIds.includes(course.id);
+                                    const isAdded = course.is_already_added;
+
+                                    return (
+                                        <div
+                                            key={course.id}
+                                            onClick={() => {
+                                                if (!isAdded) handleToggleSelectCourse(course.id);
+                                            }}
+                                            className={cn(
+                                                "p-4 rounded-2xl border transition-all text-xs flex flex-col justify-between space-y-3",
+                                                isAdded
+                                                    ? "bg-muted/30 border-border/60 opacity-80 cursor-default"
+                                                    : isSelected
+                                                    ? "bg-primary/5 border-primary shadow-xs cursor-pointer ring-1 ring-primary"
+                                                    : "bg-card hover:border-primary/50 cursor-pointer shadow-2xs"
+                                            )}
+                                        >
+                                            <div className="space-y-2">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="flex items-start gap-2.5 min-w-0">
+                                                        {!isAdded && (
+                                                            <Checkbox
+                                                                checked={isSelected}
+                                                                onCheckedChange={() => handleToggleSelectCourse(course.id)}
+                                                                className="mt-0.5"
+                                                            />
+                                                        )}
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <Badge variant="outline" className="text-[10px] font-bold bg-primary/10 text-primary border-primary/20">
+                                                                    {course.program_type_name}
+                                                                </Badge>
+                                                                <span className="font-mono text-[10px] text-muted-foreground font-semibold">
+                                                                    {course.code}
+                                                                </span>
+                                                            </div>
+                                                            <h4 className="font-bold text-sm text-foreground leading-snug">
+                                                                {course.title}
+                                                            </h4>
+                                                        </div>
+                                                    </div>
+
+                                                    {isAdded ? (
+                                                        <Badge variant="outline" className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 text-[10px] gap-1 font-bold shrink-0">
+                                                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Added
+                                                        </Badge>
+                                                    ) : (
+                                                        <Button
+                                                            size="sm"
+                                                            variant={isSelected ? "default" : "outline"}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleAdoptSelectedCourses([course]);
+                                                            }}
+                                                            disabled={adoptingCourses}
+                                                            className="h-7 text-xs font-bold gap-1 shrink-0 px-2.5"
+                                                        >
+                                                            <Plus className="w-3.5 h-3.5" /> Add
+                                                        </Button>
+                                                    )}
+                                                </div>
+
+                                                <p className="text-muted-foreground line-clamp-2 text-[11px] leading-relaxed">
+                                                    {course.description || "Comprehensive academic syllabus and curriculum modules."}
+                                                </p>
+
+                                                {/* Subjects Included */}
+                                                {Array.isArray(course.subjects) && course.subjects.length > 0 && (
+                                                    <div className="space-y-1 pt-1">
+                                                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+                                                            Subjects ({course.subjects.length})
+                                                        </span>
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {course.subjects.slice(0, 4).map((sub: string, idx: number) => (
+                                                                <span
+                                                                    key={idx}
+                                                                    className="px-1.5 py-0.5 rounded-md bg-muted text-[10px] font-medium text-foreground"
+                                                                >
+                                                                    {sub}
+                                                                </span>
+                                                            ))}
+                                                            {course.subjects.length > 4 && (
+                                                                <span className="text-[10px] text-muted-foreground font-semibold px-1 py-0.5">
+                                                                    +{course.subjects.length - 4} more
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="flex items-center justify-between pt-2 border-t text-[11px] text-muted-foreground">
+                                                <span className="inline-flex items-center gap-1">
+                                                    <Clock className="w-3.5 h-3.5" />
+                                                    {course.duration_text || `${course.duration_value} months`}
+                                                </span>
+                                                <span className="font-semibold text-foreground">
+                                                    {course.category_name}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Dialog Footer */}
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t mt-2">
+                        <div className="text-xs text-muted-foreground">
+                            {selectedMasterCourseIds.length > 0 ? (
+                                <span className="font-bold text-foreground">
+                                    {selectedMasterCourseIds.length} course(s) selected
+                                </span>
+                            ) : (
+                                <span>Select one or more courses above to add them simultaneously</span>
+                            )}
+                        </div>
+
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setSelectCoursesModalOpen(false)}
+                                disabled={adoptingCourses}
+                                className="h-9 text-xs flex-1 sm:flex-none font-semibold"
+                            >
+                                Close
+                            </Button>
+                            <Button
+                                type="button"
+                                onClick={() => handleAdoptSelectedCourses()}
+                                disabled={selectedMasterCourseIds.length === 0 || adoptingCourses}
+                                className="h-9 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex-1 sm:flex-none gap-1.5 shadow-sm"
+                            >
+                                {adoptingCourses ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                    <Plus className="w-3.5 h-3.5" />
+                                )}
+                                Add Selected ({selectedMasterCourseIds.length}) Courses
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* ============================================================ */}
+            {/* MODAL: MANAGE BATCHES & SECTIONS FOR PROGRAM */}
+            {/* ============================================================ */}
+            <Dialog open={batchModalOpen} onOpenChange={setBatchModalOpen}>
+                <DialogContent className="sm:max-w-4xl w-[95vw] max-h-[92vh] flex flex-col p-6 overflow-hidden">
+                    <DialogHeader className="pb-2 border-b">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                                    <Users className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                                        <span>Batches & Sections Management</span>
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs mt-0.5">
+                                        Manage batches, sections, seats & fee structures for <strong className="text-foreground">{batchTargetProgram?.title}</strong>
+                                    </DialogDescription>
+                                </div>
+                            </div>
+                            <Badge variant="outline" className="hidden sm:inline-flex text-xs px-2.5 py-1 bg-primary/5 text-primary border-primary/20">
+                                {programBatches.length} {programBatches.length === 1 ? "Batch" : "Batches"} Configured
+                            </Badge>
+                        </div>
+                    </DialogHeader>
+
+                    {/* Tabs Navigation */}
+                    <Tabs value={batchActiveTab} onValueChange={(v) => setBatchActiveTab(v as "details" | "fee" | "list")} className="flex flex-col flex-1 overflow-hidden pt-2">
+                        <TabsList className="grid grid-cols-3 max-w-md shrink-0 mb-3 bg-muted/60">
+                            <TabsTrigger value="details" className="text-xs font-semibold gap-1.5">
+                                <Users className="w-3.5 h-3.5" /> 1. Batch Details
+                            </TabsTrigger>
+                            <TabsTrigger value="fee" className="text-xs font-semibold gap-1.5">
+                                <Wallet className="w-3.5 h-3.5" /> 2. Fee Structure ({batchFeeOptions.length})
+                            </TabsTrigger>
+                            <TabsTrigger value="list" className="text-xs font-semibold gap-1.5">
+                                <Layers className="w-3.5 h-3.5" /> Active Batches ({programBatches.length})
+                            </TabsTrigger>
+                        </TabsList>
+
+                        {/* TAB 1: BATCH BASIC DETAILS */}
+                        <TabsContent value="details" className="flex-1 overflow-y-auto pr-1 space-y-4 data-[state=active]:flex data-[state=active]:flex-col">
+                            <form onSubmit={handleAddBatch} className="space-y-4">
+                                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.02] dark:bg-emerald-500/[0.04] p-4 space-y-3.5">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-sm">
+                                            <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                                            <h4>Batch Basic Details</h4>
+                                        </div>
+                                        {batchMeta.programInfo?.duration_value && (
+                                            <Badge variant="outline" className="text-[10px] font-semibold bg-primary/5 text-primary border-primary/20">
+                                                Duration: {batchMeta.programInfo.duration_value} {batchMeta.programInfo.duration_unit || "Years"}
+                                            </Badge>
+                                        )}
+                                    </div>
+
+                                    {/* 1. Fetch Program Course Year & Semester Option */}
+                                    <div className="space-y-1.5 p-3 rounded-xl border border-primary/20 bg-primary/[0.03]">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                                <Calendar className="h-3.5 w-3.5 text-primary" />
+                                                Program Academic Year &amp; Semester Option
+                                            </Label>
+                                            <span className="text-[10px] text-muted-foreground font-normal">
+                                                Select academic term for this batch
+                                            </span>
+                                        </div>
+                                        <Select
+                                            value={(() => {
+                                                const matched = derivedAcademicTerms.find((t) => t.label === batchForm.academicTerm || t.key === batchForm.academicTerm);
+                                                return matched ? matched.key : (batchForm.academicTerm || "full_course");
+                                            })()}
+                                            onValueChange={(val) => {
+                                                const matched = derivedAcademicTerms.find((t) => t.key === val || t.label === val);
+                                                setBatchForm((prev) => ({
+                                                    ...prev,
+                                                    academicTerm: matched ? matched.label : val,
+                                                    academicYearNumber: matched?.year ? String(matched.year) : "",
+                                                    semesterNumber: matched?.semester ? String(matched.semester) : "",
+                                                }));
+                                            }}
+                                        >
+                                            <SelectTrigger className="text-xs h-9 bg-background font-medium">
+                                                <SelectValue placeholder="Choose Academic Year / Semester..." />
+                                            </SelectTrigger>
+                                            <SelectContent className="max-h-56">
+                                                {derivedAcademicTerms.map((t) => (
+                                                    <SelectItem key={t.key} value={t.key} className="text-xs">
+                                                        {t.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {/* 2. Batch Name, Section & Language */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                                        {/* Batch Name */}
+                                        <div className="space-y-1.5 md:col-span-2">
+                                            <Label className="text-xs font-semibold text-foreground">
+                                                Batch Name <span className="text-destructive">*</span>
+                                            </Label>
+                                            <Input
+                                                placeholder="e.g. Morning Batch 2026"
+                                                value={batchForm.batchName}
+                                                onChange={(e) => setBatchForm(prev => ({ ...prev, batchName: e.target.value }))}
+                                                className="text-xs h-9 bg-background"
+                                                required
+                                            />
+                                        </div>
+
+                                        {/* Section */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-foreground">
+                                                Section
+                                            </Label>
+                                            <Select
+                                                value={batchForm.sectionName || batchForm.sectionId}
+                                                onValueChange={(val) => {
+                                                    const matched = batchMeta.sections.find(s => String(s.id) === val || s.name === val);
+                                                    if (matched) {
+                                                        setBatchForm(prev => ({ ...prev, sectionId: String(matched.id), sectionName: matched.name }));
+                                                    } else {
+                                                        setBatchForm(prev => ({ ...prev, sectionId: "", sectionName: val }));
+                                                    }
+                                                }}
+                                            >
+                                                <SelectTrigger className="text-xs h-9 bg-background">
+                                                    <SelectValue placeholder="Select Section" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Section A">Section A</SelectItem>
+                                                    <SelectItem value="Section B">Section B</SelectItem>
+                                                    <SelectItem value="Section C">Section C</SelectItem>
+                                                    <SelectItem value="Section D">Section D</SelectItem>
+                                                    {batchMeta.sections?.filter(s => !["A", "B", "C", "D", "Section A", "Section B", "Section C", "Section D"].includes(s.name)).map(s => (
+                                                        <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        {/* Language */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-foreground">
+                                                Language / Medium
+                                            </Label>
+                                            <Select
+                                                value={batchForm.languageId || batchForm.languageName}
+                                                onValueChange={(val) => {
+                                                    const matched = batchMeta.languages.find(l => String(l.id) === val || l.name === val);
+                                                    if (matched) {
+                                                        setBatchForm(prev => ({ ...prev, languageId: String(matched.id), languageName: matched.name }));
+                                                    } else {
+                                                        setBatchForm(prev => ({ ...prev, languageId: "", languageName: val }));
+                                                    }
+                                                }}
+                                            >
+                                                <SelectTrigger className="text-xs h-9 bg-background">
+                                                    <SelectValue placeholder="Select Language" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="English">English</SelectItem>
+                                                    <SelectItem value="Hindi">Hindi</SelectItem>
+                                                    <SelectItem value="Bilingual">Bilingual (English + Hindi)</SelectItem>
+                                                    {batchMeta.languages?.filter(l => !["English", "Hindi"].includes(l.name)).map(l => (
+                                                        <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    {/* 3. Seats, Teaching Method & Attendance Setup Dropdown */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                                        {/* Max Students / Seats */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-foreground">
+                                                Seats / Max Students
+                                            </Label>
+                                            <Input
+                                                type="number"
+                                                min="1"
+                                                placeholder="e.g. 50"
+                                                value={batchForm.seatsAvailable}
+                                                onChange={(e) => setBatchForm(prev => ({ ...prev, seatsAvailable: e.target.value }))}
+                                                className="text-xs h-9 bg-background"
+                                            />
+                                        </div>
+
+                                        {/* Teaching Method */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-foreground">
+                                                Teaching Method
+                                            </Label>
+                                            <Select
+                                                value={batchForm.teachingMethod}
+                                                onValueChange={(val) => setBatchForm(prev => ({ ...prev, teachingMethod: val }))}
+                                            >
+                                                <SelectTrigger className="text-xs h-9 bg-background">
+                                                    <SelectValue placeholder="Select Method" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Classroom">Classroom / Offline</SelectItem>
+                                                    <SelectItem value="Online Live">Online Live Classes</SelectItem>
+                                                    <SelectItem value="Hybrid">Hybrid (Online + Offline)</SelectItem>
+                                                    <SelectItem value="Recorded">Recorded Lectures</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        {/* Attendance Setup Dropdown */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                                                <span className="flex items-center gap-1">
+                                                    <Clock className="h-3.5 w-3.5 text-primary" />
+                                                    Attendance Setup
+                                                </span>
+                                            </Label>
+                                            <Select
+                                                value={batchForm.attendanceSetupId || batchForm.attendanceSetupTitle}
+                                                onValueChange={(val) => {
+                                                    const setups = batchMeta.attendanceSetups || [];
+                                                    const matched = setups.find((s: any) => String(s.id) === val || s.title === val);
+                                                    if (matched) {
+                                                        setBatchForm((prev) => ({
+                                                            ...prev,
+                                                            attendanceSetupId: String(matched.id),
+                                                            attendanceSetupTitle: matched.title,
+                                                        }));
+                                                    } else {
+                                                        setBatchForm((prev) => ({
+                                                            ...prev,
+                                                            attendanceSetupId: "",
+                                                            attendanceSetupTitle: val,
+                                                        }));
+                                                    }
+                                                }}
+                                            >
+                                                <SelectTrigger className="text-xs h-9 bg-background font-medium">
+                                                    <SelectValue placeholder="Select Attendance Setup" />
+                                                </SelectTrigger>
+                                                <SelectContent className="max-h-60">
+                                                    {(batchMeta.attendanceSetups || []).length > 0 ? (
+                                                        batchMeta.attendanceSetups.map((s: any) => (
+                                                            <SelectItem key={s.id} value={String(s.id)} className="text-xs">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="font-semibold text-foreground">{s.title}</span>
+                                                                    <span className="text-[10px] text-muted-foreground">
+                                                                        ({s.attendance_mode === "PERIOD_WISE" ? "Period-Wise" : s.attendance_mode === "BIOMETRIC" ? "Biometric" : "Full Day"}
+                                                                        {s.start_time ? ` • ${s.start_time} - ${s.end_time}` : ""})
+                                                                    </span>
+                                                                    {s.is_default && (
+                                                                        <span className="text-[9px] px-1 py-0.2 rounded bg-primary/10 text-primary font-bold">Default</span>
+                                                                    )}
+                                                                </div>
+                                                            </SelectItem>
+                                                        ))
+                                                    ) : (
+                                                        <>
+                                                            <SelectItem value="Daily Attendance (Full Day)">Daily Attendance (Full Day)</SelectItem>
+                                                            <SelectItem value="Period-Wise Lecture Attendance">Period-Wise Lecture Attendance</SelectItem>
+                                                            <SelectItem value="Regular Academic Shift (08:00 - 14:30)">Regular Academic Shift (08:00 - 14:30)</SelectItem>
+                                                            <SelectItem value="Biometric Attendance (In / Out)">Biometric Attendance (In / Out)</SelectItem>
+                                                        </>
+                                                    )}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Form Action Buttons */}
+                                <div className="flex items-center justify-between pt-2 border-t">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={handleClearBatchForm}
+                                        disabled={savingBatch}
+                                        className="h-9 px-4 text-xs font-semibold gap-1.5"
+                                    >
+                                        <RotateCcw className="w-3.5 h-3.5" /> Clear
+                                    </Button>
+
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            onClick={() => setBatchActiveTab("fee")}
+                                            className="h-9 px-4 text-xs font-bold gap-1.5"
+                                        >
+                                            Configure Fee Structure <ArrowRight className="w-3.5 h-3.5" />
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            disabled={savingBatch || !batchForm.batchName.trim()}
+                                            className="h-9 px-5 text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
+                                        >
+                                            {savingBatch ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                                            Save Batch
+                                        </Button>
+                                    </div>
+                                </div>
+                            </form>
+                        </TabsContent>
+
+                        {/* TAB 2: FEE STRUCTURE / PAYMENT PLANS */}
+                        <TabsContent value="fee" className="flex-1 overflow-y-auto pr-1 space-y-4 data-[state=active]:flex data-[state=active]:flex-col">
+                            {/* Quick Add Payment Schedule Buttons */}
+                            <div className="p-3.5 rounded-xl border bg-muted/20 space-y-2">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[11px] font-extrabold text-muted-foreground uppercase mr-1">
+                                        Add Payment Schedule:
+                                    </span>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "one-time")}
+                                        className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
+                                    >
+                                        💳 + One-Time Plan
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "month")}
+                                        className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
+                                    >
+                                        📅 + Monthly Plan
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "quarter")}
+                                        className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
+                                    >
+                                        🎓 + Quarterly (3 mo)
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "half-year")}
+                                        className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
+                                    >
+                                        🏛️ + Half-Yearly (6 mo)
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "year")}
+                                        className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
+                                    >
+                                        📆 + Yearly Plan
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "week")}
+                                        className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
+                                    >
+                                        ⏱️ + Weekly Plan
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Fee Schedules List */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h4 className="text-sm font-extrabold text-foreground">
+                                            Configured Fee Schedules & Payment Plans ({batchFeeOptions.length})
+                                        </h4>
+                                        <p className="text-xs text-muted-foreground">
+                                            Specify the installment rate, billing frequency, installment count, and applicable discounts.
+                                        </p>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        onClick={() => handleAddBatchFeeSchedule()}
+                                        size="sm"
+                                        variant="outline"
+                                        className="text-xs font-bold border-primary/40 text-primary hover:bg-primary/10 h-8 gap-1.5"
+                                    >
+                                        <Plus className="h-3.5 w-3.5" /> Add Fee Option
+                                    </Button>
+                                </div>
+
+                                {batchFeeOptions.length === 0 ? (
+                                    <div className="p-8 text-center border rounded-xl border-dashed bg-muted/10 space-y-2">
+                                        <Wallet className="h-7 w-7 text-muted-foreground/60 mx-auto" />
+                                        <p className="text-xs font-bold text-foreground">No fee schedules configured yet</p>
+                                        <p className="text-[11px] text-muted-foreground">
+                                            Click any button above to add a payment plan (One-Time, Monthly, Quarterly, Yearly).
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {batchFeeOptions.map((fee, idx) => {
+                                            const numAmount = parseFloat(fee.amount) || 0;
+                                            const numDiscount = parseFloat(fee.discount_value || "0") || 0;
+                                            const hasDisc = Boolean(fee.has_discount && numDiscount > 0);
+                                            const discDeduction = hasDisc
+                                                ? fee.discount_type === "percentage"
+                                                    ? (numAmount * Math.min(100, numDiscount)) / 100
+                                                    : Math.min(numAmount, numDiscount)
+                                                : 0;
+                                            const netPerInstallment = Math.max(0, numAmount - discDeduction);
+                                            const count = Math.max(1, parseInt(fee.installments_count) || 1);
+                                            const totalCost = netPerInstallment * count;
+
+                                            const unitLabelMap: Record<string, string> = {
+                                                "one-time": "One-Time",
+                                                "month": "Monthly Installment",
+                                                "quarter": "Quarterly Installment",
+                                                "half-year": "Half-Yearly Installment",
+                                                "year": "Yearly Installment",
+                                                "week": "Weekly Installment",
+                                            };
+
+                                            return (
+                                                <div
+                                                    key={fee.id}
+                                                    className="p-4 rounded-xl border border-border bg-card shadow-xs space-y-3 hover:border-primary/40 transition-all"
+                                                >
+                                                    {/* Card Header */}
+                                                    <div className="flex items-center justify-between pb-2 border-b border-border/50">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <Badge variant="outline" className="text-[10px] font-extrabold bg-primary/10 text-primary border-primary/20">
+                                                                Option #{idx + 1}
+                                                            </Badge>
+                                                            <Badge variant="secondary" className="text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20">
+                                                                {unitLabelMap[fee.unit] || fee.unit}
+                                                            </Badge>
+                                                            <span className="text-xs font-bold text-foreground">
+                                                                {fee.fee_type === "Custom / Other Fee" && fee.custom_title ? fee.custom_title : fee.fee_type}
+                                                            </span>
+                                                        </div>
+                                                        <Button
+                                                            type="button"
+                                                            size="icon"
+                                                            variant="ghost"
+                                                            onClick={() => handleRemoveBatchFeeSchedule(fee.id)}
+                                                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </Button>
+                                                    </div>
+
+                                                    {/* Row 1: Fee Type, Rate per Installment, Installments # */}
+                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                        <div className="space-y-1.5 sm:col-span-1">
+                                                            <Label className="text-xs font-semibold text-foreground">Fee Type *</Label>
+                                                            <Select
+                                                                value={fee.fee_type}
+                                                                onValueChange={(val) => handleUpdateBatchFeeSchedule(fee.id, { fee_type: val })}
+                                                            >
+                                                                <SelectTrigger className="text-xs h-9 bg-background">
+                                                                    <SelectValue placeholder="Select Fee Type" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="Course Tuition Fee">Course Tuition Fee</SelectItem>
+                                                                    <SelectItem value="Tuition Fee">Tuition Fee</SelectItem>
+                                                                    <SelectItem value="Admission Fee">Admission Fee</SelectItem>
+                                                                    <SelectItem value="Registration Fee">Registration Fee</SelectItem>
+                                                                    <SelectItem value="Exam / Certification Fee">Exam / Certification Fee</SelectItem>
+                                                                    <SelectItem value="Lab / Practical Fee">Lab / Practical Fee</SelectItem>
+                                                                    <SelectItem value="Custom / Other Fee">Custom / Other Fee</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                            {fee.fee_type === "Custom / Other Fee" && (
+                                                                <Input
+                                                                    placeholder="Enter Custom Fee Head Name"
+                                                                    value={fee.custom_title}
+                                                                    onChange={(e) => handleUpdateBatchFeeSchedule(fee.id, { custom_title: e.target.value })}
+                                                                    className="text-xs h-8 mt-1.5 bg-background"
+                                                                />
+                                                            )}
+                                                        </div>
+
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-xs font-semibold text-foreground">Rate per Installment (₹) *</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min="0"
+                                                                placeholder="25000.00"
+                                                                value={fee.amount}
+                                                                onChange={(e) => handleUpdateBatchFeeSchedule(fee.id, { amount: e.target.value })}
+                                                                className="text-xs h-9 bg-background"
+                                                            />
+                                                        </div>
+
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-xs font-semibold text-foreground">Installments #</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min="1"
+                                                                placeholder="1"
+                                                                value={fee.installments_count}
+                                                                onChange={(e) => handleUpdateBatchFeeSchedule(fee.id, { installments_count: e.target.value })}
+                                                                className="text-xs h-9 bg-background"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Row 2: Discount / Scholarship Waiver */}
+                                                    <div className="rounded-lg border border-border/70 p-2.5 bg-muted/20 space-y-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                                                                <Tag className="w-3.5 h-3.5 text-primary" />
+                                                                <span>Discount / Scholarship Waiver</span>
+                                                            </div>
+                                                            <Checkbox
+                                                                checked={fee.has_discount}
+                                                                onCheckedChange={(c) => handleUpdateBatchFeeSchedule(fee.id, { has_discount: Boolean(c) })}
+                                                            />
+                                                        </div>
+
+                                                        {fee.has_discount && (
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-border/40">
+                                                                <div className="space-y-1">
+                                                                    <Label className="text-[11px] font-medium text-muted-foreground">Discount Type</Label>
+                                                                    <Select
+                                                                        value={fee.discount_type}
+                                                                        onValueChange={(val: "percentage" | "fixed") => handleUpdateBatchFeeSchedule(fee.id, { discount_type: val })}
+                                                                    >
+                                                                        <SelectTrigger className="text-xs h-8 bg-background">
+                                                                            <SelectValue />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            <SelectItem value="percentage">Percentage (%)</SelectItem>
+                                                                            <SelectItem value="fixed">Fixed Amount (₹)</SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <Label className="text-[11px] font-medium text-muted-foreground">Discount Value</Label>
+                                                                    <Input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        placeholder={fee.discount_type === "percentage" ? "10" : "1000"}
+                                                                        value={fee.discount_value}
+                                                                        onChange={(e) => handleUpdateBatchFeeSchedule(fee.id, { discount_value: e.target.value })}
+                                                                        className="text-xs h-8 bg-background"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Row 3: Calculation Footer */}
+                                                    <div className="flex items-center justify-between pt-1 text-xs bg-muted/40 p-2 rounded-lg">
+                                                        <div className="space-y-0.5">
+                                                            <div className="font-semibold text-foreground">
+                                                                Installment Rate: ₹{netPerInstallment.toLocaleString()} / {fee.unit === "one-time" ? "full course" : fee.unit}
+                                                            </div>
+                                                            <div className="text-[11px] text-muted-foreground">
+                                                                Schedule: {count} payments &times; ₹{netPerInstallment.toLocaleString()}
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <span className="text-[10px] uppercase font-bold text-muted-foreground block">
+                                                                Total Cost Under This Plan
+                                                            </span>
+                                                            <span className="text-base font-extrabold text-primary">
+                                                                ₹{totalCost.toLocaleString()}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Fee Tab Action Bar */}
+                            <div className="flex items-center justify-between pt-3 border-t">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setBatchActiveTab("details")}
+                                    className="h-9 px-4 text-xs font-semibold gap-1.5"
+                                >
+                                    <ArrowLeft className="w-3.5 h-3.5" /> Back to Batch Details
+                                </Button>
+
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={handleClearBatchForm}
+                                        disabled={savingBatch}
+                                        className="h-9 px-4 text-xs font-semibold gap-1.5"
+                                    >
+                                        <RotateCcw className="w-3.5 h-3.5" /> Clear
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        onClick={handleAddBatch}
+                                        disabled={savingBatch || !batchForm.batchName.trim()}
+                                        className="h-9 px-5 text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
+                                    >
+                                        {savingBatch ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                                        Save Batch
+                                    </Button>
+                                </div>
+                            </div>
+                        </TabsContent>
+
+                        {/* TAB 3: ACTIVE BATCHES LIST */}
+                        <TabsContent value="list" className="flex-1 overflow-y-auto pr-1 space-y-3 data-[state=active]:flex data-[state=active]:flex-col">
+                            {loadingBatches ? (
+                                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground text-xs space-y-2">
+                                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                                    <span>Loading program batches...</span>
+                                </div>
+                            ) : programBatches.length === 0 ? (
+                                <div className="p-8 rounded-xl border border-dashed text-center flex flex-col items-center justify-center space-y-2 text-muted-foreground">
+                                    <Users className="w-8 h-8 text-muted-foreground/40" />
+                                    <p className="text-xs font-semibold">No batches configured for this program yet.</p>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setBatchActiveTab("details")}
+                                        className="text-xs font-bold mt-2"
+                                    >
+                                        <Plus className="w-3.5 h-3.5 mr-1" /> Add Your First Batch
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {programBatches.map((batch) => {
+                                        const finalPrice = Number(batch.price) > 0
+                                            ? Math.max(0, Math.round(Number(batch.price) * (1 - (Number(batch.discount_percent) || 0) / 100)))
+                                            : null;
+                                        return (
+                                            <div
+                                                key={batch.id || batch.section_id}
+                                                className="p-3.5 rounded-xl border bg-card hover:border-primary/40 transition-all shadow-xs flex flex-col justify-between gap-3"
+                                            >
+                                                <div className="space-y-2">
+                                                    {/* Header: Name + Status */}
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0">
+                                                                <Users className="w-4 h-4" />
+                                                            </div>
+                                                            <div>
+                                                                <h5 className="font-bold text-sm text-foreground leading-tight">
+                                                                    {batch.batch_name || batch.name}
+                                                                </h5>
+                                                                <span className="text-[11px] text-muted-foreground">
+                                                                    {batch.enrolled_students_count ?? 0} enrolled students
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                                                            Active
+                                                        </Badge>
+                                                    </div>
+
+                                                    {/* Badges Grid */}
+                                                    <div className="flex flex-wrap gap-1.5 pt-1">
+                                                        {batch.academic_term && (
+                                                            <Badge variant="secondary" className="text-[10px] font-bold bg-primary/10 text-primary border-primary/20 flex items-center gap-1">
+                                                                <Calendar className="h-3 w-3" />
+                                                                {batch.academic_term}
+                                                            </Badge>
+                                                        )}
+                                                        {batch.section_name && (
+                                                            <Badge variant="secondary" className="text-[10px] font-medium">
+                                                                Section: {batch.section_name}
+                                                            </Badge>
+                                                        )}
+                                                        {batch.attendance_setup_title && (
+                                                            <Badge variant="secondary" className="text-[10px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20 flex items-center gap-1">
+                                                                <Clock className="h-3 w-3" />
+                                                                {batch.attendance_setup_title}
+                                                            </Badge>
+                                                        )}
+                                                        {(batch.language_title || batch.language_name) && (
+                                                            <Badge variant="secondary" className="text-[10px] font-medium bg-blue-500/10 text-blue-600 border-blue-500/20">
+                                                                {batch.language_title || batch.language_name}
+                                                            </Badge>
+                                                        )}
+                                                        {batch.seats_available != null && (
+                                                            <Badge variant="secondary" className="text-[10px] font-medium bg-purple-500/10 text-purple-600 border-purple-500/20">
+                                                                {batch.seats_available} Seats
+                                                            </Badge>
+                                                        )}
+                                                        {batch.teaching_method && (
+                                                            <Badge variant="secondary" className="text-[10px] font-medium bg-indigo-500/10 text-indigo-600 border-indigo-500/20">
+                                                                {batch.teaching_method}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Fee and Module Details */}
+                                                    {Number(batch.price) > 0 && (
+                                                        <div className="text-xs pt-1 space-y-1 bg-muted/30 p-2 rounded-lg border border-border/50">
+                                                            <div className="flex items-center justify-between text-xs">
+                                                                <span className="text-muted-foreground">Tuition Fee:</span>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    {Number(batch.discount_percent) > 0 && (
+                                                                        <span className="line-through text-muted-foreground text-[11px]">
+                                                                            ₹{Number(batch.price).toLocaleString()}
+                                                                        </span>
+                                                                    )}
+                                                                    <span className="font-bold text-foreground">
+                                                                        ₹{finalPrice?.toLocaleString()}
+                                                                    </span>
+                                                                    {Number(batch.discount_percent) > 0 && (
+                                                                        <span className="text-[10px] text-emerald-600 font-bold bg-emerald-500/10 px-1 rounded">
+                                                                            {batch.discount_percent}% off
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            {Number(batch.installments_count) > 1 && (
+                                                                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                                                                    <span>Installments:</span>
+                                                                    <span>{batch.installments_count} parts</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Footer Action */}
+                                                <div className="flex items-center justify-end pt-1 border-t border-border/40">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => handleRemoveBatch(batch.section_id || batch.id)}
+                                                        className="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive px-2"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove Batch
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </TabsContent>
+                    </Tabs>
+                </DialogContent>
+            </Dialog>
+
+            {/* ============================================================ */}
+            {/* MODAL: MANAGE SYLLABUS FOR PROGRAM */}
+            {/* ============================================================ */}
+            <Dialog open={syllabusModalOpen} onOpenChange={setSyllabusModalOpen}>
+                <DialogContent className="sm:max-w-5xl w-[95vw] max-h-[92vh] flex flex-col p-6 overflow-hidden">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                            <BookMarked className="h-5 w-5 text-primary" />
+                            <span>Curriculum & Syllabus &mdash; {syllabusTargetProgram?.title}</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs">
+                            Define modules, units, chapters, learning topics, and estimated hours for this program's subjects.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="flex-1 overflow-y-auto py-2 min-h-[350px]">
+                        {loadingSyllabusDetail ? (
+                            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground space-y-2">
+                                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                                <span className="text-xs font-semibold">Loading curriculum & subjects...</span>
+                            </div>
+                        ) : (
+                            <ProgramSyllabusManager
+                                subjectIds={syllabusSubjectIds}
+                                subjectOptions={syllabusSubjectOptions}
+                                categoryName={syllabusTargetProgram?.title || "Program"}
+                                authHeader={authHeader}
+                                syllabusNodes={standaloneSyllabusNodes}
+                                onSyllabusNodesChange={setStandaloneSyllabusNodes}
+                            />
+                        )}
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-3 border-t">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setSyllabusModalOpen(false)}
+                            className="text-xs h-9 font-semibold"
+                        >
+                            Close
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={() => {
+                                toast.success("Syllabus updated successfully!");
+                                setSyllabusModalOpen(false);
+                            }}
+                            className="text-xs h-9 font-bold bg-primary text-primary-foreground"
+                        >
+                            Save Syllabus
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

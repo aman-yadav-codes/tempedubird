@@ -14,6 +14,7 @@ import {
   Star,
   MessageSquare,
   Sparkles,
+  Send,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
 import { useCategoryAvailability } from "@/hooks/use-category-availability";
 import { UniversalFeedbackDialog, type UniversalEntityTarget } from "@/components/public/universal-feedback-dialog";
+import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
 import { SharedPublicSidebar } from "@/components/public/shared-public-sidebar";
 import { SharedInterstitialBanner } from "@/components/public/shared-interstitial-banner";
 
@@ -49,6 +51,8 @@ export default function NotesPublicPage() {
   const [activeSubject, setActiveSubject] = useState<string>("all");
   const [feedbackTarget, setFeedbackTarget] = useState<UniversalEntityTarget | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [enquiryNote, setEnquiryNote] = useState<NoteItem | null>(null);
+  const [enquiryOpen, setEnquiryOpen] = useState(false);
 
   // Sync search URL query
   useEffect(() => {
@@ -220,12 +224,39 @@ export default function NotesPublicPage() {
                             </button>
                           </div>
 
-                          {/* CTA Button */}
-                          <a href={n.file_url || "#"} target="_blank" rel="noopener noreferrer" className="block">
-                            <Button size="sm" className="w-full font-bold text-xs gap-1.5 rounded-xl shadow-xs bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer">
-                              <ArrowDownToLine className="size-3.5" /> Download Handouts
-                            </Button>
-                          </a>
+                          {/* Actions */}
+                          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/50">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFeedbackTarget({
+                                  type: "notes",
+                                  id: n.id,
+                                  title: n.title,
+                                  subtitle: `${n.subject} • ${n.author_name || "Faculty Notes"}`,
+                                  avg_rating: 4.9,
+                                  review_count: 16,
+                                });
+                                setFeedbackOpen(true);
+                              }}
+                              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-amber-300 bg-amber-50/70 text-xs font-bold text-amber-800 transition hover:bg-amber-100 cursor-pointer"
+                            >
+                              <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
+                              <span>Reviews & Q&A</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEnquiryNote(n);
+                                setEnquiryOpen(true);
+                              }}
+                              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-primary text-xs font-bold text-primary-foreground transition hover:bg-primary/90 cursor-pointer shadow-xs"
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                              <span>Enquiry</span>
+                            </button>
+                          </div>
                         </div>
                       </Card>
 
@@ -257,6 +288,19 @@ export default function NotesPublicPage() {
         open={feedbackOpen}
         onOpenChange={setFeedbackOpen}
         target={feedbackTarget}
+      />
+
+      {/* Note Handout Enquiry Dialog */}
+      <CourseEnquiryDialog
+        open={enquiryOpen}
+        onOpenChange={setEnquiryOpen}
+        course={enquiryNote ? {
+          id: enquiryNote.id,
+          title: enquiryNote.title,
+          institute: enquiryNote.institution_name || enquiryNote.author_name || "Faculty Desk",
+          price: enquiryNote.price || "Free Handout",
+          duration: enquiryNote.subject,
+        } : null}
       />
     </div>
   );

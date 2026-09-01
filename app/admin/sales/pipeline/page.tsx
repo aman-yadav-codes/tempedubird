@@ -835,10 +835,12 @@ export default function SalesPipelinePage() {
                   <SelectContent>
                     <SelectItem value="Walk-in">Walk-in</SelectItem>
                     <SelectItem value="Phone Call">Phone Call</SelectItem>
-                    <SelectItem value="Website">Website</SelectItem>
+                    <SelectItem value="Own Website">Own Website</SelectItem>
                     <SelectItem value="EduBird">EduBird</SelectItem>
                     <SelectItem value="Social Media">Social Media</SelectItem>
                     <SelectItem value="Referral">Referral</SelectItem>
+                    <SelectItem value="Direct Admission">Direct Admission</SelectItem>
+                    <SelectItem value="Campaign / Ad">Campaign / Ad</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

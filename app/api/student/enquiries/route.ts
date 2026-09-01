@@ -49,7 +49,12 @@ export async function GET(req: Request) {
         COALESCE(prog.title, vs.current_page_url, 'Course Program') AS preferred_program,
         vs.created_at,
         vs.institution_id,
-        COALESCE(ip.name, ip.slug, 'EduBird Partner Institute') AS institution_name,
+        vs.source_type,
+        vs.metadata,
+        CASE
+          WHEN vs.source_type = 'product' OR vs.follow_up ILIKE '%EduBird Store%' OR vs.follow_up ILIKE '%Product:%' THEN 'EduBird Official Store'
+          ELSE COALESCE(ip.name, ip.slug, 'EduBird Partner Institute')
+        END AS institution_name,
         prog.id AS program_id,
         prog.title AS program_title
       FROM visitor_sessions vs

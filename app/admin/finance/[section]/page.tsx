@@ -1,10 +1,13 @@
-import { BadgeDollarSign, BarChart3, CalendarDays, CreditCard, FileText, IndianRupee, TrendingUp } from "lucide-react";
+import { BadgeDollarSign, BarChart3, CalendarDays, CreditCard, FileText, IndianRupee, Landmark, Tags, TrendingUp } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { AllowanceClient } from "@/app/admin/finance/allowance-client";
 import { Badge } from "@/components/ui/badge";
 import { ExpenseClient } from "@/app/admin/finance/expense-client";
+import { FinanceCategoriesClient } from "@/app/admin/finance/categories-client";
 import { IncomeClient } from "@/app/admin/finance/income-client";
+import { InvoicesClient } from "@/app/admin/finance/invoices-client";
+import { PaymentMethodsClient } from "@/app/admin/finance/payment-methods-client";
 import { PerformanceClient } from "@/app/admin/finance/performance-client";
 import { RecurringExpensesClient } from "@/app/admin/finance/recurring-expenses-client";
 
@@ -21,7 +24,7 @@ const FINANCE_SECTIONS = {
   },
   invoice: {
     title: "Invoice",
-    description: "Create and manage invoice records.",
+    description: "View and print automatically generated invoices and receipts.",
     icon: FileText,
   },
   allowance: {
@@ -38,6 +41,16 @@ const FINANCE_SECTIONS = {
     title: "Financial Performance",
     description: "Audit Profit & Loss, Gross Income, Net Income, and Weekly/Monthly/Yearly charts.",
     icon: BarChart3,
+  },
+  "payment-methods": {
+    title: "Payment Methods",
+    description: "Configure Bank Accounts (Net Banking) and UPI Payment details (PhonePe, Google Pay, Paytm, QR Codes).",
+    icon: Landmark,
+  },
+  categories: {
+    title: "Finance Categories",
+    description: "Configure finance categories that appear in Income, Expense, and Recurring Expenses.",
+    icon: Tags,
   },
 } as const;
 
@@ -64,6 +77,10 @@ export default async function FinanceSectionPage({ params }: FinanceSectionPageP
     return <ExpenseClient />;
   }
 
+  if (section === "invoice") {
+    return <InvoicesClient />;
+  }
+
   if (section === "allowance") {
     return <AllowanceClient />;
   }
@@ -74,6 +91,14 @@ export default async function FinanceSectionPage({ params }: FinanceSectionPageP
 
   if (section === "performance") {
     return <PerformanceClient />;
+  }
+
+  if (section === "payment-methods") {
+    return <PaymentMethodsClient />;
+  }
+
+  if (section === "categories") {
+    return <FinanceCategoriesClient />;
   }
 
   return (

@@ -26,6 +26,8 @@ import {
   Percent,
   BookOpen,
   X,
+  MessageSquare,
+  Send,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -40,6 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
+import { UniversalFeedbackDialog, type UniversalEntityTarget } from "@/components/public/universal-feedback-dialog";
 import { PortalBannerAd } from "@/components/public/portal-banner-ad";
 
 export default function PublicProductsPage() {
@@ -53,9 +56,11 @@ export default function PublicProductsPage() {
   const [programSearch, setProgramSearch] = useState("");
   const [selectedPriceRange, setSelectedPriceRange] = useState("all");
 
-  // Inquiry Dialog State
+  // Feedback & Inquiry Dialog State
   const [enquiryOpen, setEnquiryOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [feedbackTarget, setFeedbackTarget] = useState<UniversalEntityTarget | null>(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   // Load Products, Categories & Programs
   useEffect(() => {
@@ -425,8 +430,8 @@ export default function PublicProductsPage() {
                     </div>
 
                     {/* Price & Action */}
-                    <div className="p-4 border-t border-border mt-3 flex items-center justify-between gap-2 bg-muted/20">
-                      <div>
+                    <div className="p-4 border-t border-border mt-3 space-y-3 bg-muted/20">
+                      <div className="flex items-center justify-between">
                         <div className="flex items-baseline gap-1.5">
                           <span className="text-base font-black text-foreground">
                             ₹{Number(prod.sale_price !== null && prod.sale_price !== undefined ? prod.sale_price : prod.price).toLocaleString("en-IN")}
@@ -442,13 +447,35 @@ export default function PublicProductsPage() {
                         </span>
                       </div>
 
-                      <Button
-                        size="sm"
-                        onClick={() => handleOrderInquiry(prod)}
-                        className="font-bold text-xs gap-1 shadow-2xs cursor-pointer rounded-xl h-8 px-2.5"
-                      >
-                        <ShoppingBag className="h-3 w-3" /> Inquire
-                      </Button>
+                      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/50">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFeedbackTarget({
+                              type: "product",
+                              id: prod.id,
+                              title: prod.title,
+                              subtitle: `${prod.category} • Academic Store`,
+                              avg_rating: 4.8,
+                              review_count: 16,
+                            });
+                            setFeedbackOpen(true);
+                          }}
+                          className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-amber-300 bg-amber-50/70 text-xs font-bold text-amber-800 transition hover:bg-amber-100 cursor-pointer"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
+                          <span>Reviews & Q&A</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOrderInquiry(prod)}
+                          className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-primary text-xs font-bold text-primary-foreground transition hover:bg-primary/90 cursor-pointer shadow-xs"
+                        >
+                          <Send className="h-3.5 w-3.5" />
+                          <span>Enquiry</span>
+                        </button>
+                      </div>
                     </div>
                   </Card>
                 ))}
@@ -689,9 +716,18 @@ export default function PublicProductsPage() {
             institute: selectedProduct.institution_name || "Official Store",
             fee_amount: selectedProduct.sale_price || selectedProduct.price,
             institutionId: selectedProduct.institution_id,
+            type: "product",
+            is_product: true,
           }}
         />
       )}
+
+      {/* Universal Feedback Dialog */}
+      <UniversalFeedbackDialog
+        open={feedbackOpen}
+        onOpenChange={setFeedbackOpen}
+        target={feedbackTarget}
+      />
     </div>
   );
 }

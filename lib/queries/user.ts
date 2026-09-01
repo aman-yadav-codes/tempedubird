@@ -34,11 +34,13 @@ async function ensureUserProfileCompleteSchema(db: Queryable) {
       `);
       await db.query(`
         ALTER TABLE users
-        ADD COLUMN IF NOT EXISTS is_marketplace_enabled BOOLEAN DEFAULT TRUE
+        ADD COLUMN IF NOT EXISTS is_marketplace_enabled BOOLEAN DEFAULT TRUE,
+        ADD COLUMN IF NOT EXISTS show_in_team BOOLEAN DEFAULT FALSE
       `);
       await db.query(`
         ALTER TABLE user_profiles
-        ADD COLUMN IF NOT EXISTS is_marketplace_enabled BOOLEAN DEFAULT TRUE
+        ADD COLUMN IF NOT EXISTS is_marketplace_enabled BOOLEAN DEFAULT TRUE,
+        ADD COLUMN IF NOT EXISTS show_in_team BOOLEAN DEFAULT FALSE
       `);
       await db.query(`
         ALTER TABLE user_profiles
@@ -326,6 +328,24 @@ export type AdminUserDetails = {
     board_name: string | null;
     breadcrumb: string | null;
   }[];
+  commission?: {
+    commission_type: string;
+    commission_rate: string;
+    commission_trigger: string;
+    minimum_threshold: string | null;
+    payout_frequency: string;
+    notes: string | null;
+    rules: Array<{
+      id?: string;
+      condition_trigger: string;
+      condition_label: string;
+      reward_type: "PERCENTAGE" | "FIXED_AMOUNT";
+      rate: string;
+      minimum_threshold?: string | null;
+      payout_frequency?: string;
+      notes?: string | null;
+    }>;
+  } | null;
 };
 
 export const getUserById = async (
@@ -781,19 +801,21 @@ export const getUsersPaginatedQuery = async (
             AND staff_member.institution_id = $${institutionFilterIndex}
             AND staff_member.is_active = TRUE
             AND COALESCE(staff_member.is_deleted, FALSE) = FALSE
-            AND staff_role.code <> 'student'
+            AND staff_role.code NOT IN ('student', 'guardian', 'parent')
         )
       `);
     } else {
       filtersWhere.push(`
         EXISTS (
           SELECT 1
-          FROM institution_memberships staff_member
-          INNER JOIN roles staff_role ON staff_role.id = staff_member.role_id
-          WHERE staff_member.user_id = u.id
-            AND staff_member.is_active = TRUE
-            AND COALESCE(staff_member.is_deleted, FALSE) = FALSE
-            AND staff_role.code <> 'student'
+          FROM user_roles global_role
+          INNER JOIN roles global_role_meta ON global_role_meta.id = global_role.role_id
+          LEFT JOIN scope_types st ON st.id = global_role_meta.scope_id
+          WHERE global_role.user_id = u.id
+            AND (st.code = 'platform' OR global_role_meta.code IN ('platform_admin', 'super_admin') OR NOT EXISTS (
+              SELECT 1 FROM institution_memberships im WHERE im.user_id = u.id AND im.is_active = TRUE AND COALESCE(im.is_deleted, FALSE) = FALSE
+            ))
+            AND global_role_meta.code NOT IN ('student', 'guardian', 'parent')
         )
       `);
     }
@@ -849,6 +871,7 @@ export const getUsersPaginatedQuery = async (
         u.created_at,
         ugp.plain_password AS generated_password,
         COALESCE(up.employment_status, 'ACTIVE') AS employment_status,
+        COALESCE(up.show_in_team, u.show_in_team, FALSE) AS show_in_team,
         COALESCE(role_names.roles, '{}') AS roles
       FROM users u
       LEFT JOIN user_generated_passwords ugp ON ugp.user_id = u.id
@@ -1326,8 +1349,8 @@ export async function createPublicRegisteredUserProfile(
   );
 }
 
-function toOrgSlug(text: string) {
-  return text
+function toOrgSlug(text: string | null | undefined) {
+  return String(text ?? "")
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, "")
@@ -1445,15 +1468,72 @@ const replaceStaffSalaryComponents = async (
         )
         VALUES ($1, $2, $3, $4, $5)
       `,
-      [
-        userId,
-        component.label,
-        component.amount,
-        (component as any).type || "EARNING",
-        index,
-      ]
-    );
+        [
+          userId,
+          component.label,
+          component.amount,
+          (component as any).type || "EARNING",
+          index,
+        ]
+      );
+    }
+  };
+
+const replaceStaffCommissionStructure = async (
+  db: Queryable,
+  userId: number,
+  commission: AdminCreateUserInput["commission"]
+) => {
+  if (!commission || commission.commission_type === "NONE") {
+    await db.query(`DELETE FROM staff_commission_structures WHERE user_id = $1`, [userId]);
+    await db.query(`UPDATE user_profiles SET commission_data = NULL WHERE user_id = $1`, [userId]);
+    return;
   }
+
+  const rate = Number(commission.commission_rate) || 0;
+  const threshold = commission.minimum_threshold ? Number(commission.minimum_threshold) : null;
+  const rulesJson = JSON.stringify(commission.rules || []);
+
+  await db.query(
+    `
+      INSERT INTO staff_commission_structures (
+        user_id,
+        commission_type,
+        commission_rate,
+        commission_trigger,
+        minimum_threshold,
+        payout_frequency,
+        notes,
+        rules,
+        updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, NOW())
+      ON CONFLICT (user_id) DO UPDATE SET
+        commission_type = EXCLUDED.commission_type,
+        commission_rate = EXCLUDED.commission_rate,
+        commission_trigger = EXCLUDED.commission_trigger,
+        minimum_threshold = EXCLUDED.minimum_threshold,
+        payout_frequency = EXCLUDED.payout_frequency,
+        notes = EXCLUDED.notes,
+        rules = EXCLUDED.rules,
+        updated_at = NOW()
+    `,
+    [
+      userId,
+      commission.commission_type || "RULES_BASED",
+      rate,
+      commission.commission_trigger || "course_admission",
+      threshold,
+      commission.payout_frequency || "MONTHLY",
+      commission.notes || null,
+      rulesJson,
+    ]
+  );
+
+  await db.query(
+    `UPDATE user_profiles SET commission_data = $2::jsonb WHERE user_id = $1`,
+    [userId, JSON.stringify(commission)]
+  );
 };
 
 export const assertTeachingSubjectsMatchInstitutionBoard = async (
@@ -1505,24 +1585,49 @@ export const createAdminUserWithDetails = async (
     await client.query("BEGIN");
 
     const roleId = data.role_id ?? (await getDefaultRoleId(client));
-    const existingUser = await getUserByEmailQuery(client, data.email);
-    if (existingUser) {
-      throw new Error("A user with that email already exists");
-    }
+    const roleCheck = await client.query<{ code: string }>(
+      `SELECT code FROM roles WHERE id = $1 LIMIT 1`,
+      [roleId]
+    );
+    const isStudentRole = roleCheck.rows[0]?.code === "student";
 
-    const user = await insertUser(client, {
-      full_name: data.full_name,
-      email: data.email,
-      phone: data.phone,
-      password: null,
-      avatar_url: data.avatar_url,
-      is_active: data.is_active,
-      is_verified: data.is_verified,
-      is_profile_complete: data.is_profile_complete,
-      created_by: adminId,
-      updated_by: adminId,
-      login_provider: "admin_created",
-    });
+    const existingUser = await getUserByEmailQuery(client, data.email);
+    let user: any;
+
+    if (existingUser) {
+      if (isStudentRole) {
+        // Students can be enrolled in multiple institutions and courses using the same user account
+        user = existingUser;
+        if (data.phone || data.full_name || data.avatar_url) {
+          await client.query(
+            `UPDATE users SET 
+              phone = COALESCE($1, phone), 
+              full_name = COALESCE($2, full_name),
+              avatar_url = COALESCE($3, avatar_url),
+              updated_by = $4,
+              updated_at = NOW()
+             WHERE id = $5`,
+            [data.phone || null, data.full_name || null, data.avatar_url || null, adminId, user.id]
+          );
+        }
+      } else {
+        throw new Error("A user with that email already exists");
+      }
+    } else {
+      user = await insertUser(client, {
+        full_name: data.full_name,
+        email: data.email,
+        phone: data.phone,
+        password: null,
+        avatar_url: data.avatar_url,
+        is_active: data.is_active,
+        is_verified: data.is_verified,
+        is_profile_complete: data.is_profile_complete,
+        created_by: adminId,
+        updated_by: adminId,
+        login_provider: "admin_created",
+      });
+    }
 
     await assignScopedRole(
       client,
@@ -1678,6 +1783,7 @@ export const createAdminUserWithDetails = async (
     }
 
     for (const experience of data.experiences) {
+      if (!experience.job_title && !experience.company_name) continue;
       await client.query(
         `
           INSERT INTO user_experience (
@@ -1694,18 +1800,19 @@ export const createAdminUserWithDetails = async (
         `,
         [
           user.id,
-          experience.job_title,
-          experience.company_name,
-          experience.from_month,
-          experience.from_year,
+          experience.job_title || "Staff",
+          experience.company_name || "",
+          experience.from_month ?? null,
+          experience.from_year ?? null,
           experience.is_current ? null : experience.to_month ?? null,
           experience.is_current ? null : experience.to_year ?? null,
-          experience.is_current,
+          Boolean(experience.is_current),
         ]
       );
     }
 
     for (const education of data.education) {
+      if (!education.qualification && !education.institution_name) continue;
       const institutionId = await resolveEducationInstitutionId(client, education, adminId);
 
       await client.query(
@@ -1721,15 +1828,16 @@ export const createAdminUserWithDetails = async (
     `,
         [
           user.id,
-          education.qualification,
+          education.qualification || "Education",
           institutionId,
-          education.from_year,
-          education.to_year,
+          education.from_year ?? null,
+          education.to_year ?? null,
         ]
       );
     }
 
     for (const certification of data.certifications) {
+      if (!certification.name) continue;
       await client.query(
         `
           INSERT INTO user_certifications (
@@ -1757,6 +1865,7 @@ export const createAdminUserWithDetails = async (
     );
     await replaceUserDocuments(client, user.id, data.documents, adminId);
     await replaceStaffSalaryComponents(client, user.id, data.salary_components);
+    await replaceStaffCommissionStructure(client, user.id, data.commission);
 
     await client.query("COMMIT");
 
@@ -1788,6 +1897,7 @@ export const getAdminUserDetails = async (
     salaryComponentsResult,
     teachingCategoriesResult,
     teachingSubjectsResult,
+    commissionResult,
   ] = await Promise.all([
     db.query<QueryResultRow & Omit<AdminUserDetails, "profile" | "institutions" | "location" | "experiences" | "education" | "certifications" | "documents" | "salary_components">>(
       `
@@ -2109,10 +2219,28 @@ ORDER BY ue.to_year DESC, ue.from_year DESC, ue.id DESC
       `,
       [id]
     ),
+    db.query<QueryResultRow>(
+      `
+        SELECT
+          commission_type,
+          commission_rate::text AS commission_rate,
+          commission_trigger,
+          minimum_threshold::text AS minimum_threshold,
+          payout_frequency,
+          notes,
+          COALESCE(rules, '[]'::jsonb) AS rules
+        FROM staff_commission_structures
+        WHERE user_id = $1
+        LIMIT 1
+      `,
+      [id]
+    ),
   ]);
 
   const user = userResult.rows[0];
   if (!user) return null;
+
+  const commissionRow = (commissionResult as any)?.rows?.[0];
 
   return {
     ...(user as unknown as Omit<AdminUserDetails, "profile" | "institutions" | "location" | "experiences" | "education" | "certifications" | "documents" | "salary_components">),
@@ -2136,6 +2264,17 @@ ORDER BY ue.to_year DESC, ue.from_year DESC, ue.id DESC
     certifications: certificationsResult.rows,
     documents: documentsResult.rows,
     salary_components: salaryComponentsResult.rows,
+    commission: commissionResult?.rows?.[0]
+      ? {
+          commission_type: commissionResult.rows[0].commission_type,
+          commission_rate: String(commissionResult.rows[0].commission_rate ?? "0"),
+          commission_trigger: commissionResult.rows[0].commission_trigger ?? "course_admission",
+          minimum_threshold: commissionResult.rows[0].minimum_threshold ? String(commissionResult.rows[0].minimum_threshold) : null,
+          payout_frequency: commissionResult.rows[0].payout_frequency ?? "MONTHLY",
+          notes: commissionResult.rows[0].notes ?? null,
+          rules: Array.isArray(commissionResult.rows[0].rules) ? commissionResult.rows[0].rules : [],
+        }
+      : ((profileResult.rows[0] as any)?.commission_data ?? null),
     teaching_categories: teachingCategoriesResult.rows,
     teaching_subjects: teachingSubjectsResult.rows,
   };
@@ -2182,33 +2321,42 @@ export const updateAdminUserWithDetails = async (
       ]
     );
 
-    await client.query(`DELETE FROM user_roles WHERE user_id = $1`, [id]);
-    const previousMemberships = await client.query<{ id: number }>(
-      `SELECT id FROM institution_memberships WHERE user_id = $1 AND COALESCE(is_deleted, FALSE) = FALSE`,
-      [id]
-    );
-    if (previousMemberships.rows.length) {
-      const membershipIds = previousMemberships.rows.map((row) => row.id);
-      await closeMembershipLifecycle(client, {
-        membershipIds,
-        status: "LEFT",
-        actorId: adminId,
-        remarks: "Institution role replaced",
-      });
-      await client.query(
-        `
-          UPDATE institution_memberships
-          SET is_active = FALSE,
-              status = 'LEFT',
-              is_current = FALSE,
-              leave_date = COALESCE(leave_date, CURRENT_TIMESTAMP),
-              updated_at = CURRENT_TIMESTAMP
-          WHERE id = ANY($1::bigint[])
-        `,
-        [membershipIds]
-      );
-    }
     const roleId = data.role_id ?? (await getDefaultRoleId(client));
+    const roleCheck = await client.query<{ code: string; scope_code: string | null }>(
+      `SELECT r.code, st.code AS scope_code FROM roles r LEFT JOIN scope_types st ON st.id = r.scope_id WHERE r.id = $1 LIMIT 1`,
+      [roleId]
+    );
+    const isStudentRole = roleCheck.rows[0]?.code === "student";
+
+    if (!isStudentRole) {
+      await client.query(`DELETE FROM user_roles WHERE user_id = $1`, [id]);
+      const previousMemberships = await client.query<{ id: number }>(
+        `SELECT id FROM institution_memberships WHERE user_id = $1 AND COALESCE(is_deleted, FALSE) = FALSE`,
+        [id]
+      );
+      if (previousMemberships.rows.length) {
+        const membershipIds = previousMemberships.rows.map((row) => row.id);
+        await closeMembershipLifecycle(client, {
+          membershipIds,
+          status: "LEFT",
+          actorId: adminId,
+          remarks: "Institution role replaced",
+        });
+        await client.query(
+          `
+            UPDATE institution_memberships
+            SET is_active = FALSE,
+                status = 'LEFT',
+                is_current = FALSE,
+                leave_date = COALESCE(leave_date, CURRENT_TIMESTAMP),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ANY($1::bigint[])
+          `,
+          [membershipIds]
+        );
+      }
+    }
+
     await assignScopedRole(
       client,
       id,
@@ -2384,6 +2532,7 @@ export const updateAdminUserWithDetails = async (
     await client.query(`DELETE FROM user_certifications WHERE user_id = $1`, [id]);
 
     for (const experience of data.experiences) {
+      if (!experience.job_title && !experience.company_name) continue;
       await client.query(
         `
           INSERT INTO user_experience (
@@ -2400,18 +2549,19 @@ export const updateAdminUserWithDetails = async (
         `,
         [
           id,
-          experience.job_title,
-          experience.company_name,
-          experience.from_month,
-          experience.from_year,
+          experience.job_title || "Staff",
+          experience.company_name || "",
+          experience.from_month ?? null,
+          experience.from_year ?? null,
           experience.is_current ? null : experience.to_month ?? null,
           experience.is_current ? null : experience.to_year ?? null,
-          experience.is_current,
+          Boolean(experience.is_current),
         ]
       );
     }
 
     for (const education of data.education) {
+      if (!education.qualification && !education.institution_name) continue;
       const institutionId = await resolveEducationInstitutionId(client, education, adminId);
 
       await client.query(
@@ -2427,15 +2577,16 @@ export const updateAdminUserWithDetails = async (
         `,
         [
           id,
-          education.qualification,
+          education.qualification || "Education",
           institutionId,
-          education.from_year,
-          education.to_year,
+          education.from_year ?? null,
+          education.to_year ?? null,
         ]
       );
     }
 
     for (const certification of data.certifications) {
+      if (!certification.name) continue;
       await client.query(
         `
           INSERT INTO user_certifications (
@@ -2463,6 +2614,7 @@ export const updateAdminUserWithDetails = async (
     );
     await replaceUserDocuments(client, id, data.documents, adminId);
     await replaceStaffSalaryComponents(client, id, data.salary_components);
+    await replaceStaffCommissionStructure(client, id, data.commission);
 
     await client.query("COMMIT");
 

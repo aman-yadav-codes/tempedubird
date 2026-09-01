@@ -90,11 +90,17 @@ export async function GET(req: Request) {
                     COALESCE(vs.estimated_value, 25000)::numeric AS estimated_value,
                     COALESCE(vs.notes, vs.follow_up, 'Direct Course Enquiry') AS notes,
                     COALESCE(prog.title, vs.current_page_url, 'Course Program') AS preferred_program,
-                    CASE 
-                        WHEN vs.source_type = 'institution_website' OR vs.metadata->>'source_type' = 'institution_website' OR vs.follow_up ILIKE '%Origin: Institution Website%' THEN 'Institution Website'
-                        WHEN vs.source_type = 'edubird' OR vs.metadata->>'source_type' = 'edubird' OR vs.follow_up ILIKE '%EduBird%' THEN 'EduBird'
-                        ELSE 'EduBird'
-                    END AS source,
+                    COALESCE(
+                        NULLIF(vs.metadata->>'source', ''),
+                        NULLIF(vs.metadata->>'origin_source', ''),
+                        CASE 
+                            WHEN vs.source_type = 'own_website' OR vs.source_type = 'institution_website' OR vs.metadata->>'source_type' = 'own_website' OR vs.metadata->>'source_type' = 'institution_website' OR vs.follow_up ILIKE '%Origin: Institution Website%' OR vs.follow_up ILIKE '%Origin: Own Website%' THEN 'Own Website'
+                            WHEN vs.source_type = 'product' OR vs.metadata->>'source_type' = 'product' OR vs.follow_up ILIKE '%EduBird Store%' OR vs.follow_up ILIKE '%Product:%' THEN 'Store Product'
+                            WHEN vs.source_type IS NOT NULL AND vs.source_type != '' AND vs.source_type != 'edubird' THEN vs.source_type
+                            WHEN vs.institution_id IS NOT NULL THEN 'Own Website'
+                            ELSE 'EduBird'
+                        END
+                    ) AS source,
                     vs.created_at,
                     vs.institution_id
                 FROM visitor_sessions vs
@@ -117,7 +123,10 @@ export async function GET(req: Request) {
                     COALESCE(p.fee_amount, 25000)::numeric AS estimated_value,
                     'Direct Student Enrollment Application' AS notes,
                     COALESCE(p.title, 'Academic Course') AS preferred_program,
-                    'EduBird' AS source,
+                    CASE 
+                        WHEN se.institution_id IS NOT NULL THEN 'Own Website'
+                        ELSE 'EduBird'
+                    END AS source,
                     se.created_at,
                     se.institution_id
                 FROM student_enrollments se
@@ -195,8 +204,10 @@ export async function POST(req: Request) {
         const url = new URL(req.url);
         const institutionIdParam = url.searchParams.get("institutionId") || req.headers.get("x-institution-id");
         let institutionId: number | null = null;
-        if (institutionIdParam && !isNaN(Number(institutionIdParam))) {
+        if (institutionIdParam && !isNaN(Number(institutionIdParam)) && institutionIdParam !== "all") {
             institutionId = Number(institutionIdParam);
+        } else if (body.institution_id && !isNaN(Number(body.institution_id))) {
+            institutionId = Number(body.institution_id);
         } else if (user?.memberships?.length > 0) {
             const instMem = user.memberships.find((m: any) => m.institution_id);
             if (instMem) institutionId = Number(instMem.institution_id);
@@ -226,9 +237,12 @@ export async function POST(req: Request) {
                 estimated_value,
                 follow_up,
                 current_page_url,
-                created_at
+                source_type,
+                metadata,
+                created_at,
+                last_seen_at
             )
-            VALUES ($1::uuid, $2, $3, $4, $5, 'new enquiry', $6, $7, $8, $9, NOW())
+            VALUES ($1::uuid, $2, $3, $4, $5, 'new enquiry', $6, $7, $8, $9, $10, $11, NOW(), NOW())
             RETURNING id
             `,
             [
@@ -241,6 +255,13 @@ export async function POST(req: Request) {
                 estimatedValue,
                 fullNotes,
                 preferredProgram || "/courses",
+                source,
+                JSON.stringify({
+                    source: source,
+                    source_type: source,
+                    origin_source: source,
+                    parent_name: parentName || null,
+                }),
             ]
         );
 

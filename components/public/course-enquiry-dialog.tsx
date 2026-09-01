@@ -49,6 +49,8 @@ export interface CourseEnquiryTarget {
   price?: string;
   fee_amount?: string | number;
   duration?: string;
+  type?: "course" | "product" | "institute" | "institution" | "teacher";
+  is_product?: boolean;
 }
 
 interface CourseEnquiryDialogProps {
@@ -124,15 +126,46 @@ export function CourseEnquiryDialog({
     }
   }, [user, isParent, open]);
 
-  // Reset form state when dialog opens with new course
+  // Reset form state when dialog opens with new course/product
   useEffect(() => {
     if (open && course) {
       setSubmitted(false);
-      setNotes(`Interested in learning more about ${course.title} at ${course.institute || "this institution"}. Please share syllabus, fees, batch timings, and admission process.`);
+      const isProd = course.type === "product" || course.is_product;
+      const isInst = course.type === "institute" || course.type === "institution";
+      const isTeacher = course.type === "teacher";
+      if (isProd) {
+        setNotes(`Interested in purchasing/inquiring about ${course.title} (Price: ₹${course.fee_amount || course.price || "N/A"}). Please share availability, bulk discount, and delivery details.`);
+      } else if (isInst) {
+        setNotes(`Interested in admission, available courses, fee concessions, and campus facilities at ${course.title}. Please connect me with the admissions desk.`);
+      } else if (isTeacher) {
+        setNotes(`Interested in mentorship and learning with ${course.title}. Please share batch timings and course curriculum.`);
+      } else {
+        setNotes(`Interested in learning more about ${course.title} at ${course.institute || "this institution"}. Please share syllabus, fees, batch timings, and admission process.`);
+      }
     }
   }, [open, course]);
 
   if (!course) return null;
+
+  const isProd = course.type === "product" || course.is_product;
+  const isInst = course.type === "institute" || course.type === "institution";
+  const isTeacher = course.type === "teacher";
+
+  const dialogTitle = isProd
+    ? "Product Enquiry & Purchase Request"
+    : isInst
+    ? "Institute Admission & Counseling Enquiry"
+    : isTeacher
+    ? "Faculty Mentorship & Guidance Enquiry"
+    : "Course Counseling & Admission Enquiry";
+
+  const dialogBadge = isProd
+    ? "Store Desk"
+    : isInst
+    ? "Institute Desk"
+    : isTeacher
+    ? "Faculty Desk"
+    : "Admission Desk";
 
   const handleOpenAuth = (tab: "signin" | "signup") => {
     setAuthTab(tab);
@@ -163,10 +196,15 @@ export function CourseEnquiryDialog({
           phone: resolvedPhone,
           email: resolvedEmail,
           preferred_program: course.title,
-          program_id: course.id,
-          institution_id: course.institution_id || 1,
-          source: isParent ? "Parent Portal Course Inquiry" : (source || "Website Course Inquiry"),
-          source_type: "edubird",
+          program_id: isProd ? null : (isInst ? null : course.id),
+          product_id: isProd ? course.id : null,
+          institution_id: course.institution_id || course.institutionId || (isInst ? course.id : null),
+          source: isProd
+            ? (isParent ? "Parent Portal Product Inquiry" : "Website Product Inquiry")
+            : isInst
+            ? (isParent ? "Parent Portal Institute Inquiry" : "Website Institute Inquiry")
+            : (isParent ? "Parent Portal Course Inquiry" : (source || "Website Course Inquiry")),
+          source_type: isProd ? "product" : isInst ? "own_website" : (course.institution_id || course.institutionId ? "own_website" : "edubird"),
           notes: isParent
             ? `Enquiry by Parent: ${user?.full_name || ""} (${resolvedPhone}) on behalf of child ${resolvedName}. ${notes.trim()}`
             : notes.trim(),
@@ -189,7 +227,7 @@ export function CourseEnquiryDialog({
         window.dispatchEvent(new Event("student_enrollment_updated"));
       }
     } catch (err: any) {
-      toast.error(err.message || "Error submitting course enquiry");
+      toast.error(err.message || "Error submitting enquiry");
     } finally {
       setSubmitting(false);
     }
@@ -203,14 +241,14 @@ export function CourseEnquiryDialog({
             <div className="flex items-center justify-between">
               <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
-                Course Counseling Enquiry
+                {dialogTitle}
               </DialogTitle>
               <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary font-semibold">
-                Admission Desk
+                {dialogBadge}
               </Badge>
             </div>
             <DialogDescription className="text-xs text-muted-foreground">
-              Submit your inquiry directly to the institution counseling office.
+              Submit your inquiry directly to the counseling & admissions desk.
             </DialogDescription>
           </DialogHeader>
 
@@ -222,113 +260,103 @@ export function CourseEnquiryDialog({
                 </div>
                 <div className="space-y-1">
                   <h4 className="font-extrabold text-foreground text-lg">Enquiry Successfully Submitted!</h4>
-                <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
-                  Your inquiry for <strong className="text-foreground">{course.title}</strong> has been sent to the institution. You can track updates under <strong className="text-primary">Student Portal &gt; My Enquiries</strong>.
-                </p>
-              </div>
-              <div className="pt-2 flex items-center justify-center gap-2">
-                <Button
-                  onClick={() => onOpenChange(false)}
-                  className="font-bold text-xs bg-primary text-primary-foreground px-6 py-2"
-                >
-                  Done
-                </Button>
-              </div>
-            </div>
-          ) : !user || !accessToken ? (
-            /* Locked state requiring student / guardian login or signup */
-            <div className="space-y-4 pt-2">
-              {/* Selected Course Banner */}
-              <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 flex items-center justify-between text-xs">
-                <div className="min-w-0 pr-2">
-                  <span className="text-[10px] uppercase font-bold text-primary block">Target Course</span>
-                  <h4 className="font-bold text-foreground truncate text-sm">{course.title}</h4>
-                  {course.institute && (
-                    <p className="text-muted-foreground truncate flex items-center gap-1 mt-0.5 text-[11px]">
-                      <Building2 className="h-3 w-3 text-primary shrink-0" />
-                      {course.institute}
-                    </p>
-                  )}
+                  <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
+                    Your inquiry for <strong className="text-foreground">{course.title}</strong> has been sent. You can track updates under <strong className="text-primary">Student Portal &gt; My Enquiries</strong>.
+                  </p>
                 </div>
-                {course.price && (
-                  <Badge className="bg-primary text-primary-foreground font-extrabold text-xs shrink-0">
-                    {course.price}
-                  </Badge>
-                )}
-              </div>
-
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-2 text-xs">
-                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-sm">
-                  <Lock className="h-4 w-4 shrink-0" />
-                  Student / Guardian Account Required to Enquire
+                <div className="pt-2 flex items-center justify-center gap-2">
+                  <Button
+                    onClick={() => onOpenChange(false)}
+                    className="font-bold text-xs bg-primary text-primary-foreground px-6 py-2"
+                  >
+                    Done
+                  </Button>
                 </div>
-                <p className="text-muted-foreground leading-relaxed">
-                  To ensure quality counseling and allow you to track answers, notes, and application status in your student portal, you must be signed in with a student or guardian account.
-                </p>
               </div>
-
-              <div className="space-y-2 pt-1">
-                <Button
-                  onClick={() => handleOpenAuth("signup")}
-                  className="w-full font-bold shadow-md gap-2 h-11 text-xs bg-primary text-primary-foreground"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  Register Free Student Account
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => handleOpenAuth("signin")}
-                  className="w-full font-bold text-xs h-10"
-                >
-                  Already have an account? Sign In
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmitEnquiry} className="space-y-4 pt-2">
-              {/* Selected Course Banner */}
-              <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 flex items-center justify-between text-xs">
-                <div className="min-w-0 pr-2">
-                  <span className="text-[10px] uppercase font-bold text-primary block">Target Course Selected</span>
-                  <h4 className="font-bold text-foreground truncate text-sm">{course.title}</h4>
-                  {course.institute && (
-                    <p className="text-muted-foreground truncate flex items-center gap-1 mt-0.5 text-[11px]">
-                      <Building2 className="h-3 w-3 text-primary shrink-0" />
-                      {course.institute}
-                    </p>
-                  )}
-                </div>
-                {course.price && (
-                  <Badge className="bg-primary text-primary-foreground font-extrabold text-xs shrink-0">
-                    {course.price}
-                  </Badge>
-                )}
-              </div>
-
-              {/* Verified Account Notice if logged in */}
-              {user ? (
-                <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1.5 text-xs text-emerald-800 dark:text-emerald-300">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold flex items-center gap-1.5 truncate text-foreground text-sm">
-                      <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                      {isParent ? (
-                        <span>Enquiring as Parent: <strong className="font-black">{user?.full_name || "Parent"}</strong></span>
-                      ) : (
-                        <span>Enquiring as student: <strong className="font-black">{user?.full_name || "Student"}</strong></span>
-                      )}
+            ) : (
+              <form onSubmit={handleSubmitEnquiry} className="space-y-4 pt-2">
+                {/* Target Selected Banner */}
+                <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 flex items-center justify-between text-xs">
+                  <div className="min-w-0 pr-2">
+                    <span className="text-[10px] uppercase font-bold text-primary block">
+                      {isProd ? "Selected Product" : isInst ? "Selected Institution" : isTeacher ? "Selected Educator" : "Selected Course"}
                     </span>
-                    <Badge variant="outline" className="text-[9px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold uppercase shrink-0">
-                      {isParent ? "Parent Portal" : "Verified Account"}
+                    <h4 className="font-bold text-foreground truncate text-sm">{course.title}</h4>
+                    {course.institute && (
+                      <p className="text-muted-foreground truncate flex items-center gap-1 mt-0.5 text-[11px]">
+                        <Building2 className="h-3 w-3 text-primary shrink-0" />
+                        {course.institute}
+                      </p>
+                    )}
+                  </div>
+                  {course.price && (
+                    <Badge className="bg-primary text-primary-foreground font-extrabold text-xs shrink-0">
+                      {course.price}
                     </Badge>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground pt-0.5 font-medium">
-                    {user?.phone && <span>📞 {user.phone}</span>}
-                    {user?.email && <span>✉️ {user.email}</span>}
-                  </div>
+                  )}
                 </div>
-              ) : null}
+
+                {/* Auto-filled details for logged-in user or editable inputs */}
+                {user ? (
+                  <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1.5 text-xs text-emerald-800 dark:text-emerald-300">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold flex items-center gap-1.5 truncate text-foreground text-sm">
+                        <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                        {isParent ? (
+                          <span>Enquiring as Parent: <strong className="font-black">{user?.full_name || "Parent"}</strong></span>
+                        ) : (
+                          <span>Enquiring as student: <strong className="font-black">{user?.full_name || "Student"}</strong></span>
+                        )}
+                      </span>
+                      <Badge variant="outline" className="text-[9px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold uppercase shrink-0">
+                        {isParent ? "Parent Portal" : "Verified Account"}
+                      </Badge>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground pt-0.5 font-medium">
+                      {user?.phone && <span>📞 {user.phone}</span>}
+                      {user?.email && <span>✉️ {user.email}</span>}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3 pt-1">
+                    <div>
+                      <Label className="text-xs font-bold">Your Full Name *</Label>
+                      <Input
+                        required
+                        placeholder="Enter your full name"
+                        value={studentName}
+                        onChange={(e) => setStudentName(e.target.value)}
+                        className="h-9 text-xs mt-1"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs font-bold">Email Address *</Label>
+                        <Input
+                          required
+                          type="email"
+                          placeholder="you@example.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="h-9 text-xs mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs font-bold">Phone / WhatsApp *</Label>
+                        <Input
+                          required
+                          type="tel"
+                          placeholder="+91 9876543210"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          className="h-9 text-xs mt-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
               {/* If Parent, prompt for which child's behalf they are making enquiry */}
               {isParent && childrenList.length > 0 && (

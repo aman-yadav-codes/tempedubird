@@ -3,8 +3,8 @@
  * @param text - Input text
  * @returns Capitalized text
  */
-export function capitalize(text: string): string {
-    if (!text) return "";
+export function capitalize(text: string | null | undefined): string {
+    if (!text || typeof text !== "string") return "";
     return text
         .trim()
         .split(/\s+/)

@@ -55,6 +55,9 @@ export async function POST(req: Request) {
       const commonCategoryId = body.categoryId ? Number(body.categoryId) : null;
       const commonBoardId = body.boardId ? Number(body.boardId) : null;
       const commonIcon = body.icon_url || body.icon || null;
+      const commonTermType = body.termType || body.term_type || "full_course";
+      const commonTermNumber = body.termNumber || body.term_number || 1;
+      const commonTermName = body.termName || body.term_name || null;
 
       const createdSubjects = [];
       const errors = [];
@@ -73,10 +76,13 @@ export async function POST(req: Request) {
             name: item.name.trim(),
             slug: effectiveSlug,
             code: item.code?.trim() || null,
-            icon_url: item.icon_url || item.icon || commonIcon,
+            icon_url: item.icon_url || item.icon || commonIcon || "/icons/default-subject.svg",
             categoryId: item.categoryId ? Number(item.categoryId) : commonCategoryId,
             boardId: item.boardId ? Number(item.boardId) : commonBoardId,
             courseId: item.courseId ? Number(item.courseId) : commonCourseId,
+            termType: item.termType || item.term_type || commonTermType,
+            termNumber: item.termNumber || item.term_number || commonTermNumber,
+            termName: item.termName || item.term_name || commonTermName,
             is_active: item.is_active !== undefined ? Boolean(item.is_active) : true,
           });
           createdSubjects.push(subject);
@@ -93,7 +99,7 @@ export async function POST(req: Request) {
     }
 
     // Single subject payload
-    const { name, slug, code, icon_url, icon, categoryId, boardId, courseId, course_id, is_active } = body;
+    const { name, slug, code, icon_url, icon, categoryId, boardId, courseId, course_id, termType, term_type, termNumber, term_number, termName, term_name, is_active } = body;
 
     if (!name || !name.trim()) {
       return NextResponse.json(
@@ -115,10 +121,13 @@ export async function POST(req: Request) {
       name: name.trim(),
       slug: effectiveSlug,
       code: code || null,
-      icon_url: icon_url || icon || null,
+      icon_url: icon_url || icon || "/icons/default-subject.svg",
       categoryId: categoryId ? Number(categoryId) : null,
       boardId: boardId ? Number(boardId) : null,
       courseId: effectiveCourseId,
+      termType: termType || term_type || "full_course",
+      termNumber: termNumber || term_number || 1,
+      termName: termName || term_name || null,
       is_active: is_active !== undefined ? Boolean(is_active) : true,
     });
 

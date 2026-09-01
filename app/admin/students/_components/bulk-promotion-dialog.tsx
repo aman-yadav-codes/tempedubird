@@ -79,12 +79,11 @@ type BulkPromotionDialogProps = {
 const TODAY = new Date();
 const CURRENT_YEAR = TODAY.getFullYear();
 
-const outcomeLabels: Record<PromotionOutcome, string> = {
-  promoted: "Promoted",
-  retained: "Repeat same class",
-  failed: "Failed",
+const outcomeLabels: Partial<Record<PromotionOutcome, string>> = {
+  promoted: "Promoted to next class",
+  failed: "Failed (Repeat same class)",
   graduated: "Graduated",
-  transferred: "Transferred",
+  transferred: "Transferred out",
 };
 
 function toDateInputValue(date: Date) {
@@ -95,7 +94,7 @@ function toDateInputValue(date: Date) {
 }
 
 function createsEnrollment(outcome: PromotionOutcome) {
-  return outcome === "promoted" || outcome === "retained" || outcome === "failed";
+  return outcome === "promoted" || outcome === "failed";
 }
 
 export function BulkPromotionDialog({

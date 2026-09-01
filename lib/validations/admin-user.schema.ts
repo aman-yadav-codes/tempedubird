@@ -62,17 +62,38 @@ const salaryComponentSchema = z.object({
 });
 
 const salaryAccountSchema = z.object({
-  payment_mode: z.string().trim().max(50).optional().nullable(),
-  bank_name: z.string().trim().max(120).optional().nullable(),
-  account_holder_name: z.string().trim().max(150).optional().nullable(),
-  account_number: z.string().trim().max(60).optional().nullable(),
-  ifsc_code: z.string().trim().max(30).optional().nullable(),
-  branch_name: z.string().trim().max(120).optional().nullable(),
-  account_type: z.string().trim().max(30).optional().nullable(),
-  upi_id: z.string().trim().max(100).optional().nullable(),
-  pan_number: z.string().trim().max(30).optional().nullable(),
-  uan_number: z.string().trim().max(50).optional().nullable(),
-  esi_number: z.string().trim().max(50).optional().nullable(),
+  payment_mode: z.preprocess(emptyToNull, z.string().max(50).optional().nullable()),
+  bank_name: z.preprocess(emptyToNull, z.string().max(120).optional().nullable()),
+  account_holder_name: z.preprocess(emptyToNull, z.string().max(150).optional().nullable()),
+  account_number: z.preprocess(emptyToNull, z.string().max(60).optional().nullable()),
+  ifsc_code: z.preprocess(emptyToNull, z.string().max(30).optional().nullable()),
+  branch_name: z.preprocess(emptyToNull, z.string().max(120).optional().nullable()),
+  account_type: z.preprocess(emptyToNull, z.string().max(30).optional().nullable()),
+  upi_id: z.preprocess(emptyToNull, z.string().max(100).optional().nullable()),
+  pan_number: z.preprocess(emptyToNull, z.string().max(30).optional().nullable()),
+  uan_number: z.preprocess(emptyToNull, z.string().max(50).optional().nullable()),
+  esi_number: z.preprocess(emptyToNull, z.string().max(50).optional().nullable()),
+}).optional().nullable();
+
+const commissionRuleSchema = z.object({
+  id: z.string().optional(),
+  condition_trigger: z.string().trim().min(1).default("successful_enrollment"),
+  condition_label: z.string().trim().optional().default(""),
+  reward_type: z.enum(["PERCENTAGE", "FIXED_AMOUNT"]).default("PERCENTAGE"),
+  rate: z.preprocess(emptyToNull, z.union([z.string(), z.number(), z.null()]).optional()),
+  minimum_threshold: z.preprocess(emptyToNull, z.union([z.string(), z.number(), z.null()]).optional()),
+  payout_frequency: z.string().trim().optional().default("MONTHLY"),
+  notes: z.preprocess(emptyToNull, z.union([z.string().max(1000), z.null()]).optional()),
+});
+
+const commissionSchema = z.object({
+  commission_type: z.string().trim().default("RULES_BASED"),
+  commission_rate: z.preprocess(emptyToNull, z.union([z.string(), z.number(), z.null()]).optional()),
+  commission_trigger: z.string().trim().optional().default("course_admission"),
+  minimum_threshold: z.preprocess(emptyToNull, z.union([z.string(), z.number(), z.null()]).optional()),
+  payout_frequency: z.string().trim().optional().default("MONTHLY"),
+  notes: z.preprocess(emptyToNull, z.union([z.string().max(2000), z.null()]).optional()),
+  rules: z.array(commissionRuleSchema).optional().default([]),
 }).optional().nullable();
 
 export const adminCreateUserSchema = z.object({
@@ -82,18 +103,24 @@ export const adminCreateUserSchema = z.object({
     .min(2, "Full name must be at least 2 characters")
     .max(150, "Full name is too long")
     .transform(capitalize),
-  email: z
-    .string()
-    .trim()
-    .email("Invalid email address")
-    .max(150, "Email is too long")
-    .toLowerCase(),
-  phone: z
-    .string()
-    .trim()
-    .regex(/^\d{10}$/, "Phone number must be exactly 10 digits")
-    .optional()
-    .nullable(),
+  email: z.preprocess(
+    emptyToNull,
+    z
+      .union([
+        z.string().trim().email("Invalid email address").max(150, "Email is too long").toLowerCase(),
+        z.null(),
+      ])
+      .optional()
+  ),
+  phone: z.preprocess(
+    emptyToNull,
+    z
+      .union([
+        z.string().trim().regex(/^\d{10}$/, "Phone number must be exactly 10 digits"),
+        z.null(),
+      ])
+      .optional()
+  ),
   avatar_url: nullableUrl,
   role_id: optionalPositiveInt,
   is_active: z.boolean().default(true),
@@ -198,8 +225,9 @@ export const adminCreateUserSchema = z.object({
   documents: z.array(userDocumentSchema).max(50).default([]),
   salary_components: z.array(salaryComponentSchema.passthrough()).max(30).default([]),
   salary_account: salaryAccountSchema,
-  salary_frequency: z.string().trim().max(30).optional().nullable(),
-  salary_notes: z.string().trim().max(2000).optional().nullable(),
+  salary_frequency: z.preprocess(emptyToNull, z.string().max(30).optional().nullable()),
+  salary_notes: z.preprocess(emptyToNull, z.string().max(2000).optional().nullable()),
+  commission: commissionSchema,
   teaching_categories: z
     .array(z.coerce.number().int().positive())
     .default([]),

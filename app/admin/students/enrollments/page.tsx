@@ -201,8 +201,105 @@ export default function AdminEnrollmentsPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <Card className="overflow-hidden border border-border shadow-xs">
+      {/* Mobile Card List (< md) */}
+      <div className="space-y-3 md:hidden">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Card key={`enr-skeleton-${i}`} className="p-4 space-y-3 border border-border/80 animate-pulse">
+              <div className="h-4 w-32 bg-muted rounded" />
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/40">
+                <div className="h-3 w-20 bg-muted rounded" />
+                <div className="h-3 w-20 bg-muted rounded" />
+              </div>
+            </Card>
+          ))
+        ) : enrollments.length > 0 ? (
+          enrollments.map((record) => (
+            <Card key={`mobile-enr-${record.enrollment_id}`} className="p-3.5 space-y-3 border border-border/80 shadow-2xs">
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-0.5 min-w-0">
+                  <p className="font-bold text-sm text-foreground">{record.student_name}</p>
+                  {record.student_phone && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Phone className="h-3 w-3 text-primary shrink-0" />
+                      {record.student_phone}
+                    </p>
+                  )}
+                  {record.student_email && (
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                      <Mail className="h-3 w-3 text-primary shrink-0" />
+                      {record.student_email}
+                    </p>
+                  )}
+                </div>
+                <Badge
+                  className={
+                    record.status === "active"
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-bold shrink-0"
+                      : "bg-amber-500/10 text-amber-600 border-amber-500/20 font-bold shrink-0"
+                  }
+                  variant="outline"
+                >
+                  {record.status.toUpperCase()}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50 text-xs">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                    Program / Class
+                  </span>
+                  <span className="font-semibold text-foreground block truncate">
+                    {record.program_title}
+                  </span>
+                  {record.academic_year_name && (
+                    <Badge variant="outline" className="text-[9.5px] mt-0.5 py-0 px-1">
+                      {record.academic_year_name}
+                    </Badge>
+                  )}
+                </div>
+
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                    Institution
+                  </span>
+                  <span className="font-semibold text-foreground flex items-center gap-1 truncate">
+                    <Building2 className="h-3 w-3 text-primary shrink-0" />
+                    {record.institution_name}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                    Fee Amount
+                  </span>
+                  <span className="font-bold text-primary">
+                    {record.program_fee
+                      ? `₹${Number(record.program_fee).toLocaleString("en-IN")}`
+                      : "Standard Fee"}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                    Date
+                  </span>
+                  <span className="text-muted-foreground">
+                    {record.created_at ? new Date(record.created_at).toLocaleDateString() : "-"}
+                  </span>
+                </div>
+              </div>
+            </Card>
+          ))
+        ) : (
+          <Card className="p-8 text-center text-xs text-muted-foreground border-dashed">
+            No program enrollment applications found.
+          </Card>
+        )}
+      </div>
+
+      {/* Desktop Table (hidden on mobile, visible on md+) */}
+      <Card className="hidden md:block overflow-hidden border border-border shadow-xs">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40">

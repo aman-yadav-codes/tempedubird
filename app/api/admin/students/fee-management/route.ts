@@ -331,7 +331,7 @@ async function ensureStudentFeePaymentsTable() {
       academic_year_id INTEGER NULL REFERENCES academic_years(id) ON DELETE SET NULL,
       period_indexes INTEGER[] NOT NULL DEFAULT '{}',
       period_labels JSONB NOT NULL DEFAULT '[]'::jsonb,
-      payment_method TEXT NOT NULL CHECK (payment_method IN ('upi', 'qr', 'cash')),
+      payment_method TEXT NOT NULL CHECK (payment_method IN ('upi', 'qr', 'cash', 'net_banking')),
       subtotal_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
       discount_percent NUMERIC(5, 2) NOT NULL DEFAULT 0,
       discount_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
@@ -353,6 +353,15 @@ async function ensureStudentFeePaymentsTable() {
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
+  `);
+
+  await db.query(`
+    DO $$
+    BEGIN
+      ALTER TABLE student_fee_payments DROP CONSTRAINT IF EXISTS student_fee_payments_payment_method_check;
+      ALTER TABLE student_fee_payments ADD CONSTRAINT student_fee_payments_payment_method_check CHECK (payment_method IN ('upi', 'qr', 'cash', 'net_banking'));
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END $$;
   `);
 
   await db.query(`
@@ -496,6 +505,125 @@ export async function GET(req: Request) {
           WHERE sfp.status = 'pending'
             ${scopedWhere}
           ORDER BY sfp.created_at DESC, sfp.id DESC
+        `,
+        params,
+      );
+
+      return NextResponse.json({ data: result.rows });
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      if (message === "Forbidden: Admin access required") {
+        return NextResponse.json({ error: message }, { status: 403 });
+      }
+      if (message === "Unauthorized" || message === "User not found") {
+        return NextResponse.json({ error: message }, { status: 401 });
+      }
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  }
+
+  if (action === "transactions") {
+    try {
+      const institutionId = getRequestedInstitutionId(url.searchParams);
+      const academicYearId = parsePositiveInteger(url.searchParams.get("academicYearId"));
+      const programId = parsePositiveInteger(url.searchParams.get("programId"));
+      const sectionId = parsePositiveInteger(url.searchParams.get("sectionId"));
+      const paymentMethod = url.searchParams.get("paymentMethod");
+
+      const currentUser = await requirePermission(
+        req,
+        "managestudents.fee_management.view",
+        institutionId,
+      );
+      if (institutionId && !canAccessInstitution(currentUser, institutionId)) {
+        return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
+      }
+
+      await ensureStudentFeePaymentsTable();
+      const scopedInstitutionIds = getScopedInstitutionIds(currentUser, institutionId);
+      const params: unknown[] = [];
+      const scopedWhere =
+        scopedInstitutionIds === null
+          ? ""
+          : scopedInstitutionIds.length === 0
+            ? "AND FALSE"
+            : `AND sfp.institution_id = ANY($${params.push(scopedInstitutionIds)}::int[])`;
+
+      let filterWhere = "";
+      if (academicYearId) {
+        filterWhere += ` AND COALESCE(sfp.academic_year_id, se.academic_year_id) = $${params.push(academicYearId)}`;
+      }
+      if (programId) {
+        filterWhere += ` AND se.program_id = $${params.push(programId)}`;
+      }
+      if (sectionId) {
+        filterWhere += ` AND se.section_id = $${params.push(sectionId)}`;
+      }
+      if (paymentMethod && paymentMethod !== "all") {
+        filterWhere += ` AND sfp.payment_method = $${params.push(paymentMethod)}`;
+      }
+
+      const result = await db.query(
+        `
+          SELECT
+            sfp.id,
+            sfp.student_user_id,
+            sfp.student_profile_id,
+            sfp.enrollment_id,
+            sfp.institution_id,
+            sfp.academic_year_id,
+            sfp.period_indexes,
+            sfp.period_labels,
+            sfp.payment_method,
+            sfp.subtotal_amount,
+            sfp.discount_percent,
+            sfp.discount_amount,
+            sfp.total_amount,
+            sfp.transaction_id,
+            sfp.screenshot_url,
+            sfp.screenshot_public_id,
+            sfp.screenshot_resource_type,
+            sfp.remarks,
+            sfp.status,
+            sfp.received_at,
+            sfp.verified_at,
+            sfp.created_at,
+            student.full_name AS student_name,
+            student.email AS student_email,
+            student.phone AS student_phone,
+            sp.admission_number,
+            se.roll_number,
+            inst.name AS institution_name,
+            prog.title AS program_name,
+            ay.name AS academic_year_name,
+            category.name AS class_category_name,
+            section.name AS section_name,
+            receiver.full_name AS receiver_name
+          FROM student_fee_payments sfp
+          INNER JOIN users student
+            ON student.id = sfp.student_user_id
+           AND COALESCE(student.is_deleted, FALSE) = FALSE
+          INNER JOIN student_profiles sp ON sp.id = sfp.student_profile_id
+          INNER JOIN student_enrollments se
+            ON se.id = sfp.enrollment_id
+           AND COALESCE(se.is_deleted, FALSE) = FALSE
+          INNER JOIN institution_profiles inst
+            ON inst.id = sfp.institution_id
+           AND inst.is_active = TRUE
+           AND COALESCE(inst.is_deleted, FALSE) = FALSE
+          LEFT JOIN institution_programs prog
+            ON prog.id = se.program_id
+           AND COALESCE(prog.is_deleted, FALSE) = FALSE
+          LEFT JOIN academic_years ay
+            ON ay.id = COALESCE(sfp.academic_year_id, se.academic_year_id)
+           AND COALESCE(ay.is_deleted, FALSE) = FALSE
+          LEFT JOIN categories category ON category.id = se.class_category_id
+          LEFT JOIN sections section ON section.id = se.section_id
+          LEFT JOIN users receiver ON receiver.id = COALESCE(sfp.received_by, sfp.verified_by)
+          WHERE LOWER(COALESCE(sfp.status, 'paid')) IN ('paid', 'verified', 'approved')
+            ${scopedWhere}
+            ${filterWhere}
+          ORDER BY COALESCE(sfp.received_at, sfp.verified_at, sfp.created_at) DESC, sfp.id DESC
         `,
         params,
       );
@@ -976,11 +1104,11 @@ export async function POST(req: Request) {
     if (!periodIndexes.length) {
       return NextResponse.json({ error: "Select at least one fee month." }, { status: 400 });
     }
-    if (!["upi", "qr", "cash"].includes(paymentMethod)) {
+    if (!["upi", "qr", "cash", "net_banking"].includes(paymentMethod)) {
       return NextResponse.json({ error: "Select a valid payment method." }, { status: 400 });
     }
-    if ((paymentMethod === "upi" || paymentMethod === "qr") && !transactionId) {
-      return NextResponse.json({ error: "Enter the transaction ID before confirming payment." }, { status: 400 });
+    if (paymentMethod !== "cash" && !transactionId) {
+      return NextResponse.json({ error: "Enter the transaction / reference ID before confirming payment." }, { status: 400 });
     }
 
     const currentUser = await requirePermission(

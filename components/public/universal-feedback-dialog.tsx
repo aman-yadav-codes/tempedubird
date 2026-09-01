@@ -53,7 +53,9 @@ export type UniversalEntityTarget = {
     | "facility"
     | "blog"
     | "article"
-    | "exam";
+    | "exam"
+    | "vendor"
+    | "product";
   id: number;
   title: string;
   subtitle?: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarDays, Loader2 } from "lucide-react";
+import { CalendarDays, Loader2, Sparkles } from "lucide-react";
 
 import {
   Select,
@@ -33,16 +33,27 @@ import { useAuthStore } from "@/store";
 export function AdminAcademicSessionSelector() {
   const { accessToken, user } = useAuthStore();
   const { activeInstitutionId } = useActiveInstitution();
+  const [mounted, setMounted] = useState(false);
   const [sessions, setSessions] = useState<ActiveAcademicSession[]>([]);
   const [studentEnrollments, setStudentEnrollments] = useState<ActiveStudentEnrollment[]>([]);
-  const [selectedId, setSelectedId] = useState(() => {
-    const storedId = user?.role_codes?.includes("student")
-      ? getStoredActiveStudentEnrollmentId()
-      : null;
-    return storedId ? String(storedId) : "";
-  });
+  const [selectedId, setSelectedId] = useState("");
   const [loading, setLoading] = useState(false);
   const isStudent = Boolean(user?.role_codes?.includes("student"));
+  const isPlatformAdmin = Boolean(
+    user?.role_codes?.includes("platform_admin") ||
+    user?.role_codes?.includes("super_admin") ||
+    user?.is_super_admin
+  );
+
+  useEffect(() => {
+    setMounted(true);
+    const storedId = user?.role_codes?.includes("student")
+      ? getStoredActiveStudentEnrollmentId()
+      : getStoredActiveAcademicYearId(activeInstitutionId);
+    if (storedId) {
+      setSelectedId(String(storedId));
+    }
+  }, [user, activeInstitutionId]);
 
   const selectedSession = useMemo(
     () => sessions.find((session) => String(session.id) === selectedId) ?? null,
@@ -74,6 +85,10 @@ export function AdminAcademicSessionSelector() {
   }, [selectedId, studentEnrollments]);
 
   const loadSessions = useCallback(async () => {
+    if (isPlatformAdmin) {
+      return;
+    }
+
     if (isStudent) {
       if (!accessToken) {
         setStudentEnrollments([]);
@@ -132,7 +147,7 @@ export function AdminAcademicSessionSelector() {
       return;
     }
 
-    if (!accessToken || !activeInstitutionId) {
+    if (!accessToken) {
       setSessions([]);
       setSelectedId("");
       return;
@@ -152,25 +167,30 @@ export function AdminAcademicSessionSelector() {
       return stored ?? institutionDefault ?? current;
     };
 
-    const cachedSessions = getStoredActiveAcademicSessions(activeInstitutionId).filter(
-      (session) => session.institutionId === activeInstitutionId,
-    );
-    if (cachedSessions.length) {
-      setSessions(cachedSessions);
-      const cachedSelected = chooseSession(cachedSessions);
-      setSelectedId(cachedSelected ? String(cachedSelected.id) : "");
-      if (cachedSelected) setStoredActiveAcademicSession(cachedSelected);
-      return;
+    if (activeInstitutionId) {
+      const cachedSessions = getStoredActiveAcademicSessions(activeInstitutionId).filter(
+        (session) => session.institutionId === activeInstitutionId,
+      );
+      if (cachedSessions.length) {
+        setSessions(cachedSessions);
+        const cachedSelected = chooseSession(cachedSessions);
+        setSelectedId(cachedSelected ? String(cachedSelected.id) : "");
+        if (cachedSelected) setStoredActiveAcademicSession(cachedSelected);
+        return;
+      }
     }
 
     setLoading(true);
     try {
       const params = new URLSearchParams({
-        institutionId: String(activeInstitutionId),
         page: "1",
         limit: "100",
         pastOrCurrentOnly: "true",
       });
+      if (activeInstitutionId) {
+        params.set("institutionId", String(activeInstitutionId));
+      }
+
       const res = await fetch(`/api/admin/institutions/academic-years?${params.toString()}`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -186,8 +206,11 @@ export function AdminAcademicSessionSelector() {
         isActive: Boolean(row.is_active),
         institutionDefaultAcademicYearId: Number(row.institution_default_academic_year_id) || null,
       })) as ActiveAcademicSession[];
+
       setSessions(rows);
-      setStoredActiveAcademicSessions(activeInstitutionId, rows);
+      if (activeInstitutionId) {
+        setStoredActiveAcademicSessions(activeInstitutionId, rows);
+      }
 
       const next = chooseSession(rows);
       setSelectedId(next ? String(next.id) : "");
@@ -199,7 +222,7 @@ export function AdminAcademicSessionSelector() {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, activeInstitutionId, isStudent]);
+  }, [accessToken, activeInstitutionId, isPlatformAdmin, isStudent]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -213,51 +236,90 @@ export function AdminAcademicSessionSelector() {
     return label.replace(/\s*Academic\s+Session\s*/gi, "").trim();
   }
 
-  if (!isStudent && !activeInstitutionId) return null;
-  const options = isStudent
-    ? uniqueStudentEnrollments.map((enrollment) => ({
-      id: enrollment.id,
-      label: cleanSessionLabel(enrollment.academicYearName),
-    }))
-    : sessions.map((session) => ({
-      id: session.id,
-      label: cleanSessionLabel(session.name),
-    }));
+  const options = useMemo(() => {
+    if (isStudent) {
+      return uniqueStudentEnrollments.map((enrollment) => ({
+        id: enrollment.id,
+        label: cleanSessionLabel(enrollment.academicYearName),
+      }));
+    }
+
+    const seenNames = new Set<string>();
+    const uniqueOptions: { id: number; label: string }[] = [];
+
+    // Prioritize active institution's sessions first, sorted descending
+    const sorted = [...sessions].sort((a, b) => {
+      if (activeInstitutionId) {
+        if (a.institutionId === activeInstitutionId && b.institutionId !== activeInstitutionId) return -1;
+        if (b.institutionId === activeInstitutionId && a.institutionId !== activeInstitutionId) return 1;
+      }
+      return b.name.localeCompare(a.name);
+    });
+
+    for (const session of sorted) {
+      const cleanLabel = cleanSessionLabel(session.name);
+      if (!cleanLabel || seenNames.has(cleanLabel)) continue;
+      seenNames.add(cleanLabel);
+      uniqueOptions.push({
+        id: session.id,
+        label: cleanLabel,
+      });
+    }
+
+    return uniqueOptions;
+  }, [isStudent, uniqueStudentEnrollments, sessions, activeInstitutionId]);
+
+  if (isPlatformAdmin) {
+    return null;
+  }
+
+  if (!mounted) {
+    return (
+      <div className="flex min-w-0 items-center gap-2">
+        <div className="flex items-center gap-1.5 rounded-lg border border-border/80 bg-muted/40 px-2.5 py-1 text-xs font-bold text-foreground shadow-2xs">
+          <CalendarDays className="size-3.5 text-primary shrink-0" />
+          <span className="hidden sm:inline text-muted-foreground text-[11px] font-semibold">Session:</span>
+          <span className="text-xs font-bold text-foreground">2026-2027</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <CalendarDays className="size-4 text-muted-foreground" />
-      <Select
-        value={selectedId}
-        onValueChange={(value) => {
-          setSelectedId(value);
-          if (isStudent) {
-            setStoredActiveStudentEnrollmentId(Number(value));
-            return;
-          }
-          const session = sessions.find((item) => String(item.id) === value);
-          if (session) setStoredActiveAcademicSession(session);
-          else setStoredActiveAcademicYearId(Number(value), activeInstitutionId);
-        }}
-        disabled={loading || options.length === 0}
-      >
-        <SelectTrigger className="h-9 w-48 max-w-[42vw]">
-          <SelectValue placeholder={loading ? "Loading session..." : "Select session"} />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((option) => (
-            <SelectItem key={option.id} value={String(option.id)}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {loading ? <Loader2 className="size-4 animate-spin text-muted-foreground" /> : null}
-      {selectedSession || selectedEnrollment ? (
-        <span className="hidden text-xs text-muted-foreground lg:inline">
-          Current active session
-        </span>
-      ) : null}
+      <div className="flex items-center gap-1.5 rounded-lg border border-border/80 bg-muted/40 px-2.5 py-1 text-xs font-bold text-foreground shadow-2xs">
+        <CalendarDays className="size-3.5 text-primary shrink-0" />
+        <span className="hidden sm:inline text-muted-foreground text-[11px] font-semibold">Session:</span>
+        <Select
+          value={selectedId}
+          onValueChange={(value) => {
+            setSelectedId(value);
+            if (isStudent) {
+              setStoredActiveStudentEnrollmentId(Number(value));
+              return;
+            }
+            const session = sessions.find((item) => String(item.id) === value);
+            if (session) {
+              setStoredActiveAcademicSession(session);
+            } else {
+              setStoredActiveAcademicYearId(Number(value), activeInstitutionId);
+            }
+          }}
+          disabled={loading || options.length === 0}
+        >
+          <SelectTrigger className="h-7 border-0 bg-transparent p-0 text-xs font-bold shadow-none focus:ring-0 gap-1.5 min-w-[90px] max-w-[150px]">
+            <SelectValue placeholder={loading ? "Loading..." : "Select Year"} />
+          </SelectTrigger>
+          <SelectContent align="start">
+            {options.map((option) => (
+              <SelectItem key={option.id} value={String(option.id)} className="text-xs font-semibold">
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {loading ? <Loader2 className="size-3 animate-spin text-muted-foreground" /> : null}
+      </div>
     </div>
   );
 }

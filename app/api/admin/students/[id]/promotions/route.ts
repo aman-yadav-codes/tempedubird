@@ -90,23 +90,25 @@ export async function POST(
 
     // If destination enrollment is needed (promoted, retained, failed)
     let destEnrollmentId: number | null = null;
+    const effectiveToProgramId = toProgramId || (outcome === "failed" ? currentEnrollment?.program_id : null);
+    const effectiveToSectionId = toSectionId !== undefined ? toSectionId : (outcome === "failed" ? currentEnrollment?.section_id : null);
 
     if (["promoted", "retained", "failed"].includes(outcome)) {
-      if (!toAcademicYearId || !toProgramId) {
+      if (!toAcademicYearId || !effectiveToProgramId) {
         return NextResponse.json({ error: "Destination Academic Year and Program are required" }, { status: 400 });
       }
 
-      // Fetch class_category_id for toProgramId
+      // Fetch class_category_id for effectiveToProgramId
       const catRes = await db.query<{ category_id: number }>(
         `SELECT category_id FROM program_categories WHERE program_id = $1 LIMIT 1`,
-        [toProgramId]
+        [effectiveToProgramId]
       );
       const classCategoryId = catRes.rows[0]?.category_id || currentEnrollment?.class_category_id || 1;
 
       // Deactivate old enrollments
       await db.query(
-        `UPDATE student_enrollments SET is_current = FALSE, status = 'promoted' WHERE student_id = $1 AND institution_id = $2`,
-        [studentProfileId, institutionId]
+        `UPDATE student_enrollments SET is_current = FALSE, status = $3 WHERE student_id = $1 AND institution_id = $2`,
+        [studentProfileId, institutionId, outcome === "failed" ? "failed" : "promoted"]
       );
 
       // Create new active enrollment
@@ -130,9 +132,9 @@ export async function POST(
           studentProfileId,
           institutionId,
           toAcademicYearId,
-          toProgramId,
+          effectiveToProgramId,
           classCategoryId,
-          toSectionId || null,
+          effectiveToSectionId || null,
           rollNumber || currentEnrollment?.roll_number || null,
         ]
       );

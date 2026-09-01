@@ -39,9 +39,9 @@ export async function POST(req: NextRequest) {
     let phone = String(body.phone || body.contact_phone || authUser?.phone || "").trim();
     let email = String(body.email || body.email_address || authUser?.email || "").trim();
     let preferredProgram = String(body.preferred_program || body.course || "").trim();
-    let programId = body.program_id ? Number(body.program_id) : null;
-    let institutionId = body.institution_id ? Number(body.institution_id) : null;
-    const source = String(body.source || "Website Course Inquiry").trim();
+    let programId = body.program_id && !isNaN(Number(body.program_id)) ? Number(body.program_id) : null;
+    let institutionId = body.institution_id && !isNaN(Number(body.institution_id)) && Number(body.institution_id) > 0 ? Number(body.institution_id) : null;
+    const source = String(body.source || "").trim();
     const notes = String(body.notes || body.message || "").trim();
 
     if (!userId && (email || phone)) {
@@ -62,23 +62,17 @@ export async function POST(req: NextRequest) {
     }
 
     // Auto-resolve accurate institution_id and program title if programId is provided
-    if (programId) {
+    if (programId && !institutionId) {
       const progRes = await db.query<{ institution_id: number; title: string }>(
         `SELECT institution_id, title FROM institution_programs WHERE id = $1 LIMIT 1`,
         [programId]
       );
-      if (progRes.rows.length > 0) {
-        if (!institutionId || institutionId === 1) {
-          institutionId = progRes.rows[0].institution_id;
-        }
+      if (progRes.rows.length > 0 && progRes.rows[0].institution_id) {
+        institutionId = progRes.rows[0].institution_id;
         if (!preferredProgram) {
           preferredProgram = progRes.rows[0].title;
         }
       }
-    }
-
-    if (!institutionId) {
-      institutionId = 1;
     }
 
     if (!phone) {
@@ -89,16 +83,53 @@ export async function POST(req: NextRequest) {
     const parentPhone = String(body.parent_phone || "").trim();
     const parentEmail = String(body.parent_email || "").trim();
     const childName = String(body.child_name || "").trim();
-    const sourceOrigin = String(body.source_type || (body.source?.toLowerCase().includes("institution") ? "institution_website" : "edubird"));
+
+    // Determine Origin / Source:
+    // 1. If product inquiry -> "Store Product"
+    // 2. If explicitly provided custom source (e.g. Walk-in, Phone Call, Referral, etc.) -> use provided source
+    // 3. If institution_id is present (ID basis) -> "Own Website"
+    // 4. If no institution_id is stored -> "EduBird"
+    const isProductInquiry = Boolean(
+      body.source_type === "product" ||
+      body.product_id ||
+      source.toLowerCase().includes("product")
+    );
+
+    let displaySource = "EduBird";
+    let storedSourceType = "edubird";
+
+    if (isProductInquiry) {
+      displaySource = "Store Product";
+      storedSourceType = "product";
+    } else if (
+      body.source &&
+      !["website course inquiry", "platform inquiry", "edubird", "website"].includes(body.source.toLowerCase()) &&
+      !body.source.toLowerCase().startsWith("website ")
+    ) {
+      displaySource = body.source;
+      storedSourceType = body.source;
+    } else if (
+      body.source_type &&
+      !["edubird", "own_website", "institution_website", "institution", "product"].includes(body.source_type.toLowerCase())
+    ) {
+      displaySource = body.source_type;
+      storedSourceType = body.source_type;
+    } else if (institutionId) {
+      displaySource = "Own Website";
+      storedSourceType = "own_website";
+    } else {
+      displaySource = "EduBird";
+      storedSourceType = "edubird";
+    }
 
     const trackingToken = randomUUID();
     const fullNotes = [
       notes,
-      `Program: ${preferredProgram}`,
-      `Origin: ${sourceOrigin === "institution_website" ? "Institution Website" : "EduBird Platform"}`,
+      isProductInquiry ? `Product: ${preferredProgram}` : `Program: ${preferredProgram}`,
+      `Origin: ${displaySource}`,
       parentName ? `Parent: ${parentName} (${parentPhone || "No phone"})` : "",
       childName ? `Child: ${childName}` : "",
-      `Source: ${source}`,
+      `Source: ${displaySource}`,
     ].filter(Boolean).join(" | ");
 
     const res = await db.query(
@@ -134,9 +165,11 @@ export async function POST(req: NextRequest) {
         email || null,
         fullNotes,
         preferredProgram || "/courses",
-        sourceOrigin,
+        storedSourceType,
         JSON.stringify({
-          source_type: sourceOrigin,
+          source: displaySource,
+          source_type: storedSourceType,
+          origin_source: displaySource,
           parent_name: parentName || null,
           parent_phone: parentPhone || null,
           parent_email: parentEmail || null,
@@ -149,7 +182,9 @@ export async function POST(req: NextRequest) {
       success: true,
       id: res.rows[0]?.id,
       institution_id: institutionId,
-      source_type: sourceOrigin,
+      source: displaySource,
+      source_type: storedSourceType,
+      origin_source: displaySource,
       message: "Enquiry submitted successfully",
     });
   } catch (err: any) {

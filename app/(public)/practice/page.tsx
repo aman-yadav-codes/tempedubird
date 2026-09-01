@@ -14,6 +14,7 @@ import {
   Play,
   Star,
   MessageSquare,
+  Send,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
 import { useCategoryAvailability } from "@/hooks/use-category-availability";
 import { UniversalFeedbackDialog, type UniversalEntityTarget } from "@/components/public/universal-feedback-dialog";
+import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
 import { SharedPublicSidebar } from "@/components/public/shared-public-sidebar";
 import { SharedInterstitialBanner } from "@/components/public/shared-interstitial-banner";
 
@@ -51,6 +53,8 @@ export default function PracticePublicPage() {
   const [activeSubject, setActiveSubject] = useState<string>("all");
   const [feedbackTarget, setFeedbackTarget] = useState<UniversalEntityTarget | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [enquiryTest, setEnquiryTest] = useState<PracticeTest | null>(null);
+  const [enquiryOpen, setEnquiryOpen] = useState(false);
 
   // Sync URL search query
   useEffect(() => {
@@ -226,13 +230,39 @@ export default function PracticePublicPage() {
                             </button>
                           </div>
 
-                          {/* CTA Button */}
-                          <Button
-                            size="sm"
-                            className="w-full font-bold text-xs gap-1.5 rounded-xl shadow-xs bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
-                          >
-                            <Play className="size-3.5 fill-current" /> Start Mock Test
-                          </Button>
+                          {/* Actions */}
+                          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/50">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFeedbackTarget({
+                                  type: "practice",
+                                  id: t.id,
+                                  title: t.title,
+                                  subtitle: `${t.subject} • ${t.category} • ${t.time_limit_mins} mins`,
+                                  avg_rating: 4.8,
+                                  review_count: t.attempts_count ? Math.min(t.attempts_count, 14) : 8,
+                                });
+                                setFeedbackOpen(true);
+                              }}
+                              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-amber-300 bg-amber-50/70 text-xs font-bold text-amber-800 transition hover:bg-amber-100 cursor-pointer"
+                            >
+                              <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
+                              <span>Reviews & Q&A</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEnquiryTest(t);
+                                setEnquiryOpen(true);
+                              }}
+                              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-primary text-xs font-bold text-primary-foreground transition hover:bg-primary/90 cursor-pointer shadow-xs"
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                              <span>Enquiry</span>
+                            </button>
+                          </div>
                         </div>
                       </Card>
 
@@ -264,6 +294,19 @@ export default function PracticePublicPage() {
         open={feedbackOpen}
         onOpenChange={setFeedbackOpen}
         target={feedbackTarget}
+      />
+
+      {/* Practice Test Enquiry Dialog */}
+      <CourseEnquiryDialog
+        open={enquiryOpen}
+        onOpenChange={setEnquiryOpen}
+        course={enquiryTest ? {
+          id: enquiryTest.id,
+          title: enquiryTest.title,
+          institute: enquiryTest.institution_name || enquiryTest.subject || "Practice Series",
+          price: enquiryTest.price || "Free",
+          duration: `${enquiryTest.time_limit_mins} Mins`,
+        } : null}
       />
     </div>
   );

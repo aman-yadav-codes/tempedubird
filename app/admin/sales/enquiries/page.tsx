@@ -454,22 +454,53 @@ export default function SalesEnquiriesPage() {
             accessorKey: "source",
             header: "Origin / Source",
             cell: ({ row }) => {
-                const src = row.original.source || "EduBird Platform";
-                const isEdubird = src.toLowerCase().includes("edubird");
-                const isInstWeb = src.toLowerCase().includes("institution");
+                const src = row.original.source || "EduBird";
+                const lower = src.toLowerCase();
+                const isOwnWebsite = lower.includes("own website") || lower.includes("institution");
+                const isEdubird = lower.includes("edubird");
+                const isWalkIn = lower.includes("walk-in") || lower.includes("walkin");
+                const isPhone = lower.includes("phone");
+                const isSocial = lower.includes("social");
+                const isReferral = lower.includes("referral");
+                const isProduct = lower.includes("product") || lower.includes("store");
+                const isDirect = lower.includes("direct");
+
+                let badgeClass = "bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-800";
+                if (isOwnWebsite) {
+                    badgeClass = "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800";
+                } else if (isEdubird) {
+                    badgeClass = "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800";
+                } else if (isWalkIn) {
+                    badgeClass = "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800";
+                } else if (isPhone) {
+                    badgeClass = "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800";
+                } else if (isSocial) {
+                    badgeClass = "bg-pink-500/10 text-pink-700 dark:text-pink-300 border-pink-300 dark:border-pink-800";
+                } else if (isReferral) {
+                    badgeClass = "bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-800";
+                } else if (isProduct) {
+                    badgeClass = "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800";
+                } else if (isDirect) {
+                    badgeClass = "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-300 dark:border-cyan-800";
+                }
+
                 return (
                     <Badge
                         variant="outline"
-                        className={`font-semibold text-[11px] py-0.5 px-2 flex items-center gap-1 w-fit ${
-                            isEdubird
-                                ? "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800"
-                                : isInstWeb
-                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
-                                : "bg-muted text-muted-foreground"
-                        }`}
+                        className={`font-semibold text-[11px] py-0.5 px-2 flex items-center gap-1 w-fit ${badgeClass}`}
                     >
-                        {isEdubird ? <Globe className="w-3 h-3 text-purple-600" /> : isInstWeb ? <Building2 className="w-3 h-3 text-emerald-600" /> : null}
-                        {src}
+                        {isOwnWebsite ? (
+                            <Building2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                        ) : isEdubird ? (
+                            <Globe className="w-3 h-3 text-purple-600 shrink-0" />
+                        ) : isPhone ? (
+                            <PhoneCall className="w-3 h-3 text-amber-600 shrink-0" />
+                        ) : isWalkIn ? (
+                            <Users className="w-3 h-3 text-blue-600 shrink-0" />
+                        ) : isSocial ? (
+                            <Sparkles className="w-3 h-3 text-pink-600 shrink-0" />
+                        ) : null}
+                        <span>{src}</span>
                     </Badge>
                 );
             },
@@ -758,10 +789,12 @@ export default function SalesEnquiriesPage() {
                                     <SelectContent>
                                         <SelectItem value="Walk-in">Walk-in</SelectItem>
                                         <SelectItem value="Phone Call">Phone Call</SelectItem>
-                                        <SelectItem value="Website">Website</SelectItem>
+                                        <SelectItem value="Own Website">Own Website</SelectItem>
                                         <SelectItem value="EduBird">EduBird</SelectItem>
                                         <SelectItem value="Social Media">Social Media</SelectItem>
                                         <SelectItem value="Referral">Referral</SelectItem>
+                                        <SelectItem value="Direct Admission">Direct Admission</SelectItem>
+                                        <SelectItem value="Campaign / Ad">Campaign / Ad</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>

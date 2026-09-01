@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -67,10 +68,13 @@ type PerformanceData = {
 };
 
 export function PerformanceClient() {
+  const pathname = usePathname();
   const { isReady, isForbidden } = useAdminGuard();
   const { user, accessToken } = useAuthStore();
   const { activeInstitution } = useActiveInstitution();
   const isPlatformAdmin = isPlatformAdminUser(user);
+  const isPlatformSection = pathname?.startsWith("/platformadmin");
+  const targetInstitutionId = isPlatformSection ? null : activeInstitution?.id;
 
   const [timeframe, setTimeframe] = useState<"weekly" | "monthly" | "yearly">("monthly");
   const [data, setData] = useState<PerformanceData | null>(null);
@@ -79,15 +83,15 @@ export function PerformanceClient() {
   useEffect(() => {
     if (!isReady || isForbidden) return;
     fetchPerformanceData();
-  }, [isReady, isForbidden, timeframe, activeInstitution?.id]);
+  }, [isReady, isForbidden, timeframe, targetInstitutionId]);
 
   const fetchPerformanceData = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       params.set("timeframe", timeframe);
-      if (activeInstitution?.id) {
-        params.set("institution_id", String(activeInstitution.id));
+      if (targetInstitutionId) {
+        params.set("institution_id", String(targetInstitutionId));
       }
 
       const headers: Record<string, string> = {};
@@ -147,53 +151,13 @@ export function PerformanceClient() {
 
   return (
     <div className="space-y-6">
-      {/* Sub-Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b pb-3 overflow-x-auto no-scrollbar">
-        <Button asChild variant="ghost" size="sm" className="text-xs font-semibold gap-1.5 text-muted-foreground">
-          <Link href="/admin/finance/income">
-            <TrendingUp className="h-4 w-4 text-emerald-500" />
-            <span>Income</span>
-          </Link>
-        </Button>
-        <Button asChild variant="ghost" size="sm" className="text-xs font-semibold gap-1.5 text-muted-foreground">
-          <Link href="/admin/finance/expense">
-            <CreditCard className="h-4 w-4 text-rose-500" />
-            <span>Expense</span>
-          </Link>
-        </Button>
-        <Button asChild variant="ghost" size="sm" className="text-xs font-semibold gap-1.5 text-muted-foreground">
-          <Link href="/admin/finance/invoice">
-            <FileText className="h-4 w-4 text-blue-500" />
-            <span>Invoice</span>
-          </Link>
-        </Button>
-        <Button asChild variant="ghost" size="sm" className="text-xs font-semibold gap-1.5 text-muted-foreground">
-          <Link href="/admin/finance/allowance">
-            <BadgeDollarSign className="h-4 w-4 text-amber-500" />
-            <span>Allowance</span>
-          </Link>
-        </Button>
-        <Button asChild variant="ghost" size="sm" className="text-xs font-semibold gap-1.5 text-muted-foreground">
-          <Link href="/admin/finance/recurring-expenses">
-            <CalendarDays className="h-4 w-4 text-indigo-500" />
-            <span>Recurring Expenses</span>
-          </Link>
-        </Button>
-        <Button asChild variant="default" size="sm" className="text-xs font-bold gap-1.5 bg-primary text-primary-foreground shadow-2xs">
-          <Link href="/admin/finance/performance">
-            <BarChart3 className="h-4 w-4" />
-            <span>Financial Performance</span>
-          </Link>
-        </Button>
-      </div>
-
       {/* Header Banner */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Financial Performance & P&L Audit</h1>
             <Badge variant="outline" className="text-xs uppercase font-bold tracking-wider">
-              {isPlatformAdmin ? (activeInstitution ? activeInstitution.name : "Platform Overview") : "Institution Scope"}
+              {isPlatformSection || !targetInstitutionId ? "Platform Overview" : (activeInstitution?.name ?? "Institution Scope")}
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground mt-1">

@@ -335,7 +335,12 @@ export default function PracticeExamsPage() {
 
   async function inheritPracticeExams(practiceExams: PracticeExamRow[], resetSelection?: () => void) {
     if (!accessToken) return;
-    if (!activeInstitutionId) {
+    const effectiveInstId =
+      activeInstitutionId ??
+      (user?.memberships?.[0]?.institution_id ? Number(user.memberships[0].institution_id) : null) ??
+      ((user as any)?.institution_id ? Number((user as any).institution_id) : null);
+
+    if (!effectiveInstId) {
       toast.error("Select an institution from the sidebar first");
       return;
     }
@@ -353,7 +358,7 @@ export default function PracticeExamsPage() {
           {
             method: "POST",
             headers: { ...authHeaders(), "Content-Type": "application/json" },
-            body: JSON.stringify({ institution_id: activeInstitutionId }),
+            body: JSON.stringify({ institution_id: effectiveInstId }),
           }
         );
         const json = await readJson(res);

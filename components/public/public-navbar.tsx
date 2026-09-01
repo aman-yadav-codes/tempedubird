@@ -53,6 +53,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
+import { AccountSwitcherDialog } from "@/components/auth/account-switcher-dialog";
 import { toRoleRoutePath } from "@/lib/auth/role-routes";
 import type { PublicInstitutionNavItem, PublicNavbarBrand } from "@/lib/api/public-nav";
 
@@ -107,6 +108,7 @@ export function PublicNavbar({
 
   const [landingViewMode, setLandingViewMode] = useState<"platform" | "institution">("platform");
   const [institutionInfo, setInstitutionInfo] = useState<any>(null);
+  const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   const defaultEnvInstId = process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
@@ -562,6 +564,17 @@ export function PublicNavbar({
                     </Link>
                   </DropdownMenuItem>
 
+                  <DropdownMenuItem
+                    onClick={() => setSwitchAccountOpen(true)}
+                    className="cursor-pointer py-2.5 px-3 rounded-lg text-primary hover:bg-primary/5 focus:bg-primary/5 focus:text-primary flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Sparkles className="h-4 w-4 text-[#800000]" />
+                      <span className="text-xs font-bold text-[#800000]">Switch Account</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground font-medium">All role accounts</span>
+                  </DropdownMenuItem>
+
                   <DropdownMenuSeparator className="my-1" />
 
                   <DropdownMenuItem
@@ -812,6 +825,12 @@ export function PublicNavbar({
         onOpenChange={setAuthDialogOpen}
         defaultTab={authDialogTab}
         institutionId={brand.isInstitution ? (activeInstitutionId || 1) : undefined}
+      />
+
+      {/* Multi-Role Account Switcher Dialog */}
+      <AccountSwitcherDialog
+        open={switchAccountOpen}
+        onOpenChange={setSwitchAccountOpen}
       />
 
       {/* Live Location Permission Prompt Banner */}

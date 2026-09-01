@@ -131,6 +131,17 @@ const CURRENT_YEAR = TODAY.getFullYear();
 const CURRENT_YEAR_START = new Date(CURRENT_YEAR, 0, 1);
 const CURRENT_YEAR_END = new Date(CURRENT_YEAR, 11, 31);
 
+const BLOOD_GROUPS = [
+  "A+",
+  "A-",
+  "B+",
+  "B-",
+  "AB+",
+  "AB-",
+  "O+",
+  "O-",
+] as const;
+
 const STANDARD_DOCUMENT_TYPES = [
   { value: "AADHAAR", label: "Aadhaar Card" },
   { value: "PAN", label: "PAN Card" },
@@ -428,12 +439,11 @@ const blankPromotionForm = (): PromotionForm => ({
   notes: "",
 });
 
-const promotionOutcomeLabels: Record<PromotionOutcome, string> = {
-  promoted: "Promoted",
-  retained: "Repeat same class",
-  failed: "Failed",
+const promotionOutcomeLabels: Partial<Record<PromotionOutcome, string>> = {
+  promoted: "Promoted to next class",
+  failed: "Failed (Repeat same class)",
   graduated: "Graduated",
-  transferred: "Transferred",
+  transferred: "Transferred out",
 };
 
 const blankStudentRecords = (): StudentRecordsForm => ({
@@ -594,12 +604,13 @@ export function AddStudentDialog({
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const programDetailRequestRef = useRef(0);
   const identifierCheckRequestRef = useRef(0);
+  const openedUserIdRef = useRef<number | string | null>(null);
   const [tabScrollHints, setTabScrollHints] = useState({ left: false, right: false });
   const isEdit = mode === "edit";
   const studentFormKey = `student:${isEdit ? user?.id ?? "edit" : "new"}`;
   const { saveStatus, handleBlur } = useProgressiveSave({
     formKey: studentFormKey,
-    formState: form,
+    formState: { ...form, studentRecords, enrollmentDrafts },
     enabled: actualOpen,
   });
 
@@ -703,6 +714,12 @@ export function AddStudentDialog({
     const mapped = mapStudentRecordsResponse(data);
     const enrollments = data.enrollments ?? (data.enrollment ? [data.enrollment] : []);
     setStudentRecords(mapped.records);
+    if (mapped.records.date_of_birth) {
+      setForm((prev) => ({
+        ...prev,
+        date_of_birth: mapped.records.date_of_birth,
+      }));
+    }
     setSavedEnrollments(enrollments);
     setEnrollmentDrafts(
       enrollments.map(enrollmentRecordToDraft).concat(enrollments.length ? [] : [blankEnrollmentDraft()])
@@ -713,14 +730,34 @@ export function AddStudentDialog({
 
   const loadLatestStudentRecords = useCallback(async () => {
     if (!accessToken || !user?.id) return null;
-    const res = await fetch(`/api/admin/student-records/${user.id}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error ?? "Failed to load student records");
-    const data = (json.data ?? {}) as StudentRecordsResponse;
-    return applyStudentRecordsData(data);
-  }, [accessToken, applyStudentRecordsData, user]);
+    try {
+      const [recordsRes, userRes] = await Promise.all([
+        fetch(`/api/admin/student-records/${user.id}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }),
+        fetch(`/api/admin/users/detail?id=${user.id}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }).catch(() => null),
+      ]);
+
+      if (userRes && userRes.ok) {
+        const userJson = await userRes.json();
+        const userData = userJson.data as AdminUserDetails;
+        if (userData) {
+          const loadedForm = getInitialForm(userData);
+          setForm(loadedForm);
+        }
+      }
+
+      const json = await recordsRes.json();
+      if (!recordsRes.ok) throw new Error(json.error ?? "Failed to load student records");
+      const data = (json.data ?? {}) as StudentRecordsResponse;
+      return applyStudentRecordsData(data);
+    } catch (err) {
+      console.error("Error loading student records:", err);
+      return null;
+    }
+  }, [accessToken, applyStudentRecordsData, user?.id]);
 
   const selectEnrollmentForPromotion = useCallback((enrollment: StudentEnrollmentRecord) => {
     if (!enrollment.id) return;
@@ -736,6 +773,101 @@ export function AddStudentDialog({
       notes: "",
     }));
   }, []);
+
+  const lastMatchedKeyRef = useRef("");
+  const lookupMatchingStudent = useCallback(
+    async (name: string, dob: string, gender: string) => {
+      const trimmedName = safeTrim(name);
+      const trimmedDob = safeTrim(dob);
+      const trimmedGender = safeTrim(gender);
+
+      if (isEdit || !actualOpen || !accessToken) return;
+      if (trimmedName.length < 2 || !trimmedDob || !trimmedGender || trimmedGender === NO_GENDER) {
+        return;
+      }
+
+      const lookupKey = `${trimmedName.toLowerCase()}|${trimmedDob}|${trimmedGender.toLowerCase()}`;
+      if (lastMatchedKeyRef.current === lookupKey) return;
+
+      try {
+        const res = await fetch(
+          `/api/admin/students/lookup?name=${encodeURIComponent(trimmedName)}&dob=${encodeURIComponent(trimmedDob)}&gender=${encodeURIComponent(trimmedGender)}`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+        const json = await res.json();
+        if (res.ok && json.matched && json.data) {
+          lastMatchedKeyRef.current = lookupKey;
+          const matchedUser = json.data.user;
+          const mappedRecords = json.data.studentRecords
+            ? mapStudentRecordsResponse(json.data.studentRecords)
+            : null;
+
+          setForm((prev) => ({
+            ...prev,
+            full_name: matchedUser.full_name || prev.full_name,
+            email: matchedUser.email || prev.email,
+            phone: matchedUser.phone || prev.phone,
+            avatar_url: matchedUser.avatar_url || prev.avatar_url,
+            gender: matchedUser.gender || prev.gender,
+            about: matchedUser.about || prev.about,
+            full_address: matchedUser.address || prev.full_address,
+            location: (matchedUser.address || matchedUser.city)
+              ? {
+                  latitude: "",
+                  longitude: "",
+                  country: "India",
+                  state: matchedUser.state || "",
+                  city: matchedUser.city || "",
+                  area: "",
+                  pincode: matchedUser.pincode || "",
+                  full_address: matchedUser.address || "",
+                  formatted_address: matchedUser.address || "",
+                  place_id: "",
+                }
+              : prev.location,
+          }));
+
+          if (mappedRecords) {
+            setStudentRecords((prev) => ({
+              ...prev,
+              ...mappedRecords.records,
+              date_of_birth: trimmedDob,
+            }));
+          } else {
+            setStudentRecords((prev) => ({
+              ...prev,
+              date_of_birth: trimmedDob,
+              admission_number: matchedUser.admission_number || prev.admission_number,
+              apar_id: matchedUser.apar_id || prev.apar_id,
+              blood_group: matchedUser.blood_group || prev.blood_group,
+              emergency_contact_phone: matchedUser.emergency_contact_number || prev.emergency_contact_phone,
+            }));
+          }
+
+          toast.success(
+            `Matched existing student "${matchedUser.full_name}"! Profile & records auto-filled.`,
+            { id: "student-auto-prefill", duration: 4000 }
+          );
+        }
+      } catch (err) {
+        console.error("Auto match student error:", err);
+      }
+    },
+    [isEdit, actualOpen, accessToken]
+  );
+
+  useEffect(() => {
+    if (isEdit || !actualOpen) return;
+    const dob = studentRecords.date_of_birth || form.date_of_birth || "";
+    if (form.full_name && dob && form.gender && form.gender !== NO_GENDER) {
+      const timer = setTimeout(() => {
+        void lookupMatchingStudent(form.full_name, dob, form.gender);
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [form.full_name, form.date_of_birth, studentRecords.date_of_birth, form.gender, isEdit, actualOpen, lookupMatchingStudent]);
 
   const checkEmailAvailability = useCallback(async () => {
     if (!actualOpen || !accessToken) return;
@@ -755,21 +887,42 @@ export function AddStudentDialog({
       if (!res.ok) return;
 
       const json = await res.json();
-      setErrors((prev) => {
-        if (json.exists) {
-          return { ...prev, email: DUPLICATE_EMAIL_MESSAGE };
+      if (selectedRoleIsStudent) {
+        // Students can be enrolled in multiple courses and across multiple institutions with the same account
+        if (json.exists && json.user) {
+          setForm((prev) => ({
+            ...prev,
+            full_name: prev.full_name || json.user.full_name || "",
+            phone: prev.phone || json.user.phone || "",
+            avatar_url: prev.avatar_url || json.user.avatar_url || "",
+          }));
+          toast.info(`Found existing student profile for ${json.user.full_name}. This enrollment will be linked to their account.`, {
+            id: "existing-student-notice",
+          });
         }
+        setErrors((prev) => {
+          if (prev.email === DUPLICATE_EMAIL_MESSAGE) {
+            return { ...prev, email: "" };
+          }
+          return prev;
+        });
+      } else {
+        setErrors((prev) => {
+          if (json.exists) {
+            return { ...prev, email: DUPLICATE_EMAIL_MESSAGE };
+          }
 
-        if (prev.email === DUPLICATE_EMAIL_MESSAGE) {
-          return { ...prev, email: "" };
-        }
+          if (prev.email === DUPLICATE_EMAIL_MESSAGE) {
+            return { ...prev, email: "" };
+          }
 
-        return prev;
-      });
+          return prev;
+        });
+      }
     } catch {
-      setErrors((prev) => prev);
+      // Ignore network failures for non-blocking pre-check
     }
-  }, [accessToken, actualOpen, form.email, isEdit, user]);
+  }, [accessToken, actualOpen, form.email, isEdit, selectedRoleIsStudent, user?.id]);
 
   const applyPreferredInstitution = useCallback((nextForm: AddUserForm) => {
     if (isEdit || !preferredInstitution) return nextForm;
@@ -1061,8 +1214,8 @@ export function AddStudentDialog({
       form.teacher_type ||
       form.under_institution_id ||
       form.under_institution_name ||
-      form.teaching_categories.length > 0 ||
-      form.teaching_subjects.length > 0
+      (form.teaching_categories?.length ?? 0) > 0 ||
+      (form.teaching_subjects?.length ?? 0) > 0
     ) {
       const timeout = window.setTimeout(() => {
         setForm((prev) => ({
@@ -1080,8 +1233,8 @@ export function AddStudentDialog({
     }
   }, [
     form.teacher_type,
-    form.teaching_categories.length,
-    form.teaching_subjects.length,
+    form.teaching_categories?.length,
+    form.teaching_subjects?.length,
     form.under_institution_id,
     form.under_institution_name,
     accountNeedsInstitution,
@@ -1201,11 +1354,11 @@ export function AddStudentDialog({
       optionMap.set(option.value, option);
     }
 
-    for (const value of form.teaching_subjects) {
+    for (const value of (form.teaching_subjects || [])) {
       const option = optionMap.get(value);
       if (!option) continue;
-      const key = option.label.trim().toLowerCase();
-      if (labelSet.has(key)) continue;
+      const key = safeTrim(option.label).toLowerCase();
+      if (!key || labelSet.has(key)) continue;
       labelSet.add(key);
       nextOptions.push(option);
     }
@@ -1216,8 +1369,8 @@ export function AddStudentDialog({
   const dedupeTeachingSubjectOptions = useCallback((options: TeachingOption[]) => {
     const next = new Map<string, TeachingOption>();
     for (const option of options) {
-      const key = option.label.trim().toLowerCase();
-      if (!next.has(key)) next.set(key, option);
+      const key = safeTrim(option?.label).toLowerCase();
+      if (key && !next.has(key)) next.set(key, option);
     }
     return Array.from(next.values());
   }, []);
@@ -1669,7 +1822,7 @@ export function AddStudentDialog({
     if (selectedCategoryIds.length === 0) {
       const timeout = window.setTimeout(() => {
         setForm((prev) =>
-          prev.teaching_subjects.length === 0
+          (prev.teaching_subjects?.length ?? 0) === 0
             ? prev
             : { ...prev, teaching_subjects: [] }
         );
@@ -1725,8 +1878,9 @@ export function AddStudentDialog({
         });
 
         setForm((prev) => {
-          const nextSubjects = prev.teaching_subjects.filter((subjectId) => nextAllowed.has(subjectId));
-          if (nextSubjects.length === prev.teaching_subjects.length) {
+          const currentSubjects = prev.teaching_subjects || [];
+          const nextSubjects = currentSubjects.filter((subjectId) => nextAllowed.has(subjectId));
+          if (nextSubjects.length === currentSubjects.length) {
             return prev;
           }
 
@@ -1779,13 +1933,13 @@ export function AddStudentDialog({
 
   const getDefaultStudentForm = useCallback(() => {
     const nextForm = getInitialForm(user);
-    if (!isEdit && defaultStudentRole) {
+    if (defaultStudentRole && (!nextForm.role_id || !Number.isInteger(Number(nextForm.role_id)))) {
       nextForm.role_id = String(defaultStudentRole.id);
       nextForm.is_teacher = false;
       nextForm.teacher_type = "";
     }
     return applyPreferredInstitution(nextForm);
-  }, [applyPreferredInstitution, defaultStudentRole, isEdit, roles, user]);
+  }, [applyPreferredInstitution, defaultStudentRole, user]);
 
   const resetForm = () => {
     setActiveStep(0);
@@ -1836,103 +1990,54 @@ export function AddStudentDialog({
   };
 
   useEffect(() => {
-    if (!actualOpen) return;
+    if (!actualOpen) {
+      openedUserIdRef.current = null;
+      return;
+    }
+
+    const currentTargetId = isEdit ? (user?.id ? String(user.id) : "edit") : "new";
+    if (openedUserIdRef.current === currentTargetId) {
+      return;
+    }
+    openedUserIdRef.current = currentTargetId;
 
     const timeout = window.setTimeout(() => {
       setActiveStep(0);
       setErrors({});
       setPasswordErrors({});
       setPasswordForm({ password: "", confirmPassword: "" });
-      setForm(getDefaultStudentForm());
-      setStudentRecords(applyPreferredEnrollment(blankStudentRecords()));
       setEnablePromotion(false);
       setUseSiblingGuardians(false);
       setSiblingStudentId("");
       setSiblingStudentLabel("");
       setSavedUploadPublicIds(new Set());
+
+      if (isEdit && user) {
+        setForm(getInitialForm(user));
+        if (initialStudentRecords) {
+          applyStudentRecordsData(initialStudentRecords);
+        } else {
+          void loadLatestStudentRecords();
+        }
+      } else {
+        setForm(getDefaultStudentForm());
+        setStudentRecords(applyPreferredEnrollment(blankStudentRecords()));
+        setSavedEnrollments([]);
+        setEnrollmentDrafts([blankEnrollmentDraft()]);
+      }
     }, 0);
 
     return () => window.clearTimeout(timeout);
   }, [
     actualOpen,
     applyPreferredEnrollment,
+    applyStudentRecordsData,
     getDefaultStudentForm,
+    initialStudentRecords,
+    isEdit,
+    loadLatestStudentRecords,
+    user,
   ]);
-
-  useEffect(() => {
-    if (!actualOpen || !initialStudentRecords) return;
-
-    const timeout = window.setTimeout(() => {
-      applyStudentRecordsData(initialStudentRecords);
-    }, 0);
-
-    return () => window.clearTimeout(timeout);
-  }, [actualOpen, applyStudentRecordsData, initialStudentRecords]);
-
-  useEffect(() => {
-    if (!actualOpen || !accessToken || !user?.id || initialStudentRecords) return;
-
-    let cancelled = false;
-    const loadStudentRecords = async () => {
-      try {
-        const enrollments = await loadLatestStudentRecords();
-        if (cancelled) return;
-        if (!enrollments) return;
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Failed to load student records");
-      }
-    };
-
-    loadStudentRecords();
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, actualOpen, initialStudentRecords, loadLatestStudentRecords, user?.id]);
-
-  useEffect(() => {
-    if (!actualOpen || !user) {
-      return;
-    }
-
-    const teachingCategories = user.teaching_categories.map((category) => String(category.id));
-    const teachingSubjects = user.teaching_subjects.map((subject) => String(subject.id));
-
-    const timeout = window.setTimeout(() => {
-      setForm((prev) => ({
-        ...prev,
-        is_teacher: user.profile.is_teacher ?? false,
-        teacher_type: user.profile.teacher_type ?? "",
-        under_institution_id: user.profile.under_institution_id
-          ? String(user.profile.under_institution_id)
-          : "",
-        under_institution_name: user.profile.under_institution_name ?? "",
-        designation_id: user.profile.designation_id
-          ? String(user.profile.designation_id)
-          : "",
-        designation_name: user.profile.designation_name ?? "",
-        teaching_categories: teachingCategories,
-        teaching_subjects: teachingSubjects,
-      }));
-
-      setTeachingCategoryOptions(
-        user.teaching_categories.map((category) => ({
-          id: category.id,
-          value: String(category.id),
-          label: category.name,
-        }))
-      );
-
-      setTeachingSubjectOptionsCache(
-        dedupeTeachingSubjectOptions(user.teaching_subjects.map((subject) => ({
-          id: subject.id,
-          value: String(subject.id),
-          label: subject.name,
-        })))
-      );
-    }, 0);
-
-    return () => window.clearTimeout(timeout);
-  }, [actualOpen, dedupeTeachingSubjectOptions, user]);
 
   useEffect(() => {
     if (!actualOpen || !isEdit) return;
@@ -1995,10 +2100,8 @@ export function AddStudentDialog({
         nextErrors.full_name = "Enter the full name.";
       }
 
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeTrim(form.email))) {
+      if (safeTrim(form.email) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeTrim(form.email))) {
         nextErrors.email = "Enter a valid email.";
-      } else if (errors.email === DUPLICATE_EMAIL_MESSAGE) {
-        nextErrors.email = DUPLICATE_EMAIL_MESSAGE;
       }
 
       if (safeTrim(form.phone)) {
@@ -2154,12 +2257,23 @@ export function AddStudentDialog({
       ])
     );
 
+    const studentRoleId = form.role_id && Number.isInteger(Number(form.role_id)) && Number(form.role_id) > 0
+      ? Number(form.role_id)
+      : (defaultStudentRole ? Number(defaultStudentRole.id) : (user?.role_id ? Number(user.role_id) : null));
+
+    const effectiveInstitutionId =
+      (lockedEnrollmentInstitutionId && Number.isInteger(Number(lockedEnrollmentInstitutionId)) && Number(lockedEnrollmentInstitutionId) > 0)
+        ? Number(lockedEnrollmentInstitutionId)
+        : (preferredInstitution?.id ?? user?.institutions?.[0]?.id ?? (form.under_institution_id && Number.isInteger(Number(form.under_institution_id)) ? Number(form.under_institution_id) : null));
+
+    const studentEmail = safeTrim(form.email) || null;
+
     return {
       full_name: normalizeText(form.full_name),
-      email: normalizeEmail(form.email),
+      email: studentEmail ? normalizeEmail(studentEmail) : null,
       phone: safeTrim(form.phone) || null,
       avatar_url: safeTrim(form.avatar_url) || null,
-      role_id: form.role_id ? Number(form.role_id) : (defaultStudentRole ? Number(defaultStudentRole.id) : null),
+      role_id: studentRoleId,
       is_active: form.is_active,
       is_verified: form.is_verified,
       is_profile_complete: form.is_profile_complete,
@@ -2167,15 +2281,14 @@ export function AddStudentDialog({
         about: normalizeNullableText(form.about),
         is_teacher: selectedRoleIsTeacher,
         teacher_type: selectedRoleIsTeacher ? form.teacher_type || "individual_teacher" : null,
-        under_institution_id:
-          (accountNeedsInstitution || selectedRoleIsTeacher) && form.under_institution_id
-            ? Number(form.under_institution_id)
-            : null,
+        under_institution_id: effectiveInstitutionId ?? null,
+        institution_ids: effectiveInstitutionId ? [effectiveInstitutionId] : (user?.institutions?.map((i) => i.id).filter(Boolean) ?? []),
         designation_id:
           selectedRoleCanHaveDesignation && form.designation_id
             ? Number(form.designation_id)
             : null,
         gender: form.gender === NO_GENDER ? null : normalizeText(form.gender),
+        date_of_birth: studentRecords.date_of_birth || form.date_of_birth || null,
         hourly_charges: showHourlyCharges && safeTrim(form.hourly_charges)
           ? Number(form.hourly_charges)
           : null,
@@ -2288,16 +2401,16 @@ export function AddStudentDialog({
   const buildStudentRecordsPayload = () => {
     const selectedGuardians = studentRecords.guardians.filter((guardian) =>
       guardian.guardian_user_id ||
-      (guardian.guardian_name.trim() && guardian.guardian_email.trim())
+      (safeTrim(guardian.guardian_name) && safeTrim(guardian.guardian_email))
     );
     const emergencyGuardian =
       selectedGuardians.find((guardian) => guardian.is_primary) ??
       selectedGuardians[0] ??
       null;
-    const emergencyPhone = emergencyGuardian?.guardian_phone.replace(/\D/g, "").slice(-10) || null;
-    const enrollmentPayloads = enrollmentDrafts.map((enrollment) => ({
+    const emergencyPhone = emergencyGuardian?.guardian_phone ? safeTrim(emergencyGuardian.guardian_phone).replace(/\D/g, "").slice(-10) : null;
+    const savedPayloads = savedEnrollments.map((enrollment) => ({
       id: enrollment.id ?? null,
-      institution_id: lockedEnrollmentInstitutionId ? Number(lockedEnrollmentInstitutionId) : null,
+      institution_id: enrollment.institution_id ? Number(enrollment.institution_id) : (lockedEnrollmentInstitutionId ? Number(lockedEnrollmentInstitutionId) : null),
       program_id: enrollment.program_id ? Number(enrollment.program_id) : null,
       academic_year_id: enrollment.academic_year_id ? Number(enrollment.academic_year_id) : null,
       class_category_id: enrollment.class_category_id ? Number(enrollment.class_category_id) : null,
@@ -2308,11 +2421,26 @@ export function AddStudentDialog({
       remarks: normalizeNullableText(enrollment.remarks ?? ""),
     }));
 
+    const singlePayload = (studentRecords.program_id && studentRecords.academic_year_id) ? [{
+      id: null,
+      institution_id: lockedEnrollmentInstitutionId ? Number(lockedEnrollmentInstitutionId) : null,
+      program_id: Number(studentRecords.program_id),
+      academic_year_id: Number(studentRecords.academic_year_id),
+      class_category_id: studentRecords.class_category_id ? Number(studentRecords.class_category_id) : null,
+      section_id: studentRecords.section_id ? Number(studentRecords.section_id) : null,
+      roll_number: safeTrim(studentRecords.roll_number ?? "") || null,
+      admission_date: isParentMode ? null : (studentRecords.admission_date || null),
+      status: studentRecords.status || "active",
+      remarks: normalizeNullableText(studentRecords.remarks ?? ""),
+    }] : [];
+
+    const enrollmentPayloads = savedPayloads.length > 0 ? savedPayloads : singlePayload;
+
     return ({
     profile: {
       admission_number: safeTrim(studentRecords.admission_number).toUpperCase() || null,
       apar_id: safeTrim(studentRecords.apar_id).toUpperCase() || null,
-      date_of_birth: studentRecords.date_of_birth || null,
+      date_of_birth: studentRecords.date_of_birth || form.date_of_birth || null,
       blood_group: safeTrim(studentRecords.blood_group).toUpperCase() || null,
       emergency_contact_name: emergencyGuardian ? normalizeNullableText(emergencyGuardian.guardian_name) : null,
       emergency_contact_phone: emergencyPhone && emergencyPhone.length === 10 ? emergencyPhone : null,
@@ -2331,10 +2459,10 @@ export function AddStudentDialog({
     enrollments: enrollmentPayloads,
     guardians: studentRecords.guardians
       .filter((guardian) =>
-        guardian.relationship.trim() &&
+        safeTrim(guardian.relationship) &&
         (
           guardian.guardian_user_id ||
-          (guardian.guardian_name.trim() && guardian.guardian_email.trim())
+          (safeTrim(guardian.guardian_name) && safeTrim(guardian.guardian_email))
         )
       )
       .map((guardian) => ({
@@ -2348,7 +2476,7 @@ export function AddStudentDialog({
         is_primary: guardian.is_primary,
       })),
     documents: studentRecords.documents
-      .filter((document) => document.document_type.trim() && getDocumentFiles(document).length > 0)
+      .filter((document) => safeTrim(document.document_type) && getDocumentFiles(document).length > 0)
       .flatMap((document) =>
         getDocumentFiles(document).map((file) => ({
           document_type: safeTrim(document.document_type).toUpperCase(),
@@ -2666,231 +2794,127 @@ export function AddStudentDialog({
             <div
               ref={tabScrollerRef}
               onScroll={updateTabScrollHints}
-              className="overflow-x-auto overscroll-x-contain scroll-smooth"
+              className="overflow-x-auto overscroll-x-contain scroll-smooth no-scrollbar"
             >
-              <ol className="flex min-w-max gap-2">
-            {dialogSteps.map((step, index) => {
-                const Icon = step.icon;
-                const isActive = activeStep === index;
-                const isComplete = activeStep > index;
+              <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/40 border border-border/70 min-w-max">
+                {dialogSteps.map((step, index) => {
+                  const Icon = step.icon;
+                  const isActive = activeStep === index;
+                  const isComplete = activeStep > index;
 
-                return (
-                  <li key={step.label} className="w-46 shrink-0 sm:w-48">
+                  return (
                     <button
+                      key={step.label}
                       ref={(node) => {
                         tabRefs.current[index] = node;
                       }}
                       type="button"
                       onClick={() => goToStep(index)}
                       className={cn(
-                        "flex h-12 w-full items-center gap-2 whitespace-nowrap rounded-md border px-3 text-left text-sm transition-colors",
-                        isActive && "border-primary bg-primary text-primary-foreground",
-                        isComplete && !isActive && "bg-muted",
-                        !isActive && !isComplete && "hover:bg-muted"
+                        "flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer select-none",
+                        isActive
+                          ? "bg-primary text-primary-foreground shadow-sm shadow-primary/30"
+                          : isComplete
+                          ? "bg-card text-foreground border border-border/60 hover:bg-muted/70"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
                       )}
                     >
                       <span
                         className={cn(
-                          "grid size-7 shrink-0 place-items-center rounded-full border",
-                          isActive && "border-primary-foreground/50",
-                          isComplete && !isActive && "bg-background"
+                          "flex size-5.5 shrink-0 items-center justify-center rounded-lg text-[11px] font-black transition-colors",
+                          isActive
+                            ? "bg-primary-foreground/20 text-primary-foreground"
+                            : isComplete
+                            ? "bg-emerald-500/10 text-emerald-600"
+                            : "bg-muted text-muted-foreground"
                         )}
                       >
-                        <Icon className="size-3.5" />
+                        <Icon className="size-3" />
                       </span>
-                      <span className="truncate font-medium">{step.label}</span>
+                      <span>{step.label}</span>
                     </button>
-                  </li>
-                );
-              })}
-              </ol>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
           {activeStep === 0 && (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="add-user-name">Full name *</Label>
-                <Input
-                  id="add-user-name"
-                  value={form.full_name}
-                  onChange={(event) =>
-                    updateForm("full_name", event.target.value)
-                  }
-                  placeholder="Jane Cooper"
-                  autoComplete="off"
-                />
-                <FieldError message={errors.full_name} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="add-user-email">Email *</Label>
-                <Input
-                  id="add-user-email"
-                  value={form.email}
-                  onChange={(event) => updateForm("email", event.target.value)}
-                  onBlur={() => {
-                    void checkEmailAvailability();
-                  }}
-                  placeholder="jane@example.com"
-                  type="email"
-                  autoComplete="off"
-                />
-                <FieldError message={errors.email} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="add-user-phone">Phone</Label>
-                <Input
-                  id="add-user-phone"
-                  value={form.phone}
-                  onChange={(event) => updateForm("phone", event.target.value)}
-                  placeholder="9876543210"
-                  autoComplete="off"
-                />
-                <FieldError message={errors.phone} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="add-user-gender">Gender</Label>
-                <Select
-                  value={form.gender}
-                  onValueChange={(value) => updateForm("gender", value)}
-                >
-                  <SelectTrigger id="add-user-gender" className="w-full">
-                    <SelectValue placeholder="Select gender" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NO_GENDER}>Not specified</SelectItem>
-                    <SelectItem value="male">Male</SelectItem>
-                    <SelectItem value="female">Female</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                    <SelectItem value="prefer_not_to_say">
-                      Prefer not to say
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {showRoleAssignment && (
-              <div className="space-y-1.5">
-                <Label htmlFor="add-user-role">Role</Label>
-                <Select
-                  value={form.role_id}
-                  onValueChange={(value) => {
-                    const nextRole = roles.find((role) => String(role.id) === value);
-                    const nextRoleIsTeacher = nextRole?.code === "teacher";
-                    const nextRoleIsInstitutionScoped = nextRole?.scope_code === "institution";
-                    const nextRoleCanHaveDesignation =
-                      nextRole?.code === "institution_admin" || nextRoleIsTeacher;
-                    setForm((prev) => ({
-                      ...prev,
-                      role_id: value,
-                      is_teacher: nextRoleIsTeacher,
-                      teacher_type: nextRoleIsTeacher
-                        ? "institute_teacher"
-                        : "",
-                      ...(nextRoleIsInstitutionScoped && !nextRoleIsTeacher
-                        ? {
-                          designation_id: nextRoleCanHaveDesignation ? prev.designation_id : "",
-                          designation_name: nextRoleCanHaveDesignation ? prev.designation_name : "",
-                          teaching_categories: [],
-                          teaching_subjects: [],
-                          hourly_charges: "",
-                        }
-                        : {
-                          under_institution_id: nextRoleIsTeacher && prev.teacher_type === "institute_teacher"
-                            ? prev.under_institution_id
-                            : "",
-                          under_institution_name: nextRoleIsTeacher && prev.teacher_type === "institute_teacher"
-                            ? prev.under_institution_name
-                            : "",
-                          ...(!nextRoleIsTeacher
-                            ? {
-                              designation_id: "",
-                              designation_name: "",
-                              teaching_categories: [],
-                              teaching_subjects: [],
-                              hourly_charges: "",
-                            }
-                            : {}),
-                        }),
-                    }));
-                  }}
-                >
-                  <SelectTrigger id="add-user-role" className="w-full">
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roles.map((role) => (
-                      <SelectItem key={role.id} value={String(role.id)}>
-                        {role.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              )}
-              {showAccountInstitution && (
+            <div className="grid gap-4 sm:grid-cols-2 items-start">
+              {/* Left Column: Full name, DOB, Gender */}
+              <div className="space-y-3.5">
                 <div className="space-y-1.5">
-                  <Label>Institution</Label>
-                  <AsyncSearchPopover<InstitutionOption>
-                    value={form.under_institution_id}
-                    onChange={(value) => updateForm("under_institution_id", value)}
-                    placeholder="Select institution"
-                    searchPlaceholder="Search institution..."
-                    emptyText="No institution found"
-                    selectedLabel={form.under_institution_name}
-                    fetcher={fetchInstitutions}
-                    getValue={(item) => String(item.id)}
-                    getLabel={(item) => item.name}
-                    onSelectItem={(item) => {
-                      updateForm("under_institution_id", String(item.id));
-                      updateForm("under_institution_name", item.name);
-                    }}
-                    renderItem={(item) => (
-                      <div className="min-w-0">
-                        <div className="truncate font-medium">{item.name}</div>
-                        <div className="truncate text-xs text-muted-foreground">{item.slug}</div>
-                      </div>
-                    )}
+                  <Label htmlFor="add-user-name" className="text-xs font-bold text-foreground">
+                    Full name *
+                  </Label>
+                  <Input
+                    id="add-user-name"
+                    value={form.full_name}
+                    onChange={(event) =>
+                      updateForm("full_name", event.target.value)
+                    }
+                    placeholder="e.g. Amit Lodha"
+                    autoComplete="off"
+                    className="h-10 text-sm rounded-xl"
                   />
-                  <FieldError message={errors.under_institution_id} />
+                  <FieldError message={errors.full_name} />
                 </div>
-              )}
-              <div className="sm:col-span-2">
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="add-student-dob" className="text-xs font-bold text-foreground">
+                      Date of Birth
+                    </Label>
+                    <Input
+                      id="add-student-dob"
+                      type="date"
+                      value={studentRecords.date_of_birth || form.date_of_birth || ""}
+                      onChange={(event) => {
+                        const dob = event.target.value;
+                        setStudentRecords((prev) => ({ ...prev, date_of_birth: dob }));
+                        setForm((prev) => ({ ...prev, date_of_birth: dob }));
+                      }}
+                      className="h-10 text-sm rounded-xl"
+                    />
+                    <FieldError message={errors.date_of_birth} />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="add-user-gender" className="text-xs font-bold text-foreground">
+                      Gender
+                    </Label>
+                    <Select
+                      value={form.gender}
+                      onValueChange={(value) => updateForm("gender", value)}
+                    >
+                      <SelectTrigger id="add-user-gender" className="w-full h-10 text-sm rounded-xl">
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_GENDER}>Not specified</SelectItem>
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                        <SelectItem value="prefer_not_to_say">
+                          Prefer not to say
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Avatar Image */}
+              <div className="space-y-1.5">
                 <ImageUploader
                   label="Avatar image"
                   value={form.avatar_url}
                   onChange={(url) => updateForm("avatar_url", url)}
                   accessToken={accessToken}
+                  hideUrlInput={true}
                 />
                 <FieldError message={errors.avatar_url} />
               </div>
-              {showAdminControls && (
-              <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
-                <div className="flex h-12 items-center gap-3 rounded-md border p-3">
-                  <Checkbox
-                    id="add-user-active"
-                    checked={Boolean(form.is_active)}
-                    onCheckedChange={(checked) =>
-                      updateForm("is_active", checked === true)
-                    }
-                  />
-                  <Label htmlFor="add-user-active" className="cursor-pointer">
-                    Active
-                  </Label>
-                </div>
-                <div className="flex h-12 items-center gap-3 rounded-md border p-3">
-                  <Checkbox
-                    id="add-user-verified"
-                    checked={Boolean(form.is_verified)}
-                    onCheckedChange={(checked) =>
-                      updateForm("is_verified", checked === true)
-                    }
-                  />
-                  <Label htmlFor="add-user-verified" className="cursor-pointer">
-                    Verified
-                  </Label>
-                </div>
-              </div>
-              )}
             </div>
           )}
 
@@ -2938,14 +2962,11 @@ export function AddStudentDialog({
                     <SelectValue placeholder="Select blood group" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="A+">A+</SelectItem>
-                    <SelectItem value="A-">A-</SelectItem>
-                    <SelectItem value="B+">B+</SelectItem>
-                    <SelectItem value="B-">B-</SelectItem>
-                    <SelectItem value="O+">O+</SelectItem>
-                    <SelectItem value="O-">O-</SelectItem>
-                    <SelectItem value="AB+">AB+</SelectItem>
-                    <SelectItem value="AB-">AB-</SelectItem>
+                    {BLOOD_GROUPS.map((group) => (
+                      <SelectItem key={group} value={group}>
+                        {group}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -3391,210 +3412,6 @@ export function AddStudentDialog({
                 </div>
               )}
 
-              {false && savedEnrollments.length > 0 && (
-                <div className="space-y-2 sm:col-span-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <Label>Program Enrollments</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setStudentRecords((previous) => ({
-                          ...previous,
-                          program_id: "",
-                          program_name: "",
-                          section_id: "",
-                          section_name: "",
-                          class_category_id: "",
-                          class_category_name: "",
-                          roll_number: "",
-                          remarks: "",
-                          status: "active",
-                        }));
-                      }}
-                    >
-                      <Plus className="size-4" /> Assign More Program
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    These assignments stay in this form until you save the student. Click one to edit its section or roll number.
-                  </p>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {savedEnrollments.map((enrollment, index) => (
-                      <div
-                        key={`${enrollment.program_id}-${enrollment.academic_year_id}-${index}`}
-                        className="flex items-center justify-between gap-3 rounded-md border bg-background/40 p-3"
-                      >
-                        <button
-                          type="button"
-                          className="min-w-0 flex-1 text-left"
-                          onClick={() => {
-                            setStudentRecords((previous) => ({
-                              ...previous,
-                              program_id: enrollment.program_id ? String(enrollment.program_id) : "",
-                              program_name: enrollment.program_name ?? "",
-                              academic_year_id: enrollment.academic_year_id ? String(enrollment.academic_year_id) : "",
-                              academic_year_name: enrollment.academic_year_name ?? "",
-                              class_category_id: enrollment.class_category_id ? String(enrollment.class_category_id) : "",
-                              class_category_name: enrollment.class_category_name ?? "",
-                              section_id: enrollment.section_id ? String(enrollment.section_id) : "",
-                              section_name: enrollment.section_name ?? "",
-                              roll_number: enrollment.roll_number ?? "",
-                              admission_date: admissionDateValue(enrollment.admission_date),
-                              status: enrollment.status ?? "active",
-                              remarks: enrollment.remarks ?? "",
-                            }));
-                          }}
-                        >
-                          <span className="block truncate text-sm font-semibold">
-                            {enrollment.program_name ?? `Program ${enrollment.program_id}`} · {enrollment.section_name || "No section"}
-                          </span>
-                          <span className="mt-1 block truncate text-xs text-muted-foreground">
-                            Roll {enrollment.roll_number || "—"} · {enrollment.academic_year_name || "No session"}
-                          </span>
-                        </button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Remove program assignment"
-                          onClick={() => setSavedEnrollments((current) => current.filter((_, itemIndex) => itemIndex !== index))}
-                        >
-                          <X className="size-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {false && (<>
-              <div className="space-y-1.5">
-                <Label>Program / Class</Label>
-                <AsyncSearchPopover<ProgramOption>
-                  value={studentRecords.program_id}
-                  selectedLabel={studentRecords.program_name}
-                  disabled={!lockedEnrollmentInstitutionId}
-                  onChange={(value) => {
-                    setProgramSections([]);
-                    setStudentRecords((prev) => ({
-                      ...prev,
-                      program_id: value,
-                      program_name: "",
-                      class_category_id: "",
-                      class_category_name: "",
-                      section_id: "",
-                      section_name: "",
-                    }));
-                    if (value) void loadProgramDetail(value);
-                  }}
-                  onSelectItem={(item) => {
-                    setStudentRecords((prev) => ({
-                      ...prev,
-                      program_id: String(item.id),
-                      program_name: item.title,
-                      section_id: "",
-                      section_name: "",
-                    }));
-                    void loadProgramDetail(String(item.id));
-                  }}
-                  placeholder={lockedEnrollmentInstitutionId ? "Select program..." : "Select institution on Account tab first"}
-                  searchPlaceholder="Search programs..."
-                  fetcher={fetchPrograms}
-                  getValue={(item) => String(item.id)}
-                  getLabel={(item) => item.title}
-                />
-                <FieldError message={errors.program_id} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Academic Year / Session</Label>
-                <AsyncSearchPopover<AcademicYearOption>
-                  value={studentRecords.academic_year_id}
-                  selectedLabel={studentRecords.academic_year_name}
-                  disabled={!lockedEnrollmentInstitutionId}
-                  onChange={(value) => setStudentRecords((prev) => ({ ...prev, academic_year_id: value, academic_year_name: value ? prev.academic_year_name : "" }))}
-                  onSelectItem={(item) => setStudentRecords((prev) => ({ ...prev, academic_year_id: String(item.id), academic_year_name: item.name }))}
-                  placeholder={lockedEnrollmentInstitutionId ? "Select academic year" : "Select institution on Account tab first"}
-                  searchPlaceholder="Search academic years..."
-                  fetcher={fetchAcademicYears}
-                  getValue={(item) => String(item.id)}
-                  getLabel={(item) => item.name}
-                />
-                <FieldError message={errors.academic_year_id} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Section</Label>
-                {programDetailLoading ? (
-                  <div className="flex h-9 w-full items-center rounded-md border border-input bg-transparent px-2.5 text-sm text-muted-foreground">
-                    <span className="min-w-0 flex-1 truncate">Loading sections...</span>
-                    <Loader2 className="size-4 shrink-0 animate-spin" />
-                  </div>
-                ) : (
-                  <Select
-                    value={studentRecords.section_id}
-                    onValueChange={(value) => {
-                      const section = programSections.find((item) => String(item.id) === value);
-                      setStudentRecords((prev) => ({
-                        ...prev,
-                        section_id: value,
-                        section_name: section?.name ?? "",
-                      }));
-                    }}
-                    disabled={!studentRecords.program_id || programSections.length === 0}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder={programSections.length ? "Select section..." : "No sections"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {programSections.map((section) => (
-                        <SelectItem key={section.id} value={String(section.id)}>
-                          {section.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                <FieldError message={errors.section_id} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Status</Label>
-                <Select
-                  value={studentRecords.status}
-                  onValueChange={(value) => setStudentRecords((prev) => ({ ...prev, status: value }))}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {["active", "promoted", "demoted", "transferred", "dropout", "graduated", "completed", "suspended"].map((status) => (
-                      <SelectItem key={status} value={status}>{capitalize(status)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Roll Number</Label>
-                <Input
-                  value={studentRecords.roll_number}
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  onChange={(event) => setStudentRecords((prev) => ({ ...prev, roll_number: normalizeRollNumberInput(event.target.value) }))}
-                  placeholder="Roll number"
-                />
-                <FieldError message={errors.roll_number} />
-              </div>
-              <div className="flex items-end">
-                <Button
-                  type="button"
-                  className="w-full"
-                  onClick={assignEnrollmentDraft}
-                  disabled={programDetailLoading}
-                >
-                  <Plus className="size-4" />
-                  Assign Program
-                </Button>
-              </div>
-              </>)}
               <div className="space-y-1.5">
                 <Label>Admission Number</Label>
                 <Input
@@ -3628,23 +3445,22 @@ export function AddStudentDialog({
                 <FieldError message={errors.apar_id} />
               </div>
               <div className="space-y-1.5">
-                <Label>Date of Birth</Label>
-                <DatePicker
-                  value={studentRecords.date_of_birth}
-                  onChange={(value) => setStudentRecords((prev) => ({ ...prev, date_of_birth: value }))}
-                  placeholder="Select date of birth"
-                  fromYear={1950}
-                  toYear={CURRENT_YEAR}
-                  disabledDates={{ after: TODAY }}
-                />
-              </div>
-              <div className="space-y-1.5">
                 <Label>Blood Group</Label>
-                <Input
-                  value={studentRecords.blood_group}
-                  onChange={(event) => setStudentRecords((prev) => ({ ...prev, blood_group: event.target.value.toUpperCase() }))}
-                  placeholder="B+"
-                />
+                <Select
+                  value={studentRecords.blood_group || ""}
+                  onValueChange={(val) => setStudentRecords((prev) => ({ ...prev, blood_group: val }))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select blood group" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BLOOD_GROUPS.map((group) => (
+                      <SelectItem key={group} value={group}>
+                        {group}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               {!isParentMode && (
                 <div className="space-y-1.5">
@@ -4176,7 +3992,7 @@ export function AddStudentDialog({
                   size="sm"
                   onClick={() => setStudentRecords((prev) => ({
                     ...prev,
-                    documents: [...prev.documents, { id: crypto.randomUUID(), document_type: "", document_number: "", file_url: "", public_id: "", resource_type: "", files: [], is_verified: false }],
+                    documents: [...prev.documents, { id: crypto.randomUUID(), document_type: "AADHAAR", document_number: "", file_url: "", public_id: "", resource_type: "", files: [], is_verified: false }],
                   }))}
                 >
                   <Plus className="size-4" />
@@ -4201,14 +4017,14 @@ export function AddStudentDialog({
                         value={
                           STANDARD_DOCUMENT_TYPES.some((d) => d.value === document.document_type)
                             ? document.document_type
-                            : document.document_type ? "OTHER" : "AADHAAR"
+                            : document.document_type || "AADHAAR"
                         }
                         onValueChange={(val) => {
                           setStudentRecords((prev) => ({
                             ...prev,
                             documents: prev.documents.map((item, itemIndex) =>
                               itemIndex === index
-                                ? { ...item, document_type: val === "OTHER" ? (item.document_type && !STANDARD_DOCUMENT_TYPES.some(d => d.value === item.document_type) ? item.document_type : "") : val }
+                                ? { ...item, document_type: val }
                                 : item
                             ),
                           }));
@@ -4225,25 +4041,6 @@ export function AddStudentDialog({
                           ))}
                         </SelectContent>
                       </Select>
-                      {(!STANDARD_DOCUMENT_TYPES.some((d) => d.value === document.document_type && d.value !== "OTHER") ||
-                        document.document_type === "OTHER" ||
-                        (document.document_type && !STANDARD_DOCUMENT_TYPES.map(d => d.value).includes(document.document_type))) && (
-                        <Input
-                          value={document.document_type === "OTHER" ? "" : document.document_type}
-                          onChange={(event) =>
-                            setStudentRecords((prev) => ({
-                              ...prev,
-                              documents: prev.documents.map((item, itemIndex) =>
-                                itemIndex === index
-                                  ? { ...item, document_type: event.target.value.toUpperCase() }
-                                  : item
-                              ),
-                            }))
-                          }
-                          placeholder="Enter document name"
-                          className="mt-1.5"
-                        />
-                      )}
                     </div>
                     <div className="space-y-1.5">
                       <Label>Document Number</Label>
@@ -4278,17 +4075,7 @@ export function AddStudentDialog({
                         }))}
                       />
                     </div>
-                    <label className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={Boolean(document.is_verified)}
-                        onCheckedChange={(checked) => setStudentRecords((prev) => ({
-                          ...prev,
-                          documents: prev.documents.map((item, itemIndex) => itemIndex === index ? { ...item, is_verified: Boolean(checked) } : item),
-                        }))}
-                      />
-                      Verified
-                    </label>
-                    <div className="flex justify-end">
+                    <div className="flex justify-end sm:col-span-2">
                       <Button
                         type="button"
                         variant="ghost"
@@ -4380,24 +4167,6 @@ export function AddStudentDialog({
 
           {activeStep === reviewStepIndex && (
             <div className="grid max-h-[min(58vh,620px)] gap-4 overflow-y-auto pr-2 lg:grid-cols-2">
-              <label className="flex cursor-pointer items-start gap-3 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-4 lg:col-span-2">
-                <Checkbox
-                  checked={Boolean(form.is_profile_complete)}
-                  onCheckedChange={(checked) =>
-                    updateForm("is_profile_complete", checked === true)
-                  }
-                  className="mt-0.5"
-                />
-                <span className="space-y-1">
-                  <span className="block font-medium text-foreground">
-                    Profile complete
-                  </span>
-                  <span className="block text-sm text-muted-foreground">
-                    Confirm that all required student details have been reviewed and completed.
-                  </span>
-                </span>
-              </label>
-
               <ReviewCard title="Account">
                 <div className="space-y-1 text-muted-foreground">
                   <p>{form.full_name || "Unnamed user"}</p>

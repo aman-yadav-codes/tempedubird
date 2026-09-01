@@ -26,6 +26,7 @@ import type { AdminUserDetails } from "@/lib/queries/user";
 import { AddUserDialog, type RoleOption } from "@/app/admin/users/add-user-dialog";
 import { buildUserColumns, type User } from "@/app/admin/users/columns";
 import { UserProfileSheet } from "@/app/admin/users/user-profile-sheet";
+import { UserPasswordDialog } from "@/app/admin/users/_components/user-password-dialog";
 import { usePersistedState } from "@/hooks/use-persisted-state";
 import {
   getDefaultStaffFilters,
@@ -76,6 +77,8 @@ export function StaffProfileList() {
   const [viewingUser, setViewingUser] = useState<AdminUserDetails | null>(null);
   const [editingUser, setEditingUser] = useState<AdminUserDetails | null>(null);
   const [removingUser, setRemovingUser] = useState<User | null>(null);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [passwordUser, setPasswordUser] = useState<User | null>(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -275,13 +278,33 @@ export function StaffProfileList() {
   }, [fetchUserDetails]);
 
   const canEditStaff =
+    hasPermission(currentUser, "managestaff.allstaff.edit", { institutionId: activeInstitution?.id }) ||
     hasPermission(currentUser, "managestaff.allstaff.edit") ||
     hasPermission(currentUser, "users.allusers.edit") ||
-    Boolean(currentUser?.role_codes?.includes("platform_admin") || currentUser?.is_super_admin);
+    hasPermission(currentUser, "managestudents.allstudents.edit") ||
+    Boolean(
+      currentUser?.role_codes?.includes("platform_admin") ||
+      currentUser?.role_codes?.includes("institution_admin") ||
+      currentUser?.role_codes?.includes("school_owner") ||
+      currentUser?.role_codes?.includes("college_owner") ||
+      currentUser?.role_codes?.includes("university_owner") ||
+      currentUser?.roles?.includes("Institution Admin") ||
+      currentUser?.is_super_admin
+    );
+
   const canDeleteStaff =
+    hasPermission(currentUser, "managestaff.allstaff.delete", { institutionId: activeInstitution?.id }) ||
     hasPermission(currentUser, "managestaff.allstaff.delete") ||
     hasPermission(currentUser, "users.allusers.delete") ||
-    Boolean(currentUser?.role_codes?.includes("platform_admin") || currentUser?.is_super_admin);
+    Boolean(
+      currentUser?.role_codes?.includes("platform_admin") ||
+      currentUser?.role_codes?.includes("institution_admin") ||
+      currentUser?.role_codes?.includes("school_owner") ||
+      currentUser?.role_codes?.includes("college_owner") ||
+      currentUser?.role_codes?.includes("university_owner") ||
+      currentUser?.roles?.includes("Institution Admin") ||
+      currentUser?.is_super_admin
+    );
 
   const updateFilters = useCallback((nextFilters: StaffFilters) => {
     setFilters(nextFilters);
@@ -310,14 +333,23 @@ export function StaffProfileList() {
       return;
     }
 
-    const details = await fetchUserDetails(
-      user.id,
-      "You don't have permission to edit this staff member."
-    );
-    if (!details) return;
+    const toastId = toast.loading("Loading staff member details...");
+    try {
+      const details = await fetchUserDetails(
+        user.id,
+        "You don't have permission to edit this staff member."
+      );
+      if (!details) {
+        toast.dismiss(toastId);
+        return;
+      }
 
-    setEditingUser(details);
-    setEditOpen(true);
+      setEditingUser(details);
+      setEditOpen(true);
+      toast.dismiss(toastId);
+    } catch {
+      toast.dismiss(toastId);
+    }
   }, [canEditStaff, fetchUserDetails]);
 
   const handleRemoveUser = useCallback(async () => {
@@ -392,17 +424,50 @@ export function StaffProfileList() {
     [accessToken, authHeader, fetchStaff]
   );
 
+  const handleToggleShowInTeam = useCallback(
+    async (user: User, showInTeam: boolean) => {
+      if (!accessToken) return;
+      try {
+        const res = await fetch(`/api/admin/users/team-status`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...authHeader(),
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            showInTeam,
+          }),
+        });
+        const json = await readJsonResponse(res);
+        if (!res.ok) {
+          throw new Error(getApiErrorMessage(json, "Failed to update team status"));
+        }
+        toast.success(showInTeam ? `${user.full_name} is now shown in Team` : `${user.full_name} removed from Team`);
+        fetchStaff();
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err));
+      }
+    },
+    [accessToken, authHeader, fetchStaff]
+  );
+
   const columns = useMemo(
     () =>
       buildUserColumns({
         onViewProfile: handleViewProfile,
         onEditUser: handleEditUser,
+        onGeneratePassword: (user) => {
+          setPasswordUser(user);
+          setPasswordDialogOpen(true);
+        },
         onChangeEmploymentStatus: handleChangeEmploymentStatus,
+        onToggleShowInTeam: handleToggleShowInTeam,
         onRemoveUser: setRemovingUser,
         removalLabel: "Remove staff member",
         entityLabel: "Staff member",
       }),
-    [handleChangeEmploymentStatus, handleEditUser, handleViewProfile]
+    [handleChangeEmploymentStatus, handleToggleShowInTeam, handleEditUser, handleViewProfile]
   );
 
   if (loading && !hasLoadedStaff) {
@@ -478,6 +543,7 @@ export function StaffProfileList() {
 
       {editingUser && (
         <AddUserDialog
+          key={`edit-staff-${editingUser.id}`}
           mode="edit"
           user={editingUser}
           roles={roles}
@@ -527,6 +593,16 @@ export function StaffProfileList() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <UserPasswordDialog
+        open={passwordDialogOpen}
+        onOpenChange={(open) => {
+          setPasswordDialogOpen(open);
+          if (!open) fetchStaff();
+        }}
+        user={passwordUser}
+        accessToken={accessToken}
+      />
     </div>
   );
 }

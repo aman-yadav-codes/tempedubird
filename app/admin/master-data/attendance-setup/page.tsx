@@ -20,6 +20,7 @@ import {
   CalendarDays,
   Bell,
   Check,
+  UserCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
@@ -61,16 +62,17 @@ type AttendanceSetup = {
   title: string;
   target_type: "STUDENTS" | "STAFF" | "ALL";
   attendance_mode: "FULL_DAY" | "PERIOD_WISE" | "BIOMETRIC" | "QR_CODE";
+  who_can_mark?: string | null;
   start_time: string;
   end_time: string;
   grace_period_mins: number;
   half_day_time: string;
-  min_attendance_percentage: number;
+  min_attendance_percentage?: number;
   working_days: string[];
-  auto_notify_absent: boolean;
-  is_active: boolean;
-  is_default: boolean;
-  is_dummy: boolean;
+  auto_notify_absent?: boolean;
+  is_active?: boolean;
+  is_default?: boolean;
+  is_dummy?: boolean;
   created_at?: string;
   updated_at?: string;
 };
@@ -89,15 +91,44 @@ const initialForm = {
   title: "",
   target_type: "STUDENTS" as "STUDENTS" | "STAFF" | "ALL",
   attendance_mode: "FULL_DAY" as "FULL_DAY" | "PERIOD_WISE" | "BIOMETRIC" | "QR_CODE",
+  who_can_mark: "TEACHER",
   start_time: "08:00",
   end_time: "14:30",
   grace_period_mins: 15,
   half_day_time: "11:30",
-  min_attendance_percentage: 75,
   working_days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-  auto_notify_absent: true,
   is_active: true,
-  is_default: false,
+};
+
+const formatMarkingAuthorityLabel = (who?: string | null, target?: string) => {
+  if (!who || who === "INSTITUTION_ADMIN") return "Institution Admin Only";
+  if (who === "STAFF_SELF") return "Staff / Employee Self-Marking";
+  if (who === "BOTH") return target === "STAFF" ? "Both (Admin & Staff)" : "Both Admin & Members";
+  if (who === "TEACHER") return "Teachers Only";
+  if (who === "STUDENT_SELF") return "Student Self-Marking";
+  if (who === "ADMIN_AND_TEACHER") return "Both Admin & Teachers";
+  if (who === "ALL") return "Any / All (Admin, Teachers & Students)";
+  if (who === "TEACHER_AND_STAFF") return "Teachers & Staff";
+  return who.replace(/_/g, " ");
+};
+
+const getMarkingAuthorityDescription = (who: string, target: string) => {
+  if (target === "STAFF") {
+    if (who === "INSTITUTION_ADMIN") return "🔒 Only Institution Admin has permission to mark attendance for staff.";
+    if (who === "STAFF_SELF") return "👤 Staff & employees can mark their own attendance directly.";
+    if (who === "BOTH") return "🤝 Both Institution Admin and Staff can mark attendance.";
+  } else if (target === "STUDENTS") {
+    if (who === "INSTITUTION_ADMIN") return "🔒 Only Institution Admin has permission to mark attendance for students.";
+    if (who === "TEACHER") return "👨‍🏫 Only assigned teachers / faculty can mark student attendance.";
+    if (who === "STUDENT_SELF") return "🎓 Students can mark their own attendance when in class / campus.";
+    if (who === "ADMIN_AND_TEACHER") return "🤝 Both Institution Admin and Teachers can mark student attendance.";
+    if (who === "ALL") return "✨ Any of them (Institution Admin, Teachers, or Student Self-Check-in) can mark attendance.";
+  } else {
+    if (who === "INSTITUTION_ADMIN") return "🔒 Only Institution Admin has permission to mark attendance.";
+    if (who === "TEACHER_AND_STAFF") return "👨‍🏫 Teachers and staff members can mark attendance.";
+    if (who === "ALL") return "✨ Any authorized user (Admin, Staff, or Students) can mark attendance.";
+  }
+  return "Select who can mark attendance for this group.";
 };
 
 export default function AttendanceSetupPage() {
@@ -172,15 +203,13 @@ export default function AttendanceSetupPage() {
       title: item.title,
       target_type: item.target_type,
       attendance_mode: item.attendance_mode,
+      who_can_mark: item.who_can_mark || (item.target_type === "STAFF" ? "BOTH" : item.target_type === "STUDENTS" ? "TEACHER" : "INSTITUTION_ADMIN"),
       start_time: item.start_time || "08:00",
       end_time: item.end_time || "14:30",
       grace_period_mins: item.grace_period_mins || 15,
       half_day_time: item.half_day_time || "11:30",
-      min_attendance_percentage: item.min_attendance_percentage || 75,
       working_days: Array.isArray(item.working_days) ? item.working_days : ALL_DAYS.slice(0, 6),
-      auto_notify_absent: Boolean(item.auto_notify_absent),
-      is_active: Boolean(item.is_active),
-      is_default: Boolean(item.is_default),
+      is_active: item.is_active !== undefined ? Boolean(item.is_active) : true,
     });
     setDialogOpen(true);
   };
@@ -345,17 +374,36 @@ export default function AttendanceSetupPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Select value={filterTarget} onValueChange={setFilterTarget}>
-            <SelectTrigger className="h-9 text-xs w-[160px]">
-              <SelectValue placeholder="Audience Filter" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All Audiences</SelectItem>
-              <SelectItem value="STUDENTS">Students Only</SelectItem>
-              <SelectItem value="STAFF">Staff Only</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <Button
+            type="button"
+            size="sm"
+            variant={filterTarget === "ALL" ? "default" : "outline"}
+            className="h-8 text-xs font-semibold px-3"
+            onClick={() => setFilterTarget("ALL")}
+          >
+            All ({stats.total})
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={filterTarget === "STUDENTS" ? "default" : "outline"}
+            className="h-8 text-xs font-semibold px-3 gap-1"
+            onClick={() => setFilterTarget("STUDENTS")}
+          >
+            <GraduationCap className="size-3.5" />
+            For Students ({stats.student_setups})
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={filterTarget === "STAFF" ? "default" : "outline"}
+            className="h-8 text-xs font-semibold px-3 gap-1"
+            onClick={() => setFilterTarget("STAFF")}
+          >
+            <Users className="size-3.5" />
+            For Staff ({stats.staff_setups})
+          </Button>
         </div>
       </div>
 
@@ -471,20 +519,17 @@ export default function AttendanceSetupPage() {
                   {/* Policy details */}
                   <div className="space-y-1.5 text-xs">
                     <div className="flex items-center justify-between text-muted-foreground">
-                      <span>Min Required Attendance:</span>
-                      <span className="font-bold text-foreground">{setup.min_attendance_percentage}%</span>
+                      <span className="flex items-center gap-1">
+                        <UserCheck className="size-3 text-primary" /> Marking Authority:
+                      </span>
+                      <span className="font-bold text-foreground">
+                        {formatMarkingAuthorityLabel(setup.who_can_mark, setup.target_type)}
+                      </span>
                     </div>
 
                     <div className="flex items-center justify-between text-muted-foreground">
                       <span>Half-Day Threshold:</span>
                       <span className="font-semibold text-foreground">{setup.half_day_time || "11:30"}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-muted-foreground">
-                      <span>Parent / Staff Notifications:</span>
-                      <span className="font-semibold text-foreground">
-                        {setup.auto_notify_absent ? "Auto-SMS Enabled" : "Disabled"}
-                      </span>
                     </div>
                   </div>
 
@@ -546,11 +591,6 @@ export default function AttendanceSetupPage() {
               <ClipboardCheck className="size-5 text-primary" />
               {editingSetup ? "Modify Attendance Setup" : "Create Attendance Setup"}
             </DialogTitle>
-            <DialogDescription>
-              {editingSetup
-                ? "Update timings, thresholds, and notifications for this shift."
-                : "Add a new attendance shift and working day schedule for your institution."}
-            </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSave} className="space-y-4">
@@ -573,7 +613,12 @@ export default function AttendanceSetupPage() {
                 <Label className="text-xs font-bold">Target Audience</Label>
                 <Select
                   value={form.target_type}
-                  onValueChange={(val: any) => setForm({ ...form, target_type: val })}
+                  onValueChange={(val: any) => {
+                    let defaultWho = "INSTITUTION_ADMIN";
+                    if (val === "STAFF") defaultWho = "BOTH";
+                    else if (val === "STUDENTS") defaultWho = "TEACHER";
+                    setForm({ ...form, target_type: val, who_can_mark: defaultWho });
+                  }}
                 >
                   <SelectTrigger className="h-9 text-xs">
                     <SelectValue placeholder="Select target" />
@@ -603,6 +648,70 @@ export default function AttendanceSetupPage() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* Who Can Mark Attendance Selection */}
+            <div className="space-y-1.5 p-3 rounded-lg border bg-muted/20">
+              <div className="flex items-center gap-1.5">
+                <UserCheck className="size-4 text-primary" />
+                <Label className="text-xs font-bold">Who Can Mark Attendance? *</Label>
+              </div>
+              <Select
+                value={form.who_can_mark}
+                onValueChange={(val: string) => setForm({ ...form, who_can_mark: val })}
+              >
+                <SelectTrigger className="h-9 text-xs bg-background">
+                  <SelectValue placeholder="Select who can mark" />
+                </SelectTrigger>
+                <SelectContent>
+                  {form.target_type === "STAFF" ? (
+                    <>
+                      <SelectItem value="INSTITUTION_ADMIN" className="text-xs">
+                        Institution Admin Only
+                      </SelectItem>
+                      <SelectItem value="STAFF_SELF" className="text-xs">
+                        Staff / Employee (Self-Marking)
+                      </SelectItem>
+                      <SelectItem value="BOTH" className="text-xs">
+                        Both (Institution Admin & Staff)
+                      </SelectItem>
+                    </>
+                  ) : form.target_type === "STUDENTS" ? (
+                    <>
+                      <SelectItem value="INSTITUTION_ADMIN" className="text-xs">
+                        Institution Admin Only
+                      </SelectItem>
+                      <SelectItem value="TEACHER" className="text-xs">
+                        Teachers Only
+                      </SelectItem>
+                      <SelectItem value="STUDENT_SELF" className="text-xs">
+                        Students (Self-Marking)
+                      </SelectItem>
+                      <SelectItem value="ADMIN_AND_TEACHER" className="text-xs">
+                        Both Admin & Teachers
+                      </SelectItem>
+                      <SelectItem value="ALL" className="text-xs">
+                        Any / All of them (Admin, Teachers & Students)
+                      </SelectItem>
+                    </>
+                  ) : (
+                    <>
+                      <SelectItem value="INSTITUTION_ADMIN" className="text-xs">
+                        Institution Admin Only
+                      </SelectItem>
+                      <SelectItem value="TEACHER_AND_STAFF" className="text-xs">
+                        Teachers & Staff Members
+                      </SelectItem>
+                      <SelectItem value="ALL" className="text-xs">
+                        Any / All of them (Admin, Staff & Students)
+                      </SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground pt-0.5">
+                {getMarkingAuthorityDescription(form.who_can_mark, form.target_type)}
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3 p-3 rounded-lg border bg-muted/20">
@@ -685,55 +794,7 @@ export default function AttendanceSetupPage() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="min-attendance" className="text-xs font-bold">
-                Minimum Attendance Percentage for Exams / Certificate (%)
-              </Label>
-              <Input
-                id="min-attendance"
-                type="number"
-                min={1}
-                max={100}
-                value={form.min_attendance_percentage}
-                onChange={(e) => setForm({ ...form, min_attendance_percentage: Number(e.target.value) })}
-                className="h-9 text-xs"
-              />
-            </div>
 
-            <div className="space-y-2 pt-2 border-t">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="auto-notify"
-                  checked={form.auto_notify_absent}
-                  onCheckedChange={(checked) => setForm({ ...form, auto_notify_absent: checked === true })}
-                />
-                <Label htmlFor="auto-notify" className="text-xs font-medium cursor-pointer">
-                  Send automated absent notifications to parents / staff
-                </Label>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="is-default"
-                  checked={form.is_default}
-                  onCheckedChange={(checked) => setForm({ ...form, is_default: checked === true })}
-                />
-                <Label htmlFor="is-default" className="text-xs font-medium cursor-pointer">
-                  Set as default shift for this institution
-                </Label>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="is-active"
-                  checked={form.is_active}
-                  onCheckedChange={(checked) => setForm({ ...form, is_active: checked === true })}
-                />
-                <Label htmlFor="is-active" className="text-xs font-medium cursor-pointer">
-                  Active policy
-                </Label>
-              </div>
-            </div>
 
             <DialogFooter className="pt-2">
               <Button
@@ -745,8 +806,12 @@ export default function AttendanceSetupPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={saving} className="text-xs h-9 font-bold">
-                {saving && <Loader2 className="size-3.5 animate-spin mr-1.5" />}
+              <Button
+                type="submit"
+                disabled={saving}
+                className="text-xs h-9 font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
+              >
+                {saving && <Loader2 className="size-3.5 animate-spin" />}
                 {editingSetup ? "Save Changes" : "Create Setup"}
               </Button>
             </DialogFooter>

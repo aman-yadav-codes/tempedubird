@@ -158,11 +158,11 @@ export default function InstitutionComplaintsPage() {
   const { activeInstitution } = useActiveInstitution();
   const activeAcademicYearId = useActiveAcademicYearId();
   const role = ["institution_admin", "teacher", "student", "parent", "driver"]
-    .find((code) => user?.role_codes?.includes(code)) ?? "";
+    .find((code) => user?.role_codes?.includes(code)) || user?.primary_role || ((user as any)?.roles?.[0]?.toLowerCase()) || "student";
   const permissionModule = MODULES[role];
-  const canCreate = Boolean(permissionModule && hasPermission(user, `${permissionModule}.create`));
-  const canReply = Boolean(permissionModule && hasPermission(user, `${permissionModule}.edit`));
-  const targetOptions = TARGETS[role] ?? [];
+  const canCreate = Boolean(role && (role === "student" || role === "parent" || role === "teacher" || role === "institution_admin" || hasPermission(user, `${permissionModule}.create`)));
+  const canReply = Boolean(role && (role === "student" || role === "parent" || role === "teacher" || role === "institution_admin" || hasPermission(user, `${permissionModule}.edit`)));
+  const targetOptions = TARGETS[role] ?? TARGETS.student;
   const [rows, setRows] = useState<Complaint[]>([]);
   const [search, setSearch] = useState("");
   const [complaintView, setComplaintView] = useState<"received" | "created">("received");
@@ -690,7 +690,11 @@ export default function InstitutionComplaintsPage() {
           <h1 className="text-2xl font-bold tracking-tight">Complaints</h1>
           <p className="text-muted-foreground">Raise and discuss complaints within your institution.</p>
         </div>
-        {canCreate && <Button onClick={() => setCreateOpen(true)}><Plus className="size-4" /> New Complaint</Button>}
+        {canCreate && (
+          <Button onClick={() => setCreateOpen(true)} className="gap-2 font-bold shadow-xs">
+            <Plus className="size-4" /> Create Complaint
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
 
 export interface SharedPublicSidebarProps {
-  pageType: "institutes" | "exams" | "practice" | "notes" | "teachers" | "courses";
+  pageType: "institutes" | "exams" | "practice" | "notes" | "teachers" | "courses" | "vendors";
   quickCategories?: string[];
   activeCategory?: string;
   onSelectCategory?: (category: string) => void;
@@ -48,6 +48,13 @@ export function SharedPublicSidebar({
 
   const getAdvisoryConfig = () => {
     switch (pageType) {
+      case "vendors":
+        return {
+          title: "Campus Vendor Helpdesk",
+          subtitle: "Verified Student Services",
+          description: "Connect directly with verified hostel, mess, laundry, and repair service vendors near your campus.",
+          btnText: "Vendor Inquiry",
+        };
       case "institutes":
         return {
           title: "Campus Admission Helpline",

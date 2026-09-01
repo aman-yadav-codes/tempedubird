@@ -15,6 +15,8 @@ import {
   CheckCircle2,
   ArrowRight,
   RefreshCw,
+  ShoppingBag,
+  UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +38,7 @@ type StudentEnquiry = {
   institution_name?: string;
   program_id?: number;
   program_title?: string;
+  source_type?: string;
 };
 
 const STATUS_BADGE: Record<string, { label: string; color: string }> = {
@@ -103,9 +106,9 @@ export default function StudentEnquiriesPage() {
             <HelpCircle className="h-3.5 w-3.5" />
             <span>Student Account</span>
           </div>
-          <h1 className="text-3xl font-extrabold text-foreground tracking-tight">My Course Enquiries</h1>
+          <h1 className="text-3xl font-extrabold text-foreground tracking-tight">My Enquiries</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            View all counseling requests, course inquiries, and admission questions you have submitted.
+            View all counseling requests, course inquiries, and store product inquiries you have submitted.
           </p>
         </div>
 
@@ -115,9 +118,14 @@ export default function StudentEnquiriesPage() {
             <span>Refresh</span>
           </Button>
           <Link href="/courses">
-            <Button size="sm" className="font-bold gap-2 text-xs h-9 bg-primary text-primary-foreground">
+            <Button variant="outline" size="sm" className="font-bold gap-2 text-xs h-9">
               <GraduationCap className="h-3.5 w-3.5" />
-              <span>Explore Courses</span>
+              <span>Courses</span>
+            </Button>
+          </Link>
+          <Link href="/products">
+            <Button size="sm" className="font-bold gap-2 text-xs h-9 bg-primary text-primary-foreground">
+              <span>Store Products</span>
             </Button>
           </Link>
         </div>
@@ -127,23 +135,30 @@ export default function StudentEnquiriesPage() {
       {loading ? (
         <div className="py-20 text-center flex flex-col items-center justify-center gap-3 text-muted-foreground">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <span className="text-sm font-medium">Loading your course enquiries...</span>
+          <span className="text-sm font-medium">Loading your enquiries...</span>
         </div>
       ) : enquiries.length === 0 ? (
         <Card className="p-12 text-center text-muted-foreground space-y-4">
           <MessageSquare className="h-12 w-12 mx-auto opacity-30 text-primary" />
           <div className="space-y-1">
-            <h3 className="font-bold text-lg text-foreground">No Course Enquiries Found</h3>
+            <h3 className="font-bold text-lg text-foreground">No Enquiries Found</h3>
             <p className="text-xs max-w-md mx-auto">
-              You haven't submitted any course counseling inquiries yet. Browse our catalog and click "Enquiry" on any course to ask questions!
+              You haven't submitted any counseling or product inquiries yet. Browse our catalog and click &quot;Inquire&quot; on any course or store product!
             </p>
           </div>
-          <Link href="/courses">
-            <Button className="font-bold text-xs bg-primary text-primary-foreground px-6 mt-2">
-              Browse All Courses
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-          </Link>
+          <div className="flex justify-center gap-3 mt-2">
+            <Link href="/courses">
+              <Button variant="outline" className="font-bold text-xs px-4">
+                Browse Courses
+              </Button>
+            </Link>
+            <Link href="/products">
+              <Button className="font-bold text-xs bg-primary text-primary-foreground px-4">
+                Explore Store Products
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </Link>
+          </div>
         </Card>
       ) : (
         <div className="space-y-4">
@@ -185,12 +200,55 @@ export default function StudentEnquiriesPage() {
                         {programName}
                       </h3>
 
-                      {item.institution_name && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5 font-medium">
-                          <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
-                          {item.institution_name}
-                        </p>
-                      )}
+                      {(() => {
+                        const isProduct = Boolean(
+                          item.source_type === "product" ||
+                          item.notes?.includes("EduBird Store") ||
+                          item.notes?.includes("Product:") ||
+                          item.notes?.toLowerCase().includes("website product inquiry")
+                        );
+                        const isInstitute = Boolean(
+                          item.source_type === "institution" ||
+                          item.source_type === "institute" ||
+                          item.notes?.toLowerCase().includes("institute inquiry") ||
+                          item.notes?.toLowerCase().includes("website institute inquiry") ||
+                          item.notes?.toLowerCase().includes("admission, available courses, fee concessions")
+                        );
+                        const isTeacher = Boolean(
+                          item.source_type === "teacher" ||
+                          item.source_type === "teacher_inquiry" ||
+                          item.notes?.toLowerCase().includes("faculty mentorship") ||
+                          item.notes?.toLowerCase().includes("educator inquiry") ||
+                          item.notes?.toLowerCase().includes("teacher inquiry")
+                        );
+
+                        const sellerOrSchoolName = isProduct
+                          ? "EduBird Official Store"
+                          : isTeacher
+                          ? `Faculty: ${item.preferred_program || "Expert Educator"}`
+                          : (item.institution_name || "Institution Campus");
+
+                        return (
+                          <p className={`text-xs flex items-center gap-1.5 font-semibold ${
+                            isProduct
+                              ? "text-rose-600 dark:text-rose-400"
+                              : isInstitute
+                              ? "text-blue-600 dark:text-blue-400"
+                              : isTeacher
+                              ? "text-purple-600 dark:text-purple-400"
+                              : "text-muted-foreground"
+                          }`}>
+                            {isProduct ? (
+                              <ShoppingBag className="h-3.5 w-3.5 text-rose-500 shrink-0" />
+                            ) : isTeacher ? (
+                              <UserCheck className="h-3.5 w-3.5 text-purple-500 shrink-0" />
+                            ) : (
+                              <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                            )}
+                            <span>{sellerOrSchoolName}</span>
+                          </p>
+                        );
+                      })()}
 
                       {item.notes && (
                         <div className="p-3 rounded-lg bg-muted/30 border border-border/60 text-xs text-foreground/90 space-y-1">
@@ -207,12 +265,70 @@ export default function StudentEnquiriesPage() {
                         {item.email && <p className="text-muted-foreground text-[11px]">{item.email}</p>}
                       </div>
 
-                      <Link href="/courses">
-                        <Button size="sm" variant="outline" className="text-xs font-bold gap-1.5 h-8 mt-1">
-                          <Sparkles className="h-3.5 w-3.5 text-primary" />
-                          <span>Enquire Another Course</span>
-                        </Button>
-                      </Link>
+                      {(() => {
+                        const isProduct = Boolean(
+                          item.source_type === "product" ||
+                          item.notes?.includes("EduBird Store") ||
+                          item.notes?.includes("Product:") ||
+                          item.notes?.toLowerCase().includes("website product inquiry")
+                        );
+                        const isInstitute = Boolean(
+                          item.source_type === "institution" ||
+                          item.source_type === "institute" ||
+                          item.notes?.toLowerCase().includes("institute inquiry") ||
+                          item.notes?.toLowerCase().includes("website institute inquiry") ||
+                          item.notes?.toLowerCase().includes("admission, available courses, fee concessions")
+                        );
+                        const isTeacher = Boolean(
+                          item.source_type === "teacher" ||
+                          item.source_type === "teacher_inquiry" ||
+                          item.notes?.toLowerCase().includes("faculty mentorship") ||
+                          item.notes?.toLowerCase().includes("educator inquiry") ||
+                          item.notes?.toLowerCase().includes("teacher inquiry")
+                        );
+
+                        if (isProduct) {
+                          return (
+                            <Link href="/products">
+                              <Button size="sm" variant="outline" className="text-xs font-bold gap-1.5 h-8 mt-1 border-rose-500/30 text-rose-600 hover:text-rose-700 hover:bg-rose-500/10">
+                                <ShoppingBag className="h-3.5 w-3.5 text-rose-500" />
+                                <span>Enquire Another Product</span>
+                              </Button>
+                            </Link>
+                          );
+                        }
+
+                        if (isInstitute) {
+                          return (
+                            <Link href="/institutes">
+                              <Button size="sm" variant="outline" className="text-xs font-bold gap-1.5 h-8 mt-1 border-blue-500/30 text-blue-600 hover:text-blue-700 hover:bg-blue-500/10">
+                                <Building2 className="h-3.5 w-3.5 text-blue-500" />
+                                <span>Enquire Another Institute</span>
+                              </Button>
+                            </Link>
+                          );
+                        }
+
+                        if (isTeacher) {
+                          return (
+                            <Link href="/teachers">
+                              <Button size="sm" variant="outline" className="text-xs font-bold gap-1.5 h-8 mt-1 border-purple-500/30 text-purple-600 hover:text-purple-700 hover:bg-purple-500/10">
+                                <UserCheck className="h-3.5 w-3.5 text-purple-500" />
+                                <span>Enquire Another Faculty</span>
+                              </Button>
+                            </Link>
+                          );
+                        }
+
+                        return (
+                          <Link href="/courses">
+                            <Button size="sm" variant="outline" className="text-xs font-bold gap-1.5 h-8 mt-1">
+                              <GraduationCap className="h-3.5 w-3.5 text-primary" />
+                              <span>Enquire Another Course</span>
+                            </Button>
+                          </Link>
+                        );
+                      })()}
                     </div>
                   </div>
                 </Card>

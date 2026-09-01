@@ -4,10 +4,14 @@ import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { hasPermission, isInstitutionAdminUser, isPlatformAdminUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
 import {
+  createFinanceExpenseCategory,
   createFinanceExpenseEntry,
   getInstitutionAdminName,
+  listFinanceEmployeeOptions,
   listFinanceExpense,
   listFinanceExpenseCategories,
+  listFinancePaymentMethods,
+  listFinanceVendorSuggestions,
   type FinanceScope,
 } from "@/lib/queries/finance";
 
@@ -26,20 +30,35 @@ function jsonError(error: unknown, status = 400) {
 function userInstitutionIds(user: CurrentUser) {
   return new Set(
     (user.memberships ?? [])
-      .filter((membership) => membership.role_code === "institution_admin")
       .map((membership) => Number(membership.institution_id))
       .filter((id) => Number.isInteger(id) && id > 0)
   );
 }
 
-function resolveScope(user: CurrentUser, institutionId: number | null): { scope: FinanceScope; institutionId: number | null } {
-  if (isPlatformAdminUser(user)) return { scope: "platform", institutionId: null };
-  if (!isInstitutionAdminUser(user)) throw new Error("Forbidden: Admin access required");
-
+function resolveScope(user: CurrentUser, requestedInstitutionId?: number | null): { scope: FinanceScope; institutionId: number | null } {
+  const isPlatform = isPlatformAdminUser(user) || hasPermission(user, "finance.platform.expense.view");
+  const isInstitution = isInstitutionAdminUser(user) || hasPermission(user, "finance.expense.view");
   const institutionIds = userInstitutionIds(user);
-  const targetId = institutionId ?? Array.from(institutionIds)[0] ?? null;
-  if (!targetId || !institutionIds.has(targetId)) throw new Error("Forbidden: Institution access required");
-  return { scope: "institution", institutionId: targetId };
+
+  if (isPlatform && requestedInstitutionId) {
+    return { scope: "institution", institutionId: requestedInstitutionId };
+  }
+
+  if (isPlatform) {
+    return { scope: "platform", institutionId: null };
+  }
+
+  if (isInstitution) {
+    const institutionId = requestedInstitutionId && institutionIds.has(requestedInstitutionId)
+      ? requestedInstitutionId
+      : (Array.from(institutionIds)[0] ?? null);
+    if (!institutionId) {
+      throw new Error("No active institution found for expense management");
+    }
+    return { scope: "institution", institutionId };
+  }
+
+  throw new Error("Forbidden: You do not have permission to access expense records");
 }
 
 function positiveInt(value: string | null, fallback: number, max: number) {
@@ -50,8 +69,8 @@ function positiveInt(value: string | null, fallback: number, max: number) {
 
 function validDate(value: unknown, label: string) {
   const text = String(value ?? "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || Number.isNaN(Date.parse(`${text}T00:00:00Z`))) {
-    throw new Error(`${label} is required`);
+  if (!text || Number.isNaN(new Date(text).getTime())) {
+    throw new Error(`Enter a valid ${label.toLowerCase()}`);
   }
   return text;
 }
@@ -81,8 +100,104 @@ export async function GET(req: Request) {
       offset: (page - 1) * limit,
     });
     const categoriesPromise = listFinanceExpenseCategories(db, scope, institutionId);
+    const employeesPromise = listFinanceEmployeeOptions(db, scope, institutionId);
     const adminNamePromise = institutionId ? getInstitutionAdminName(db, institutionId) : Promise.resolve(user.full_name);
-    const [result, categories, adminName] = await Promise.all([resultPromise, categoriesPromise, adminNamePromise]);
+    const paymentMethodsPromise = listFinancePaymentMethods(db, { scope_type: scope, institution_id: institutionId });
+    const vendorSuggestionsPromise = listFinanceVendorSuggestions(db, scope, institutionId);
+    const [result, categories, employees, adminName, paymentMethods, vendorSuggestions] = await Promise.all([
+      resultPromise,
+      categoriesPromise,
+      employeesPromise,
+      adminNamePromise,
+      paymentMethodsPromise,
+      vendorSuggestionsPromise,
+    ]);
+
+    const currentUserOption = {
+      value: String(user.id),
+      label: `${user.full_name || "Admin"} (You)`,
+    };
+
+    const basePaidByOptions = scope === "platform"
+      ? [
+          currentUserOption,
+          { value: "platform_account", label: "Platform Account" },
+        ]
+      : [
+          currentUserOption,
+          { value: "institution_account", label: "Institution Account" },
+          ...(adminName && adminName !== user.full_name ? [{ value: "admin", label: adminName }] : []),
+        ];
+
+    const employeePaidByOptions = employees
+      .filter((emp) => emp.id !== user.id)
+      .map((emp) => ({
+        value: String(emp.id),
+        label: `${emp.full_name}${emp.role_label ? ` (${emp.role_label})` : ""}`,
+      }));
+
+    let userBalancesRes: any = { rows: [] };
+    try {
+      const balanceSql = `
+        WITH user_allowance_totals AS (
+          SELECT 
+            fae.user_id,
+            u.full_name AS user_name,
+            u.email AS user_email,
+            COALESCE(SUM(fae.amount), 0) AS total_allowance_provided,
+            COUNT(fae.id) AS allowance_count
+          FROM finance_allowance_entries fae
+          JOIN users u ON u.id = fae.user_id
+          WHERE ($1::text IS NULL OR fae.scope_type = $1)
+            AND ($2::int IS NULL OR fae.institution_id = $2)
+          GROUP BY fae.user_id, u.full_name, u.email
+        ),
+        user_spend_totals AS (
+          SELECT 
+            spends.user_id,
+            COALESCE(SUM(spends.amount), 0) AS total_spent,
+            COUNT(*) AS spend_count
+          FROM (
+            SELECT fase.user_id, fase.amount, fase.scope_type, fase.institution_id
+            FROM finance_allowance_spend_entries fase
+            UNION ALL
+            SELECT 
+              CASE 
+                WHEN fee.paid_by ~ '^[0-9]+$' THEN fee.paid_by::int 
+                ELSE fee.user_id 
+              END AS user_id,
+              fee.amount,
+              fee.scope_type,
+              fee.institution_id
+            FROM finance_expense_entries fee
+            WHERE (fee.paid_by ~ '^[0-9]+$' OR fee.paid_by NOT IN ('institution_account', 'platform_account'))
+          ) spends
+          WHERE ($1::text IS NULL OR spends.scope_type = $1)
+            AND ($2::int IS NULL OR spends.institution_id = $2)
+          GROUP BY spends.user_id
+        )
+        SELECT 
+          uat.user_id,
+          uat.user_name,
+          uat.user_email,
+          uat.total_allowance_provided::numeric AS total_allowance_provided,
+          COALESCE(ust.total_spent, 0)::numeric AS total_spent,
+          GREATEST(0, (uat.total_allowance_provided - COALESCE(ust.total_spent, 0)))::numeric AS in_hand_balance,
+          uat.allowance_count,
+          COALESCE(ust.spend_count, 0) AS spend_count
+        FROM user_allowance_totals uat
+        LEFT JOIN user_spend_totals ust ON ust.user_id = uat.user_id
+        ORDER BY in_hand_balance DESC, uat.total_allowance_provided DESC
+      `;
+      userBalancesRes = await db.query(balanceSql, [scope, institutionId]);
+    } catch {
+      userBalancesRes = { rows: [] };
+    }
+
+    const userBalances = userBalancesRes.rows;
+    const totalAllowanceProvided = userBalances.reduce((acc: number, r: any) => acc + Number(r.total_allowance_provided || 0), 0);
+    const totalAllowanceSpent = userBalances.reduce((acc: number, r: any) => acc + Number(r.total_spent || 0), 0);
+    const totalAllowanceInHand = userBalances.reduce((acc: number, r: any) => acc + Number(r.in_hand_balance || 0), 0);
 
     return NextResponse.json({
       data: result.data,
@@ -97,15 +212,20 @@ export async function GET(req: Request) {
         scope,
         institution_id: institutionId,
         categories,
-        paid_by_options: scope === "platform"
-          ? [
-              { value: "platform_account", label: "Platform Account" },
-              { value: "admin", label: user.full_name || "Platform Admin" },
-            ]
-          : [
-              { value: "institution_account", label: "Institution Account" },
-              { value: "admin", label: adminName },
-            ],
+        payment_methods: paymentMethods,
+        vendor_suggestions: vendorSuggestions,
+        paid_by_options: [...basePaidByOptions, ...employeePaidByOptions],
+        current_user_payer: {
+          value: String(user.id),
+          label: user.full_name || "Admin",
+        },
+        employee_options: employees,
+        allowance_summary: {
+          total_provided: totalAllowanceProvided,
+          total_spent: totalAllowanceSpent,
+          total_in_hand: totalAllowanceInHand,
+          user_balances: userBalances,
+        },
       },
     });
   } catch (error) {
@@ -137,12 +257,22 @@ export async function POST(req: Request) {
     const amount = Number(body.amount);
     if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a valid amount");
 
-    const categoryId = Number(body.category_id);
-    if (!Number.isInteger(categoryId) || categoryId <= 0) throw new Error("Select a payment category");
+    let categoryId = Number(body.category_id);
+    const customCategoryName = String(body.custom_category_name || body.category_name || "").trim();
+
+    if ((!Number.isInteger(categoryId) || categoryId <= 0) && customCategoryName) {
+      const createdCat = await createFinanceExpenseCategory(db, scope, institutionId, customCategoryName, user.id);
+      categoryId = createdCat.id;
+    }
+
+    if (!Number.isInteger(categoryId) || categoryId <= 0) throw new Error("Select or enter a payment category");
 
     const paidBy = String(body.paid_by ?? "").trim();
     const paidByLabel = String(body.paid_by_label ?? "").trim();
     if (!paidBy || !paidByLabel) throw new Error("Select who paid this expense");
+
+    const paidTo = body.paid_to ? String(body.paid_to).trim() : null;
+    const paidToLabel = body.paid_to_label ? String(body.paid_to_label).trim() : (paidTo || null);
 
     await createFinanceExpenseEntry(db, {
       scope_type: scope,
@@ -152,6 +282,8 @@ export async function POST(req: Request) {
       payment_status: paymentStatus as "paid" | "due",
       paid_by: paidBy,
       paid_by_label: paidByLabel,
+      paid_to: paidTo,
+      paid_to_label: paidToLabel,
       amount,
       expense_date: validDate(body.expense_date, "Payment date"),
       invoice_url: body.invoice_url ? String(body.invoice_url) : null,

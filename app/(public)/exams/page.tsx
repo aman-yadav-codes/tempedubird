@@ -13,6 +13,7 @@ import {
   Sparkles,
   MessageSquare,
   Star,
+  Send,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,7 @@ import { useCategoryAvailability } from "@/hooks/use-category-availability";
 import { SharedPublicSidebar } from "@/components/public/shared-public-sidebar";
 import { SharedInterstitialBanner } from "@/components/public/shared-interstitial-banner";
 import { UniversalFeedbackDialog, type UniversalEntityTarget } from "@/components/public/universal-feedback-dialog";
+import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
 
 type EntranceExam = {
   id: number;
@@ -46,6 +48,8 @@ export default function ExamsPublicPage() {
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [feedbackTarget, setFeedbackTarget] = useState<UniversalEntityTarget | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [enquiryExam, setEnquiryExam] = useState<EntranceExam | null>(null);
+  const [enquiryOpen, setEnquiryOpen] = useState(false);
 
   useEffect(() => {
     fetchExams();
@@ -203,30 +207,39 @@ export default function ExamsPublicPage() {
                             </button>
                           </div>
 
-                          {/* CTA Button */}
-                          {e.website_url ? (
-                            <a
-                              href={e.website_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="block"
+                          {/* Actions */}
+                          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/50">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFeedbackTarget({
+                                  type: "exam",
+                                  id: e.id,
+                                  title: e.exam_name,
+                                  subtitle: `${e.category} • Official Entrance Exam`,
+                                  avg_rating: e.rating || 4.8,
+                                  review_count: e.reviews_count || 12,
+                                });
+                                setFeedbackOpen(true);
+                              }}
+                              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-amber-300 bg-amber-50/70 text-xs font-bold text-amber-800 transition hover:bg-amber-100 cursor-pointer"
                             >
-                              <Button
-                                size="sm"
-                                className="w-full font-bold text-xs gap-1.5 rounded-xl shadow-xs bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
-                              >
-                                Official Exam Portal <ExternalLink className="size-3.5" />
-                              </Button>
-                            </a>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full font-bold text-xs rounded-xl"
+                              <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
+                              <span>Reviews & Q&A</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEnquiryExam(e);
+                                setEnquiryOpen(true);
+                              }}
+                              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-primary text-xs font-bold text-primary-foreground transition hover:bg-primary/90 cursor-pointer shadow-xs"
                             >
-                              View Exam Notice
-                            </Button>
-                          )}
+                              <Send className="h-3.5 w-3.5" />
+                              <span>Enquiry</span>
+                            </button>
+                          </div>
                         </div>
                       </Card>
 
@@ -257,6 +270,18 @@ export default function ExamsPublicPage() {
         open={feedbackOpen}
         onOpenChange={setFeedbackOpen}
         target={feedbackTarget}
+      />
+
+      {/* Exam Enquiry Dialog */}
+      <CourseEnquiryDialog
+        open={enquiryOpen}
+        onOpenChange={setEnquiryOpen}
+        course={enquiryExam ? {
+          id: enquiryExam.id,
+          title: enquiryExam.exam_name,
+          institute: enquiryExam.institution_name || enquiryExam.category || "Competitive Exam",
+          price: `₹${Number(enquiryExam.application_fee || 1000).toLocaleString("en-IN")}`,
+        } : null}
       />
     </div>
   );

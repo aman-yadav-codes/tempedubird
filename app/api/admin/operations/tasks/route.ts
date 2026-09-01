@@ -20,9 +20,13 @@ export async function GET(req: Request) {
     const userRole = (user as any)?.role || (user as any)?.role_code || "";
     const userInstId = (user as any)?.institution_id || user?.memberships?.[0]?.institution_id || null;
 
-    // Filter by institution if institution admin
-    if (userRole === "institution_admin" && userInstId) {
-      params.push(userInstId);
+    const requestedInstId = url.searchParams.get("institution_id") || req.headers.get("x-institution-id");
+    const parsedInstId = requestedInstId ? Number(requestedInstId) : null;
+    const targetInstId = Number.isInteger(parsedInstId) && (parsedInstId as number) > 0 ? parsedInstId : userInstId;
+
+    // Filter by institution if available
+    if (targetInstId) {
+      params.push(targetInstId);
       query += ` AND (institution_id = $${params.length} OR institution_id IS NULL)`;
     }
 
@@ -46,9 +50,16 @@ export async function GET(req: Request) {
       query += ` AND client_id = $${params.length}`;
     }
 
-    if (employeeId && employeeId !== "all") {
-      params.push(employeeId);
-      query += ` AND assigned_employee_id = $${params.length}`;
+    const effectiveEmployeeId = employeeId === "me" ? (user?.id ? String(user.id) : "") : employeeId;
+    if (effectiveEmployeeId && effectiveEmployeeId !== "all") {
+      params.push(effectiveEmployeeId);
+      query += ` AND (
+        assigned_employee_id::text = $${params.length}
+        OR EXISTS (
+          SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) elem 
+          WHERE elem->>'assigned_employee_id' = $${params.length}
+        )
+      )`;
     }
 
     query += ` ORDER BY 
@@ -66,24 +77,46 @@ export async function GET(req: Request) {
     let tasks = res.rows;
 
     // Fetch list of clients for picker
-    const clientsRes = await db.query(`SELECT id, name, company_name, email, phone, client_type FROM clients WHERE status = 'active' ORDER BY name ASC`);
+    const clientsRes = await db.query(
+      `SELECT id, name, company_name, email, phone, client_type 
+       FROM clients 
+       WHERE status = 'active' 
+         AND ($1::int IS NULL OR institution_id = $1::int OR institution_id IS NULL)
+       ORDER BY name ASC`,
+      [targetInstId]
+    );
     
-    // Fetch list of staff/employees for picker
-    const staffRes = await db.query(`
-      SELECT DISTINCT 
-        u.id, 
-        COALESCE(NULLIF(TRIM(u.full_name), ''), u.email) as name, 
-        u.email, 
-        u.phone,
-        COALESCE(r.name, r.code, 'Staff Member') as role,
-        r.code as role_code
-      FROM users u 
-      LEFT JOIN user_roles ur ON ur.user_id = u.id 
-      LEFT JOIN roles r ON r.id = ur.role_id 
-      WHERE u.is_deleted = FALSE 
-        AND (r.code IS NULL OR r.code NOT IN ('student', 'parent'))
-      ORDER BY name ASC
-    `);
+    // Fetch list of staff/employees for picker strictly filtered and deduplicated
+    const staffRes = await db.query(
+      `
+        WITH unique_staff AS (
+          SELECT DISTINCT ON (u.id)
+            u.id,
+            COALESCE(NULLIF(TRIM(u.full_name), ''), u.email) AS name,
+            u.email,
+            u.phone,
+            COALESCE(d.name, r.name, r.code, 'Staff Member') AS role,
+            COALESCE(r.code, 'staff') AS role_code
+          FROM users u
+          LEFT JOIN institution_memberships im 
+            ON im.user_id = u.id 
+            AND im.is_active = TRUE 
+            AND COALESCE(im.is_deleted, FALSE) = FALSE
+          LEFT JOIN user_profiles up 
+            ON up.user_id = u.id
+          LEFT JOIN designations d 
+            ON d.id = up.designation_id
+          LEFT JOIN roles r 
+            ON r.id = im.role_id
+          WHERE COALESCE(u.is_deleted, FALSE) = FALSE
+            AND ($1::int IS NULL OR im.institution_id = $1::int OR up.under_institution_id = $1::int)
+            AND (r.code IS NULL OR r.code NOT IN ('student', 'parent', 'guardian'))
+          ORDER BY u.id, im.updated_at DESC NULLS LAST
+        )
+        SELECT * FROM unique_staff ORDER BY name ASC;
+      `,
+      [targetInstId]
+    );
 
     // Auto-seed sample tasks if empty
     if (tasks.length === 0 && !search && (!status || status === "all") && (!urgency || urgency === "all")) {
@@ -170,6 +203,12 @@ export async function GET(req: Request) {
     const totalEstimatedHours = tasks.reduce((sum, t) => sum + (parseFloat(t.estimated_hours) || 0), 0);
     const totalLoggedHours = tasks.reduce((sum, t) => sum + (parseFloat(t.logged_hours) || 0), 0);
 
+    const currentUserIdStr = user?.id ? String(user.id) : "";
+    const myAssignedTasks = currentUserIdStr ? tasks.filter(t => 
+      String(t.assigned_employee_id) === currentUserIdStr ||
+      (Array.isArray(t.sub_tasks) && t.sub_tasks.some((st: any) => String(st.assigned_employee_id) === currentUserIdStr))
+    ).length : 0;
+
     return NextResponse.json({
       tasks,
       clients: clientsRes.rows,
@@ -180,6 +219,7 @@ export async function GET(req: Request) {
         inProgressTasks,
         completedTasks,
         urgentTasks,
+        myAssignedTasks,
         totalRevenue,
         totalEstimatedHours,
         totalLoggedHours,

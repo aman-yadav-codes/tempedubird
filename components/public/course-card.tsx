@@ -14,6 +14,7 @@ import {
   Users,
   Star,
   MessageSquare,
+  Send,
   Sparkles,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { buildCourseUrl } from "@/lib/utils/seo-slug";
 import { UniversalFeedbackDialog } from "@/components/public/universal-feedback-dialog";
+import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
 
 export interface CourseCardProps {
   id: number;
@@ -82,6 +84,7 @@ export function CourseCard({
   onEnquire,
 }: CourseCardProps) {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [enquiryOpen, setEnquiryOpen] = useState(false);
   const courseUrl = buildCourseUrl(id, title, institute);
   const isList = viewMode === "list";
   const subjectPreview = subjects.slice(0, 2).join(", ");
@@ -207,26 +210,15 @@ export function CourseCard({
 
           {/* Actions */}
           <div className="grid grid-cols-2 gap-2 pt-1">
-            {onEnroll ? (
-              <button
-                type="button"
-                onClick={() =>
-                  onEnroll({
-                    id,
-                    title,
-                    institute,
-                    price,
-                    duration,
-                    institution_id: institutionId || institution_id,
-                    fee_amount,
-                  })
-                }
-                className="flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-primary font-bold text-xs text-primary-foreground shadow-2xs transition hover:bg-primary/90 cursor-pointer"
-              >
-                <GraduationCap className="h-3.5 w-3.5" />
-                <span>Enroll</span>
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => setFeedbackOpen(true)}
+              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-amber-300 bg-amber-50/70 text-xs font-bold text-amber-800 transition hover:bg-amber-100 cursor-pointer"
+            >
+              <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
+              <span>Reviews & Q&A</span>
+            </button>
+
             <button
               type="button"
               onClick={() => {
@@ -240,14 +232,12 @@ export function CourseCard({
                     institution_id: institutionId || institution_id,
                   });
                 } else {
-                  window.location.href = courseUrl;
+                  setEnquiryOpen(true);
                 }
               }}
-              className={`flex h-9 w-full items-center justify-center gap-1.5 rounded-xl border border-primary/70 text-xs font-bold text-primary transition hover:bg-primary hover:text-primary-foreground cursor-pointer ${
-                !onEnroll ? "col-span-2" : ""
-              }`}
+              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-primary text-xs font-bold text-primary-foreground transition hover:bg-primary/90 cursor-pointer shadow-xs"
             >
-              <HelpCircle className="h-3.5 w-3.5" />
+              <Send className="h-3.5 w-3.5" />
               <span>Enquiry</span>
             </button>
           </div>
@@ -265,6 +255,20 @@ export function CourseCard({
           subtitle: `${institute} • ${duration}`,
           avg_rating: rating || 4.8,
           review_count: reviews || 24,
+        }}
+      />
+
+      {/* Course Enquiry Dialog */}
+      <CourseEnquiryDialog
+        open={enquiryOpen}
+        onOpenChange={setEnquiryOpen}
+        course={{
+          id,
+          title,
+          institute,
+          price,
+          duration,
+          institution_id: institutionId || institution_id,
         }}
       />
     </Card>

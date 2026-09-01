@@ -24,22 +24,38 @@ function jsonError(error: unknown, status = 400) {
 function userInstitutionIds(user: CurrentUser) {
   return new Set(
     (user.memberships ?? [])
-      .filter((membership) => membership.role_code === "institution_admin")
       .map((membership) => Number(membership.institution_id))
       .filter((id) => Number.isInteger(id) && id > 0)
   );
 }
 
-function resolveScope(user: CurrentUser, institutionId: number | null): { scope: FinanceScope; institutionId: number | null } {
-  if (isPlatformAdminUser(user) || hasPermission(user, "finance.platform.allowance.view")) {
+function resolveScope(user: CurrentUser, requestedInstitutionId?: number | null): {
+  scope: FinanceScope;
+  institutionId: number | null;
+} {
+  const isPlatform = isPlatformAdminUser(user) || hasPermission(user, "finance.platform.allowance.view");
+  const isInstitution = isInstitutionAdminUser(user) || hasPermission(user, "finance.allowance.view");
+  const institutionIds = userInstitutionIds(user);
+
+  if (isPlatform && requestedInstitutionId) {
+    return { scope: "institution", institutionId: requestedInstitutionId };
+  }
+
+  if (isPlatform) {
     return { scope: "platform", institutionId: null };
   }
-  if (!isInstitutionAdminUser(user)) throw new Error("Forbidden: Admin access required");
 
-  const institutionIds = userInstitutionIds(user);
-  const targetId = institutionId ?? Array.from(institutionIds)[0] ?? null;
-  if (!targetId || !institutionIds.has(targetId)) throw new Error("Forbidden: Institution access required");
-  return { scope: "institution", institutionId: targetId };
+  if (isInstitution) {
+    const institutionId = requestedInstitutionId && institutionIds.has(requestedInstitutionId)
+      ? requestedInstitutionId
+      : (Array.from(institutionIds)[0] ?? null);
+    if (!institutionId) {
+      throw new Error("No active institution found for allowance management");
+    }
+    return { scope: "institution", institutionId };
+  }
+
+  throw new Error("Forbidden: You do not have permission to access allowance records");
 }
 
 function positiveInt(value: string | null, fallback: number, max: number) {
@@ -96,6 +112,7 @@ export async function GET(req: Request) {
         limit,
         filtered_total: result.filtered_total,
         this_month_total: result.this_month_total,
+        cash_in_hand_total: result.cash_in_hand_total,
         scope,
         institution_id: institutionId,
         users,

@@ -81,7 +81,6 @@ import { AsyncSearchPopover } from "@/components/shared/async-search-popover";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { InstitutionNews } from "@/lib/types/institution";
 import { cn } from "@/lib/utils";
-import { MarketplaceSellOption } from "@/components/admin/marketplace-sell-option";
 
 type NoticeTargetType =
   "WHOLE_INSTITUTION" | "ROLE" | "PROGRAM" | "SECTION" | "USER";
@@ -1198,18 +1197,6 @@ export default function NewsPage() {
                   placeholder="Write the notice message..."
                   rows={6}
                   className="min-h-36 resize-none border border-border bg-background/50"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <MarketplaceSellOption
-                  sellOnMarketplace={sellOnMarketplace}
-                  onSellOnMarketplaceChange={setSellOnMarketplace}
-                  marketplacePrice={marketplacePrice}
-                  onMarketplacePriceChange={(val) => setMarketplacePrice(Number(val))}
-                  title="Sell on Marketplace"
-                  description="Publish this blog/news post on the EduBird national marketplace for all learners to discover."
-                  priceLabel="Marketplace Reading / Access Price (₹)"
-                  pricePlaceholder="Enter 0 for free or enter a price"
                 />
               </div>
             </div>

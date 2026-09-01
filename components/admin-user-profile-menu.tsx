@@ -21,6 +21,7 @@ import { toast } from "sonner";
 
 import { useAuthStore } from "@/store";
 import { toRoleRoutePath } from "@/lib/auth/role-routes";
+import { AccountSwitcherDialog } from "@/components/auth/account-switcher-dialog";
 
 import {
   DropdownMenu,
@@ -49,6 +50,7 @@ export function AdminUserProfileMenu() {
   const router = useRouter();
   const { user, setAuth, clearAuth } = useAuthStore();
   const [logoutOpen, setLogoutOpen] = useState(false);
+  const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [switchingRole, setSwitchingRole] = useState<string | null>(null);
 
@@ -263,6 +265,15 @@ export function AdminUserProfileMenu() {
               <span className="flex-1 text-xs">Super Admin Portal</span>
               {isPlatformAdmin && <Badge variant="outline" className="text-[9px] h-4">Active</Badge>}
             </DropdownMenuItem>
+
+            <DropdownMenuItem
+              onClick={() => setSwitchAccountOpen(true)}
+              className="cursor-pointer font-bold text-primary focus:text-primary focus:bg-primary/10"
+            >
+              <Sparkles className="mr-2 h-4 w-4 text-primary" />
+              <span className="flex-1 text-xs">All Switchable Accounts</span>
+              <Badge variant="secondary" className="text-[9px] h-4 bg-primary/10 text-primary">Browse All</Badge>
+            </DropdownMenuItem>
           </DropdownMenuGroup>
 
           <DropdownMenuSeparator />
@@ -280,6 +291,12 @@ export function AdminUserProfileMenu() {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* Multi-Role Account Switcher Dialog */}
+      <AccountSwitcherDialog
+        open={switchAccountOpen}
+        onOpenChange={setSwitchAccountOpen}
+      />
 
       {/* Logout Confirmation Dialog */}
       <AlertDialog open={logoutOpen} onOpenChange={setLogoutOpen}>

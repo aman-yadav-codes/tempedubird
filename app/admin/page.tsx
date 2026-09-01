@@ -220,6 +220,7 @@ import {
   HelpCircle,
   School,
   Phone,
+  ClipboardList,
 } from "lucide-react";
 
 export default function AdminPage() {
@@ -706,6 +707,14 @@ export default function AdminPage() {
         icon: BookMarked,
         colorBg: "bg-amber-500/10",
         colorText: "text-amber-600 dark:text-amber-400",
+      },
+      {
+        title: "My Assigned Tasks",
+        description: "View and track project deliverables, operations tasks, and deadlines assigned to you.",
+        href: "/admin/operations/tasks?scope=me",
+        icon: ClipboardList,
+        colorBg: "bg-purple-500/10",
+        colorText: "text-purple-600 dark:text-purple-400",
       },
     ];
 

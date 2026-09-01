@@ -69,6 +69,7 @@ export function isManagedInstitutionRoleCode(roleCode: string | null | undefined
 
 export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "dashboard", label: "Dashboard", description: "admin dashboard", scope: "institution", page: "/admin" },
+  { key: "analytics", label: "Traffic Analytics", description: "view clicks, views, impressions, searches and user journeys", scope: "institution", page: "/admin/analytics" },
   { key: "student.dashboard", label: "Student Dashboard", description: "student dashboard", scope: "institution", page: "/admin/my-program" },
   { key: "parent.dashboard", label: "Parent Dashboard", description: "parent dashboard", scope: "institution", page: "/admin" },
   { key: "teacher.dashboard", label: "Teacher Dashboard", description: "teacher dashboard", scope: "institution", page: "/admin" },
@@ -140,7 +141,7 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "driver.myinstitution.mysalary", label: "Driver My Salary", description: "the driver's own salary records", scope: "institution", page: "/admin/institution/my-salary" },
   { key: "teacher.myinstitution.myletters", label: "Teacher My Letters", description: "letters generated for the teacher", scope: "institution", page: "/admin/institution/my-letters" },
   { key: "driver.myinstitution.myletters", label: "Driver My Letters", description: "letters generated for the driver", scope: "institution", page: "/admin/institution/my-letters" },
-  { key: "analytics.overview", label: "Analytics Overview", description: "analytics overview", scope: "platform", page: "/admin/analytics" },
+  { key: "analytics.overview", label: "Analytics Overview", description: "analytics overview", scope: "institution", page: "/admin/analytics" },
   { key: "analytics.leads", label: "Leads", description: "analytics leads", scope: "platform", page: "/admin/users/leads" },
   { key: "analytics.sales", label: "Sales", description: "analytics sales", scope: "platform", page: "/admin/analytics/sales" },
   { key: "analytics.reports", label: "Analytics Reports", description: "analytics reports", scope: "platform", page: "/admin/analytics/reports" },
@@ -159,6 +160,7 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "sales.proposals", label: "Sales Proposals", description: "commercial course proposals and custom quotes", scope: "institution", page: "/admin/sales/proposals" },
   { key: "sales.enquiries", label: "Sales Enquiry", description: "sales enquiries", scope: "institution", page: "/admin/sales/enquiries" },
   { key: "sales.enrollments", label: "Course Enrollments", description: "course enrollments", scope: "institution", page: "/admin/sales/enrollments" },
+  { key: "sales.orders", label: "Orders", description: "product orders, student kit purchases, and receipts", scope: "institution", page: "/admin/sales/orders" },
   { key: "sales.commissions", label: "Sales Commissions", description: "sales commissions and incentives", scope: "institution", page: "/admin/sales/commissions" },
   { key: "content.category_tree", label: "Category Tree", description: "content category tree", scope: "institution", page: "/admin/content/tree" },
   { key: "content.categories", label: "Categories", description: "content categories", scope: "institution", page: "/admin/content/categories" },
@@ -182,6 +184,7 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "content.practice_exam_reviews", label: "Practice Exam Reviews", description: "practice exam marketplace reviews", scope: "platform", page: "/admin/master-data/practice-exams" },
   { key: "content.institute_calendar", label: "Institute Calendar", description: "institution holidays, notices, and events", scope: "institution", page: "/admin/master-data/institute-calendar" },
   { key: "content.timetable_setup", label: "Timetable Setup", description: "subject teacher mappings and timetable slots", scope: "institution", page: "/admin/master-data/timetable-setup" },
+  { key: "content.attendance_setup", label: "Attendance Setup", description: "attendance rules and shift settings", scope: "institution", page: "/admin/master-data/attendance-setup" },
   { key: "content.blog", label: "Blog", description: "institution website blog posts", scope: "institution", page: "/admin/content/blog" },
   { key: "content.media", label: "Media", description: "content media", scope: "institution", page: "/admin/content/media" },
   { key: "institution.types", label: "Institution Types", description: "institution types", scope: "platform", page: "/admin/institutions/types" },
@@ -225,12 +228,16 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "settings.subscription", label: "Subscription", description: "institution subscription plans and status", scope: "institution", page: "/admin/settings/subscription" },
   { key: "settings.ai", label: "AI Settings", description: "AI settings", scope: "platform", page: "/admin/ai-settings" },
   { key: "settings.security", label: "Security Settings", description: "security settings", scope: "platform", page: "/admin/settings/security" },
+  { key: "settings.logs", label: "System & Data Logs", description: "system audit trail and record modification history", scope: "institution", page: "/admin/settings/logs" },
   { key: "settings.recycle_bin", label: "Recycle Bin", description: "recoverable deleted records", scope: "institution", page: "/admin/settings/recycle-bin" },
   { key: "settings.help_center", label: "Help Center Settings", description: "help center overview", scope: "platform", page: "/admin/settings/help-center" },
   { key: "settings.help_center_categories", label: "Help Center Categories", description: "help center categories", scope: "platform", page: "/admin/settings/help-center/categories" },
   { key: "settings.help_center_articles", label: "Help Center Articles", description: "help center articles", scope: "platform", page: "/admin/settings/help-center/articles" },
   { key: "settings.help_center_updates", label: "Help Center Updates", description: "help center recent updates", scope: "platform", page: "/admin/settings/help-center/updates" },
   { key: "settings.help_center_analytics", label: "Help Center Analytics", description: "help center analytics", scope: "platform", page: "/admin/settings/help-center/analytics" },
+  { key: "admin.inventory", label: "Inventory Management", description: "manage inventory, products, stock levels and assets", scope: "institution", page: "/admin/inventory" },
+  { key: "admin.vendors", label: "Vendors & Suppliers", description: "manage vendors and suppliers", scope: "institution", page: "/admin/vendors" },
+  { key: "admin.team", label: "Internal Admin Team", description: "manage internal admin team members", scope: "institution", page: "/admin/team" },
 ];
 
 export const LEGACY_PERMISSION_MODULE_MAP: Record<string, string> = {
@@ -330,6 +337,7 @@ export const LEGACY_PERMISSION_MODULE_MAP: Record<string, string> = {
   "content.master_data.practice_exams": "content.practice_exams",
   "content.master_data.institute_calendar": "content.institute_calendar",
   "content.master_data.timetable_setup": "content.timetable_setup",
+  "content.master_data.attendance_setup": "content.attendance_setup",
   "content.blogs": "content.blog",
   "institutions.master.institution_type": "institution.types",
   "institutions.master.institution_subtype": "institution.subtypes",
@@ -498,6 +506,15 @@ export function isAdminPathVisibleForRole(
   }
 
   if (normalized === "/admin/master-data" || normalized.startsWith("/admin/master-data")) {
+    if (
+      normalized === "/admin/master-data/timetable-setup" ||
+      normalized === "/admin/master-data/attendance-setup" ||
+      normalized === "/admin/master-data/institute-calendar" ||
+      normalized === "/admin/master-data/card-templates" ||
+      normalized === "/admin/master-data"
+    ) {
+      return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    }
     return isPlatformAdminUser(user);
   }
 
@@ -518,6 +535,18 @@ export function isAdminPathVisibleForRole(
       isInstitutionAdminUser(user) ||
       Boolean(user?.permissions?.some((permission) => permission.startsWith("finance.platform.")))
     );
+  }
+
+  if (normalized === "/admin/inventory" || normalized.startsWith("/admin/inventory/")) {
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, "admin.inventory.view") || hasPermission(user, "admin.inventory");
+  }
+
+  if (normalized === "/admin/vendors" || normalized.startsWith("/admin/vendors/")) {
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, "admin.vendors.view") || hasPermission(user, "admin.vendors");
+  }
+
+  if (normalized === "/admin/team" || normalized.startsWith("/admin/team/")) {
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, "admin.team.view") || hasPermission(user, "admin.team");
   }
 
   if (!isPlatformAdminUser(user)) return true;
@@ -970,6 +999,8 @@ export function getRequestPermission(method: string, url: string) {
   if (pathname.includes("/api/admin/staff/attendance")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/staff/salary")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/staff/letters")) return AUTHENTICATED_LOOKUP_PERMISSION;
+  if (pathname.includes("/api/admin/staff/jobs")) return AUTHENTICATED_LOOKUP_PERMISSION;
+  if (pathname.includes("/api/admin/staff/applicants")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/finance/income")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/finance/expense")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/finance/allowance")) return AUTHENTICATED_LOOKUP_PERMISSION;
@@ -1008,6 +1039,7 @@ export function getRequestPermission(method: string, url: string) {
   if (pathname.includes("/api/admin/master-data/exams")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/master-data/practice-exams")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/master-data/institute-calendar")) return AUTHENTICATED_LOOKUP_PERMISSION;
+  if (pathname.includes("/api/admin/master-data/attendance-setup")) return permissionForAction("content.attendance_setup", verb);
   if (pathname.includes("/api/admin/master-data/syllabi")) return permissionForAction("content.syllabus", verb);
   if (pathname.includes("/api/admin/master-data/organizations")) return permissionForAction("content.designations", verb);
   if (pathname.includes("/api/admin/timetable/slots")) return permissionForAction("content.timetable_setup", verb);
@@ -1164,6 +1196,10 @@ export function hasAdminPagePermission(
   }
 
   if (normalized === "/admin/company" || normalized.startsWith("/admin/company")) {
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+  }
+
+  if (normalized === "/admin/analytics" || normalized.startsWith("/admin/analytics")) {
     return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
   }
 

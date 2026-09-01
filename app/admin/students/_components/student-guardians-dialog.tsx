@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Plus, Trash2, UsersRound, UserCheck, ShieldCheck } from "lucide-react";
+import { Loader2, Plus, Trash2, PhoneCall, UserCheck, ShieldCheck, Mail, Phone, Contact } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -58,7 +58,7 @@ export function StudentGuardiansDialog({
   const [saving, setSaving] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
 
-  // Form states for new guardian
+  // Form states for new guardian / contact
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -85,11 +85,11 @@ export function StudentGuardiansDialog({
       if (res.ok) {
         setGuardians(json.data || []);
       } else {
-        toast.error(json.error || "Failed to load guardians");
+        toast.error(json.error || "Failed to load contact details");
       }
     } catch (err) {
       console.error("Error fetching guardians:", err);
-      toast.error("Failed to load guardians.");
+      toast.error("Failed to load contact details.");
     } finally {
       setLoading(false);
     }
@@ -113,8 +113,12 @@ export function StudentGuardiansDialog({
   };
 
   const handleAddGuardian = async () => {
-    if (!name.trim() || !email.trim()) {
-      toast.error("Guardian name and email are required.");
+    if (!name.trim()) {
+      toast.error("Contact full name is required.");
+      return;
+    }
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      toast.error("A valid Email Address is required for guardian notifications.");
       return;
     }
     if (!student?.id || !accessToken) return;
@@ -138,21 +142,21 @@ export function StudentGuardiansDialog({
       });
 
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to add guardian");
+      if (!res.ok) throw new Error(json.error || "Failed to save contact details");
 
-      toast.success("Guardian record saved successfully!");
+      toast.success("Contact details saved successfully!");
       setShowAddForm(false);
       resetForm();
       fetchGuardians();
     } catch (err: any) {
-      toast.error(err.message || "Failed to add guardian record");
+      toast.error(err.message || "Failed to save contact details");
     } finally {
       setSaving(false);
     }
   };
 
   const handleDeleteGuardian = async (guardianUserId: number) => {
-    if (!confirm("Are you sure you want to remove this guardian record?")) return;
+    if (!confirm("Are you sure you want to remove this contact record?")) return;
     if (!student?.id || !accessToken) return;
 
     try {
@@ -161,12 +165,12 @@ export function StudentGuardiansDialog({
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to delete guardian");
+      if (!res.ok) throw new Error(json.error || "Failed to delete contact record");
 
-      toast.success("Guardian record removed.");
+      toast.success("Contact record removed.");
       fetchGuardians();
     } catch (err: any) {
-      toast.error(err.message || "Failed to delete guardian");
+      toast.error(err.message || "Failed to delete contact");
     }
   };
 
@@ -174,12 +178,12 @@ export function StudentGuardiansDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <UsersRound className="h-5 w-5 text-primary" />
-            Manage Guardians: {student?.full_name}
+          <DialogTitle className="flex items-center gap-2 text-base font-bold">
+            <PhoneCall className="h-5 w-5 text-primary" />
+            Contact Details: {student?.full_name}
           </DialogTitle>
-          <DialogDescription>
-            Guardians records are stored in a separate table and linked to the student profile.
+          <DialogDescription className="text-xs">
+            Manage guardian contacts, email addresses, and emergency phone numbers for this student.
           </DialogDescription>
         </DialogHeader>
 
@@ -191,11 +195,11 @@ export function StudentGuardiansDialog({
           <div className="space-y-4 py-2">
             {/* List of existing guardians */}
             {guardians.length === 0 && !showAddForm ? (
-              <div className="text-center py-8 border rounded-lg bg-muted/20">
-                <UsersRound className="mx-auto h-10 w-10 text-muted-foreground/40 mb-2" />
-                <p className="text-sm font-medium text-muted-foreground">No guardians added for this student yet.</p>
-                <Button size="sm" className="mt-3" onClick={() => setShowAddForm(true)}>
-                  <Plus className="mr-1.5 h-4 w-4" /> Add Guardian
+              <div className="text-center py-8 border rounded-xl bg-muted/20">
+                <Contact className="mx-auto h-10 w-10 text-muted-foreground/40 mb-2" />
+                <p className="text-sm font-medium text-muted-foreground">No guardian or contact details added yet.</p>
+                <Button size="sm" className="mt-3 gap-1.5 font-bold text-xs" onClick={() => setShowAddForm(true)}>
+                  <Plus className="h-4 w-4" /> Add Contact Details
                 </Button>
               </div>
             ) : (
@@ -203,27 +207,30 @@ export function StudentGuardiansDialog({
                 {guardians.map((g) => (
                   <div
                     key={g.id}
-                    className="flex items-center justify-between p-3 rounded-lg border bg-card hover:border-primary/40 transition-colors"
+                    className="flex items-center justify-between p-3.5 rounded-xl border bg-card hover:border-primary/40 transition-colors shadow-2xs"
                   >
-                    <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm text-foreground">{g.guardian_name}</span>
-                        <Badge variant="outline" className="text-xs bg-primary/10 text-primary">
+                        <span className="font-bold text-sm text-foreground">{g.guardian_name}</span>
+                        <Badge variant="outline" className="text-xs bg-primary/10 text-primary font-bold">
                           {g.relationship}
                         </Badge>
                         {g.is_primary && (
-                          <Badge variant="default" className="text-xs bg-green-600 text-white">
-                            Primary Guardian
+                          <Badge variant="default" className="text-xs bg-emerald-600 text-white font-bold">
+                            Primary Contact
                           </Badge>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">{g.guardian_email} {g.guardian_phone ? `• ${g.guardian_phone}` : ""}</p>
+                      <p className="text-xs text-muted-foreground truncate flex items-center gap-2">
+                        <span className="flex items-center gap-1"><Mail className="h-3 w-3 text-muted-foreground" /> {g.guardian_email}</span>
+                        {g.guardian_phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3 text-muted-foreground" /> {g.guardian_phone}</span>}
+                      </p>
                     </div>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDeleteGuardian(g.guardian_user_id)}
-                      className="text-destructive hover:text-destructive"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -234,28 +241,28 @@ export function StudentGuardiansDialog({
 
             {/* Add Guardian Form */}
             {showAddForm ? (
-              <div className="rounded-lg border p-4 bg-muted/30 space-y-3 mt-4">
-                <h4 className="font-semibold text-sm text-foreground flex items-center gap-1.5">
-                  <Plus className="h-4 w-4 text-primary" /> Add Guardian Details
+              <div className="rounded-xl border p-4 bg-muted/30 space-y-3.5 mt-4">
+                <h4 className="font-bold text-sm text-foreground flex items-center gap-1.5">
+                  <Plus className="h-4 w-4 text-primary" /> Add Contact Details
                 </h4>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs">Full Name *</Label>
+                    <Label className="text-xs font-bold">Full Name *</Label>
                     <Input
-                      size={1}
-                      className="text-sm"
+                      required
+                      className="text-sm h-9 rounded-lg"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="e.g. Ramesh Sharma"
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Email Address *</Label>
+                    <Label className="text-xs font-bold">Email Address *</Label>
                     <Input
-                      size={1}
+                      required
                       type="email"
-                      className="text-sm"
+                      className="text-sm h-9 rounded-lg"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="ramesh@example.com"
@@ -265,22 +272,23 @@ export function StudentGuardiansDialog({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs">Phone Number</Label>
+                    <Label className="text-xs font-bold">Phone Number</Label>
                     <Input
-                      size={1}
-                      className="text-sm"
+                      type="tel"
+                      className="text-sm h-9 rounded-lg"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="+91 9876543210"
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Relationship</Label>
+                    <Label className="text-xs font-bold">Relationship</Label>
                     <Select value={relationship} onValueChange={setRelationship}>
-                      <SelectTrigger className="h-9 text-sm">
+                      <SelectTrigger className="h-9 text-sm rounded-lg">
                         <SelectValue placeholder="Select relationship" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="Self">Self</SelectItem>
                         <SelectItem value="Father">Father</SelectItem>
                         <SelectItem value="Mother">Mother</SelectItem>
                         <SelectItem value="Guardian">Legal Guardian</SelectItem>
@@ -296,27 +304,27 @@ export function StudentGuardiansDialog({
                     id="is-primary-guardian"
                     checked={isPrimary}
                     onChange={(e) => setIsPrimary(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-primary"
+                    className="h-4 w-4 rounded border-gray-300 text-primary cursor-pointer"
                   />
-                  <Label htmlFor="is-primary-guardian" className="text-xs cursor-pointer">
-                    Set as Primary Contact / Guardian
+                  <Label htmlFor="is-primary-guardian" className="text-xs cursor-pointer font-medium">
+                    Set as Primary Contact
                   </Label>
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2">
-                  <Button variant="outline" size="sm" onClick={() => setShowAddForm(false)}>
+                  <Button variant="outline" size="sm" onClick={() => setShowAddForm(false)} className="text-xs">
                     Cancel
                   </Button>
-                  <Button size="sm" onClick={handleAddGuardian} disabled={saving}>
-                    {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
-                    Save Guardian Record
+                  <Button size="sm" onClick={handleAddGuardian} disabled={saving} className="text-xs font-bold gap-1.5 bg-primary text-primary-foreground">
+                    {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    Save Contact Details
                   </Button>
                 </div>
               </div>
             ) : (
               guardians.length > 0 && (
-                <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setShowAddForm(true)}>
-                  <Plus className="mr-1.5 h-4 w-4" /> Add Another Guardian
+                <Button variant="outline" size="sm" className="w-full mt-2 gap-1.5 font-bold text-xs h-9 rounded-lg" onClick={() => setShowAddForm(true)}>
+                  <Plus className="h-4 w-4" /> Add Another Contact
                 </Button>
               )
             )}

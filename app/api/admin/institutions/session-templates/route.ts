@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/auth/auth";
-import { isPlatformAdminUser } from "@/lib/auth/permissions";
+import { isInstitutionAdminUser, isPlatformAdminUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
-import { ensureAcademicSessionSchema } from "@/lib/queries/academic-sessions";
+import { ensureAcademicSessionSchema, syncInstitutionAcademicYearsFromTemplates } from "@/lib/queries/academic-sessions";
 import { getPageCount, getPagination } from "@/lib/queries/pagination";
 
 function errorMessage(error: unknown) {
@@ -29,7 +29,7 @@ function isPastSession(endDate: string) {
 
 export async function GET(req: Request) {
   try {
-    await requireAdmin(req);
+    const currentUser = await requireAdmin(req);
     await ensureAcademicSessionSchema(db);
     const url = new URL(req.url);
     const { limit, offset } = getPagination(url.searchParams.get("page"), url.searchParams.get("limit"));
@@ -72,8 +72,8 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const currentUser = await requireAdmin(req);
-    if (!isPlatformAdminUser(currentUser)) {
-      return NextResponse.json({ error: "Only Platform Admin can create sessions" }, { status: 403 });
+    if (!isPlatformAdminUser(currentUser) && !isInstitutionAdminUser(currentUser)) {
+      return NextResponse.json({ error: "Admin access required to create sessions" }, { status: 403 });
     }
     await ensureAcademicSessionSchema(db);
     const body = await req.json();
@@ -103,6 +103,7 @@ export async function POST(req: Request) {
       `,
       [name, startDate, endDate, body.isActive !== false, currentUser.id]
     );
+    await syncInstitutionAcademicYearsFromTemplates(db, [], currentUser.id);
     return NextResponse.json({ data: result.rows[0] }, { status: 201 });
   } catch (error) {
     const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
@@ -116,8 +117,8 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   try {
     const currentUser = await requireAdmin(req);
-    if (!isPlatformAdminUser(currentUser)) {
-      return NextResponse.json({ error: "Only Platform Admin can update sessions" }, { status: 403 });
+    if (!isPlatformAdminUser(currentUser) && !isInstitutionAdminUser(currentUser)) {
+      return NextResponse.json({ error: "Admin access required to update sessions" }, { status: 403 });
     }
     await ensureAcademicSessionSchema(db);
     const body = await req.json();
@@ -207,8 +208,8 @@ export async function PATCH(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const currentUser = await requireAdmin(req);
-    if (!isPlatformAdminUser(currentUser)) {
-      return NextResponse.json({ error: "Only Platform Admin can delete sessions" }, { status: 403 });
+    if (!isPlatformAdminUser(currentUser) && !isInstitutionAdminUser(currentUser)) {
+      return NextResponse.json({ error: "Admin access required to delete sessions" }, { status: 403 });
     }
     await ensureAcademicSessionSchema(db);
     const id = Number(new URL(req.url).searchParams.get("id"));

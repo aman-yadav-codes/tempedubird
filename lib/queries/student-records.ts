@@ -1,5 +1,17 @@
 import { db } from "@/lib/db/db";
 
+type QueryRunner = {
+  query: (text: string, params?: unknown[]) => Promise<any>;
+};
+
+export async function ensureStudentEnrollmentsSchema(runner: QueryRunner = db) {
+  try {
+    await runner.query(`ALTER TABLE student_enrollments ALTER COLUMN class_category_id DROP NOT NULL`);
+  } catch {
+    // ignore if already nullable
+  }
+}
+
 export type StudentRecordsResponse = {
   profile: Record<string, unknown> | null;
   enrollment: Record<string, unknown> | null;
@@ -9,6 +21,7 @@ export type StudentRecordsResponse = {
 };
 
 export async function readStudentRecords(studentUserId: number): Promise<StudentRecordsResponse> {
+  await ensureStudentEnrollmentsSchema(db);
   const [profile, enrollment, guardians, documents] = await Promise.all([
     db.query(
       `

@@ -39,6 +39,20 @@ export async function ensureFeatureSchema() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS vendor_categories (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        slug VARCHAR(255),
+        icon VARCHAR(100) DEFAULT 'Briefcase',
+        description TEXT,
+        institution_id INT,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_vendor_categories_name_inst 
+      ON vendor_categories (name, COALESCE(institution_id, 0));
+
       CREATE TABLE IF NOT EXISTS ads_campaigns (
         id SERIAL PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
@@ -269,6 +283,54 @@ export async function ensureFeatureSchema() {
       );
 
       ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS sub_tasks JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE vendors ADD COLUMN IF NOT EXISTS institution_id INT;
+      ALTER TABLE vendors ADD COLUMN IF NOT EXISTS vendor_type VARCHAR(50) DEFAULT 'vendor';
+      ALTER TABLE vendors ADD COLUMN IF NOT EXISTS company_name VARCHAR(255);
+      ALTER TABLE vendors ADD COLUMN IF NOT EXISTS contact_person VARCHAR(255);
+      ALTER TABLE vendors ADD COLUMN IF NOT EXISTS website VARCHAR(255);
+      ALTER TABLE vendors ADD COLUMN IF NOT EXISTS notes TEXT;
+      ALTER TABLE vendors ADD COLUMN IF NOT EXISTS country VARCHAR(100) DEFAULT 'India';
+      ALTER TABLE vendors ADD COLUMN IF NOT EXISTS state VARCHAR(100);
+
+      -- Dedicated Clients Table for Institutional & Corporate Partners
+      CREATE TABLE IF NOT EXISTS clients (
+        id SERIAL PRIMARY KEY,
+        institution_id INT,
+        name VARCHAR(255) NOT NULL,
+        company_name VARCHAR(255),
+        contact_person VARCHAR(255),
+        category VARCHAR(100) DEFAULT 'Corporate Client',
+        client_type VARCHAR(50) DEFAULT 'corporate',
+        phone VARCHAR(50),
+        email VARCHAR(150),
+        website VARCHAR(255),
+        profile_image TEXT,
+        address TEXT,
+        city VARCHAR(100),
+        area VARCHAR(150),
+        location VARCHAR(150),
+        country VARCHAR(100) DEFAULT 'India',
+        state VARCHAR(100),
+        map_url TEXT,
+        rating NUMERIC(3, 1) DEFAULT 4.5,
+        description TEXT,
+        notes TEXT,
+        status VARCHAR(50) DEFAULT 'active',
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS institution_id INT;
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS company_name VARCHAR(255);
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS contact_person VARCHAR(255);
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS category VARCHAR(100) DEFAULT 'Corporate Client';
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS client_type VARCHAR(50) DEFAULT 'corporate';
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS website VARCHAR(255);
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS area VARCHAR(150);
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS country VARCHAR(100) DEFAULT 'India';
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS state VARCHAR(100);
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS notes TEXT;
 
       -- Products Table for Platform and Institution Store / Marketing
       CREATE TABLE IF NOT EXISTS products (
@@ -297,6 +359,66 @@ export async function ensureFeatureSchema() {
       CREATE INDEX IF NOT EXISTS idx_products_institution_id ON products(institution_id);
       CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
       CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
+
+      -- Inventory Management Table for Admin Module
+      CREATE TABLE IF NOT EXISTS inventory_categories (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        slug VARCHAR(255),
+        description TEXT,
+        institution_id INT,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_categories_name_inst 
+      ON inventory_categories (name, COALESCE(institution_id, 0));
+
+      CREATE TABLE IF NOT EXISTS inventory_items (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        sku VARCHAR(100),
+        category VARCHAR(100) NOT NULL DEFAULT 'General',
+        quantity INT DEFAULT 0,
+        min_quantity INT DEFAULT 5,
+        unit VARCHAR(50) DEFAULT 'units',
+        unit_price NUMERIC(12, 2) DEFAULT 0.00,
+        supplier_vendor_id INT REFERENCES vendors(id) ON DELETE SET NULL,
+        supplier_name VARCHAR(255),
+        location VARCHAR(150),
+        condition VARCHAR(50) DEFAULT 'new',
+        status VARCHAR(50) DEFAULT 'in_stock',
+        description TEXT,
+        institution_id INT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_inventory_institution_id ON inventory_items(institution_id);
+      CREATE INDEX IF NOT EXISTS idx_inventory_category ON inventory_items(category);
+      CREATE INDEX IF NOT EXISTS idx_inventory_status ON inventory_items(status);
+
+      -- Internal Admin Team Members Table
+      CREATE TABLE IF NOT EXISTS internal_team_members (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(150),
+        phone VARCHAR(50),
+        role_title VARCHAR(150) NOT NULL,
+        department VARCHAR(100) DEFAULT 'Administration',
+        access_level VARCHAR(50) DEFAULT 'admin',
+        status VARCHAR(50) DEFAULT 'active',
+        joined_date DATE DEFAULT CURRENT_DATE,
+        profile_image TEXT,
+        notes TEXT,
+        institution_id INT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_team_institution_id ON internal_team_members(institution_id);
+      CREATE INDEX IF NOT EXISTS idx_team_department ON internal_team_members(department);
+      CREATE INDEX IF NOT EXISTS idx_team_status ON internal_team_members(status);
 
       DO $$
       BEGIN
@@ -386,6 +508,46 @@ export async function ensureFeatureSchema() {
       `);
     }
 
+    // Seed initial vendor categories if none exist
+    const catCheck = await db.query(`SELECT COUNT(*) as count FROM vendor_categories`);
+    if (parseInt(catCheck.rows[0]?.count || "0") === 0) {
+      await db.query(`
+        INSERT INTO vendor_categories (name, slug, icon, description, institution_id, is_active)
+        VALUES
+          ('House Cleaner', 'house-cleaner', 'Sparkles', 'Professional room and apartment deep cleaning', NULL, TRUE),
+          ('Dhobi / Cloth Cleaner', 'dhobi-laundry', 'Shirt', 'Daily laundry, steam iron and dry cleaning services', NULL, TRUE),
+          ('Cook / Catering', 'cook-catering', 'Utensils', 'Student mess, private cook and catering services', NULL, TRUE),
+          ('PG Owners', 'pg-owners', 'Home', 'Paying Guest accommodations for students and working professionals', NULL, TRUE),
+          ('Hostel Owners', 'hostel-owners', 'Building2', 'Student hostels and residential campus stays', NULL, TRUE),
+          ('Library Owners', 'library-owners', 'Library', '24x7 study libraries, self-study spaces and reading rooms', NULL, TRUE),
+          ('Books & Stationery', 'books-stationery', 'Building', 'Textbooks, competitive exam guides and stationery supplies', NULL, TRUE),
+          ('Tech Product Providers', 'tech-product-providers', 'Laptop', 'Laptops, tablets, accessories and student tech gadgets', NULL, TRUE),
+          ('Computer Repairing Service', 'computer-repair', 'Wrench', 'Hardware, motherboard, software and laptop repair services', NULL, TRUE),
+          ('Mobile Repair', 'mobile-repair', 'Smartphone', 'Screen replacement, battery and mobile repair services', NULL, TRUE),
+          ('Job Consultancy', 'job-consultancy', 'Briefcase', 'Direct internship connections and campus hiring placements', NULL, TRUE)
+        ON CONFLICT DO NOTHING;
+      `);
+    }
+
+    // Seed initial inventory categories if none exist
+    const invCatCheck = await db.query(`SELECT COUNT(*) as count FROM inventory_categories`);
+    if (parseInt(invCatCheck.rows[0]?.count || "0") === 0) {
+      await db.query(`
+        INSERT INTO inventory_categories (name, slug, description, institution_id, is_active)
+        VALUES
+          ('Electronics & IT Hardware', 'electronics-it-hardware', 'Computers, laptops, projectors, monitors and tech hardware', NULL, TRUE),
+          ('Books & Study Materials', 'books-study-materials', 'Textbooks, course modules, reference guides and library materials', NULL, TRUE),
+          ('Stationery & Office Supplies', 'stationery-office-supplies', 'Pens, markers, paper reams, folders, staplers and desk essentials', NULL, TRUE),
+          ('Furniture & Class Fixtures', 'furniture-class-fixtures', 'Desks, chairs, whiteboards, podiums and classroom benches', NULL, TRUE),
+          ('Science & Computer Lab', 'science-computer-lab', 'Lab equipment, test tubes, apparatus, microscopes and networking tools', NULL, TRUE),
+          ('Sports & Physical Education', 'sports-physical-education', 'Balls, bats, nets, fitness gear and outdoor sports equipment', NULL, TRUE),
+          ('Uniforms & Merchandise', 'uniforms-merchandise', 'Student uniforms, lab coats, identity cards, badges and branded items', NULL, TRUE),
+          ('Maintenance & Cleaning Supplies', 'maintenance-cleaning-supplies', 'Sanitization kits, disinfectants, mops and electrical spares', NULL, TRUE),
+          ('General Supplies', 'general-supplies', 'General administrative assets, pantry stock and miscellaneous inventory', NULL, TRUE)
+        ON CONFLICT DO NOTHING;
+      `);
+    }
+
     // Seed initial vendors if none exist
     const vendorCheck = await db.query(`SELECT COUNT(*) as count FROM vendors`);
     if (parseInt(vendorCheck.rows[0]?.count || "0") === 0) {
@@ -403,6 +565,18 @@ export async function ensureFeatureSchema() {
           ('ChipLevel Laptop & Computer Repair', 'Computer Repairing Service', '+91 91234 56788', 'chiprepair@edubird.net', 'Sector 62, Fortis Cross', 'Noida', 'Sector 62', 4.8, 'On-site diagnostics, SSD upgrades, and motherboard repairs.'),
           ('Speedy Mobile Care & Screen Fix', 'Mobile Repair', '+91 91234 56789', 'speedymobile@edubird.net', 'MG Road, Shop 4', 'Gurugram', 'MG Road', 4.6, 'Express 30-minute display and battery replacements with warranty.'),
           ('Apex Career & Job Placement Consultancy', 'Job Consultancy', '+91 91234 56790', 'apexcareers@edubird.net', 'World Trade Center, Tower 2', 'Pune', 'Kharadi', 4.9, 'Direct internship connections and campus hiring placements for top MNCs.')
+      `);
+    }
+
+    // Seed default clients into dedicated clients table if none exist
+    const clientCheck = await db.query(`SELECT COUNT(*) as count FROM clients`);
+    if (parseInt(clientCheck.rows[0]?.count || "0") === 0) {
+      await db.query(`
+        INSERT INTO clients (name, company_name, contact_person, category, client_type, phone, email, website, city, location, rating, description, notes, status)
+        VALUES
+          ('Apex Global Technologies', 'Apex Global Technologies Pvt Ltd', 'Rohan Mehra', 'IT Services', 'corporate', '+91 98765 11223', 'partnerships@apexglobal.com', 'https://apexglobal.com', 'Bengaluru', 'Electronic City', 4.9, 'Annual campus placement and technical curriculum training partner.', 'Recruits 50+ students annually.', 'active'),
+          ('Metro Student Living Solutions', 'Metro Student Living Pvt Ltd', 'Ananya Sharma', 'Hostel & Housing', 'partner', '+91 98765 33445', 'info@metroliving.in', 'https://metroliving.in', 'Pune', 'Kothrud', 4.8, 'Official off-campus student accommodation partner.', 'Prefers semester-wise billing.', 'active'),
+          ('Bright Futures Foundation', 'Bright Futures Educational Trust', 'Dr. S. K. Iyer', 'Scholarship & NGO', 'sponsor', '+91 98765 55667', 'grants@brightfutures.org', 'https://brightfutures.org', 'Delhi', 'Connaught Place', 5.0, 'Merit scholarship funding partner providing fee grants for underprivileged students.', 'Sponsored 25 students this academic year.', 'active')
       `);
     }
 

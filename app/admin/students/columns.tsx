@@ -1,7 +1,7 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDown, Eye, GraduationCap, KeyRound, Loader2, MoreHorizontal, Pencil, Repeat2, Trash2, UsersRound } from "lucide-react";
+import { ArrowUpDown, Eye, GraduationCap, KeyRound, Loader2, MoreHorizontal, Pencil, Repeat2, Trash2, UsersRound, PhoneCall } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -115,9 +115,15 @@ export function buildStudentColumns({
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => (
-        <span className="text-muted-foreground">{row.getValue("email")}</span>
-      ),
+      cell: ({ row }) => {
+        const email = (row.getValue("email") as string | null) || "";
+        const isInternal = email.includes("@student.edubird.internal");
+        return (
+          <span className="text-muted-foreground">
+            {!email || isInternal ? "-" : email}
+          </span>
+        );
+      },
     },
     {
       id: "class_scope",
@@ -249,8 +255,8 @@ export function buildStudentColumns({
               )}
               {onManageGuardians && (
                 <DropdownMenuItem onSelect={() => onManageGuardians(student)} className="cursor-pointer py-2 text-xs font-semibold">
-                  <UsersRound className="mr-2 h-4 w-4 text-primary" />
-                  Manage Guardians
+                  <PhoneCall className="mr-2 h-4 w-4 text-primary" />
+                  Contact Details
                 </DropdownMenuItem>
               )}
               {onManagePromotions && (
@@ -262,7 +268,7 @@ export function buildStudentColumns({
               {onSetPassword && (
                 <DropdownMenuItem onSelect={() => onSetPassword(student)} className="cursor-pointer py-2 text-xs font-semibold">
                   <KeyRound className="mr-2 h-4 w-4 text-primary" />
-                  Set Password
+                  Generate Password
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />

@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@source "../app";
+@source "../components";
+@source "../lib";
+@source "../hooks";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "../components/editor/themes/editor-theme.css";

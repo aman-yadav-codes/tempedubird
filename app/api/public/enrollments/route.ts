@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { db } from "@/lib/db/db";
 import { getAuthUser } from "@/lib/auth/auth";
 import { ensureFeatureSchema } from "@/lib/db/ensure-feature-schema";
@@ -95,7 +96,8 @@ export async function POST(req: Request) {
 
     // 2. Insert into visitor_sessions / sales pipeline
     const originSource = source === "institution_website" ? "institution_website" : "edubird";
-    const trackingToken = `ENR-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const trackingToken = randomUUID();
+    const enrollmentCode = `ENR-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
     await db.query(
       `
@@ -116,7 +118,7 @@ export async function POST(req: Request) {
         metadata,
         created_at,
         last_seen_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'enrolled', 'enrolled', $8, $8, $9, $10, $11, NOW(), NOW())
+      ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, 'enrolled', 'enrolled', $8, $8, $9, $10, $11, NOW(), NOW())
       `,
       [
         trackingToken,
@@ -126,11 +128,12 @@ export async function POST(req: Request) {
         sName,
         sEmail || null,
         sPhone || "Not provided",
-        notes || `Direct Student Enrollment Application | Origin: ${originSource === "institution_website" ? "Institution Website" : "EduBird"}`,
+        notes || `Direct Student Enrollment Application | Ref: ${enrollmentCode} | Origin: ${originSource === "institution_website" ? "Institution Website" : "EduBird"}`,
         originSource,
         Number(progRes.rows[0].fee_amount) || 25000,
         JSON.stringify({
           source_type: originSource,
+          enrollment_code: enrollmentCode,
           parent_name: parent_name || null,
           parent_phone: parent_phone || null,
           parent_email: parent_email || null,
@@ -164,6 +167,7 @@ export async function POST(req: Request) {
       success: true,
       message: "Enrollment submitted successfully!",
       enrollment_id: enrollmentId,
+      enrollment_code: enrollmentCode,
       tracking_token: trackingToken,
       source: originSource,
     });

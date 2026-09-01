@@ -46,7 +46,9 @@ export async function GET(req: Request) {
 
     if (institutionId) {
       params.push(institutionId);
-      conditions.push(`(p.institution_id = $${params.length} OR p.institution_id IS NULL)`);
+      conditions.push(`p.institution_id = $${params.length}`);
+    } else if (isPlatformAdmin) {
+      conditions.push(`p.institution_id IS NULL`);
     }
 
     if (search) {

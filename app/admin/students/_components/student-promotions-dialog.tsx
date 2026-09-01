@@ -65,8 +65,20 @@ export function StudentPromotionsDialog({
   const [saving, setSaving] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
 
+  // Active current enrollment info
+  const [currentEnrollment, setCurrentEnrollment] = useState<{
+    id?: number;
+    program_id?: number;
+    program_name?: string;
+    section_id?: number;
+    section_name?: string;
+    academic_year_id?: number;
+    academic_year_name?: string;
+    roll_number?: string;
+  } | null>(null);
+
   // Form states for promotion
-  const [outcome, setOutcome] = useState<"promoted" | "retained" | "failed" | "graduated" | "transferred">("promoted");
+  const [outcome, setOutcome] = useState<"promoted" | "failed" | "graduated" | "transferred">("promoted");
   const [destAcademicYearId, setDestAcademicYearId] = useState<string>("");
   const [destProgramId, setDestProgramId] = useState<string>("");
   const [destSectionId, setDestSectionId] = useState<string>("");
@@ -82,15 +94,27 @@ export function StudentPromotionsDialog({
     if (!student?.id || !accessToken) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/students/${student.id}/promotions`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      const json = await res.json();
-      if (res.ok) {
-        setPromotions(json.data || []);
+      const [promoRes, enrollRes] = await Promise.all([
+        fetch(`/api/admin/students/${student.id}/promotions`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }),
+        fetch(`/api/admin/students/${student.id}/enrollments`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }),
+      ]);
+
+      const promoJson = await promoRes.json();
+      if (promoRes.ok) {
+        setPromotions(promoJson.data || []);
+      }
+
+      const enrollJson = await enrollRes.json();
+      if (enrollRes.ok && Array.isArray(enrollJson.data) && enrollJson.data.length > 0) {
+        const activeEnr = enrollJson.data.find((e: any) => e.is_current) || enrollJson.data[0];
+        setCurrentEnrollment(activeEnr);
       }
     } catch (err) {
-      console.error("Error fetching student promotions:", err);
+      console.error("Error fetching student promotions/enrollments:", err);
     } finally {
       setLoading(false);
     }
@@ -141,11 +165,47 @@ export function StudentPromotionsDialog({
       .catch(() => setSections([]));
   }, [destProgramId, accessToken]);
 
+  // Helper to find the current program ID
+  const getCurrentProgramId = useCallback(() => {
+    if (currentEnrollment?.program_id) return String(currentEnrollment.program_id);
+    const matched = programs.find(
+      (p) => p.title?.trim().toLowerCase() === student?.program_name?.trim().toLowerCase()
+    );
+    return matched ? String(matched.id) : "";
+  }, [currentEnrollment, programs, student?.program_name]);
+
+  const handleOutcomeChange = (newOutcome: "promoted" | "failed" | "graduated" | "transferred") => {
+    setOutcome(newOutcome);
+    if (newOutcome === "failed") {
+      const sameProgId = getCurrentProgramId();
+      if (sameProgId) {
+        setDestProgramId(sameProgId);
+      }
+      if (currentEnrollment?.section_id) {
+        setDestSectionId(String(currentEnrollment.section_id));
+      }
+    }
+  };
+
+  // Sync failed outcome with same program whenever programs or current enrollment loads
+  useEffect(() => {
+    if (outcome === "failed") {
+      const sameProgId = getCurrentProgramId();
+      if (sameProgId && destProgramId !== sameProgId) {
+        setDestProgramId(sameProgId);
+      }
+    }
+  }, [outcome, getCurrentProgramId, destProgramId]);
+
   useEffect(() => {
     if (open && student) {
       fetchPromotions();
       fetchOptions();
       setShowAddForm(false);
+      setOutcome("promoted");
+      setDestAcademicYearId("");
+      setDestProgramId("");
+      setDestSectionId("");
       setNotes("");
       setRollNumber(student.roll_number || "");
     }
@@ -153,8 +213,17 @@ export function StudentPromotionsDialog({
 
   const handleSavePromotion = async () => {
     if (!institutionId || !student?.id || !accessToken) return;
-    if (["promoted", "retained", "failed"].includes(outcome)) {
-      if (!destAcademicYearId || !destProgramId) {
+
+    let finalProgramId = destProgramId;
+    let finalSectionId = destSectionId;
+
+    if (outcome === "failed") {
+      finalProgramId = finalProgramId || getCurrentProgramId();
+      finalSectionId = finalSectionId || (currentEnrollment?.section_id ? String(currentEnrollment.section_id) : "");
+    }
+
+    if (["promoted", "failed"].includes(outcome)) {
+      if (!destAcademicYearId || !finalProgramId) {
         toast.error("Please select destination Academic Session and Program.");
         return;
       }
@@ -172,8 +241,8 @@ export function StudentPromotionsDialog({
           institutionId,
           outcome,
           toAcademicYearId: destAcademicYearId ? Number(destAcademicYearId) : null,
-          toProgramId: destProgramId ? Number(destProgramId) : null,
-          toSectionId: destSectionId ? Number(destSectionId) : null,
+          toProgramId: finalProgramId ? Number(finalProgramId) : null,
+          toSectionId: finalSectionId ? Number(finalSectionId) : null,
           rollNumber: rollNumber.trim() || null,
           notes: notes.trim() || null,
         }),
@@ -192,6 +261,12 @@ export function StudentPromotionsDialog({
       setSaving(false);
     }
   };
+
+  const currentProgramTitle =
+    programs.find((p) => String(p.id) === destProgramId)?.title ||
+    currentEnrollment?.program_name ||
+    student?.program_name ||
+    "Current Program / Class";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -216,8 +291,11 @@ export function StudentPromotionsDialog({
             <div className="rounded-lg border bg-primary/5 p-3 flex items-center justify-between text-xs sm:text-sm">
               <span className="font-semibold text-foreground">Current Program / Class:</span>
               <span className="font-medium text-primary">
-                {student?.program_name || "Unassigned"}{" "}
-                {student?.section_name ? `(${student.section_name})` : ""} • {student?.academic_year_name || "N/A"}
+                {student?.program_name || currentEnrollment?.program_name || "Unassigned"}{" "}
+                {student?.section_name || currentEnrollment?.section_name
+                  ? `(${student?.section_name || currentEnrollment?.section_name})`
+                  : ""}{" "}
+                • {student?.academic_year_name || currentEnrollment?.academic_year_name || "N/A"}
               </span>
             </div>
 
@@ -242,6 +320,8 @@ export function StudentPromotionsDialog({
                               ? "bg-green-100 text-green-700"
                               : p.outcome === "graduated"
                               ? "bg-blue-100 text-blue-700"
+                              : p.outcome === "failed"
+                              ? "bg-red-100 text-red-700"
                               : "bg-amber-100 text-amber-700"
                           }
                         >
@@ -275,14 +355,13 @@ export function StudentPromotionsDialog({
                   <Label className="text-xs">Outcome / Status</Label>
                   <Select
                     value={outcome}
-                    onValueChange={(val: any) => setOutcome(val)}
+                    onValueChange={(val: any) => handleOutcomeChange(val)}
                   >
                     <SelectTrigger className="h-9 text-sm">
                       <SelectValue placeholder="Select outcome" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="promoted">Promoted to next class</SelectItem>
-                      <SelectItem value="retained">Repeat same class</SelectItem>
                       <SelectItem value="failed">Failed</SelectItem>
                       <SelectItem value="graduated">Graduated</SelectItem>
                       <SelectItem value="transferred">Transferred out</SelectItem>
@@ -290,7 +369,7 @@ export function StudentPromotionsDialog({
                   </Select>
                 </div>
 
-                {["promoted", "retained", "failed"].includes(outcome) && (
+                {["promoted", "failed"].includes(outcome) && (
                   <>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
@@ -310,19 +389,32 @@ export function StudentPromotionsDialog({
                       </div>
 
                       <div className="space-y-1">
-                        <Label className="text-xs">Destination Program / Class *</Label>
-                        <Select value={destProgramId} onValueChange={setDestProgramId}>
-                          <SelectTrigger className="h-9 text-sm">
-                            <SelectValue placeholder="Select program" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {programs.map((pr) => (
-                              <SelectItem key={pr.id} value={String(pr.id)}>
-                                {pr.title || pr.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Label className="text-xs">
+                          {outcome === "failed" ? "Program / Class (Auto-retained) *" : "Destination Program / Class *"}
+                        </Label>
+                        {outcome === "failed" ? (
+                          <div>
+                            <div className="flex h-9 w-full items-center rounded-md border border-input bg-muted/60 px-3 text-xs font-medium text-foreground">
+                              {currentProgramTitle}
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              Auto-assigned to same class for repeating session.
+                            </p>
+                          </div>
+                        ) : (
+                          <Select value={destProgramId} onValueChange={setDestProgramId}>
+                            <SelectTrigger className="h-9 text-sm">
+                              <SelectValue placeholder="Select program" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {programs.map((pr) => (
+                                <SelectItem key={pr.id} value={String(pr.id)}>
+                                  {pr.title || pr.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                     </div>
 
@@ -364,7 +456,11 @@ export function StudentPromotionsDialog({
                     className="text-sm"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    placeholder="e.g. Promoted based on annual exam performance."
+                    placeholder={
+                      outcome === "failed"
+                        ? "e.g. Failed annual exam; repeating same class."
+                        : "e.g. Promoted based on annual exam performance."
+                    }
                   />
                 </div>
 

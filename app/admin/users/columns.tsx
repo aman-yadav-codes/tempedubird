@@ -1,7 +1,7 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { ArrowUpDown, KeyRound, MoreHorizontal, UserCheck, ShieldAlert } from "lucide-react"
+import { ArrowUpDown, KeyRound, MoreHorizontal, UserCheck, ShieldAlert, Users } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -29,6 +29,7 @@ export type User = {
   roles: string[]
   generated_password?: string | null
   employment_status?: string | null
+  show_in_team?: boolean
 }
 
 type UserColumnsOptions = {
@@ -36,6 +37,7 @@ type UserColumnsOptions = {
   onEditUser: (user: User) => void
   onGeneratePassword?: (user: User) => void
   onChangeEmploymentStatus?: (user: User, status: string) => void
+  onToggleShowInTeam?: (user: User, showInTeam: boolean) => void
   onRemoveUser: (user: User) => void
   removalLabel: string
   entityLabel?: string
@@ -46,6 +48,7 @@ export function buildUserColumns({
   onEditUser,
   onGeneratePassword,
   onChangeEmploymentStatus,
+  onToggleShowInTeam,
   onRemoveUser,
   removalLabel,
   entityLabel = "user",
@@ -90,9 +93,19 @@ export function buildUserColumns({
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => (
-        <span className="font-medium">{row.getValue("full_name")}</span>
-      ),
+      cell: ({ row }) => {
+        const user = row.original;
+        return (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-medium">{user.full_name}</span>
+            {user.show_in_team && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-purple-500/10 text-purple-600 border-purple-500/20 font-semibold">
+                Team
+              </Badge>
+            )}
+          </div>
+        );
+      },
     },
     // Email
     {
@@ -261,6 +274,19 @@ export function buildUserColumns({
                       </DropdownMenuItem>
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
+                </>
+              )}
+
+              {onToggleShowInTeam && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="cursor-pointer font-medium"
+                    onClick={() => onToggleShowInTeam(user, !user.show_in_team)}
+                  >
+                    <Users className="mr-2 h-4 w-4 text-purple-600" />
+                    {user.show_in_team ? "Remove from Team" : "Show in Team"}
+                  </DropdownMenuItem>
                 </>
               )}
 

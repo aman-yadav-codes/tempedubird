@@ -237,13 +237,15 @@ export function PublicFooter() {
     return items.filter((item) => Boolean(item.url));
   }, [socialLinks]);
 
-  // Quick links: Institutes and duplicate About Us removed, replaced with Blogs
+  // Quick links: All Courses, Products, Blogs, Jobs, Contact Us, FAQs, Our Team
   const quickLinks = [
     { label: "All Courses", href: "/courses" },
     { label: "Products & Store", href: "/products" },
     { label: "Blogs", href: "/blogs" },
+    { label: "Jobs", href: "/jobs" },
     { label: "Contact Us", href: "/contact" },
     { label: "FAQs", href: "/faqs" },
+    { label: "Our Team", href: "/team" },
   ];
 
   const legalLinks = [
@@ -379,6 +381,12 @@ export function PublicFooter() {
           <div className="flex flex-wrap justify-center gap-4 text-sm text-muted-foreground sm:justify-end">
             <Link href="/about" className="hover:text-foreground transition-colors">
               About
+            </Link>
+            <Link href="/team" className="hover:text-foreground transition-colors">
+              Our Team
+            </Link>
+            <Link href="/jobs" className="hover:text-foreground transition-colors">
+              Jobs
             </Link>
             <Link href="/contact" className="hover:text-foreground transition-colors">
               Contact

@@ -54,99 +54,39 @@ type EnrolledProgram = {
 const DEFAULT_MULTI_PROGRAMS: EnrolledProgram[] = [
   {
     id: 1,
-    title: "B.Tech Computer Science & Engineering",
-    institution: "Apex Institute of Engineering & Technology (Varanasi)",
-    admissionNo: "STU-2026-CSE-0155",
-    currentSemester: "Semester 6 (Academic Session 2025-2026)",
+    title: "NEET Intensive Classroom Program",
+    institution: "Maa Sharda Institute PVT LTD",
+    admissionNo: "MS-STU-001",
+    currentSemester: "Academic Session 2026-2027",
     overallAttendance: 94.5,
     completedCredits: 142,
     totalCredits: 180,
     status: "Active Enrolled",
-    category: "Full-Time Degree",
+    category: "1 Year",
     activeSubjects: [
       {
         id: 1,
-        name: "Data Structures & Advanced Algorithms",
-        code: "CS-601",
-        faculty: "Dr. Ananya Sharma",
+        name: "Physics: Mechanics & Electrodynamics",
+        code: "PHY-101",
+        faculty: "Prof. Rajesh Verma",
         progress: 85,
         nextExam: "24 Aug 2026",
       },
       {
         id: 2,
-        name: "Database Management Systems & SQL Labs",
-        code: "CS-602",
-        faculty: "Prof. Rajesh Kumar",
-        progress: 72,
+        name: "Chemistry: Organic & Inorganic Analysis",
+        code: "CHEM-102",
+        faculty: "Dr. Ananya Sharma",
+        progress: 78,
         nextExam: "28 Aug 2026",
       },
       {
         id: 3,
-        name: "Computer Networks & Cyber Security",
-        code: "CS-603",
+        name: "Biology: Botany & Human Physiology",
+        code: "BIO-103",
         faculty: "Dr. Vikramaditya",
         progress: 90,
         nextExam: "02 Sep 2026",
-      },
-      {
-        id: 4,
-        name: "Artificial Intelligence & Machine Learning",
-        code: "CS-604",
-        faculty: "Dr. Sunita Verma",
-        progress: 68,
-        nextExam: "05 Sep 2026",
-      },
-    ],
-  },
-  {
-    id: 2,
-    title: "Executive Certification in Data Science & ML",
-    institution: "Technorigator School of Technology (Delhi NCR)",
-    admissionNo: "STU-2026-DS-0882",
-    currentSemester: "Module 3: Advanced Deep Learning & NLP",
-    overallAttendance: 98.0,
-    completedCredits: 45,
-    totalCredits: 60,
-    status: "Active Professional",
-    category: "Professional Certificate",
-    activeSubjects: [
-      {
-        id: 5,
-        name: "Python for Data Science & Pandas Analysis",
-        code: "DS-301",
-        faculty: "Dr. Rohit Agarwal",
-        progress: 95,
-        nextExam: "30 Aug 2026",
-      },
-      {
-        id: 6,
-        name: "Supervised & Unsupervised Machine Learning",
-        code: "DS-302",
-        faculty: "Prof. Meera Deshmukh",
-        progress: 80,
-        nextExam: "04 Sep 2026",
-      },
-    ],
-  },
-  {
-    id: 3,
-    title: "Digital Marketing & Growth Masterclass",
-    institution: "Tech Academy Pro (Mumbai Campus)",
-    admissionNo: "STU-2026-DM-0419",
-    currentSemester: "Term 2: SEO & Meta Ads Campaign Optimization",
-    overallAttendance: 91.2,
-    completedCredits: 30,
-    totalCredits: 40,
-    status: "Active Online",
-    category: "Diploma Program",
-    activeSubjects: [
-      {
-        id: 7,
-        name: "Search Engine Optimization & Technical Audits",
-        code: "DM-201",
-        faculty: "Karan Johar & Team",
-        progress: 88,
-        nextExam: "10 Sep 2026",
       },
     ],
   },
@@ -169,20 +109,20 @@ export default function StudentDashboardPage() {
           const mapped: EnrolledProgram[] = data.enrollments.map((e: any, idx: number) => ({
             id: e.enrollment_id || idx + 1,
             title: e.program_title || "Enrolled Program",
-            institution: e.institution_name || "Partner Institution",
-            admissionNo: e.admission_number || `STU-2026-${e.program_code || "ENR"}-${String(e.enrollment_id).padStart(4, "0")}`,
-            currentSemester: e.academic_year_name ? `Academic Session ${e.academic_year_name}` : "Current Academic Session 2025-2026",
+            institution: e.institution_name || "Maa Sharda Institute PVT LTD",
+            admissionNo: e.admission_number || `MS-STU-${String(e.enrollment_id || idx + 1).padStart(3, "0")}`,
+            currentSemester: e.academic_year_name ? `Academic Session ${e.academic_year_name}` : "Academic Session 2026-2027",
             overallAttendance: 92.5 + (idx % 3),
             completedCredits: 40 + idx * 30,
             totalCredits: 120,
             status: e.status ? `Active (${e.status})` : "Active Enrolled",
-            category: e.program_duration || "Academic Program",
+            category: e.program_duration || "1 Year",
             activeSubjects: [
               {
                 id: 10 + idx,
                 name: `${e.program_title} Core Module ${idx + 1}`,
-                code: e.program_code || `PRG-${e.program_id}`,
-                faculty: "Senior Institution Faculty",
+                code: e.program_code || `PRG-${e.program_id || idx + 1}`,
+                faculty: "Senior Faculty",
                 progress: 75 + (idx * 5) % 20,
                 nextExam: "28 Aug 2026",
               },
@@ -212,6 +152,7 @@ export default function StudentDashboardPage() {
   }, [accessToken]);
 
   const activeProgram = programs.find((p) => p.id === selectedProgramId) || programs[0];
+  const distinctInstitutionsCount = new Set(programs.map((p) => p.institution)).size;
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">
@@ -222,9 +163,14 @@ export default function StudentDashboardPage() {
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge className="bg-emerald-500 text-white font-extrabold text-xs gap-1 shadow-sm">
-                  <ShieldCheck className="h-3.5 w-3.5" /> Enrolled in {programs.length} Programs Across {new Set(programs.map(p => p.institution)).size} Institutions
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  {programs.length === 1
+                    ? `Enrolled in ${programs[0].institution}`
+                    : `Enrolled in ${programs.length} Programs Across ${distinctInstitutionsCount} Institutions`}
                 </Badge>
-                <span className="text-xs font-semibold text-white/80">{activeProgram.admissionNo}</span>
+                {activeProgram?.admissionNo && (
+                  <span className="text-xs font-semibold text-white/80">{activeProgram.admissionNo}</span>
+                )}
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
@@ -232,7 +178,9 @@ export default function StudentDashboardPage() {
               </h1>
 
               <p className="text-xs sm:text-sm text-white/80 max-w-2xl leading-relaxed">
-                Currently managing multiple academic programs simultaneously. Select a program below to view details or enroll in new courses.
+                {programs.length === 1
+                  ? `You are enrolled in ${programs[0].title} at ${programs[0].institution}. Access your classes, results, and study resources below.`
+                  : "Currently managing multiple academic programs simultaneously. Select a program below to view details or enroll in new courses."}
               </p>
             </div>
 

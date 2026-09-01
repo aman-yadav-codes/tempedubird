@@ -27,6 +27,7 @@ type ImageUploaderProps = {
   maxSize?: number;
   acceptedFileTypes?: string[];
   aspectRatio?: number;
+  hideUrlInput?: boolean;
 };
 
 const DEFAULT_MAX_SIZE = 5 * 1024 * 1024;
@@ -103,6 +104,7 @@ export function ImageUploader({
   maxSize = DEFAULT_MAX_SIZE,
   acceptedFileTypes = DEFAULT_ACCEPTED_TYPES,
   aspectRatio = 1,
+  hideUrlInput = true,
 }: ImageUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -148,104 +150,69 @@ export function ImageUploader({
         },
         body: formData,
       });
+      if (!res.ok) throw new Error("Failed to upload image");
       const json = await res.json();
-
-      if (!res.ok) {
-        throw new Error(json.error ?? "Image upload failed");
+      const imageUrl = json.url || json.secure_url || json.data?.url || "";
+      if (imageUrl) {
+        onChange(imageUrl);
+        toast.success("Image uploaded successfully");
       }
-
-      onChange(json.data.url);
-      toast.success("Image uploaded");
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Image upload failed");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload image");
     } finally {
       setUploading(false);
     }
-  };
-
-  const openCropDialog = (file: File) => {
-    if (!acceptedFileTypes.includes(file.type)) {
-      toast.error("Only WebP, SVG, PNG, and JPEG images are allowed.");
-      return;
-    }
-
-    if (file.size > maxSize) {
-      toast.error("Image must be 5MB or smaller.");
-      return;
-    }
-
-    if (file.type === "image/svg+xml") {
-      uploadFile(file);
-      return;
-    }
-
-    if (pendingImage) {
-      URL.revokeObjectURL(pendingImage);
-    }
-
-    setPendingImage(URL.createObjectURL(file));
-    setPendingFileName(file.name || "avatar.jpg");
-    setCrop({ x: 0, y: 0 });
-    setZoom(1);
-    setCroppedAreaPixels(null);
-    setCropDialogOpen(true);
-  };
-
-  const onCropComplete = useCallback((_croppedArea: Area, croppedPixels: Area) => {
-    setCroppedAreaPixels(croppedPixels);
-  }, []);
-
-  const handleApplyCrop = async () => {
-    if (!pendingImage || !croppedAreaPixels) return;
-
-    if (!accessToken) {
-      toast.error("Session expired. Please log in again.");
-      return;
-    }
-
-    setUploading(true);
-    try {
-      const blob = await getCroppedImageBlob(pendingImage, croppedAreaPixels);
-      const croppedFile = new File([blob], pendingFileName, {
-        type: "image/jpeg",
-      });
-
-      setCropDialogOpen(false);
-      await uploadFile(croppedFile);
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Could not crop image");
-      setUploading(false);
-    } finally {
-      if (pendingImage) {
-        URL.revokeObjectURL(pendingImage);
-      }
-      setPendingImage(null);
-    }
-  };
-
-  const closeCropDialog = () => {
-    setCropDialogOpen(false);
-    if (pendingImage) {
-      URL.revokeObjectURL(pendingImage);
-    }
-    setPendingImage(null);
-  };
-
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      openCropDialog(file);
-    }
-    event.target.value = "";
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragging(false);
-
     const file = event.dataTransfer.files?.[0];
     if (file) {
-      openCropDialog(file);
+      const reader = new FileReader();
+      reader.onload = () => {
+        setPendingImage(reader.result as string);
+        setPendingFileName(file.name);
+        setCropDialogOpen(true);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setPendingImage(reader.result as string);
+        setPendingFileName(file.name);
+        setCropDialogOpen(true);
+      };
+      reader.readAsDataURL(file);
+    }
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const onCropComplete = useCallback((_croppedArea: Area, croppedAreaPixels: Area) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  const closeCropDialog = () => {
+    setCropDialogOpen(false);
+    setPendingImage(null);
+  };
+
+  const handleApplyCrop = async () => {
+    if (!pendingImage || !croppedAreaPixels) return;
+    try {
+      setUploading(true);
+      const blob = await getCroppedImageBlob(pendingImage, croppedAreaPixels);
+      const file = new File([blob], pendingFileName, { type: "image/jpeg" });
+      closeCropDialog();
+      await uploadFile(file);
+    } catch (err: any) {
+      toast.error(err.message || "Error cropping image");
+      setUploading(false);
     }
   };
 
@@ -253,7 +220,7 @@ export function ImageUploader({
     <div className={cn("space-y-3", className)}>
       <div className="flex items-center justify-between gap-3">
         <Label>{label}</Label>
-        {value && (
+        {value && !hideUrlInput && (
           <Button
             type="button"
             variant="ghost"
@@ -275,49 +242,82 @@ export function ImageUploader({
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
         className={cn(
-          "flex flex-col gap-4 rounded-md border border-dashed p-4 sm:flex-row sm:items-center",
-          dragging && "border-primary bg-muted/40"
+          "flex flex-col gap-4 rounded-xl border border-dashed p-4 sm:flex-row sm:items-center bg-muted/10 transition-colors",
+          dragging && "border-primary bg-primary/5"
         )}
       >
-        <Avatar className="size-20 rounded-md" size="lg">
-          <AvatarImage src={value || undefined} className="rounded-md" />
-          <AvatarFallback className="rounded-md">
-            {value ? initialsFromUrl(value) : <ImageIcon className="size-6" />}
+        <Avatar className="size-16 rounded-xl border shadow-xs" size="lg">
+          <AvatarImage src={value || undefined} className="rounded-xl object-cover" />
+          <AvatarFallback className="rounded-xl bg-muted/60 text-muted-foreground">
+            {value ? initialsFromUrl(value) : <ImageIcon className="size-6 text-muted-foreground" />}
           </AvatarFallback>
         </Avatar>
 
-        <div className="min-w-0 flex-1 space-y-3">
-          <div className="space-y-1">
-            <p className="text-sm font-medium">
-              Drag an image here or upload from device
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="space-y-0.5">
+            <p className="text-xs font-bold text-foreground">
+              {value ? "Avatar image selected" : "Drag and drop or browse avatar image"}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               JPG, PNG, or WebP. Max 5MB.
             </p>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Input
-              value={value}
-              onChange={(event) => onChange(event.target.value)}
-              placeholder="https://example.com/avatar.jpg"
-              disabled={uploading}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => inputRef.current?.click()}
-              disabled={uploading}
-              className="shrink-0"
-            >
-              {uploading ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Upload className="size-4" />
+          {hideUrlInput ? (
+            <div className="flex items-center gap-2 pt-0.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => inputRef.current?.click()}
+                disabled={uploading}
+                className="gap-1.5 font-bold text-xs h-8 rounded-lg cursor-pointer"
+              >
+                {uploading ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Upload className="size-3.5" />
+                )}
+                {value ? "Change Image" : "Upload Image"}
+              </Button>
+              {value && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onChange("")}
+                  disabled={uploading}
+                  className="text-xs font-semibold text-destructive hover:text-destructive hover:bg-destructive/10 h-8 rounded-lg cursor-pointer"
+                >
+                  <X className="size-3.5 mr-1" />
+                  Remove
+                </Button>
               )}
-              Upload
-            </Button>
-          </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                placeholder="https://example.com/avatar.jpg"
+                disabled={uploading}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => inputRef.current?.click()}
+                disabled={uploading}
+                className="shrink-0"
+              >
+                {uploading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Upload className="size-4" />
+                )}
+                Upload
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 

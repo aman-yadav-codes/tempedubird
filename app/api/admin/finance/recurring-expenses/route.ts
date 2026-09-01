@@ -7,9 +7,11 @@ import { syncRecurringExpenseReminderJob } from "@/lib/scheduled-jobs";
 import {
   createFinanceRecurringExpense,
   getInstitutionAdminName,
+  listFinanceEmployeeOptions,
   listFinanceRecurringExpenseHistory,
   listFinanceRecurringExpenseCategories,
   listFinanceRecurringExpenses,
+  listFinancePaymentMethods,
   updateFinanceRecurringExpense,
   updateFinanceRecurringExpensePaymentStatus,
   type FinanceScope,
@@ -31,23 +33,35 @@ function jsonError(error: unknown, status = 400) {
 function userInstitutionIds(user: CurrentUser) {
   return new Set(
     (user.memberships ?? [])
-      .filter((membership) => membership.role_code === "institution_admin")
       .map((membership) => Number(membership.institution_id))
       .filter((id) => Number.isInteger(id) && id > 0)
   );
 }
 
-function resolveScope(user: CurrentUser, institutionId: number | null): { scope: FinanceScope; institutionId: number | null } {
-  if (isPlatformAdminUser(user) || hasPermission(user, "finance.platform.recurring_expenses.view")) {
+function resolveScope(user: CurrentUser, requestedInstitutionId?: number | null): { scope: FinanceScope; institutionId: number | null } {
+  const isPlatform = isPlatformAdminUser(user) || hasPermission(user, "finance.platform.recurring_expenses.view");
+  const isInstitution = isInstitutionAdminUser(user) || hasPermission(user, "finance.recurring_expenses.view");
+  const institutionIds = userInstitutionIds(user);
+
+  if (isPlatform && requestedInstitutionId) {
+    return { scope: "institution", institutionId: requestedInstitutionId };
+  }
+
+  if (isPlatform) {
     return { scope: "platform", institutionId: null };
   }
 
-  if (!isInstitutionAdminUser(user)) throw new Error("Forbidden: Admin access required");
+  if (isInstitution) {
+    const institutionId = requestedInstitutionId && institutionIds.has(requestedInstitutionId)
+      ? requestedInstitutionId
+      : (Array.from(institutionIds)[0] ?? null);
+    if (!institutionId) {
+      throw new Error("No active institution found for recurring expenses");
+    }
+    return { scope: "institution", institutionId };
+  }
 
-  const institutionIds = userInstitutionIds(user);
-  const targetId = institutionId ?? Array.from(institutionIds)[0] ?? null;
-  if (!targetId || !institutionIds.has(targetId)) throw new Error("Forbidden: Institution access required");
-  return { scope: "institution", institutionId: targetId };
+  throw new Error("Forbidden: You do not have permission to access recurring expense records");
 }
 
 function positiveInt(value: string | null, fallback: number, max: number) {
@@ -177,8 +191,31 @@ export async function GET(req: Request) {
       limit,
       offset: (page - 1) * limit,
     });
-    const categories = await listFinanceRecurringExpenseCategories(db, scope, institutionId);
-    const adminName = institutionId ? await getInstitutionAdminName(db, institutionId) : user.full_name;
+    const categoriesPromise = listFinanceRecurringExpenseCategories(db, scope, institutionId);
+    const employeesPromise = listFinanceEmployeeOptions(db, scope, institutionId);
+    const adminNamePromise = institutionId ? getInstitutionAdminName(db, institutionId) : Promise.resolve(user.full_name);
+    const paymentMethodsPromise = listFinancePaymentMethods(db, { scope_type: scope, institution_id: institutionId });
+    const [categories, employees, adminName, paymentMethods] = await Promise.all([
+      categoriesPromise,
+      employeesPromise,
+      adminNamePromise,
+      paymentMethodsPromise,
+    ]);
+
+    const basePaidByOptions = scope === "platform"
+      ? [
+          { value: "platform_account", label: "Platform Account" },
+          { value: "admin", label: user.full_name || "Platform Admin" },
+        ]
+      : [
+          { value: "institution_account", label: "Institution Account" },
+          { value: "admin", label: adminName },
+        ];
+
+    const employeePaidByOptions = employees.map((emp) => ({
+      value: String(emp.id),
+      label: `${emp.full_name}${emp.role_label ? ` (${emp.role_label})` : ""}`,
+    }));
 
     return NextResponse.json({
       data: result.data,
@@ -191,15 +228,9 @@ export async function GET(req: Request) {
         scope,
         institution_id: institutionId,
         categories,
-        paid_by_options: scope === "platform"
-          ? [
-              { value: "platform_account", label: "Platform Account" },
-              { value: "admin", label: user.full_name || "Platform Admin" },
-            ]
-          : [
-              { value: "institution_account", label: "Institution Account" },
-              { value: "admin", label: adminName },
-            ],
+        payment_methods: paymentMethods,
+        paid_by_options: [...basePaidByOptions, ...employeePaidByOptions.filter((opt) => opt.value !== "admin")],
+        employee_options: employees,
       },
     });
   } catch (error) {

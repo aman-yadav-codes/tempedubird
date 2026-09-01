@@ -32,6 +32,10 @@ import {
   User,
   Settings,
   Sparkles,
+  FileText,
+  Briefcase,
+  ShoppingBag,
+  MessageSquareHeart,
 } from "lucide-react";
 import { useAuthStore } from "@/store";
 import { clearBrowserSessionData } from "@/lib/auth/clear-browser-session";
@@ -56,6 +60,7 @@ import {
 import { AdminAcademicSessionSelector } from "@/components/admin-academic-session-selector";
 import { AdminNotificationCenter } from "@/components/admin-notification-center";
 import { AdminThemeToggle } from "@/components/admin-theme-toggle";
+import { AccountSwitcherDialog } from "@/components/auth/account-switcher-dialog";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -78,6 +83,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
   const [mounted, setMounted] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({
     "My Classroom": true,
     "My Institution": false,
@@ -86,12 +92,14 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
 
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [enrollments, setEnrollments] = useState<any[]>([]);
-  const [activeEnrollmentId, setActiveEnrollmentId] = useState<number | null>(() =>
-    getStoredActiveStudentEnrollmentId()
-  );
+  const [activeEnrollmentId, setActiveEnrollmentId] = useState<number | null>(null);
 
   useEffect(() => {
     setMounted(true);
+    const storedId = getStoredActiveStudentEnrollmentId();
+    if (storedId) {
+      setActiveEnrollmentId(storedId);
+    }
     const storedTheme = window.localStorage.getItem("app-theme") || window.localStorage.getItem("public-theme");
     if (storedTheme === "dark" || storedTheme === "light") {
       setTheme(storedTheme);
@@ -185,6 +193,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
         { label: "My Subscription", href: "/student/subscription", icon: Sparkles },
         { label: "My Enquiries", href: "/student/enquiries", icon: HelpCircle },
         { label: "My Guardians", href: "/student/guardians", icon: Users },
+        { label: "Reviews & Feedback", href: "/student/reviews", icon: MessageSquareHeart },
         ...(hasEnrolledCourses
           ? [
               {
@@ -194,6 +203,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                 children: [
                   { label: "Calendar", href: "/student/institution/calendar" },
                   { label: "Noticeboard", href: "/student/institutions/news" },
+                  { label: "Reviews & Feedback", href: "/student/reviews" },
                   { label: "Complaints", href: "/student/institution/complaints" },
                 ],
               },
@@ -215,9 +225,12 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
       items: [
         { label: "Practice Tests", href: "/practice", icon: CheckSquare, badge: "Quizzes" },
         { label: "Lecture Notes", href: "/notes", icon: BookMarked },
+        { label: "Exams", href: "/exams", icon: FileText, badge: "Tests" },
         { label: "Explore Courses", href: "/courses", icon: BookOpen },
         { label: "Top Institutes", href: "/institutes", icon: Building2 },
         { label: "Expert Faculty", href: "/teachers", icon: UserCheck },
+        { label: "Academic Store", href: "/products", icon: ShoppingBag },
+        { label: "Vendor Services", href: "/admin/vendors", icon: Briefcase },
       ],
     },
   ];
@@ -542,9 +555,12 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : enrollments.length === 1 ? (
-              <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-border bg-card text-xs font-medium text-muted-foreground max-w-[220px]">
-                <Building className="h-3.5 w-3.5 shrink-0 text-primary" />
-                <span className="truncate text-xs font-bold text-foreground">{enrollments[0]?.institution_name}</span>
+              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border bg-card text-xs font-medium text-muted-foreground max-w-[280px]">
+                <Building className="h-4 w-4 shrink-0 text-primary" />
+                <div className="flex flex-col min-w-0 text-left">
+                  <span className="truncate text-xs font-bold text-foreground">{enrollments[0]?.institution_name}</span>
+                  <span className="truncate text-[10px] text-muted-foreground">{enrollments[0]?.program_title}</span>
+                </div>
               </div>
             ) : null}
 
@@ -660,6 +676,17 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                   </Link>
                 </DropdownMenuItem>
 
+                <DropdownMenuItem
+                  onClick={() => setSwitchAccountOpen(true)}
+                  className="cursor-pointer py-2.5 px-3 rounded-lg text-primary hover:bg-primary/5 focus:bg-primary/5 focus:text-primary flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Sparkles className="h-4 w-4 text-[#800000]" />
+                    <span className="text-xs font-bold text-[#800000]">Switch Account</span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground font-medium">All role accounts</span>
+                </DropdownMenuItem>
+
                 <DropdownMenuSeparator className="my-1" />
 
                 <DropdownMenuItem
@@ -681,6 +708,12 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
         <main className="flex-1 overflow-y-auto">
           {children}
         </main>
+
+        {/* Multi-Role Account Switcher Dialog */}
+        <AccountSwitcherDialog
+          open={switchAccountOpen}
+          onOpenChange={setSwitchAccountOpen}
+        />
 
         {/* FOOTER */}
         <footer className="border-t border-border/80 bg-card py-4 text-center text-xs text-muted-foreground mt-auto">

@@ -172,7 +172,10 @@ export async function listMasterCourses(
             'id', s.id,
             'name', s.name,
             'code', s.code,
-            'slug', s.slug
+            'slug', s.slug,
+            'term_type', COALESCE(mcs.term_type, s.term_type, 'full_course'),
+            'term_number', COALESCE(mcs.term_number, s.term_number, 1),
+            'term_name', COALESCE(mcs.term_name, s.term_name, '')
           )
         ) FILTER (WHERE s.id IS NOT NULL),
         '[]'
@@ -245,7 +248,10 @@ export async function getMasterCourseById(
             'id', s.id,
             'name', s.name,
             'code', s.code,
-            'slug', s.slug
+            'slug', s.slug,
+            'term_type', COALESCE(mcs.term_type, s.term_type, 'full_course'),
+            'term_number', COALESCE(mcs.term_number, s.term_number, 1),
+            'term_name', COALESCE(mcs.term_name, s.term_name, '')
           )
         ) FILTER (WHERE s.id IS NOT NULL),
         '[]'

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import {
   CalendarDays,
@@ -108,6 +109,7 @@ type AllowanceResponse = {
     total: number;
     filtered_total: string | number;
     this_month_total: string | number;
+    cash_in_hand_total?: string | number;
     users: AllowanceUserOption[];
   };
 };
@@ -148,11 +150,20 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 };
 
 function currency(value: string | number | null | undefined) {
+  const num = Number(value) || 0;
+  if (num < 0) {
+    const formattedPos = new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(Math.abs(num));
+    return `-${formattedPos}`;
+  }
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 0,
-  }).format(Number(value) || 0);
+  }).format(num);
 }
 
 function formatDate(value: string | null | undefined) {
@@ -235,9 +246,9 @@ function AllowanceDetailContent({
       <DetailContent row={row} userLabel={userLabel} />
       <div className="grid gap-3 sm:grid-cols-3">
         {[
-          ["Allowance", row.amount, "Issued amount"],
-          ["Spent", row.spent_amount, "Recorded expenditure"],
-          ["Remaining", row.balance_amount, "Available balance"],
+          ["Allowance Issued", row.amount, "Total issued allowance"],
+          ["Total Spent", row.spent_amount, "Recorded expenditures & expenses"],
+          ["Cash in Hand", row.balance_amount, "Current cash in hand"],
         ].map(([label, value, helper]) => (
           <div key={label} className="rounded-md border bg-card p-4">
             <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
@@ -480,10 +491,10 @@ function MyAllowanceClient() {
   if (!isReady) return null;
   const pageCount = Math.max(1, Math.ceil(totalRows / pagination.pageSize));
   const activeFilterCount = [paymentMethod !== "all", Boolean(fromDate), Boolean(toDate)].filter(Boolean).length;
+  const isPlatformAdmin = isPlatformAdminUser(user);
+  const isInstitutionAdmin = isInstitutionAdminUser(user);
   const spendableAllowances = allowances.filter((row) => Number(row.balance_amount) > 0);
-  const canCreateExpenditure = activeInstitutionId
-    ? hasPermission(user, "finance.allowance.create", { institutionId: activeInstitutionId })
-    : hasPermission(user, "finance.platform.allowance.create");
+  const canCreateExpenditure = isPlatformAdmin || isInstitutionAdmin || Boolean(activeInstitutionId);
 
   return (
     <div className="space-y-6">
@@ -681,13 +692,15 @@ export function AllowanceClient() {
 }
 
 function AdminAllowanceClient() {
+  const pathname = usePathname();
   const { isReady } = useAdminGuard();
   const { accessToken, user } = useAuthStore();
   const { activeInstitutionId, activeInstitution } = useActiveInstitution();
   const isMobile = useIsMobile();
   const isPlatformAdmin = isPlatformAdminUser(user);
-  const isPlatformScope = isPlatformAdmin || hasPermission(user, "finance.platform.allowance.view");
-  const targetInstitutionId = isPlatformScope ? null : activeInstitutionId;
+  const isPlatformSection = pathname?.startsWith("/platformadmin");
+  const isPlatformScope = isPlatformSection || (!activeInstitutionId && (isPlatformAdmin || hasPermission(user, "finance.platform.allowance.view")));
+  const targetInstitutionId = isPlatformSection ? null : (activeInstitutionId ?? null);
   const authHeader = useMemo(() => (accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), [accessToken]);
 
   const [rows, setRows] = useState<AllowanceRow[]>([]);
@@ -696,6 +709,7 @@ function AdminAllowanceClient() {
   const [totalRows, setTotalRows] = useState(0);
   const [filteredTotal, setFilteredTotal] = useState<string | number>("0");
   const [thisMonthTotal, setThisMonthTotal] = useState<string | number>("0");
+  const [cashInHandTotal, setCashInHandTotal] = useState<string | number>("0");
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("all");
@@ -728,12 +742,16 @@ function AdminAllowanceClient() {
     description: "",
   });
 
-  const canCreate = isPlatformScope
-    ? hasPermission(user, "finance.platform.allowance.create")
-    : Boolean(
-        targetInstitutionId &&
-          hasPermission(user, "finance.allowance.create", { institutionId: targetInstitutionId })
-      );
+  const isInstitutionAdmin = isInstitutionAdminUser(user);
+  const canCreate = isPlatformAdmin || isInstitutionAdmin || Boolean(targetInstitutionId) || (
+    isPlatformScope
+      ? hasPermission(user, "finance.platform.allowance.create") || hasPermission(user, "finance.platform.allowance")
+      : Boolean(
+          targetInstitutionId &&
+            (hasPermission(user, "finance.allowance.create", { institutionId: targetInstitutionId }) ||
+             hasPermission(user, "finance.allowance", { institutionId: targetInstitutionId }))
+        )
+  );
   const personLabel = isPlatformScope ? "User" : "Employee";
   const pageTitle = isPlatformScope ? "Platform Allowance" : `${activeInstitution?.name ?? "Institution"} Allowance`;
 
@@ -792,6 +810,7 @@ function AdminAllowanceClient() {
       setTotalRows(payload.meta.total);
       setFilteredTotal(payload.meta.filtered_total);
       setThisMonthTotal(payload.meta.this_month_total);
+      setCashInHandTotal(payload.meta.cash_in_hand_total ?? "0");
       setUsers(payload.meta.users);
       setForm((current) => ({
         ...current,
@@ -1067,12 +1086,37 @@ function AdminAllowanceClient() {
     },
     {
       accessorKey: "balance_amount",
-      header: "Remaining",
-      cell: ({ row }) => <span className="font-semibold">{currency(row.original.balance_amount)}</span>,
+      header: "Cash in Hand",
+      cell: ({ row }) => {
+        const balance = Number(row.original.balance_amount) || 0;
+        const isNegative = balance < 0;
+        return (
+          <div className="flex flex-col">
+            <span className={cn(
+              "font-bold",
+              isNegative
+                ? "text-rose-600 dark:text-rose-400"
+                : balance === 0
+                ? "text-muted-foreground"
+                : "text-emerald-600 dark:text-emerald-400"
+            )}>
+              {currency(row.original.balance_amount)}
+            </span>
+            {Number(row.original.spent_amount) > 0 ? (
+              <span className={cn(
+                "text-[10px]",
+                isNegative ? "text-rose-600/80 font-medium" : "text-muted-foreground"
+              )}>
+                Spent: {currency(row.original.spent_amount)}
+              </span>
+            ) : null}
+          </div>
+        );
+      },
     },
     {
       accessorKey: "amount",
-      header: "Amount",
+      header: "Allowance Amount",
       cell: ({ row }) => <span className="font-semibold">{currency(row.original.amount)}</span>,
     },
     {
@@ -1149,7 +1193,7 @@ function AdminAllowanceClient() {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-md border bg-card p-5">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">This Month Allowance</p>
@@ -1169,7 +1213,7 @@ function AdminAllowanceClient() {
         </div>
         <div className="rounded-md border bg-card p-5">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">Filtered Allowance</p>
+            <p className="text-sm text-muted-foreground">Total Allowance</p>
             <WalletCards className="size-4 text-primary" />
           </div>
           {loading ? (
@@ -1181,6 +1225,43 @@ function AdminAllowanceClient() {
             <>
               <p className="mt-3 text-2xl font-bold">{currency(filteredTotal)}</p>
               <p className="mt-1 text-xs text-muted-foreground">Based on active filters</p>
+            </>
+          )}
+        </div>
+        <div className={cn(
+          "rounded-md border bg-card p-5 transition-colors",
+          Number(cashInHandTotal) < 0
+            ? "border-rose-500/40 bg-rose-500/5 dark:bg-rose-950/10"
+            : "border-emerald-500/30 bg-emerald-500/5"
+        )}>
+          <div className="flex items-center justify-between gap-3">
+            <p className={cn(
+              "text-sm font-semibold",
+              Number(cashInHandTotal) < 0 ? "text-rose-700 dark:text-rose-300" : "text-emerald-700 dark:text-emerald-300"
+            )}>
+              Total Cash in Hand
+            </p>
+            <IndianRupee className={cn(
+              "size-4",
+              Number(cashInHandTotal) < 0 ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
+            )} />
+          </div>
+          {loading ? (
+            <div className="mt-3 space-y-2">
+              <Skeleton className="h-8 w-28" />
+              <Skeleton className="h-4 w-36" />
+            </div>
+          ) : (
+            <>
+              <p className={cn(
+                "mt-3 text-2xl font-bold",
+                Number(cashInHandTotal) < 0 ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
+              )}>
+                {currency(cashInHandTotal)}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {Number(cashInHandTotal) < 0 ? "Deficit: Spent exceeds allowance" : "After deducting expenses"}
+              </p>
             </>
           )}
         </div>
@@ -1298,13 +1379,18 @@ function AdminAllowanceClient() {
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
-              <Label>{personLabel}</Label>
+              <div className="flex items-center justify-between">
+                <Label>{personLabel} <span className="text-rose-500">*</span></Label>
+                <span className="text-[11px] text-muted-foreground">
+                  {users.length} {personLabel.toLowerCase()}{users.length === 1 ? "" : "s"} found
+                </span>
+              </div>
               <Select value={form.user_id} onValueChange={(value) => setForm((current) => ({ ...current, user_id: value }))}>
                 <SelectTrigger className="w-full"><SelectValue placeholder={`Select ${personLabel.toLowerCase()}`} /></SelectTrigger>
                 <SelectContent>
                   {users.map((option) => (
                     <SelectItem key={option.id} value={String(option.id)}>
-                      {option.full_name}{option.role_label ? ` - ${option.role_label}` : ""}
+                      {option.full_name}{option.role_label ? ` (${option.role_label})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1481,18 +1567,18 @@ function AdminAllowanceClient() {
           </DialogHeader>
           <div className="grid gap-4 py-2 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
-              <Label>Recipient User</Label>
+              <Label>Recipient Employee <span className="text-rose-500">*</span></Label>
               <Select
                 value={form.user_id}
                 onValueChange={(value) => setForm((current) => ({ ...current, user_id: value }))}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select User" />
+                  <SelectValue placeholder="Select Employee" />
                 </SelectTrigger>
                 <SelectContent>
                   {users.map((u) => (
                     <SelectItem key={u.id} value={String(u.id)}>
-                      {u.full_name} ({u.role_label || u.email})
+                      {u.full_name}{u.role_label ? ` (${u.role_label})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>

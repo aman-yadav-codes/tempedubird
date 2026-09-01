@@ -56,12 +56,16 @@ export async function GET(req: Request) {
     const whereClauses: string[] = [];
     const params: unknown[] = [];
 
-    if (!isPlatformAdmin && institutionId) {
+    if (isPlatformAdmin) {
+      if (institutionIdParam && !isNaN(Number(institutionIdParam)) && institutionIdParam !== "all") {
+        params.push(Number(institutionIdParam));
+        whereClauses.push(`institution_id = $${params.length}`);
+      } else {
+        whereClauses.push(`institution_id IS NULL`);
+      }
+    } else if (institutionId) {
       params.push(institutionId);
-      whereClauses.push(`(institution_id = $${params.length} OR institution_id IS NULL)`);
-    } else if (institutionId && institutionIdParam) {
-      params.push(institutionId);
-      whereClauses.push(`(institution_id = $${params.length} OR institution_id IS NULL)`);
+      whereClauses.push(`institution_id = $${params.length}`);
     }
 
     if (search) {

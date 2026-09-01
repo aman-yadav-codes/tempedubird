@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   ClipboardCheck,
   ClipboardList,
@@ -32,6 +33,8 @@ import {
   FolderPlus,
   ArrowRight,
   Filter,
+  Sparkles,
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +64,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
+import { useActiveInstitution } from "@/hooks/use-active-institution";
 
 export type SubTask = {
   id: string;
@@ -85,6 +89,10 @@ export type OperationTask = {
   institution_id: number | null;
   price: string | number;
   details: string | null;
+  assigned_employee_id?: number | null;
+  assigned_employee_name?: string | null;
+  assigned_employee_role?: string | null;
+  assigned_employee_email?: string | null;
   estimated_hours: string | number;
   logged_hours: string | number;
   deadline: string | null;
@@ -120,12 +128,35 @@ const STATUS_TABS = [
 ];
 
 export default function OperationsTasksPage() {
-  const { accessToken } = useAuthStore();
+  const searchParams = useSearchParams();
+  const { user, accessToken } = useAuthStore();
+  const { activeInstitution } = useActiveInstitution();
   const [tasks, setTasks] = useState<OperationTask[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+
+  const isStaffRole = useMemo(() => {
+    if (!user) return false;
+    const codes = (user as any)?.role_codes || [(user as any)?.role || (user as any)?.primary_role || ""];
+    const isOwnerOrAdmin = codes.some((r: string) =>
+      ["platform_admin", "super_admin", "institution_admin", "school_owner", "college_owner", "university_owner"].includes(r)
+    );
+    return !isOwnerOrAdmin;
+  }, [user]);
+
+  const initialScope = searchParams.get("scope") === "me" || isStaffRole ? "assigned_to_me" : "all";
+  const [scopeFilter, setScopeFilter] = useState<"all" | "assigned_to_me">(initialScope);
+
+  const uniqueStaffList = useMemo(() => {
+    const seen = new Set<number>();
+    return staffList.filter((s) => {
+      if (!s.id || seen.has(s.id)) return false;
+      seen.add(s.id);
+      return true;
+    });
+  }, [staffList]);
 
   // Selected Status Tab
   const [selectedStatusTab, setSelectedStatusTab] = useState<string>("all");
@@ -180,6 +211,7 @@ export default function OperationsTasksPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
+      if (activeInstitution?.id) params.set("institution_id", String(activeInstitution.id));
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
       if (selectedStatusTab && selectedStatusTab !== "all") params.set("status", selectedStatusTab);
       if (urgencyFilter && urgencyFilter !== "all") params.set("urgency", urgencyFilter);
@@ -202,7 +234,7 @@ export default function OperationsTasksPage() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, selectedStatusTab, urgencyFilter, clientFilter, staffFilter, accessToken]);
+  }, [searchQuery, selectedStatusTab, urgencyFilter, clientFilter, staffFilter, accessToken, activeInstitution]);
 
   useEffect(() => {
     fetchTasks();
@@ -454,14 +486,47 @@ export default function OperationsTasksPage() {
     );
   };
 
+  const isTaskAssignedToMe = useCallback(
+    (task: OperationTask) => {
+      if (!user?.id) return false;
+      const currentUserId = Number(user.id);
+      const currentUserEmail = (user.email || "").toLowerCase();
+
+      if (task.assigned_employee_id === currentUserId) return true;
+      if (task.assigned_employee_email && task.assigned_employee_email.toLowerCase() === currentUserEmail) return true;
+
+      if (Array.isArray(task.sub_tasks)) {
+        return task.sub_tasks.some(
+          (st) =>
+            st.assigned_employee_id === currentUserId ||
+            (st.assigned_employee_name && st.assigned_employee_name.toLowerCase() === (user.full_name || "").toLowerCase())
+        );
+      }
+      return false;
+    },
+    [user]
+  );
+
+  const displayedTasks = useMemo(() => {
+    if (scopeFilter === "assigned_to_me") {
+      return tasks.filter((t) => isTaskAssignedToMe(t));
+    }
+    return tasks;
+  }, [tasks, scopeFilter, isTaskAssignedToMe]);
+
+  const myAssignedTasksCount = useMemo(() => {
+    return tasks.filter((t) => isTaskAssignedToMe(t)).length;
+  }, [tasks, isTaskAssignedToMe]);
+
   // Get task count for tab
   const getTabCount = (tabId: string) => {
-    if (tabId === "all") return stats.totalTasks;
-    if (tabId === "pending") return stats.pendingTasks;
-    if (tabId === "in_progress") return stats.inProgressTasks;
-    if (tabId === "completed") return stats.completedTasks;
-    if (tabId === "cancelled") return tasks.filter((t) => t.status === "cancelled").length;
-    if (tabId === "under_review") return tasks.filter((t) => t.status === "under_review").length;
+    const pool = scopeFilter === "assigned_to_me" ? displayedTasks : tasks;
+    if (tabId === "all") return pool.length;
+    if (tabId === "pending") return pool.filter((t) => t.status === "pending").length;
+    if (tabId === "in_progress") return pool.filter((t) => t.status === "in_progress").length;
+    if (tabId === "completed") return pool.filter((t) => t.status === "completed").length;
+    if (tabId === "cancelled") return pool.filter((t) => t.status === "cancelled").length;
+    if (tabId === "under_review") return pool.filter((t) => t.status === "under_review").length;
     return 0;
   };
 
@@ -513,6 +578,55 @@ export default function OperationsTasksPage() {
             <Plus className="w-4 h-4" /> Create Task / Project
           </Button>
         </div>
+      </div>
+
+      {/* Scope Switcher: All Tasks vs Tasks Assigned to Me */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-card rounded-2xl border shadow-xs">
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant={scopeFilter === "all" ? "default" : "outline"}
+            onClick={() => setScopeFilter("all")}
+            className="h-8 text-xs font-bold gap-1.5"
+          >
+            <ClipboardList className="w-3.5 h-3.5" /> All Tasks
+            <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
+              {tasks.length}
+            </Badge>
+          </Button>
+
+          <Button
+            size="sm"
+            variant={scopeFilter === "assigned_to_me" ? "default" : "outline"}
+            onClick={() => setScopeFilter("assigned_to_me")}
+            className={`h-8 text-xs font-bold gap-1.5 ${
+              scopeFilter === "assigned_to_me"
+                ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                : "border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10"
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Assigned to Me
+            <Badge
+              className={`ml-1 text-[10px] px-1.5 py-0 ${
+                scopeFilter === "assigned_to_me" ? "bg-white text-emerald-800" : "bg-emerald-600 text-white"
+              }`}
+            >
+              {myAssignedTasksCount}
+            </Badge>
+          </Button>
+        </div>
+
+        {user?.full_name && (
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5 font-medium">
+            <span>Staff Account:</span>
+            <span className="font-bold text-foreground">{user.full_name}</span>
+            {isStaffRole && (
+              <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30">
+                Staff Mode
+              </Badge>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Metrics Row */}
@@ -667,7 +781,7 @@ export default function OperationsTasksPage() {
             </SelectTrigger>
             <SelectContent className="max-h-64 overflow-y-auto">
               <SelectItem value="all" className="text-xs">All Staff Members</SelectItem>
-              {staffList.map((s) => (
+              {uniqueStaffList.map((s) => (
                 <SelectItem key={s.id} value={String(s.id)} className="text-xs">
                   {s.name} ({s.role})
                 </SelectItem>
@@ -683,28 +797,44 @@ export default function OperationsTasksPage() {
           <Loader2 className="w-8 h-8 animate-spin text-primary mr-2" />
           <span className="text-sm font-medium text-muted-foreground">Loading tasks...</span>
         </div>
-      ) : tasks.length === 0 ? (
+      ) : displayedTasks.length === 0 ? (
         <div className="text-center py-20 border rounded-3xl bg-muted/10 space-y-3">
-          <ClipboardCheck className="w-12 h-12 text-muted-foreground/40 mx-auto" />
-          <h3 className="text-lg font-bold text-foreground">
-            No tasks found in &quot;{STATUS_TABS.find((t) => t.id === selectedStatusTab)?.label}&quot;
-          </h3>
-          <p className="text-xs text-muted-foreground max-w-md mx-auto">
-            Click &quot;Create Task / Project&quot; to add a new project, then use the Action button to add and assign multiple sub-tasks.
-          </p>
-          <Button onClick={handleOpenCreateTask} size="sm" className="mt-2 font-bold">
-            <Plus className="w-4 h-4 mr-1.5" /> Create Task / Project
-          </Button>
+          {scopeFilter === "assigned_to_me" ? (
+            <>
+              <Sparkles className="w-12 h-12 text-emerald-500/60 mx-auto" />
+              <h3 className="text-lg font-bold text-foreground">No Tasks Assigned to You</h3>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                When your institution administrator assigns tasks or deliverables to you, they will appear right here.
+              </p>
+              <Button variant="outline" size="sm" onClick={() => setScopeFilter("all")} className="mt-2 text-xs font-bold">
+                View All Tasks
+              </Button>
+            </>
+          ) : (
+            <>
+              <ClipboardCheck className="w-12 h-12 text-muted-foreground/40 mx-auto" />
+              <h3 className="text-lg font-bold text-foreground">
+                No tasks found in &quot;{STATUS_TABS.find((t) => t.id === selectedStatusTab)?.label}&quot;
+              </h3>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                Click &quot;Create Task / Project&quot; to add a new project, then use the Action button to add and assign multiple sub-tasks.
+              </p>
+              <Button onClick={handleOpenCreateTask} size="sm" className="mt-2 font-bold">
+                <Plus className="w-4 h-4 mr-1.5" /> Create Task / Project
+              </Button>
+            </>
+          )}
         </div>
       ) : viewMode === "cards" ? (
         /* FULL WIDTH CARDS VIEW: Each task card expands with full horizontal room */
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {tasks.map((task) => {
+          {displayedTasks.map((task) => {
             const subTasksList = Array.isArray(task.sub_tasks) ? task.sub_tasks : [];
             const completedSubs = subTasksList.filter((s) => s.status === "completed").length;
             const totalCost = subTasksList.reduce((sum, s) => sum + (parseFloat(String(s.price)) || 0), 0) || parseFloat(String(task.price || 0));
             const totalHours = subTasksList.reduce((sum, s) => sum + (parseFloat(String(s.duration_hours)) || 0), 0) || parseFloat(String(task.estimated_hours || 0));
             const isExpanded = expandedTaskSubtasks[task.id] ?? true;
+            const hasMySubtasks = isTaskAssignedToMe(task);
 
             return (
               <Card
@@ -715,9 +845,14 @@ export default function OperationsTasksPage() {
                   {/* Top Bar: Title, Urgency, Status, Action Button */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1 flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {getUrgencyBadge(task.urgency)}
                         <span className="text-[11px] text-muted-foreground font-mono">#{task.id}</span>
+                        {hasMySubtasks && (
+                          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] gap-1 font-semibold">
+                            <Sparkles className="w-3 h-3 text-amber-500" /> Assigned to You
+                          </Badge>
+                        )}
                       </div>
                       <h3 className="text-base font-bold text-foreground leading-snug">
                         {task.title}
@@ -824,13 +959,22 @@ export default function OperationsTasksPage() {
 
                     {isExpanded && subTasksList.length > 0 && (
                       <div className="space-y-2 pt-1">
-                        {subTasksList.map((sub, index) => (
+                        {subTasksList.map((sub, index) => {
+                          const isSubtaskAssignedToMe = Boolean(
+                            user?.id &&
+                            (sub.assigned_employee_id === Number(user.id) ||
+                             (sub.assigned_employee_name && sub.assigned_employee_name.toLowerCase() === (user.full_name || "").toLowerCase()))
+                          );
+
+                          return (
                           <div
                             key={sub.id}
-                            className="p-3 rounded-xl bg-background border text-xs space-y-2 hover:border-primary/40 transition-colors shadow-2xs"
+                            className={`p-3 rounded-xl bg-background border text-xs space-y-2 transition-colors shadow-2xs ${
+                              isSubtaskAssignedToMe ? "border-emerald-500/50 bg-emerald-500/5" : "hover:border-primary/40"
+                            }`}
                           >
                             <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2 min-w-0">
+                              <div className="flex items-center gap-2 min-w-0 flex-wrap">
                                 <span className="font-bold text-muted-foreground text-[10px]">#{index + 1}</span>
                                 <span className={`font-bold text-xs truncate ${sub.status === "completed" ? "line-through text-muted-foreground" : "text-foreground"}`}>
                                   {sub.title}
@@ -838,6 +982,11 @@ export default function OperationsTasksPage() {
                                 <span className="font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded text-[11px]">
                                   ₹{sub.price?.toLocaleString("en-IN")}
                                 </span>
+                                {isSubtaskAssignedToMe && (
+                                  <Badge variant="outline" className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border-emerald-500/40 text-[9px] px-1.5 py-0 gap-1 font-bold">
+                                    <Sparkles className="w-2.5 h-2.5 text-amber-500" /> Assigned to You
+                                  </Badge>
+                                )}
                               </div>
 
                               <div className="flex items-center gap-2 shrink-0">
@@ -891,7 +1040,8 @@ export default function OperationsTasksPage() {
                               </div>
                             </div>
                           </div>
-                        ))}
+                        );
+                      })}
                       </div>
                     )}
                   </div>
@@ -933,16 +1083,25 @@ export default function OperationsTasksPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
-                {tasks.map((task) => {
+                {displayedTasks.map((task) => {
                   const subTasksList = Array.isArray(task.sub_tasks) ? task.sub_tasks : [];
                   const completedSubs = subTasksList.filter((s) => s.status === "completed").length;
                   const totalCost = subTasksList.reduce((sum, s) => sum + (parseFloat(String(s.price)) || 0), 0) || parseFloat(String(task.price || 0));
                   const totalHours = subTasksList.reduce((sum, s) => sum + (parseFloat(String(s.duration_hours)) || 0), 0) || parseFloat(String(task.estimated_hours || 0));
 
+                  const hasMySubtasks = isTaskAssignedToMe(task);
+
                   return (
-                    <tr key={task.id} className="hover:bg-muted/20 transition-colors">
+                    <tr key={task.id} className={`hover:bg-muted/20 transition-colors ${hasMySubtasks ? "bg-emerald-500/[0.02]" : ""}`}>
                       <td className="p-3.5 pl-4 max-w-[280px]">
-                        <div className="font-bold text-foreground line-clamp-1">{task.title}</div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-foreground line-clamp-1">{task.title}</span>
+                          {hasMySubtasks && (
+                            <Badge variant="outline" className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[9px] px-1.5 py-0 gap-0.5 font-bold shrink-0">
+                              <Sparkles className="w-2.5 h-2.5 text-amber-500" /> Assigned to You
+                            </Badge>
+                          )}
+                        </div>
                         {task.details && (
                           <div className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{task.details}</div>
                         )}
@@ -1161,7 +1320,7 @@ export default function OperationsTasksPage() {
                     </SelectTrigger>
                     <SelectContent className="max-h-64 overflow-y-auto">
                       <SelectItem value="none" className="text-xs">-- Unassigned --</SelectItem>
-                      {staffList.map((s) => (
+                      {uniqueStaffList.map((s) => (
                         <SelectItem key={s.id} value={String(s.id)} className="text-xs">
                           {s.name} ({s.role})
                         </SelectItem>

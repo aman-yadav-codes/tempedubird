@@ -16,6 +16,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     await updateFinanceIncomeEntry(db, incomeId, {
       category_id: body.category_id ? Number(body.category_id) : undefined,
       payment_method: body.payment_method ? String(body.payment_method) : undefined,
+      paid_by: body.paid_by !== undefined ? (body.paid_by ? String(body.paid_by) : null) : undefined,
+      paid_by_label: body.paid_by_label !== undefined ? (body.paid_by_label ? String(body.paid_by_label) : null) : undefined,
+      payer_name: body.payer_name !== undefined ? (body.payer_name ? String(body.payer_name) : null) : (body.paid_by_label ? String(body.paid_by_label) : undefined),
       paid_to: body.paid_to ? String(body.paid_to) : undefined,
       paid_to_label: body.paid_to_label ? String(body.paid_to_label) : undefined,
       amount: body.amount !== undefined ? Number(body.amount) : undefined,

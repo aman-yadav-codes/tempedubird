@@ -74,18 +74,6 @@ export default function AdminLayout({
               <SidebarTrigger className="-ml-1 text-muted-foreground hover:text-foreground" />
               <div className="w-px h-5 bg-border/60" />
               <AdminAcademicSessionSelector />
-              
-              <div className="hidden xl:flex items-center gap-2 text-xs font-bold text-muted-foreground border-l border-border/60 pl-3">
-                <span className="text-muted-foreground hover:text-primary transition-colors cursor-default">
-                  EduBird Admin
-                </span>
-                <span>/</span>
-                <span className="text-foreground capitalize truncate max-w-[200px]">
-                  {pathname === "/admin"
-                    ? "Dashboard"
-                    : pathname.replace("/admin/", "").split("/").map(seg => seg.replace(/-/g, " ")).join(" · ")}
-                </span>
-              </div>
 
               <div className="ml-auto flex items-center gap-2 shrink-0">
                 <button

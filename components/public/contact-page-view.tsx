@@ -212,7 +212,7 @@ export function ContactPageView({
           email: emailAddress.trim(),
           preferred_program: selectedProgramTitle,
           program_id: selectedProgramId !== "default" ? Number(selectedProgramId) : null,
-          institution_id: resolvedInstId || institutionInfo?.id || 1,
+          institution_id: resolvedInstId || institutionInfo?.id || null,
           source: enquirySource,
           notes: inquiryDetails.trim(),
           user_id: user?.id || null,

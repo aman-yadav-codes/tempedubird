@@ -98,7 +98,7 @@ async function getStudentsPaginated(
     targetWhere: string[],
     institutionParamIndex: number | null,
   ) => {
-    if (!filters.programId && !filters.sectionId) return;
+    if (!filters.programId && !filters.sectionId && !academicYearId) return;
 
     const enrollmentClauses = [
       "filter_sp.user_id = u.id",
@@ -125,14 +125,34 @@ async function getStudentsPaginated(
       );
     }
 
-    targetWhere.push(`
-      AND EXISTS (
-        SELECT 1
-        FROM student_profiles filter_sp
-        INNER JOIN student_enrollments filter_se ON filter_se.student_id = filter_sp.id
-        WHERE ${enrollmentClauses.join(" AND ")}
-      )
-    `);
+    if (filters.programId || filters.sectionId) {
+      targetWhere.push(`
+        AND EXISTS (
+          SELECT 1
+          FROM student_profiles filter_sp
+          INNER JOIN student_enrollments filter_se ON filter_se.student_id = filter_sp.id
+          WHERE ${enrollmentClauses.join(" AND ")}
+        )
+      `);
+    } else {
+      targetWhere.push(`
+        AND (
+          EXISTS (
+            SELECT 1
+            FROM student_profiles filter_sp
+            INNER JOIN student_enrollments filter_se ON filter_se.student_id = filter_sp.id
+            WHERE ${enrollmentClauses.join(" AND ")}
+          )
+          OR NOT EXISTS (
+            SELECT 1
+            FROM student_profiles unassigned_sp
+            INNER JOIN student_enrollments unassigned_se ON unassigned_se.student_id = unassigned_sp.id
+            WHERE unassigned_sp.user_id = u.id
+              AND COALESCE(unassigned_se.is_deleted, FALSE) = FALSE
+          )
+        )
+      `);
+    }
   };
 
   appendSearchFilter(params, dataExtraWhere);

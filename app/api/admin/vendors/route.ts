@@ -7,19 +7,53 @@ import { ensureFeatureSchema } from "@/lib/db/ensure-feature-schema";
 export async function GET(req: Request) {
   try {
     await ensureFeatureSchema();
+    const user = await getAuthenticatedUser(req);
     const url = new URL(req.url);
     const category = url.searchParams.get("category")?.trim() || "";
+    const vendorType = url.searchParams.get("type")?.trim() || url.searchParams.get("vendor_type")?.trim() || "";
     const location = url.searchParams.get("location")?.trim() || "";
     const city = url.searchParams.get("city")?.trim() || "";
     const area = url.searchParams.get("area")?.trim() || "";
     const search = url.searchParams.get("search")?.trim() || "";
+    const status = url.searchParams.get("status")?.trim() || "";
+
+    const userRole = (user as any)?.role || (user as any)?.role_code || "";
+    const userInstId = (user as any)?.institution_id || user?.memberships?.[0]?.institution_id || null;
+    const requestedInstId = url.searchParams.get("institution_id") || req.headers.get("x-institution-id");
+    const parsedInstId = requestedInstId ? Number(requestedInstId) : null;
+    const targetInstId = Number.isInteger(parsedInstId) && (parsedInstId as number) > 0 ? parsedInstId : (userRole === "institution_admin" ? userInstId : null);
 
     let query = `SELECT * FROM vendors WHERE 1=1`;
     const params: any[] = [];
 
+    const isPlatformAdmin = isPlatformAdminUser(user);
+    if (isPlatformAdmin) {
+      if (targetInstId) {
+        params.push(targetInstId);
+        query += ` AND institution_id = $${params.length}`;
+      } else {
+        query += ` AND institution_id IS NULL`;
+      }
+    } else if (targetInstId) {
+      params.push(targetInstId);
+      query += ` AND institution_id = $${params.length}`;
+    } else {
+      query += ` AND 1=0`;
+    }
+
+    if (vendorType && vendorType !== "all") {
+      params.push(vendorType);
+      query += ` AND vendor_type = $${params.length}`;
+    }
+
     if (category && category !== "all") {
       params.push(category);
       query += ` AND category = $${params.length}`;
+    }
+
+    if (status && status !== "all") {
+      params.push(status);
+      query += ` AND status = $${params.length}`;
     }
 
     if (city && city !== "all") {
@@ -39,7 +73,7 @@ export async function GET(req: Request) {
 
     if (search) {
       params.push(`%${search}%`);
-      query += ` AND (name ILIKE $${params.length} OR phone ILIKE $${params.length} OR email ILIKE $${params.length} OR description ILIKE $${params.length} OR city ILIKE $${params.length} OR location ILIKE $${params.length})`;
+      query += ` AND (name ILIKE $${params.length} OR company_name ILIKE $${params.length} OR contact_person ILIKE $${params.length} OR phone ILIKE $${params.length} OR email ILIKE $${params.length} OR description ILIKE $${params.length} OR city ILIKE $${params.length} OR location ILIKE $${params.length})`;
     }
 
     query += ` ORDER BY id DESC`;
@@ -73,10 +107,23 @@ export async function GET(req: Request) {
     const distinctCities = masterCitiesRes.rows.map((r: any) => r.city).filter(Boolean);
     const distinctAreas = masterAreasRes.rows.map((r: any) => r.area).filter(Boolean);
 
+    // Fetch vendor categories
+    let catQuery = `SELECT * FROM vendor_categories WHERE is_active = TRUE`;
+    const catParams: any[] = [];
+    if (!isPlatformAdmin && targetInstId) {
+      catQuery += ` AND (institution_id = $1 OR institution_id IS NULL)`;
+      catParams.push(targetInstId);
+    } else if (!isPlatformAdmin) {
+      catQuery += ` AND institution_id IS NULL`;
+    }
+    catQuery += ` ORDER BY id ASC`;
+    const categoriesRes = await db.query(catQuery, catParams);
+
     return NextResponse.json({ 
       vendors: res.rows,
       cities: distinctCities,
-      areas: distinctAreas
+      areas: distinctAreas,
+      categories: categoriesRes.rows
     });
   } catch (error: any) {
     console.error("[Vendors GET] Error:", error);
@@ -88,16 +135,24 @@ export async function POST(req: Request) {
   try {
     await ensureFeatureSchema();
     const user = await getAuthenticatedUser(req);
-    if (!isPlatformAdminUser(user)) {
-      return NextResponse.json({ error: "Unauthorized. Platform admin access required." }, { status: 403 });
+    const userRole = (user as any)?.role || (user as any)?.role_code || "";
+    const userInstId = (user as any)?.institution_id || user?.memberships?.[0]?.institution_id || null;
+    const isAllowed = isPlatformAdminUser(user) || userRole === "institution_admin" || Boolean(userInstId);
+
+    if (!isAllowed) {
+      return NextResponse.json({ error: "Unauthorized. Admin access required." }, { status: 403 });
     }
 
     const body = await req.json();
     const {
       name,
+      company_name,
+      contact_person,
       category,
+      vendor_type = "vendor",
       phone,
       email,
+      website,
       profile_image,
       address,
       city,
@@ -105,25 +160,53 @@ export async function POST(req: Request) {
       map_url,
       rating = 4.5,
       description,
+      notes,
       status = "active",
+      institution_id,
     } = body;
 
     if (!name || !category || !phone) {
-      return NextResponse.json({ error: "Vendor name, category, and phone are required" }, { status: 400 });
+      return NextResponse.json({ error: "Name, category, and phone number are required" }, { status: 400 });
     }
+
+    const targetInstitutionId = isPlatformAdminUser(user)
+      ? (institution_id ? Number(institution_id) : null)
+      : userInstId;
 
     const res = await db.query(
       `
       INSERT INTO vendors (
-        name, category, phone, email, profile_image, address, city, location, map_url, rating, description, status, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+        name,
+        company_name,
+        contact_person,
+        category,
+        vendor_type,
+        phone,
+        email,
+        website,
+        profile_image,
+        address,
+        city,
+        location,
+        map_url,
+        rating,
+        description,
+        notes,
+        status,
+        institution_id,
+        updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW())
       RETURNING *
       `,
       [
         name.trim(),
+        company_name?.trim() || null,
+        contact_person?.trim() || null,
         category,
+        vendor_type || "vendor",
         phone.trim(),
         email?.trim() || null,
+        website?.trim() || null,
         profile_image || null,
         address?.trim() || null,
         city?.trim() || null,
@@ -131,14 +214,16 @@ export async function POST(req: Request) {
         map_url || null,
         Number(rating) || 4.5,
         description?.trim() || null,
-        status,
+        notes?.trim() || null,
+        status || "active",
+        targetInstitutionId,
       ]
     );
 
-    return NextResponse.json({ vendor: res.rows[0], message: "Vendor created successfully" });
+    return NextResponse.json({ vendor: res.rows[0], message: "Record created successfully" });
   } catch (error: any) {
     console.error("[Vendors POST] Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to create vendor" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Failed to create record" }, { status: 500 });
   }
 }
 
@@ -146,17 +231,25 @@ export async function PUT(req: Request) {
   try {
     await ensureFeatureSchema();
     const user = await getAuthenticatedUser(req);
-    if (!isPlatformAdminUser(user)) {
-      return NextResponse.json({ error: "Unauthorized. Platform admin access required." }, { status: 403 });
+    const userRole = (user as any)?.role || (user as any)?.role_code || "";
+    const userInstId = (user as any)?.institution_id || user?.memberships?.[0]?.institution_id || null;
+    const isAllowed = isPlatformAdminUser(user) || userRole === "institution_admin" || Boolean(userInstId);
+
+    if (!isAllowed) {
+      return NextResponse.json({ error: "Unauthorized. Admin access required." }, { status: 403 });
     }
 
     const body = await req.json();
     const {
       id,
       name,
+      company_name,
+      contact_person,
       category,
+      vendor_type,
       phone,
       email,
+      website,
       profile_image,
       address,
       city,
@@ -164,57 +257,71 @@ export async function PUT(req: Request) {
       map_url,
       rating,
       description,
+      notes,
       status,
+      institution_id,
     } = body;
 
     if (!id) {
-      return NextResponse.json({ error: "Vendor ID is required" }, { status: 400 });
+      return NextResponse.json({ error: "Record ID is required" }, { status: 400 });
     }
 
     const res = await db.query(
       `
       UPDATE vendors
       SET name = COALESCE($1, name),
-          category = COALESCE($2, category),
-          phone = COALESCE($3, phone),
-          email = COALESCE($4, email),
-          profile_image = COALESCE($5, profile_image),
-          address = COALESCE($6, address),
-          city = COALESCE($7, city),
-          location = COALESCE($8, location),
-          map_url = COALESCE($9, map_url),
-          rating = COALESCE($10, rating),
-          description = COALESCE($11, description),
-          status = COALESCE($12, status),
+          company_name = COALESCE($2, company_name),
+          contact_person = COALESCE($3, contact_person),
+          category = COALESCE($4, category),
+          vendor_type = COALESCE($5, vendor_type),
+          phone = COALESCE($6, phone),
+          email = COALESCE($7, email),
+          website = COALESCE($8, website),
+          profile_image = COALESCE($9, profile_image),
+          address = COALESCE($10, address),
+          city = COALESCE($11, city),
+          location = COALESCE($12, location),
+          map_url = COALESCE($13, map_url),
+          rating = COALESCE($14, rating),
+          description = COALESCE($15, description),
+          notes = COALESCE($16, notes),
+          status = COALESCE($17, status),
+          institution_id = COALESCE($18, institution_id),
           updated_at = NOW()
-      WHERE id = $13
+      WHERE id = $19
       RETURNING *
       `,
       [
-        name,
-        category,
-        phone,
-        email,
-        profile_image,
-        address,
-        city,
-        location,
-        map_url,
+        name ?? null,
+        company_name ?? null,
+        contact_person ?? null,
+        category ?? null,
+        vendor_type ?? null,
+        phone ?? null,
+        email ?? null,
+        website ?? null,
+        profile_image ?? null,
+        address ?? null,
+        city ?? null,
+        location ?? null,
+        map_url ?? null,
         rating ? Number(rating) : undefined,
-        description,
-        status,
+        description ?? null,
+        notes ?? null,
+        status ?? null,
+        institution_id ? Number(institution_id) : undefined,
         id,
       ]
     );
 
     if (!res.rows.length) {
-      return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
+      return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ vendor: res.rows[0], message: "Vendor updated successfully" });
+    return NextResponse.json({ vendor: res.rows[0], message: "Record updated successfully" });
   } catch (error: any) {
     console.error("[Vendors PUT] Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to update vendor" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Failed to update record" }, { status: 500 });
   }
 }
 
@@ -222,21 +329,30 @@ export async function DELETE(req: Request) {
   try {
     await ensureFeatureSchema();
     const user = await getAuthenticatedUser(req);
-    if (!isPlatformAdminUser(user)) {
-      return NextResponse.json({ error: "Unauthorized. Platform admin access required." }, { status: 403 });
+    const userRole = (user as any)?.role || (user as any)?.role_code || "";
+    const userInstId = (user as any)?.institution_id || user?.memberships?.[0]?.institution_id || null;
+    const isAllowed = isPlatformAdminUser(user) || userRole === "institution_admin" || Boolean(userInstId);
+
+    if (!isAllowed) {
+      return NextResponse.json({ error: "Unauthorized. Admin access required." }, { status: 403 });
     }
 
     const url = new URL(req.url);
     const id = url.searchParams.get("id");
 
     if (!id) {
-      return NextResponse.json({ error: "Vendor ID is required" }, { status: 400 });
+      return NextResponse.json({ error: "Record ID is required" }, { status: 400 });
     }
 
-    await db.query(`DELETE FROM vendors WHERE id = $1`, [id]);
-    return NextResponse.json({ message: "Vendor deleted successfully" });
+    if (isPlatformAdminUser(user)) {
+      await db.query(`DELETE FROM vendors WHERE id = $1`, [id]);
+    } else {
+      await db.query(`DELETE FROM vendors WHERE id = $1 AND (institution_id = $2 OR institution_id IS NULL)`, [id, userInstId]);
+    }
+
+    return NextResponse.json({ message: "Record deleted successfully" });
   } catch (error: any) {
     console.error("[Vendors DELETE] Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to delete vendor" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Failed to delete record" }, { status: 500 });
   }
 }

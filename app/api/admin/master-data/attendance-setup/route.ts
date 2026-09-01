@@ -11,6 +11,7 @@ async function ensureAttendanceSetupTable() {
       title VARCHAR(255) NOT NULL,
       target_type VARCHAR(50) NOT NULL DEFAULT 'STUDENTS',
       attendance_mode VARCHAR(50) NOT NULL DEFAULT 'FULL_DAY',
+      who_can_mark VARCHAR(50) NOT NULL DEFAULT 'INSTITUTION_ADMIN',
       start_time VARCHAR(20) DEFAULT '08:00',
       end_time VARCHAR(20) DEFAULT '14:30',
       grace_period_mins INT DEFAULT 15,
@@ -24,6 +25,7 @@ async function ensureAttendanceSetupTable() {
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );
+    ALTER TABLE institution_attendance_setups ADD COLUMN IF NOT EXISTS who_can_mark VARCHAR(50) DEFAULT 'INSTITUTION_ADMIN';
   `);
 }
 
@@ -32,6 +34,7 @@ const DEFAULT_DUMMY_SETUPS = [
     title: "Regular Academic Shift (Sample)",
     target_type: "STUDENTS",
     attendance_mode: "FULL_DAY",
+    who_can_mark: "TEACHER",
     start_time: "08:00",
     end_time: "14:30",
     grace_period_mins: 15,
@@ -47,6 +50,7 @@ const DEFAULT_DUMMY_SETUPS = [
     title: "Faculty & Staff Shift (Sample)",
     target_type: "STAFF",
     attendance_mode: "BIOMETRIC",
+    who_can_mark: "BOTH",
     start_time: "07:45",
     end_time: "15:30",
     grace_period_mins: 10,
@@ -62,6 +66,7 @@ const DEFAULT_DUMMY_SETUPS = [
     title: "Period-Wise Lecture Attendance (Sample)",
     target_type: "STUDENTS",
     attendance_mode: "PERIOD_WISE",
+    who_can_mark: "TEACHER",
     start_time: "09:00",
     end_time: "16:00",
     grace_period_mins: 5,
@@ -109,17 +114,18 @@ export async function GET(req: Request) {
         await db.query(
           `
           INSERT INTO institution_attendance_setups (
-            institution_id, title, target_type, attendance_mode,
+            institution_id, title, target_type, attendance_mode, who_can_mark,
             start_time, end_time, grace_period_mins, half_day_time,
             min_attendance_percentage, working_days, auto_notify_absent,
             is_active, is_default, is_dummy
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
           `,
           [
             institutionId ?? null,
             dummy.title,
             dummy.target_type,
             dummy.attendance_mode,
+            dummy.who_can_mark || "INSTITUTION_ADMIN",
             dummy.start_time,
             dummy.end_time,
             dummy.grace_period_mins,
@@ -140,7 +146,9 @@ export async function GET(req: Request) {
 
     if (institutionId) {
       params.push(institutionId);
-      whereClauses.push(`(institution_id = $${params.length} OR institution_id IS NULL)`);
+      whereClauses.push(`institution_id = $${params.length}`);
+    } else {
+      whereClauses.push(`institution_id IS NULL`);
     }
 
     if (search) {
@@ -214,6 +222,7 @@ export async function POST(req: Request) {
       title,
       target_type = "STUDENTS",
       attendance_mode = "FULL_DAY",
+      who_can_mark = "INSTITUTION_ADMIN",
       start_time = "08:00",
       end_time = "14:30",
       grace_period_mins = 15,
@@ -239,11 +248,11 @@ export async function POST(req: Request) {
     const insertRes = await db.query(
       `
       INSERT INTO institution_attendance_setups (
-        institution_id, title, target_type, attendance_mode,
+        institution_id, title, target_type, attendance_mode, who_can_mark,
         start_time, end_time, grace_period_mins, half_day_time,
         min_attendance_percentage, working_days, auto_notify_absent,
         is_active, is_default, is_dummy
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, FALSE)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, FALSE)
       RETURNING *
       `,
       [
@@ -251,6 +260,7 @@ export async function POST(req: Request) {
         title.trim(),
         target_type,
         attendance_mode,
+        who_can_mark || "INSTITUTION_ADMIN",
         start_time,
         end_time,
         Number(grace_period_mins) || 0,
@@ -282,6 +292,7 @@ export async function PUT(req: Request) {
       title,
       target_type,
       attendance_mode,
+      who_can_mark,
       start_time,
       end_time,
       grace_period_mins,
@@ -311,24 +322,26 @@ export async function PUT(req: Request) {
         title = COALESCE($1, title),
         target_type = COALESCE($2, target_type),
         attendance_mode = COALESCE($3, attendance_mode),
-        start_time = COALESCE($4, start_time),
-        end_time = COALESCE($5, end_time),
-        grace_period_mins = COALESCE($6, grace_period_mins),
-        half_day_time = COALESCE($7, half_day_time),
-        min_attendance_percentage = COALESCE($8, min_attendance_percentage),
-        working_days = COALESCE($9, working_days),
-        auto_notify_absent = COALESCE($10, auto_notify_absent),
-        is_active = COALESCE($11, is_active),
-        is_default = COALESCE($12, is_default),
+        who_can_mark = COALESCE($4, who_can_mark),
+        start_time = COALESCE($5, start_time),
+        end_time = COALESCE($6, end_time),
+        grace_period_mins = COALESCE($7, grace_period_mins),
+        half_day_time = COALESCE($8, half_day_time),
+        min_attendance_percentage = COALESCE($9, min_attendance_percentage),
+        working_days = COALESCE($10, working_days),
+        auto_notify_absent = COALESCE($11, auto_notify_absent),
+        is_active = COALESCE($12, is_active),
+        is_default = COALESCE($13, is_default),
         is_dummy = FALSE,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $13
+      WHERE id = $14
       RETURNING *
       `,
       [
         title?.trim() || null,
         target_type || null,
         attendance_mode || null,
+        who_can_mark || null,
         start_time || null,
         end_time || null,
         grace_period_mins !== undefined ? Number(grace_period_mins) : null,

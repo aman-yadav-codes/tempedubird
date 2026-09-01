@@ -521,11 +521,27 @@ export default function SyllabusPage() {
   };
 
   const [courses, setCourses] = useState<CourseOption[]>([]);
-  const [selectedCourseId, setSelectedCourseId] = useState<string>("all");
+  const [selectedCourseId, setSelectedCourseId] = useState<string>("");
+  const [selectedCourseName, setSelectedCourseName] = useState<string>("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
+  const [selectedCategoryName, setSelectedCategoryName] = useState<string>("");
   const [loadingCourses, setLoadingCourses] = useState(false);
-  const [subjectsList, setSubjectsList] = useState<Array<{ id: number; name: string; code?: string | null; icon_url?: string | null; course_id?: number | null; category_name?: string | null; board_name?: string | null }>>([]);
+  const [subjectsList, setSubjectsList] = useState<Array<{
+    id: number;
+    name: string;
+    code?: string | null;
+    icon_url?: string | null;
+    course_id?: number | null;
+    course_name?: string | null;
+    category_name?: string | null;
+    board_name?: string | null;
+    term_type?: string | null;
+    term_number?: number | null;
+    term_name?: string | null;
+  }>>([]);
   const [loadingSubjectsList, setLoadingSubjectsList] = useState(false);
   const [subjectFilterSearch, setSubjectFilterSearch] = useState("");
+  const [activeSubjectTermFilter, setActiveSubjectTermFilter] = useState<string>("all");
 
   // Curriculum Builder (Module / Unit / Chapter / Lesson / Topic) State
   type DraftSyllabusNode = {
@@ -810,13 +826,16 @@ export default function SyllabusPage() {
     }
   }, [accessToken, authHeaders]);
 
-  const fetchSubjectsList = useCallback(async (courseId?: string) => {
+  const fetchSubjectsList = useCallback(async (courseId?: string, categoryId?: string) => {
     if (!accessToken) return;
     setLoadingSubjectsList(true);
     try {
       const params = new URLSearchParams({ limit: "150" });
-      if (courseId && courseId !== "all") {
+      if (courseId && courseId !== "all" && courseId !== "") {
         params.set("courseId", courseId);
+      }
+      if (categoryId && categoryId !== "all" && categoryId !== "") {
+        params.set("categoryId", categoryId);
       }
       const res = await fetch(`/api/admin/subjects?${params.toString()}`, {
         headers: authHeaders(),
@@ -824,6 +843,21 @@ export default function SyllabusPage() {
       const json = await readJson(res);
       if (res.ok && Array.isArray(json.data)) {
         setSubjectsList(json.data);
+        if (json.data.length > 0) {
+          const first = json.data[0];
+          setForm((prev) => {
+            const exists = json.data.some((s: any) => String(s.id) === prev.subject_id);
+            if (!exists || !prev.subject_id) {
+              return {
+                ...prev,
+                subject_id: String(first.id),
+                subject_label: first.name,
+                title: `${first.name} Syllabus`,
+              };
+            }
+            return prev;
+          });
+        }
       }
     } catch (err) {
       console.error("Failed to fetch subjects list", err);
@@ -866,8 +900,12 @@ export default function SyllabusPage() {
   const openCreateDialog = () => {
     setEditingSyllabus(null);
     setForm(blankSyllabusForm());
-    setSelectedCourseId("all");
+    setSelectedCourseId("");
+    setSelectedCourseName("");
+    setSelectedCategoryId("");
+    setSelectedCategoryName("");
     setSubjectFilterSearch("");
+    setActiveSubjectTermFilter("all");
     setSubjectNodesMap({});
     setExpandedAccordions(new Set());
     setNewNodeType("unit");
@@ -881,8 +919,7 @@ export default function SyllabusPage() {
     setBulkPasteOpen(false);
     setBulkPasteText("");
     setSaveStatus("saved");
-    fetchCoursesList();
-    fetchSubjectsList("all");
+    fetchSubjectsList("", "");
     setDialogOpen(true);
   };
 
@@ -912,8 +949,12 @@ export default function SyllabusPage() {
           subject_label: subjectLabel,
           title: subjectLabel ? `${subjectLabel} Syllabus` : "",
         });
-        setSelectedCourseId("all");
+        setSelectedCourseId("");
+        setSelectedCourseName("");
+        setSelectedCategoryId("");
+        setSelectedCategoryName("");
         setSubjectFilterSearch("");
+        setActiveSubjectTermFilter("all");
         setSubjectNodesMap({});
         setExpandedAccordions(new Set());
         setNewNodeType("unit");
@@ -927,8 +968,7 @@ export default function SyllabusPage() {
         setBulkPasteOpen(false);
         setBulkPasteText("");
         setSaveStatus("saved");
-        fetchCoursesList();
-        fetchSubjectsList("all");
+        fetchSubjectsList("", "");
         setDialogOpen(true);
       }
       window.history.replaceState(null, "", window.location.pathname);
@@ -946,14 +986,17 @@ export default function SyllabusPage() {
       version: String(syllabus.version),
       is_active: syllabus.is_active,
     });
-    setSelectedCourseId("all");
+    setSelectedCourseId("");
+    setSelectedCourseName("");
+    setSelectedCategoryId("");
+    setSelectedCategoryName("");
     setSubjectFilterSearch("");
+    setActiveSubjectTermFilter("all");
     setSubjectNodesMap({});
     setExpandedAccordions(new Set());
     setInlineAddTargetId(null);
     setSaveStatus("saved");
-    fetchCoursesList();
-    fetchSubjectsList("all");
+    fetchSubjectsList("", "");
     setDialogOpen(true);
   };
 
@@ -1733,139 +1776,390 @@ export default function SyllabusPage() {
       />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[92vh] overflow-y-auto sm:!max-w-4xl max-w-4xl w-full">
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:!max-w-5xl max-w-5xl !w-[94vw] p-6 rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-primary" />
-              {editingSyllabus ? "Edit Syllabus" : "Add Syllabus"}
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-primary" />
+                {editingSyllabus ? "Edit Syllabus" : "Add Syllabus"}
+              </DialogTitle>
+              {selectedCourseName && (
+                <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20">
+                  {selectedCourseName}
+                </Badge>
+              )}
+            </div>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Choose Course / Program */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                <span>Choose Course / Program</span>
-                {loadingCourses && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-              </Label>
-              <Select
-                value={selectedCourseId}
-                onValueChange={(val) => {
-                  setSelectedCourseId(val);
-                  fetchSubjectsList(val);
-                }}
-              >
-                <SelectTrigger className="w-full h-9 text-xs">
-                  <SelectValue placeholder="All Courses / Universal" />
-                </SelectTrigger>
-                <SelectContent className="max-h-60">
-                  <SelectItem value="all" className="text-xs font-medium">
-                    All Courses / Universal
-                  </SelectItem>
-                  {courses.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)} className="text-xs">
-                      {formatCourseOptionLabel(c)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* Search Option for Course / Program & Class */}
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-3.5 rounded-2xl border border-primary/20 bg-primary/[0.03]">
+              {/* 1. Search Course / Program */}
+              <div className="sm:col-span-7 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Layers className="h-3.5 w-3.5 text-primary" />
+                    Choose Course / Program
+                  </Label>
+                  {selectedCourseId && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedCourseId("");
+                        setSelectedCourseName("");
+                        fetchSubjectsList("", selectedCategoryId);
+                      }}
+                      className="h-5 text-[10px] text-muted-foreground hover:text-destructive px-1"
+                    >
+                      Clear Course
+                    </Button>
+                  )}
+                </div>
+
+                <AsyncSearchPopover<{ id: number; name: string; category_name?: string; category_breadcrumb?: string; code?: string; board_name?: string; university_name?: string }>
+                  value={selectedCourseId}
+                  onChange={(val) => {
+                    setSelectedCourseId(val);
+                    if (!val) setSelectedCourseName("");
+                    fetchSubjectsList(val, selectedCategoryId);
+                  }}
+                  onSelectItem={(item) => {
+                    setSelectedCourseId(String(item.id));
+                    setSelectedCourseName(item.name);
+                    fetchSubjectsList(String(item.id), selectedCategoryId);
+                  }}
+                  selectedLabel={selectedCourseName || undefined}
+                  placeholder="Search & choose Course / Program (e.g. B.Com, B.Tech, Class 3)..."
+                  searchPlaceholder="Type course or program name to search..."
+                  emptyText="No matching course/program found"
+                  showDefaultOption
+                  defaultOptionLabel="All Courses / Universal"
+                  defaultOptionValue=""
+                  fetcher={async (search, page) => {
+                    const params = new URLSearchParams({
+                      page: String(page),
+                      limit: "25",
+                      search,
+                    });
+                    if (selectedCategoryId) {
+                      params.set("categoryId", selectedCategoryId);
+                    }
+                    const res = await fetch(`/api/admin/content/courses?${params.toString()}`, {
+                      headers: authHeaders(),
+                    });
+                    if (!res.ok) throw new Error("Failed to load courses");
+                    const json = await res.json();
+                    return { data: json.data || [], hasMore: page < (json.pageCount || 1) };
+                  }}
+                  getValue={(item) => String(item.id)}
+                  getLabel={(item) => item.name}
+                  renderItem={(item) => (
+                    <div className="flex flex-col py-0.5">
+                      <span className="font-semibold text-xs text-foreground">{item.name}</span>
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                        {item.code && <span className="font-mono">{item.code}</span>}
+                        {(item.category_breadcrumb || item.category_name) && (
+                          <span>• {item.category_breadcrumb || item.category_name}</span>
+                        )}
+                        {item.university_name && <span>• Univ: {item.university_name}</span>}
+                        {item.board_name && <span>• Board: {item.board_name}</span>}
+                      </div>
+                    </div>
+                  )}
+                />
+              </div>
+
+              {/* 2. Filter by Class / Category */}
+              <div className="sm:col-span-5 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <GraduationCap className="h-3.5 w-3.5 text-primary" />
+                    Filter by Class / Category
+                  </Label>
+                  {selectedCategoryId && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedCategoryId("");
+                        setSelectedCategoryName("");
+                        fetchSubjectsList(selectedCourseId, "");
+                      }}
+                      className="h-5 text-[10px] text-muted-foreground hover:text-destructive px-1"
+                    >
+                      Clear Class
+                    </Button>
+                  )}
+                </div>
+
+                <AsyncSearchPopover<{ id: number; name: string; breadcrumb?: string }>
+                  value={selectedCategoryId}
+                  onChange={(val) => {
+                    setSelectedCategoryId(val);
+                    if (!val) setSelectedCategoryName("");
+                    fetchSubjectsList(selectedCourseId, val);
+                  }}
+                  onSelectItem={(item) => {
+                    setSelectedCategoryId(String(item.id));
+                    setSelectedCategoryName(item.breadcrumb || item.name);
+                    fetchSubjectsList(selectedCourseId, String(item.id));
+                  }}
+                  selectedLabel={selectedCategoryName || undefined}
+                  placeholder="Filter by Class / Level..."
+                  searchPlaceholder="Type class or level name..."
+                  emptyText="No class found"
+                  showDefaultOption
+                  defaultOptionLabel="All Classes / Categories"
+                  defaultOptionValue=""
+                  fetcher={async (search, page) => {
+                    const params = new URLSearchParams({
+                      page: String(page),
+                      limit: "20",
+                      search,
+                    });
+                    const res = await fetch(`/api/admin/content/categories?${params.toString()}`, {
+                      headers: authHeaders(),
+                    });
+                    if (!res.ok) throw new Error("Failed to load categories");
+                    const json = await res.json();
+                    return { data: json.data || [], hasMore: page < (json.pageCount || 1) };
+                  }}
+                  getValue={(item) => String(item.id)}
+                  getLabel={(item) => item.breadcrumb || item.name}
+                />
+              </div>
             </div>
 
             {/* Individual Subject Tabs Selection */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <GraduationCap className="h-4 w-4 text-primary" />
-                  <span>Subjects</span>
-                  <span className="text-[11px] text-muted-foreground font-normal">
-                    (Click a tab to configure its syllabus)
-                  </span>
-                </Label>
-                <div className="flex items-center gap-2">
-                  {saveStatus === "saving" ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-500">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Saving changes...
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      Progressive Save Active
-                    </span>
-                  )}
-                </div>
-              </div>
+            {(() => {
+              // Extract unique academic terms from subjectsList (e.g. Year 1, Semester 1...)
+              const termPills: Array<{ key: string; label: string; count: number }> = [];
+              const termMap = new Map<string, number>();
 
-              {/* Individual Subject Tabs (Horizontal Scrollable) */}
-              <div className="p-2 rounded-xl border border-border bg-muted/10 overflow-hidden">
-                {loadingSubjectsList ? (
-                  <div className="flex items-center justify-center py-4 text-muted-foreground text-xs gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    <span>Loading subjects...</span>
+              for (const sub of subjectsList) {
+                let termKey = "full_course";
+                let termLabel = "Universal / Full Course";
+                if (sub.term_type === "semester") {
+                  const derivedYear = Math.max(1, Math.ceil((sub.term_number || 1) / 2));
+                  termKey = `sem-${sub.term_number || 1}`;
+                  termLabel = `Year ${derivedYear} • Sem ${sub.term_number || 1}`;
+                } else if (sub.term_type === "year") {
+                  termKey = `year-${sub.term_number || 1}`;
+                  termLabel = `Year ${sub.term_number || 1} (Annual)`;
+                }
+                termMap.set(termKey, (termMap.get(termKey) || 0) + 1);
+              }
+
+              for (const [key, count] of Array.from(termMap.entries())) {
+                let label = key;
+                if (key.startsWith("sem-")) {
+                  const num = Number(key.replace("sem-", ""));
+                  const yr = Math.max(1, Math.ceil(num / 2));
+                  label = `Year ${yr} • Sem ${num}`;
+                } else if (key.startsWith("year-")) {
+                  label = `Year ${key.replace("year-", "")} (Annual)`;
+                } else {
+                  label = "Full Course";
+                }
+                termPills.push({ key, label, count });
+              }
+
+              // Filter subjects according to search and term
+              const filteredSubjects = subjectsList.filter((sub) => {
+                if (subjectFilterSearch.trim()) {
+                  const q = subjectFilterSearch.toLowerCase();
+                  const matchName = sub.name?.toLowerCase().includes(q);
+                  const matchCode = sub.code?.toLowerCase().includes(q);
+                  if (!matchName && !matchCode) return false;
+                }
+
+                if (activeSubjectTermFilter !== "all") {
+                  if (activeSubjectTermFilter.startsWith("sem-")) {
+                    const semNum = Number(activeSubjectTermFilter.replace("sem-", ""));
+                    return sub.term_type === "semester" && sub.term_number === semNum;
+                  }
+                  if (activeSubjectTermFilter.startsWith("year-")) {
+                    const yrNum = Number(activeSubjectTermFilter.replace("year-", ""));
+                    return sub.term_type === "year" && sub.term_number === yrNum;
+                  }
+                  if (activeSubjectTermFilter === "full_course") {
+                    return !sub.term_type || sub.term_type === "full_course";
+                  }
+                }
+                return true;
+              });
+
+              return (
+                <div className="space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <GraduationCap className="h-4 w-4 text-primary" />
+                        <span>Subjects ({filteredSubjects.length})</span>
+                      </Label>
+                      <span className="text-[11px] text-muted-foreground font-normal">
+                        Click a subject tab below to add or edit its syllabus:
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {subjectsList.length > 5 && (
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                          <Input
+                            placeholder="Quick search subject..."
+                            value={subjectFilterSearch}
+                            onChange={(e) => setSubjectFilterSearch(e.target.value)}
+                            className="pl-8 h-7 text-xs w-44 bg-background"
+                          />
+                        </div>
+                      )}
+                      {saveStatus === "saving" ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-500">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Saving...
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Auto-Save Active
+                        </span>
+                      )}
+                    </div>
                   </div>
-                ) : subjectsList.length === 0 ? (
-                  <div className="py-4 text-center text-muted-foreground text-xs">
-                    No subjects found for this course.
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-                    {subjectsList.map((sub) => {
-                      const isSelected = form.subject_id === String(sub.id);
-                      const count = subjectNodesMap[String(sub.id)]?.length || 0;
-                      return (
+
+                  {/* Term Breakdown Pills if multi-term course */}
+                  {termPills.length > 1 && (
+                    <div className="flex flex-wrap gap-1 pb-1">
+                      <button
+                        type="button"
+                        onClick={() => setActiveSubjectTermFilter("all")}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                          activeSubjectTermFilter === "all"
+                            ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                            : "bg-background text-muted-foreground border-border hover:text-foreground"
+                        }`}
+                      >
+                        All Terms ({subjectsList.length})
+                      </button>
+                      {termPills.map((p) => (
                         <button
-                          key={sub.id}
+                          key={p.key}
                           type="button"
-                          onClick={() => {
-                            setForm((prev) => ({
-                              ...prev,
-                              subject_id: String(sub.id),
-                              subject_label: sub.name,
-                              title: `${sub.name} Syllabus`,
-                            }));
-                            const nodes = subjectNodesMap[String(sub.id)] || [];
-                            if (nodes.length > 0) {
-                              setExpandedAccordions(new Set(nodes.map((n) => n.id)));
-                            }
-                          }}
-                          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all border text-left cursor-pointer ${
-                            isSelected
-                              ? "bg-primary text-primary-foreground border-primary shadow-xs ring-2 ring-primary/20 scale-[1.02]"
-                              : "bg-background hover:bg-muted text-foreground border-border hover:border-primary/40"
+                          onClick={() => setActiveSubjectTermFilter(p.key)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border flex items-center gap-1.5 ${
+                            activeSubjectTermFilter === p.key
+                              ? "bg-indigo-600 text-white border-indigo-700 shadow-xs"
+                              : "bg-background text-muted-foreground border-border hover:text-foreground"
                           }`}
                         >
-                          {sub.icon_url ? (
-                            <img
-                              src={sub.icon_url}
-                              alt=""
-                              className="h-3.5 w-3.5 rounded object-contain shrink-0"
-                              onError={(e) => {
-                                (e.target as HTMLElement).style.display = "none";
-                              }}
-                            />
-                          ) : (
-                            <GraduationCap className={`h-3.5 w-3.5 shrink-0 ${isSelected ? "text-primary-foreground" : "text-muted-foreground"}`} />
-                          )}
-                          <span className="truncate max-w-[140px]">{sub.name}</span>
-                          <Badge
-                            variant="outline"
-                            className={`text-[9px] px-1.5 py-0 rounded-full font-bold ${
-                              isSelected
-                                ? "bg-primary-foreground/20 text-primary-foreground border-primary-foreground/30"
-                                : count > 0
-                                ? "bg-primary/10 text-primary border-primary/30"
-                                : "bg-muted text-muted-foreground border-border"
-                            }`}
-                          >
-                            {count}
-                          </Badge>
+                          <span>{p.label}</span>
+                          <span className="text-[10px] px-1 py-0.2 rounded-full font-mono bg-primary/10 text-primary">
+                            {p.count}
+                          </span>
                         </button>
-                      );
-                    })}
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Individual Subject Tabs (Horizontal Scrollable / Wrapping) */}
+                  <div className="p-2.5 rounded-2xl border border-border bg-muted/10 overflow-hidden">
+                    {loadingSubjectsList ? (
+                      <div className="flex items-center justify-center py-6 text-muted-foreground text-xs gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        <span>Fetching subjects for selected course...</span>
+                      </div>
+                    ) : filteredSubjects.length === 0 ? (
+                      <div className="py-6 text-center text-muted-foreground text-xs space-y-1">
+                        <p className="font-semibold text-foreground">No subjects found for this selection.</p>
+                        <p className="text-[11px]">
+                          Choose a different course/program or class, or add subjects in Master Subjects first.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                        {filteredSubjects.map((sub) => {
+                          const isSelected = form.subject_id === String(sub.id);
+                          const count = subjectNodesMap[String(sub.id)]?.length || 0;
+                          const derivedYear = sub.term_type === "semester" ? Math.max(1, Math.ceil((sub.term_number || 1) / 2)) : sub.term_number || 1;
+
+                          return (
+                            <button
+                              key={sub.id}
+                              type="button"
+                              onClick={() => {
+                                setForm((prev) => ({
+                                  ...prev,
+                                  subject_id: String(sub.id),
+                                  subject_label: sub.name,
+                                  title: `${sub.name} Syllabus`,
+                                }));
+                                const nodes = subjectNodesMap[String(sub.id)] || [];
+                                if (nodes.length > 0) {
+                                  setExpandedAccordions(new Set(nodes.map((n) => n.id)));
+                                }
+                              }}
+                              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition-all border text-left cursor-pointer shadow-2xs ${
+                                isSelected
+                                  ? "bg-primary text-primary-foreground border-primary shadow-xs ring-2 ring-primary/20 scale-[1.02]"
+                                  : "bg-background hover:bg-muted text-foreground border-border hover:border-primary/40"
+                              }`}
+                            >
+                              <img
+                                src={sub.icon_url || "/icons/default-subject.svg"}
+                                alt=""
+                                className="h-4 w-4 rounded object-contain shrink-0"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = "/icons/default-subject.svg";
+                                }}
+                              />
+
+                              <div className="flex flex-col min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="truncate max-w-[150px]">{sub.name}</span>
+                                  {sub.code && (
+                                    <span className={`text-[10px] font-mono font-medium ${isSelected ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                                      ({sub.code})
+                                    </span>
+                                  )}
+                                </div>
+
+                                {sub.term_type === "semester" && (
+                                  <span className={`text-[9px] font-semibold ${isSelected ? "text-primary-foreground/90" : "text-indigo-600 dark:text-indigo-400"}`}>
+                                    Y{derivedYear} • Sem {sub.term_number || 1}
+                                  </span>
+                                )}
+                                {sub.term_type === "year" && (
+                                  <span className={`text-[9px] font-semibold ${isSelected ? "text-primary-foreground/90" : "text-amber-600 dark:text-amber-400"}`}>
+                                    Year {sub.term_number || 1}
+                                  </span>
+                                )}
+                              </div>
+
+                              <Badge
+                                variant="outline"
+                                className={`text-[9px] px-1.5 py-0 rounded-full font-bold ml-1 ${
+                                  isSelected
+                                    ? "bg-primary-foreground/20 text-primary-foreground border-primary-foreground/30"
+                                    : count > 0
+                                    ? "bg-primary/10 text-primary border-primary/30"
+                                    : "bg-muted text-muted-foreground border-border"
+                                }`}
+                              >
+                                {count} {count === 1 ? "unit" : "units"}
+                              </Badge>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
+              );
+            })()}
 
             {/* Curriculum Accordion Tree Builder */}
             {form.subject_id && !editingSyllabus && (

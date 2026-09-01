@@ -6,7 +6,7 @@ import { PortalBannerAd } from "@/components/public/portal-banner-ad";
 
 export interface SharedInterstitialBannerProps {
   bannerIndex: number;
-  pageType?: "courses" | "institutes" | "exams" | "practice" | "notes" | "teachers" | "products" | "blogs";
+  pageType?: "courses" | "institutes" | "exams" | "practice" | "notes" | "teachers" | "products" | "blogs" | "vendors";
   onEnquire?: () => void;
 }
 
@@ -25,6 +25,7 @@ export function SharedInterstitialBanner({
     teachers: "teacher",
     products: "product",
     blogs: "blog",
+    vendors: "institute",
   };
   const section = sectionMap[pageType] || "course";
 

@@ -272,7 +272,7 @@ export function PracticeTestRunnerModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl h-[92vh] flex flex-col p-0 overflow-hidden bg-background border-border shadow-2xl rounded-3xl">
+      <DialogContent className="!w-[96vw] sm:!max-w-[96vw] md:!max-w-5xl lg:!max-w-6xl xl:!max-w-7xl h-[92vh] max-h-[95vh] flex flex-col p-0 overflow-hidden bg-background border-border shadow-2xl rounded-3xl">
         {loading ? (
           <div className="flex-1 flex flex-col items-center justify-center space-y-3">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -325,7 +325,7 @@ export function PracticeTestRunnerModal({
             </div>
 
             {/* Exam Body Grid */}
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_280px] overflow-hidden">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-[1fr_280px] lg:grid-cols-[1fr_320px] overflow-hidden">
               {/* Question Main Canvas */}
               <div className="flex-1 flex flex-col p-6 overflow-y-auto space-y-6">
                 {currentQ && (
@@ -441,7 +441,7 @@ export function PracticeTestRunnerModal({
               </div>
 
               {/* Right Palette */}
-              <div className="border-l border-border bg-card/60 p-4 flex flex-col justify-between overflow-y-auto hidden lg:flex">
+              <div className="border-l border-border bg-card/60 p-4 flex flex-col justify-between overflow-y-auto hidden md:flex">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h4 className="font-extrabold text-xs text-foreground uppercase tracking-wider">

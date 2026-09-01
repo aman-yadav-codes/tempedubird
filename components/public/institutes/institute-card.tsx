@@ -3,13 +3,14 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { CheckCircle2, ChevronRight, MapPin, ShieldCheck, Star, MessageSquare } from "lucide-react";
+import { CheckCircle2, ChevronRight, MapPin, ShieldCheck, Star, MessageSquare, Send } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { PublicInstitute } from "./institute-data";
 import { buildInstituteUrl } from "@/lib/utils/seo-slug";
 import { UniversalFeedbackDialog } from "@/components/public/universal-feedback-dialog";
+import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
 
 type InstituteCardProps = {
   institute: PublicInstitute;
@@ -18,6 +19,7 @@ type InstituteCardProps = {
 
 export function InstituteCard({ institute, viewMode = "grid" }: InstituteCardProps) {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [enquiryOpen, setEnquiryOpen] = useState(false);
   const isList = viewMode === "list";
   const instUrl = buildInstituteUrl(institute.id, institute.name, institute.location);
   const numRating = institute.rating != null && !isNaN(Number(institute.rating)) ? Number(institute.rating) : 4.8;
@@ -91,13 +93,14 @@ export function InstituteCard({ institute, viewMode = "grid" }: InstituteCardPro
               <span>Reviews & Q&A</span>
             </button>
 
-            <Link
-              href={instUrl}
-              className="flex h-10 w-full items-center justify-center gap-1.5 rounded-md bg-primary text-xs font-bold text-primary-foreground transition hover:bg-primary/90"
+            <button
+              type="button"
+              onClick={() => setEnquiryOpen(true)}
+              className="flex h-10 w-full items-center justify-center gap-1.5 rounded-md bg-primary text-xs font-bold text-primary-foreground transition hover:bg-primary/90 cursor-pointer shadow-xs"
             >
-              <span>View Profile</span>
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Link>
+              <Send className="h-3.5 w-3.5" />
+              <span>Enquiry</span>
+            </button>
           </div>
         </div>
       </CardContent>
@@ -113,6 +116,19 @@ export function InstituteCard({ institute, viewMode = "grid" }: InstituteCardPro
           subtitle: `${institute.location} • ${institute.category}`,
           avg_rating: institute.rating || 4.8,
           review_count: institute.reviews || 24,
+        }}
+      />
+
+      {/* Universal Enquiry Dialog */}
+      <CourseEnquiryDialog
+        open={enquiryOpen}
+        onOpenChange={setEnquiryOpen}
+        course={{
+          id: institute.id,
+          title: institute.name,
+          institute: `${institute.location} • ${institute.category}`,
+          institution_id: institute.id,
+          type: "institute",
         }}
       />
     </Card>

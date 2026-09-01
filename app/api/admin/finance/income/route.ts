@@ -4,10 +4,14 @@ import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { hasPermission, isInstitutionAdminUser, isPlatformAdminUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
 import {
+  createFinanceIncomeCategory,
   createFinanceIncomeEntry,
   getInstitutionAdminName,
+  listFinanceEmployeeOptions,
   listFinanceIncome,
   listFinanceIncomeCategories,
+  listFinancePayerSuggestions,
+  listFinancePaymentMethods,
   type FinanceScope,
 } from "@/lib/queries/finance";
 
@@ -23,30 +27,44 @@ function jsonError(error: unknown, status = 400) {
 }
 
 function userInstitutionIds(user: CurrentUser) {
-  return new Set(
-    (user.memberships ?? [])
-      .filter((membership) => membership.role_code === "institution_admin")
-      .map((membership) => Number(membership.institution_id))
-      .filter((id) => Number.isInteger(id) && id > 0)
-  );
+  const ids = new Set<number>();
+  (user.memberships ?? []).forEach((membership) => {
+    const id = Number(membership.institution_id);
+    if (Number.isInteger(id) && id > 0) ids.add(id);
+  });
+  const directId = Number((user as any)?.institution_id);
+  if (Number.isInteger(directId) && directId > 0) ids.add(directId);
+  const underId = Number((user as any)?.under_institution_id);
+  if (Number.isInteger(underId) && underId > 0) ids.add(underId);
+  const profileInstId = Number((user as any)?.profile?.under_institution_id || (user as any)?.profile?.institution_id);
+  if (Number.isInteger(profileInstId) && profileInstId > 0) ids.add(profileInstId);
+  return ids;
 }
 
-function resolveScope(user: CurrentUser, institutionId: number | null): { scope: FinanceScope; institutionId: number | null } {
-  if (isPlatformAdminUser(user) || hasPermission(user, "finance.platform.income.view")) {
+function resolveScope(user: CurrentUser, requestedInstitutionId?: number | null): { scope: FinanceScope; institutionId: number | null } {
+  const isPlatform = isPlatformAdminUser(user) || hasPermission(user, "finance.platform.income.view");
+  const isInstitution = isInstitutionAdminUser(user) || (user as any)?.role === "institution_admin" || hasPermission(user, "finance.income.view");
+  const institutionIds = userInstitutionIds(user);
+
+  if (isPlatform && requestedInstitutionId) {
+    return { scope: "institution", institutionId: requestedInstitutionId };
+  }
+
+  if (isPlatform) {
     return { scope: "platform", institutionId: null };
   }
 
-  if (!isInstitutionAdminUser(user)) {
-    throw new Error("Forbidden: Admin access required");
+  if (isInstitution || institutionIds.size > 0) {
+    const institutionId = requestedInstitutionId && (institutionIds.has(requestedInstitutionId) || isInstitutionAdminUser(user) || (user as any)?.role === "institution_admin")
+      ? requestedInstitutionId
+      : (Array.from(institutionIds)[0] ?? requestedInstitutionId ?? (user as any)?.institution_id ?? null);
+    if (!institutionId) {
+      throw new Error("No active institution found for income management");
+    }
+    return { scope: "institution", institutionId };
   }
 
-  const institutionIds = userInstitutionIds(user);
-  const targetId = institutionId ?? Array.from(institutionIds)[0] ?? null;
-  if (!targetId || !institutionIds.has(targetId)) {
-    throw new Error("Forbidden: Institution access required");
-  }
-
-  return { scope: "institution", institutionId: targetId };
+  throw new Error("Forbidden: You do not have permission to access income records");
 }
 
 function positiveInt(value: string | null, fallback: number, max: number) {
@@ -86,8 +104,36 @@ export async function GET(req: Request) {
       limit,
       offset: (page - 1) * limit,
     });
-    const categories = await listFinanceIncomeCategories(db, scope, institutionId);
-    const adminName = institutionId ? await getInstitutionAdminName(db, institutionId) : user.full_name;
+    const [categories, employees, adminName, paymentMethods, payerSuggestions] = await Promise.all([
+      listFinanceIncomeCategories(db, scope, institutionId),
+      listFinanceEmployeeOptions(db, scope, institutionId),
+      institutionId ? getInstitutionAdminName(db, institutionId) : Promise.resolve(user.full_name),
+      listFinancePaymentMethods(db, { scope_type: scope, institution_id: institutionId }),
+      listFinancePayerSuggestions(db, scope, institutionId),
+    ]);
+
+    const currentUserOption = {
+      value: String(user.id),
+      label: `${user.full_name || "Admin"} (You)`,
+    };
+
+    const basePaidToOptions = scope === "platform"
+      ? [
+          currentUserOption,
+          { value: "platform_account", label: "Platform Account" },
+        ]
+      : [
+          currentUserOption,
+          { value: "institution_account", label: "Institution Account" },
+          ...(adminName && adminName !== user.full_name ? [{ value: "admin", label: adminName }] : []),
+        ];
+
+    const employeePaidToOptions = employees
+      .filter((emp) => emp.id !== user.id)
+      .map((emp) => ({
+        value: String(emp.id),
+        label: `${emp.full_name}${emp.role_label ? ` (${emp.role_label})` : ""}`,
+      }));
 
     return NextResponse.json({
       data: result.data,
@@ -100,15 +146,14 @@ export async function GET(req: Request) {
         scope,
         institution_id: institutionId,
         categories,
-        paid_to_options: scope === "platform"
-          ? [
-              { value: "platform_account", label: "Platform Account" },
-              { value: "admin", label: user.full_name || "Platform Admin" },
-            ]
-          : [
-              { value: "institution_account", label: "Institution Account" },
-              { value: "admin", label: adminName },
-            ],
+        payment_methods: paymentMethods,
+        payer_suggestions: payerSuggestions,
+        paid_to_options: [...basePaidToOptions, ...employeePaidToOptions],
+        current_user_receiver: {
+          value: String(user.id),
+          label: user.full_name || "Admin",
+        },
+        employee_options: employees,
       },
     });
   } catch (error) {
@@ -126,8 +171,10 @@ export async function POST(req: Request) {
       : null;
     const { scope, institutionId } = resolveScope(user, requestedInstitutionId);
 
+    const isPlatform = isPlatformAdminUser(user);
+    const isInstAdmin = isInstitutionAdminUser(user) || (user as any)?.role === "institution_admin";
     const permission = scope === "platform" ? "finance.platform.income.create" : "finance.income.create";
-    if (!hasPermission(user, permission, { institutionId })) {
+    if (!isPlatform && !isInstAdmin && !hasPermission(user, permission, { institutionId })) {
       throw new Error("Forbidden: You do not have permission to add income");
     }
 
@@ -137,18 +184,32 @@ export async function POST(req: Request) {
     const amount = Number(body.amount);
     if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a valid amount");
 
-    const categoryId = Number(body.category_id);
-    if (!Number.isInteger(categoryId) || categoryId <= 0) throw new Error("Select a payment category");
+    let categoryId = Number(body.category_id);
+    const customCategoryName = String(body.custom_category_name || body.category_name || "").trim();
+
+    if ((!Number.isInteger(categoryId) || categoryId <= 0) && customCategoryName) {
+      const createdCat = await createFinanceIncomeCategory(db, scope, institutionId, customCategoryName, user.id);
+      categoryId = createdCat.id;
+    }
+
+    if (!Number.isInteger(categoryId) || categoryId <= 0) throw new Error("Select or enter a payment category");
 
     const paidTo = String(body.paid_to ?? "").trim();
     const paidToLabel = String(body.paid_to_label ?? "").trim();
     if (!paidTo || !paidToLabel) throw new Error("Select who received the payment");
+
+    const paidBy = body.paid_by ? String(body.paid_by).trim() : null;
+    const paidByLabel = body.paid_by_label ? String(body.paid_by_label).trim() : null;
+    const payerName = body.payer_name ? String(body.payer_name).trim() : (paidByLabel || null);
 
     await createFinanceIncomeEntry(db, {
       scope_type: scope,
       institution_id: institutionId,
       category_id: categoryId,
       payment_method: paymentMethod as "cash" | "upi" | "net_banking",
+      paid_by: paidBy,
+      paid_by_label: paidByLabel,
+      payer_name: payerName,
       paid_to: paidTo,
       paid_to_label: paidToLabel,
       amount,

@@ -50,12 +50,15 @@ type InstitutionOption = {
   slug?: string | null;
 };
 
+type TargetAudience = "ALL" | "STUDENTS" | "STAFF";
+
 type CalendarEvent = {
   id: number;
   institution_id: number;
   title: string;
   description?: string | null;
   event_type: EventType;
+  target_audience?: TargetAudience | null;
   start_date: string;
   end_date: string;
   color?: string | null;
@@ -68,10 +71,17 @@ type EventForm = {
   title: string;
   description: string;
   eventType: EventType;
+  targetAudience: TargetAudience;
   startDate: string;
   endDate: string;
   color: string;
 };
+
+const TARGET_AUDIENCES: Array<{ value: TargetAudience; label: string }> = [
+  { value: "ALL", label: "All (Students & Staff)" },
+  { value: "STUDENTS", label: "For Students" },
+  { value: "STAFF", label: "For Staff" },
+];
 
 const EVENT_TYPES: Array<{ value: EventType; label: string; color: string }> = [
   { value: "HOLIDAY", label: "Holiday", color: "#ef4444" },
@@ -215,6 +225,7 @@ function defaultForm(date = new Date()): EventForm {
     title: "",
     description: "",
     eventType: "EVENT",
+    targetAudience: "ALL",
     startDate: toDateInputValue(start),
     endDate: toDateInputValue(end),
     color: "#38bdf8",
@@ -373,6 +384,13 @@ function HolidayDatePicker({
   );
 }
 
+function getEventAudience(event: CalendarEvent): TargetAudience {
+  if (event.target_audience) return event.target_audience;
+  if (event.description?.includes("[For: Students]")) return "STUDENTS";
+  if (event.description?.includes("[For: Staff]")) return "STAFF";
+  return "ALL";
+}
+
 export function InstituteCalendarPageContent({
   defaultCalendarMode = false,
 }: {
@@ -389,6 +407,7 @@ export function InstituteCalendarPageContent({
   const [institutionName, setInstitutionName] = useState("");
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [audienceFilter, setAudienceFilter] = useState<TargetAudience>("ALL");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [importingDefaults, setImportingDefaults] = useState(false);
@@ -410,11 +429,31 @@ export function InstituteCalendarPageContent({
     const start = startOfCalendarGrid(month);
     return Array.from({ length: 42 }, (_, index) => addDays(start, index));
   }, [month]);
+
+  const audienceCounts = useMemo(() => {
+    let studentCount = 0;
+    let staffCount = 0;
+    for (const e of events) {
+      const aud = getEventAudience(e);
+      if (aud === "STUDENTS" || aud === "ALL") studentCount++;
+      if (aud === "STAFF" || aud === "ALL") staffCount++;
+    }
+    return { studentCount, staffCount };
+  }, [events]);
+
+  const displayedEvents = useMemo(() => {
+    if (audienceFilter === "ALL") return events;
+    return events.filter((e) => {
+      const aud = getEventAudience(e);
+      return aud === "ALL" || aud === audienceFilter;
+    });
+  }, [events, audienceFilter]);
+
   const eventStats = useMemo(() => ({
-    events: events.length,
-    holidays: events.filter((event) => event.event_type === "HOLIDAY").length,
-    notices: events.filter((event) => event.event_type === "NOTICE").length,
-  }), [events]);
+    events: displayedEvents.length,
+    holidays: displayedEvents.filter((event) => event.event_type === "HOLIDAY").length,
+    notices: displayedEvents.filter((event) => event.event_type === "NOTICE").length,
+  }), [displayedEvents]);
 
   const fetchInstitutions = useCallback(async (search: string, page: number) => {
     const params = new URLSearchParams({ page: String(page), limit: "15", search });
@@ -471,11 +510,15 @@ export function InstituteCalendarPageContent({
   function openEditDialog(event: CalendarEvent) {
     const startDate = toDateInputValue(parseApiDate(event.start_date));
     const endDate = toDateInputValue(parseApiDate(event.end_date));
+    const targetAudience = getEventAudience(event);
+    const cleanDesc = (event.description || "").replace(/\[For:\s*(Students|Staff)\]\s*/gi, "").trim();
+
     setForm({
       id: event.id,
       title: event.title,
-      description: event.description || "",
+      description: cleanDesc,
       eventType: event.event_type,
+      targetAudience,
       startDate,
       endDate,
       color: event.color || EVENT_TYPES.find((type) => type.value === event.event_type)?.color || "#38bdf8",
@@ -506,14 +549,20 @@ export function InstituteCalendarPageContent({
         toast.error("Holiday end date cannot be before start date");
         return;
       }
+
+      const audiencePrefix = form.targetAudience === "STUDENTS" ? "[For: Students]" : form.targetAudience === "STAFF" ? "[For: Staff]" : "";
+      const rawDesc = form.description.replace(/\[For:\s*(Students|Staff)\]\s*/gi, "").trim();
+      const finalDescription = audiencePrefix ? `${audiencePrefix} ${rawDesc}`.trim() : rawDesc;
+
       const payload = {
         id: form.id,
         ...(defaultCalendarMode
           ? { default_calendar: true }
           : { institution_id: Number(selectedInstitutionId) }),
         title: form.title.trim(),
-        description: form.description.trim(),
+        description: finalDescription,
         event_type: form.eventType,
+        target_audience: form.targetAudience,
         start_date: startDate,
         end_date: endDate,
         color: form.color,
@@ -705,6 +754,37 @@ export function InstituteCalendarPageContent({
               <p className="mt-1 text-xl font-bold text-foreground sm:text-2xl">{eventStats.notices}</p>
             </div>
           </div>
+
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/60">
+            <span className="text-xs font-semibold text-muted-foreground mr-1">Audience View:</span>
+            <Button
+              type="button"
+              size="sm"
+              variant={audienceFilter === "ALL" ? "default" : "outline"}
+              className="h-7 text-xs px-3"
+              onClick={() => setAudienceFilter("ALL")}
+            >
+              All Events ({events.length})
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={audienceFilter === "STUDENTS" ? "default" : "outline"}
+              className="h-7 text-xs px-3"
+              onClick={() => setAudienceFilter("STUDENTS")}
+            >
+              For Students ({audienceCounts.studentCount})
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={audienceFilter === "STAFF" ? "default" : "outline"}
+              className="h-7 text-xs px-3"
+              onClick={() => setAudienceFilter("STAFF")}
+            >
+              For Staff ({audienceCounts.staffCount})
+            </Button>
+          </div>
         </div>
       </section>
 
@@ -804,34 +884,42 @@ export function InstituteCalendarPageContent({
                   </div>
                 )}
                 <div className="hidden space-y-1 sm:block">
-                  {dayEvents.slice(0, 3).map((event) => (
-                    <div
-                      key={event.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEditDialog(event);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
+                  {dayEvents.slice(0, 3).map((event) => {
+                    const aud = getEventAudience(event);
+                    return (
+                      <div
+                        key={event.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
                           e.stopPropagation();
                           openEditDialog(event);
-                        }
-                      }}
-                      className={cn(
-                        "flex items-center justify-between gap-2 rounded-md border px-2 py-1 text-xs font-semibold",
-                        eventTypeClass(event.event_type)
-                      )}
-                      style={event.color ? { borderColor: event.color, color: event.color } : undefined}
-                    >
-                      <span className="min-w-0 flex-1 truncate">{event.title}</span>
-                      {event.event_type !== "HOLIDAY" && (
-                        <span className="shrink-0 text-[10px] opacity-80">{getEventTime(event.start_date)}</span>
-                      )}
-                    </div>
-                  ))}
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openEditDialog(event);
+                          }
+                        }}
+                        className={cn(
+                          "flex items-center justify-between gap-1.5 rounded-md border px-2 py-1 text-xs font-semibold",
+                          eventTypeClass(event.event_type)
+                        )}
+                        style={event.color ? { borderColor: event.color, color: event.color } : undefined}
+                      >
+                        <span className="min-w-0 flex-1 truncate">{event.title}</span>
+                        {aud !== "ALL" && (
+                          <span className="shrink-0 rounded bg-background/70 px-1 py-0.2 text-[9px] font-bold text-foreground">
+                            {aud === "STUDENTS" ? "Students" : "Staff"}
+                          </span>
+                        )}
+                        {event.event_type !== "HOLIDAY" && (
+                          <span className="shrink-0 text-[10px] opacity-80">{getEventTime(event.start_date)}</span>
+                        )}
+                      </div>
+                    );
+                  })}
                   {dayEvents.length > 3 && (
                     <div className="px-1 text-xs text-muted-foreground">+{dayEvents.length - 3} more</div>
                   )}
@@ -858,8 +946,26 @@ export function InstituteCalendarPageContent({
                 id="calendar-title"
                 value={form.title}
                 onChange={(e) => setForm((current) => ({ ...current, title: e.target.value }))}
-                placeholder="Annual function, Diwali holiday..."
+                placeholder="Annual function, Diwali holiday, Staff meeting..."
               />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Target Audience (For Students / For Staff)</Label>
+              <Select
+                value={form.targetAudience}
+                onValueChange={(value) => setForm((current) => ({ ...current, targetAudience: value as TargetAudience }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select target audience..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {TARGET_AUDIENCES.map((aud) => (
+                    <SelectItem key={aud.value} value={aud.value}>
+                      {aud.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-4 sm:col-span-2 sm:grid-cols-[180px_1fr]">
               <div className="space-y-2">
