@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db/db";
+import { getInstitutionTenantByHost, getRequestHost } from "@/lib/tenancy/institution-domain";
 
 export type PublicTeacher = {
   id: number;
@@ -123,7 +124,27 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search")?.trim().toLowerCase() || "";
     const subject = searchParams.get("subject")?.trim().toLowerCase() || "";
-    const institutionId = searchParams.get("institutionId") ? Number(searchParams.get("institutionId")) : null;
+    
+    // Resolve Institution ID from params, headers, tenant domain, or .env
+    const institutionIdParam =
+      searchParams.get("institutionId") ||
+      searchParams.get("institution_id") ||
+      searchParams.get("inst_id") ||
+      req.headers.get("x-institution-id");
+    const parsedInstId = institutionIdParam && Number(institutionIdParam) > 0 ? Number(institutionIdParam) : null;
+
+    const envInstIdRaw = (
+      process.env.DEFAULT_INSTITUTION_ID ||
+      process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ||
+      process.env.INSTITUTION_ID ||
+      process.env.NEXT_PUBLIC_INSTITUTION_ID ||
+      ""
+    ).trim();
+    const envInstId = envInstIdRaw && /^\d+$/.test(envInstIdRaw) && Number(envInstIdRaw) > 0 ? Number(envInstIdRaw) : null;
+
+    const host = getRequestHost(req);
+    const tenant = host ? await getInstitutionTenantByHost(db, host) : null;
+    const targetInstId = parsedInstId || tenant?.institution_id || envInstId || null;
 
     let dbTeachers: PublicTeacher[] = [];
 
@@ -131,12 +152,24 @@ export async function GET(req: Request) {
       const whereConditions = [
         "u.is_active = TRUE",
         "COALESCE(u.is_deleted, FALSE) = FALSE",
-        "(r_im.code ILIKE '%teacher%' OR r_ur.code ILIKE '%teacher%' OR r_im.code ILIKE '%faculty%' OR r_ur.code ILIKE '%faculty%' OR COALESCE(up.is_teacher, FALSE) = TRUE OR u.email ILIKE '%teacher%' OR u.email ILIKE '%faculty%')"
+        `(${[
+          "COALESCE(up.is_teacher, FALSE) = TRUE",
+          "r_im.code = 'teacher'",
+          "r_ur.code = 'teacher'",
+          "d.name ILIKE '%teacher%'",
+          "d.name ILIKE '%faculty%'",
+          "d.name ILIKE '%professor%'",
+          "d.name ILIKE '%lecturer%'",
+          "d.name ILIKE '%instructor%'",
+          "d.name ILIKE '%educator%'",
+          "u.email ILIKE '%teacher%'",
+          "u.email ILIKE '%faculty%'",
+        ].join(" OR ")})`,
       ];
       const params: unknown[] = [];
 
-      if (institutionId && Number.isInteger(institutionId) && institutionId > 0) {
-        params.push(institutionId);
+      if (targetInstId && Number.isInteger(targetInstId) && targetInstId > 0) {
+        params.push(targetInstId);
         whereConditions.push(`(im.institution_id = $${params.length} OR up.under_institution_id = $${params.length})`);
       }
 
@@ -146,12 +179,21 @@ export async function GET(req: Request) {
         SELECT DISTINCT ON (u.id)
           u.id,
           u.full_name,
-          u.avatar_url,
+          COALESCE(u.avatar_url, up.avatar_url) AS avatar_url,
           u.email,
           COALESCE(d.name, 'Faculty Specialist') AS designation,
           COALESCE(ip1.name, ip2.name, 'Educational Institution') AS institution_name,
           COALESCE(ip1.id, ip2.id) AS institution_id,
-          COALESCE(ip1.city, ip2.city, 'Varanasi, UP') AS location
+          COALESCE(ip1.city, ip2.city, 'India') AS location,
+          up.qualification,
+          up.experience_years,
+          up.bio,
+          (
+            SELECT json_agg(s.name)
+            FROM user_teaching_subjects uts
+            JOIN subjects s ON s.id = uts.subject_id AND COALESCE(s.is_deleted, FALSE) = FALSE
+            WHERE uts.user_id = u.id
+          ) AS teaching_subjects
         FROM users u
         LEFT JOIN user_profiles up ON up.user_id = u.id
         LEFT JOIN designations d ON d.id = up.designation_id
@@ -188,6 +230,9 @@ export async function GET(req: Request) {
         dbTeachers = res.rows.map((r: any, idx: number) => {
           const poolIndex = (r.id + idx) % DEFAULT_SUBJECT_POOLS.length;
           const qualIndex = (r.id + idx) % DEFAULT_QUALIFICATIONS.length;
+          const userSubjects = Array.isArray(r.teaching_subjects) && r.teaching_subjects.length > 0
+            ? r.teaching_subjects
+            : DEFAULT_SUBJECT_POOLS[poolIndex];
 
           return {
             id: r.id,
@@ -196,14 +241,14 @@ export async function GET(req: Request) {
             designation: r.designation || "Faculty Specialist",
             institution_name: r.institution_name,
             institution_id: r.institution_id || null,
-            qualification: DEFAULT_QUALIFICATIONS[qualIndex],
-            experience_years: 4 + (r.id % 15),
-            subjects: DEFAULT_SUBJECT_POOLS[poolIndex],
-            bio: `Experienced faculty member at ${r.institution_name} dedicated to student mentoring, conceptual clarity, and career guidance.`,
+            qualification: r.qualification || DEFAULT_QUALIFICATIONS[qualIndex],
+            experience_years: r.experience_years ? Number(r.experience_years) : (4 + (r.id % 15)),
+            subjects: userSubjects,
+            bio: r.bio || `Experienced faculty member at ${r.institution_name} dedicated to student mentoring, conceptual clarity, and career guidance.`,
             rating: Number((4.6 + (r.id % 4) * 0.1).toFixed(1)),
             reviews_count: 30 + (r.id % 75),
             students_taught: 400 + (r.id % 200) * 12,
-            location: r.location || "Varanasi, UP",
+            location: r.location || "India",
             is_verified: true,
           };
         });
@@ -213,7 +258,7 @@ export async function GET(req: Request) {
     }
 
     // If specific institution requested, ONLY return teachers belonging to that institution
-    let combined = dbTeachers.length > 0 ? dbTeachers : (institutionId ? [] : NATIONWIDE_MARKETPLACE_TEACHERS);
+    let combined = dbTeachers.length > 0 ? dbTeachers : (targetInstId ? [] : NATIONWIDE_MARKETPLACE_TEACHERS);
 
     // Apply search filter
     if (search) {
@@ -238,8 +283,11 @@ export async function GET(req: Request) {
       teachers: combined,
       total: combined.length,
     });
-  } catch (error) {
-    console.error("Error fetching public teachers:", error);
-    return NextResponse.json({ success: true, teachers: NATIONWIDE_MARKETPLACE_TEACHERS, total: NATIONWIDE_MARKETPLACE_TEACHERS.length });
+  } catch (error: any) {
+    console.error("[Public Teachers GET] Error:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to fetch teachers" },
+      { status: 500 }
+    );
   }
 }

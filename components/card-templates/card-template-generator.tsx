@@ -143,6 +143,8 @@ export function CardTemplateGenerator({
   const [categoryId, setCategoryId] = useState("");
   const [templateName, setTemplateName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
+  const [isPaid, setIsPaid] = useState(false);
+  const [price, setPrice] = useState("199");
   const [generated, setGenerated] = useState<GeneratedTemplate | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [canvasImageSrc, setCanvasImageSrc] = useState<string | null>(null);
@@ -327,6 +329,7 @@ export function CardTemplateGenerator({
     setSaving(true);
     try {
       const thumbnailUrl = await uploadThumbnail(canvasImageSrc, accessToken);
+      const parsedPrice = isPaid ? Math.max(0, Number(price) || 0) : 0;
       const res = await fetch("/api/admin/master-data/card-templates", {
         method: "POST",
         headers: {
@@ -339,6 +342,9 @@ export function CardTemplateGenerator({
           thumbnail_url: thumbnailUrl,
           html_template: generated.html,
           is_public: isPublic,
+          is_paid: isPaid,
+          price: parsedPrice,
+          currency: "INR",
           fields: generated.fields.map((field, index) => ({
             field_name: field.name,
             label: field.label,
@@ -403,16 +409,64 @@ export function CardTemplateGenerator({
             </div>
 
             {selectedCategory && (
-              <div className="space-y-2">
-                <Label htmlFor="ai-template-name">Template Name</Label>
-                <Input
-                  id="ai-template-name"
-                  value={templateName}
-                  onChange={(event) => setTemplateName(event.target.value)}
-                  placeholder="Leave blank for AI to generate"
-                  className="bg-background"
-                  maxLength={150}
-                />
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="ai-template-name">Template Name</Label>
+                  <Input
+                    id="ai-template-name"
+                    value={templateName}
+                    onChange={(event) => setTemplateName(event.target.value)}
+                    placeholder="Leave blank for AI to generate"
+                    className="bg-background"
+                    maxLength={150}
+                  />
+                </div>
+
+                <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+                  <Label className="text-xs font-semibold">Pricing Model</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={!isPaid ? "default" : "outline"}
+                      className="h-8 text-xs font-medium"
+                      onClick={() => setIsPaid(false)}
+                    >
+                      Free Template
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={isPaid ? "default" : "outline"}
+                      className="h-8 text-xs font-medium"
+                      onClick={() => setIsPaid(true)}
+                    >
+                      Paid Template
+                    </Button>
+                  </div>
+                  {isPaid && (
+                    <div className="pt-2">
+                      <Label htmlFor="pricing-charge-input" className="text-xs text-muted-foreground">
+                        Institution Charge (₹ INR) *
+                      </Label>
+                      <div className="relative mt-1">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
+                          ₹
+                        </span>
+                        <Input
+                          id="pricing-charge-input"
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={price}
+                          onChange={(e) => setPrice(e.target.value)}
+                          placeholder="e.g. 199"
+                          className="pl-7 bg-background text-sm"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -598,6 +652,41 @@ export function CardTemplateGenerator({
                           value={templateName}
                           onChange={(event) => setTemplateName(event.target.value)}
                         />
+                      </div>
+                      <div className="space-y-2 rounded-lg border bg-muted/20 p-2.5">
+                        <Label className="text-xs font-semibold">Pricing Model</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={!isPaid ? "default" : "outline"}
+                            className="h-7 text-xs"
+                            onClick={() => setIsPaid(false)}
+                          >
+                            Free
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={isPaid ? "default" : "outline"}
+                            className="h-7 text-xs"
+                            onClick={() => setIsPaid(true)}
+                          >
+                            Paid
+                          </Button>
+                        </div>
+                        {isPaid && (
+                          <div className="pt-2">
+                            <Label className="text-[11px] text-muted-foreground">Charge (₹ INR)</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={price}
+                              onChange={(e) => setPrice(e.target.value)}
+                              className="mt-1 h-8 text-xs"
+                            />
+                          </div>
+                        )}
                       </div>
                       {generated.fields.map((field) => (
                         <div key={field.name} className="space-y-2">

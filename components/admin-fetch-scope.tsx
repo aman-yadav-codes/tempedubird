@@ -69,6 +69,9 @@ function getRequestUrl(input: RequestInfo | URL) {
 
 function shouldScopeInstitution(url: URL) {
   if (url.searchParams.has("institutionId") || url.searchParams.has("institution_id")) return false;
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/platformadmin")) {
+    return false;
+  }
   if (
     (url.pathname === "/api/admin/master-data/syllabi" ||
       url.pathname === "/api/admin/master-data/assignments" ||
@@ -78,7 +81,14 @@ function shouldScopeInstitution(url: URL) {
   ) {
     return false;
   }
-  if (url.pathname === "/api/admin/institutions/options") {
+  if (
+    url.pathname === "/api/admin/institutions/options" ||
+    url.pathname === "/api/admin/institutions/profiles" ||
+    url.pathname === "/api/admin/institutions/types" ||
+    url.pathname === "/api/admin/institutions/subtypes" ||
+    url.pathname === "/api/admin/institutions/facility-types" ||
+    url.pathname === "/api/admin/institutions/program-types"
+  ) {
     return false;
   }
   return INSTITUTION_SCOPED_ADMIN_API_PREFIXES.some((prefix) =>

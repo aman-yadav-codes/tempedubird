@@ -126,9 +126,13 @@ export function StaffProfileList() {
       if (filters.roleCode && filters.roleCode !== "all") {
         params.set("roleCode", filters.roleCode);
       }
-      if (filters.search.trim()) params.set("search", filters.search.trim());
-      if (filters.status !== "all") params.set("status", filters.status);
-      if (activeInstitution) {
+      const isPlatformAdmin = Boolean(
+        currentUser?.role_codes?.includes("platform_admin") ||
+        currentUser?.is_super_admin ||
+        currentUser?.roles?.includes("Platform Admin") ||
+        (currentUser as any)?.role === "platform_admin"
+      );
+      if (activeInstitution && !isPlatformAdmin) {
         params.set("institutionId", String(activeInstitution.id));
       }
 

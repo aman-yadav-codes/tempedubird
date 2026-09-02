@@ -14,11 +14,15 @@ import {
   RefreshCw,
   ShieldAlert,
   Trash2,
+  Landmark,
+  ExternalLink,
+  Globe,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { ExamQuestionEditor } from "@/components/exams/exam-question-editor";
 import { ExamEditor } from "@/components/exams/exam-editor";
+import { PlatformGovernmentExamDialog } from "@/components/exams/platform-government-exam-dialog";
 import type { ExamInstitutionOption } from "@/components/exams/exam-editor";
 import { AsyncSearchPopover } from "@/components/shared/async-search-popover";
 import { DatePicker } from "@/components/shared/date-picker";
@@ -187,6 +191,8 @@ export default function ExamsPage() {
   const [publishTarget, setPublishTarget] = useState<ExamRow | null>(null);
   const [actionRowId, setActionRowId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ExamRow | null>(null);
+  const [govDialogOpen, setGovDialogOpen] = useState(false);
+  const [editingGovExam, setEditingGovExam] = useState<ExamRow | null>(null);
 
   const authHeaders = useCallback(
     () => ({ Authorization: `Bearer ${accessToken}` }),
@@ -985,6 +991,24 @@ export default function ExamsPage() {
           },
         },
         {
+          id: "pricing",
+          header: "Pricing",
+          cell: ({ row }) => {
+            const series = row.original as any;
+            const isPaid = Boolean(series.is_paid || (Number(series.price) > 0));
+            const price = Number(series.price) || 0;
+            return isPaid ? (
+              <Badge variant="outline" className="border-rose-500/30 bg-rose-500/10 text-rose-600 font-bold text-xs">
+                ₹{price}
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 font-bold text-xs">
+                Free
+              </Badge>
+            );
+          },
+        },
+        {
           id: "actions",
           header: "Actions",
           cell: ({ row }) => {
@@ -1049,14 +1073,14 @@ export default function ExamsPage() {
                   {marketplaceMode && (
                     isAlreadyInheritedSeries(series) ? (
                       <DropdownMenuItem disabled>
-                        <Badge variant="outline" className={inheritedBadgeClass}>
+                        <Badge variant="outline" className="border-emerald-500/80 text-emerald-400">
                           Already inherited
                         </Badge>
                       </DropdownMenuItem>
                     ) : (
                       <DropdownMenuItem
                         disabled={actionLoading}
-                        onClick={() => void inheritSeries(series)}
+                        onClick={() => void inheritSeriesRows([series])}
                       >
                         <Plus className="size-4" />
                         Inherit all subjects
@@ -1075,36 +1099,77 @@ export default function ExamsPage() {
       {
         accessorKey: "title",
         header: "Exam",
-        cell: ({ row }) => (
-          <button
-            type="button"
-            className="min-w-[280px] text-left"
-            onClick={() => void openDetail(row.original as ExamRow)}
-          >
-            <span className="block font-semibold">{(row.original as ExamRow).title}</span>
-            <span className="block text-xs text-muted-foreground">
-              {(row.original as ExamRow).target_label ?? "No target"}
-            </span>
-            {(row.original as ExamRow).blocked_by_platform && (
-              <span className="mt-1 inline-flex items-center gap-1 text-xs text-destructive">
-                <ShieldAlert className="size-3" />
-                Blocked by Platform Admin
-              </span>
-            )}
-            {(row.original as ExamRow).marketplace_requested &&
-              !(row.original as ExamRow).is_public &&
-              !(row.original as ExamRow).blocked_by_platform && (
-                <span className="mt-1 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-                  {isPlatformAdmin ? "Action required" : "Marketplace approval pending"}
+        cell: ({ row }) => {
+          const exam = row.original as ExamRow;
+          return (
+            <div className="min-w-[280px] space-y-1">
+              <button
+                type="button"
+                className="text-left group"
+                onClick={() => {
+                  if (isPlatformAdmin || exam.is_government_exam) {
+                    setEditingGovExam(exam);
+                    setGovDialogOpen(true);
+                  } else {
+                    void openDetail(exam);
+                  }
+                }}
+              >
+                <span className="block font-semibold group-hover:text-primary transition-colors">
+                  {exam.title}
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  {exam.target_label ?? (exam.is_government_exam ? "All Students (National / State)" : "No target")}
+                </span>
+              </button>
+
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                {exam.conducting_body && (
+                  <Badge variant="outline" className="border-primary/30 text-primary font-bold text-[10px] gap-1 px-1.5 py-0">
+                    <Landmark className="size-2.5" />
+                    {exam.conducting_body}
+                  </Badge>
+                )}
+                {exam.exam_category && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                    {exam.exam_category}
+                  </Badge>
+                )}
+                {exam.apply_url && (
+                  <a
+                    href={exam.apply_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:underline ml-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ExternalLink className="size-2.5" />
+                    Apply Portal
+                  </a>
+                )}
+              </div>
+
+              {exam.blocked_by_platform && (
+                <span className="mt-1 inline-flex items-center gap-1 text-xs text-destructive">
+                  <ShieldAlert className="size-3" />
+                  Blocked by Platform Admin
                 </span>
               )}
-            {(row.original as ExamRow).is_public && (
-              <span className="mt-1 inline-flex items-center rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-700 dark:text-sky-300">
-                Marketplace
-              </span>
-            )}
-          </button>
-        ),
+              {exam.marketplace_requested &&
+                !exam.is_public &&
+                !exam.blocked_by_platform && (
+                  <span className="mt-1 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                    {isPlatformAdmin ? "Action required" : "Marketplace approval pending"}
+                  </span>
+                )}
+              {exam.is_public && (
+                <span className="mt-1 inline-flex items-center rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-700 dark:text-sky-300">
+                  Marketplace
+                </span>
+              )}
+            </div>
+          );
+        },
       },
       {
         accessorKey: "total_marks",
@@ -1170,6 +1235,24 @@ export default function ExamsPage() {
           ),
       },
       {
+        id: "pricing",
+        header: "Pricing",
+        cell: ({ row }) => {
+          const exam = row.original as any;
+          const isPaid = Boolean(exam.is_paid || (Number(exam.price) > 0));
+          const price = Number(exam.price) || 0;
+          return isPaid ? (
+            <Badge variant="outline" className="border-rose-500/30 bg-rose-500/10 text-rose-600 font-bold text-xs">
+              ₹{price}
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 font-bold text-xs">
+              Free
+            </Badge>
+          );
+        },
+      },
+      {
         id: "actions",
         header: "Actions",
         cell: ({ row }) => {
@@ -1215,6 +1298,33 @@ export default function ExamsPage() {
                 </DropdownMenuItem>
                 {isPlatformAdmin ? (
                   <>
+                    {exam.is_government_exam ? (
+                      <DropdownMenuItem
+                        className="whitespace-nowrap"
+                        onClick={() => {
+                          setEditingGovExam(exam);
+                          setGovDialogOpen(true);
+                        }}
+                      >
+                        <Pencil className="size-4" />
+                        Edit Exam Information
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem
+                        className="whitespace-nowrap"
+                        onClick={() => void openEdit(exam)}
+                      >
+                        <Pencil className="size-4" />
+                        Edit Exam
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem
+                      className="text-destructive whitespace-nowrap"
+                      onClick={() => setDeleteTarget(exam)}
+                    >
+                      <Trash2 className="size-4" />
+                      Delete
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     {exam.marketplace_requested &&
                       !exam.is_public &&
@@ -1333,25 +1443,41 @@ export default function ExamsPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Exams</h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-xs sm:text-sm mt-0.5">
             {isPlatformAdmin
-              ? "Review institution exams and block unsafe content."
+              ? "Create scheduled exams, syllabus-mapped tests, and publish government competitive exams."
               : "Create scheduled exams with targets, marketplace sharing, and result controls."}
           </p>
         </div>
-        <Button
-          onClick={() => {
-            if (examView !== "my") {
-              setExamView("my");
-            }
-            setEditing(null);
-            setActiveSeries(null);
-            setEditorOpen(true);
-          }}
-        >
-          <Plus className="size-4" />
-          Add Exam
-        </Button>
+        <div className="flex items-center gap-2">
+          {isPlatformAdmin && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditingGovExam(null);
+                setGovDialogOpen(true);
+              }}
+              className="gap-2 font-bold shadow-xs cursor-pointer"
+            >
+              <Landmark className="size-4" />
+              Publish Government Exam
+            </Button>
+          )}
+          <Button
+            onClick={() => {
+              if (examView !== "my") {
+                setExamView("my");
+              }
+              setEditing(null);
+              setActiveSeries(null);
+              setEditorOpen(true);
+            }}
+            className="gap-1.5 font-bold shadow-xs cursor-pointer"
+          >
+            <Plus className="size-4" />
+            Add Exam
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -2364,6 +2490,16 @@ export default function ExamsPage() {
           }}
         />
       )}
+
+      <PlatformGovernmentExamDialog
+        open={govDialogOpen}
+        onOpenChange={setGovDialogOpen}
+        exam={editingGovExam}
+        accessToken={accessToken}
+        onSuccess={() => {
+          void fetchRows();
+        }}
+      />
     </div>
   );
 }

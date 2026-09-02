@@ -91,7 +91,19 @@ export type ExamRow = {
   syllabus_node_ids?: number[];
   syllabus_nodes?: ExamSyllabusNode[];
   questions?: ExamQuestion[];
+  is_government_exam?: boolean;
+  conducting_body?: string | null;
+  exam_category?: string | null;
+  application_start_date?: string | null;
+  application_end_date?: string | null;
+  admit_card_date?: string | null;
+  apply_url?: string | null;
+  official_website_url?: string | null;
+  notification_pdf_url?: string | null;
+  eligibility_criteria?: string | null;
+  application_fee?: string | null;
 };
+
 
 export type ExamSeriesRow = {
   id: number;

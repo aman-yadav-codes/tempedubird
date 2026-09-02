@@ -195,9 +195,14 @@ export default async function BlogDetailPage({ params }: BlogPostProps) {
         {/* Article Header Card */}
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge className="bg-primary/10 text-primary border-primary/20 font-bold text-xs">
+            <Badge className="bg-primary/10 text-primary border-primary/20 text-xs font-bold uppercase tracking-wider px-3 py-1">
               {article.category}
             </Badge>
+            {article.sub_category && (
+              <Badge variant="outline" className="text-xs font-semibold px-2.5 py-0.5">
+                {article.sub_category}
+              </Badge>
+            )}
             {article.institution_name && (
               <Badge variant="outline" className="text-xs font-semibold gap-1">
                 <Building2 className="h-3 w-3 text-primary" />
@@ -212,9 +217,17 @@ export default async function BlogDetailPage({ params }: BlogPostProps) {
 
           <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground pt-2 border-b border-border/70 pb-5">
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-primary/15 text-primary font-black text-xs flex items-center justify-center">
-                {(article.author_name || "A").slice(0, 2).toUpperCase()}
-              </div>
+              {article.author_avatar ? (
+                <img
+                  src={article.author_avatar}
+                  alt={article.author_name || "Author"}
+                  className="h-8 w-8 rounded-full object-cover border shrink-0"
+                />
+              ) : (
+                <div className="h-8 w-8 rounded-full bg-primary/15 text-primary font-black text-xs flex items-center justify-center shrink-0">
+                  {(article.author_name || "A").slice(0, 2).toUpperCase()}
+                </div>
+              )}
               <div>
                 <p className="font-bold text-foreground">{article.author_name || "EduBird Contributor"}</p>
                 <p className="text-[10px] text-muted-foreground">{article.author_role || "Academic Faculty"}</p>
@@ -256,6 +269,35 @@ export default async function BlogDetailPage({ params }: BlogPostProps) {
               alt={article.title}
               className="h-full w-full object-cover"
             />
+          </div>
+        )}
+
+        {/* Featured Video Player if available */}
+        {article.video_url && (
+          <div className="rounded-2xl overflow-hidden border border-border bg-black shadow-md">
+            {article.video_url.includes("youtube.com") || article.video_url.includes("youtu.be") ? (
+              <div className="relative aspect-video w-full">
+                <iframe
+                  src={
+                    article.video_url.includes("watch?v=")
+                      ? article.video_url.replace("watch?v=", "embed/")
+                      : article.video_url.includes("youtu.be/")
+                      ? article.video_url.replace("youtu.be/", "www.youtube.com/embed/")
+                      : article.video_url
+                  }
+                  title={article.title}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="h-full w-full border-0"
+                />
+              </div>
+            ) : (
+              <video
+                src={article.video_url}
+                controls
+                className="w-full max-h-[500px] object-contain"
+              />
+            )}
           </div>
         )}
 

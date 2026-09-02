@@ -36,6 +36,10 @@ export type DocumentTemplateRow = {
   version: number;
   is_public: boolean;
   is_active: boolean;
+  is_paid?: boolean;
+  price?: number;
+  currency?: string;
+  is_purchased?: boolean;
   field_count: number;
   assignment_count: number;
   is_assigned_to_active_institution?: boolean;
@@ -51,3 +55,17 @@ export type DocumentTemplateRow = {
   updated_at: string;
   fields?: DocumentTemplateField[];
 };
+
+export type CardCategoryRow = {
+  id: number;
+  name: string;
+  slug?: string;
+  description?: string | null;
+  target_audience?: "student" | "staff";
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  created_by_name?: string | null;
+  updated_by_name?: string | null;
+};
+

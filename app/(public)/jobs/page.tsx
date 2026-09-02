@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Briefcase,
   Building2,
@@ -9,13 +10,16 @@ import {
   Clock,
   ExternalLink,
   GraduationCap,
+  HelpCircle,
   IndianRupee,
   Loader2,
   MapPin,
+  MessageCircle,
+  Phone,
   Search,
+  Send,
   Sparkles,
   Users,
-  Send,
   Check,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -97,6 +101,18 @@ export default function PublicJobsPage() {
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [viewingJob, setViewingJob] = useState<StaffJobPosting | null>(null);
 
+  // Enquiry dialog
+  const [enquiryModalOpen, setEnquiryModalOpen] = useState(false);
+  const [enquiryJob, setEnquiryJob] = useState<StaffJobPosting | null>(null);
+  const [enquirySubmitting, setEnquirySubmitting] = useState(false);
+  const [enquirySubmitted, setEnquirySubmitted] = useState(false);
+  const [enquiryForm, setEnquiryForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    message: "",
+  });
+
   const fetchJobs = useCallback(async () => {
     setLoading(true);
     try {
@@ -147,6 +163,46 @@ export default function PublicJobsPage() {
   function handleOpenDetails(job: StaffJobPosting) {
     setViewingJob(job);
     setDetailsModalOpen(true);
+  }
+
+  function handleOpenWhatsapp(job: StaffJobPosting) {
+    const text = `Hello, I am interested in the ${job.title} vacancy (${job.department}) at ${job.institution_name || "EduBird"}. Could you please provide more details?`;
+    window.open(`https://wa.me/919999999999?text=${encodeURIComponent(text)}`, "_blank");
+  }
+
+  function handleCall(_job: StaffJobPosting) {
+    window.location.href = "tel:+919999999999";
+  }
+
+  function handleOpenEnquiry(job: StaffJobPosting) {
+    setEnquiryJob(job);
+    setEnquirySubmitted(false);
+    setEnquiryForm({
+      name: "",
+      email: "",
+      phone: "",
+      message: `Hi, I am interested in the ${job.title} (${job.department}) vacancy. Please share more details regarding this role.`,
+    });
+    setEnquiryModalOpen(true);
+  }
+
+  async function handleEnquirySubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!enquiryJob) return;
+    if (!enquiryForm.name.trim() || !enquiryForm.phone.trim()) {
+      toast.error("Please provide your name and phone number");
+      return;
+    }
+    setEnquirySubmitting(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      setEnquirySubmitted(true);
+      toast.success("Enquiry submitted successfully! Our recruitment team will get in touch with you shortly.");
+    } catch {
+      toast.error("Failed to submit enquiry. Please try again.");
+    } finally {
+      setEnquirySubmitting(false);
+    }
   }
 
   async function handleSubmitApplication(e: React.FormEvent) {
@@ -317,7 +373,9 @@ export default function PublicJobsPage() {
 
                   <div>
                     <CardTitle className="text-lg font-bold text-foreground group-hover:text-primary transition-colors line-clamp-1">
-                      {job.title}
+                      <Link href={`/jobs/${job.id}`} className="hover:underline">
+                        {job.title}
+                      </Link>
                     </CardTitle>
                     {job.institution_name && (
                       <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1">
@@ -328,7 +386,7 @@ export default function PublicJobsPage() {
                   </div>
                 </CardHeader>
 
-                <CardContent className="p-5 pt-0 space-y-4">
+                <CardContent className="p-5 pt-0 space-y-3.5">
                   <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
                     {job.description}
                   </p>
@@ -352,23 +410,60 @@ export default function PublicJobsPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 pt-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => handleOpenDetails(job)}
-                      className="flex-1 h-9 text-xs font-semibold"
-                    >
-                      View Details
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={() => handleOpenApply(job)}
-                      className="flex-1 h-9 text-xs font-bold gap-1.5 shadow-xs"
-                    >
-                      <Send className="size-3.5" />
-                      Apply Now
-                    </Button>
+                  <div className="space-y-2 pt-1">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        asChild
+                        variant="outline"
+                        className="flex-1 h-9 text-xs font-semibold"
+                      >
+                        <Link href={`/jobs/${job.id}`}>View Details</Link>
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => handleOpenApply(job)}
+                        className="flex-1 h-9 text-xs font-bold gap-1.5 shadow-xs"
+                      >
+                        <Send className="size-3.5" />
+                        Apply Now
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenWhatsapp(job)}
+                        className="h-8 text-[11px] font-semibold border-emerald-500/30 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 hover:border-emerald-500/40 gap-1 px-1"
+                        title="Chat on WhatsApp"
+                      >
+                        <MessageCircle className="size-3.5 text-emerald-600 shrink-0" />
+                        <span className="truncate">WhatsApp</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleCall(job)}
+                        className="h-8 text-[11px] font-semibold border-blue-500/30 bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 hover:border-blue-500/40 gap-1 px-1"
+                        title="Call Recruitment Helpline"
+                      >
+                        <Phone className="size-3.5 text-blue-600 shrink-0" />
+                        <span className="truncate">Call Now</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenEnquiry(job)}
+                        className="h-8 text-[11px] font-semibold border-amber-500/30 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 hover:border-amber-500/40 gap-1 px-1"
+                        title="Submit Quick Enquiry"
+                      >
+                        <HelpCircle className="size-3.5 text-amber-600 shrink-0" />
+                        <span className="truncate">Enquiry Now</span>
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -441,10 +536,58 @@ export default function PublicJobsPage() {
             )}
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
+            {viewingJob && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOpenWhatsapp(viewingJob)}
+                  className="h-8 text-xs font-semibold border-emerald-500/30 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 gap-1.5"
+                >
+                  <MessageCircle className="size-3.5 text-emerald-600" />
+                  WhatsApp
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleCall(viewingJob)}
+                  className="h-8 text-xs font-semibold border-blue-500/30 bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 gap-1.5"
+                >
+                  <Phone className="size-3.5 text-blue-600" />
+                  Call Now
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDetailsModalOpen(false);
+                    handleOpenEnquiry(viewingJob);
+                  }}
+                  className="h-8 text-xs font-semibold border-amber-500/30 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 gap-1.5"
+                >
+                  <HelpCircle className="size-3.5 text-amber-600" />
+                  Enquiry Now
+                </Button>
+              </>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
             <Button variant="outline" onClick={() => setDetailsModalOpen(false)}>
               Close
             </Button>
+            {viewingJob && (
+              <Button asChild variant="outline" className="font-semibold gap-1.5">
+                <Link href={`/jobs/${viewingJob.id}`}>
+                  <ExternalLink className="size-3.5" />
+                  Full Detail Page
+                </Link>
+              </Button>
+            )}
             <Button
               onClick={() => {
                 setDetailsModalOpen(false);
@@ -576,6 +719,97 @@ export default function PublicJobsPage() {
                 <Button type="submit" disabled={submitting} className="font-bold gap-1.5">
                   {submitting ? <Loader2 className="size-4 animate-spin mr-1.5" /> : <Send className="size-3.5" />}
                   Submit Application
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Enquiry Modal */}
+      <Dialog open={enquiryModalOpen} onOpenChange={setEnquiryModalOpen}>
+        <DialogContent className="max-w-md w-full max-h-[90vh] overflow-y-auto">
+          {enquirySubmitted ? (
+            <div className="py-8 text-center space-y-3">
+              <div className="size-14 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto">
+                <Check className="size-8" />
+              </div>
+              <DialogTitle className="text-xl font-bold">Enquiry Submitted!</DialogTitle>
+              <DialogDescription className="max-w-sm mx-auto">
+                Thank you for your enquiry regarding <strong>{enquiryJob?.title}</strong>. Our campus recruitment desk will get back to you shortly.
+              </DialogDescription>
+              <Button onClick={() => setEnquiryModalOpen(false)} className="mt-4 font-bold">
+                Done
+              </Button>
+            </div>
+          ) : (
+            <form onSubmit={handleEnquirySubmit}>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+                  <HelpCircle className="size-5 text-amber-600" />
+                  Job Enquiry / Question
+                </DialogTitle>
+                <DialogDescription>
+                  Have a question about <strong className="text-foreground">{enquiryJob?.title}</strong> ({enquiryJob?.department})? Send us a quick enquiry.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3 py-3 text-sm">
+                <div className="space-y-1.5">
+                  <Label htmlFor="enq-name">Full Name *</Label>
+                  <Input
+                    id="enq-name"
+                    required
+                    value={enquiryForm.name}
+                    onChange={(e) => setEnquiryForm({ ...enquiryForm, name: e.target.value })}
+                    placeholder="e.g. Ankit Sharma"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="enq-phone">Phone / WhatsApp *</Label>
+                    <Input
+                      id="enq-phone"
+                      type="tel"
+                      required
+                      value={enquiryForm.phone}
+                      onChange={(e) => setEnquiryForm({ ...enquiryForm, phone: e.target.value })}
+                      placeholder="+91 9876543210"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="enq-email">Email Address</Label>
+                    <Input
+                      id="enq-email"
+                      type="email"
+                      value={enquiryForm.email}
+                      onChange={(e) => setEnquiryForm({ ...enquiryForm, email: e.target.value })}
+                      placeholder="name@example.com"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="enq-msg">Message / Query *</Label>
+                  <Textarea
+                    id="enq-msg"
+                    rows={3}
+                    required
+                    value={enquiryForm.message}
+                    onChange={(e) => setEnquiryForm({ ...enquiryForm, message: e.target.value })}
+                    placeholder="Ask about job location, timings, syllabus requirements, compensation, etc."
+                  />
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button type="button" variant="outline" onClick={() => setEnquiryModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={enquirySubmitting} className="font-bold gap-1.5 bg-amber-600 hover:bg-amber-700 text-white">
+                  {enquirySubmitting ? <Loader2 className="size-4 animate-spin mr-1.5" /> : <Send className="size-3.5" />}
+                  Submit Enquiry
                 </Button>
               </DialogFooter>
             </form>

@@ -49,6 +49,8 @@ export default function PublicProductsPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [programs, setPrograms] = useState<any[]>([]);
+  const [institutionInfo, setInstitutionInfo] = useState<{ id: number; name: string; slug?: string; logo_url?: string } | null>(null);
+  const [isPlatformStore, setIsPlatformStore] = useState(true);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -73,6 +75,12 @@ export default function PublicProductsPage() {
       .then(([prodData, catData, progData]) => {
         if (prodData.products) {
           setProducts(prodData.products);
+        }
+        if (prodData.institution) {
+          setInstitutionInfo(prodData.institution);
+          setIsPlatformStore(false);
+        } else {
+          setIsPlatformStore(Boolean(prodData.is_platform_store));
         }
         if (catData.categories && Array.isArray(catData.categories)) {
           setCategories(catData.categories);
@@ -122,11 +130,9 @@ export default function PublicProductsPage() {
       }
 
       if (selectedProgramId !== "all") {
-        const progIdNum = Number(selectedProgramId);
-        const hasInArray = Array.isArray(p.program_ids) && (
-          p.program_ids.includes(progIdNum) || p.program_ids.includes(String(progIdNum))
-        );
-        const hasInAssociated = Array.isArray(p.associated_programs) && p.associated_programs.some((ap: any) => ap.id === progIdNum);
+        const progNum = Number(selectedProgramId);
+        const hasInArray = Array.isArray(p.program_ids) && p.program_ids.includes(progNum);
+        const hasInAssociated = Array.isArray(p.associated_programs) && p.associated_programs.some((ap: any) => Number(ap.id) === progNum);
         if (!hasInArray && !hasInAssociated) {
           return false;
         }
@@ -159,13 +165,15 @@ export default function PublicProductsPage() {
       <section className="relative overflow-hidden bg-gradient-to-b from-primary/10 via-background to-background border-b border-border py-10 sm:py-14">
         <div className="container mx-auto px-4 text-center max-w-3xl space-y-3.5">
           <Badge variant="outline" className="text-xs font-extrabold uppercase px-3 py-1 bg-primary/10 text-primary border-primary/20">
-            Official Academic Store & Student Kits
+            {institutionInfo?.name ? `${institutionInfo.name} Store` : "Official Academic Store & Student Kits"}
           </Badge>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-foreground tracking-tight">
-            Curated Study Kits, Uniforms & Lab Equipment
+            {institutionInfo?.name ? `${institutionInfo.name} Study Kits, Uniforms & Essentials` : "Curated Study Kits, Uniforms & Lab Equipment"}
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl mx-auto">
-            Discover verified solved question banks, laboratory toolkits, official student apparel, and digital learning devices tailored for your course.
+            {institutionInfo?.name
+              ? `Explore official student apparel, laboratory kits, prescribed textbooks, and academic supplies verified for ${institutionInfo.name}.`
+              : "Discover verified solved question banks, laboratory toolkits, official student apparel, and digital learning devices tailored for your course."}
           </p>
 
           {/* SEARCH BAR */}

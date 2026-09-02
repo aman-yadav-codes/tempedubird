@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db/db";
 import { ensureFeatureSchema } from "@/lib/db/ensure-feature-schema";
+import { getInstitutionTenantByHost, getRequestHost } from "@/lib/tenancy/institution-domain";
 
 async function ensureTeamSchema() {
   try {
@@ -22,9 +23,27 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const search = url.searchParams.get("search")?.trim() || "";
     const department = url.searchParams.get("department")?.trim() || "";
-    const institutionIdParam = url.searchParams.get("institution_id") || url.searchParams.get("institutionId") || req.headers.get("x-institution-id");
-    const parsedInstId = institutionIdParam ? Number(institutionIdParam) : null;
-    const targetInstId = Number.isInteger(parsedInstId) && (parsedInstId as number) > 0 ? (parsedInstId as number) : null;
+    
+    // Resolve Institution ID from params, headers, tenant domain, or .env
+    const institutionIdParam =
+      url.searchParams.get("institution_id") ||
+      url.searchParams.get("institutionId") ||
+      url.searchParams.get("inst_id") ||
+      req.headers.get("x-institution-id");
+    const parsedInstId = institutionIdParam && Number(institutionIdParam) > 0 ? Number(institutionIdParam) : null;
+
+    const envInstIdRaw = (
+      process.env.DEFAULT_INSTITUTION_ID ||
+      process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ||
+      process.env.INSTITUTION_ID ||
+      process.env.NEXT_PUBLIC_INSTITUTION_ID ||
+      ""
+    ).trim();
+    const envInstId = envInstIdRaw && /^\d+$/.test(envInstIdRaw) && Number(envInstIdRaw) > 0 ? Number(envInstIdRaw) : null;
+
+    const host = getRequestHost(req);
+    const tenant = host ? await getInstitutionTenantByHost(db, host) : null;
+    const targetInstId = parsedInstId || tenant?.institution_id || envInstId || null;
 
     let query = `
       WITH team_users AS (
@@ -48,7 +67,7 @@ export async function GET(req: Request) {
             ELSE 'active'
           END AS status,
           u.created_at::date::text AS joined_date,
-          u.avatar_url AS profile_image,
+          COALESCE(u.avatar_url, up.avatar_url) AS profile_image,
           up.bio AS notes,
           COALESCE(im.institution_id, up.under_institution_id) AS institution_id,
           u.created_at,
@@ -62,15 +81,23 @@ export async function GET(req: Request) {
         LEFT JOIN roles pr ON pr.id = ur.role_id
         LEFT JOIN designations d ON d.id = up.designation_id
         WHERE COALESCE(u.is_deleted, FALSE) = FALSE
-          AND (u.show_in_team = TRUE OR up.show_in_team = TRUE)
+          AND u.is_active = TRUE
           AND (
-            $1::int IS NULL 
-            OR (
+            $1::int IS NOT NULL AND (
               im.institution_id = $1::int 
               OR up.under_institution_id = $1::int
               OR EXISTS (
                 SELECT 1 FROM institution_memberships im2
                 WHERE im2.user_id = u.id AND im2.institution_id = $1::int AND im2.is_active = TRUE AND COALESCE(im2.is_deleted, FALSE) = FALSE
+              )
+            )
+            OR (
+              $1::int IS NULL AND (
+                pr.code = 'platform_admin'
+                OR ur.role_id IN (SELECT id FROM roles WHERE code = 'platform_admin')
+                OR (im.institution_id IS NULL AND up.under_institution_id IS NULL)
+                OR u.show_in_team = TRUE
+                OR up.show_in_team = TRUE
               )
             )
           )
@@ -134,7 +161,7 @@ export async function GET(req: Request) {
     let institutionInfo = null;
     if (targetInstId) {
       const instRes = await db.query(
-        `SELECT id, name, slug, logo_url, about, location_name FROM institutions WHERE id = $1`,
+        `SELECT id, name, slug, logo_url, about FROM institution_profiles WHERE id = $1`,
         [targetInstId]
       );
       if (instRes.rows.length > 0) {
@@ -146,7 +173,7 @@ export async function GET(req: Request) {
     const departmentsRes = await db.query(`
       SELECT DISTINCT department 
       FROM (
-        SELECT department FROM user_profiles WHERE show_in_team = TRUE AND department IS NOT NULL
+        SELECT department FROM user_profiles WHERE department IS NOT NULL
         UNION
         SELECT department FROM internal_team_members WHERE status = 'active' AND department IS NOT NULL
       ) d

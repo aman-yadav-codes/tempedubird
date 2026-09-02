@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo } from "react";
+import { usePathname } from "next/navigation";
 import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { useAuthStore } from "@/store";
 import { toast } from "sonner";
@@ -519,7 +520,6 @@ export default function InstitutionsAdminPage() {
         { label: "Basic", icon: Building2 },
         { label: "Mission, Vision & Goal", icon: Target },
         { label: "Contact & Branches", icon: MapPin },
-        { label: "Courses", icon: GraduationCap },
         { label: "Founder", icon: UserCheck },
     ];
 
@@ -1157,6 +1157,16 @@ export default function InstitutionsAdminPage() {
         }
     });
 
+    const pathname = usePathname();
+    const isPlatformAdmin = Boolean(
+        pathname?.startsWith("/platformadmin") ||
+        user?.is_super_admin ||
+        user?.role_codes?.includes("platform_admin") ||
+        user?.roles?.includes("platform_admin") ||
+        user?.primary_role === "platform_admin" ||
+        (!user?.memberships?.length)
+    );
+
     return (
         <div className="space-y-6 w-full max-w-full">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1164,11 +1174,13 @@ export default function InstitutionsAdminPage() {
                     <h1 className="text-2xl font-bold tracking-tight">Institutions</h1>
                     <p className="text-sm text-muted-foreground">Manage organization profiles, contact info, subtypes and media.</p>
                 </div>
-                <div>
-                    <Button onClick={openCreateDialog} className="w-full sm:w-auto">
-                        <Plus className="mr-2 h-4 w-4" /> New Institution
-                    </Button>
-                </div>
+                {!isPlatformAdmin && (
+                    <div>
+                        <Button onClick={openCreateDialog} className="w-full sm:w-auto">
+                            <Plus className="mr-2 h-4 w-4" /> New Institution
+                        </Button>
+                    </div>
+                )}
             </div>
 
             <DataTable
@@ -1299,7 +1311,7 @@ export default function InstitutionsAdminPage() {
 
                     {/* Wizard Steps Header */}
                     <div className="-mx-4 overflow-x-auto overscroll-x-contain px-4 pb-2 mb-6 sm:mx-0 sm:overflow-visible sm:px-0 sm:pb-0">
-                        <ol className="flex w-max min-w-full gap-2 sm:w-full sm:grid sm:grid-cols-5">
+                        <ol className="flex w-max min-w-full gap-2 sm:w-full sm:grid sm:grid-cols-4">
                             {steps.map((step, idx) => {
                                 const Icon = step.icon;
                                 const isActive = idx === activeStep;
@@ -1600,17 +1612,6 @@ export default function InstitutionsAdminPage() {
                         )}
 
                         {activeStep === 3 && (
-                            <div className="space-y-4">
-                                <InstitutionCourseManager
-                                    institutionId={editing?.id || 0}
-                                    accessToken={accessToken}
-                                    stagedCourses={stagedCourses}
-                                    onStagedCoursesChange={setStagedCourses}
-                                />
-                            </div>
-                        )}
-
-                        {activeStep === 4 && (
                             <div className="space-y-4">
                                 <div className="space-y-1">
                                     <h3 className="text-sm font-semibold flex items-center gap-2">

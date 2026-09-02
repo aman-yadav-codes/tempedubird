@@ -793,56 +793,142 @@ export const getUsersPaginatedQuery = async (
   if (filters.staffScope === "all" || filters.staffScope === "institution_staff") {
     if (institutionFilterIndex) {
       filtersWhere.push(`
-        EXISTS (
-          SELECT 1
-          FROM institution_memberships staff_member
-          INNER JOIN roles staff_role ON staff_role.id = staff_member.role_id
-          WHERE staff_member.user_id = u.id
-            AND staff_member.institution_id = $${institutionFilterIndex}
-            AND staff_member.is_active = TRUE
-            AND COALESCE(staff_member.is_deleted, FALSE) = FALSE
-            AND staff_role.code NOT IN ('student', 'guardian', 'parent')
+        (
+          EXISTS (
+            SELECT 1
+            FROM institution_memberships staff_member
+            INNER JOIN roles staff_role ON staff_role.id = staff_member.role_id
+            WHERE staff_member.user_id = u.id
+              AND staff_member.institution_id = $${institutionFilterIndex}
+              AND staff_member.is_active = TRUE
+              AND COALESCE(staff_member.is_deleted, FALSE) = FALSE
+              AND staff_role.code NOT IN ('student', 'guardian', 'parent')
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM user_profiles scoped_up
+            JOIN user_roles scoped_ur ON scoped_ur.user_id = u.id
+            JOIN roles scoped_r ON scoped_r.id = scoped_ur.role_id
+            WHERE scoped_up.user_id = u.id
+              AND scoped_up.under_institution_id = $${institutionFilterIndex}
+              AND scoped_r.code NOT IN ('student', 'guardian', 'parent')
+          )
         )
       `);
     } else {
       filtersWhere.push(`
-        EXISTS (
-          SELECT 1
-          FROM user_roles global_role
-          INNER JOIN roles global_role_meta ON global_role_meta.id = global_role.role_id
-          LEFT JOIN scope_types st ON st.id = global_role_meta.scope_id
-          WHERE global_role.user_id = u.id
-            AND (st.code = 'platform' OR global_role_meta.code IN ('platform_admin', 'super_admin') OR NOT EXISTS (
-              SELECT 1 FROM institution_memberships im WHERE im.user_id = u.id AND im.is_active = TRUE AND COALESCE(im.is_deleted, FALSE) = FALSE
-            ))
-            AND global_role_meta.code NOT IN ('student', 'guardian', 'parent')
+        (
+          (
+            u.created_by = 1
+            OR EXISTS (
+              SELECT 1
+              FROM user_roles cr_ur
+              JOIN roles cr_r ON cr_r.id = cr_ur.role_id
+              WHERE cr_ur.user_id = u.created_by
+                AND cr_r.code IN ('platform_admin', 'super_admin')
+            )
+            OR (
+              u.created_by IS NULL
+              AND EXISTS (
+                SELECT 1
+                FROM user_roles global_ur
+                JOIN roles global_r ON global_r.id = global_ur.role_id
+                LEFT JOIN scope_types global_st ON global_st.id = global_r.scope_id
+                WHERE global_ur.user_id = u.id
+                  AND global_st.code = 'platform'
+              )
+            )
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM user_profiles inst_up
+            WHERE inst_up.user_id = u.id
+              AND inst_up.under_institution_id IS NOT NULL
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM institution_memberships im
+            WHERE im.user_id = u.id
+              AND im.institution_id IS NOT NULL
+              AND im.is_active = TRUE
+              AND COALESCE(im.is_deleted, FALSE) = FALSE
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM user_roles cr_ur
+            JOIN roles cr_r ON cr_r.id = cr_ur.role_id
+            WHERE cr_ur.user_id = u.created_by
+              AND cr_r.code = 'institution_admin'
+          )
+          AND EXISTS (
+            SELECT 1
+            FROM user_roles global_role
+            INNER JOIN roles global_role_meta ON global_role_meta.id = global_role.role_id
+            WHERE global_role.user_id = u.id
+              AND global_role_meta.code NOT IN ('student', 'guardian', 'parent')
+          )
         )
       `);
     }
   } else if (filters.staffScope === "teacher_driver") {
     if (institutionFilterIndex) {
       filtersWhere.push(`
-        EXISTS (
-          SELECT 1
-          FROM institution_memberships staff_member
-          INNER JOIN roles staff_role ON staff_role.id = staff_member.role_id
-          WHERE staff_member.user_id = u.id
-            AND staff_member.institution_id = $${institutionFilterIndex}
-            AND staff_member.is_active = TRUE
-            AND COALESCE(staff_member.is_deleted, FALSE) = FALSE
-            AND staff_role.code IN ('teacher', 'driver')
+        (
+          EXISTS (
+            SELECT 1
+            FROM institution_memberships staff_member
+            INNER JOIN roles staff_role ON staff_role.id = staff_member.role_id
+            WHERE staff_member.user_id = u.id
+              AND staff_member.institution_id = $${institutionFilterIndex}
+              AND staff_member.is_active = TRUE
+              AND COALESCE(staff_member.is_deleted, FALSE) = FALSE
+              AND staff_role.code IN ('teacher', 'driver')
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM user_profiles scoped_up
+            JOIN user_roles scoped_ur ON scoped_ur.user_id = u.id
+            JOIN roles scoped_r ON scoped_r.id = scoped_ur.role_id
+            WHERE scoped_up.user_id = u.id
+              AND scoped_up.under_institution_id = $${institutionFilterIndex}
+              AND scoped_r.code IN ('teacher', 'driver')
+          )
         )
       `);
     } else {
       filtersWhere.push(`
-        EXISTS (
-          SELECT 1
-          FROM institution_memberships staff_member
-          INNER JOIN roles staff_role ON staff_role.id = staff_member.role_id
-          WHERE staff_member.user_id = u.id
-            AND staff_member.is_active = TRUE
-            AND COALESCE(staff_member.is_deleted, FALSE) = FALSE
-            AND staff_role.code IN ('teacher', 'driver')
+        (
+          (
+            u.created_by = 1
+            OR EXISTS (
+              SELECT 1
+              FROM user_roles cr_ur
+              JOIN roles cr_r ON cr_r.id = cr_ur.role_id
+              WHERE cr_ur.user_id = u.created_by
+                AND cr_r.code IN ('platform_admin', 'super_admin')
+            )
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM user_profiles inst_up
+            WHERE inst_up.user_id = u.id
+              AND inst_up.under_institution_id IS NOT NULL
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM institution_memberships im
+            WHERE im.user_id = u.id
+              AND im.institution_id IS NOT NULL
+              AND im.is_active = TRUE
+              AND COALESCE(im.is_deleted, FALSE) = FALSE
+          )
+          AND EXISTS (
+            SELECT 1
+            FROM user_roles global_role
+            INNER JOIN roles global_role_meta ON global_role_meta.id = global_role.role_id
+            WHERE global_role.user_id = u.id
+              AND global_role_meta.code IN ('teacher', 'driver')
+          )
         )
       `);
     }

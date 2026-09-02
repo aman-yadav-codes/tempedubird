@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -107,17 +107,31 @@ export function AuthModalDialog({
       ? Number(urlInstIdRaw)
       : null;
 
+  const envInstId = (
+    process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ||
+    process.env.DEFAULT_INSTITUTION_ID ||
+    process.env.NEXT_PUBLIC_INSTITUTION_ID ||
+    process.env.INSTITUTION_ID ||
+    process.env.NEXT_PUBLIC_TENANT_INSTITUTION_ID ||
+    process.env.NEXT_PUBLIC_INSTITUTION_PROFILE_ID ||
+    ""
+  ).trim();
+
   const hasInstitutionId = Boolean(
     institutionId ||
       urlInstId ||
       activeInstitutionId ||
       defaultEnvInstitutionId ||
       isTenantInstitution ||
-      process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ||
-      process.env.NEXT_PUBLIC_INSTITUTION_ID ||
-      process.env.NEXT_PUBLIC_TENANT_INSTITUTION_ID ||
-      process.env.NEXT_PUBLIC_INSTITUTION_PROFILE_ID
+      (envInstId && /^\d+$/.test(envInstId) && Number(envInstId) > 0)
   );
+
+  const availableRegisterRoles = useMemo(() => {
+    if (hasInstitutionId) {
+      return REGISTER_ROLES.filter((r) => r.value === "student" || r.value === "guardian");
+    }
+    return REGISTER_ROLES;
+  }, [hasInstitutionId]);
 
   const [activeTab, setActiveTab] = useState<"signin" | "signup">(defaultTab);
 
@@ -126,6 +140,7 @@ export function AuthModalDialog({
       setActiveTab(defaultTab);
     }
   }, [open, defaultTab]);
+
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -141,6 +156,13 @@ export function AuthModalDialog({
   const [signUpPhone, setSignUpPhone] = useState("");
   const [signUpCity, setSignUpCity] = useState("");
   const [signUpRole, setSignUpRole] = useState("student");
+
+  useEffect(() => {
+    if (hasInstitutionId && signUpRole === "institution_admin") {
+      setSignUpRole("student");
+    }
+  }, [hasInstitutionId, signUpRole]);
+
   const [signUpPassword, setSignUpPassword] = useState("");
   const [signUpConfirmPassword, setSignUpConfirmPassword] = useState("");
 
@@ -566,7 +588,7 @@ export function AuthModalDialog({
                       disabled={submitting}
                       className="w-full text-xs font-semibold text-slate-900 bg-transparent outline-none border-none p-0 focus:ring-0 cursor-pointer truncate"
                     >
-                      {REGISTER_ROLES.map((r) => (
+                      {availableRegisterRoles.map((r) => (
                         <option key={r.value} value={r.value}>
                           {r.label}
                         </option>

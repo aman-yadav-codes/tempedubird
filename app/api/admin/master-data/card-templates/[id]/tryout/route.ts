@@ -68,6 +68,7 @@ async function ensureTemplateAccess(templateId: number, isPlatformAdmin: boolean
         AND COALESCE(dt.is_deleted, FALSE) = FALSE
         AND (
           $2::boolean
+          OR dt.is_active = TRUE
           OR EXISTS (
             SELECT 1
             FROM institution_templates it
@@ -171,11 +172,7 @@ async function getStudents(
         ip.name AS institution_name,
         COALESCE(prog.title, class_category.name) AS program_name,
         section.name AS section_name
-      FROM institution_templates it
-      INNER JOIN student_enrollments se
-        ON se.institution_id = it.institution_id
-       AND se.status = 'active'
-       AND COALESCE(se.is_deleted, FALSE) = FALSE
+      FROM student_enrollments se
       INNER JOIN student_profiles sp ON sp.id = se.student_id
       INNER JOIN users u ON u.id = sp.user_id
       INNER JOIN institution_profiles ip
@@ -187,10 +184,10 @@ async function getStudents(
         AND COALESCE(prog.is_deleted, FALSE) = FALSE
       LEFT JOIN categories class_category ON class_category.id = se.class_category_id
       LEFT JOIN sections section ON section.id = se.section_id
-      WHERE it.template_id = $1
-        AND it.is_active = TRUE
+      WHERE se.status = 'active'
+        AND COALESCE(se.is_deleted, FALSE) = FALSE
         AND COALESCE(u.is_deleted, FALSE) = FALSE
-        AND ($2::boolean OR it.institution_id = ANY($3::int[]))
+        AND ($2::boolean OR se.institution_id = ANY($3::int[]))
         AND ($6::int IS NULL OR se.academic_year_id = $6)
         AND ($7::int IS NULL OR se.institution_id = $7)
         AND (
@@ -225,23 +222,23 @@ async function getStaff(
         im.institution_id,
         ip.name AS institution_name,
         r.code AS role_code,
-        initcap(replace(r.code, '_', ' ')) AS role_name
-      FROM institution_templates it
-      INNER JOIN institution_memberships im
-        ON im.institution_id = it.institution_id
+        COALESCE(desig.name, initcap(replace(r.code, '_', ' ')), 'Staff') AS role_name
+      FROM users u
+      LEFT JOIN institution_memberships im
+        ON im.user_id = u.id
        AND im.is_active = TRUE
        AND COALESCE(im.is_deleted, FALSE) = FALSE
-      INNER JOIN roles r ON r.id = im.role_id AND r.code IN ('teacher', 'driver')
-      INNER JOIN users u ON u.id = im.user_id
-      INNER JOIN institution_profiles ip
+      LEFT JOIN roles r ON r.id = im.role_id
+      LEFT JOIN user_profiles up ON up.user_id = u.id
+      LEFT JOIN designations desig ON desig.id = up.designation_id
+      LEFT JOIN institution_profiles ip
          ON ip.id = im.institution_id
         AND ip.is_active = TRUE
         AND COALESCE(ip.is_deleted, FALSE) = FALSE
-      WHERE it.template_id = $1
-        AND it.is_active = TRUE
-        AND COALESCE(u.is_deleted, FALSE) = FALSE
+      WHERE COALESCE(u.is_deleted, FALSE) = FALSE
         AND u.is_active = TRUE
-        AND ($2::boolean OR it.institution_id = ANY($3::int[]))
+        AND (r.code IS NULL OR r.code NOT IN ('student', 'guardian', 'parent'))
+        AND ($2::boolean OR im.institution_id = ANY($3::int[]) OR im.institution_id IS NULL)
         AND ($6::int IS NULL OR im.institution_id = $6)
         AND (
           $4 = ''
@@ -249,6 +246,7 @@ async function getStaff(
           OR u.email ILIKE $5
           OR u.phone ILIKE $5
           OR r.code ILIKE $5
+          OR desig.name ILIKE $5
         )
       ORDER BY u.id, u.full_name
       LIMIT 25
@@ -316,11 +314,7 @@ async function getStudentValues(
         institution_location.pincode AS institution_pincode,
         media.logo_url,
         media.gallery_image_url
-      FROM institution_templates template_assignment
-      INNER JOIN student_enrollments se
-        ON se.institution_id = template_assignment.institution_id
-       AND se.status = 'active'
-       AND COALESCE(se.is_deleted, FALSE) = FALSE
+      FROM student_enrollments se
       INNER JOIN student_profiles sp ON sp.id = se.student_id
       INNER JOIN users u ON u.id = sp.user_id
       INNER JOIN institution_profiles ip
@@ -380,11 +374,11 @@ async function getStudentValues(
           AND COALESCE(is_deleted, FALSE) = FALSE
           AND media_type IN ('image', 'logo')
       ) media ON TRUE
-      WHERE template_assignment.template_id = $1
-        AND template_assignment.is_active = TRUE
+      WHERE sp.id = $2
+        AND se.status = 'active'
+        AND COALESCE(se.is_deleted, FALSE) = FALSE
         AND COALESCE(u.is_deleted, FALSE) = FALSE
-        AND sp.id = $2
-        AND ($3::boolean OR template_assignment.institution_id = ANY($4::int[]))
+        AND ($3::boolean OR se.institution_id = ANY($4::int[]))
         AND ($5::int IS NULL OR se.academic_year_id = $5)
         AND ($6::int IS NULL OR se.institution_id = $6)
       ORDER BY se.updated_at DESC, se.id DESC
@@ -538,19 +532,19 @@ async function getStaffValues(
         institution_location.pincode AS institution_pincode,
         media.logo_url,
         media.gallery_image_url
-      FROM institution_templates template_assignment
-      INNER JOIN institution_memberships im
-        ON im.institution_id = template_assignment.institution_id
+      FROM users u
+      LEFT JOIN institution_memberships im
+        ON im.user_id = u.id
        AND im.is_active = TRUE
        AND COALESCE(im.is_deleted, FALSE) = FALSE
-      INNER JOIN roles r ON r.id = im.role_id AND r.code IN ('teacher', 'driver')
-      INNER JOIN users u ON u.id = im.user_id
-      INNER JOIN institution_profiles ip
+      LEFT JOIN roles r ON r.id = im.role_id
+      LEFT JOIN user_profiles up ON up.user_id = u.id
+      LEFT JOIN user_locations ul ON ul.user_id = u.id
+      LEFT JOIN designations desig ON desig.id = up.designation_id
+      LEFT JOIN institution_profiles ip
          ON ip.id = im.institution_id
         AND ip.is_active = TRUE
         AND COALESCE(ip.is_deleted, FALSE) = FALSE
-      LEFT JOIN user_profiles up ON up.user_id = u.id
-      LEFT JOIN user_locations ul ON ul.user_id = u.id
       LEFT JOIN institution_types itype ON itype.id = ip.institution_type_id
       LEFT JOIN institution_subtypes isubtype ON isubtype.id = ip.institution_subtype_id
       LEFT JOIN boards board ON board.id = ip.board_id
@@ -577,12 +571,10 @@ async function getStaffValues(
           AND COALESCE(is_deleted, FALSE) = FALSE
           AND media_type IN ('image', 'logo')
       ) media ON TRUE
-      WHERE template_assignment.template_id = $1
-        AND template_assignment.is_active = TRUE
+      WHERE u.id = $2
         AND COALESCE(u.is_deleted, FALSE) = FALSE
         AND u.is_active = TRUE
-        AND u.id = $2
-        AND ($3::boolean OR template_assignment.institution_id = ANY($4::int[]))
+        AND ($3::boolean OR im.institution_id = ANY($4::int[]) OR im.institution_id IS NULL)
         AND ($5::int IS NULL OR im.institution_id = $5)
       ORDER BY u.id, im.updated_at DESC, im.id DESC
       LIMIT 1

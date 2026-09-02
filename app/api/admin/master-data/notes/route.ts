@@ -44,11 +44,15 @@ function parseNoteBody(body: Record<string, unknown>) {
   if (!asPositiveInteger(body.program_id)) throw new Error("Class / Program is required");
   return {
     institution_id: institutionId,
+    title: typeof body.title === "string" ? body.title.trim() : "",
     subject_id: asPositiveInteger(body.subject_id),
     syllabus_id: asPositiveInteger(body.syllabus_id),
+    syllabus_node_id: asPositiveInteger(body.syllabus_node_id),
     program_id: asPositiveInteger(body.program_id),
     section_id: asPositiveInteger(body.section_id),
     is_active: typeof body.is_active === "boolean" ? body.is_active : false,
+    is_paid: body.is_paid === true || (Number(body.price) > 0),
+    price: (body.is_paid === true || (Number(body.price) > 0)) ? Math.max(0, Number(body.price) || 0) : 0,
     marketplace_requested: typeof body.marketplace_requested === "boolean" ? body.marketplace_requested : false,
   };
 }
@@ -60,11 +64,15 @@ function parseNoteItemBody(body: Record<string, unknown>) {
   if (!noteId) throw new Error("Note is required");
   if (!title) throw new Error("Title is required");
   if (!noteBody) throw new Error("Notes content is required");
+  const attachments = Array.isArray(body.attachments) ? body.attachments : [];
   return {
     note_id: noteId,
     syllabus_node_id: asPositiveInteger(body.syllabus_node_id),
     title,
     body: noteBody,
+    attachment_url: typeof body.attachment_url === "string" && body.attachment_url.trim() ? body.attachment_url.trim() : null,
+    attachment_name: typeof body.attachment_name === "string" && body.attachment_name.trim() ? body.attachment_name.trim() : null,
+    attachments,
     is_active: typeof body.is_active === "boolean" ? body.is_active : true,
   };
 }
@@ -111,7 +119,8 @@ export async function GET(req: Request) {
     if (action === "syllabi") {
       const institutionId = asPositiveInteger(url.searchParams.get("institutionId"));
       if (!institutionId) return NextResponse.json({ error: "Institution is required" }, { status: 422 });
-      const result = await listNoteSyllabi(db, user, institutionId, search, limit, offset);
+      const programId = asPositiveInteger(url.searchParams.get("programId"));
+      const result = await listNoteSyllabi(db, user, institutionId, search, limit, offset, programId);
       return NextResponse.json({ ...result, pageCount: getPageCount(result.total, limit) });
     }
 

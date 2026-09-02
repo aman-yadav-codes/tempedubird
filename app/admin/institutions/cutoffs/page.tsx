@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { ColumnDef, PaginationState } from "@tanstack/react-table";
 import {
     Bot,
@@ -281,9 +282,17 @@ export default function CutoffsAdminPage() {
     const { isReady } = useAdminGuard();
     const { accessToken, user: currentUser } = useAuthStore();
     const { activeInstitution, activeInstitutionId } = useActiveInstitution();
+    const pathname = usePathname();
     const isMobile = useIsMobile();
     const authHeader = useMemo(() => ({ Authorization: `Bearer ${accessToken}` }), [accessToken]);
-    const isPlatformAdmin = Boolean(currentUser?.is_super_admin || currentUser?.role_codes?.includes("platform_admin"));
+    const isPlatformAdmin = Boolean(
+        pathname?.startsWith("/platformadmin") ||
+        currentUser?.is_super_admin ||
+        currentUser?.role_codes?.includes("platform_admin") ||
+        currentUser?.roles?.includes("platform_admin") ||
+        currentUser?.primary_role === "platform_admin" ||
+        (!currentUser?.memberships?.length)
+    );
     const lockToActiveInstitution = Boolean(activeInstitution && !isPlatformAdmin);
 
     const [items, setItems] = useState<InstitutionCutoff[]>([]);
@@ -865,10 +874,12 @@ export default function CutoffsAdminPage() {
                         Generate and manage verified exam-wise cutoff JSON responses with available years, categories, and rounds.
                     </p>
                 </div>
-                <Button onClick={openCreate} className="w-full gap-2 sm:w-auto">
-                    <Plus className="size-4" />
-                    New Cutoff
-                </Button>
+                {!isPlatformAdmin && (
+                    <Button onClick={openCreate} className="w-full gap-2 sm:w-auto">
+                        <Plus className="size-4" />
+                        New Cutoff
+                    </Button>
+                )}
             </div>
 
             <DataTable

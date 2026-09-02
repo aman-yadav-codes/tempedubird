@@ -60,55 +60,85 @@ async function ensureStaffLettersSchema() {
 
 async function assertStaffLetterAccess(
   currentUser: CurrentUser,
-  institutionId: number,
+  institutionId: number | null,
   mode: "admin" | "self",
 ) {
-  if (!canAccessInstitution(currentUser, institutionId)) {
-    throw new Error("Forbidden: Admin access required");
-  }
-  if (mode === "admin") {
-    if (!isInstitutionAdminUser(currentUser)) throw new Error("Forbidden: Admin access required");
-    return;
-  }
-  if (
-    !hasPermission(currentUser, "teacher.myinstitution.myletters.view", { institutionId }) &&
-    !hasPermission(currentUser, "driver.myinstitution.myletters.view", { institutionId })
-  ) {
-    throw new Error("Forbidden: Admin access required");
+  if (institutionId) {
+    if (!canAccessInstitution(currentUser, institutionId)) {
+      throw new Error("Forbidden: Admin access required");
+    }
+    if (mode === "admin") {
+      if (!isInstitutionAdminUser(currentUser)) throw new Error("Forbidden: Admin access required");
+      return;
+    }
+    if (
+      !hasPermission(currentUser, "teacher.myinstitution.myletters.view", { institutionId }) &&
+      !hasPermission(currentUser, "driver.myinstitution.myletters.view", { institutionId })
+    ) {
+      throw new Error("Forbidden: Admin access required");
+    }
+  } else {
+    // Platform admin global access
+    if (!hasPermission(currentUser, "admin.staff.view") && !hasPermission(currentUser, "admin.generate")) {
+      throw new Error("Forbidden: Admin access required");
+    }
   }
 }
 
-async function getStaffMembership(staffUserId: number, institutionId: number) {
-  const result = await db.query<{
-    staff_user_id: number;
-    full_name: string;
-    email: string | null;
-    role_code: "teacher" | "driver";
-  }>(
-    `
-      SELECT
-        u.id AS staff_user_id,
-        u.full_name,
-        u.email,
-        r.code AS role_code
-      FROM institution_memberships im
-      INNER JOIN roles r ON r.id = im.role_id AND r.code IN ('teacher', 'driver')
-      INNER JOIN users u ON u.id = im.user_id
-      WHERE im.user_id = $1
-        AND im.institution_id = $2
-        AND im.is_active = TRUE
-        AND COALESCE(im.is_deleted, FALSE) = FALSE
-        AND u.is_active = TRUE
-        AND COALESCE(u.is_deleted, FALSE) = FALSE
-      LIMIT 1
-    `,
-    [staffUserId, institutionId]
-  );
-  if (!result.rows[0]) throw new Error("Staff member does not belong to this institution");
-  return result.rows[0];
+async function getStaffMembership(staffUserId: number, institutionId: number | null) {
+  if (institutionId) {
+    const result = await db.query<{
+      staff_user_id: number;
+      full_name: string;
+      email: string | null;
+      role_code: "teacher" | "driver" | "staff";
+    }>(
+      `
+        SELECT
+          u.id AS staff_user_id,
+          u.full_name,
+          u.email,
+          COALESCE(r.code, 'staff') AS role_code
+        FROM users u
+        LEFT JOIN institution_memberships im
+          ON im.user_id = u.id AND im.institution_id = $2 AND im.is_active = TRUE AND COALESCE(im.is_deleted, FALSE) = FALSE
+        LEFT JOIN roles r ON r.id = im.role_id
+        WHERE u.id = $1
+          AND u.is_active = TRUE
+          AND COALESCE(u.is_deleted, FALSE) = FALSE
+        LIMIT 1
+      `,
+      [staffUserId, institutionId]
+    );
+    if (!result.rows[0]) throw new Error("Staff member not found");
+    return result.rows[0];
+  } else {
+    const result = await db.query<{
+      staff_user_id: number;
+      full_name: string;
+      email: string | null;
+      role_code: "teacher" | "driver" | "staff";
+    }>(
+      `
+        SELECT
+          u.id AS staff_user_id,
+          u.full_name,
+          u.email,
+          'staff' AS role_code
+        FROM users u
+        WHERE u.id = $1
+          AND u.is_active = TRUE
+          AND COALESCE(u.is_deleted, FALSE) = FALSE
+        LIMIT 1
+      `,
+      [staffUserId]
+    );
+    if (!result.rows[0]) throw new Error("Staff member not found");
+    return result.rows[0];
+  }
 }
 
-async function getStaffTemplate(templateId: number, institutionId: number) {
+async function getStaffTemplate(templateId: number, institutionId: number | null) {
   const result = await db.query<{
     template_id: number;
     template_name: string;
@@ -122,27 +152,21 @@ async function getStaffTemplate(templateId: number, institutionId: number) {
         dt.id AS template_id,
         dt.name AS template_name,
         dt.card_category_id,
-        cc.name AS category_name,
-        cc.slug AS category_slug,
-        COALESCE(cc.target_audience, 'student') AS category_target_audience
-      FROM institution_templates it
-      INNER JOIN document_templates dt
-         ON dt.id = it.template_id
+        COALESCE(cc.name, 'Staff Document') AS category_name,
+        COALESCE(cc.slug, 'staff_letter') AS category_slug,
+        COALESCE(cc.target_audience, 'staff') AS category_target_audience
+      FROM document_templates dt
+      LEFT JOIN card_categories cc
+         ON cc.id = dt.card_category_id
+      WHERE dt.id = $1
         AND dt.is_active = TRUE
         AND COALESCE(dt.is_deleted, FALSE) = FALSE
-      INNER JOIN card_categories cc
-         ON cc.id = dt.card_category_id
-        AND cc.is_active = TRUE
-      WHERE it.template_id = $1
-        AND it.institution_id = $2
-        AND it.is_active = TRUE
       LIMIT 1
     `,
-    [templateId, institutionId]
+    [templateId]
   );
   const row = result.rows[0];
-  if (!row) throw new Error("Template not found for this institution");
-  if (row.category_target_audience !== "staff") throw new Error("This template is not for staff letters");
+  if (!row) throw new Error("Template not found");
   return row;
 }
 
@@ -156,7 +180,6 @@ export async function GET(req: Request) {
     await ensureStaffLettersSchema();
     const url = new URL(req.url);
     const institutionId = parseOptionalPositiveId(url.searchParams.get("institutionId"));
-    if (!institutionId) throw new Error("Institution is required");
     const mode = url.searchParams.get("mode") === "self" ? "self" : "admin";
     await assertStaffLetterAccess(currentUser, institutionId, mode);
 
@@ -174,6 +197,8 @@ export async function GET(req: Request) {
       countParams.push(currentUser.id);
     }
 
+    const institutionWhere = institutionId ? "sgl.institution_id = $1" : "(sgl.institution_id IS NULL OR $1::integer IS NULL)";
+
     const [rowsResult, countResult] = await Promise.all([
       db.query(
         `
@@ -183,7 +208,7 @@ export async function GET(req: Request) {
             sgl.staff_user_id,
             staff.full_name,
             staff.email,
-            role.code AS role_code,
+            'staff' AS role_code,
             sgl.template_id,
             template.name AS template_name,
             sgl.card_category_id,
@@ -199,16 +224,10 @@ export async function GET(req: Request) {
             generator.full_name AS generated_by_name
           FROM staff_generated_letters sgl
           INNER JOIN users staff ON staff.id = sgl.staff_user_id
-          INNER JOIN institution_memberships im
-             ON im.user_id = staff.id
-            AND im.institution_id = sgl.institution_id
-            AND im.is_active = TRUE
-            AND COALESCE(im.is_deleted, FALSE) = FALSE
-          INNER JOIN roles role ON role.id = im.role_id AND role.code IN ('teacher', 'driver')
           INNER JOIN document_templates template ON template.id = sgl.template_id
           LEFT JOIN card_categories category ON category.id = sgl.card_category_id
           LEFT JOIN users generator ON generator.id = sgl.generated_by
-          WHERE sgl.institution_id = $1
+          WHERE ${institutionWhere}
             AND COALESCE(sgl.is_deleted, FALSE) = FALSE
             ${selfFilter}
             AND (
@@ -231,7 +250,7 @@ export async function GET(req: Request) {
           INNER JOIN users staff ON staff.id = sgl.staff_user_id
           INNER JOIN document_templates template ON template.id = sgl.template_id
           LEFT JOIN card_categories category ON category.id = sgl.card_category_id
-          WHERE sgl.institution_id = $1
+          WHERE ${institutionWhere}
             AND COALESCE(sgl.is_deleted, FALSE) = FALSE
             ${mode === "self" ? "AND sgl.staff_user_id = $4" : ""}
             AND (
@@ -269,7 +288,7 @@ export async function POST(req: Request) {
     const currentUser = await requireAdmin(req);
     await ensureStaffLettersSchema();
     const body = await req.json();
-    const institutionId = parsePositiveId(body.institutionId, "institution");
+    const institutionId = parseOptionalPositiveId(body.institutionId);
     const staffUserId = parsePositiveId(body.staffUserId, "staff member");
     const templateId = parsePositiveId(body.templateId, "template");
     const renderedHtml = String(body.renderedHtml ?? "");

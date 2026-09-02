@@ -79,10 +79,11 @@ export function useActiveInstitution() {
       if (match) return match;
       if (storedSummary && storedSummary.id === activeInstitutionId) return storedSummary;
     }
-    if (storedSummary) return storedSummary;
+    if (storedSummary && !isPlatformAdmin) return storedSummary;
+    if (isPlatformAdmin) return null;
     if (institutions.length > 0) return institutions[0];
     return null;
-  }, [activeInstitutionId, institutions, storedSummary]);
+  }, [activeInstitutionId, institutions, storedSummary, isPlatformAdmin]);
 
   useEffect(() => {
     function handleChange(event: Event) {
@@ -115,13 +116,14 @@ export function useActiveInstitution() {
     ? Number((user as any).institution_id)
     : ((user as any)?.under_institution_id ? Number((user as any).under_institution_id) : null);
 
-  const resolvedId =
-    activeInstitutionId ??
-    activeInstitution?.id ??
-    userMembershipInstId ??
-    userProfileInstId ??
-    defaultEnvId ??
-    null;
+  const resolvedId = isPlatformAdmin
+    ? (activeInstitutionId ?? activeInstitution?.id ?? null)
+    : (activeInstitutionId ??
+       activeInstitution?.id ??
+       userMembershipInstId ??
+       userProfileInstId ??
+       defaultEnvId ??
+       null);
 
   return {
     institutions,

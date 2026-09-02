@@ -238,6 +238,7 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "admin.inventory", label: "Inventory Management", description: "manage inventory, products, stock levels and assets", scope: "institution", page: "/admin/inventory" },
   { key: "admin.vendors", label: "Vendors & Suppliers", description: "manage vendors and suppliers", scope: "institution", page: "/admin/vendors" },
   { key: "admin.team", label: "Internal Admin Team", description: "manage internal admin team members", scope: "institution", page: "/admin/team" },
+  { key: "admin.generate", label: "Document & Card Generator", description: "generate student and staff ID cards and documents", scope: "institution", page: "/admin/generate" },
 ];
 
 export const LEGACY_PERMISSION_MODULE_MAP: Record<string, string> = {
@@ -547,6 +548,10 @@ export function isAdminPathVisibleForRole(
 
   if (normalized === "/admin/team" || normalized.startsWith("/admin/team/")) {
     return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, "admin.team.view") || hasPermission(user, "admin.team");
+  }
+
+  if (normalized === "/admin/generate" || normalized.startsWith("/admin/generate/")) {
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, "admin.generate.view") || hasPermission(user, "admin.generate");
   }
 
   if (!isPlatformAdminUser(user)) return true;
@@ -913,6 +918,7 @@ function isSharedLookupRequest(pathname: string, verb: string) {
     pathname.includes("/api/admin/master-data/notes") ||
     pathname.includes("/api/admin/master-data/exams") ||
     pathname.includes("/api/admin/master-data/practice-exams") ||
+    pathname.includes("/api/admin/master-data/card-categories") ||
     pathname.includes("/api/admin/master-data/card-templates") ||
     pathname.includes("/api/admin/master-data/institute-calendar") ||
     pathname.includes("/api/admin/institutions/programs") ||
@@ -926,6 +932,9 @@ function isSharedLookupRequest(pathname: string, verb: string) {
     pathname.includes("/api/admin/sales/enquiries") ||
     pathname.includes("/api/admin/sales/pipeline") ||
     pathname.includes("/api/admin/sales/enrollments") ||
+    pathname.includes("/api/admin/generate") ||
+    pathname.includes("/api/admin/content/growth-chart") ||
+    pathname.includes("/api/admin/academics/growth-chart") ||
     pathname.includes("/api/program-types")
   );
 }

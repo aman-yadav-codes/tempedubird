@@ -47,7 +47,9 @@ import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { isPlatformAdminUser } from "@/lib/auth/permissions";
 import type { ExamRow } from "@/lib/types/exam";
 import type { SyllabusNode } from "@/lib/types/syllabus";
+import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store";
+import { ContentPricingOption } from "@/components/shared/content-pricing-option";
 
 export type ExamInstitutionOption = { id: number; name: string };
 type ExamProgramOption = { id: number; title: string };
@@ -409,6 +411,8 @@ export function ExamEditor({
   const [publicWarningOpen, setPublicWarningOpen] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
   const [isActive, setIsActive] = useState(false);
+  const [isPaid, setIsPaid] = useState(false);
+  const [price, setPrice] = useState<number | string>(0);
   const [aiQuestionFormat, setAiQuestionFormat] = useState<AiQuestionFormat>({
     enabled: false,
     true_false: 1,
@@ -532,6 +536,8 @@ export function ExamEditor({
       setResultDate(String(template?.result_date ?? seriesResultDate ?? "").slice(0, 10));
       setIsPublic(Boolean(template?.marketplace_requested || template?.is_public || seriesIsPublic));
       setIsActive(template?.is_active ?? seriesIsActive ?? false);
+      setIsPaid(Boolean((template as any)?.is_paid || (Number((template as any)?.price) > 0)));
+      setPrice(Number((template as any)?.price) || 0);
       setAiQuestionFormat({
         enabled: Boolean(template?.ai_question_format?.enabled),
         true_false: Number(template?.ai_question_format?.true_false ?? 1),
@@ -578,6 +584,21 @@ export function ExamEditor({
   async function fetchProgramDetailData(id: string) {
     if (!accessToken || !id) {
       return { sections: [] as SectionOption[], subjects: [] as SubjectOption[] };
+    }
+    if (isPlatformAdmin) {
+      const res = await fetch(`/api/admin/content/courses/${id}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const json = await readJson(res);
+      if (!res.ok) throw new Error(json.error ?? "Failed to load course");
+      return {
+        sections: [] as SectionOption[],
+        subjects: (((json.data?.subjects ?? []) as Array<{ id: number; name?: string }>)).map((s) => ({
+          id: s.id,
+          name: s.name ?? `Subject ${s.id}`,
+          syllabus_available: true,
+        })),
+      };
     }
     const res = await fetch(`/api/admin/institutions/programs/${id}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -678,7 +699,21 @@ export function ExamEditor({
       limit: "25",
       search,
     });
-    if (!isPlatformAdmin && institutionId) {
+    if (isPlatformAdmin) {
+      const res = await fetch(`/api/admin/content/courses?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const json = await readJson(res);
+      if (!res.ok) throw new Error(json.error ?? "Failed to load courses/programs");
+      return {
+        data: ((json.data ?? []) as Array<{ id: number; name?: string; title?: string }>).map((item) => ({
+          id: item.id,
+          title: item.name || item.title || `Course #${item.id}`,
+        })),
+        hasMore: page < Number(json.pageCount ?? 0),
+      };
+    }
+    if (institutionId) {
       params.set("institutionId", institutionId);
     }
     const res = await fetch(`/api/admin/institutions/programs?${params.toString()}`, {
@@ -1299,6 +1334,8 @@ export function ExamEditor({
             ai_question_format: aiQuestionFormat,
             is_public: isPlatformAdmin ? true : (seriesId ? (seriesIsPublic ?? isPublic) : isPublic),
             is_active: seriesId ? (seriesIsActive ?? isActive) : isActive,
+            is_paid: isPaid,
+            price: isPaid ? (Number(price) || 0) : 0,
           }),
         }
       );
@@ -1729,7 +1766,17 @@ export function ExamEditor({
               </div>
             )}
             {!seriesId && (
-              <div className="flex flex-wrap items-center gap-5 pt-2">
+              <>
+                <ContentPricingOption
+                  isPaid={isPaid}
+                  onIsPaidChange={setIsPaid}
+                  price={price}
+                  onPriceChange={setPrice}
+                  label="Exam Access Pricing"
+                  description="Choose if students access this exam for Free or if a fee is charged."
+                />
+
+                <div className="flex flex-wrap items-center gap-5 pt-2">
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox
                   checked={isPublic}
@@ -1740,11 +1787,12 @@ export function ExamEditor({
                 />
                 Request marketplace review
               </label>
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox checked={isActive} onCheckedChange={(value) => setIsActive(Boolean(value))} />
-                Active
-              </label>
-              </div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox checked={isActive} onCheckedChange={(value) => setIsActive(Boolean(value))} />
+                    Active
+                  </label>
+                </div>
+              </>
             )}
               </>
             )}

@@ -135,6 +135,19 @@ export function parseExamMetadataPayload(body: Record<string, unknown>) {
     aiQuestionFormat: parseAiQuestionFormat(body.ai_question_format),
     isPublic: body.is_public === true,
     isActive: body.is_active === true,
+    isPaid: body.is_paid === true || (Number(body.price) > 0),
+    price: (body.is_paid === true || (Number(body.price) > 0)) ? Math.max(0, Number(body.price) || 0) : 0,
+    conductingBody: String(body.conducting_body ?? "").trim() || null,
+    examCategory: String(body.exam_category ?? "").trim() || null,
+    officialWebsiteUrl: String(body.official_website_url ?? "").trim() || null,
+    applyUrl: String(body.apply_url ?? "").trim() || null,
+    notificationPdfUrl: String(body.notification_pdf_url ?? "").trim() || null,
+    applicationStartDate: String(body.application_start_date ?? "").trim() || null,
+    applicationEndDate: String(body.application_end_date ?? "").trim() || null,
+    admitCardDate: String(body.admit_card_date ?? "").trim() || null,
+    eligibilityCriteria: String(body.eligibility_criteria ?? "").trim() || null,
+    applicationFee: String(body.application_fee ?? "").trim() || null,
+    isGovernmentExam: body.is_government_exam === true,
   };
 }
 

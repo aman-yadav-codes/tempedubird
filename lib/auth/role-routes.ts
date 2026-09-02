@@ -65,6 +65,7 @@ const ADMIN_CHILD_SEGMENTS = new Set([
   "content",
   "dashboard",
   "finance",
+  "generate",
   "guardians",
   "institution",
   "institutions",

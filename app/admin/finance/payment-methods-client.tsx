@@ -12,7 +12,11 @@ import {
   CreditCard,
   Edit2,
   ExternalLink,
+  Eye,
+  EyeOff,
+  Globe,
   Info,
+  Key,
   Landmark,
   Loader2,
   MoreHorizontal,
@@ -26,6 +30,7 @@ import {
   Trash2,
   Upload,
   Wallet,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -87,10 +92,128 @@ const POPULAR_INDIAN_BANKS = [
   "Other Bank",
 ];
 
+export const PAYMENT_GATEWAY_PROVIDERS = [
+  {
+    id: "razorpay",
+    name: "Razorpay",
+    description: "Accept Cards, UPI, Netbanking & Wallets in India",
+    keyIdLabel: "Key ID",
+    keyIdPlaceholder: "e.g. rzp_live_xxxxxxxxxxxx or rzp_test_xxxxxxxxxxxx",
+    secretLabel: "Key Secret",
+    secretPlaceholder: "e.g. 8kxxxxxxxxxxxxxxxxxxxxxxxx",
+    webhookLabel: "Webhook Secret (Optional)",
+    badgeColor: "bg-blue-600 text-white",
+    defaultTitle: "Razorpay Gateway",
+  },
+  {
+    id: "cashfree",
+    name: "Cashfree Payments",
+    description: "Fast UPI, Card & Auto-Collect PG Gateway",
+    keyIdLabel: "App ID / Client ID",
+    keyIdPlaceholder: "e.g. CF_APP_xxxxxxxxxxxxxxxx",
+    secretLabel: "Secret Key",
+    secretPlaceholder: "e.g. cfsk_ma_xxxxxxxxxxxxxxxxxxxxxxxx",
+    webhookLabel: "Webhook Signature Secret",
+    badgeColor: "bg-purple-600 text-white",
+    defaultTitle: "Cashfree Gateway",
+  },
+  {
+    id: "payu",
+    name: "PayU India",
+    description: "Enterprise payment aggregator with highest success rates",
+    keyIdLabel: "Merchant Key",
+    keyIdPlaceholder: "e.g. 7rnFly / Merchant Key",
+    secretLabel: "Merchant Salt",
+    secretPlaceholder: "e.g. pjyd6gtA / Salt Key",
+    webhookLabel: "Auth Header / Webhook Key",
+    badgeColor: "bg-emerald-600 text-white",
+    defaultTitle: "PayU Payment Gateway",
+  },
+  {
+    id: "stripe",
+    name: "Stripe",
+    description: "Global credit cards, debit cards & international payments",
+    keyIdLabel: "Publishable Key",
+    keyIdPlaceholder: "Enter your publishable key",
+    secretLabel: "Secret Key",
+    secretPlaceholder: "Enter your secret key",
+    webhookLabel: "Webhook Signing Secret (whsec_...)",
+    badgeColor: "bg-indigo-600 text-white",
+    defaultTitle: "Stripe Payment Gateway",
+  },
+  {
+    id: "phonepe_pg",
+    name: "PhonePe PG (Direct Merchant)",
+    description: "Direct PhonePe Merchant API payment gateway integration",
+    keyIdLabel: "Merchant ID (MID)",
+    keyIdPlaceholder: "e.g. M1234567890",
+    secretLabel: "Salt Key",
+    secretPlaceholder: "e.g. 96434309-7796-489d-8924-ab988df7656a",
+    webhookLabel: "Salt Index (e.g. 1)",
+    badgeColor: "bg-violet-600 text-white",
+    defaultTitle: "PhonePe Direct PG",
+  },
+  {
+    id: "paytm_pg",
+    name: "Paytm Payment Gateway",
+    description: "Paytm All-in-One Payment Gateway & UPI Stack",
+    keyIdLabel: "Merchant ID (MID)",
+    keyIdPlaceholder: "e.g. YOUR_PAYTM_MID_HERE",
+    secretLabel: "Merchant Key",
+    secretPlaceholder: "e.g. YOUR_PAYTM_MERCHANT_KEY",
+    webhookLabel: "Website Name (DEFAULT / WEBSTAGING)",
+    badgeColor: "bg-sky-600 text-white",
+    defaultTitle: "Paytm PG Stack",
+  },
+  {
+    id: "ccavenue",
+    name: "CCAvenue",
+    description: "Comprehensive multi-currency online payments",
+    keyIdLabel: "Merchant ID",
+    keyIdPlaceholder: "e.g. 123456",
+    secretLabel: "Working Key",
+    secretPlaceholder: "e.g. 32-character working key",
+    webhookLabel: "Access Code",
+    badgeColor: "bg-amber-600 text-white",
+    defaultTitle: "CCAvenue Gateway",
+  },
+  {
+    id: "instamojo",
+    name: "Instamojo",
+    description: "Easy payment link and checkout gateway",
+    keyIdLabel: "Client ID / API Key",
+    keyIdPlaceholder: "e.g. live_xxxxxxxxxxxx",
+    secretLabel: "Client Secret / Auth Token",
+    secretPlaceholder: "e.g. test_secret_xxxxxxxxxxxx",
+    webhookLabel: "Private Salt (Optional)",
+    badgeColor: "bg-teal-600 text-white",
+    defaultTitle: "Instamojo Gateway",
+  },
+  {
+    id: "custom_pg",
+    name: "Custom / Other Gateway",
+    description: "Any custom API or aggregator gateway credentials",
+    keyIdLabel: "API Key / Public Key / Merchant ID",
+    keyIdPlaceholder: "Enter API Key / Client ID",
+    secretLabel: "API Secret / Private Key",
+    secretPlaceholder: "Enter Secret Key / Private Key",
+    webhookLabel: "Webhook Secret / Verification Key",
+    badgeColor: "bg-slate-700 text-white",
+    defaultTitle: "Custom Payment Gateway",
+  },
+];
+
 const METHOD_TYPE_CONFIG: Record<
   FinancePaymentMethodType,
-  { label: string; icon: typeof Landmark; badgeClass: string; color: string; group: "bank" | "upi" | "other" }
+  { label: string; icon: typeof Landmark; badgeClass: string; color: string; group: "gateway" | "bank" | "upi" | "other" }
 > = {
+  payment_gateway: {
+    label: "Payment Gateway (Online)",
+    icon: Zap,
+    badgeClass: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400",
+    color: "from-emerald-600 to-teal-700",
+    group: "gateway",
+  },
   net_banking: {
     label: "Net Banking / Bank Account",
     icon: Landmark,
@@ -99,7 +222,7 @@ const METHOD_TYPE_CONFIG: Record<
     group: "bank",
   },
   phonepe: {
-    label: "PhonePe",
+    label: "PhonePe UPI",
     icon: Smartphone,
     badgeClass: "bg-purple-500/10 text-purple-600 border-purple-500/20 dark:text-purple-400",
     color: "from-purple-600 to-indigo-600",
@@ -155,7 +278,7 @@ const METHOD_TYPE_CONFIG: Record<
     group: "other",
   },
   custom: {
-    label: "Custom Gateway / Other",
+    label: "Custom / Other",
     icon: Building,
     badgeClass: "bg-slate-500/10 text-slate-600 border-slate-500/20 dark:text-slate-400",
     color: "from-slate-600 to-gray-700",
@@ -174,7 +297,7 @@ export function PaymentMethodsClient() {
 
   const [methods, setMethods] = useState<FinancePaymentMethodRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterGroup, setFilterGroup] = useState<"all" | "bank" | "upi" | "other">("all");
+  const [filterGroup, setFilterGroup] = useState<"all" | "gateway" | "bank" | "upi" | "other">("all");
   const [search, setSearch] = useState("");
 
   // Dialog State
@@ -183,7 +306,7 @@ export function PaymentMethodsClient() {
   const [saving, setSaving] = useState(false);
 
   // Form State
-  const [methodType, setMethodType] = useState<FinancePaymentMethodType>("net_banking");
+  const [methodType, setMethodType] = useState<FinancePaymentMethodType>("payment_gateway");
   const [title, setTitle] = useState("");
   const [bankName, setBankName] = useState("");
   const [customBankName, setCustomBankName] = useState("");
@@ -200,6 +323,14 @@ export function PaymentMethodsClient() {
   const [instructions, setInstructions] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [isDefault, setIsDefault] = useState(false);
+
+  // Gateway Form State
+  const [gatewayProvider, setGatewayProvider] = useState("razorpay");
+  const [gatewayKeyId, setGatewayKeyId] = useState("");
+  const [gatewayKeySecret, setGatewayKeySecret] = useState("");
+  const [gatewayWebhookSecret, setGatewayWebhookSecret] = useState("");
+  const [gatewayEnvironment, setGatewayEnvironment] = useState<"live" | "test">("live");
+  const [showSecretKey, setShowSecretKey] = useState(false);
 
   // QR Modal Preview State
   const [previewQrUrl, setPreviewQrUrl] = useState<{ url: string; title: string; upiId: string | null } | null>(null);
@@ -241,8 +372,8 @@ export function PaymentMethodsClient() {
 
   const resetForm = () => {
     setEditingMethod(null);
-    setMethodType("net_banking");
-    setTitle("");
+    setMethodType("payment_gateway");
+    setTitle("Razorpay Gateway");
     setBankName("");
     setCustomBankName("");
     setAccountHolderName(activeInstitution?.name || "");
@@ -258,6 +389,12 @@ export function PaymentMethodsClient() {
     setInstructions("");
     setIsActive(true);
     setIsDefault(false);
+    setGatewayProvider("razorpay");
+    setGatewayKeyId("");
+    setGatewayKeySecret("");
+    setGatewayWebhookSecret("");
+    setGatewayEnvironment("live");
+    setShowSecretKey(false);
   };
 
   const openAddDialog = () => {
@@ -301,15 +438,37 @@ export function PaymentMethodsClient() {
     setInstructions(item.instructions || "");
     setIsActive(item.is_active);
     setIsDefault(item.is_default);
+
+    // Gateway fields
+    setGatewayProvider(item.gateway_provider || "razorpay");
+    setGatewayKeyId(item.gateway_key_id || "");
+    setGatewayKeySecret(item.gateway_key_secret || "");
+    setGatewayWebhookSecret(item.gateway_webhook_secret || "");
+    setGatewayEnvironment((item.gateway_environment as "live" | "test") || "live");
+    setShowSecretKey(false);
+
     setDialogOpen(true);
   };
+
+  const activeGatewayConfig = useMemo(() => {
+    return PAYMENT_GATEWAY_PROVIDERS.find((p) => p.id === gatewayProvider) || PAYMENT_GATEWAY_PROVIDERS[0];
+  }, [gatewayProvider]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const effectiveTitle = title.trim() || `${METHOD_TYPE_CONFIG[methodType].label} (${activeInstitution?.name || "Institution"})`;
     const effectiveBankName = bankName === "Other Bank" ? customBankName.trim() : bankName.trim();
 
-    if (methodType === "net_banking") {
+    if (methodType === "payment_gateway") {
+      if (!gatewayProvider) {
+        toast.error("Please select a payment gateway provider");
+        return;
+      }
+      if (!gatewayKeyId.trim()) {
+        toast.error(`Please enter ${activeGatewayConfig?.keyIdLabel || "API Key / Key ID"}`);
+        return;
+      }
+    } else if (methodType === "net_banking") {
       if (!effectiveBankName) {
         toast.error("Please select or enter bank name");
         return;
@@ -349,6 +508,11 @@ export function PaymentMethodsClient() {
         qr_code_url: qrFile?.url || null,
         qr_code_public_id: qrFile?.publicId || null,
         instructions: instructions.trim() || null,
+        gateway_provider: methodType === "payment_gateway" ? gatewayProvider : null,
+        gateway_key_id: methodType === "payment_gateway" ? gatewayKeyId.trim() : null,
+        gateway_key_secret: methodType === "payment_gateway" ? gatewayKeySecret.trim() : null,
+        gateway_webhook_secret: methodType === "payment_gateway" ? gatewayWebhookSecret.trim() : null,
+        gateway_environment: methodType === "payment_gateway" ? gatewayEnvironment : "live",
         is_active: isActive,
         is_default: isDefault,
       };
@@ -433,6 +597,12 @@ export function PaymentMethodsClient() {
     toast.success(`Copied ${label} to clipboard!`);
   };
 
+  const maskSecret = (secret: string | null) => {
+    if (!secret) return "••••••••••••";
+    if (secret.length <= 8) return "••••••••";
+    return `${secret.slice(0, 4)}••••••••${secret.slice(-4)}`;
+  };
+
   const filteredMethods = useMemo(() => {
     return methods.filter((item) => {
       const config = METHOD_TYPE_CONFIG[item.method_type] ?? METHOD_TYPE_CONFIG.custom;
@@ -443,6 +613,7 @@ export function PaymentMethodsClient() {
         const query = search.toLowerCase().trim();
         return (
           item.title.toLowerCase().includes(query) ||
+          (item.gateway_provider && item.gateway_provider.toLowerCase().includes(query)) ||
           (item.bank_name && item.bank_name.toLowerCase().includes(query)) ||
           (item.account_number && item.account_number.includes(query)) ||
           (item.ifsc_code && item.ifsc_code.toLowerCase().includes(query)) ||
@@ -451,33 +622,29 @@ export function PaymentMethodsClient() {
       }
       return true;
     });
-  }, [methods, filterGroup, search]);
+  }, [filterGroup, methods, search]);
 
-  if (!isReady) return null;
+  const stats = useMemo(() => {
+    const total = methods.length;
+    const gateways = methods.filter((m) => m.method_type === "payment_gateway").length;
+    const bank = methods.filter((m) => m.method_type === "net_banking").length;
+    const upi = methods.filter((m) => ["phonepe", "google_pay", "paytm", "bhim_upi", "other_upi"].includes(m.method_type)).length;
+    const other = methods.filter((m) => ["cash", "cheque", "pos_card", "custom"].includes(m.method_type)).length;
+    return { total, gateways, bank, upi, other };
+  }, [methods]);
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <Landmark className="size-4 text-primary" />
-            Finance &gt; Payment Methods
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight">Payment Methods &amp; Accounts</h1>
-          <p className="text-sm text-muted-foreground">
-            Configure Net Banking bank accounts, PhonePe, Google Pay, Paytm, and UPI QR codes for student fee and manual receipts.
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">Payment Methods &amp; Gateways</h1>
+          <p className="text-xs text-muted-foreground sm:text-sm">
+            Configure Online Payment Gateways (Razorpay, Cashfree, PayU, Stripe), Net Banking bank accounts, and UPI QR codes.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="h-9 px-3 text-xs font-semibold">
-            {scopeBadgeText}
-          </Badge>
-          <Button variant="outline" size="sm" onClick={fetchMethods} disabled={loading} className="gap-2">
-            {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-            Refresh
-          </Button>
-          <Button size="sm" onClick={openAddDialog} className="gap-2 bg-primary text-primary-foreground shadow-xs">
+          <Button size="sm" onClick={openAddDialog} className="gap-2 bg-primary text-primary-foreground shadow-xs cursor-pointer">
             <Plus className="size-4" />
             Add Payment Method
           </Button>
@@ -488,10 +655,11 @@ export function PaymentMethodsClient() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-1.5 rounded-lg border bg-muted/40 p-1">
           {[
-            { id: "all", label: "All Methods" },
-            { id: "bank", label: "Bank Accounts (Net Banking)" },
-            { id: "upi", label: "UPI & QR (PhonePe, GPay, Paytm)" },
-            { id: "other", label: "Cash & Other" },
+            { id: "all", label: `All Methods (${stats.total})` },
+            { id: "gateway", label: `⚡ Payment Gateways (${stats.gateways})` },
+            { id: "bank", label: `Bank Accounts (${stats.bank})` },
+            { id: "upi", label: `UPI & QR (${stats.upi})` },
+            { id: "other", label: `Cash & Others (${stats.other})` },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -513,7 +681,7 @@ export function PaymentMethodsClient() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search bank, IFSC, UPI ID..."
+            placeholder="Search gateway, bank, IFSC, UPI ID..."
             className="h-9 pl-9 text-xs"
           />
         </div>
@@ -533,10 +701,10 @@ export function PaymentMethodsClient() {
         </div>
       ) : filteredMethods.length === 0 ? (
         <div className="rounded-xl border bg-card py-16 text-center text-sm text-muted-foreground shadow-xs">
-          <Landmark className="mx-auto size-10 mb-3 text-muted-foreground/40" />
-          <p className="font-semibold text-foreground text-base">No payment methods configured yet</p>
+          <Zap className="mx-auto size-10 mb-3 text-muted-foreground/40" />
+          <p className="font-semibold text-foreground text-base">No payment methods found</p>
           <p className="mt-1 max-w-md mx-auto text-xs text-muted-foreground">
-            Add Net Banking bank accounts, PhonePe, Google Pay, or other UPI options with QR codes for fast student fee collection.
+            Configure an Online Payment Gateway (Razorpay, Cashfree, PayU, Stripe) or Bank Account &amp; UPI QR code to accept student fee payments.
           </p>
           <Button onClick={openAddDialog} size="sm" className="mt-4 gap-2">
             <Plus className="size-4" />
@@ -547,8 +715,10 @@ export function PaymentMethodsClient() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredMethods.map((item) => {
             const config = METHOD_TYPE_CONFIG[item.method_type] ?? METHOD_TYPE_CONFIG.custom;
+            const isGateway = item.method_type === "payment_gateway";
             const isBank = config.group === "bank";
             const isUpi = config.group === "upi";
+            const gatewayInfo = PAYMENT_GATEWAY_PROVIDERS.find((p) => p.id === item.gateway_provider);
 
             return (
               <div
@@ -563,8 +733,20 @@ export function PaymentMethodsClient() {
                     <div className="flex flex-wrap items-center gap-1.5">
                       <Badge variant="outline" className={`gap-1 px-2.5 py-0.5 text-xs font-semibold ${config.badgeClass}`}>
                         <config.icon className="size-3" />
-                        {config.label}
+                        {isGateway ? `${gatewayInfo?.name || "Payment Gateway"}` : config.label}
                       </Badge>
+                      {isGateway && (
+                        <Badge
+                          variant="secondary"
+                          className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0 ${
+                            item.gateway_environment === "test"
+                              ? "bg-amber-500/15 text-amber-600 border border-amber-500/30"
+                              : "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
+                          }`}
+                        >
+                          {item.gateway_environment === "test" ? "Sandbox / Test" : "Live / Production"}
+                        </Badge>
+                      )}
                       {item.is_default && (
                         <Badge className="gap-1 bg-amber-500/15 text-amber-600 border border-amber-500/30 text-[10px] font-bold">
                           <Star className="size-3 fill-amber-500" />
@@ -583,7 +765,7 @@ export function PaymentMethodsClient() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => openEditDialog(item)} className="gap-2 cursor-pointer">
                           <Edit2 className="size-3.5" />
-                          Edit Details
+                          Edit Details &amp; Keys
                         </DropdownMenuItem>
                         {!item.is_default && (
                           <DropdownMenuItem onClick={() => handleSetDefault(item)} className="gap-2 cursor-pointer">
@@ -619,6 +801,38 @@ export function PaymentMethodsClient() {
                       </p>
                     ) : null}
                   </div>
+
+                  {/* PAYMENT GATEWAY DETAILS */}
+                  {isGateway && (
+                    <div className="mt-4 space-y-2 rounded-lg border bg-muted/30 p-3 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Provider</span>
+                        <span className="font-bold text-foreground">{gatewayInfo?.name || item.gateway_provider}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">{gatewayInfo?.keyIdLabel || "API Key ID"}</span>
+                        <div className="flex items-center gap-1.5 font-mono font-bold text-foreground">
+                          <span className="truncate max-w-[140px]">{item.gateway_key_id ? maskSecret(item.gateway_key_id) : "-"}</span>
+                          {item.gateway_key_id && (
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(item.gateway_key_id!, "Key ID")}
+                              className="text-muted-foreground hover:text-foreground cursor-pointer"
+                              title="Copy Key ID"
+                            >
+                              <Copy className="size-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {item.gateway_webhook_secret && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Webhook</span>
+                          <span className="font-semibold text-emerald-600 dark:text-emerald-400">Configured ✓</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Content Specific to Net Banking */}
                   {isBank && (
@@ -665,12 +879,6 @@ export function PaymentMethodsClient() {
                           <span className="truncate text-foreground max-w-[150px]">{item.branch_name}</span>
                         </div>
                       )}
-                      {item.account_type && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Type</span>
-                          <span className="font-medium text-foreground">{item.account_type}</span>
-                        </div>
-                      )}
                     </div>
                   )}
 
@@ -691,12 +899,6 @@ export function PaymentMethodsClient() {
                               <Copy className="size-3" />
                             </button>
                           </div>
-                        </div>
-                      )}
-                      {item.upi_number && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">UPI Mobile No.</span>
-                          <span className="font-mono font-semibold text-foreground">{item.upi_number}</span>
                         </div>
                       )}
                       {item.qr_code_url ? (
@@ -771,22 +973,30 @@ export function PaymentMethodsClient() {
         <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
           <form onSubmit={handleSave}>
             <DialogHeader>
-              <DialogTitle>{editingMethod ? "Edit Payment Method" : "Add Payment Method"}</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <Zap className="size-5 text-primary" />
+                {editingMethod ? "Edit Payment Method / Gateway" : "Configure Payment Method / Gateway"}
+              </DialogTitle>
               <DialogDescription>
-                Configure Net Banking account details or UPI apps (PhonePe, Google Pay, Paytm, BHIM) with QR codes.
+                Configure Online Payment Gateways (Razorpay, Cashfree, PayU, Stripe), Net Banking, or UPI QR codes.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-3">
               {/* Method Type Selection */}
               <div className="space-y-1.5">
-                <Label>Payment Method Type *</Label>
+                <Label>Payment Method Category *</Label>
                 <Select
                   value={methodType}
                   onValueChange={(val) => {
-                    setMethodType(val as FinancePaymentMethodType);
-                    if (!title) {
-                      setTitle(`${METHOD_TYPE_CONFIG[val as FinancePaymentMethodType].label}`);
+                    const nextType = val as FinancePaymentMethodType;
+                    setMethodType(nextType);
+                    if (nextType === "payment_gateway") {
+                      setTitle(activeGatewayConfig?.defaultTitle || "Razorpay Gateway");
+                    } else if (nextType === "net_banking") {
+                      setTitle("Primary Current Bank Account");
+                    } else if (["phonepe", "google_pay", "paytm", "bhim_upi"].includes(nextType)) {
+                      setTitle(`${METHOD_TYPE_CONFIG[nextType].label}`);
                     }
                   }}
                 >
@@ -794,6 +1004,9 @@ export function PaymentMethodsClient() {
                     <SelectValue placeholder="Select payment method type" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="payment_gateway" className="font-semibold text-primary">
+                      ⚡ Online Payment Gateway (Razorpay, Cashfree, PayU, Stripe, etc.)
+                    </SelectItem>
                     <SelectItem value="net_banking">🏦 Net Banking (Bank Account Transfer / NEFT / RTGS)</SelectItem>
                     <SelectItem value="phonepe">🟣 PhonePe UPI</SelectItem>
                     <SelectItem value="google_pay">🔵 Google Pay (GPay)</SelectItem>
@@ -808,13 +1021,115 @@ export function PaymentMethodsClient() {
                 </Select>
               </div>
 
+              {/* PAYMENT GATEWAY CONFIGURATION */}
+              {methodType === "payment_gateway" && (
+                <div className="space-y-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm font-bold text-foreground">
+                      <Zap className="size-4 text-primary" />
+                      Gateway Provider &amp; API Credentials
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs font-semibold">Environment:</Label>
+                      <Select
+                        value={gatewayEnvironment}
+                        onValueChange={(v) => setGatewayEnvironment(v as "live" | "test")}
+                      >
+                        <SelectTrigger className="h-7 w-32 text-xs font-bold">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="live" className="text-emerald-600 font-bold">🟢 Live / Prod</SelectItem>
+                          <SelectItem value="test" className="text-amber-600 font-bold">🟡 Sandbox / Test</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label>Select Payment Gateway Provider *</Label>
+                    <Select
+                      value={gatewayProvider}
+                      onValueChange={(val) => {
+                        setGatewayProvider(val);
+                        const prov = PAYMENT_GATEWAY_PROVIDERS.find((p) => p.id === val);
+                        if (prov) {
+                          setTitle(prov.defaultTitle);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PAYMENT_GATEWAY_PROVIDERS.map((prov) => (
+                          <SelectItem key={prov.id} value={prov.id}>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold">{prov.name}</span>
+                              <span className="text-[11px] text-muted-foreground">— {prov.description}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label>{activeGatewayConfig.keyIdLabel} *</Label>
+                      <div className="relative">
+                        <Key className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          value={gatewayKeyId}
+                          onChange={(e) => setGatewayKeyId(e.target.value)}
+                          placeholder={activeGatewayConfig.keyIdPlaceholder}
+                          className="pl-9 font-mono text-xs"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <div className="flex items-center justify-between">
+                        <Label>{activeGatewayConfig.secretLabel}</Label>
+                        <button
+                          type="button"
+                          onClick={() => setShowSecretKey(!showSecretKey)}
+                          className="flex items-center gap-1 text-[11px] text-primary hover:underline cursor-pointer"
+                        >
+                          {showSecretKey ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+                          {showSecretKey ? "Hide Secret" : "Reveal Secret"}
+                        </button>
+                      </div>
+                      <Input
+                        type={showSecretKey ? "text" : "password"}
+                        value={gatewayKeySecret}
+                        onChange={(e) => setGatewayKeySecret(e.target.value)}
+                        placeholder={activeGatewayConfig.secretPlaceholder}
+                        className="font-mono text-xs"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label>{activeGatewayConfig.webhookLabel}</Label>
+                      <Input
+                        value={gatewayWebhookSecret}
+                        onChange={(e) => setGatewayWebhookSecret(e.target.value)}
+                        placeholder="Webhook signing secret / salt / token (optional)"
+                        className="font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Title / Nickname */}
               <div className="space-y-1.5">
-                <Label>Display Title / Nickname *</Label>
+                <Label>Display Name / Nickname *</Label>
                 <Input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Primary SBI Current Account, Main Desk PhonePe UPI"
+                  placeholder="e.g. Primary Razorpay PG, SBI Current Account"
                   required
                 />
               </div>
@@ -994,11 +1309,11 @@ export function PaymentMethodsClient() {
 
               {/* Instructions */}
               <div className="space-y-1.5">
-                <Label>Payer Instructions (Optional)</Label>
+                <Label>Payer Instructions / Description (Optional)</Label>
                 <Textarea
                   value={instructions}
                   onChange={(e) => setInstructions(e.target.value)}
-                  placeholder="e.g. Mention student admission number in remarks and share transaction reference screenshot on WhatsApp."
+                  placeholder="e.g. Student fee payments processed securely with instant fee receipt generation."
                   rows={2}
                 />
               </div>
@@ -1008,7 +1323,7 @@ export function PaymentMethodsClient() {
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label className="text-sm font-semibold">Set as Default Payment Method</Label>
-                    <p className="text-xs text-muted-foreground">Will be auto-selected first during fee collection and manual receipts.</p>
+                    <p className="text-xs text-muted-foreground">Will be auto-selected first during fee collection and online checkout.</p>
                   </div>
                   <Switch checked={isDefault} onCheckedChange={setIsDefault} />
                 </div>
@@ -1016,7 +1331,7 @@ export function PaymentMethodsClient() {
                 <div className="flex items-center justify-between border-t pt-2.5">
                   <div className="space-y-0.5">
                     <Label className="text-sm font-semibold">Active Status</Label>
-                    <p className="text-xs text-muted-foreground">Enable this payment method for immediate use.</p>
+                    <p className="text-xs text-muted-foreground">Enable this payment method / gateway for immediate use.</p>
                   </div>
                   <Switch checked={isActive} onCheckedChange={setIsActive} />
                 </div>

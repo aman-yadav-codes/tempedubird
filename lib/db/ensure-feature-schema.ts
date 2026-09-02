@@ -291,6 +291,7 @@ export async function ensureFeatureSchema() {
       ALTER TABLE vendors ADD COLUMN IF NOT EXISTS notes TEXT;
       ALTER TABLE vendors ADD COLUMN IF NOT EXISTS country VARCHAR(100) DEFAULT 'India';
       ALTER TABLE vendors ADD COLUMN IF NOT EXISTS state VARCHAR(100);
+      ALTER TABLE vendors ADD COLUMN IF NOT EXISTS contacts JSONB DEFAULT '[]'::jsonb;
 
       -- Dedicated Clients Table for Institutional & Corporate Partners
       CREATE TABLE IF NOT EXISTS clients (

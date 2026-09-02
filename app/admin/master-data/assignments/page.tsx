@@ -532,6 +532,23 @@ export default function AssignmentsPage() {
           ),
       },
       {
+        id: "pricing",
+        header: "Pricing",
+        cell: ({ row }) => {
+          const isPaid = Boolean((row.original as any).is_paid || (Number((row.original as any).price) > 0));
+          const price = Number((row.original as any).price) || 0;
+          return isPaid ? (
+            <Badge variant="outline" className="border-rose-500/30 bg-rose-500/10 text-rose-600 font-bold text-xs">
+              ₹{price}
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 font-bold text-xs">
+              Free
+            </Badge>
+          );
+        },
+      },
+      {
         id: "actions",
         header: "Actions",
         cell: ({ row }) => {

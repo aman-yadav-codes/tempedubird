@@ -104,6 +104,12 @@ type RecurringExpenseRow = {
   next_due_date: string;
   is_active: boolean;
   description: string | null;
+  institution_name?: string | null;
+  created_by?: number | null;
+  created_by_name?: string | null;
+  created_by_role?: string | null;
+  staff_id?: number | null;
+  created_at?: string;
 };
 
 type RecurringExpenseResponse = {
@@ -741,6 +747,29 @@ export function RecurringExpensesClient() {
       header: "Paid By",
     },
     {
+      accessorKey: "created_by_name",
+      header: "Recorded By",
+      cell: ({ row }) => (
+        <div className="min-w-0 space-y-0.5">
+          <p className="font-medium text-xs truncate">{row.original.created_by_name || "Admin"}</p>
+          {row.original.created_by_role && (
+            <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-normal">
+              {row.original.created_by_role}
+            </Badge>
+          )}
+        </div>
+      ),
+    },
+    ...(isPlatformScope ? [{
+      id: "scope_column",
+      header: "Scope",
+      cell: ({ row }: { row: { original: RecurringExpenseRow } }) => (
+        <Badge variant={row.original.institution_name ? "secondary" : "default"} className="text-[11px]">
+          {row.original.institution_name ? row.original.institution_name : "Platform Global"}
+        </Badge>
+      ),
+    }] : []),
+    {
       accessorKey: "is_active",
       header: "Status",
       cell: ({ row }) => (
@@ -775,7 +804,7 @@ export function RecurringExpensesClient() {
         </DropdownMenu>
       ),
     },
-  ], [canEdit, markPaymentStatus]);
+  ], [canEdit, isPlatformScope, markPaymentStatus]);
 
   if (!isReady) return null;
 

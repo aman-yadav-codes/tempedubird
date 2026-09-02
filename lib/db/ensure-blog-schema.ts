@@ -6,12 +6,22 @@ export async function ensureBlogPostsTable() {
   if (blogSchemaReady) return;
   try {
     await db.query(`
+      CREATE TABLE IF NOT EXISTS blog_categories (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(150) NOT NULL,
+        slug VARCHAR(150) NOT NULL,
+        parent_id INTEGER NULL REFERENCES blog_categories(id) ON DELETE CASCADE,
+        institution_id INTEGER NULL REFERENCES institution_profiles(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE TABLE IF NOT EXISTS blog_posts (
         id SERIAL PRIMARY KEY,
         slug VARCHAR(255) UNIQUE,
         institution_id INTEGER NULL REFERENCES institution_profiles(id) ON DELETE CASCADE,
         title TEXT NOT NULL,
         category TEXT DEFAULT 'Academic & Curriculum',
+        sub_category TEXT NULL,
         cover_image TEXT NULL,
         video_url TEXT NULL,
         summary TEXT NULL,
@@ -40,6 +50,7 @@ export async function ensureBlogPostsTable() {
 
       -- Ensure newly added columns exist in older database environments
       ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS slug VARCHAR(255);
+      ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS sub_category TEXT;
       ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS content_html TEXT;
       ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT FALSE;
       ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS read_time_mins INT DEFAULT 5;
@@ -55,7 +66,9 @@ export async function ensureBlogPostsTable() {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_blog_posts_slug ON blog_posts(slug) WHERE slug IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_blog_posts_institution_status ON blog_posts(institution_id, status, published_at DESC);
       CREATE INDEX IF NOT EXISTS idx_blog_posts_category ON blog_posts(category);
+      CREATE INDEX IF NOT EXISTS idx_blog_posts_sub_category ON blog_posts(sub_category);
       CREATE INDEX IF NOT EXISTS idx_blog_posts_featured ON blog_posts(is_featured);
+      CREATE INDEX IF NOT EXISTS idx_blog_categories_parent ON blog_categories(parent_id);
     `);
 
     // Backfill any missing slugs for older blog rows
@@ -65,6 +78,52 @@ export async function ensureBlogPostsTable() {
       WHERE slug IS NULL OR slug = '';
     `);
 
+    // Seed default categories & subcategories if empty
+    const catCheck = await db.query<{ count: string }>(`SELECT COUNT(*) as count FROM blog_categories`);
+    if (parseInt(catCheck.rows[0]?.count || "0", 10) === 0) {
+      await db.query(`
+        WITH inserted_parents AS (
+          INSERT INTO blog_categories (name, slug, parent_id)
+          VALUES 
+            ('Academic & Curriculum', 'academic-curriculum', NULL),
+            ('Admissions & Counseling', 'admissions-counseling', NULL),
+            ('Campus Life & Culture', 'campus-life-culture', NULL),
+            ('Exams, Cutoffs & Results', 'exams-cutoffs-results', NULL),
+            ('Placements & Career', 'placements-career', NULL),
+            ('Scholarships & Financial Aid', 'scholarships-financial-aid', NULL),
+            ('Student Activities & Sports', 'student-activities-sports', NULL),
+            ('Technology & Innovation', 'technology-innovation', NULL),
+            ('Announcements & Notices', 'announcements-notices', NULL)
+          RETURNING id, name
+        )
+        INSERT INTO blog_categories (name, slug, parent_id)
+        SELECT sub.name, sub.slug, p.id
+        FROM inserted_parents p
+        CROSS JOIN LATERAL (
+          SELECT * FROM (VALUES
+            ('Academic & Curriculum', 'Computer Science & IT', 'computer-science-it'),
+            ('Academic & Curriculum', 'Engineering & Technology', 'engineering-technology'),
+            ('Academic & Curriculum', 'Management & Business', 'management-business'),
+            ('Academic & Curriculum', 'Medical & Healthcare', 'medical-healthcare'),
+            ('Admissions & Counseling', 'UG Admissions 2026', 'ug-admissions-2026'),
+            ('Admissions & Counseling', 'PG & Masters Guidance', 'pg-masters-guidance'),
+            ('Admissions & Counseling', 'Counseling Rounds & Seat Allotment', 'counseling-rounds'),
+            ('Exams, Cutoffs & Results', 'JEE & Engineering Entrance', 'jee-engineering-entrance'),
+            ('Exams, Cutoffs & Results', 'NEET & Medical Tests', 'neet-medical-tests'),
+            ('Exams, Cutoffs & Results', 'CAT / MBA Exams', 'cat-mba-exams'),
+            ('Placements & Career', 'Internships & Traineeships', 'internships-traineeships'),
+            ('Placements & Career', 'Resume & Interview Prep', 'resume-interview-prep'),
+            ('Placements & Career', 'Salary Insights & Tech Hiring', 'salary-insights'),
+            ('Campus Life & Culture', 'Hostel & Residential Life', 'hostel-residential-life'),
+            ('Campus Life & Culture', 'Student Clubs & Fests', 'student-clubs-fests'),
+            ('Technology & Innovation', 'Artificial Intelligence & ML', 'ai-ml'),
+            ('Technology & Innovation', 'Full Stack Development', 'fullstack-dev')
+          ) AS s(p_name, name, slug)
+          WHERE s.p_name = p.name
+        ) sub;
+      `);
+    }
+
     // Seed comprehensive initial articles if table is empty
     const countCheck = await db.query<{ count: string }>(`SELECT COUNT(*) as count FROM blog_posts`);
     if (parseInt(countCheck.rows[0]?.count || "0", 10) === 0) {
@@ -73,6 +132,7 @@ export async function ensureBlogPostsTable() {
           title,
           slug,
           category,
+          sub_category,
           summary,
           content_html,
           cover_image,
@@ -90,6 +150,7 @@ export async function ensureBlogPostsTable() {
           'Complete Guide to BCA & Computer Science Career Roadmaps in 2026',
           'complete-guide-to-bca-computer-science-career-roadmaps-2026',
           'Academic & Curriculum',
+          'Computer Science & IT',
           'Discover top technical specializations, high-growth engineering domains, full-stack frameworks, and placement strategies for computer applications students.',
           '<h2>Overview of Computer Applications in 2026</h2><p>The field of Computer Applications and Information Technology has evolved rapidly with cloud computing, artificial intelligence, and full-stack software architecture becoming standard industry prerequisites.</p><h3>Key Skill Pillars</h3><ul><li><strong>Data Structures & Algorithmic Thinking:</strong> Crucial for technical interviews and scalable system design.</li><li><strong>Full Stack Web & Mobile Engineering:</strong> Modern frameworks like Next.js, React, Node.js, and TypeScript.</li><li><strong>Cloud Infrastructure & DevOps:</strong> AWS, Docker, Kubernetes, and automated CI/CD pipelines.</li></ul><blockquote>Continuous hands-on project building and open-source contribution remain the highest-yielding habits for computer science aspirants.</blockquote><h3>Placement Strategies</h3><p>Start building real-world projects by your second year. Participate in hackathons, publish your GitHub repositories, and maintain an active technical portfolio.</p>',
           'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1200&q=80',
@@ -106,6 +167,7 @@ export async function ensureBlogPostsTable() {
           'Top Strategies for Cracking National Entrance Exams & Engineering Cutoffs',
           'top-strategies-for-cracking-national-entrance-exams-cutoffs',
           'Exams, Cutoffs & Results',
+          'JEE & Engineering Entrance',
           'Master time management, high-yield subject revision, mock test analysis, and stress resilience for competitive entrance assessments.',
           '<h2>Strategic Exam Preparation</h2><p>Scoring in the top percentile of competitive entrance exams requires disciplined consistency, conceptual mastery, and targeted simulation through timed practice tests.</p><h3>1. The 80/20 Revision Rule</h3><p>Focus 80% of your revision energy on the high-weightage core syllabus topics that consistently appear year after year.</p><h3>2. Active Mock Test Analysis</h3><p>Taking a mock test is only half the battle. Spend double the time analyzing your incorrect attempts, time-drains, and calculation slips.</p>',
           'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=1200&q=80',
@@ -122,6 +184,7 @@ export async function ensureBlogPostsTable() {
           'How Modern Institutions Are Transforming Hybrid Classroom Learning',
           'how-modern-institutions-are-transforming-hybrid-classroom-learning',
           'Campus Life & Culture',
+          'Student Clubs & Fests',
           'Exploring digital smart campuses, interactive laboratory modules, virtual internships, and next-generation student support systems.',
           '<h2>The Future of Education Delivery</h2><p>Classrooms are no longer restricted to four walls. Hybrid learning models blend dynamic in-person mentorship with anytime-accessible digital study repositories, automated assessments, and interactive doubt resolution.</p>',
           'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=1200&q=80',

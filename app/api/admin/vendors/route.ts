@@ -163,10 +163,18 @@ export async function POST(req: Request) {
       notes,
       status = "active",
       institution_id,
+      contacts,
     } = body;
 
-    if (!name || !category || !phone) {
-      return NextResponse.json({ error: "Name, category, and phone number are required" }, { status: 400 });
+    if (!name || !category) {
+      return NextResponse.json({ error: "Vendor name and category are required" }, { status: 400 });
+    }
+
+    const primaryPhone = phone?.trim() || (Array.isArray(contacts) && contacts[0]?.phone ? String(contacts[0].phone).trim() : null);
+    const primaryEmail = email?.trim() || (Array.isArray(contacts) && contacts[0]?.email ? String(contacts[0].email).trim() : null);
+
+    if (!primaryPhone) {
+      return NextResponse.json({ error: "At least one contact phone number is required" }, { status: 400 });
     }
 
     const targetInstitutionId = isPlatformAdminUser(user)
@@ -194,8 +202,9 @@ export async function POST(req: Request) {
         notes,
         status,
         institution_id,
+        contacts,
         updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
       RETURNING *
       `,
       [
@@ -204,8 +213,8 @@ export async function POST(req: Request) {
         contact_person?.trim() || null,
         category,
         vendor_type || "vendor",
-        phone.trim(),
-        email?.trim() || null,
+        primaryPhone,
+        primaryEmail,
         website?.trim() || null,
         profile_image || null,
         address?.trim() || null,
@@ -217,6 +226,7 @@ export async function POST(req: Request) {
         notes?.trim() || null,
         status || "active",
         targetInstitutionId,
+        JSON.stringify(Array.isArray(contacts) ? contacts : []),
       ]
     );
 
@@ -260,11 +270,15 @@ export async function PUT(req: Request) {
       notes,
       status,
       institution_id,
+      contacts,
     } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Record ID is required" }, { status: 400 });
     }
+
+    const primaryPhone = phone !== undefined ? phone : (Array.isArray(contacts) && contacts[0]?.phone ? String(contacts[0].phone).trim() : null);
+    const primaryEmail = email !== undefined ? email : (Array.isArray(contacts) && contacts[0]?.email ? String(contacts[0].email).trim() : null);
 
     const res = await db.query(
       `
@@ -287,8 +301,9 @@ export async function PUT(req: Request) {
           notes = COALESCE($16, notes),
           status = COALESCE($17, status),
           institution_id = COALESCE($18, institution_id),
+          contacts = COALESCE($19::jsonb, contacts),
           updated_at = NOW()
-      WHERE id = $19
+      WHERE id = $20
       RETURNING *
       `,
       [
@@ -297,8 +312,8 @@ export async function PUT(req: Request) {
         contact_person ?? null,
         category ?? null,
         vendor_type ?? null,
-        phone ?? null,
-        email ?? null,
+        primaryPhone ?? null,
+        primaryEmail ?? null,
         website ?? null,
         profile_image ?? null,
         address ?? null,
@@ -310,6 +325,7 @@ export async function PUT(req: Request) {
         notes ?? null,
         status ?? null,
         institution_id ? Number(institution_id) : undefined,
+        contacts !== undefined ? JSON.stringify(Array.isArray(contacts) ? contacts : []) : null,
         id,
       ]
     );

@@ -29,10 +29,27 @@ async function ensureCardCategoryAudienceSchema() {
   `);
 }
 
+async function ensureDocumentTemplatesPricingSchema() {
+  await db.query(`
+    ALTER TABLE document_templates
+      ADD COLUMN IF NOT EXISTS is_paid BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS price NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+      ADD COLUMN IF NOT EXISTS currency VARCHAR(10) NOT NULL DEFAULT 'INR';
+
+    ALTER TABLE institution_templates
+      ADD COLUMN IF NOT EXISTS is_paid BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS price_paid NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+      ADD COLUMN IF NOT EXISTS payment_id VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'completed',
+      ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50);
+  `);
+}
+
 export async function GET(req: Request, context: Context) {
   try {
     const currentUser = await requireAdmin(req);
     await ensureCardCategoryAudienceSchema();
+    await ensureDocumentTemplatesPricingSchema();
     await ensureInstitutionGeneratedDocumentsTable();
     const { id: value } = await context.params;
     const id = parseId(value);
@@ -129,6 +146,7 @@ export async function PATCH(req: Request, context: Context) {
     if (!isPlatformAdminUser(currentUser)) {
       return NextResponse.json({ error: "Only Platform Admin can update templates" }, { status: 403 });
     }
+    await ensureDocumentTemplatesPricingSchema();
     const { id: value } = await context.params;
     const id = parseId(value);
     const body = await req.json();
@@ -137,6 +155,9 @@ export async function PATCH(req: Request, context: Context) {
     if (!name) throw new Error("Template name is required");
     if (!Number.isInteger(cardCategoryId) || cardCategoryId <= 0) throw new Error("Card category is required");
 
+    const isPaid = typeof body.is_paid === "boolean" ? body.is_paid : undefined;
+    const price = body.price !== undefined ? Math.max(0, Number(body.price) || 0) : undefined;
+
     const result = await db.query(
       `
         UPDATE document_templates
@@ -144,13 +165,24 @@ export async function PATCH(req: Request, context: Context) {
             card_category_id = $3,
             is_public = $4,
             is_active = $5,
-            updated_by = $6,
+            is_paid = COALESCE($6, is_paid),
+            price = COALESCE($7, price),
+            updated_by = $8,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
           AND COALESCE(is_deleted, FALSE) = FALSE
         RETURNING id
       `,
-      [id, name, cardCategoryId, body.is_public !== false, body.is_active !== false, currentUser.id]
+      [
+        id,
+        name,
+        cardCategoryId,
+        body.is_public !== false,
+        body.is_active !== false,
+        isPaid,
+        price,
+        currentUser.id,
+      ]
     );
     if (!result.rowCount) return NextResponse.json({ error: "Template not found" }, { status: 404 });
     return NextResponse.json({ success: true });

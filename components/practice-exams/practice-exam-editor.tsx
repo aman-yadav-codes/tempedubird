@@ -32,6 +32,7 @@ import type { PracticeExamRow } from "@/lib/types/practice-exam";
 import type { SyllabusNode } from "@/lib/types/syllabus";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store";
+import { ContentPricingOption } from "@/components/shared/content-pricing-option";
 
 export type PracticeExamInstitutionOption = { id: number; name: string };
 type PracticeExamProgramOption = { id: number; title: string };
@@ -202,6 +203,8 @@ export function PracticeExamEditor({
   const [durationMinutes, setDurationMinutes] = useState("30");
   const [isPublic, setIsPublic] = useState(false);
   const [isActive, setIsActive] = useState(false);
+  const [isPaid, setIsPaid] = useState(false);
+  const [price, setPrice] = useState<number | string>(0);
   const [aiQuestionFormat, setAiQuestionFormat] = useState<AiQuestionFormat>({
     enabled: false,
     true_false: 1,
@@ -252,6 +255,8 @@ export function PracticeExamEditor({
       setDurationMinutes(String(template?.duration_minutes ?? 30));
       setIsPublic(Boolean(template?.marketplace_requested || template?.is_public));
       setIsActive(template?.is_active ?? false);
+      setIsPaid(Boolean((template as any)?.is_paid || (Number((template as any)?.price) > 0)));
+      setPrice(Number((template as any)?.price) || 0);
       setAiQuestionFormat({
         enabled: Boolean(template?.ai_question_format?.enabled),
         true_false: Number(template?.ai_question_format?.true_false ?? 1),
@@ -278,6 +283,22 @@ export function PracticeExamEditor({
     }
     setProgramLoading(true);
     try {
+      if (isPlatformAdmin) {
+        const res = await fetch(`/api/admin/content/courses/${id}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const json = await readJson(res);
+        if (!res.ok) throw new Error(json.error ?? "Failed to load course");
+        setSections([]);
+        setProgramSubjects(
+          ((json.data?.subjects ?? []) as Array<{ id: number; name?: string; code?: string }>).map((s) => ({
+            id: s.id,
+            name: s.name ?? `Subject ${s.id}`,
+            syllabus_available: true,
+          }))
+        );
+        return;
+      }
       const res = await fetch(`/api/admin/institutions/programs/${id}`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -319,7 +340,21 @@ export function PracticeExamEditor({
       limit: "25",
       search,
     });
-    if (!isPlatformAdmin && institutionId) {
+    if (isPlatformAdmin) {
+      const res = await fetch(`/api/admin/content/courses?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const json = await readJson(res);
+      if (!res.ok) throw new Error(json.error ?? "Failed to load courses/programs");
+      return {
+        data: ((json.data ?? []) as Array<{ id: number; name?: string; title?: string }>).map((item) => ({
+          id: item.id,
+          title: item.name || item.title || `Course #${item.id}`,
+        })),
+        hasMore: page < Number(json.pageCount ?? 0),
+      };
+    }
+    if (institutionId) {
       params.set("institutionId", institutionId);
     }
     const res = await fetch(`/api/admin/institutions/programs?${params.toString()}`, {
@@ -600,6 +635,8 @@ export function PracticeExamEditor({
             ai_question_format: aiQuestionFormat,
             is_public: isPlatformAdmin ? true : isPublic,
             is_active: isActive,
+            is_paid: isPaid,
+            price: isPaid ? (Number(price) || 0) : 0,
           }),
         }
       );
@@ -769,6 +806,16 @@ export function PracticeExamEditor({
                 />
               </div>
             </div>
+
+            <ContentPricingOption
+              isPaid={isPaid}
+              onIsPaidChange={setIsPaid}
+              price={price}
+              onPriceChange={setPrice}
+              label="Practice Exam Access Pricing"
+              description="Choose if learners access this practice exam for Free or if a fee is charged."
+            />
+
             <div className="flex flex-wrap items-center gap-5 pt-2">
               {!isPlatformAdmin && (
                 <label className="flex items-center gap-2 text-sm">

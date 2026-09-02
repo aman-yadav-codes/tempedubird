@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { UniversalLocationPicker } from "@/components/shared/universal-location-picker";
+import { ImageUploader } from "@/components/shared/image-uploader";
 import {
   Briefcase,
   Building,
@@ -133,12 +134,22 @@ export type VendorCategory = {
   vendor_count?: number;
 };
 
+export type VendorContact = {
+  id: string;
+  name: string;
+  designation: string;
+  phone: string;
+  email: string;
+  is_primary: boolean;
+};
+
 export type Vendor = {
   id: number;
   name: string;
   category: string;
   phone: string;
   email: string | null;
+  contacts?: VendorContact[] | null;
   profile_image: string | null;
   address: string | null;
   city: string | null;
@@ -184,14 +195,17 @@ export default function AdminVendorsPage() {
   // Vendor Dialog State
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
-  const [dialogTab, setDialogTab] = useState<"info" | "location">("info");
+  const [dialogTab, setDialogTab] = useState<"info" | "contacts" | "location">("info");
   const [saving, setSaving] = useState(false);
 
-  // Form fields
+  // Form Fields
   const [formName, setFormName] = useState("");
   const [formCategory, setFormCategory] = useState("House Cleaner");
   const [formPhone, setFormPhone] = useState("");
   const [formEmail, setFormEmail] = useState("");
+  const [formContacts, setFormContacts] = useState<VendorContact[]>([
+    { id: "1", name: "", designation: "Primary Contact", phone: "", email: "", is_primary: true },
+  ]);
   const [formImage, setFormImage] = useState("");
   const [formCountry, setFormCountry] = useState("India");
   const [formState, setFormState] = useState("");
@@ -267,6 +281,9 @@ export default function AdminVendorsPage() {
     setFormCategory(selectedCategory !== "all" ? selectedCategory : (categoryOptions[0]?.label || "House Cleaner"));
     setFormPhone("");
     setFormEmail("");
+    setFormContacts([
+      { id: "1", name: "", designation: "Primary Contact", phone: "", email: "", is_primary: true },
+    ]);
     setFormImage("");
     setFormCountry("India");
     setFormState("");
@@ -286,6 +303,13 @@ export default function AdminVendorsPage() {
     setFormCategory(v.category || "House Cleaner");
     setFormPhone(v.phone || "");
     setFormEmail(v.email || "");
+    if (Array.isArray(v.contacts) && v.contacts.length > 0) {
+      setFormContacts(v.contacts);
+    } else {
+      setFormContacts([
+        { id: "1", name: "", designation: "Primary Contact", phone: v.phone || "", email: v.email || "", is_primary: true },
+      ]);
+    }
     setFormImage(v.profile_image || "");
     setFormCountry(v.country || "India");
     setFormState(v.state || "");
@@ -300,8 +324,19 @@ export default function AdminVendorsPage() {
 
   const handleSaveVendor = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim() || !formPhone.trim()) {
-      toast.error("Please fill in Vendor Name and Contact Phone Number");
+    const validContacts = formContacts.filter((c) => c.phone.trim() || c.email.trim());
+    const primary = validContacts.find((c) => c.is_primary) || validContacts[0];
+    const primaryPhone = primary ? primary.phone.trim() : formPhone.trim();
+    const primaryEmail = primary ? primary.email.trim() : formEmail.trim();
+
+    if (!formName.trim()) {
+      toast.error("Please fill in Vendor Name");
+      return;
+    }
+
+    if (!primaryPhone) {
+      toast.error("Please provide at least one contact phone number in the Contacts tab");
+      setDialogTab("contacts");
       return;
     }
 
@@ -318,8 +353,9 @@ export default function AdminVendorsPage() {
           id: editingVendor?.id,
           name: formName.trim(),
           category: formCategory,
-          phone: formPhone.trim(),
-          email: formEmail.trim() || null,
+          phone: primaryPhone,
+          email: primaryEmail || null,
+          contacts: formContacts,
           profile_image: formImage.trim() || null,
           address: formAddress.trim() || null,
           city: formCity.trim() || null,
@@ -591,55 +627,7 @@ export default function AdminVendorsPage() {
         </div>
       </div>
 
-      {/* Category Quick Chips Bar */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-        <button
-          type="button"
-          onClick={() => setSelectedCategory("all")}
-          className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
-            selectedCategory === "all"
-              ? "bg-primary text-primary-foreground border-primary shadow-xs"
-              : "bg-background text-muted-foreground hover:text-foreground border-border hover:bg-muted/50"
-          }`}
-        >
-          <Briefcase className="w-3.5 h-3.5" />
-          <span>All</span>
-          <span className="ml-0.5 text-[10px] opacity-80 font-mono">({vendors.length})</span>
-        </button>
 
-        {categoryOptions.map((cat) => {
-          const Icon = cat.icon;
-          const isSelected = selectedCategory === cat.id;
-          return (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
-                isSelected
-                  ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                  : "bg-background text-muted-foreground hover:text-foreground border-border hover:bg-muted/50"
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              <span>{cat.label}</span>
-            </button>
-          );
-        })}
-
-        {canManage && (
-          <button
-            type="button"
-            onClick={() => {
-              setCategoryTab("create");
-              setCategoryDialogOpen(true);
-            }}
-            className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold text-primary border border-dashed border-primary/40 hover:bg-primary/10 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" /> Add Category
-          </button>
-        )}
-      </div>
 
       {/* Vendors Cards Grid */}
       {loading ? (
@@ -783,12 +771,19 @@ export default function AdminVendorsPage() {
 
                   {canManage && (
                     <div className="w-full flex items-center justify-between pt-1 border-t border-border/40">
-                      <a
-                        href={`tel:${vendor.phone}`}
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-muted-foreground hover:text-primary hover:underline"
-                      >
-                        <Phone className="w-3 h-3" /> {vendor.phone}
-                      </a>
+                      <div className="flex items-center gap-1.5">
+                        <a
+                          href={`tel:${vendor.phone}`}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-muted-foreground hover:text-primary hover:underline"
+                        >
+                          <Phone className="w-3 h-3" /> {vendor.phone}
+                        </a>
+                        {Array.isArray(vendor.contacts) && vendor.contacts.length > 1 && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">
+                            +{vendor.contacts.length - 1} more
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-1">
                         <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(vendor)} className="h-7 px-2 text-[11px] font-semibold">
                           <Edit className="w-3 h-3 mr-1" /> Edit
@@ -953,31 +948,35 @@ export default function AdminVendorsPage() {
 
       {/* Add / Edit Vendor Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <form onSubmit={handleSaveVendor}>
             <DialogHeader>
               <DialogTitle>{editingVendor ? "Edit Vendor Record" : "Add New Vendor Service Provider"}</DialogTitle>
-              <DialogDescription>
-                Provide service provider details, location, phone numbers, and profile photo.
-              </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-3 text-xs">
               <Tabs value={dialogTab} onValueChange={(val: any) => setDialogTab(val)} className="w-full">
-                <TabsList className="grid grid-cols-2 w-full h-10 bg-muted/60 p-1 rounded-xl mb-4">
+                <TabsList className="grid grid-cols-3 w-full h-10 bg-muted/60 p-1 rounded-xl mb-4">
                   <TabsTrigger
                     value="info"
                     className="text-xs font-semibold flex items-center justify-center gap-1.5 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm"
                   >
                     <Building2 className="w-3.5 h-3.5" />
-                    <span>1. Business Info & Services</span>
+                    <span>1. Business Info</span>
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="contacts"
+                    className="text-xs font-semibold flex items-center justify-center gap-1.5 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>2. Contacts ({formContacts.length})</span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="location"
                     className="text-xs font-semibold flex items-center justify-center gap-1.5 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm"
                   >
                     <MapPin className="w-3.5 h-3.5" />
-                    <span>2. Address & Location</span>
+                    <span>3. Address & Location</span>
                   </TabsTrigger>
                 </TabsList>
 
@@ -1030,64 +1029,13 @@ export default function AdminVendorsPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="v-phone">Contact Phone Number *</Label>
-                      <Input
-                        id="v-phone"
-                        value={formPhone}
-                        onChange={(e) => setFormPhone(e.target.value)}
-                        placeholder="+91 98765 43210"
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor="v-email">Email Address</Label>
-                      <Input
-                        id="v-email"
-                        type="email"
-                        value={formEmail}
-                        onChange={(e) => setFormEmail(e.target.value)}
-                        placeholder="contact@vendor.com"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="v-rating">Rating (1 to 5)</Label>
-                      <Input
-                        id="v-rating"
-                        type="number"
-                        step="0.1"
-                        min="1"
-                        max="5"
-                        value={formRating}
-                        onChange={(e) => setFormRating(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="v-status">Status</Label>
-                      <Select value={formStatus} onValueChange={(val: any) => setFormStatus(val)}>
-                        <SelectTrigger id="v-status">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="active">Active (Visible)</SelectItem>
-                          <SelectItem value="inactive">Inactive (Hidden)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
                   <div className="space-y-1.5">
-                    <Label htmlFor="v-img">Profile Picture / Logo URL</Label>
-                    <Input
-                      id="v-img"
+                    <ImageUploader
                       value={formImage}
-                      onChange={(e) => setFormImage(e.target.value)}
-                      placeholder="https://images.unsplash.com/..."
+                      onChange={setFormImage}
+                      accessToken={accessToken}
+                      label="Vendor Logo / Profile Picture"
+                      aspectRatio={1}
                     />
                   </div>
 
@@ -1107,6 +1055,177 @@ export default function AdminVendorsPage() {
                       type="button"
                       variant="secondary"
                       size="sm"
+                      onClick={() => setDialogTab("contacts")}
+                      className="text-xs font-semibold gap-1"
+                    >
+                      Next: Contacts & Numbers →
+                    </Button>
+                  </div>
+                </TabsContent>
+
+                {/* Tab 2: Contacts & Multiple Numbers/Emails */}
+                <TabsContent value="contacts" className="space-y-4 pt-1 outline-none">
+                  <div className="flex items-center justify-between pb-1 border-b">
+                    <div>
+                      <h4 className="font-bold text-xs text-foreground flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5 text-primary" />
+                        <span>Vendor Contact Directory</span>
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground">
+                        Store multiple phone numbers, emails, and contact persons for this vendor.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setFormContacts((prev) => [
+                          ...prev,
+                          {
+                            id: String(Date.now()),
+                            name: "",
+                            designation: `Contact ${prev.length + 1}`,
+                            phone: "",
+                            email: "",
+                            is_primary: false,
+                          },
+                        ]);
+                      }}
+                      className="text-xs font-bold gap-1 text-primary border-primary/30 hover:bg-primary/10 h-8"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Another Contact
+                    </Button>
+                  </div>
+
+                  <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+                    {formContacts.map((contact, idx) => (
+                      <div
+                        key={contact.id || idx}
+                        className={`p-3 rounded-xl border transition-all space-y-3 ${
+                          contact.is_primary ? "border-primary/40 bg-primary/5" : "border-border bg-background"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-muted font-mono text-[10px] flex items-center justify-center font-bold">
+                              {idx + 1}
+                            </span>
+                            <span className="text-xs font-bold text-foreground">
+                              {contact.name || contact.designation || `Contact #${idx + 1}`}
+                            </span>
+                            {contact.is_primary && (
+                              <Badge className="text-[9px] h-4 bg-primary/20 text-primary border-primary/30 font-semibold px-1.5">
+                                Primary
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {!contact.is_primary && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setFormContacts((prev) =>
+                                    prev.map((c, i) => ({
+                                      ...c,
+                                      is_primary: i === idx,
+                                    }))
+                                  );
+                                }}
+                                className="text-[10px] text-muted-foreground hover:text-primary underline px-1.5 py-0.5 cursor-pointer"
+                              >
+                                Set as Primary
+                              </button>
+                            )}
+                            {formContacts.length > 1 && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setFormContacts((prev) => {
+                                    const next = prev.filter((_, i) => i !== idx);
+                                    if (contact.is_primary && next.length > 0) {
+                                      next[0].is_primary = true;
+                                    }
+                                    return next;
+                                  });
+                                }}
+                                className="h-6 w-6 p-0 text-destructive hover:bg-destructive/10"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          <div className="space-y-1">
+                            <Label className="text-[11px] font-medium">Contact Person / Label</Label>
+                            <Input
+                              value={contact.name}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setFormContacts((prev) =>
+                                  prev.map((c, i) => (i === idx ? { ...c, name: val } : c))
+                                );
+                              }}
+                              placeholder="e.g. Booking Desk / Owner"
+                              className="h-8 text-xs"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label className="text-[11px] font-medium">Phone Number *</Label>
+                            <Input
+                              value={contact.phone}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setFormContacts((prev) =>
+                                  prev.map((c, i) => (i === idx ? { ...c, phone: val } : c))
+                                );
+                              }}
+                              placeholder="+91 98765 43210"
+                              className="h-8 text-xs font-mono"
+                              required={idx === 0}
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label className="text-[11px] font-medium">Email Address</Label>
+                            <Input
+                              type="email"
+                              value={contact.email || ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setFormContacts((prev) =>
+                                  prev.map((c, i) => (i === idx ? { ...c, email: val } : c))
+                                );
+                              }}
+                              placeholder="contact@vendor.com"
+                              className="h-8 text-xs"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-3 border-t">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setDialogTab("info")}
+                      className="text-xs"
+                    >
+                      ← Back
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
                       onClick={() => setDialogTab("location")}
                       className="text-xs font-semibold gap-1"
                     >
@@ -1115,7 +1234,7 @@ export default function AdminVendorsPage() {
                   </div>
                 </TabsContent>
 
-                {/* Tab 2: Address & Location */}
+                {/* Tab 3: Address & Location */}
                 <TabsContent value="location" className="space-y-4 pt-1 outline-none">
                   <UniversalLocationPicker
                     value={{
@@ -1135,30 +1254,41 @@ export default function AdminVendorsPage() {
                     showCoordinates={false}
                   />
 
-                  <div className="flex justify-start pt-2">
+                  <div className="flex items-center justify-between pt-4 border-t">
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => setDialogTab("info")}
+                      onClick={() => setDialogTab("contacts")}
                       className="text-xs"
                     >
                       ← Back
                     </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDialogOpen(false)}
+                        disabled={saving}
+                        className="text-xs font-semibold"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        size="sm"
+                        disabled={saving}
+                        className="text-xs font-semibold gap-1.5 bg-primary text-primary-foreground"
+                      >
+                        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                        {editingVendor ? "Update Vendor" : "Save Vendor"}
+                      </Button>
+                    </div>
                   </div>
                 </TabsContent>
               </Tabs>
             </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
-                {editingVendor ? "Update Vendor" : "Save Vendor"}
-              </Button>
-            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

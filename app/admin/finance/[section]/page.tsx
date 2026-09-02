@@ -43,8 +43,8 @@ const FINANCE_SECTIONS = {
     icon: BarChart3,
   },
   "payment-methods": {
-    title: "Payment Methods",
-    description: "Configure Bank Accounts (Net Banking) and UPI Payment details (PhonePe, Google Pay, Paytm, QR Codes).",
+    title: "Payment Methods & Gateways",
+    description: "Configure Online Payment Gateways (Razorpay, Cashfree, PayU, Stripe), Bank Accounts (Net Banking), and UPI Payment details (PhonePe, Google Pay, Paytm, QR Codes).",
     icon: Landmark,
   },
   categories: {

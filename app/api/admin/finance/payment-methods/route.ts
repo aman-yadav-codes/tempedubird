@@ -69,6 +69,7 @@ const VALID_METHOD_TYPES = new Set<FinancePaymentMethodType>([
   "cash",
   "cheque",
   "pos_card",
+  "payment_gateway",
   "custom",
 ]);
 
@@ -119,6 +120,9 @@ export async function POST(req: NextRequest) {
       if (!body.bank_name?.trim()) return jsonError("Bank name is required for Net Banking", 400);
       if (!body.account_number?.trim()) return jsonError("Account number is required for Net Banking", 400);
       if (!body.ifsc_code?.trim()) return jsonError("IFSC code is required for Net Banking", 400);
+    } else if (methodType === "payment_gateway") {
+      if (!body.gateway_provider?.trim()) return jsonError("Gateway provider is required", 400);
+      if (!body.gateway_key_id?.trim()) return jsonError("API Key / Key ID is required", 400);
     } else if (["phonepe", "google_pay", "paytm", "bhim_upi", "other_upi"].includes(methodType)) {
       if (!body.upi_id?.trim() && !body.qr_code_url?.trim()) {
         return jsonError("UPI ID or QR Code image is required", 400);
@@ -143,6 +147,11 @@ export async function POST(req: NextRequest) {
       qr_code_url: body.qr_code_url?.trim() || null,
       qr_code_public_id: body.qr_code_public_id?.trim() || null,
       instructions: body.instructions?.trim() || null,
+      gateway_provider: body.gateway_provider?.trim() || null,
+      gateway_key_id: body.gateway_key_id?.trim() || null,
+      gateway_key_secret: body.gateway_key_secret?.trim() || null,
+      gateway_webhook_secret: body.gateway_webhook_secret?.trim() || null,
+      gateway_environment: body.gateway_environment?.trim() || "live",
       is_active: body.is_active !== undefined ? Boolean(body.is_active) : true,
       is_default: Boolean(body.is_default),
       user_id: user.id,

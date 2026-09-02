@@ -148,6 +148,11 @@ export async function POST(req: Request) {
       : generateSlug(title);
 
     const category = typeof body.category === "string" ? body.category.trim() : "Academic & Curriculum";
+    const subCategory = typeof body.sub_category === "string" && body.sub_category.trim()
+      ? body.sub_category.trim()
+      : typeof body.subCategory === "string" && body.subCategory.trim()
+      ? body.subCategory.trim()
+      : null;
     const coverImage = typeof body.cover_image === "string" ? body.cover_image.trim() : null;
     const videoUrl = typeof body.video_url === "string" ? body.video_url.trim() : null;
     const summary = typeof body.summary === "string" ? body.summary.trim() : null;
@@ -180,6 +185,7 @@ export async function POST(req: Request) {
           title,
           slug,
           category,
+          sub_category,
           cover_image,
           video_url,
           summary,
@@ -204,9 +210,9 @@ export async function POST(req: Request) {
           updated_at
         )
         VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
-          CASE WHEN $11 = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END,
-          $14, $14, CURRENT_TIMESTAMP
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23,
+          CASE WHEN $12 = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END,
+          $15, $15, CURRENT_TIMESTAMP
         )
         RETURNING *
       `,
@@ -215,6 +221,7 @@ export async function POST(req: Request) {
         title,
         slug,
         category,
+        subCategory,
         coverImage,
         videoUrl,
         summary,

@@ -28,6 +28,22 @@ async function ensureCardCategoryAudienceSchema() {
   `);
 }
 
+async function ensureDocumentTemplatesPricingSchema() {
+  await db.query(`
+    ALTER TABLE document_templates
+      ADD COLUMN IF NOT EXISTS is_paid BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS price NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+      ADD COLUMN IF NOT EXISTS currency VARCHAR(10) NOT NULL DEFAULT 'INR';
+
+    ALTER TABLE institution_templates
+      ADD COLUMN IF NOT EXISTS is_paid BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS price_paid NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+      ADD COLUMN IF NOT EXISTS payment_id VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'completed',
+      ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50);
+  `);
+}
+
 function parseIds(value: unknown) {
   if (!Array.isArray(value)) return [];
   return Array.from(
@@ -282,6 +298,7 @@ export async function GET(req: Request) {
   try {
     const currentUser = await requireAdmin(req);
     await ensureCardCategoryAudienceSchema();
+    await ensureDocumentTemplatesPricingSchema();
     await ensureInstitutionGeneratedDocumentsTable();
     const url = new URL(req.url);
 
@@ -313,15 +330,19 @@ export async function GET(req: Request) {
     );
     const search = url.searchParams.get("search")?.trim() ?? "";
     const searchValue = `%${search}%`;
+    const categoryIdParam = url.searchParams.get("categoryId");
+    const categoryId = categoryIdParam && Number(categoryIdParam) > 0 ? Number(categoryIdParam) : null;
     const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const requestedView = url.searchParams.get("view");
     const requestedInstitutionId = getRequestedInstitutionId(url.searchParams);
     const view =
       requestedView === "marketplace"
         ? "marketplace"
-        : isPlatformAdmin
-          ? "all"
-          : "my";
+        : requestedView === "generate"
+          ? "generate"
+          : isPlatformAdmin
+            ? "all"
+            : "my";
     const allowedInstitutionIds = getAllowedInstitutionIds(currentUser, requestedInstitutionId);
     const scopeAllInstitutions = isPlatformAdmin && !requestedInstitutionId;
 
@@ -338,25 +359,31 @@ export async function GET(req: Request) {
           FROM document_templates dt
           INNER JOIN card_categories cc ON cc.id = dt.card_category_id
           WHERE ($3 = '' OR dt.name ILIKE $4 OR cc.name ILIKE $4)
+            AND ($8::int IS NULL OR dt.card_category_id = $8)
             AND COALESCE(dt.is_deleted, FALSE) = FALSE
             AND (
               ($5 = 'all' AND $6::boolean)
               OR
+              ($5 = 'generate' AND dt.is_active = TRUE)
+              OR
               ($5 = 'marketplace' AND dt.is_public = TRUE AND dt.is_active = TRUE)
               OR
-              ($5 = 'my' AND EXISTS (
-                SELECT 1
-                FROM institution_templates scoped_it
-                WHERE scoped_it.template_id = dt.id
-                  AND scoped_it.is_active = TRUE
-                  AND EXISTS (
-                    SELECT 1
-                    FROM institution_profiles scoped_ip
-                    WHERE scoped_ip.id = scoped_it.institution_id
-                      AND scoped_ip.is_active = TRUE
-                      AND COALESCE(scoped_ip.is_deleted, FALSE) = FALSE
-                  )
-                  AND ($6::boolean OR scoped_it.institution_id = ANY($7::int[]))
+              ($5 = 'my' AND (
+                (dt.is_public = TRUE AND dt.is_active = TRUE)
+                OR EXISTS (
+                  SELECT 1
+                  FROM institution_templates scoped_it
+                  WHERE scoped_it.template_id = dt.id
+                    AND scoped_it.is_active = TRUE
+                    AND EXISTS (
+                      SELECT 1
+                      FROM institution_profiles scoped_ip
+                      WHERE scoped_ip.id = scoped_it.institution_id
+                        AND scoped_ip.is_active = TRUE
+                        AND COALESCE(scoped_ip.is_deleted, FALSE) = FALSE
+                    )
+                    AND ($6::boolean OR scoped_it.institution_id = ANY($7::int[]))
+                )
               ))
             )
         ),
@@ -371,6 +398,9 @@ export async function GET(req: Request) {
             dt.version,
             dt.is_public,
             dt.is_active,
+            COALESCE(dt.is_paid, FALSE) AS is_paid,
+            COALESCE(dt.price, 0)::float AS price,
+            COALESCE(dt.currency, 'INR') AS currency,
             dt.created_at,
             dt.updated_at,
             creator.full_name AS created_by_name,
@@ -401,6 +431,15 @@ export async function GET(req: Request) {
                 AND NOT $6::boolean
                 AND it.institution_id = ANY($7::int[])
             ) AS is_assigned_to_active_institution,
+            EXISTS (
+              SELECT 1
+              FROM institution_templates it
+              WHERE it.template_id = dt.id
+                AND it.is_active = TRUE
+                AND it.is_paid = TRUE
+                AND NOT $6::boolean
+                AND it.institution_id = ANY($7::int[])
+            ) AS is_purchased,
             COALESCE(
               (
                 SELECT array_agg(
@@ -497,7 +536,7 @@ export async function GET(req: Request) {
           END AS stats_active,
           (SELECT COUNT(*)::int FROM document_templates WHERE is_public AND is_active AND COALESCE(is_deleted, FALSE) = FALSE) AS stats_public
       `,
-      [limit, offset, search, searchValue, view, scopeAllInstitutions, allowedInstitutionIds]
+      [limit, offset, search, searchValue, view, scopeAllInstitutions, allowedInstitutionIds, categoryId]
     );
 
     const summary = result.rows[0];
@@ -527,11 +566,15 @@ export async function POST(req: Request) {
     if (!isPlatformAdminUser(currentUser)) {
       return NextResponse.json({ error: "Only Platform Admin can create templates" }, { status: 403 });
     }
+    await ensureDocumentTemplatesPricingSchema();
     const body = await req.json();
     const cardCategoryId = Number(body.card_category_id);
     const name = String(body.name ?? "").trim();
     const htmlTemplate = String(body.html_template ?? "").trim();
     const thumbnailUrl = String(body.thumbnail_url ?? "").trim() || null;
+    const isPaid = Boolean(body.is_paid);
+    const price = isPaid ? Math.max(0, Number(body.price) || 0) : 0;
+    const currency = String(body.currency ?? "INR").trim().toUpperCase() || "INR";
     const fields = parseFields(body.fields);
 
     if (!Number.isInteger(cardCategoryId) || cardCategoryId <= 0) throw new Error("Card category is required");
@@ -544,8 +587,8 @@ export async function POST(req: Request) {
       const templateResult = await client.query<{ id: number }>(
         `
           INSERT INTO document_templates
-            (card_category_id, name, thumbnail_url, html_template, is_public, is_active, created_by, updated_by)
-          VALUES ($1, $2, $3, $4, $5, TRUE, $6, $6)
+            (card_category_id, name, thumbnail_url, html_template, is_public, is_active, is_paid, price, currency, created_by, updated_by)
+          VALUES ($1, $2, $3, $4, $5, TRUE, $6, $7, $8, $9, $9)
           RETURNING id
         `,
         [
@@ -554,6 +597,9 @@ export async function POST(req: Request) {
           thumbnailUrl,
           htmlTemplate,
           body.is_public !== false,
+          isPaid,
+          price,
+          currency,
           currentUser.id,
         ]
       );
@@ -590,6 +636,7 @@ export async function PATCH(req: Request) {
     if (!isPlatformAdminUser(currentUser)) {
       return NextResponse.json({ error: "Only Platform Admin can update templates" }, { status: 403 });
     }
+    await ensureDocumentTemplatesPricingSchema();
     const body = await req.json();
     const ids = parseIds(body.ids);
     if (!ids.length) throw new Error("Select at least one template");
@@ -603,6 +650,15 @@ export async function PATCH(req: Request) {
     if (typeof body.is_public === "boolean") {
       params.push(body.is_public);
       updates.push(`is_public = $${params.length}`);
+    }
+    if (typeof body.is_paid === "boolean") {
+      params.push(body.is_paid);
+      updates.push(`is_paid = $${params.length}`);
+    }
+    if (body.price !== undefined) {
+      const price = Math.max(0, Number(body.price) || 0);
+      params.push(price);
+      updates.push(`price = $${params.length}`);
     }
     if (updates.length === 2) throw new Error("No template changes provided");
 

@@ -66,6 +66,7 @@ export async function GET(req: Request) {
             bp.slug,
             bp.title,
             bp.category,
+            bp.sub_category,
             bp.summary,
             bp.cover_image,
             bp.video_url,

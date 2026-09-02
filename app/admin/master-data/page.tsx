@@ -180,6 +180,54 @@ const MASTER_DATA_MODULES = [
     badge: "Schedule",
     color: "from-sky-500/10 to-blue-500/10 border-sky-500/20 text-sky-600 dark:text-sky-400",
   },
+  {
+    title: "Institution Types",
+    url: "/admin/institutions/types",
+    icon: Building2,
+    description: "Primary institution classifications (Schools, Colleges, Universities, Coaching Centers).",
+    badge: "Types",
+    color: "from-indigo-500/10 to-blue-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400",
+  },
+  {
+    title: "Institution Subtypes",
+    url: "/admin/institutions/subtypes",
+    icon: Building2,
+    description: "Specialized subtype classifications under primary institution categories.",
+    badge: "Subtypes",
+    color: "from-blue-500/10 to-cyan-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400",
+  },
+  {
+    title: "Program Types",
+    url: "/admin/institutions/program-types",
+    icon: BookOpen,
+    description: "Classification of educational offerings (Degree, Diploma, Certificate, School Level).",
+    badge: "Programs",
+    color: "from-emerald-500/10 to-teal-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400",
+  },
+  {
+    title: "Facility Types",
+    url: "/admin/institutions/facility-types",
+    icon: Building2,
+    description: "Campus amenity and infrastructure categories (Labs, Libraries, Hostels, Sports).",
+    badge: "Facilities",
+    color: "from-amber-500/10 to-yellow-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400",
+  },
+  {
+    title: "Languages",
+    url: "/admin/institutions/languages",
+    icon: BookOpen,
+    description: "Mediums of instruction and languages supported across curricula and campuses.",
+    badge: "Languages",
+    color: "from-purple-500/10 to-pink-500/10 border-purple-500/20 text-purple-600 dark:text-purple-400",
+  },
+  {
+    title: "Academic Sessions",
+    url: "/admin/institutions/academic-years",
+    icon: CalendarDays,
+    description: "Annual academic calendars, intake batches, and academic session durations.",
+    badge: "Sessions",
+    color: "from-rose-500/10 to-pink-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400",
+  },
 ];
 
 const INSTITUTION_MODULE_URLS = new Set([
@@ -188,6 +236,8 @@ const INSTITUTION_MODULE_URLS = new Set([
   "/admin/content/exams",
   "/admin/content/notes",
   "/admin/content/blog",
+  "/admin/master-data/card-templates",
+  "/admin/master-data/card-categories",
 ]);
 
 const INSTITUTION_TIMETABLE_MODULE = {

@@ -52,12 +52,12 @@ async function getTemplate(id: number, academicYearId: number | null = null) {
         target.target_type,
         target.target_id,
         target.program_id AS target_program_id,
-        target_scope_program.title AS target_program_label,
+        COALESCE(target_scope_program.title, target_scope_master_course.name) AS target_program_label,
         CASE
           WHEN target.target_type = 'INSTITUTION' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > Whole institution'
-          WHEN target.target_type = 'PROGRAM' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > ' || target_program.title
-          WHEN target.target_type = 'SECTION' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > ' || COALESCE(target_scope_program.title, 'Class') || ' > ' || target_section.name
-          WHEN target.target_type = 'STUDENT' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || COALESCE(' > ' || target_scope_program.title, '') || ' > ' || target_user.full_name
+          WHEN target.target_type = 'PROGRAM' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > ' || COALESCE(target_program.title, target_master_course.name, 'Course')
+          WHEN target.target_type = 'SECTION' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > ' || COALESCE(target_scope_program.title, target_scope_master_course.name, 'Class') || ' > ' || target_section.name
+          WHEN target.target_type = 'STUDENT' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || COALESCE(' > ' || COALESCE(target_scope_program.title, target_scope_master_course.name), '') || ' > ' || target_user.full_name
           ELSE NULL
         END AS target_label,
         COALESCE(
@@ -107,8 +107,12 @@ async function getTemplate(id: number, academicYearId: number | null = null) {
       LEFT JOIN practice_exam_targets target ON target.practice_exam_id = assn.id
       LEFT JOIN institution_programs target_program
         ON target_program.id = target.target_id AND target.target_type = 'PROGRAM'
+      LEFT JOIN master_courses target_master_course
+        ON target_master_course.id = target.target_id AND target.target_type = 'PROGRAM'
       LEFT JOIN institution_programs target_scope_program
         ON target_scope_program.id = target.program_id
+      LEFT JOIN master_courses target_scope_master_course
+        ON target_scope_master_course.id = target.program_id
       LEFT JOIN sections target_section
         ON target_section.id = target.target_id AND target.target_type = 'SECTION'
       LEFT JOIN student_profiles target_student
@@ -133,10 +137,13 @@ async function validatePracticeExamTarget(
   if (targetType === "INSTITUTION") return;
   if (targetType === "PROGRAM") {
     const result = await db.query(
-      `SELECT 1 FROM institution_programs WHERE id = $1 AND institution_id = $2 LIMIT 1`,
+      `SELECT 1 FROM institution_programs WHERE id = $1 AND institution_id = $2
+       UNION ALL
+       SELECT 1 FROM master_courses WHERE id = $1 AND COALESCE(is_deleted, FALSE) = FALSE AND is_active = TRUE
+       LIMIT 1`,
       [targetId, institutionId]
     );
-    if (!result.rows[0]) throw new Error("Selected class is not in this institution");
+    if (!result.rows[0]) throw new Error("Selected class or course is not available");
     return;
   }
   if (targetType === "SECTION") {
@@ -349,6 +356,8 @@ export async function PATCH(req: Request, context: Context) {
               marketplace_approved_at = NULL,
               marketplace_approved_by = NULL,
               is_active = $8,
+              is_paid = $10,
+              price = $11,
               version = version + 1,
               updated_by = $9,
               updated_at = CURRENT_TIMESTAMP
@@ -365,6 +374,8 @@ export async function PATCH(req: Request, context: Context) {
           payload.isPublic,
           payload.isActive,
           currentUser.id,
+          payload.isPaid,
+          payload.price,
         ]
       );
       const nextVersion = Number(versionResult.rows[0]?.version ?? 1);

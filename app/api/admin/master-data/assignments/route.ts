@@ -72,11 +72,17 @@ async function validateAssignmentTarget(
           AND program.is_active = TRUE
           AND COALESCE(institution.is_deleted, FALSE) = FALSE
           AND institution.is_active = TRUE
+        UNION ALL
+        SELECT 1
+        FROM master_courses mc
+        WHERE mc.id = $1
+          AND COALESCE(mc.is_deleted, FALSE) = FALSE
+          AND mc.is_active = TRUE
         LIMIT 1
       `,
       [targetId, institutionId]
     );
-    if (!result.rows[0]) throw new Error("Selected class is not in this institution");
+    if (!result.rows[0]) throw new Error("Selected class or course is not available");
     return;
   }
   if (targetType === "SECTION") {
@@ -447,6 +453,8 @@ export async function GET(req: Request) {
               LIMIT 1
             ) AS inherited_by_institution_name,
             at.is_active,
+            COALESCE(at.is_paid, FALSE) AS is_paid,
+            COALESCE(at.price, 0)::float8 AS price,
             at.version,
             at.source_institution_id,
             COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) AS institution_name,
@@ -465,12 +473,12 @@ export async function GET(req: Request) {
             target.target_type,
             target.target_id,
             target.program_id AS target_program_id,
-            target_scope_program.title AS target_program_label,
+            COALESCE(target_scope_program.title, target_scope_master_course.name) AS target_program_label,
             CASE
               WHEN target.target_type = 'INSTITUTION' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > Whole institution'
-              WHEN target.target_type = 'PROGRAM' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > ' || target_program.title
-              WHEN target.target_type = 'SECTION' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > ' || COALESCE(target_scope_program.title, 'Class') || ' > ' || target_section.name
-              WHEN target.target_type = 'STUDENT' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || COALESCE(' > ' || target_scope_program.title, '') || ' > ' || target_user.full_name
+              WHEN target.target_type = 'PROGRAM' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > ' || COALESCE(target_program.title, target_master_course.name, 'Course')
+              WHEN target.target_type = 'SECTION' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > ' || COALESCE(target_scope_program.title, target_scope_master_course.name, 'Class') || ' > ' || target_section.name
+              WHEN target.target_type = 'STUDENT' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || COALESCE(' > ' || COALESCE(target_scope_program.title, target_scope_master_course.name), '') || ' > ' || target_user.full_name
               ELSE NULL
             END AS target_label,
             COALESCE(
@@ -525,8 +533,12 @@ export async function GET(req: Request) {
           LEFT JOIN assignment_targets target ON target.assignment_id = assn.id
           LEFT JOIN institution_programs target_program
             ON target_program.id = target.target_id AND target.target_type = 'PROGRAM'
+          LEFT JOIN master_courses target_master_course
+            ON target_master_course.id = target.target_id AND target.target_type = 'PROGRAM'
           LEFT JOIN institution_programs target_scope_program
             ON target_scope_program.id = target.program_id
+          LEFT JOIN master_courses target_scope_master_course
+            ON target_scope_master_course.id = target.program_id
           LEFT JOIN sections target_section
             ON target_section.id = target.target_id AND target.target_type = 'SECTION'
           LEFT JOIN student_profiles target_student
@@ -535,8 +547,8 @@ export async function GET(req: Request) {
           LEFT JOIN assignment_template_questions q ON q.template_id = at.id
           LEFT JOIN assignment_template_question_files qf ON qf.question_id = q.id
           GROUP BY at.id, ip.id, parent_at.id, parent_ip.id, creator.id, updater.id, blocker.id,
-                   requester.id, approver.id, assn.id, target.id, target_program.id, target_section.id,
-                   target_user.id, target_scope_program.id
+                   requester.id, approver.id, assn.id, target.id, target_program.id, target_master_course.id,
+                   target_section.id, target_user.id, target_scope_program.id, target_scope_master_course.id
           ORDER BY
             (at.marketplace_requested = TRUE AND at.is_public = FALSE AND at.blocked_by_platform = FALSE) DESC,
             at.updated_at DESC,
@@ -641,7 +653,7 @@ export async function POST(req: Request) {
             (title, description, total_marks, ai_question_format, is_public,
              marketplace_requested, marketplace_requested_at, marketplace_requested_by,
              marketplace_approved, marketplace_approved_at, marketplace_approved_by,
-             is_active, version, source_institution_id,
+             is_active, is_paid, price, version, source_institution_id,
              created_by, updated_by)
           VALUES (
             $1, $2, $3, $4::jsonb, $5,
@@ -649,7 +661,7 @@ export async function POST(req: Request) {
             CASE WHEN $6 THEN $8::integer ELSE NULL::integer END,
             $9, CASE WHEN $9 THEN CURRENT_TIMESTAMP ELSE NULL END,
             CASE WHEN $9 THEN $8::integer ELSE NULL::integer END,
-            $7, 1, $10, $8, $8
+            $7, $11, $12, 1, $10, $8, $8
           )
           RETURNING id
         `,
@@ -664,6 +676,8 @@ export async function POST(req: Request) {
           currentUser.id,
           marketplaceApproved,
           payload.institutionId,
+          payload.isPaid,
+          payload.price,
         ]
       );
       const templateId = result.rows[0].id;

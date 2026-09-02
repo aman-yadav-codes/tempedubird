@@ -1344,6 +1344,35 @@ export function CardTemplateTryout({
     }
   }
 
+  async function handleSaveAndDownloadPdf() {
+    setPreviewActionLoading(true);
+    try {
+      if (!canvasImageSrc) {
+        await generatePreview();
+      }
+      if (canvasImageSrc) {
+        await downloadPdf();
+      } else {
+        const exported = currentCanvasExport?.();
+        if (exported) {
+          downloadCurrentSizePdf();
+        }
+      }
+      if (studentId) {
+        try {
+          await saveGeneratedCard();
+        } catch {
+          // non-blocking
+        }
+      }
+      toast.success("Document PDF generated & downloaded!");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to generate PDF");
+    } finally {
+      window.setTimeout(() => setPreviewActionLoading(false), 350);
+    }
+  }
+
   async function saveGeneratedCard(confirmUpdate = false) {
     if (!accessToken) {
       toast.error("Your session is not available");
@@ -1351,10 +1380,6 @@ export function CardTemplateTryout({
     }
     if (!studentId) {
       toast.error(`Select a ${recipientNoun} before saving`);
-      return false;
-    }
-    if (targetAudience === "staff" && !institutionId) {
-      toast.error("Select an institution before saving the staff letter");
       return false;
     }
 
@@ -2177,9 +2202,10 @@ export function CardTemplateTryout({
               )}
             </div>
             <div className="shrink-0 border-t p-5 md:px-7">
-              <div className={isInstitutionTryout ? "grid gap-2 sm:grid-cols-2" : ""}>
+              <div className="grid gap-2 sm:grid-cols-2">
                 <Button
                   type="button"
+                  variant="outline"
                   onClick={() => void generatePreview()}
                   disabled={rendering || isTryoutDataLoading}
                   className="h-11 w-full font-semibold"
@@ -2196,32 +2222,24 @@ export function CardTemplateTryout({
                     </>
                   )}
                 </Button>
-                {isInstitutionTryout && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void saveGeneratedCard()}
-                    disabled={
-                      isSavingGeneratedDocument ||
-                      rendering ||
-                      isTryoutDataLoading ||
-                      !studentId
-                    }
-                    className="h-11 w-full font-semibold"
-                  >
-                    {isSavingGeneratedDocument ? (
-                      <>
-                        <Loader2 className="size-4 animate-spin" />
-                        {savingButtonText}
-                      </>
-                    ) : (
-                      <>
-                        <Save className="size-4" />
-                        {saveButtonText}
-                      </>
-                    )}
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  onClick={() => void handleSaveAndDownloadPdf()}
+                  disabled={rendering || isTryoutDataLoading || previewActionLoading}
+                  className="h-11 w-full font-semibold gap-1.5 bg-primary text-primary-foreground shadow-xs hover:bg-primary/90"
+                >
+                  {previewActionLoading ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      Saving PDF...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="size-4" />
+                      Save & Download PDF
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
           </div>
@@ -2261,65 +2279,79 @@ export function CardTemplateTryout({
               </div>
             )}
             {canvasImageSrc && !rendering && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="icon"
-                    className={canEditTemplate ? "absolute right-5 top-16 z-30 shadow-xl" : "absolute right-5 top-4 z-30 shadow-xl"}
-                    title="Download preview"
-                  >
-                    {isPreviewMenuBusy ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <MoreHorizontal className="size-4" />
+              <div className={canEditTemplate ? "absolute right-5 top-16 z-30 flex items-center gap-2" : "absolute right-5 top-4 z-30 flex items-center gap-2"}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void runPreviewMenuAction(downloadPdf)}
+                  disabled={isPreviewMenuBusy}
+                  className="h-9 gap-1.5 px-3 font-semibold shadow-md bg-background/95 hover:bg-background border border-border cursor-pointer"
+                >
+                  <FileText className="size-4 text-primary" />
+                  <span>Save as PDF</span>
+                </Button>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      className="shadow-xl"
+                      title="More download options"
+                    >
+                      {isPreviewMenuBusy ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <MoreHorizontal className="size-4" />
+                      )}
+                      <span className="sr-only">More options</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuItem onClick={() => void runPreviewMenuAction(downloadPdf)}>
+                      <FileText className="size-4" />
+                      <span className="whitespace-nowrap font-medium">Download Original PDF</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void runPreviewMenuAction(downloadCurrentSizePdf)}>
+                      <FileText className="size-4" />
+                      <span className="whitespace-nowrap">Download Current Size PDF</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => void runPreviewMenuAction(downloadPng)}>
+                      <Download className="size-4" />
+                      <span className="whitespace-nowrap font-medium">Download Original PNG</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void runPreviewMenuAction(downloadCurrentSizePng)}>
+                      <Download className="size-4" />
+                      <span className="whitespace-nowrap">Download Current Size PNG</span>
+                    </DropdownMenuItem>
+                    {isInstitutionTryout && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          disabled={
+                            isSavingGeneratedDocument ||
+                            isTryoutDataLoading ||
+                            !studentId
+                          }
+                          onClick={() => void saveGeneratedCard()}
+                        >
+                          {isSavingGeneratedDocument ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Save className="size-4" />
+                          )}
+                          <span className="whitespace-nowrap">
+                            {isSavingGeneratedDocument ? savingButtonText : saveButtonText}
+                          </span>
+                        </DropdownMenuItem>
+                      </>
                     )}
-                    <span className="sr-only">Download preview</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                  <DropdownMenuItem onClick={() => void runPreviewMenuAction(downloadCurrentSizePng)}>
-                    <Download className="size-4" />
-                    <span className="whitespace-nowrap">Download Current Size PNG</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void runPreviewMenuAction(downloadCurrentSizePdf)}>
-                    <FileText className="size-4" />
-                    <span className="whitespace-nowrap">Download Current Size PDF</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => void runPreviewMenuAction(downloadPng)}>
-                    <Download className="size-4" />
-                    <span className="whitespace-nowrap">Download Original PNG</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void runPreviewMenuAction(downloadPdf)}>
-                    <FileText className="size-4" />
-                    <span className="whitespace-nowrap">Download Original PDF</span>
-                  </DropdownMenuItem>
-                  {isInstitutionTryout && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        disabled={
-                          isSavingGeneratedDocument ||
-                          isTryoutDataLoading ||
-                          !studentId
-                        }
-                        onClick={() => void saveGeneratedCard()}
-                      >
-                        {isSavingGeneratedDocument ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                          <Save className="size-4" />
-                        )}
-                        <span className="whitespace-nowrap">
-                          {isSavingGeneratedDocument ? savingButtonText : saveButtonText}
-                        </span>
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             )}
             {rendering ? (
               <div className="flex h-full items-center justify-center gap-2 text-muted-foreground">

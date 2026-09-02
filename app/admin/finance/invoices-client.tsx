@@ -208,8 +208,15 @@ export function InvoicesClient() {
     },
     {
       accessorKey: "invoice_date",
-      header: "Date",
-      cell: ({ row }) => <span className="text-xs">{formatDate(row.original.invoice_date)}</span>,
+      header: "Date & Time",
+      cell: ({ row }) => (
+        <div className="min-w-0">
+          <span className="text-xs font-semibold block">{formatDate(row.original.invoice_date)}</span>
+          <span className="text-[11px] text-muted-foreground">
+            {row.original.created_at ? new Date(row.original.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }) : ""}
+          </span>
+        </div>
+      ),
     },
     {
       accessorKey: "payer_name",
@@ -226,6 +233,29 @@ export function InvoicesClient() {
       header: "Received By",
       cell: ({ row }) => <span className="text-xs text-muted-foreground">{row.original.receiver_name}</span>,
     },
+    {
+      accessorKey: "created_by_name",
+      header: "Recorded By",
+      cell: ({ row }) => (
+        <div className="min-w-0 space-y-0.5">
+          <p className="font-medium text-xs truncate">{row.original.created_by_name || "Admin"}</p>
+          {row.original.created_by_role && (
+            <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-normal">
+              {row.original.created_by_role}
+            </Badge>
+          )}
+        </div>
+      ),
+    },
+    ...(isPlatformScope ? [{
+      id: "scope_column",
+      header: "Scope",
+      cell: ({ row }: { row: { original: FinanceInvoiceRow } }) => (
+        <Badge variant={row.original.institution_name ? "secondary" : "default"} className="text-[11px]">
+          {row.original.institution_name ? row.original.institution_name : "Platform Global"}
+        </Badge>
+      ),
+    }] : []),
     {
       accessorKey: "payment_method",
       header: "Method",

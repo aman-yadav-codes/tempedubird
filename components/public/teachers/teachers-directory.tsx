@@ -52,24 +52,17 @@ type Teacher = {
 };
 
 import { useCategoryAvailability } from "@/hooks/use-category-availability";
-
-const SUBJECT_OPTIONS = [
-  "All Subjects",
-  "Physics",
-  "Chemistry",
-  "Mathematics",
-  "Biology",
-  "Computer Science",
-];
+import { useActiveInstitution } from "@/hooks/use-active-institution";
 
 export function TeachersDirectory() {
-  const { isInstitutionalAdmin, activeInstitutionId } = useCategoryAvailability();
+  const { isInstitutionalAdmin } = useCategoryAvailability();
+  const { activeInstitutionId, defaultEnvInstitutionId } = useActiveInstitution();
+  const targetInstitutionId = activeInstitutionId || defaultEnvInstitutionId;
   const searchParams = useSearchParams();
   const initialSearch = searchParams?.get("search") || searchParams?.get("q") || "";
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(initialSearch);
-  const [selectedSubject, setSelectedSubject] = useState("All Subjects");
 
   // Sync search parameter from URL when it changes
   useEffect(() => {
@@ -96,16 +89,15 @@ export function TeachersDirectory() {
 
   useEffect(() => {
     fetchTeachers();
-  }, [search, selectedSubject, activeInstitutionId, isInstitutionalAdmin]);
+  }, [search, targetInstitutionId]);
 
   const fetchTeachers = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (search.trim()) params.set("search", search.trim());
-      if (selectedSubject !== "All Subjects") params.set("subject", selectedSubject);
-      if (isInstitutionalAdmin && activeInstitutionId) {
-        params.set("institutionId", String(activeInstitutionId));
+      if (targetInstitutionId) {
+        params.set("institutionId", String(targetInstitutionId));
       }
 
       const res = await fetch(`/api/public/teachers?${params.toString()}`);
@@ -139,37 +131,48 @@ export function TeachersDirectory() {
     formRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const handleInquirySubmit = async (e: React.FormEvent) => {
+  const handleSubmitInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim() || !formEmail.trim() || !formPhone.trim()) {
-      toast.error("Please fill in all mandatory contact fields.");
+    if (!formName.trim() || !formPhone.trim()) {
+      toast.error("Please enter your name and phone number");
       return;
     }
 
     setSubmittingInquiry(true);
     try {
-      const res = await fetch("/api/public/teachers/inquire", {
+      const res = await fetch("/api/student/enquiries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fullName: formName.trim(),
-          email: formEmail.trim(),
-          phoneNumber: formPhone.trim(),
-          preferredSubject: formSubject,
-          message: formMessage.trim(),
-          teacherId: selectedTeacherForInquiry?.id,
+          entity_type: "teacher",
+          entity_id: selectedTeacherForInquiry?.id || 0,
+          student_name: formName.trim(),
+          email: formEmail.trim() || undefined,
+          phone: formPhone.trim(),
+          subject: formSubject,
+          notes: formMessage.trim(),
+          source: "Teachers Directory Inquiry",
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Inquiry submission failed.");
-
-      setInquirySuccess(true);
-      toast.success("Inquiry submitted successfully! The educator will reach out to you.");
-      setFormMessage("");
-      setInquiryDialogOpen(false);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to submit inquiry.");
+      if (res.ok) {
+        setInquirySuccess(true);
+        toast.success("Inquiry sent successfully!", {
+          description: "The teacher / institution counselor will contact you shortly.",
+        });
+        setTimeout(() => {
+          setInquiryDialogOpen(false);
+          setFormName("");
+          setFormEmail("");
+          setFormPhone("");
+          setFormMessage("");
+        }, 2000);
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Failed to submit inquiry");
+      }
+    } catch {
+      toast.error("Network error while submitting inquiry");
     } finally {
       setSubmittingInquiry(false);
     }
@@ -177,13 +180,13 @@ export function TeachersDirectory() {
 
   return (
     <div className="space-y-8">
-      {/* Search Header Banner */}
-      <div className="rounded-2xl border border-primary/20 bg-gradient-to-r from-card via-card to-muted p-6 lg:p-8 shadow-sm space-y-4">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      {/* Header Banner */}
+      <div className="rounded-3xl bg-gradient-to-r from-primary/10 via-card to-background p-6 sm:p-8 border border-border space-y-4 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary mb-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold mb-2">
               <Sparkles className="h-3.5 w-3.5" />
-              <span>Verified Educational Faculty Directory</span>
+              Verified Educational Faculty Directory
             </div>
             <h1 className="text-3xl font-extrabold text-foreground tracking-tight">
               Find & Connect with Top Teachers
@@ -204,26 +207,6 @@ export function TeachersDirectory() {
               />
             </div>
           </div>
-        </div>
-
-        {/* Subject Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto pt-2 no-scrollbar">
-          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground shrink-0 flex items-center gap-1">
-            <Filter className="h-3.5 w-3.5 text-primary" /> Filter Subject:
-          </span>
-          {SUBJECT_OPTIONS.map((sub) => (
-            <button
-              key={sub}
-              onClick={() => setSelectedSubject(sub)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all cursor-pointer ${
-                selectedSubject === sub
-                  ? "bg-primary text-primary-foreground shadow-2xs"
-                  : "bg-background border border-border hover:border-primary/40 text-foreground"
-              }`}
-            >
-              {sub}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -390,12 +373,7 @@ export function TeachersDirectory() {
         </div>
 
         {/* Right Sidebar Options & Ads */}
-        <SharedPublicSidebar
-          pageType="teachers"
-          quickCategories={SUBJECT_OPTIONS.filter((s) => s !== "All Subjects")}
-          activeCategory={selectedSubject === "All Subjects" ? undefined : selectedSubject}
-          onSelectCategory={(cat) => setSelectedSubject(cat)}
-        />
+        <SharedPublicSidebar pageType="teachers" />
       </div>
 
       {/* Universal Feedback & Comment Dialog for Teachers */}

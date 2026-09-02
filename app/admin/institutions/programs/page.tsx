@@ -2117,14 +2117,16 @@ export default function ProgramsAdminPage() {
                     <h1 className="text-2xl font-bold tracking-tight">Programs</h1>
                     <p className="text-sm text-muted-foreground">Manage academic curriculum, classification metadata, fees structures, and image gallery.</p>
                 </div>
-                <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
-                    <Button
-                        onClick={openSelectCoursesModal}
-                        className="w-full sm:w-auto font-bold gap-1.5 shadow-sm"
-                    >
-                        <BookOpen className="h-4 w-4" /> Select Program / Course
-                    </Button>
-                </div>
+                {!isPlatformAdmin && (
+                    <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+                        <Button
+                            onClick={openSelectCoursesModal}
+                            className="w-full sm:w-auto font-bold gap-1.5 shadow-sm"
+                        >
+                            <BookOpen className="h-4 w-4" /> Select Program / Course
+                        </Button>
+                    </div>
+                )}
             </div>
 
             {/* Platform Admin Institution Filter Header */}

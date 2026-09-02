@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/auth/auth";
 import { assertCanAccessInstitution } from "@/lib/auth/institution-scope";
-import { hasPermission } from "@/lib/auth/permissions";
+import { hasPermission, isPlatformAdminUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
 
 export async function POST(req: Request) {
@@ -27,9 +27,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const templateResult = await db.query(
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
+    const templateResult = await db.query<{ id: number; is_paid: boolean; price: number }>(
       `
-        SELECT id
+        SELECT id, COALESCE(is_paid, FALSE) AS is_paid, COALESCE(price, 0)::float AS price
         FROM document_templates
         WHERE id = $1
           AND is_public = TRUE
@@ -46,9 +47,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const existing = await db.query<{ is_active: boolean }>(
+    const template = templateResult.rows[0];
+
+    const existing = await db.query<{ is_active: boolean; is_paid: boolean }>(
       `
-        SELECT is_active
+        SELECT is_active, COALESCE(is_paid, FALSE) AS is_paid
         FROM institution_templates
         WHERE institution_id = $1 AND template_id = $2
         LIMIT 1
@@ -59,6 +62,13 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "This template is already added to the selected institution" },
         { status: 409 }
+      );
+    }
+
+    if (template.is_paid && !isPlatformAdmin && !existing.rows[0]?.is_paid) {
+      return NextResponse.json(
+        { error: "This is a premium paid template. Please complete payment to unlock it." },
+        { status: 402 }
       );
     }
 

@@ -100,6 +100,11 @@ export async function PUT(
     const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : currentPost.title;
     const slug = typeof body.slug === "string" && body.slug.trim() ? body.slug.trim() : currentPost.slug;
     const category = typeof body.category === "string" ? body.category.trim() : currentPost.category;
+    const subCategory = typeof body.sub_category === "string"
+      ? body.sub_category.trim()
+      : typeof body.subCategory === "string"
+      ? body.subCategory.trim()
+      : currentPost.sub_category;
     const coverImage = typeof body.cover_image === "string" ? body.cover_image.trim() : currentPost.cover_image;
     const videoUrl = typeof body.video_url === "string" ? body.video_url.trim() : currentPost.video_url;
     const summary = typeof body.summary === "string" ? body.summary.trim() : currentPost.summary;
@@ -134,37 +139,39 @@ export async function PUT(
           title = $1,
           slug = $2,
           category = $3,
-          cover_image = $4,
-          video_url = $5,
-          summary = $6,
-          tags = $7,
-          content = $8::jsonb,
-          content_html = $9,
-          status = $10,
-          is_featured = $11,
-          read_time_mins = $12,
-          author_name = $13,
-          author_role = $14,
-          author_avatar = $15,
-          meta_title = $16,
-          meta_description = $17,
-          meta_keywords = $18,
-          canonical_url = $19,
-          institution_id = $20,
-          publish_at = $21,
+          sub_category = $4,
+          cover_image = $5,
+          video_url = $6,
+          summary = $7,
+          tags = $8,
+          content = $9::jsonb,
+          content_html = $10,
+          status = $11,
+          is_featured = $12,
+          read_time_mins = $13,
+          author_name = $14,
+          author_role = $15,
+          author_avatar = $16,
+          meta_title = $17,
+          meta_description = $18,
+          meta_keywords = $19,
+          canonical_url = $20,
+          institution_id = $21,
+          publish_at = $22,
           published_at = CASE 
-            WHEN $10 = 'published' AND published_at IS NULL THEN CURRENT_TIMESTAMP
+            WHEN $11 = 'published' AND published_at IS NULL THEN CURRENT_TIMESTAMP
             ELSE published_at
           END,
-          updated_by = $22,
+          updated_by = $23,
           updated_at = CURRENT_TIMESTAMP
-        WHERE id = $23
+        WHERE id = $24
         RETURNING *
       `,
       [
         title,
         slug,
         category,
+        subCategory,
         coverImage,
         videoUrl,
         summary,

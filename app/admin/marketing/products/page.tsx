@@ -27,11 +27,15 @@ import {
   Image as ImageIcon,
   FolderPlus,
   BookOpen,
-  ChevronRight,
   ChevronLeft,
+  ChevronRight,
   Info,
   Percent,
   ListChecks,
+  UploadCloud,
+  Upload,
+  Loader2,
+  Camera,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
@@ -188,12 +192,57 @@ export default function AdminProductsPage() {
   const [formStatus, setFormStatus] = useState<"active" | "draft" | "archived">("active");
   const [formIsFeatured, setFormIsFeatured] = useState(false);
   const [formFeatures, setFormFeatures] = useState<string[]>([""]);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const isPlatformAdmin = Boolean(
     user?.role_codes?.some((r: string) => r.includes("super") || r.includes("platform")) ||
     (user as any)?.role === "platform_admin" ||
     user?.is_super_admin
   );
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image file (PNG, JPG, WEBP, AVIF, GIF, etc.)");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Image file size should be less than 10MB");
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "products");
+
+      const res = await fetch("/api/admin/uploads/image", {
+        method: "POST",
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        body: formData,
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to upload image");
+      }
+
+      const uploadedUrl = json.data?.url || json.url;
+      if (uploadedUrl) {
+        setFormImage(uploadedUrl);
+        toast.success("Product picture uploaded successfully!");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload image");
+    } finally {
+      setUploadingImage(false);
+      if (e.target) e.target.value = "";
+    }
+  };
 
   // Fetch Categories
   const fetchCategories = useCallback(async () => {
@@ -1048,22 +1097,89 @@ export default function AdminProductsPage() {
                   <div className="p-3 bg-primary/5 rounded-xl border border-primary/10 flex items-center justify-between">
                     <div>
                       <h4 className="text-xs font-black text-foreground">3. Product Media & Visual Assets</h4>
-                      <p className="text-[11px] text-muted-foreground">Add image URL, test live presets, and inspect how the visual showcase will appear.</p>
+                      <p className="text-[11px] text-muted-foreground">Upload high quality product pictures, paste direct image URLs, or choose from quick sample presets.</p>
                     </div>
                     <Badge variant="outline" className="text-[10px] font-bold bg-background">
                       Tab 3 of 5
                     </Badge>
                   </div>
 
-                  {/* Image URL Input */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold">Product Picture / Image URL *</Label>
+                  {/* Direct Image Upload Box */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-foreground flex items-center justify-between">
+                      <span>Upload Product Photo</span>
+                      <span className="text-[10px] font-normal text-muted-foreground">JPG, PNG, WEBP, AVIF (Max 10MB)</span>
+                    </Label>
+
+                    <div className="border-2 border-dashed border-border hover:border-primary/50 transition-colors rounded-xl p-4 bg-muted/10 text-center relative flex flex-col items-center justify-center gap-2">
+                      <input
+                        type="file"
+                        id="product-image-file-input"
+                        accept="image/png,image/jpeg,image/webp,image/avif,image/gif,image/svg+xml"
+                        className="hidden"
+                        onChange={handleImageUpload}
+                        disabled={uploadingImage}
+                      />
+                      
+                      {uploadingImage ? (
+                        <div className="py-4 flex flex-col items-center gap-2">
+                          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                          <p className="text-xs font-bold text-foreground">Uploading product image...</p>
+                          <p className="text-[11px] text-muted-foreground">Please wait while the image is processed</p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2 py-1">
+                          <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                            <UploadCloud className="w-5 h-5" />
+                          </div>
+                          <div className="space-y-0.5">
+                            <p className="text-xs font-bold text-foreground">Drag & drop product picture here, or browse</p>
+                            <p className="text-[10px] text-muted-foreground">High resolution product photos look great on storefront</p>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="default"
+                              onClick={() => document.getElementById("product-image-file-input")?.click()}
+                              className="h-8 text-xs font-bold gap-1.5 shadow-sm cursor-pointer"
+                            >
+                              <Upload className="w-3.5 h-3.5" />
+                              Browse &amp; Upload
+                            </Button>
+                            {formImage && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setFormImage("")}
+                                className="h-8 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20 gap-1 cursor-pointer"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                                Clear Image
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Fallback Image URL Input */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold">Or Product Image URL</Label>
+                      {formImage && (
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> Image linked
+                        </span>
+                      )}
+                    </div>
                     <Input
                       value={formImage}
                       onChange={(e) => setFormImage(e.target.value)}
-                      placeholder="https://images.unsplash.com/..."
+                      placeholder="https://images.unsplash.com/... or uploaded Cloudinary URL"
                       className="text-xs h-9"
-                      required
                     />
                     <div className="flex flex-wrap items-center gap-1.5 pt-1">
                       <span className="text-[10px] text-muted-foreground font-semibold py-0.5">Quick Presets:</span>
@@ -1083,13 +1199,18 @@ export default function AdminProductsPage() {
                   {/* Live Visual Preview Container */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                     <div className="border border-border rounded-xl p-3 bg-muted/20 space-y-2">
-                      <span className="text-[11px] font-bold text-muted-foreground block">Storefront Card Preview</span>
-                      <div className="relative aspect-video w-full rounded-lg overflow-hidden bg-background border border-border/60 flex items-center justify-center">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-muted-foreground">Storefront Card Preview</span>
+                        {formImage && (
+                          <span className="text-[10px] text-primary font-bold">Live Preview</span>
+                        )}
+                      </div>
+                      <div className="relative aspect-video w-full rounded-lg overflow-hidden bg-background border border-border/60 flex items-center justify-center shadow-inner">
                         {formImage ? (
                           <img
                             src={formImage}
                             alt={formTitle || "Product preview"}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover transition-transform hover:scale-105 duration-300"
                             onError={(e) => {
                               (e.target as HTMLElement).style.display = "none";
                             }}
@@ -1097,11 +1218,11 @@ export default function AdminProductsPage() {
                         ) : (
                           <div className="flex flex-col items-center gap-1.5 text-muted-foreground p-4 text-center">
                             <ImageIcon className="w-8 h-8 opacity-40" />
-                            <span className="text-[10px]">Enter an image URL to preview</span>
+                            <span className="text-[10px]">Upload an image or enter a URL to preview</span>
                           </div>
                         )}
                         {formBadge && (
-                          <div className="absolute top-2 left-2">
+                          <div className="absolute top-2 left-2 shadow-sm">
                             <Badge className="text-[9px] font-black bg-primary text-primary-foreground px-1.5 py-0.5">
                               {formBadge}
                             </Badge>
@@ -1129,15 +1250,15 @@ export default function AdminProductsPage() {
                       <ul className="space-y-1.5 text-[11px] text-muted-foreground">
                         <li className="flex items-start gap-1.5">
                           <span className="text-primary font-bold">•</span>
-                          <span>Use clear product photos with 16:9 or 1:1 aspect ratio.</span>
+                          <span>Upload crisp product photos in 16:9 or 1:1 square aspect ratio.</span>
                         </li>
                         <li className="flex items-start gap-1.5">
                           <span className="text-primary font-bold">•</span>
-                          <span>High resolution images (800x600 or higher) look sharp on all screens.</span>
+                          <span>High resolution images (800x600 or higher) look sharp across mobile and desktop.</span>
                         </li>
                         <li className="flex items-start gap-1.5">
                           <span className="text-primary font-bold">•</span>
-                          <span>HTTPS direct image links from CDNs or photo libraries are fully supported.</span>
+                          <span>Supports direct photo upload to cloud storage as well as external CDN URLs.</span>
                         </li>
                       </ul>
                     </div>

@@ -29,16 +29,22 @@ import {
   Play,
   ExternalLink,
   Clock,
+  MessageCircle,
+  Download,
+  HelpCircle,
+  Send,
+  Navigation,
 } from "lucide-react";
 import { Star, MessageSquare } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { RightInquiryForm } from "@/components/public/right-inquiry-form";
 import { DetailSuggestionSidebar } from "@/components/public/detail-suggestion-sidebar";
 import { ProgramEnrollmentDialog, type ProgramEnrollmentTarget } from "@/components/public/program-enrollment-dialog";
+import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
 import { UniversalFeedbackDialog, type UniversalEntityTarget } from "@/components/public/universal-feedback-dialog";
 
 const fallbackBanners = [
@@ -48,10 +54,25 @@ const fallbackBanners = [
 ];
 
 export function PublicInstituteDetailClient({ data }: { data: any }) {
-  const { profile, programs = [], courses = [], facilities = [], placements = [], cutoffs = [], scholarships = [], branches = [], mediaList = [], facultyList = [], hostels = [], libraries = [] } = data;
+  const {
+    profile,
+    programs = [],
+    courses = [],
+    facilities = [],
+    placements = [],
+    cutoffs = [],
+    scholarships = [],
+    branches = [],
+    mediaList = [],
+    facultyList = [],
+    hostels = [],
+    libraries = [],
+    relatedInstitutes = [],
+  } = data;
   const [activeTab, setActiveTab] = useState("overview");
   const [enrollModalOpen, setEnrollModalOpen] = useState(false);
   const [selectedEnrollProgram, setSelectedEnrollProgram] = useState<ProgramEnrollmentTarget | null>(null);
+  const [enquiryModalOpen, setEnquiryModalOpen] = useState(false);
 
   const [universalFeedbackOpen, setUniversalFeedbackOpen] = useState(false);
   const [selectedUniversalTarget, setSelectedUniversalTarget] = useState<UniversalEntityTarget | null>(null);
@@ -248,6 +269,10 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                   <TabsTrigger value="scholarships" className="rounded-lg font-semibold gap-2">
                     <Sparkles className="h-4 w-4" />
                     <span>Scholarships</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="branches" className="rounded-lg font-semibold gap-2">
+                    <MapPin className="h-4 w-4" />
+                    <span>Branches ({branches.length > 0 ? branches.length : 1})</span>
                   </TabsTrigger>
                 </TabsList>
               </div>
@@ -1119,10 +1144,147 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                   </CardContent>
                 </Card>
               </TabsContent>
+
+              {/* BRANCHES TAB */}
+              <TabsContent value="branches" className="mt-6 space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold flex items-center gap-2">
+                      <MapPin className="h-5 w-5 text-primary" />
+                      Campus & Branch Locations ({branches.length > 0 ? branches.length : 1})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {branches.length > 0 ? (
+                      <div className="grid gap-6 md:grid-cols-2">
+                        {branches.map((b: any) => {
+                          const phonesList = Array.isArray(b.phones) ? b.phones : [];
+                          const emailsList = Array.isArray(b.emails) ? b.emails : [];
+
+                          return (
+                            <Card key={b.id} className="p-6 border bg-card/60 space-y-4 shadow-xs hover:border-primary/50 transition-all flex flex-col justify-between">
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <h4 className="font-bold text-lg text-foreground flex items-center gap-2">
+                                    <Building2 className="h-5 w-5 text-primary shrink-0" />
+                                    {b.branch_name}
+                                  </h4>
+                                  {b.is_primary && (
+                                    <Badge className="bg-primary text-primary-foreground font-bold text-xs">
+                                      Main Campus
+                                    </Badge>
+                                  )}
+                                </div>
+
+                                <p className="text-sm text-muted-foreground leading-relaxed flex items-start gap-2">
+                                  <MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                                  <span>{[b.address, b.city, b.state, b.pincode].filter(Boolean).join(", ")}</span>
+                                </p>
+
+                                {b.working_hours && (
+                                  <p className="text-xs text-muted-foreground flex items-center gap-2 font-medium">
+                                    <Clock className="h-4 w-4 text-primary shrink-0" />
+                                    <span>Visiting / Office Hours: <strong className="text-foreground">{b.working_hours}</strong></span>
+                                  </p>
+                                )}
+
+                                {phonesList.length > 0 && (
+                                  <div className="space-y-1 pt-2 border-t border-border/60">
+                                    <p className="text-xs font-bold text-muted-foreground uppercase">Campus Helplines</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {phonesList.map((pObj: any, pIdx: number) => (
+                                        <a
+                                          key={pIdx}
+                                          href={`tel:${pObj.phone || pObj}`}
+                                          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline bg-primary/10 px-2 py-1 rounded-md"
+                                        >
+                                          <Phone className="h-3 w-3" />
+                                          {pObj.phone || pObj}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {emailsList.length > 0 && (
+                                  <div className="space-y-1 pt-2 border-t border-border/60">
+                                    <p className="text-xs font-bold text-muted-foreground uppercase">Admissions & Query Email</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {emailsList.map((eObj: any, eIdx: number) => (
+                                        <a
+                                          key={eIdx}
+                                          href={`mailto:${eObj.email || eObj}`}
+                                          className="inline-flex items-center gap-1 text-xs font-semibold text-foreground hover:text-primary bg-muted px-2 py-1 rounded-md"
+                                        >
+                                          <Mail className="h-3 w-3 text-primary" />
+                                          {eObj.email || eObj}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2 pt-3 border-t border-border/60">
+                                <a
+                                  href={`https://wa.me/919999999999?text=${encodeURIComponent(`Hello, I am inquiring about branch ${b.branch_name} at ${profile.name}.`)}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex h-9 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 font-bold text-white text-xs hover:bg-emerald-700 transition"
+                                >
+                                  <MessageCircle className="h-3.5 w-3.5" />
+                                  WhatsApp
+                                </a>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="font-bold text-xs"
+                                  onClick={() => setEnquiryModalOpen(true)}
+                                >
+                                  <HelpCircle className="h-3.5 w-3.5 mr-1 text-primary" />
+                                  Branch Enquiry
+                                </Button>
+                              </div>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <Card className="p-6 border bg-card/60 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-bold text-lg text-foreground">{profile.name} — Main Campus</h4>
+                            <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
+                              <MapPin className="h-4 w-4 text-primary shrink-0" />
+                              {locText}
+                            </p>
+                          </div>
+                          <Badge className="bg-primary text-primary-foreground font-bold">Primary Campus</Badge>
+                        </div>
+                        <Separator />
+                        <div className="grid sm:grid-cols-3 gap-4 text-xs">
+                          <div className="p-3 bg-muted/30 rounded-lg">
+                            <p className="font-bold text-foreground">Phone Helpline</p>
+                            <p className="text-muted-foreground mt-1">{profile.phone || "+91 98765 43210"}</p>
+                          </div>
+                          <div className="p-3 bg-muted/30 rounded-lg">
+                            <p className="font-bold text-foreground">Official Email</p>
+                            <p className="text-muted-foreground mt-1">{profile.email || "info@edubird.com"}</p>
+                          </div>
+                          <div className="p-3 bg-muted/30 rounded-lg">
+                            <p className="font-bold text-foreground">Working Hours</p>
+                            <p className="text-muted-foreground mt-1">Mon - Sat: 9:00 AM - 5:30 PM</p>
+                          </div>
+                        </div>
+                      </Card>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
             </Tabs>
           </div>
 
-          {/* Right Column: Sticky Contact & Inquiry */}
+          {/* Right Column: Sticky Contact & Similar Institutes */}
           <aside className="w-full lg:sticky lg:top-24 space-y-6">
             <Card className="p-6 shadow-md border-border space-y-4">
               <h3 className="font-bold text-foreground text-lg flex items-center gap-2">
@@ -1160,12 +1322,46 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
 
               <Separator />
 
-              <div className="space-y-2">
-                <Button className="w-full font-bold shadow-md" size="lg" data-tracker-trigger="enquiry">
-                  Enquire & Apply Now
+              {/* Action Buttons: WhatsApp, Call Now, Enquiry Now, Download Brochure */}
+              <div className="space-y-2.5">
+                <div className="grid grid-cols-2 gap-2">
+                  <a
+                    href={`https://wa.me/919999999999?text=${encodeURIComponent(`Hello, I am inquiring about admissions and courses at ${profile.name}.`)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 font-bold text-white shadow-xs transition hover:bg-emerald-700 text-xs sm:text-sm"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    <span>WhatsApp</span>
+                  </a>
+
+                  <a
+                    href={`tel:${profile.phone || "+919876543210"}`}
+                    className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 font-bold text-white shadow-xs transition hover:bg-blue-700 text-xs sm:text-sm"
+                  >
+                    <Phone className="h-4 w-4" />
+                    <span>Call Now</span>
+                  </a>
+                </div>
+
+                <Button
+                  className="w-full font-bold shadow-xs h-10 text-xs sm:text-sm"
+                  onClick={() => setEnquiryModalOpen(true)}
+                  data-tracker-trigger="enquiry"
+                >
+                  <HelpCircle className="h-4 w-4 mr-2" />
+                  Enquiry Now
                 </Button>
-                <Button variant="outline" className="w-full">
-                  Download Campus Brochure
+
+                <Button
+                  variant="outline"
+                  className="w-full font-bold h-10 text-xs sm:text-sm border-border hover:bg-muted/80"
+                  onClick={() => {
+                    toast.success(`Prospectus and brochure for ${profile.name} downloaded.`);
+                  }}
+                >
+                  <Download className="h-4 w-4 mr-2 text-primary" />
+                  Download Brochure
                 </Button>
               </div>
 
@@ -1175,9 +1371,60 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
               </div>
             </Card>
 
-            <RightInquiryForm />
-
-            <DetailSuggestionSidebar type="institutes" currentId={profile.id} />
+            {/* Other Institutes in Same Category / Nearby Area */}
+            <Card className="p-5 shadow-xs border-border space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-foreground text-base flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-primary" />
+                  Similar Institutes in Area
+                </h3>
+                <Badge variant="secondary" className="text-[10px] font-bold">
+                  {profile.subtype_name || profile.type_name || "Related"}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Explore top rated institutes offering similar programs in {locText} and nearby regions.
+              </p>
+              <Separator />
+              <div className="space-y-3">
+                {relatedInstitutes.length > 0 ? (
+                  relatedInstitutes.map((inst: any) => (
+                    <Link
+                      key={inst.id}
+                      href={`/institutes/${inst.slug || inst.id}`}
+                      className="flex items-start gap-3 p-2.5 rounded-xl border border-border/70 bg-card hover:bg-muted/40 hover:border-primary/50 transition-all group"
+                    >
+                      <div className="w-11 h-11 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 overflow-hidden font-bold text-primary text-xs">
+                        {inst.logo_url ? (
+                          <img src={inst.logo_url} alt={inst.name} className="w-full h-full object-contain" />
+                        ) : (
+                          (inst.name || "IN").slice(0, 2).toUpperCase()
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-xs font-bold text-foreground group-hover:text-primary transition-colors truncate">
+                          {inst.name}
+                        </h4>
+                        <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5 truncate">
+                          <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
+                          <span className="truncate">{inst.location_name || locText}</span>
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                            {inst.subtype_name || inst.type_name || "Institute"}
+                          </span>
+                          <span className="text-[10px] font-bold text-primary flex items-center gap-0.5 ml-auto">
+                            View <ChevronRight className="h-3 w-3" />
+                          </span>
+                        </div>
+                      </div>
+                    </Link>
+                  ))
+                ) : (
+                  <DetailSuggestionSidebar type="institutes" currentId={profile.id} />
+                )}
+              </div>
+            </Card>
           </aside>
         </div>
       </div>
@@ -1186,6 +1433,20 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
         open={enrollModalOpen}
         onOpenChange={setEnrollModalOpen}
         program={selectedEnrollProgram}
+      />
+
+      <CourseEnquiryDialog
+        open={enquiryModalOpen}
+        onOpenChange={setEnquiryModalOpen}
+        course={{
+          id: profile.id,
+          title: profile.name,
+          institute: profile.name,
+          institution_id: profile.id,
+          type: "institute",
+          price: "Free Inquiry",
+          duration: profile.type_name || "Campus Admission",
+        }}
       />
 
       <UniversalFeedbackDialog

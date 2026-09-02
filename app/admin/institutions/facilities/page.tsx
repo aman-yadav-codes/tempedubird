@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { ColumnDef, PaginationState } from "@tanstack/react-table";
 import {
     Building2,
@@ -114,7 +115,7 @@ function fromStoredFacilities(rows: InstitutionFacility[]): FacilityEditorItem[]
 
 export default function InstitutionFacilitiesPage() {
     const { isReady } = useAdminGuard();
-    const { accessToken } = useAuthStore();
+    const { accessToken, user } = useAuthStore();
     const { activeInstitution } = useActiveInstitution();
     const authHeader = useMemo(() => ({ Authorization: `Bearer ${accessToken}` }), [accessToken]);
 
@@ -463,6 +464,16 @@ export default function InstitutionFacilitiesPage() {
         },
     ];
 
+    const pathname = usePathname();
+    const isPlatformAdmin = Boolean(
+        pathname?.startsWith("/platformadmin") ||
+        user?.is_super_admin ||
+        user?.role_codes?.includes("platform_admin") ||
+        user?.roles?.includes("platform_admin") ||
+        user?.primary_role === "platform_admin" ||
+        (!user?.memberships?.length)
+    );
+
     return (
         <div className="w-full max-w-full space-y-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -470,9 +481,11 @@ export default function InstitutionFacilitiesPage() {
                     <h1 className="text-2xl font-bold tracking-tight">Institution Facilities</h1>
                     <p className="text-sm text-muted-foreground">Manage facility content and separate image galleries for each institution.</p>
                 </div>
-                <Button onClick={openCreate} className="w-full sm:w-auto">
-                    <Plus className="mr-2 size-4" /> Add Facilities
-                </Button>
+                {!isPlatformAdmin && (
+                    <Button onClick={openCreate} className="w-full sm:w-auto">
+                        <Plus className="mr-2 size-4" /> Add Facilities
+                    </Button>
+                )}
             </div>
 
             <DataTable

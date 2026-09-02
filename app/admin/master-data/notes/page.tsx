@@ -4,11 +4,28 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
-import { CheckCircle2, Eye, Loader2, MoreHorizontal, Pencil, Plus, RefreshCw, StickyNote, Store, Trash2 } from "lucide-react";
+import {
+  CheckCircle2,
+  Download,
+  ExternalLink,
+  Eye,
+  FileText,
+  Loader2,
+  MoreHorizontal,
+  Paperclip,
+  Pencil,
+  Plus,
+  RefreshCw,
+  StickyNote,
+  Store,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import type { SerializedEditorState } from "lexical";
 import { AsyncSearchPopover } from "@/components/shared/async-search-popover";
+import { ContentPricingOption } from "@/components/shared/content-pricing-option";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -63,19 +80,31 @@ type Option = { id: number; name?: string; title?: string; label?: string };
 type SyllabusOption = { id: number; title: string; subject_id: number; subject_name: string };
 type NodeOption = { id: number; title: string; node_type: string; parent_id?: number | null; sort_order?: number };
 
+type NoteAttachment = {
+  url: string;
+  name?: string;
+  type?: string;
+  size?: number;
+};
+
 type NoteRow = {
   id: number;
+  title?: string | null;
   institution_id: number;
   institution_name?: string | null;
   subject_id?: number | null;
   subject_name?: string | null;
   syllabus_id?: number | null;
   syllabus_title?: string | null;
+  syllabus_node_id?: number | null;
+  syllabus_node_title?: string | null;
   program_id?: number | null;
   program_title?: string | null;
   section_id?: number | null;
   section_name?: string | null;
   is_active: boolean;
+  is_paid?: boolean;
+  price?: number;
   item_count: number;
   is_public: boolean;
   marketplace_requested: boolean;
@@ -99,6 +128,9 @@ type NoteItem = {
   node_type?: string | null;
   title: string;
   body: string;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
+  attachments?: NoteAttachment[];
   is_active: boolean;
   sort_order: number;
   updated_at: string;
@@ -106,16 +138,21 @@ type NoteItem = {
 
 type NoteForm = {
   id?: number;
+  title: string;
   institution_id: string;
   institution_label: string;
   syllabus_id: string;
   syllabus_label: string;
+  syllabus_node_id: string;
+  syllabus_node_label: string;
   subject_id: string;
   program_id: string;
   program_label: string;
   section_id: string;
   section_label: string;
   is_active: boolean;
+  is_paid: boolean;
+  price: number | string;
   marketplace_requested: boolean;
 };
 
@@ -126,21 +163,29 @@ type ItemForm = {
   syllabus_node_label: string;
   title: string;
   body: string;
+  attachments: NoteAttachment[];
+  attachmentInputUrl: string;
+  attachmentInputName: string;
   editorState: SerializedEditorState | null;
   is_active: boolean;
 };
 
 const blankForm: NoteForm = {
+  title: "",
   institution_id: "",
   institution_label: "",
   syllabus_id: "",
   syllabus_label: "",
+  syllabus_node_id: "",
+  syllabus_node_label: "",
   subject_id: "",
   program_id: "",
   program_label: "",
   section_id: "",
   section_label: "",
-  is_active: false,
+  is_active: true,
+  is_paid: false,
+  price: 0,
   marketplace_requested: false,
 };
 
@@ -150,6 +195,9 @@ const blankItemForm: ItemForm = {
   syllabus_node_label: "",
   title: "",
   body: "",
+  attachments: [],
+  attachmentInputUrl: "",
+  attachmentInputName: "",
   editorState: null,
   is_active: true,
 };
@@ -502,7 +550,7 @@ function noteBodyText(value: string) {
 }
 
 function noteTitle(row: NoteRow) {
-  return row.syllabus_title || row.subject_name || row.program_title || "Class Notes";
+  return row.title || row.syllabus_title || row.subject_name || row.program_title || "Class Notes";
 }
 
 function noteSubtitle(row: NoteRow) {
@@ -522,22 +570,33 @@ function noteItemScopeLabel(item: NoteItem) {
 function formFromRow(row: NoteRow): NoteForm {
   return {
     id: row.id,
+    title: row.title || "",
     institution_id: String(row.institution_id),
     institution_label: row.institution_name || `Institution #${row.institution_id}`,
     syllabus_id: row.syllabus_id ? String(row.syllabus_id) : "",
     syllabus_label: row.syllabus_title || "",
+    syllabus_node_id: row.syllabus_node_id ? String(row.syllabus_node_id) : "",
+    syllabus_node_label: row.syllabus_node_title || "",
     subject_id: row.subject_id ? String(row.subject_id) : "",
     program_id: row.program_id ? String(row.program_id) : "",
     program_label: row.program_title || "",
     section_id: row.section_id ? String(row.section_id) : "",
     section_label: row.section_name || "",
     is_active: row.is_active,
+    is_paid: Boolean(row.is_paid || (Number(row.price) > 0)),
+    price: Number(row.price) || 0,
     marketplace_requested: row.marketplace_requested,
   };
 }
 
 function itemFormFromRow(row: NoteItem): ItemForm {
   const editorState = parseEditorState(row.body);
+  const attachments: NoteAttachment[] = Array.isArray(row.attachments) && row.attachments.length
+    ? row.attachments
+    : row.attachment_url
+      ? [{ url: row.attachment_url, name: row.attachment_name || "Attachment" }]
+      : [];
+
   return {
     id: row.id,
     note_id: String(row.note_id),
@@ -545,6 +604,9 @@ function itemFormFromRow(row: NoteItem): ItemForm {
     syllabus_node_label: row.node_title ? `${row.node_title}${row.node_type ? ` (${row.node_type})` : ""}` : "",
     title: row.title,
     body: row.body,
+    attachments,
+    attachmentInputUrl: "",
+    attachmentInputName: "",
     editorState,
     is_active: row.is_active,
   };
@@ -561,6 +623,7 @@ export default function MasterDataNotesPage() {
   const [rows, setRows] = useState<NoteRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
   const [search, setSearch] = useState("");
   const [pageCount, setPageCount] = useState(-1);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
@@ -620,7 +683,7 @@ export default function MasterDataNotesPage() {
     window.addEventListener("pointercancel", stopResize, { once: true });
     window.addEventListener("blur", stopResize, { once: true });
   }, []);
-  const effectiveInstitutionId = isPlatformAdmin ? form.institution_id : activeInstitutionId ? String(activeInstitutionId) : "";
+  const effectiveInstitutionId = isPlatformAdmin ? (form.institution_id || "1") : activeInstitutionId ? String(activeInstitutionId) : "";
   const canEditActive = canModifyNote(active);
 
   const loadRows = useCallback(async () => {
@@ -674,17 +737,29 @@ export default function MasterDataNotesPage() {
   }, [isReady, loadRows]);
 
   const fetchLookup = useCallback(async <T,>(action: string, query: string, page: number, extra?: Record<string, string>) => {
+    if (action === "programs" && isPlatformAdmin) {
+      const params = new URLSearchParams({ search: query, page: String(page), limit: "15" });
+      const res = await fetch(`/api/admin/content/courses?${params.toString()}`, { headers: authHeader });
+      const json = await readJson(res);
+      if (!res.ok) throw new Error(json.error ?? "Failed to load master courses");
+      const list = ((json.data ?? []) as Array<{ id: number; name?: string; title?: string }>).map((c) => ({
+        id: c.id,
+        title: c.name || c.title || `Course #${c.id}`,
+      }));
+      return { data: list as unknown as T[], hasMore: page < Number(json.pageCount ?? 0) };
+    }
+
     const params = new URLSearchParams({ action, search: query, page: String(page), limit: "15", ...(extra ?? {}) });
     const res = await fetch(`/api/admin/master-data/notes?${params.toString()}`, { headers: authHeader });
     const json = await readJson(res);
     if (!res.ok) throw new Error(json.error ?? "Failed to load options");
     return { data: (json.data ?? []) as T[], hasMore: page < Number(json.pageCount ?? 0) };
-  }, [authHeader]);
+  }, [authHeader, isPlatformAdmin]);
 
   const openCreate = () => {
     setForm({
       ...blankForm,
-      institution_id: !isPlatformAdmin && activeInstitutionId ? String(activeInstitutionId) : "",
+      institution_id: !isPlatformAdmin && activeInstitutionId ? String(activeInstitutionId) : isPlatformAdmin ? (activeInstitutionId ? String(activeInstitutionId) : "1") : "",
       institution_label: !isPlatformAdmin ? activeInstitutionName : "",
     });
     setDialogOpen(true);
@@ -712,14 +787,55 @@ export default function MasterDataNotesPage() {
     setItemDialogOpen(true);
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploadingFile(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const isImage = file.type.startsWith("image/");
+      const endpoint = isImage ? "/api/admin/uploads/image" : "/api/admin/uploads/documents";
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: authHeader,
+        body: formData,
+      });
+      const json = await readJson(res);
+      if (!res.ok) throw new Error(json.error ?? "Upload failed");
+      const url = json.url || json.data?.url || "";
+      if (!url) throw new Error("No URL returned from upload");
+      const newAttachment: NoteAttachment = {
+        url,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+      };
+      setItemForm((curr) => ({
+        ...curr,
+        attachments: [...curr.attachments, newAttachment],
+      }));
+      toast.success("Attachment uploaded successfully");
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setUploadingFile(false);
+      event.target.value = "";
+    }
+  };
+
   async function saveNote() {
-    const institutionId = isPlatformAdmin ? form.institution_id : activeInstitutionId ? String(activeInstitutionId) : "";
+    if (!form.title.trim()) {
+      toast.error("Title of notes is required");
+      return;
+    }
+    const institutionId = isPlatformAdmin ? (form.institution_id || "1") : activeInstitutionId ? String(activeInstitutionId) : "";
     if (!institutionId) {
       toast.error("Institution is required");
       return;
     }
     if (!form.program_id) {
-      toast.error("Class / Program is required");
+      toast.error("Course / Program is required");
       return;
     }
 
@@ -730,18 +846,22 @@ export default function MasterDataNotesPage() {
         headers: { ...authHeader, "Content-Type": "application/json" },
         body: JSON.stringify({
           id: form.id,
+          title: form.title.trim(),
           institution_id: Number(institutionId),
           subject_id: form.subject_id ? Number(form.subject_id) : null,
           syllabus_id: form.syllabus_id ? Number(form.syllabus_id) : null,
+          syllabus_node_id: form.syllabus_node_id ? Number(form.syllabus_node_id) : null,
           program_id: Number(form.program_id),
           section_id: form.section_id ? Number(form.section_id) : null,
           is_active: form.is_active,
+          is_paid: form.is_paid,
+          price: form.is_paid ? (Number(form.price) || 0) : 0,
           marketplace_requested: form.marketplace_requested,
         }),
       });
       const json = await readJson(res);
       if (!res.ok) throw new Error(json.error ?? "Failed to save note");
-      toast.success(form.id ? "Note details updated" : "Note details added");
+      toast.success(form.id ? "Note details updated" : "Note created successfully");
       setDialogOpen(false);
       setForm(blankForm);
       await loadRows();
@@ -758,7 +878,7 @@ export default function MasterDataNotesPage() {
       ? JSON.stringify(itemEditorStateRef.current)
       : itemBodyRef.current.trim();
     if (!itemForm.title.trim() || !noteBodyText(serializedBody)) {
-      toast.error("Title and notes content are required");
+      toast.error("Question and answer / notes content are required");
       return;
     }
     setSaving(true);
@@ -773,6 +893,9 @@ export default function MasterDataNotesPage() {
           syllabus_node_id: itemForm.syllabus_node_id ? Number(itemForm.syllabus_node_id) : null,
           title: itemForm.title.trim(),
           body: serializedBody,
+          attachment_url: itemForm.attachments[0]?.url || null,
+          attachment_name: itemForm.attachments[0]?.name || null,
+          attachments: itemForm.attachments,
           is_active: itemForm.is_active,
         }),
       });
@@ -943,6 +1066,23 @@ export default function MasterDataNotesPage() {
           )}
         </div>
       ),
+    },
+    {
+      id: "pricing",
+      header: "Pricing",
+      cell: ({ row }) => {
+        const isPaid = Boolean(row.original.is_paid || (Number(row.original.price) > 0));
+        const price = Number(row.original.price) || 0;
+        return isPaid ? (
+          <Badge variant="outline" className="border-rose-500/30 bg-rose-500/10 text-rose-600 font-bold text-xs">
+            ₹{price}
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 font-bold text-xs">
+            Free
+          </Badge>
+        );
+      },
     },
     {
       accessorKey: "updated_at",
@@ -1131,11 +1271,21 @@ export default function MasterDataNotesPage() {
           <DialogHeader>
             <DialogTitle>{form.id ? "Edit Note Details" : "Add Note Details"}</DialogTitle>
             <DialogDescription>
-              Save basic targeting first. Add note titles and content from the detail sheet.
+              Provide note title, select course/program, syllabus, and optional unit/chapter before adding Q&A entries.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-2 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="note-main-title">Title of Notes *</Label>
+              <Input
+                id="note-main-title"
+                value={form.title}
+                onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                placeholder="e.g. Complete Mechanics & Laws of Motion Notes"
+              />
+            </div>
+
             {isPlatformAdmin ? (
               <div className="space-y-2 sm:col-span-2">
                 <Label>Institution *</Label>
@@ -1147,8 +1297,8 @@ export default function MasterDataNotesPage() {
                   fetcher={(query, page) => fetchLookup<Option>("institutions", query, page)}
                   getValue={(item) => String(item.id)}
                   getLabel={optionLabel}
-                  onChange={(value) => setForm((current) => ({ ...current, institution_id: value, institution_label: value ? current.institution_label : "", syllabus_id: "", syllabus_label: "", subject_id: "", program_id: "", program_label: "", section_id: "", section_label: "" }))}
-                  onSelectItem={(item) => setForm((current) => ({ ...current, institution_id: String(item.id), institution_label: optionLabel(item), syllabus_id: "", syllabus_label: "", subject_id: "", program_id: "", program_label: "", section_id: "", section_label: "" }))}
+                  onChange={(value) => setForm((current) => ({ ...current, institution_id: value, institution_label: value ? current.institution_label : "", syllabus_id: "", syllabus_label: "", syllabus_node_id: "", syllabus_node_label: "", subject_id: "", program_id: "", program_label: "", section_id: "", section_label: "" }))}
+                  onSelectItem={(item) => setForm((current) => ({ ...current, institution_id: String(item.id), institution_label: optionLabel(item), syllabus_id: "", syllabus_label: "", syllabus_node_id: "", syllabus_node_label: "", subject_id: "", program_id: "", program_label: "", section_id: "", section_label: "" }))}
                 />
               </div>
             ) : (
@@ -1159,18 +1309,18 @@ export default function MasterDataNotesPage() {
             )}
 
             <div className="space-y-2">
-              <Label>Class / Program *</Label>
+              <Label>{isPlatformAdmin ? "Course / Program *" : "Class / Program *"}</Label>
               <AsyncSearchPopover<Option>
                 value={form.program_id}
                 selectedLabel={form.program_label}
-                placeholder="Select class..."
-                searchPlaceholder="Search classes..."
+                placeholder={isPlatformAdmin ? "Select master course / program..." : "Select class..."}
+                searchPlaceholder="Search courses / programs..."
                 disabled={!effectiveInstitutionId}
                 fetcher={(query, page) => fetchLookup<Option>("programs", query, page, { institutionId: effectiveInstitutionId })}
                 getValue={(item) => String(item.id)}
                 getLabel={optionLabel}
-                onChange={(value) => setForm((current) => ({ ...current, program_id: value, program_label: value ? current.program_label : "", section_id: "", section_label: "" }))}
-                onSelectItem={(item) => setForm((current) => ({ ...current, program_id: String(item.id), program_label: optionLabel(item), section_id: "", section_label: "" }))}
+                onChange={(value) => setForm((current) => ({ ...current, program_id: value, program_label: value ? current.program_label : "", syllabus_id: "", syllabus_label: "", syllabus_node_id: "", syllabus_node_label: "", section_id: "", section_label: "" }))}
+                onSelectItem={(item) => setForm((current) => ({ ...current, program_id: String(item.id), program_label: optionLabel(item), syllabus_id: "", syllabus_label: "", syllabus_node_id: "", syllabus_node_label: "", section_id: "", section_label: "" }))}
               />
             </div>
 
@@ -1181,7 +1331,7 @@ export default function MasterDataNotesPage() {
                 selectedLabel={form.section_label}
                 placeholder="All sections"
                 searchPlaceholder="Search sections..."
-                disabled={!form.program_id}
+                disabled={!form.program_id || isPlatformAdmin}
                 showDefaultOption
                 defaultOptionLabel="All sections"
                 defaultOptionValue=""
@@ -1198,10 +1348,10 @@ export default function MasterDataNotesPage() {
               <AsyncSearchPopover<SyllabusOption>
                 value={form.syllabus_id}
                 selectedLabel={form.syllabus_label}
-                placeholder="Select syllabus..."
+                placeholder={form.program_id ? "Select syllabus for this course..." : "Select syllabus..."}
                 searchPlaceholder="Search syllabus..."
                 disabled={!effectiveInstitutionId}
-                fetcher={(query, page) => fetchLookup<SyllabusOption>("syllabi", query, page, { institutionId: effectiveInstitutionId })}
+                fetcher={(query, page) => fetchLookup<SyllabusOption>("syllabi", query, page, { institutionId: effectiveInstitutionId, programId: form.program_id })}
                 getValue={(item) => String(item.id)}
                 getLabel={(item) => item.title}
                 renderItem={(item) => (
@@ -1210,8 +1360,38 @@ export default function MasterDataNotesPage() {
                     <p className="truncate text-xs text-muted-foreground">{item.subject_name}</p>
                   </div>
                 )}
-                onChange={(value) => setForm((current) => ({ ...current, syllabus_id: value, syllabus_label: value ? current.syllabus_label : "", subject_id: "" }))}
-                onSelectItem={(item) => setForm((current) => ({ ...current, syllabus_id: String(item.id), syllabus_label: item.title, subject_id: String(item.subject_id) }))}
+                onChange={(value) => setForm((current) => ({ ...current, syllabus_id: value, syllabus_label: value ? current.syllabus_label : "", syllabus_node_id: "", syllabus_node_label: "", subject_id: "" }))}
+                onSelectItem={(item) => setForm((current) => ({ ...current, syllabus_id: String(item.id), syllabus_label: item.title, syllabus_node_id: "", syllabus_node_label: "", subject_id: String(item.subject_id) }))}
+              />
+            </div>
+
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Syllabus Unit / Chapter (Optional)</Label>
+              <AsyncSearchPopover<NodeOption>
+                value={form.syllabus_node_id}
+                selectedLabel={form.syllabus_node_label}
+                placeholder="Overall syllabus note"
+                searchPlaceholder="Search units or chapters..."
+                disabled={!form.syllabus_id}
+                showDefaultOption
+                defaultOptionLabel="Overall syllabus note"
+                defaultOptionValue=""
+                fetcher={(query, page) => fetchLookup<NodeOption>("nodes", query, page, { syllabusId: form.syllabus_id })}
+                getValue={(item) => String(item.id)}
+                getLabel={nodeLabel}
+                onChange={(value) => setForm((current) => ({ ...current, syllabus_node_id: value, syllabus_node_label: value ? current.syllabus_node_label : "" }))}
+                onSelectItem={(item) => setForm((current) => ({ ...current, syllabus_node_id: String(item.id), syllabus_node_label: nodeLabel(item) }))}
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <ContentPricingOption
+                isPaid={form.is_paid}
+                onIsPaidChange={(val) => setForm((curr) => ({ ...curr, is_paid: val }))}
+                price={form.price}
+                onPriceChange={(val) => setForm((curr) => ({ ...curr, price: val }))}
+                label="Notes Access Pricing"
+                description="Choose if students access these notes for Free or if a fee is charged."
               />
             </div>
 
@@ -1283,7 +1463,7 @@ export default function MasterDataNotesPage() {
               {canEditActive && (
                 <Button onClick={openItemCreate}>
                   <Plus className="size-4" />
-                  Add Notes
+                  Add Q&A Note Entry
                 </Button>
               )}
             </div>
@@ -1295,41 +1475,89 @@ export default function MasterDataNotesPage() {
                 <StickyNote className="mb-3 size-8 text-muted-foreground" />
                 <div className="flex items-center gap-2">
                   <Loader2 className="size-4 animate-spin" />
-                  Loading notes...
+                  Loading note entries...
                 </div>
               </div>
             ) : items.length ? (
-              <div className="space-y-3">
-                {items.map((item) => (
-                  <div key={item.id} className="rounded-md border bg-card p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h3 className="truncate font-semibold">{item.title}</h3>
-                        <p className="text-xs text-muted-foreground">
-                          {noteItemScopeLabel(item)}
-                        </p>
+              <div className="space-y-4">
+                {items.map((item, index) => {
+                  const itemAttachments: NoteAttachment[] = Array.isArray(item.attachments) && item.attachments.length
+                    ? item.attachments
+                    : item.attachment_url
+                      ? [{ url: item.attachment_url, name: item.attachment_name || "Attachment" }]
+                      : [];
+
+                  return (
+                    <div key={item.id} className="rounded-xl border bg-card p-5 shadow-sm space-y-3.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 space-y-1.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="secondary" className="font-mono text-xs font-semibold">
+                              Q{index + 1}
+                            </Badge>
+                            {item.node_title && (
+                              <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20">
+                                {noteItemScopeLabel(item)}
+                              </Badge>
+                            )}
+                          </div>
+                          <h3 className="text-base font-semibold text-foreground leading-snug">
+                            {item.title}
+                          </h3>
+                        </div>
+                        {canEditActive && (
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="ghost" size="icon-sm" onClick={() => openItemEdit(item)}>
+                              <Pencil className="size-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon-sm" onClick={() => void deleteItem(item)}>
+                              <Trash2 className="size-4 text-destructive" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
-                      {canEditActive && (
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon-sm" onClick={() => openItemEdit(item)}>
-                            <Pencil className="size-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon-sm" onClick={() => void deleteItem(item)}>
-                            <Trash2 className="size-4 text-destructive" />
-                          </Button>
+
+                      {/* Formatted Answer */}
+                      <div className="rounded-lg border bg-muted/20 p-4">
+                        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                          <FileText className="size-3.5 text-primary" />
+                          Answer / Notes Content
+                        </div>
+                        <NoteBodyRenderer value={item.body} />
+                      </div>
+
+                      {/* Attachments */}
+                      {itemAttachments.length > 0 && (
+                        <div className="space-y-1.5 pt-1">
+                          <div className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                            <Paperclip className="size-3.5 text-primary" />
+                            Attachments ({itemAttachments.length})
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {itemAttachments.map((att, attIdx) => (
+                              <a
+                                key={attIdx}
+                                href={att.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+                              >
+                                <Paperclip className="size-3" />
+                                <span className="truncate max-w-[200px]">{att.name || `Attachment ${attIdx + 1}`}</span>
+                                <ExternalLink className="size-3 opacity-60" />
+                              </a>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
-                    <div className="mt-3 rounded-md border bg-background/40 p-4">
-                      <NoteBodyRenderer value={item.body} />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="flex min-h-48 flex-col items-center justify-center rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
                 <StickyNote className="mb-3 size-8 text-muted-foreground" />
-                No note entries added yet.
+                No Q&A note entries added yet. Click &quot;Add Q&A Note Entry&quot; to begin.
               </div>
             )}
           </div>
@@ -1344,10 +1572,10 @@ export default function MasterDataNotesPage() {
           <DialogHeader className="shrink-0 border-b px-5 py-4 pr-14">
             <DialogTitle className="flex items-center gap-2">
               <StickyNote className="size-4 text-primary" />
-              {itemForm.id ? "Edit Notes" : "Add Notes"}
+              {itemForm.id ? "Edit Q&A Note Entry" : "Add Q&A Note Entry"}
             </DialogTitle>
             <DialogDescription className="sr-only">
-              Add details on the left and write formatted notes on the editor canvas.
+              Add Question, Syllabus Unit, and Attachments on the left and write formatted Answer on the editor canvas.
             </DialogDescription>
           </DialogHeader>
 
@@ -1357,9 +1585,9 @@ export default function MasterDataNotesPage() {
               style={{ flexBasis: `${noteEditorLeftSize}%` }}
             >
               <div className="shrink-0 border-b px-5 py-5">
-                <h3 className="font-semibold">Note Fields</h3>
+                <h3 className="font-semibold">Question & Details</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Select syllabus node and title before saving. Write the note content on the canvas.
+                  Select syllabus unit/chapter, provide the Question or Topic heading, and add attachments.
                 </p>
               </div>
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
@@ -1383,13 +1611,116 @@ export default function MasterDataNotesPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="note-title">Title *</Label>
+                  <Label htmlFor="note-question-title">Question / Heading *</Label>
                   <Input
-                    id="note-title"
+                    id="note-question-title"
                     value={itemForm.title}
                     onChange={(event) => setItemForm((current) => ({ ...current, title: event.target.value }))}
-                    placeholder="Introduction notes, unit summary..."
+                    placeholder="e.g. State and prove Archimedes' Principle with diagram?"
                   />
+                </div>
+
+                {/* Attachments Section */}
+                <div className="space-y-2.5 rounded-lg border bg-muted/20 p-3.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-1.5 font-medium text-xs">
+                      <Paperclip className="size-3.5 text-primary" />
+                      Attachments ({itemForm.attachments.length})
+                    </Label>
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        className="sr-only"
+                        onChange={handleFileUpload}
+                        disabled={uploadingFile}
+                      />
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                        {uploadingFile ? <Loader2 className="size-3 animate-spin" /> : <Upload className="size-3" />}
+                        Upload File
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Add URL attachment */}
+                  <div className="space-y-1.5 pt-1">
+                    <Input
+                      placeholder="Attachment title (e.g. Formula Sheet PDF)"
+                      value={itemForm.attachmentInputName}
+                      onChange={(e) => setItemForm((c) => ({ ...c, attachmentInputName: e.target.value }))}
+                      className="h-8 text-xs"
+                    />
+                    <div className="flex gap-1.5">
+                      <Input
+                        placeholder="Attachment URL (https://...)"
+                        value={itemForm.attachmentInputUrl}
+                        onChange={(e) => setItemForm((c) => ({ ...c, attachmentInputUrl: e.target.value }))}
+                        className="h-8 text-xs"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="xs"
+                        className="h-8 shrink-0 text-xs"
+                        onClick={() => {
+                          if (!itemForm.attachmentInputUrl.trim()) {
+                            toast.error("Enter attachment URL");
+                            return;
+                          }
+                          const newAtt: NoteAttachment = {
+                            url: itemForm.attachmentInputUrl.trim(),
+                            name: itemForm.attachmentInputName.trim() || "Attachment",
+                            type: "link",
+                          };
+                          setItemForm((c) => ({
+                            ...c,
+                            attachments: [...c.attachments, newAtt],
+                            attachmentInputUrl: "",
+                            attachmentInputName: "",
+                          }));
+                        }}
+                      >
+                        <Plus className="size-3 mr-1" /> Add
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Attachment List */}
+                  {itemForm.attachments.length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      {itemForm.attachments.map((att, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between gap-2 rounded border bg-background px-2.5 py-1.5 text-xs"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText className="size-3.5 shrink-0 text-primary" />
+                            <a
+                              href={att.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="truncate font-medium text-primary hover:underline"
+                            >
+                              {att.name || att.url}
+                            </a>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            className="size-6 text-muted-foreground hover:text-destructive shrink-0"
+                            onClick={() =>
+                              setItemForm((c) => ({
+                                ...c,
+                                attachments: c.attachments.filter((_, i) => i !== idx),
+                              }))
+                            }
+                          >
+                            <Trash2 className="size-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <label className="flex items-center gap-2 pt-2 text-sm">
@@ -1406,7 +1737,7 @@ export default function MasterDataNotesPage() {
                 </Button>
                 <Button onClick={() => void saveNoteItem()} disabled={saving}>
                   {saving && <Loader2 className="size-4 animate-spin" />}
-                  {itemForm.id ? "Save Notes" : "Add Notes"}
+                  {itemForm.id ? "Save Q&A Entry" : "Add Q&A Entry"}
                 </Button>
               </DialogFooter>
             </div>
@@ -1437,9 +1768,9 @@ export default function MasterDataNotesPage() {
               <div className="shrink-0 border-b px-5 py-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="font-semibold">Document Canvas</h3>
+                    <h3 className="font-semibold">Answer / Explanation Canvas</h3>
                     <p className="text-sm text-muted-foreground">
-                      Rich formatting, tables, lists, links, and quick commands.
+                      Write formatted explanations, steps, formulas, tables, and notes content.
                     </p>
                   </div>
                   <div className="hidden text-xs text-muted-foreground md:block">
@@ -1455,7 +1786,7 @@ export default function MasterDataNotesPage() {
                     itemEditorStateRef.current = state;
                     itemBodyRef.current = JSON.stringify(state);
                   }}
-                  placeholder="Press / for commands..."
+                  placeholder="Type the answer or notes content here... (Press / for commands)"
                   maxLength={50000}
                   alwaysEditable
                   className="h-full min-h-0"

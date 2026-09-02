@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { ColumnDef, PaginationState } from "@tanstack/react-table";
 import {
     Building2,
@@ -54,7 +55,7 @@ export default function ScholarshipsAdminPage() {
     const { isReady } = useAdminGuard();
     const isMobile = useIsMobile();
     const [isMounted, setIsMounted] = useState(false);
-    const { accessToken } = useAuthStore();
+    const { accessToken, user } = useAuthStore();
     const { activeInstitution } = useActiveInstitution();
     const authHeader = useMemo(() => ({ Authorization: `Bearer ${accessToken}` }), [accessToken]);
 
@@ -547,6 +548,16 @@ export default function ScholarshipsAdminPage() {
         );
     };
 
+    const pathname = usePathname();
+    const isPlatformAdmin = Boolean(
+        pathname?.startsWith("/platformadmin") ||
+        user?.is_super_admin ||
+        user?.role_codes?.includes("platform_admin") ||
+        user?.roles?.includes("platform_admin") ||
+        user?.primary_role === "platform_admin" ||
+        (!user?.memberships?.length)
+    );
+
     return (
         <div className="space-y-6 w-full max-w-full">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -554,12 +565,14 @@ export default function ScholarshipsAdminPage() {
                     <h1 className="text-2xl font-bold tracking-tight">Scholarships</h1>
                     <p className="text-sm text-muted-foreground">Generate scholarship content from the active AI provider, preview the structured JSON, and save it to the table.</p>
                 </div>
-                <div>
-                    <Button onClick={openCreate} className="w-full gap-2 sm:w-auto">
-                        <Plus className="size-4" />
-                        New Scholarship
-                    </Button>
-                </div>
+                {!isPlatformAdmin && (
+                    <div>
+                        <Button onClick={openCreate} className="w-full gap-2 sm:w-auto">
+                            <Plus className="size-4" />
+                            New Scholarship
+                        </Button>
+                    </div>
+                )}
             </div>
 
             <DataTable

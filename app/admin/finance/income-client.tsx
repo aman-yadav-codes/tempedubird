@@ -125,6 +125,10 @@ type IncomeRow = {
   invoice_resource_type: string | null;
   invoice_file_name: string | null;
   description: string | null;
+  created_by?: number | null;
+  created_by_name?: string | null;
+  created_by_role?: string | null;
+  staff_id?: number | null;
   created_at: string;
 };
 
@@ -639,8 +643,15 @@ export function IncomeClient() {
   const columns = useMemo<ColumnDef<IncomeRow>[]>(() => [
     {
       accessorKey: "income_date",
-      header: "Date",
-      cell: ({ row }) => <span className="font-medium">{formatDate(row.original.income_date)}</span>,
+      header: "Date & Time",
+      cell: ({ row }) => (
+        <div className="min-w-0">
+          <span className="font-semibold block">{formatDate(row.original.income_date)}</span>
+          <span className="text-[11px] text-muted-foreground">
+            {row.original.created_at ? new Date(row.original.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }) : ""}
+          </span>
+        </div>
+      ),
     },
     {
       accessorKey: "category_name",
@@ -666,6 +677,29 @@ export function IncomeClient() {
       accessorKey: "paid_to_label",
       header: "Paid To",
     },
+    {
+      accessorKey: "created_by_name",
+      header: "Recorded By",
+      cell: ({ row }) => (
+        <div className="min-w-0 space-y-0.5">
+          <p className="font-medium text-xs truncate">{row.original.created_by_name || "Admin"}</p>
+          {row.original.created_by_role && (
+            <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-normal">
+              {row.original.created_by_role}
+            </Badge>
+          )}
+        </div>
+      ),
+    },
+    ...(isPlatformScope ? [{
+      id: "scope_column",
+      header: "Scope",
+      cell: ({ row }: { row: { original: IncomeRow } }) => (
+        <Badge variant={row.original.institution_name ? "secondary" : "default"} className="text-[11px]">
+          {row.original.institution_name ? row.original.institution_name : "Platform Global"}
+        </Badge>
+      ),
+    }] : []),
     {
       accessorKey: "amount",
       header: "Amount",

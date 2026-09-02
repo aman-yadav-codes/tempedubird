@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
@@ -17,6 +17,10 @@ import {
   Search,
   ShieldCheck,
   Users,
+  Landmark,
+  ExternalLink,
+  Globe,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -67,6 +71,17 @@ type ExamRow = {
   attempt_count: number;
   is_released: boolean;
   result_available: boolean;
+  conducting_body?: string | null;
+  exam_category?: string | null;
+  official_website_url?: string | null;
+  apply_url?: string | null;
+  notification_pdf_url?: string | null;
+  application_start_date?: string | null;
+  application_end_date?: string | null;
+  admit_card_date?: string | null;
+  eligibility_criteria?: string | null;
+  application_fee?: string | null;
+  is_government_exam?: boolean;
 };
 
 type ExamAttempt = {
@@ -455,36 +470,70 @@ export default function ClassroomExamsPage() {
                       <span className="block text-xs text-muted-foreground">
                         {row.target_label ?? row.institution_name ?? "Classroom"}
                       </span>
-                      <span className="block text-xs text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                        {row.conducting_body && (
+                          <Badge variant="outline" className="border-primary/40 text-primary font-bold text-[10px] gap-1 px-1.5 py-0">
+                            <Landmark className="size-2.5" />
+                            {row.conducting_body}
+                          </Badge>
+                        )}
+                        {row.exam_category && (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                            {row.exam_category}
+                          </Badge>
+                        )}
+                      </div>
+                      <span className="block text-xs text-muted-foreground mt-0.5">
                         Mode: {row.exam_mode ? row.exam_mode.charAt(0).toUpperCase() + row.exam_mode.slice(1) : "Not specified"}
                       </span>
                     </span>
-                    <span className="font-medium">{formatExamDateTime(row.exam_date, row.exam_time)}</span>
+                    <span className="font-medium">
+                      {formatExamDateTime(row.exam_date, row.exam_time)}
+                      {row.application_end_date && (
+                        <span className="block text-[11px] text-destructive font-semibold mt-0.5">
+                          Apply by: {new Date(row.application_end_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                        </span>
+                      )}
+                    </span>
                     <span>{row.duration_minutes ? `${row.duration_minutes} min` : "-"}</span>
-                    <span>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          locked && "border-amber-500/60 text-amber-600 dark:text-amber-400",
-                          (updatedAvailable || attempted) && "border-primary/60 text-primary"
-                        )}
-                      >
-                        {!row.is_released
-                          ? "Upcoming"
-                          : locked
-                          ? "Locked"
-                          : completedCurrent && !row.result_available
-                            ? "Completed"
-                            : completedCurrent
-                              ? "Result"
-                          : isParentReadonly
-                            ? "View"
-                          : updatedAvailable
-                            ? "Updated"
-                            : attempted
-                              ? "Retake"
-                              : "Start"}
-                      </Badge>
+                    <span className="flex items-center gap-2">
+                      {row.apply_url ? (
+                        <Button
+                          size="sm"
+                          className="h-7 gap-1 px-2.5 text-[11px] font-bold bg-primary text-primary-foreground shadow-xs cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(row.apply_url!, "_blank", "noopener,noreferrer");
+                          }}
+                        >
+                          <ExternalLink className="size-3" />
+                          Apply Online
+                        </Button>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            locked && "border-amber-500/60 text-amber-600 dark:text-amber-400",
+                            (updatedAvailable || attempted) && "border-primary/60 text-primary"
+                          )}
+                        >
+                          {!row.is_released
+                            ? "Upcoming"
+                            : locked
+                            ? "Locked"
+                            : completedCurrent && !row.result_available
+                              ? "Completed"
+                              : completedCurrent
+                                ? "Result"
+                            : isParentReadonly
+                              ? "View"
+                            : updatedAvailable
+                              ? "Updated"
+                              : attempted
+                                ? "Retake"
+                                : "Start"}
+                        </Badge>
+                      )}
                     </span>
                   </button>
                 );

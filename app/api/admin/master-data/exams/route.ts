@@ -243,11 +243,17 @@ async function validateExamTarget(
           AND program.is_active = TRUE
           AND COALESCE(institution.is_deleted, FALSE) = FALSE
           AND institution.is_active = TRUE
+        UNION ALL
+        SELECT 1
+        FROM master_courses mc
+        WHERE mc.id = $1
+          AND COALESCE(mc.is_deleted, FALSE) = FALSE
+          AND mc.is_active = TRUE
         LIMIT 1
       `,
       [targetId, institutionId]
     );
-    if (!result.rows[0]) throw new Error("Selected class is not in this institution");
+    if (!result.rows[0]) throw new Error("Selected class or course is not available");
     return;
   }
   if (targetType === "SECTION") {
@@ -603,6 +609,8 @@ export async function GET(req: Request) {
             approver.full_name AS marketplace_approved_by_name,
             at.parent_template_id,
             at.is_active,
+            COALESCE(at.is_paid, FALSE) AS is_paid,
+            COALESCE(at.price, 0)::float8 AS price,
             at.version,
             at.source_institution_id,
             COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) AS institution_name,
@@ -1046,16 +1054,27 @@ export async function GET(req: Request) {
             blocker.full_name AS blocked_by_name,
             at.blocked_at,
             at.block_reason,
+            at.conducting_body,
+            at.exam_category,
+            at.official_website_url,
+            at.apply_url,
+            at.notification_pdf_url,
+            at.application_start_date,
+            at.application_end_date,
+            at.admit_card_date,
+            at.eligibility_criteria,
+            at.application_fee,
+            COALESCE(at.is_government_exam, FALSE) AS is_government_exam,
             assn.id AS assigned_practice_exam_id,
             target.target_type,
             target.target_id,
             target.program_id AS target_program_id,
-            target_scope_program.title AS target_program_label,
+            COALESCE(target_scope_program.title, target_scope_master_course.name) AS target_program_label,
             CASE
               WHEN target.target_type = 'INSTITUTION' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > Whole institution'
-              WHEN target.target_type = 'PROGRAM' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > ' || target_program.title
-              WHEN target.target_type = 'SECTION' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > ' || COALESCE(target_scope_program.title, 'Class') || ' > ' || target_section.name
-              WHEN target.target_type = 'STUDENT' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || COALESCE(' > ' || target_scope_program.title, '') || ' > ' || target_user.full_name
+              WHEN target.target_type = 'PROGRAM' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > ' || COALESCE(target_program.title, target_master_course.name, 'Course')
+              WHEN target.target_type = 'SECTION' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > ' || COALESCE(target_scope_program.title, target_scope_master_course.name, 'Class') || ' > ' || target_section.name
+              WHEN target.target_type = 'STUDENT' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || COALESCE(' > ' || COALESCE(target_scope_program.title, target_scope_master_course.name), '') || ' > ' || target_user.full_name
               ELSE NULL
             END AS target_label,
             COALESCE(
@@ -1112,8 +1131,12 @@ export async function GET(req: Request) {
           LEFT JOIN practice_exam_targets target ON target.practice_exam_id = assn.id
           LEFT JOIN institution_programs target_program
             ON target_program.id = target.target_id AND target.target_type = 'PROGRAM'
+          LEFT JOIN master_courses target_master_course
+            ON target_master_course.id = target.target_id AND target.target_type = 'PROGRAM'
           LEFT JOIN institution_programs target_scope_program
             ON target_scope_program.id = target.program_id
+          LEFT JOIN master_courses target_scope_master_course
+            ON target_scope_master_course.id = target.program_id
           LEFT JOIN sections target_section
             ON target_section.id = target.target_id AND target.target_type = 'SECTION'
           LEFT JOIN student_profiles target_student
@@ -1122,8 +1145,8 @@ export async function GET(req: Request) {
           LEFT JOIN practice_exam_template_questions q ON q.template_id = at.id
           LEFT JOIN practice_exam_template_question_files qf ON qf.question_id = q.id
           GROUP BY at.id, es.id, ip.id, creator.id, updater.id, blocker.id,
-                   requester.id, approver.id, assn.id, target.id, target_program.id, target_section.id,
-                   target_user.id, target_scope_program.id
+                   requester.id, approver.id, assn.id, target.id, target_program.id, target_master_course.id,
+                   target_section.id, target_user.id, target_scope_program.id, target_scope_master_course.id
           ORDER BY
             ((COALESCE(at.marketplace_requested, FALSE) OR COALESCE(es.marketplace_requested, FALSE)) AND at.is_public = FALSE AND at.blocked_by_platform = FALSE) DESC,
             at.updated_at DESC,
@@ -1316,7 +1339,9 @@ export async function POST(req: Request) {
              exam_date, exam_time, exam_place, exam_mode, result_date, instant_result, is_public,
              marketplace_requested, marketplace_requested_at, marketplace_requested_by,
              marketplace_approved, marketplace_approved_at, marketplace_approved_by,
-             is_active, version, source_institution_id,
+             is_active, is_paid, price, version, source_institution_id,
+             conducting_body, exam_category, official_website_url, apply_url, notification_pdf_url,
+             application_start_date, application_end_date, admit_card_date, eligibility_criteria, application_fee, is_government_exam,
              created_by, updated_by)
           VALUES (
             $1, $2, $3, $4::jsonb, $5, 'exam', $6,
@@ -1325,7 +1350,10 @@ export async function POST(req: Request) {
             CASE WHEN $13 THEN $16::integer ELSE NULL::integer END,
             $18, CASE WHEN $18 THEN CURRENT_TIMESTAMP ELSE NULL END,
             CASE WHEN $18 THEN $16::integer ELSE NULL::integer END,
-            $14, 1, $15, $16, $16
+            $14, $19, $20, 1, $15,
+            $21, $22, $23, $24, $25,
+            $26, $27, $28, $29, $30, $31,
+            $16, $16
           )
           RETURNING id
         `,
@@ -1348,6 +1376,19 @@ export async function POST(req: Request) {
           currentUser.id,
           isPublic,
           marketplaceApproved,
+          payload.isPaid,
+          payload.price,
+          payload.conductingBody,
+          payload.examCategory,
+          payload.officialWebsiteUrl,
+          payload.applyUrl,
+          payload.notificationPdfUrl,
+          payload.applicationStartDate,
+          payload.applicationEndDate,
+          payload.admitCardDate,
+          payload.eligibilityCriteria,
+          payload.applicationFee,
+          payload.isGovernmentExam,
         ]
       );
       const templateId = result.rows[0].id;

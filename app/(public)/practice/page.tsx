@@ -172,7 +172,7 @@ export default function PracticePublicPage() {
                             {t.description || "Timed speed test with automated scoring and topic-wise benchmark report."}
                           </p>
 
-                          <div className="flex flex-wrap items-center gap-2.5 text-xs pt-1 border-t border-border/40 text-muted-foreground">
+                          <div className="flex flex-wrap items-center gap-2.5 text-xs pt-2 border-t border-border/40 text-muted-foreground">
                             <span className="flex items-center gap-1 font-semibold text-foreground">
                               <HelpCircle className="size-3.5 text-primary" /> {t.questions_count} Qs
                             </span>
@@ -184,84 +184,6 @@ export default function PracticePublicPage() {
                             <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
                               <Flame className="size-3.5" /> {t.attempts_count || 12}
                             </span>
-                          </div>
-                        </div>
-
-                        <div className="space-y-3 pt-2 border-t border-border/60">
-                          {/* Rating & Reviews */}
-                          <div className="flex items-center justify-between text-xs">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFeedbackTarget({
-                                  type: "practice",
-                                  id: t.id,
-                                  title: t.title,
-                                  subtitle: `${t.subject} • ${t.category} • ${t.time_limit_mins} mins`,
-                                  avg_rating: 4.8,
-                                  review_count: t.attempts_count ? Math.min(t.attempts_count, 14) : 8,
-                                });
-                                setFeedbackOpen(true);
-                              }}
-                              className="inline-flex items-center gap-1 text-amber-500 hover:text-amber-600 font-bold hover:underline cursor-pointer"
-                            >
-                              <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                              <span>4.8</span>
-                              <span className="text-muted-foreground font-normal">({t.attempts_count ? Math.min(t.attempts_count, 14) : 8} reviews)</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFeedbackTarget({
-                                  type: "practice",
-                                  id: t.id,
-                                  title: t.title,
-                                  subtitle: `${t.subject} • ${t.category} • ${t.time_limit_mins} mins`,
-                                  avg_rating: 4.8,
-                                  review_count: t.attempts_count ? Math.min(t.attempts_count, 14) : 8,
-                                });
-                                setFeedbackOpen(true);
-                              }}
-                              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary font-medium cursor-pointer"
-                            >
-                              <MessageSquare className="size-3" />
-                              <span>Feedback</span>
-                            </button>
-                          </div>
-
-                          {/* Actions */}
-                          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/50">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFeedbackTarget({
-                                  type: "practice",
-                                  id: t.id,
-                                  title: t.title,
-                                  subtitle: `${t.subject} • ${t.category} • ${t.time_limit_mins} mins`,
-                                  avg_rating: 4.8,
-                                  review_count: t.attempts_count ? Math.min(t.attempts_count, 14) : 8,
-                                });
-                                setFeedbackOpen(true);
-                              }}
-                              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-amber-300 bg-amber-50/70 text-xs font-bold text-amber-800 transition hover:bg-amber-100 cursor-pointer"
-                            >
-                              <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
-                              <span>Reviews & Q&A</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEnquiryTest(t);
-                                setEnquiryOpen(true);
-                              }}
-                              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-primary text-xs font-bold text-primary-foreground transition hover:bg-primary/90 cursor-pointer shadow-xs"
-                            >
-                              <Send className="h-3.5 w-3.5" />
-                              <span>Enquiry</span>
-                            </button>
                           </div>
                         </div>
                       </Card>

@@ -52,9 +52,21 @@ export async function GET(req: Request) {
             a.instant_result,
             a.version,
             a.status,
+            COALESCE(a.conducting_body, template.conducting_body) AS conducting_body,
+            COALESCE(a.exam_category, template.exam_category) AS exam_category,
+            COALESCE(a.official_website_url, template.official_website_url) AS official_website_url,
+            COALESCE(a.apply_url, template.apply_url) AS apply_url,
+            COALESCE(a.notification_pdf_url, template.notification_pdf_url) AS notification_pdf_url,
+            COALESCE(a.application_start_date, template.application_start_date) AS application_start_date,
+            COALESCE(a.application_end_date, template.application_end_date) AS application_end_date,
+            COALESCE(a.admit_card_date, template.admit_card_date) AS admit_card_date,
+            COALESCE(a.eligibility_criteria, template.eligibility_criteria) AS eligibility_criteria,
+            COALESCE(a.application_fee, template.application_fee) AS application_fee,
+            COALESCE(a.is_government_exam, template.is_government_exam, FALSE) AS is_government_exam,
             ip.name AS institution_name,
             target.target_type,
             CASE
+              WHEN COALESCE(a.is_government_exam, template.is_government_exam, FALSE) THEN 'All Students (National / State Level)'
               WHEN target.target_type = 'INSTITUTION' THEN ip.name || ' > Whole institution'
               WHEN target.target_type = 'PROGRAM' THEN ip.name || ' > ' || target_program.title
               WHEN target.target_type = 'SECTION' THEN ip.name || ' > ' || COALESCE(target_scope_program.title, 'Class') || ' > ' || target_section.name
@@ -63,11 +75,14 @@ export async function GET(req: Request) {
             END AS target_label
           FROM student_enrollments se
           INNER JOIN practice_exams a
-            ON a.institution_id = se.institution_id
+            ON (
+              (a.institution_id = se.institution_id AND a.academic_year_id = se.academic_year_id)
+              OR (COALESCE(a.is_government_exam, FALSE) = TRUE)
+            )
            AND a.status = 'active'
            AND COALESCE(a.exam_kind, 'practice') = 'exam'
            AND COALESCE(a.is_deleted, FALSE) = FALSE
-           AND a.academic_year_id = se.academic_year_id
+          LEFT JOIN practice_exam_templates template ON template.id = a.template_id
           INNER JOIN institution_profiles ip
              ON ip.id = a.institution_id
             AND ip.is_active = TRUE
@@ -86,7 +101,8 @@ export async function GET(req: Request) {
             AND se.id = $4
             AND COALESCE(se.is_deleted, FALSE) = FALSE
             AND (
-              target.target_type IS NULL
+              COALESCE(a.is_government_exam, template.is_government_exam, FALSE) = TRUE
+              OR target.target_type IS NULL
               OR target.target_type = 'INSTITUTION'
               OR (
                 target.target_type = 'PROGRAM'
@@ -107,7 +123,7 @@ export async function GET(req: Request) {
               )
               OR (target.target_type = 'STUDENT' AND target.target_id = se.student_id)
             )
-            AND ($2 = '' OR a.title ILIKE $3 OR COALESCE(a.description, '') ILIKE $3)
+            AND ($2 = '' OR a.title ILIKE $3 OR COALESCE(a.description, '') ILIKE $3 OR COALESCE(a.conducting_body, template.conducting_body, '') ILIKE $3)
         )
         SELECT
           eligible.*,
@@ -166,6 +182,17 @@ export async function GET(req: Request) {
           eligible.institution_name,
           eligible.target_type,
           eligible.target_label,
+          eligible.conducting_body,
+          eligible.exam_category,
+          eligible.official_website_url,
+          eligible.apply_url,
+          eligible.notification_pdf_url,
+          eligible.application_start_date,
+          eligible.application_end_date,
+          eligible.admit_card_date,
+          eligible.eligibility_criteria,
+          eligible.application_fee,
+          eligible.is_government_exam,
           sa.status,
           sa.submitted_at,
           sa.obtained_marks,

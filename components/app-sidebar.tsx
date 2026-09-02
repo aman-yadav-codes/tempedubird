@@ -198,14 +198,18 @@ const navItems: SidebarItem[] = [
             { title: "All Students", url: "/admin/students", icon: GraduationCap },
             { title: "Fee Management", url: "/admin/students/fee-management", icon: CreditCard },
             { title: "Attendance", url: "/admin/students/attendance", icon: ClipboardCheck },
-            { title: "Achievements", url: "/admin/students/achievements", icon: Trophy },
-            { title: "Assignments", url: "/admin/students/assignments", icon: ClipboardList },
-            { title: "Exams", url: "/admin/students/exams", icon: FileText },
-            { title: "Practice", url: "/admin/students/practice", icon: ClipboardCheck },
-            { title: "Result", url: "/admin/students/result", icon: FileCheck2 },
-            { title: "TC", url: "/admin/students/tc", icon: FileCheck2 },
-            { title: "Cards", url: "/admin/students/cards", icon: IdCard },
-            { title: "Notes", url: "/admin/students/notes", icon: StickyNote },
+        ],
+    },
+    {
+        title: "Academics",
+        url: "/admin/content/notes",
+        icon: BookOpen,
+        children: [
+            { title: "Notes", url: "/admin/content/notes", icon: StickyNote },
+            { title: "Assignments", url: "/admin/content/assignments", icon: ClipboardList },
+            { title: "Exams", url: "/admin/content/exams", icon: FileText },
+            { title: "Practice Exams", url: "/admin/content/practice-exams", icon: ClipboardCheck },
+            { title: "Growth Chart", url: "/admin/content/growth-chart", icon: TrendingUp },
         ],
     },
     {
@@ -217,10 +221,6 @@ const navItems: SidebarItem[] = [
             { title: "Task Management", url: "/admin/operations/tasks", icon: ClipboardList },
             { title: "Attendance", url: "/admin/staff/attendance", icon: ClipboardCheck },
             { title: "Queries", url: "/admin/staff/queries", icon: HelpCircle },
-            { title: "Salary Slip", url: "/admin/staff/salary-slips", icon: CreditCard },
-            { title: "Offer Letter", url: "/admin/staff/offer-letters", icon: Mail },
-            { title: "Certificate", url: "/admin/staff/certificates", icon: BadgeCheck },
-            { title: "Experience Letter", url: "/admin/staff/experience-letters", icon: FileCheck2 },
             { title: "Our Jobs", url: "/admin/staff/jobs", icon: Briefcase },
             { title: "Applicant", url: "/admin/staff/applicants", icon: UserCheck },
             { title: "Appreciation Certificate", url: "/admin/staff/appreciation-certificates", icon: Trophy },
@@ -322,7 +322,7 @@ const navItems: SidebarItem[] = [
             { title: "Syllabus", url: "/admin/content/syllabus", icon: BookOpen },
             { title: "Assignments", url: "/admin/content/assignments", icon: ClipboardList },
             { title: "Practice Exams", url: "/admin/content/practice-exams", icon: ClipboardCheck },
-            { title: "Exams", url: "/admin/content/exams", icon: FileText },
+            { title: "Government & Selection Exams", url: "/admin/content/exams", icon: Landmark },
             { title: "Notes", url: "/admin/content/notes", icon: StickyNote },
             { title: "Blog", url: "/admin/content/blog", icon: FileText },
             { title: "Skills", url: "/admin/master-data/skills", icon: BookOpen },
@@ -331,6 +331,12 @@ const navItems: SidebarItem[] = [
             { title: "Card Categories", url: "/admin/master-data/card-categories", icon: LibraryBig },
             { title: "Card Templates", url: "/admin/master-data/card-templates", icon: IdCard },
             { title: "Default Calendar", url: "/admin/master-data/default-calendar", icon: CalendarDays },
+            { title: "Institution Types", url: "/admin/institutions/types", icon: Building },
+            { title: "Institution Subtypes", url: "/admin/institutions/subtypes", icon: Building },
+            { title: "Program Types", url: "/admin/institutions/program-types", icon: BookOpen },
+            { title: "Facility Types", url: "/admin/institutions/facility-types", icon: Building },
+            { title: "Languages", url: "/admin/institutions/languages", icon: BookOpen },
+            { title: "Academic Sessions", url: "/admin/institutions/academic-years", icon: CalendarDays },
         ],
     },
 
@@ -343,21 +349,6 @@ const navItems: SidebarItem[] = [
                 title: "All Institutions",
                 url: "/admin/institutions/list",
                 icon: Building,
-            },
-            {
-                title: "Institution Types",
-                url: "/admin/institutions/types",
-                icon: Building,
-            },
-            {
-                title: "Institution Subtypes",
-                url: "/admin/institutions/subtypes",
-                icon: Building,
-            },
-            {
-                title: "Program Types",
-                url: "/admin/institutions/program-types",
-                icon: BookOpen,
             },
             {
                 title: "Programs",
@@ -375,21 +366,6 @@ const navItems: SidebarItem[] = [
                 icon: Building,
             },
             {
-                title: "Facility Types",
-                url: "/admin/institutions/facility-types",
-                icon: Building,
-            },
-            {
-                title: "Languages",
-                url: "/admin/institutions/languages",
-                icon: BookOpen,
-            },
-            {
-                title: "Academic Sessions",
-                url: "/admin/institutions/academic-years",
-                icon: CalendarDays,
-            },
-            {
                 title: "Institution Cutoffs",
                 url: "/admin/institutions/cutoffs",
                 icon: ChartNoAxesColumnIncreasing,
@@ -399,6 +375,38 @@ const navItems: SidebarItem[] = [
                 url: "/admin/institutions/scholarships",
                 icon: Trophy,
             },
+        ],
+    },
+    {
+        title: "Admin",
+        url: "/admin/generate",
+        icon: ShieldCheck,
+        children: [
+            { title: "Generate", url: "/admin/generate", icon: Sparkles },
+            { title: "Vendors", url: "/admin/vendors", icon: Store },
+            { title: "Inventory", url: "/admin/inventory", icon: Boxes },
+            { title: "Team", url: "/admin/team", icon: Users },
+            { title: "Institute Calendar", url: "/admin/master-data/institute-calendar", icon: CalendarDays },
+            { title: "Timetable Setup", url: "/admin/master-data/timetable-setup", icon: CalendarDays },
+            { title: "Attendance Setup", url: "/admin/master-data/attendance-setup", icon: ClipboardCheck },
+            { title: "Noticeboard", url: "/admin/institutions/news", icon: Bell },
+            { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
+        ],
+    },
+    {
+        title: "Company & Legal",
+        url: "/admin/company?tab=contact-branches",
+        permissionPath: "/admin/company",
+        icon: Building2,
+        children: [
+            { title: "Contact & Branches", url: "/admin/company?tab=contact-branches", icon: MapPin },
+            { title: "Payment Methods", url: "/admin/company?tab=payment-methods", icon: CreditCard },
+            { title: "FAQs", url: "/admin/company?tab=faqs", icon: HelpCircle },
+            { title: "Privacy Policy", url: "/admin/company?tab=privacy-policy", icon: ShieldCheck },
+            { title: "Terms & Conditions", url: "/admin/company?tab=terms-and-conditions", icon: FileText },
+            { title: "Copyright Policy", url: "/admin/company?tab=copyright-policy", icon: Copyright },
+            { title: "Refund Policy", url: "/admin/company?tab=refund-policy", icon: RefreshCw },
+            { title: "Social Media Links", url: "/admin/company?tab=social-links", icon: Share2 },
         ],
     },
     {
@@ -443,37 +451,6 @@ const navItems: SidebarItem[] = [
                     { title: "Analytics", url: "/admin/settings/help-center/analytics", icon: BarChart3 },
                 ],
             },
-        ],
-    },
-    {
-        title: "Admin",
-        url: "/admin/vendors",
-        icon: ShieldCheck,
-        children: [
-            { title: "Vendors", url: "/admin/vendors", icon: Store },
-            { title: "Inventory", url: "/admin/inventory", icon: Boxes },
-            { title: "Team", url: "/admin/team", icon: Users },
-            { title: "Institute Calendar", url: "/admin/master-data/institute-calendar", icon: CalendarDays },
-            { title: "Timetable Setup", url: "/admin/master-data/timetable-setup", icon: CalendarDays },
-            { title: "Attendance Setup", url: "/admin/master-data/attendance-setup", icon: ClipboardCheck },
-            { title: "Noticeboard", url: "/admin/institutions/news", icon: Bell },
-            { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
-        ],
-    },
-    {
-        title: "Company & Legal",
-        url: "/admin/company?tab=contact-branches",
-        permissionPath: "/admin/company",
-        icon: Building2,
-        children: [
-            { title: "Contact & Branches", url: "/admin/company?tab=contact-branches", icon: MapPin },
-            { title: "Payment Methods", url: "/admin/company?tab=payment-methods", icon: CreditCard },
-            { title: "FAQs", url: "/admin/company?tab=faqs", icon: HelpCircle },
-            { title: "Privacy Policy", url: "/admin/company?tab=privacy-policy", icon: ShieldCheck },
-            { title: "Terms & Conditions", url: "/admin/company?tab=terms-and-conditions", icon: FileText },
-            { title: "Copyright Policy", url: "/admin/company?tab=copyright-policy", icon: Copyright },
-            { title: "Refund Policy", url: "/admin/company?tab=refund-policy", icon: RefreshCw },
-            { title: "Social Media Links", url: "/admin/company?tab=social-links", icon: Share2 },
         ],
     },
 ];
@@ -675,19 +652,19 @@ export function AppSidebar() {
             if (!isStudent && item.url === "/admin/my-program") {
                 return [];
             }
-            if (isInstitutionAdmin && item.url === "/admin/master-data") {
+            if (isInstitutionAdmin && item.url === "/admin/students") {
                 return [{
                     ...item,
+                    title: "Manage Students",
                     children: [
-                        { title: "Assignments", url: "/admin/content/assignments", icon: ClipboardList },
-                        { title: "Practice Exams", url: "/admin/content/practice-exams", icon: ClipboardCheck },
-                        { title: "Exams", url: "/admin/content/exams", icon: FileText },
-                        { title: "Notes", url: "/admin/content/notes", icon: StickyNote },
-                        { title: "Blog", url: "/admin/content/blog", icon: FileText },
+                        ...(item.children || []),
                         { title: "Academic Sessions", url: "/admin/institutions/academic-years", icon: CalendarDays },
-                        { title: "Overview Hub", url: "/admin/master-data", icon: LayoutGrid },
+                        { title: "Curriculum & Master Data", url: "/admin/master-data", icon: LayoutGrid },
                     ],
                 }];
+            }
+            if (isInstitutionAdmin && item.url === "/admin/master-data") {
+                return [];
             }
             if (item.url === "/admin/marketing/packages") {
                 if (!isPlatformAdmin && !isInstitutionAdmin) return [];

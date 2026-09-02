@@ -99,6 +99,8 @@ export function parsePracticeExamMetadataPayload(body: Record<string, unknown>) 
     aiQuestionFormat: parseAiQuestionFormat(body.ai_question_format),
     isPublic: body.is_public === true,
     isActive: body.is_active === true,
+    isPaid: body.is_paid === true || (Number(body.price) > 0),
+    price: (body.is_paid === true || (Number(body.price) > 0)) ? Math.max(0, Number(body.price) || 0) : 0,
   };
 }
 

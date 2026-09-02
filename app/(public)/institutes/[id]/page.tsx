@@ -41,6 +41,9 @@ const fetchInstitutionFullData = cache(async (idOrSlug: string) => {
         p.established_year,
         p.website,
         p.is_active,
+        p.institution_type_id,
+        p.institution_subtype_id,
+        p.location_id,
         it.name AS type_name,
         ist.name AS subtype_name,
         l.name AS location_name,
@@ -101,6 +104,7 @@ const fetchInstitutionFullData = cache(async (idOrSlug: string) => {
       hostelsSettled,
       librariesSettled,
       coursesSettled,
+      relatedSettled,
     ] = await Promise.allSettled([
       // Programs
       db.query(
@@ -286,6 +290,61 @@ const fetchInstitutionFullData = cache(async (idOrSlug: string) => {
         `SELECT * FROM institution_courses WHERE institution_id = $1 AND COALESCE(is_active, TRUE) = TRUE ORDER BY sort_order ASC, id ASC`,
         [institutionId]
       ),
+
+      // Related Institutes in same category / subtype or location
+      db.query(
+        `
+        SELECT
+          p.id,
+          p.name,
+          p.slug,
+          p.phone,
+          p.email,
+          p.established_year,
+          it.name AS type_name,
+          ist.name AS subtype_name,
+          l.name AS location_name,
+          COALESCE((
+            SELECT COUNT(*)::int
+            FROM student_enrollments se
+            WHERE se.institution_id = p.id AND COALESCE(se.is_deleted, FALSE) = FALSE
+          ), 0) AS student_count,
+          (
+            SELECT media.url
+            FROM institution_media media
+            WHERE media.institution_id = p.id
+              AND COALESCE(media.is_deleted, FALSE) = FALSE
+              AND media.url IS NOT NULL AND media.url <> ''
+              AND (lower(COALESCE(media.media_type, '')) = 'logo' OR lower(COALESCE(media.title, '')) LIKE '%logo%')
+            ORDER BY media.sort_order ASC, media.id ASC
+            LIMIT 1
+          ) AS logo_url
+        FROM institution_profiles p
+        LEFT JOIN institution_types it ON it.id = p.institution_type_id
+        LEFT JOIN institution_subtypes ist ON ist.id = p.institution_subtype_id
+        LEFT JOIN locations l ON l.id = p.location_id
+        WHERE p.id <> $1
+          AND p.is_active = TRUE
+          AND COALESCE(p.is_deleted, FALSE) = FALSE
+          AND (
+            p.institution_type_id = $2
+            OR p.institution_subtype_id = $3
+            OR p.location_id = $4
+            OR $2 IS NULL
+          )
+        ORDER BY
+          CASE WHEN p.location_id = $4 THEN 0 ELSE 1 END,
+          CASE WHEN p.institution_subtype_id = $3 THEN 0 ELSE 1 END,
+          p.id ASC
+        LIMIT 6
+        `,
+        [
+          institutionId,
+          profile.institution_type_id || null,
+          profile.institution_subtype_id || null,
+          profile.location_id || null,
+        ]
+      ),
     ]);
 
     return {
@@ -301,6 +360,7 @@ const fetchInstitutionFullData = cache(async (idOrSlug: string) => {
       hostels: hostelsSettled.status === "fulfilled" ? hostelsSettled.value.rows : [],
       libraries: librariesSettled.status === "fulfilled" ? librariesSettled.value.rows : [],
       courses: coursesSettled.status === "fulfilled" ? coursesSettled.value.rows : [],
+      relatedInstitutes: relatedSettled.status === "fulfilled" ? relatedSettled.value.rows : [],
     };
   } catch (err) {
     console.error("Error loading institution data:", err);

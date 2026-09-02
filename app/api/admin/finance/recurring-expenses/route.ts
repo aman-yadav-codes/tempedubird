@@ -261,6 +261,8 @@ export async function POST(req: Request) {
       institution_id: institutionId,
       ...parsed,
       user_id: user.id,
+      staff_id: user.id,
+      created_by_role: isPlatformAdminUser(user) ? "Platform Admin" : isInstitutionAdminUser(user) ? "Institution Admin" : "Staff",
     });
     await syncReminderJob(Number(created.id), user.id);
 

@@ -313,32 +313,6 @@ export function PublicNavbar({
                       </div>
                     </Link>
                   </DropdownMenuItem>
-
-                  {/* If institute has added Hostel, show under About Us */}
-                  {isCategoryVisible("hostels") && (
-                    <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
-                      <Link href="/hostels" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
-                        <Building2 className="h-4 w-4 text-rose-600 shrink-0" />
-                        <div className="flex flex-col leading-tight">
-                          <span className="font-bold">Hostel Facilities</span>
-                          <span className="text-[10px] text-gray-500 font-normal">Residential campus accommodation</span>
-                        </div>
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
-
-                  {/* If institute has added Library, show under About Us */}
-                  {isCategoryVisible("libraries") && (
-                    <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
-                      <Link href="/libraries" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
-                        <Library className="h-4 w-4 text-rose-600 shrink-0" />
-                        <div className="flex flex-col leading-tight">
-                          <span className="font-bold">Library & Resource Center</span>
-                          <span className="text-[10px] text-gray-500 font-normal">Books, journals & reading hall</span>
-                        </div>
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
 
@@ -685,26 +659,6 @@ export function PublicNavbar({
                     <Building2 className="h-3.5 w-3.5 text-rose-600 shrink-0" />
                     <span className="truncate">Institute Info</span>
                   </Link>
-                  {isCategoryVisible("hostels") && (
-                    <Link
-                      href="/hostels"
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center gap-1.5 p-1.5 rounded-lg text-xs font-semibold text-gray-800 hover:bg-rose-100/60"
-                    >
-                      <Building2 className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                      <span className="truncate">Hostel Living</span>
-                    </Link>
-                  )}
-                  {isCategoryVisible("libraries") && (
-                    <Link
-                      href="/libraries"
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center gap-1.5 p-1.5 rounded-lg text-xs font-semibold text-gray-800 hover:bg-rose-100/60"
-                    >
-                      <Library className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                      <span className="truncate">Library & Books</span>
-                    </Link>
-                  )}
                 </div>
               </div>
 

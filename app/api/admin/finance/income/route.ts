@@ -220,6 +220,8 @@ export async function POST(req: Request) {
       invoice_file_name: body.invoice_file_name ? String(body.invoice_file_name) : null,
       description: body.description ? String(body.description).trim() : null,
       user_id: user.id,
+      staff_id: user.id,
+      created_by_role: isPlatformAdminUser(user) ? "Platform Admin" : isInstitutionAdminUser(user) ? "Institution Admin" : "Staff",
     });
 
     return NextResponse.json({ ok: true });

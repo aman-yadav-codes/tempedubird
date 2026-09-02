@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth/auth";
+import { getAuthenticatedUser, requireAdmin } from "@/lib/auth/auth";
 import { isPlatformAdminUser, isInstitutionAdminUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
 import { getPageCount, getPagination } from "@/lib/queries/pagination";
@@ -543,9 +543,36 @@ export async function ensureDocumentCategoryAndTemplate(docType: string) {
   `);
 }
 
+async function getEffectiveUserInstitutionId(user: { id: number; role_codes?: string[]; is_super_admin?: boolean }, requestedInstitutionId?: number | null): Promise<number | null> {
+  const isPlatformAdmin = isPlatformAdminUser(user);
+  if (isPlatformAdmin) {
+    return requestedInstitutionId || null;
+  }
+
+  // Check institution memberships
+  const memRes = await db.query<{ institution_id: number }>(
+    `SELECT institution_id FROM institution_memberships WHERE user_id = $1 AND is_active = TRUE AND COALESCE(is_deleted, FALSE) = FALSE ORDER BY is_primary DESC, id ASC LIMIT 1`,
+    [user.id]
+  );
+  if (memRes.rows[0]?.institution_id) {
+    return memRes.rows[0].institution_id;
+  }
+
+  // Check user profiles
+  const profileRes = await db.query<{ under_institution_id: number }>(
+    `SELECT under_institution_id FROM user_profiles WHERE user_id = $1 LIMIT 1`,
+    [user.id]
+  );
+  if (profileRes.rows[0]?.under_institution_id) {
+    return profileRes.rows[0].under_institution_id;
+  }
+
+  return requestedInstitutionId || null;
+}
+
 export async function handleDocumentGet(req: Request, defaultDocType: string) {
   try {
-    const currentUser = await requireAdmin(req);
+    const currentUser = await getAuthenticatedUser(req);
     const url = new URL(req.url);
     const docType = url.searchParams.get("doc_type") || defaultDocType;
     const config = DOCUMENT_CONFIGS[docType] || DOCUMENT_CONFIGS.experience_letter;
@@ -554,10 +581,7 @@ export async function handleDocumentGet(req: Request, defaultDocType: string) {
 
     const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const isInstitutionAdmin = isInstitutionAdminUser(currentUser);
-
-    if (!isPlatformAdmin && !isInstitutionAdmin) {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
+    const userInstId = await getEffectiveUserInstitutionId(currentUser);
 
     const view = url.searchParams.get("view");
 
@@ -607,14 +631,18 @@ export async function handleDocumentGet(req: Request, defaultDocType: string) {
       return NextResponse.json({ data: templatesRes.rows });
     }
 
-    // 2. View = "staff-options" -> Return all staff members added by Platform Admin across institutions
+    // 2. View = "staff-options" -> Return staff members belonging to the admin's institution
     if (view === "staff-options") {
-      const institutionIdRaw = Number(url.searchParams.get("institutionId"));
-      const targetInstitutionId = Number.isInteger(institutionIdRaw) && institutionIdRaw > 0
-        ? institutionIdRaw
-        : null;
+      if (!isPlatformAdmin && !isInstitutionAdmin) {
+        return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+      }
 
-      const instFilter = targetInstitutionId && !isPlatformAdmin
+      const institutionIdRaw = Number(url.searchParams.get("institutionId"));
+      const targetInstitutionId = isPlatformAdmin
+        ? (Number.isInteger(institutionIdRaw) && institutionIdRaw > 0 ? institutionIdRaw : null)
+        : userInstId;
+
+      const instFilter = targetInstitutionId
         ? `AND (im.institution_id = ${targetInstitutionId} OR up.under_institution_id = ${targetInstitutionId})`
         : "";
 
@@ -659,11 +687,10 @@ export async function handleDocumentGet(req: Request, defaultDocType: string) {
     }
 
     // 3. Default: List Generated Letters / Documents
-    const institutionIdParam = Number(url.searchParams.get("institutionId"));
-    const targetInstitutionId = Number.isInteger(institutionIdParam) && institutionIdParam > 0
-      ? institutionIdParam
-      : null;
-
+    // Strictly isolate:
+    // - Platform Admin: can view all or filter by institutionId
+    // - Institution Admin: can ONLY see documents belonging to their institution
+    // - Staff Member: can ONLY see documents generated for their own staff_user_id
     const { limit, offset } = getPagination(
       url.searchParams.get("page"),
       url.searchParams.get("limit")
@@ -674,9 +701,24 @@ export async function handleDocumentGet(req: Request, defaultDocType: string) {
     const params: unknown[] = [docType];
     let paramIndex = 2;
 
-    if (targetInstitutionId && !isPlatformAdmin) {
-      conditions.push(`sgl.institution_id = $${paramIndex}`);
-      params.push(targetInstitutionId);
+    if (isPlatformAdmin) {
+      const institutionIdParam = Number(url.searchParams.get("institutionId"));
+      if (Number.isInteger(institutionIdParam) && institutionIdParam > 0) {
+        conditions.push(`sgl.institution_id = $${paramIndex}`);
+        params.push(institutionIdParam);
+        paramIndex++;
+      }
+    } else if (isInstitutionAdmin) {
+      const targetInstitutionId = userInstId || Number(url.searchParams.get("institutionId"));
+      if (targetInstitutionId) {
+        conditions.push(`sgl.institution_id = $${paramIndex}`);
+        params.push(targetInstitutionId);
+        paramIndex++;
+      }
+    } else {
+      // Regular staff member: only view their own generated documents
+      conditions.push(`sgl.staff_user_id = $${paramIndex}`);
+      params.push(currentUser.id);
       paramIndex++;
     }
 
@@ -752,7 +794,7 @@ export async function handleDocumentGet(req: Request, defaultDocType: string) {
 
 export async function handleDocumentPost(req: Request, defaultDocType: string) {
   try {
-    const currentUser = await requireAdmin(req);
+    const currentUser = await getAuthenticatedUser(req);
     const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const isInstitutionAdmin = isInstitutionAdminUser(currentUser);
 
@@ -760,6 +802,7 @@ export async function handleDocumentPost(req: Request, defaultDocType: string) {
       return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }
 
+    const userInstId = await getEffectiveUserInstitutionId(currentUser);
     const body = await req.json();
     const {
       institutionId,
@@ -783,8 +826,11 @@ export async function handleDocumentPost(req: Request, defaultDocType: string) {
       );
     }
 
-    let finalInstitutionId = Number(institutionId);
-    if (!Number.isInteger(finalInstitutionId) || finalInstitutionId <= 0) {
+    let finalInstitutionId = isPlatformAdmin
+      ? Number(institutionId) || userInstId || 1
+      : userInstId || Number(institutionId);
+
+    if (!finalInstitutionId) {
       const userInstRes = await db.query<{ institution_id: number }>(
         `SELECT institution_id FROM institution_memberships WHERE user_id = $1 AND is_active = TRUE LIMIT 1`,
         [staffUserId]
@@ -839,7 +885,7 @@ export async function handleDocumentPost(req: Request, defaultDocType: string) {
 
 export async function handleDocumentDelete(req: Request) {
   try {
-    const currentUser = await requireAdmin(req);
+    const currentUser = await getAuthenticatedUser(req);
     const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const isInstitutionAdmin = isInstitutionAdminUser(currentUser);
 
@@ -847,6 +893,7 @@ export async function handleDocumentDelete(req: Request) {
       return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }
 
+    const userInstId = await getEffectiveUserInstitutionId(currentUser);
     const url = new URL(req.url);
     const letterId = Number(url.searchParams.get("id"));
 
@@ -854,12 +901,25 @@ export async function handleDocumentDelete(req: Request) {
       return NextResponse.json({ error: "Valid document ID required" }, { status: 400 });
     }
 
-    await db.query(
+    const conditions: string[] = ["id = $1"];
+    const params: unknown[] = [letterId];
+
+    if (!isPlatformAdmin && userInstId) {
+      conditions.push("institution_id = $2");
+      params.push(userInstId);
+    }
+
+    const updateRes = await db.query(
       `UPDATE staff_generated_letters
-       SET is_deleted = TRUE, deleted_at = CURRENT_TIMESTAMP, deleted_by = $1
-       WHERE id = $2`,
-      [currentUser.id, letterId]
+       SET is_deleted = TRUE, deleted_at = CURRENT_TIMESTAMP, deleted_by = ${currentUser.id}
+       WHERE ${conditions.join(" AND ")}
+       RETURNING id`,
+      params
     );
+
+    if (updateRes.rowCount === 0) {
+      return NextResponse.json({ error: "Document not found or permission denied" }, { status: 404 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

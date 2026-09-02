@@ -8,17 +8,22 @@ type Queryable = Pool | PoolClient;
 
 export type StudyNoteRow = {
   id: number;
+  title: string;
   institution_id: number;
   institution_name: string | null;
   subject_id: number | null;
   subject_name: string | null;
   syllabus_id: number | null;
   syllabus_title: string | null;
+  syllabus_node_id?: number | null;
+  syllabus_node_title?: string | null;
   program_id: number | null;
   program_title: string | null;
   section_id: number | null;
   section_name: string | null;
   is_active: boolean;
+  is_paid?: boolean;
+  price?: number;
   item_count: number;
   first_item_title: string | null;
   is_public: boolean;
@@ -40,6 +45,13 @@ export type StudyNoteRow = {
   updated_at: string;
 };
 
+export type NoteAttachment = {
+  url: string;
+  name?: string;
+  type?: string;
+  size?: number;
+};
+
 export type StudyNoteItemRow = {
   id: number;
   note_id: number;
@@ -48,6 +60,9 @@ export type StudyNoteItemRow = {
   node_type: string | null;
   title: string;
   body: string;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
+  attachments: NoteAttachment[];
   is_active: boolean;
   sort_order: number;
   created_at: string;
@@ -75,11 +90,15 @@ type StudentNoteEnrollmentScope = {
 
 type NoteInput = {
   institution_id: number;
+  title?: string | null;
   subject_id?: number | null;
   syllabus_id?: number | null;
+  syllabus_node_id?: number | null;
   program_id?: number | null;
   section_id?: number | null;
   is_active?: boolean;
+  is_paid?: boolean;
+  price?: number;
   marketplace_requested?: boolean;
 };
 
@@ -88,6 +107,9 @@ type NoteItemInput = {
   syllabus_node_id?: number | null;
   title: string;
   body: string;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
+  attachments?: NoteAttachment[];
   is_active?: boolean;
 };
 
@@ -134,6 +156,8 @@ export async function ensureNotesSchema(db: Queryable) {
       await db.query(`
         ALTER TABLE study_notes
           ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE,
+          ADD COLUMN IF NOT EXISTS is_paid BOOLEAN NOT NULL DEFAULT FALSE,
+          ADD COLUMN IF NOT EXISTS price NUMERIC(10,2) NOT NULL DEFAULT 0,
           ADD COLUMN IF NOT EXISTS marketplace_requested BOOLEAN NOT NULL DEFAULT FALSE,
           ADD COLUMN IF NOT EXISTS marketplace_requested_at TIMESTAMP NULL,
           ADD COLUMN IF NOT EXISTS marketplace_requested_by INTEGER REFERENCES users(id),
@@ -159,6 +183,9 @@ export async function ensureNotesSchema(db: Queryable) {
           syllabus_node_id INTEGER REFERENCES syllabus_nodes(id) ON DELETE SET NULL,
           title TEXT NOT NULL,
           body TEXT NOT NULL,
+          attachment_url TEXT,
+          attachment_name TEXT,
+          attachments JSONB NOT NULL DEFAULT '[]'::jsonb,
           is_active BOOLEAN NOT NULL DEFAULT TRUE,
           is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
           deleted_at TIMESTAMP NULL,
@@ -169,6 +196,16 @@ export async function ensureNotesSchema(db: Queryable) {
           created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
+      `);
+      await db.query(`
+        ALTER TABLE study_note_items
+          ADD COLUMN IF NOT EXISTS attachment_url TEXT,
+          ADD COLUMN IF NOT EXISTS attachment_name TEXT,
+          ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb
+      `);
+      await db.query(`
+        ALTER TABLE study_notes
+          ADD COLUMN IF NOT EXISTS syllabus_node_id INTEGER REFERENCES syllabus_nodes(id) ON DELETE SET NULL
       `);
       await db.query(`
         INSERT INTO study_note_items (note_id, syllabus_node_id, title, body, is_active, created_by, updated_by, sort_order, created_at, updated_at)
@@ -220,18 +257,23 @@ function noteSelectSql(inheritedInstitutionParam?: number, inheritedAcademicYear
   return `
     SELECT
       note.id,
+      COALESCE(note.title, '') AS title,
       note.institution_id,
       institution.name AS institution_name,
       note.subject_id,
       subject.name AS subject_name,
       note.syllabus_id,
       syllabus.title AS syllabus_title,
+      note.syllabus_node_id,
+      node.title AS syllabus_node_title,
       note.program_id,
-      program.title AS program_title,
+      COALESCE(program.title, master_course.name) AS program_title,
       note.section_id,
       section.name AS section_name,
       note.academic_year_id,
       note.is_active,
+      COALESCE(note.is_paid, FALSE) AS is_paid,
+      COALESCE(note.price, 0)::float8 AS price,
       COALESCE(items.item_count, 0)::int AS item_count,
       items.first_item_title,
       note.is_public,
@@ -266,7 +308,9 @@ function noteSelectSql(inheritedInstitutionParam?: number, inheritedAcademicYear
     INNER JOIN institution_profiles institution ON institution.id = note.institution_id
     LEFT JOIN subjects subject ON subject.id = note.subject_id
     LEFT JOIN syllabi syllabus ON syllabus.id = note.syllabus_id
+    LEFT JOIN syllabus_nodes node ON node.id = note.syllabus_node_id
     LEFT JOIN institution_programs program ON program.id = note.program_id
+    LEFT JOIN master_courses master_course ON master_course.id = note.program_id
     LEFT JOIN sections section ON section.id = note.section_id
     LEFT JOIN users requester ON requester.id = note.marketplace_requested_by
     LEFT JOIN users approver ON approver.id = note.marketplace_approved_by
@@ -433,10 +477,24 @@ async function validateNoteInput(db: Queryable, user: PermissionUser, input: Not
 
   if (input.program_id) {
     const result = await db.query(
-      `SELECT 1 FROM institution_programs WHERE id = $1 AND institution_id = $2 AND is_active = TRUE AND COALESCE(is_deleted, FALSE) = FALSE LIMIT 1`,
+      `
+        SELECT 1
+        FROM institution_programs
+        WHERE id = $1
+          AND institution_id = $2
+          AND is_active = TRUE
+          AND COALESCE(is_deleted, FALSE) = FALSE
+        UNION ALL
+        SELECT 1
+        FROM master_courses
+        WHERE id = $1
+          AND is_active = TRUE
+          AND COALESCE(is_deleted, FALSE) = FALSE
+        LIMIT 1
+      `,
       [input.program_id, input.institution_id]
     );
-    if (!result.rowCount) throw new Error("Selected class is not in this institution");
+    if (!result.rowCount) throw new Error("Selected class or course is not available");
   }
 
   if (input.section_id) {
@@ -466,30 +524,64 @@ async function validateNoteInput(db: Queryable, user: PermissionUser, input: Not
       throw new Error("Subject must match the selected syllabus");
     }
   }
+
+  if (input.syllabus_node_id && input.syllabus_id) {
+    const nodeRes = await db.query(
+      `SELECT 1 FROM syllabus_nodes WHERE id = $1 AND syllabus_id = $2 AND COALESCE(is_active, TRUE) = TRUE LIMIT 1`,
+      [input.syllabus_node_id, input.syllabus_id]
+    );
+    if (!nodeRes.rowCount) throw new Error("Selected syllabus unit or chapter is invalid");
+  }
 }
 
 export async function createNote(db: Queryable, user: PermissionUser, input: NoteInput) {
   await ensureNotesSchema(db);
   await validateNoteInput(db, user, input);
   const requested = Boolean(input.marketplace_requested);
+  const isPaid = Boolean(input.is_paid || (Number(input.price) > 0));
+  const price = isPaid ? Math.max(0, Number(input.price) || 0) : 0;
+  const title = (input.title ?? "").trim();
   const result = await db.query<{ id: number }>(
     `
       INSERT INTO study_notes (
-        institution_id, academic_year_id, subject_id, syllabus_id, program_id, section_id,
-        is_active, marketplace_requested, marketplace_requested_at, marketplace_requested_by,
+        institution_id, academic_year_id, subject_id, syllabus_id, syllabus_node_id, program_id, section_id,
+        title, is_active, is_paid, price, marketplace_requested, marketplace_requested_at, marketplace_requested_by,
         marketplace_approved, is_public, created_by, updated_by
       )
-      VALUES ($1,(SELECT default_academic_year_id FROM institution_profiles WHERE id = $1),$2,$3,$4,$5,$6,$7,CASE WHEN $7 THEN CURRENT_TIMESTAMP ELSE NULL::timestamp END,CASE WHEN $7 THEN $8::integer ELSE NULL::integer END,FALSE,FALSE,$8,$8)
+      VALUES (
+        $1,
+        (SELECT default_academic_year_id FROM institution_profiles WHERE id = $1),
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $11,
+        $7,
+        $9,
+        $10,
+        $8,
+        CASE WHEN $8 THEN CURRENT_TIMESTAMP ELSE NULL::timestamp END,
+        CASE WHEN $8 THEN $12::integer ELSE NULL::integer END,
+        FALSE,
+        FALSE,
+        $12,
+        $12
+      )
       RETURNING id
     `,
     [
       input.institution_id,
       input.subject_id ?? null,
       input.syllabus_id ?? null,
+      input.syllabus_node_id ?? null,
       input.program_id ?? null,
       input.section_id ?? null,
       input.is_active ?? false,
       requested,
+      isPaid,
+      price,
+      title,
       user.id,
     ]
   );
@@ -501,6 +593,9 @@ export async function updateNote(db: Queryable, user: PermissionUser, noteId: nu
   await assertCanManageNote(db, user, noteId);
   await validateNoteInput(db, user, input);
   const requested = Boolean(input.marketplace_requested);
+  const isPaid = Boolean(input.is_paid || (Number(input.price) > 0));
+  const price = isPaid ? Math.max(0, Number(input.price) || 0) : 0;
+  const title = (input.title ?? "").trim();
   await db.query(
     `
       UPDATE study_notes
@@ -508,9 +603,13 @@ export async function updateNote(db: Queryable, user: PermissionUser, noteId: nu
           academic_year_id = (SELECT default_academic_year_id FROM institution_profiles WHERE id = $2),
           subject_id = $3,
           syllabus_id = $4,
+          syllabus_node_id = $12,
           program_id = $5,
           section_id = $6,
+          title = $13,
           is_active = $7,
+          is_paid = $10,
+          price = $11,
           marketplace_requested = $8,
           marketplace_requested_at = CASE WHEN $8 THEN COALESCE(marketplace_requested_at, CURRENT_TIMESTAMP) ELSE NULL END,
           marketplace_requested_by = CASE WHEN $8 THEN COALESCE(marketplace_requested_by, $9::integer) ELSE NULL::integer END,
@@ -533,6 +632,10 @@ export async function updateNote(db: Queryable, user: PermissionUser, noteId: nu
       input.is_active ?? true,
       requested,
       user.id,
+      isPaid,
+      price,
+      input.syllabus_node_id ?? null,
+      title,
     ]
   );
 }
@@ -608,6 +711,9 @@ export async function listNoteItems(
         node.node_type,
         item.title,
         item.body,
+        item.attachment_url,
+        item.attachment_name,
+        COALESCE(item.attachments, '[]'::jsonb) AS attachments,
         item.is_active,
         item.sort_order,
         item.created_at,
@@ -635,7 +741,7 @@ async function validateNoteItemInput(db: Queryable, user: PermissionUser, input:
         INNER JOIN syllabus_nodes node ON node.syllabus_id = note.syllabus_id
         WHERE note.id = $1
           AND node.id = $2
-          AND note.institution_id = $3
+          AND (note.institution_id = $3 OR note.institution_id IS NULL)
           AND COALESCE(node.is_active, TRUE) = TRUE
         LIMIT 1
       `,
@@ -648,18 +754,29 @@ async function validateNoteItemInput(db: Queryable, user: PermissionUser, input:
 export async function createNoteItem(db: Queryable, user: PermissionUser, input: NoteItemInput) {
   await ensureNotesSchema(db);
   await validateNoteItemInput(db, user, input);
+  const attachmentsJson = JSON.stringify(input.attachments || []);
   const result = await db.query<{ id: number }>(
     `
       INSERT INTO study_note_items (
-        note_id, syllabus_node_id, title, body, is_active, created_by, updated_by, sort_order
+        note_id, syllabus_node_id, title, body, attachment_url, attachment_name, attachments, is_active, created_by, updated_by, sort_order
       )
       VALUES (
-        $1,$2,$3,$4,$5,$6,$6,
+        $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $9,
         COALESCE((SELECT MAX(sort_order) + 1 FROM study_note_items WHERE note_id = $1), 1)
       )
       RETURNING id
     `,
-    [input.note_id, input.syllabus_node_id ?? null, input.title, input.body, input.is_active ?? true, user.id]
+    [
+      input.note_id,
+      input.syllabus_node_id ?? null,
+      input.title,
+      input.body,
+      input.attachment_url ?? null,
+      input.attachment_name ?? null,
+      attachmentsJson,
+      input.is_active ?? true,
+      user.id,
+    ]
   );
   await db.query(`UPDATE study_notes SET updated_at = CURRENT_TIMESTAMP, updated_by = $2 WHERE id = $1`, [input.note_id, user.id]);
   return result.rows[0].id;
@@ -668,20 +785,35 @@ export async function createNoteItem(db: Queryable, user: PermissionUser, input:
 export async function updateNoteItem(db: Queryable, user: PermissionUser, itemId: number, input: NoteItemInput) {
   await ensureNotesSchema(db);
   await validateNoteItemInput(db, user, input);
+  const attachmentsJson = JSON.stringify(input.attachments || []);
   await db.query(
     `
       UPDATE study_note_items
       SET syllabus_node_id = $3,
           title = $4,
           body = $5,
-          is_active = $6,
-          updated_by = $7,
+          attachment_url = $6,
+          attachment_name = $7,
+          attachments = $8::jsonb,
+          is_active = $9,
+          updated_by = $10,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
         AND note_id = $2
         AND COALESCE(is_deleted, FALSE) = FALSE
     `,
-    [itemId, input.note_id, input.syllabus_node_id ?? null, input.title, input.body, input.is_active ?? true, user.id]
+    [
+      itemId,
+      input.note_id,
+      input.syllabus_node_id ?? null,
+      input.title,
+      input.body,
+      input.attachment_url ?? null,
+      input.attachment_name ?? null,
+      attachmentsJson,
+      input.is_active ?? true,
+      user.id,
+    ]
   );
   await db.query(`UPDATE study_notes SET updated_at = CURRENT_TIMESTAMP, updated_by = $2 WHERE id = $1`, [input.note_id, user.id]);
 }
@@ -938,7 +1070,8 @@ export async function listNoteSyllabi(
   institutionId: number,
   search = "",
   limit = 15,
-  offset = 0
+  offset = 0,
+  programId?: number | null
 ) {
   assertCanAccessInstitution(user, institutionId);
   const params: unknown[] = [institutionId];
@@ -946,6 +1079,17 @@ export async function listNoteSyllabi(
     "COALESCE(s.is_active, TRUE) = TRUE",
     "(s.institution_id = $1 OR s.is_template = TRUE)",
   ];
+  if (programId) {
+    params.push(programId);
+    where.push(`(
+      s.subject_id IN (
+        SELECT subject_id FROM master_course_subjects WHERE course_id = $${params.length}
+        UNION
+        SELECT subject_id FROM program_subjects WHERE program_id = $${params.length}
+      )
+      OR s.is_template = TRUE
+    )`);
+  }
   if (search.trim()) {
     params.push(`%${search.trim()}%`);
     where.push(`(s.title ILIKE $${params.length} OR subject.name ILIKE $${params.length})`);

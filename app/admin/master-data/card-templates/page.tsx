@@ -4,13 +4,19 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import {
   Braces,
+  CheckCircle2,
+  CreditCard,
   Eye,
   FileImage,
+  Layers,
   ListPlus,
   Loader2,
+  Lock,
   MoreHorizontal,
   Plus,
   RefreshCw,
+  ShieldCheck,
+  ShoppingCart,
   Sparkles,
   Trash2,
   X,
@@ -88,6 +94,8 @@ type EditForm = {
   cardCategoryId: string;
   isPublic: boolean;
   isActive: boolean;
+  isPaid: boolean;
+  price: string;
 };
 
 type ConfirmAction = {
@@ -199,6 +207,11 @@ export default function CardTemplatesPage() {
   const effectiveView = isPlatformAdmin
     ? (view === "my" ? "all" : view)
     : (view === "all" ? "my" : view);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [purchasingTemplate, setPurchasingTemplate] = useState<DocumentTemplateRow | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<string>("mock_upi");
+  const [purchasing, setPurchasing] = useState(false);
   const [generatorOpen, setGeneratorOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -211,6 +224,8 @@ export default function CardTemplatesPage() {
     cardCategoryId: "",
     isPublic: true,
     isActive: true,
+    isPaid: false,
+    price: "0",
   });
   const [saving, setSaving] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -248,6 +263,9 @@ export default function CardTemplatesPage() {
         search: debouncedSearch,
         view: effectiveView,
       });
+      if (selectedCategoryId !== "all") {
+        params.set("categoryId", selectedCategoryId);
+      }
       if (!isPlatformAdmin && activeInstitution) {
         params.set("institutionId", String(activeInstitution.id));
       }
@@ -274,6 +292,7 @@ export default function CardTemplatesPage() {
     pagination.pageIndex,
     pagination.pageSize,
     effectiveView,
+    selectedCategoryId,
     isPlatformAdmin,
     activeInstitution,
   ]);
@@ -296,12 +315,12 @@ export default function CardTemplatesPage() {
   }, [fetchTemplates, isReady]);
 
   useEffect(() => {
-    if (!isReady || !isPlatformAdmin) return;
+    if (!isReady) return;
     const timeout = window.setTimeout(() => {
       void fetchCategories().catch((err) => toast.error(readError(err)));
     }, 0);
     return () => window.clearTimeout(timeout);
-  }, [fetchCategories, isPlatformAdmin, isReady]);
+  }, [fetchCategories, isReady]);
 
   const updateTemplates = useCallback(
     async (
@@ -417,9 +436,46 @@ export default function CardTemplatesPage() {
       cardCategoryId: String(template.card_category_id),
       isPublic: template.is_public,
       isActive: template.is_active,
+      isPaid: Boolean(template.is_paid),
+      price: String(template.price ?? 0),
     });
     setEditOpen(true);
   }, []);
+
+  const openPurchase = useCallback((template: DocumentTemplateRow) => {
+    if (!activeInstitution) {
+      toast.error("Please select an active institution from the sidebar");
+      return;
+    }
+    setPurchasingTemplate(template);
+    setPurchaseOpen(true);
+  }, [activeInstitution]);
+
+  const handlePurchaseTemplate = useCallback(async () => {
+    if (!accessToken || !purchasingTemplate || !activeInstitution) return;
+    setPurchasing(true);
+    try {
+      const res = await fetch("/api/admin/master-data/card-templates/purchase", {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          institution_id: activeInstitution.id,
+          template_id: purchasingTemplate.id,
+          payment_method: paymentMethod,
+        }),
+      });
+      const json = await readJson(res);
+      if (!res.ok) throw new Error(json.error ?? "Failed to process template payment");
+      toast.success(json.data?.message ?? "Template unlocked and added successfully!");
+      setPurchaseOpen(false);
+      setPurchasingTemplate(null);
+      await fetchTemplates();
+    } catch (err) {
+      toast.error(readError(err));
+    } finally {
+      setPurchasing(false);
+    }
+  }, [accessToken, activeInstitution, authHeaders, fetchTemplates, paymentMethod, purchasingTemplate]);
 
   const fetchInstitutions = useCallback(async (searchText: string, page: number) => {
     if (!accessToken) return { data: [], hasMore: false };
@@ -504,6 +560,11 @@ export default function CardTemplatesPage() {
         toast.error("Select an institution from the sidebar");
         return;
       }
+      // If single paid template, direct to purchase modal
+      if (targets.length === 1 && targets[0].is_paid && !isAlreadyInherited(targets[0])) {
+        openPurchase(targets[0]);
+        return;
+      }
       void assignTemplatesToInstitution(targets, {
         id: activeInstitution.id,
         name: activeInstitution.name,
@@ -515,7 +576,7 @@ export default function CardTemplatesPage() {
     setBulkAssigningTemplates(targets.length > 1 ? targets : []);
     setAssignInstitution({ id: "", name: "" });
     setAssignOpen(true);
-  }, [activeInstitution, assignTemplatesToInstitution, isPlatformAdmin]);
+  }, [activeInstitution, assignTemplatesToInstitution, isAlreadyInherited, isPlatformAdmin, openPurchase]);
 
   async function assignTemplate() {
     const targets = bulkAssigningTemplates.length > 0
@@ -644,6 +705,8 @@ export default function CardTemplatesPage() {
             card_category_id: Number(editForm.cardCategoryId),
             is_public: editForm.isPublic,
             is_active: editForm.isActive,
+            is_paid: editForm.isPaid,
+            price: editForm.isPaid ? Math.max(0, Number(editForm.price) || 0) : 0,
           }),
         }
       );
@@ -737,6 +800,25 @@ export default function CardTemplatesPage() {
       cell: ({ row }) => <Badge variant="outline">v{row.original.version}</Badge>,
     },
     {
+      accessorKey: "price",
+      header: "Price",
+      cell: ({ row }) => {
+        const isPaid = Boolean(row.original.is_paid && Number(row.original.price ?? 0) > 0);
+        if (isPaid) {
+          return (
+            <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold px-2 py-0.5">
+              ₹{row.original.price}
+            </Badge>
+          );
+        }
+        return (
+          <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold px-2 py-0.5">
+            Free
+          </Badge>
+        );
+      },
+    },
+    {
       accessorKey: "field_count",
       header: "Fields",
       cell: ({ row }) => (
@@ -772,6 +854,7 @@ export default function CardTemplatesPage() {
         const template = row.original;
         const alreadyInheritedRow = isAlreadyInherited(template);
         const canInheritRow = canInheritTemplate(template);
+        const isPaid = Boolean(template.is_paid && Number(template.price ?? 0) > 0);
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -789,15 +872,31 @@ export default function CardTemplatesPage() {
               {canInheritRow && (
                 <DropdownMenuItem
                   disabled={assignSaving}
-                  onClick={() => openAssign(template)}
+                  onClick={() => {
+                    if (isPaid && !isPlatformAdmin) {
+                      openPurchase(template);
+                    } else {
+                      openAssign(template);
+                    }
+                  }}
                 >
-                  <Plus className="size-4" />
-                  {isPlatformAdmin ? "Assign" : "Add Template"}
+                  {isPaid && !isPlatformAdmin ? (
+                    <>
+                      <ShoppingCart className="size-4 text-amber-500" />
+                      <span>Buy & Add (₹{template.price})</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="size-4" />
+                      <span>{isPlatformAdmin ? "Assign" : "Add Template"}</span>
+                    </>
+                  )}
                 </DropdownMenuItem>
               )}
               {alreadyInheritedRow && (
                 <DropdownMenuItem disabled>
-                  Already inherited
+                  <CheckCircle2 className="size-4 text-emerald-500" />
+                  {isPaid ? "Purchased & Added" : "Already Added"}
                 </DropdownMenuItem>
               )}
               {!isPlatformAdmin && effectiveView === "my" && (
@@ -866,6 +965,7 @@ export default function CardTemplatesPage() {
     isAlreadyInherited,
     isPlatformAdmin,
     openAssign,
+    openPurchase,
     openDetails,
     openEdit,
     openRemove,
@@ -913,27 +1013,64 @@ export default function CardTemplatesPage() {
         <StatCard label="Marketplace" value={stats.public} />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant={effectiveView === (isPlatformAdmin ? "all" : "my") ? "default" : "outline"}
-          onClick={() => {
-            setView(isPlatformAdmin ? "all" : "my");
-            setPagination((current) => ({ ...current, pageIndex: 0 }));
-          }}
-        >
-          {isPlatformAdmin ? "All Templates" : "My Templates"}
-        </Button>
-        <Button
-          type="button"
-          variant={effectiveView === "marketplace" ? "default" : "outline"}
-          onClick={() => {
-            setView("marketplace");
-            setPagination((current) => ({ ...current, pageIndex: 0 }));
-          }}
-        >
-          Marketplace
-        </Button>
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant={effectiveView === (isPlatformAdmin ? "all" : "my") ? "default" : "outline"}
+            onClick={() => {
+              setView(isPlatformAdmin ? "all" : "my");
+              setPagination((current) => ({ ...current, pageIndex: 0 }));
+            }}
+          >
+            {isPlatformAdmin ? "All Templates" : "My Templates"}
+          </Button>
+          <Button
+            type="button"
+            variant={effectiveView === "marketplace" ? "default" : "outline"}
+            onClick={() => {
+              setView("marketplace");
+              setPagination((current) => ({ ...current, pageIndex: 0 }));
+            }}
+          >
+            Marketplace
+          </Button>
+        </div>
+
+        {/* Category-wise Filter Bar */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+          <Button
+            type="button"
+            size="sm"
+            variant={selectedCategoryId === "all" ? "secondary" : "ghost"}
+            className="h-8 rounded-full px-3 text-xs font-medium shrink-0 border"
+            onClick={() => {
+              setSelectedCategoryId("all");
+              setPagination((current) => ({ ...current, pageIndex: 0 }));
+            }}
+          >
+            <Layers className="size-3.5 mr-1 text-primary" />
+            All Categories
+          </Button>
+          {categories.map((cat) => (
+            <Button
+              key={cat.id}
+              type="button"
+              size="sm"
+              variant={selectedCategoryId === String(cat.id) ? "secondary" : "ghost"}
+              className="h-8 rounded-full px-3 text-xs font-medium shrink-0 border"
+              onClick={() => {
+                setSelectedCategoryId(String(cat.id));
+                setPagination((current) => ({ ...current, pageIndex: 0 }));
+              }}
+            >
+              {cat.name}
+              <span className="ml-1.5 text-[10px] text-muted-foreground uppercase opacity-75 font-normal">
+                ({cat.target_audience === "staff" ? "Staff" : "Student"})
+              </span>
+            </Button>
+          ))}
+        </div>
       </div>
 
       <DataTable
@@ -1339,6 +1476,16 @@ export default function CardTemplatesPage() {
                   </div>
                   <div className="grid content-start gap-3 sm:grid-cols-2">
                     <div className="rounded-md border p-4">
+                      <p className="text-xs text-muted-foreground">Pricing</p>
+                      <p className="mt-1 font-semibold text-lg">
+                        {activeTemplate.is_paid && Number(activeTemplate.price ?? 0) > 0 ? (
+                          <span className="text-amber-500">₹{activeTemplate.price} INR</span>
+                        ) : (
+                          <span className="text-emerald-500">Free</span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="rounded-md border p-4">
                       <p className="text-xs text-muted-foreground">Visibility</p>
                       <p className="mt-1 font-medium">
                         {activeTemplate.is_public ? "Marketplace" : "Private"}
@@ -1419,16 +1566,29 @@ export default function CardTemplatesPage() {
                         disabled={assignSaving}
                         onClick={() => {
                           setDetailOpen(false);
-                          openAssign(activeTemplate);
+                          if (activeTemplate.is_paid && !isPlatformAdmin && !isAlreadyInherited(activeTemplate)) {
+                            openPurchase(activeTemplate);
+                          } else {
+                            openAssign(activeTemplate);
+                          }
                         }}
                       >
-                        <Plus className="size-4" />
-                        {isPlatformAdmin ? "Assign" : "Add Template"}
+                        {activeTemplate.is_paid && !isPlatformAdmin ? (
+                          <>
+                            <ShoppingCart className="size-4" />
+                            Unlock & Add (₹{activeTemplate.price})
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="size-4" />
+                            {isPlatformAdmin ? "Assign" : "Add Template (Free)"}
+                          </>
+                        )}
                       </Button>
                     )}
                     {isAlreadyInherited(activeTemplate) && (
                       <Badge variant="outline" className={`w-full justify-center ${inheritedBadgeClass}`}>
-                        Already inherited
+                        Already added to institution
                       </Badge>
                     )}
                   </div>
@@ -1436,16 +1596,14 @@ export default function CardTemplatesPage() {
 
                 <section>
                   <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <h2 className="font-semibold">Detected Fields</h2>
-                      <p className="text-sm text-muted-foreground">
-                        Placeholders used by the generated HTML.
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                      <Badge variant="outline">{activeTemplate.fields?.length ?? 0} fields</Badge>
-                      <Badge variant="secondary">{detailPreparationSummary.mapped} mapped</Badge>
-                      <Badge variant="secondary">{detailPreparationSummary.defaults} defaults</Badge>
+                    <h2 className="font-semibold">Detected Fields</h2>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Badge variant="secondary">
+                        {detailPreparationSummary.mapped} mapped
+                      </Badge>
+                      <Badge variant="secondary">
+                        {detailPreparationSummary.defaults} defaults
+                      </Badge>
                       {detailPreparationSummary.needsAction > 0 && (
                         <Badge variant="destructive">
                           {detailPreparationSummary.needsAction} need action
@@ -1596,6 +1754,53 @@ export default function CardTemplatesPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+              <Label className="text-xs font-semibold">Pricing Model</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={!editForm.isPaid ? "default" : "outline"}
+                  className="h-8 text-xs font-medium"
+                  onClick={() => setEditForm((current) => ({ ...current, isPaid: false }))}
+                >
+                  Free Template
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={editForm.isPaid ? "default" : "outline"}
+                  className="h-8 text-xs font-medium"
+                  onClick={() => setEditForm((current) => ({ ...current, isPaid: true }))}
+                >
+                  Paid Template
+                </Button>
+              </div>
+              {editForm.isPaid && (
+                <div className="pt-2">
+                  <Label htmlFor="edit-pricing-charge-input" className="text-xs text-muted-foreground">
+                    Institution Charge (₹ INR) *
+                  </Label>
+                  <div className="relative mt-1">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
+                      ₹
+                    </span>
+                    <Input
+                      id="edit-pricing-charge-input"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={editForm.price}
+                      onChange={(e) => setEditForm((current) => ({ ...current, price: e.target.value }))}
+                      placeholder="e.g. 199"
+                      className="pl-7 text-sm"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <label className="flex items-center gap-2 text-sm">
               <Checkbox
                 checked={editForm.isPublic}
@@ -1628,6 +1833,169 @@ export default function CardTemplatesPage() {
             <Button onClick={() => void saveMetadata()} disabled={saving}>
               {saving && <Loader2 className="size-4 animate-spin" />}
               Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Purchase Modal for Institution Admins */}
+      <Dialog open={purchaseOpen} onOpenChange={setPurchaseOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <ShoppingCart className="size-5 text-primary" />
+              Purchase & Unlock Template
+            </DialogTitle>
+            <DialogDescription>
+              Complete payment to add this premium card template to your institution.
+            </DialogDescription>
+          </DialogHeader>
+
+          {purchasingTemplate && (
+            <div className="space-y-4 py-2">
+              <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+                <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
+                  {purchasingTemplate.thumbnail_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={purchasingTemplate.thumbnail_url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <FileImage className="size-6 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-sm">{purchasingTemplate.name}</p>
+                  <p className="text-xs text-muted-foreground">{purchasingTemplate.category_name}</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-xs">
+                      ₹{purchasingTemplate.price} {purchasingTemplate.currency || "INR"}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              {activeInstitution && (
+                <div className="flex items-center justify-between rounded-md border border-border/80 bg-background px-3 py-2 text-xs">
+                  <span className="text-muted-foreground">Unlocking For:</span>
+                  <span className="font-semibold text-foreground">{activeInstitution.name}</span>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-muted-foreground">Select Payment Method</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    className={`flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-all ${
+                      paymentMethod === "mock_upi"
+                        ? "border-primary bg-primary/5 ring-1 ring-primary"
+                        : "border-border hover:bg-muted/40"
+                    }`}
+                    onClick={() => setPaymentMethod("mock_upi")}
+                  >
+                    <div className="flex items-center gap-2 text-xs font-semibold">
+                      <CreditCard className="size-3.5 text-primary" />
+                      <span>UPI / QR Pay</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">GooglePay, PhonePe, Paytm</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-all ${
+                      paymentMethod === "card"
+                        ? "border-primary bg-primary/5 ring-1 ring-primary"
+                        : "border-border hover:bg-muted/40"
+                    }`}
+                    onClick={() => setPaymentMethod("card")}
+                  >
+                    <div className="flex items-center gap-2 text-xs font-semibold">
+                      <CreditCard className="size-3.5 text-primary" />
+                      <span>Debit / Card</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">Visa, MasterCard, RuPay</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-all ${
+                      paymentMethod === "netbanking"
+                        ? "border-primary bg-primary/5 ring-1 ring-primary"
+                        : "border-border hover:bg-muted/40"
+                    }`}
+                    onClick={() => setPaymentMethod("netbanking")}
+                  >
+                    <div className="flex items-center gap-2 text-xs font-semibold">
+                      <ShieldCheck className="size-3.5 text-primary" />
+                      <span>Net Banking</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">All Indian banks</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-all ${
+                      paymentMethod === "mock_test"
+                        ? "border-primary bg-primary/5 ring-1 ring-primary"
+                        : "border-border hover:bg-muted/40"
+                    }`}
+                    onClick={() => setPaymentMethod("mock_test")}
+                  >
+                    <div className="flex items-center gap-2 text-xs font-semibold">
+                      <Sparkles className="size-3.5 text-primary" />
+                      <span>Instant Test Pay</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">Instant authorization</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border bg-muted/20 p-3 space-y-1.5 text-xs">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Template License Fee:</span>
+                  <span>₹{purchasingTemplate.price}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Platform Fee & Taxes:</span>
+                  <span className="text-emerald-500 font-medium">₹0 (Included)</span>
+                </div>
+                <div className="border-t pt-1.5 flex justify-between font-bold text-sm text-foreground">
+                  <span>Total Amount:</span>
+                  <span className="text-primary">₹{purchasingTemplate.price} INR</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPurchaseOpen(false)}
+              disabled={purchasing}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handlePurchaseTemplate()}
+              disabled={purchasing || !purchasingTemplate}
+              className="font-semibold"
+            >
+              {purchasing ? (
+                <>
+                  <Loader2 className="size-4 animate-spin mr-2" />
+                  Processing Payment...
+                </>
+              ) : (
+                <>
+                  <Lock className="size-3.5 mr-1.5" />
+                  Pay ₹{purchasingTemplate?.price} & Unlock
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

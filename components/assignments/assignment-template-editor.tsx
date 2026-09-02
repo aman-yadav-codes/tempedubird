@@ -49,6 +49,7 @@ import type { AssignmentTemplateRow } from "@/lib/types/assignment-template";
 import type { SyllabusNode } from "@/lib/types/syllabus";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store";
+import { ContentPricingOption } from "@/components/shared/content-pricing-option";
 
 export type AssignmentInstitutionOption = { id: number; name: string };
 type AssignmentProgramOption = { id: number; title: string };
@@ -279,6 +280,8 @@ export function AssignmentTemplateEditor({
   const [submissionDate, setSubmissionDate] = useState("");
   const [isPublic, setIsPublic] = useState(false);
   const [isActive, setIsActive] = useState(false);
+  const [isPaid, setIsPaid] = useState(false);
+  const [price, setPrice] = useState<number | string>(0);
   const [aiQuestionFormat, setAiQuestionFormat] = useState<AiQuestionFormat>({
     enabled: false,
     true_false: 1,
@@ -337,6 +340,8 @@ export function AssignmentTemplateEditor({
       setSubmissionDate(String(template?.submission_date ?? nextWeek).slice(0, 10));
       setIsPublic(Boolean(template?.marketplace_requested || template?.is_public));
       setIsActive(template?.is_active ?? false);
+      setIsPaid(Boolean((template as any)?.is_paid || (Number((template as any)?.price) > 0)));
+      setPrice(Number((template as any)?.price) || 0);
       setAiQuestionFormat({
         enabled: Boolean(template?.ai_question_format?.enabled),
         true_false: Number(template?.ai_question_format?.true_false ?? 1),
@@ -364,6 +369,22 @@ export function AssignmentTemplateEditor({
     }
     setProgramLoading(true);
     try {
+      if (isPlatformAdmin) {
+        const res = await fetch(`/api/admin/content/courses/${id}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const json = await readJson(res);
+        if (!res.ok) throw new Error(json.error ?? "Failed to load course");
+        setSections([]);
+        setProgramSubjects(
+          ((json.data?.subjects ?? []) as Array<{ id: number; name?: string; code?: string }>).map((s) => ({
+            id: s.id,
+            name: s.name ?? `Subject ${s.id}`,
+            syllabus_available: true,
+          }))
+        );
+        return;
+      }
       const res = await fetch(`/api/admin/institutions/programs/${id}`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -405,7 +426,21 @@ export function AssignmentTemplateEditor({
       limit: "25",
       search,
     });
-    if (!isPlatformAdmin && institutionId) {
+    if (isPlatformAdmin) {
+      const res = await fetch(`/api/admin/content/courses?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const json = await readJson(res);
+      if (!res.ok) throw new Error(json.error ?? "Failed to load courses/programs");
+      return {
+        data: ((json.data ?? []) as Array<{ id: number; name?: string; title?: string }>).map((item) => ({
+          id: item.id,
+          title: item.name || item.title || `Course #${item.id}`,
+        })),
+        hasMore: page < Number(json.pageCount ?? 0),
+      };
+    }
+    if (institutionId) {
       params.set("institutionId", institutionId);
     }
     const res = await fetch(`/api/admin/institutions/programs?${params.toString()}`, {
@@ -697,6 +732,8 @@ export function AssignmentTemplateEditor({
             submission_date: submissionDate,
             is_public: isPlatformAdmin ? true : isPublic,
             is_active: isActive,
+            is_paid: isPaid,
+            price: isPaid ? (Number(price) || 0) : 0,
           }),
         }
       );
@@ -873,6 +910,16 @@ export function AssignmentTemplateEditor({
                 />
               </div>
             </div>
+
+            <ContentPricingOption
+              isPaid={isPaid}
+              onIsPaidChange={setIsPaid}
+              price={price}
+              onPriceChange={setPrice}
+              label="Assignment Access Pricing"
+              description="Choose if students access this assignment for Free or if a fee is charged."
+            />
+
             <div className="flex flex-wrap items-center gap-5 pt-2">
               {!isPlatformAdmin && (
                 <label className="flex items-center gap-2 text-sm">

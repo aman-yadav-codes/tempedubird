@@ -39,6 +39,10 @@ export type FinanceIncomeRow = {
   invoice_resource_type: string | null;
   invoice_file_name: string | null;
   description: string | null;
+  created_by?: number | null;
+  created_by_name?: string | null;
+  created_by_role?: string | null;
+  staff_id?: number | null;
   created_at: string;
 };
 
@@ -60,6 +64,8 @@ export type FinanceIncomeInput = {
   invoice_file_name?: string | null;
   description?: string | null;
   user_id: number;
+  staff_id?: number | null;
+  created_by_role?: string | null;
 };
 
 export type FinanceIncomeListOptions = {
@@ -116,6 +122,10 @@ export type FinanceExpenseRow = {
   invoice_resource_type: string | null;
   invoice_file_name: string | null;
   description: string | null;
+  created_by?: number | null;
+  created_by_name?: string | null;
+  created_by_role?: string | null;
+  staff_id?: number | null;
   created_at: string;
 };
 
@@ -137,6 +147,8 @@ export type FinanceExpenseInput = {
   invoice_file_name?: string | null;
   description?: string | null;
   user_id: number;
+  staff_id?: number | null;
+  created_by_role?: string | null;
 };
 
 export type FinanceExpenseListOptions = {
@@ -156,6 +168,7 @@ export type FinanceRecurringExpenseRow = {
   id: string;
   scope_type: FinanceScope;
   institution_id: number | null;
+  institution_name?: string | null;
   title: string;
   category_ids: number[];
   category_names: string[];
@@ -172,6 +185,10 @@ export type FinanceRecurringExpenseRow = {
   next_due_date: string;
   is_active: boolean;
   description: string | null;
+  created_by?: number | null;
+  created_by_name?: string | null;
+  created_by_role?: string | null;
+  staff_id?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -194,6 +211,8 @@ export type FinanceRecurringExpenseInput = {
   next_due_date: string;
   description?: string | null;
   user_id: number;
+  staff_id?: number | null;
+  created_by_role?: string | null;
 };
 
 export type FinanceRecurringExpenseHistoryRow = {
@@ -245,6 +264,10 @@ export type FinanceAllowanceRow = {
   invoice_resource_type: string | null;
   invoice_file_name: string | null;
   description: string | null;
+  created_by?: number | null;
+  created_by_name?: string | null;
+  created_by_role?: string | null;
+  staff_id?: number | null;
   created_at: string;
 };
 
@@ -261,6 +284,8 @@ export type FinanceAllowanceInput = {
   invoice_file_name?: string | null;
   description?: string | null;
   created_by: number;
+  staff_id?: number | null;
+  created_by_role?: string | null;
 };
 
 export type FinanceAllowanceListOptions = {
@@ -638,7 +663,7 @@ export async function ensureFinanceIncomeSchema(db: Queryable) {
           id BIGSERIAL PRIMARY KEY,
           scope_type VARCHAR(20) NOT NULL CHECK (scope_type IN ('platform','institution')),
           institution_id INTEGER REFERENCES institution_profiles(id) ON DELETE CASCADE,
-          method_type VARCHAR(50) NOT NULL CHECK (method_type IN ('net_banking','phonepe','google_pay','paytm','bhim_upi','other_upi','cash','cheque','pos_card','custom')),
+          method_type VARCHAR(50) NOT NULL,
           title VARCHAR(180) NOT NULL,
           bank_name VARCHAR(180),
           account_holder_name VARCHAR(180),
@@ -653,6 +678,11 @@ export async function ensureFinanceIncomeSchema(db: Queryable) {
           qr_code_url TEXT,
           qr_code_public_id TEXT,
           instructions TEXT,
+          gateway_provider VARCHAR(80),
+          gateway_key_id VARCHAR(255),
+          gateway_key_secret TEXT,
+          gateway_webhook_secret VARCHAR(255),
+          gateway_environment VARCHAR(30) DEFAULT 'live',
           is_active BOOLEAN NOT NULL DEFAULT TRUE,
           is_default BOOLEAN NOT NULL DEFAULT FALSE,
           created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -660,6 +690,13 @@ export async function ensureFinanceIncomeSchema(db: Queryable) {
           created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
+        ALTER TABLE finance_payment_methods DROP CONSTRAINT IF EXISTS finance_payment_methods_method_type_check;
+        ALTER TABLE finance_payment_methods
+          ADD COLUMN IF NOT EXISTS gateway_provider VARCHAR(80),
+          ADD COLUMN IF NOT EXISTS gateway_key_id VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS gateway_key_secret TEXT,
+          ADD COLUMN IF NOT EXISTS gateway_webhook_secret VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS gateway_environment VARCHAR(30) DEFAULT 'live';
         CREATE INDEX IF NOT EXISTS idx_finance_payment_methods_scope
         ON finance_payment_methods(scope_type, institution_id, is_active, id DESC);
         CREATE TABLE IF NOT EXISTS finance_invoices (
@@ -689,6 +726,31 @@ export async function ensureFinanceIncomeSchema(db: Queryable) {
         ON finance_invoices(invoice_number);
         CREATE INDEX IF NOT EXISTS idx_finance_invoices_income
         ON finance_invoices(income_id);
+
+        -- Ensure staff_id and created_by_role exist across all finance modules
+        ALTER TABLE finance_income_entries ADD COLUMN IF NOT EXISTS staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+        ALTER TABLE finance_income_entries ADD COLUMN IF NOT EXISTS created_by_role VARCHAR(50);
+
+        ALTER TABLE finance_expense_entries ADD COLUMN IF NOT EXISTS staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+        ALTER TABLE finance_expense_entries ADD COLUMN IF NOT EXISTS created_by_role VARCHAR(50);
+
+        ALTER TABLE finance_allowance_entries ADD COLUMN IF NOT EXISTS staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+        ALTER TABLE finance_allowance_entries ADD COLUMN IF NOT EXISTS created_by_role VARCHAR(50);
+
+        ALTER TABLE finance_allowance_spend_entries ADD COLUMN IF NOT EXISTS staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+        ALTER TABLE finance_allowance_spend_entries ADD COLUMN IF NOT EXISTS created_by_role VARCHAR(50);
+
+        ALTER TABLE finance_recurring_expenses ADD COLUMN IF NOT EXISTS staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+        ALTER TABLE finance_recurring_expenses ADD COLUMN IF NOT EXISTS created_by_role VARCHAR(50);
+
+        ALTER TABLE finance_invoices ADD COLUMN IF NOT EXISTS staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+        ALTER TABLE finance_invoices ADD COLUMN IF NOT EXISTS created_by_role VARCHAR(50);
+
+        CREATE INDEX IF NOT EXISTS idx_finance_income_entries_creator ON finance_income_entries(created_by);
+        CREATE INDEX IF NOT EXISTS idx_finance_expense_entries_creator ON finance_expense_entries(created_by);
+        CREATE INDEX IF NOT EXISTS idx_finance_allowance_entries_creator ON finance_allowance_entries(created_by);
+        CREATE INDEX IF NOT EXISTS idx_finance_recurring_expenses_creator ON finance_recurring_expenses(created_by);
+        CREATE INDEX IF NOT EXISTS idx_finance_invoices_creator ON finance_invoices(created_by);
       `);
     })().catch((error) => {
       schemaReady = null;
@@ -1439,11 +1501,17 @@ function incomeRowsSql(options: Pick<FinanceIncomeListOptions, "scope_type" | "i
         fie.invoice_resource_type,
         fie.invoice_file_name,
         fie.description,
+        fie.created_by,
+        COALESCE(creator.full_name, 'Admin') AS created_by_name,
+        COALESCE(fie.created_by_role, creator_role.name, 'Admin') AS created_by_role,
+        COALESCE(fie.staff_id, fie.created_by) AS staff_id,
         fie.created_at
       FROM finance_income_entries fie
       LEFT JOIN finance_income_categories fic ON fic.id = fie.category_id
       LEFT JOIN institution_profiles ip ON ip.id = fie.institution_id
       LEFT JOIN users creator ON creator.id = fie.created_by
+      LEFT JOIN user_roles ur ON ur.user_id = creator.id
+      LEFT JOIN roles creator_role ON creator_role.id = ur.role_id
       WHERE ${scopePredicate("fie", options)}
 
       UNION ALL
@@ -1478,6 +1546,10 @@ function incomeRowsSql(options: Pick<FinanceIncomeListOptions, "scope_type" | "i
         sfp.screenshot_resource_type AS invoice_resource_type,
         NULL::varchar AS invoice_file_name,
         COALESCE(sfp.remarks, 'Student Fee Payment') AS description,
+        COALESCE(sfp.received_by, sfp.verified_by, sfp.submitted_by) AS created_by,
+        COALESCE(receiver.full_name, 'Staff') AS created_by_name,
+        'Staff / Admin' AS created_by_role,
+        COALESCE(sfp.received_by, sfp.verified_by) AS staff_id,
         sfp.created_at
       FROM student_fee_payments sfp
       LEFT JOIN institution_profiles ip ON ip.id = sfp.institution_id
@@ -1514,6 +1586,10 @@ function incomeRowsSql(options: Pick<FinanceIncomeListOptions, "scope_type" | "i
         NULL::varchar AS invoice_resource_type,
         NULL::varchar AS invoice_file_name,
         sp.description AS description,
+        sub.created_by AS created_by,
+        'Platform System' AS created_by_name,
+        'Platform Admin' AS created_by_role,
+        sub.created_by AS staff_id,
         sub.updated_at AS created_at
       FROM institution_subscriptions sub
       JOIN institution_profiles ip ON ip.id = sub.institution_id
@@ -1691,9 +1767,9 @@ export async function createFinanceExpenseEntry(db: Queryable, input: FinanceExp
     INSERT INTO finance_expense_entries (
       scope_type, institution_id, category_id, payment_method, payment_status,
       paid_by, paid_by_label, paid_to, paid_to_label, amount, expense_date, invoice_url, invoice_public_id,
-      invoice_resource_type, invoice_file_name, description, created_by, updated_by
+      invoice_resource_type, invoice_file_name, description, created_by, updated_by, staff_id, created_by_role
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17,$18,$19)
     RETURNING id
   `, [
     input.scope_type,
@@ -1713,6 +1789,8 @@ export async function createFinanceExpenseEntry(db: Queryable, input: FinanceExp
     input.invoice_file_name ?? null,
     input.description ?? null,
     input.user_id,
+    input.staff_id ?? input.user_id,
+    input.created_by_role ?? null,
   ]);
   return result.rows[0];
 }
@@ -1744,10 +1822,17 @@ function expenseRowsSql(options: Pick<FinanceExpenseListOptions, "scope_type" | 
         fee.invoice_resource_type,
         fee.invoice_file_name,
         fee.description,
+        fee.created_by,
+        COALESCE(creator.full_name, 'Admin') AS created_by_name,
+        COALESCE(fee.created_by_role, creator_role.name, 'Admin') AS created_by_role,
+        COALESCE(fee.staff_id, fee.created_by) AS staff_id,
         fee.created_at
       FROM finance_expense_entries fee
       LEFT JOIN finance_expense_categories fec ON fec.id = fee.category_id
       LEFT JOIN institution_profiles ip ON ip.id = fee.institution_id
+      LEFT JOIN users creator ON creator.id = fee.created_by
+      LEFT JOIN user_roles ur ON ur.user_id = creator.id
+      LEFT JOIN roles creator_role ON creator_role.id = ur.role_id
       WHERE ${expenseScopePredicate("fee", options)}
 
       ${options.scope_type === "institution" ? `
@@ -1775,6 +1860,10 @@ function expenseRowsSql(options: Pick<FinanceExpenseListOptions, "scope_type" | 
         NULL::varchar AS invoice_resource_type,
         NULL::varchar AS invoice_file_name,
         sp.description AS description,
+        sub.created_by AS created_by,
+        'Platform Subscription' AS created_by_name,
+        'Platform' AS created_by_role,
+        sub.created_by AS staff_id,
         sub.updated_at AS created_at
       FROM institution_subscriptions sub
       JOIN institution_profiles ip ON ip.id = sub.institution_id
@@ -1807,10 +1896,15 @@ function expenseRowsSql(options: Pick<FinanceExpenseListOptions, "scope_type" | 
         fae.invoice_resource_type,
         fae.invoice_file_name,
         fae.description,
+        fae.created_by,
+        COALESCE(fae_creator.full_name, 'Admin') AS created_by_name,
+        'Staff / Admin' AS created_by_role,
+        COALESCE(fae.staff_id, fae.created_by) AS staff_id,
         fae.created_at
       FROM finance_allowance_entries fae
       JOIN users u ON u.id = fae.user_id
       LEFT JOIN institution_profiles ip ON ip.id = fae.institution_id
+      LEFT JOIN users fae_creator ON fae_creator.id = fae.created_by
       WHERE ${expenseScopePredicate("fae", options)}
 
       UNION ALL
@@ -1837,9 +1931,14 @@ function expenseRowsSql(options: Pick<FinanceExpenseListOptions, "scope_type" | 
         NULL::varchar AS invoice_resource_type,
         NULL::varchar AS invoice_file_name,
         fre.description,
+        fre.created_by,
+        COALESCE(fre_creator.full_name, 'Admin') AS created_by_name,
+        'Staff / Admin' AS created_by_role,
+        COALESCE(fre.staff_id, fre.created_by) AS staff_id,
         fre.updated_at AS created_at
       FROM finance_recurring_expenses fre
       LEFT JOIN institution_profiles ip ON ip.id = fre.institution_id
+      LEFT JOIN users fre_creator ON fre_creator.id = fre.created_by
       LEFT JOIN LATERAL (
         SELECT STRING_AGG(frec.name, ', ' ORDER BY frec.name) AS category_names_text
         FROM finance_recurring_expense_categories frec
@@ -2000,9 +2099,9 @@ export async function createFinanceRecurringExpense(db: Queryable, input: Financ
     INSERT INTO finance_recurring_expenses (
       scope_type, institution_id, title, category_ids, payment_method, paid_by,
       paid_by_label, amount, frequency, due_day, start_date, next_due_date,
-      end_date, payment_status, reminder_days_before, description, created_by, updated_by
+      end_date, payment_status, reminder_days_before, description, created_by, updated_by, staff_id, created_by_role
     )
-    VALUES ($1,$2,$3,$4::int[],$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17)
+    VALUES ($1,$2,$3,$4::int[],$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17,$18,$19)
     RETURNING id
   `, [
     input.scope_type,
@@ -2022,6 +2121,8 @@ export async function createFinanceRecurringExpense(db: Queryable, input: Financ
     input.reminder_days_before,
     input.description ?? null,
     input.user_id,
+    input.staff_id ?? input.user_id,
+    input.created_by_role ?? null,
   ]);
   await db.query(`
     INSERT INTO finance_recurring_expense_history (
@@ -2139,6 +2240,8 @@ export async function listFinanceRecurringExpenses(db: Queryable, options: Finan
 
   const baseFrom = `
     FROM finance_recurring_expenses fre
+    LEFT JOIN institution_profiles ip ON ip.id = fre.institution_id
+    LEFT JOIN users fre_creator ON fre_creator.id = fre.created_by
     LEFT JOIN LATERAL (
       SELECT
         ARRAY_AGG(fec.name ORDER BY fec.name) AS category_names,
@@ -2156,6 +2259,7 @@ export async function listFinanceRecurringExpenses(db: Queryable, options: Finan
         fre.id::text,
         fre.scope_type::text AS scope_type,
         fre.institution_id,
+        ip.name AS institution_name,
         fre.title,
         fre.category_ids,
         COALESCE(category_rollup.category_names, ARRAY[]::text[]) AS category_names,
@@ -2172,6 +2276,10 @@ export async function listFinanceRecurringExpenses(db: Queryable, options: Finan
         fre.next_due_date,
         fre.is_active,
         fre.description,
+        fre.created_by,
+        COALESCE(fre_creator.full_name, 'Admin') AS created_by_name,
+        COALESCE(fre.created_by_role, 'Staff / Admin') AS created_by_role,
+        COALESCE(fre.staff_id, fre.created_by) AS staff_id,
         fre.created_at,
         fre.updated_at
       ${baseFrom}
@@ -2322,9 +2430,9 @@ export async function createFinanceAllowanceEntry(db: Queryable, input: FinanceA
     INSERT INTO finance_allowance_entries (
       scope_type, institution_id, user_id, payment_method, amount, allowance_date,
       invoice_url, invoice_public_id, invoice_resource_type, invoice_file_name,
-      description, created_by, updated_by
+      description, created_by, updated_by, staff_id, created_by_role
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12,$13,$14)
     RETURNING id
   `, [
     input.scope_type,
@@ -2339,6 +2447,8 @@ export async function createFinanceAllowanceEntry(db: Queryable, input: FinanceA
     input.invoice_file_name ?? null,
     input.description ?? null,
     input.created_by,
+    input.staff_id ?? input.created_by,
+    input.created_by_role ?? null,
   ]);
   return result.rows[0];
 }
@@ -2401,10 +2511,15 @@ function allowanceRowsSql(options: Pick<FinanceAllowanceListOptions, "scope_type
         fae.invoice_resource_type,
         fae.invoice_file_name,
         fae.description,
+        fae.created_by,
+        COALESCE(fae_creator.full_name, 'Admin') AS created_by_name,
+        COALESCE(fae.created_by_role, 'Staff / Admin') AS created_by_role,
+        COALESCE(fae.staff_id, fae.created_by) AS staff_id,
         fae.created_at
       FROM finance_allowance_entries fae
       JOIN users u ON u.id = fae.user_id
       LEFT JOIN institution_profiles ip ON ip.id = fae.institution_id
+      LEFT JOIN users fae_creator ON fae_creator.id = fae.created_by
       LEFT JOIN LATERAL (
         SELECT 
           CASE 
@@ -2933,6 +3048,7 @@ export type FinancePaymentMethodType =
   | "cash"
   | "cheque"
   | "pos_card"
+  | "payment_gateway"
   | "custom";
 
 export type FinancePaymentMethodRow = {
@@ -2955,6 +3071,11 @@ export type FinancePaymentMethodRow = {
   qr_code_url: string | null;
   qr_code_public_id: string | null;
   instructions: string | null;
+  gateway_provider: string | null;
+  gateway_key_id: string | null;
+  gateway_key_secret: string | null;
+  gateway_webhook_secret: string | null;
+  gateway_environment: string | null;
   is_active: boolean;
   is_default: boolean;
   created_at: string;
@@ -2979,6 +3100,11 @@ export type FinancePaymentMethodInput = {
   qr_code_url?: string | null;
   qr_code_public_id?: string | null;
   instructions?: string | null;
+  gateway_provider?: string | null;
+  gateway_key_id?: string | null;
+  gateway_key_secret?: string | null;
+  gateway_webhook_secret?: string | null;
+  gateway_environment?: string | null;
   is_active?: boolean;
   is_default?: boolean;
   user_id: number;
@@ -3009,9 +3135,10 @@ export async function createFinancePaymentMethod(db: Queryable, input: FinancePa
         bank_name, account_holder_name, account_number, ifsc_code, branch_name, account_type,
         upi_id, upi_number, upi_provider_name, merchant_name,
         qr_code_url, qr_code_public_id, instructions,
+        gateway_provider, gateway_key_id, gateway_key_secret, gateway_webhook_secret, gateway_environment,
         is_active, is_default, created_by, updated_by
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$20)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$25)
       RETURNING *
     `,
     [
@@ -3032,6 +3159,11 @@ export async function createFinancePaymentMethod(db: Queryable, input: FinancePa
       input.qr_code_url || null,
       input.qr_code_public_id || null,
       input.instructions || null,
+      input.gateway_provider || null,
+      input.gateway_key_id || null,
+      input.gateway_key_secret || null,
+      input.gateway_webhook_secret || null,
+      input.gateway_environment || "live",
       input.is_active ?? true,
       input.is_default ?? false,
       input.user_id,
@@ -3077,6 +3209,11 @@ export async function updateFinancePaymentMethod(db: Queryable, id: number, inpu
   addField("qr_code_url", input.qr_code_url);
   addField("qr_code_public_id", input.qr_code_public_id);
   addField("instructions", input.instructions);
+  addField("gateway_provider", input.gateway_provider);
+  addField("gateway_key_id", input.gateway_key_id);
+  addField("gateway_key_secret", input.gateway_key_secret);
+  addField("gateway_webhook_secret", input.gateway_webhook_secret);
+  addField("gateway_environment", input.gateway_environment);
   addField("is_active", input.is_active);
   addField("is_default", input.is_default);
   addField("updated_by", input.updated_by);
@@ -3761,6 +3898,10 @@ export type FinanceInvoiceRow = {
   invoice_date: string;
   status: "paid" | "due" | "cancelled";
   notes: string | null;
+  created_by?: number | null;
+  created_by_name?: string | null;
+  created_by_role?: string | null;
+  staff_id?: number | null;
   created_at: string;
 };
 
@@ -3856,9 +3997,14 @@ export async function listFinanceInvoices(
       fi.invoice_date,
       fi.status,
       fi.notes,
+      fi.created_by,
+      COALESCE(fi_creator.full_name, 'Admin') AS created_by_name,
+      COALESCE(fi.created_by_role, 'Staff / Admin') AS created_by_role,
+      COALESCE(fi.staff_id, fi.created_by) AS staff_id,
       fi.created_at
     FROM finance_invoices fi
     LEFT JOIN institution_profiles ip ON ip.id = fi.institution_id
+    LEFT JOIN users fi_creator ON fi_creator.id = fi.created_by
     ${whereClause}
     ORDER BY fi.invoice_date DESC, fi.id DESC
     LIMIT $${paramIdx++} OFFSET $${paramIdx++}

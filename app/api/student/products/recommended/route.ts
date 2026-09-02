@@ -51,7 +51,50 @@ export async function GET(req: Request) {
       } catch {}
     }
 
-    // 3. Fetch Active Products from Catalog
+    // Resolve target institution ID from user profile / enrollment or environment
+    const envDefaultInstId = (
+      process.env.DEFAULT_INSTITUTION_ID ||
+      process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ||
+      process.env.INSTITUTION_ID ||
+      process.env.NEXT_PUBLIC_INSTITUTION_ID ||
+      ""
+    ).trim();
+
+    let targetInstitutionId: number | null = null;
+    if ((user as any)?.institution_id) {
+      targetInstitutionId = Number((user as any).institution_id);
+    } else if (user?.memberships?.length && (user.memberships[0] as any)?.institution_id) {
+      targetInstitutionId = Number((user.memberships[0] as any).institution_id);
+    } else if (enrolledCourses.length > 0) {
+      // Look up student enrollment institution
+      try {
+        const instLookup = await db.query(
+          `SELECT se.institution_id FROM student_enrollments se 
+           JOIN student_profiles sp ON sp.id = se.student_id 
+           WHERE sp.user_id = $1 AND se.institution_id IS NOT NULL 
+           LIMIT 1`,
+          [user.id]
+        );
+        if (instLookup.rows[0]?.institution_id) {
+          targetInstitutionId = Number(instLookup.rows[0].institution_id);
+        }
+      } catch {}
+    }
+
+    if (!targetInstitutionId && envDefaultInstId && /^\d+$/.test(envDefaultInstId) && Number(envDefaultInstId) > 0) {
+      targetInstitutionId = Number(envDefaultInstId);
+    }
+
+    // 3. Fetch Active Products from Catalog scoped to institution or platform
+    const productParams: any[] = [];
+    let productWhere = "WHERE status = 'active'";
+    if (targetInstitutionId) {
+      productParams.push(targetInstitutionId);
+      productWhere += ` AND institution_id = $${productParams.length}`;
+    } else {
+      productWhere += ` AND institution_id IS NULL`;
+    }
+
     const productsRes = await db.query(
       `
       SELECT 
@@ -70,9 +113,10 @@ export async function GET(req: Request) {
         status,
         is_featured
       FROM products
-      WHERE status = 'active'
+      ${productWhere}
       ORDER BY is_featured DESC, id ASC
-      `
+      `,
+      productParams
     );
 
     let allProducts = productsRes.rows;

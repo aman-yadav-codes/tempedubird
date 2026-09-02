@@ -31,6 +31,8 @@ export function ensurePracticeExamSchema() {
           ADD COLUMN IF NOT EXISTS marketplace_approved_by INTEGER,
           ADD COLUMN IF NOT EXISTS parent_template_id INTEGER,
           ADD COLUMN IF NOT EXISTS ai_question_format JSONB DEFAULT '{"enabled":false,"true_false":0,"objective":0}'::jsonb NOT NULL,
+          ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT FALSE NOT NULL,
+          ADD COLUMN IF NOT EXISTS price NUMERIC(10,2) DEFAULT 0 NOT NULL,
           ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE NOT NULL,
           ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
 

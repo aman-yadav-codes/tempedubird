@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { ImageUploader } from "@/components/shared/image-uploader";
 import {
   Card,
   CardContent,
@@ -163,6 +164,13 @@ export default function InventoryManagementPage() {
   const [newCatName, setNewCatName] = useState("");
   const [newCatDesc, setNewCatDesc] = useState("");
   const [savingCategory, setSavingCategory] = useState(false);
+
+  // Quick Vendor Dialog State
+  const [vendorDialogOpen, setVendorDialogOpen] = useState(false);
+  const [newVendorName, setNewVendorName] = useState("");
+  const [newVendorPhone, setNewVendorPhone] = useState("");
+  const [newVendorCategory, setNewVendorCategory] = useState("Stationery & Office Supplies");
+  const [savingVendor, setSavingVendor] = useState(false);
 
   // Summary Stats
   const [stats, setStats] = useState({
@@ -456,6 +464,48 @@ export default function InventoryManagementPage() {
       fetchCategories();
     } catch (err: any) {
       toast.error(err.message || "Failed to delete category");
+    }
+  };
+
+  const handleQuickAddVendor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newVendorName.trim() || !newVendorPhone.trim()) {
+      toast.error("Please enter Vendor Name and Contact Phone");
+      return;
+    }
+
+    setSavingVendor(true);
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+      const res = await fetch("/api/admin/vendors", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          name: newVendorName.trim(),
+          phone: newVendorPhone.trim(),
+          category: newVendorCategory.trim() || "Stationery & Office Supplies",
+          institution_id: activeInstitution?.id || null,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create vendor");
+
+      toast.success(`Vendor "${newVendorName.trim()}" added successfully!`);
+      const created = data.vendor;
+      if (created) {
+        setSuppliers((prev) => [created, ...prev]);
+        setFormSupplierId(String(created.id));
+      }
+      setNewVendorName("");
+      setNewVendorPhone("");
+      setVendorDialogOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add vendor");
+    } finally {
+      setSavingVendor(false);
     }
   };
 
@@ -1157,8 +1207,8 @@ export default function InventoryManagementPage() {
                   value="assignment"
                   className="text-xs font-semibold flex items-center justify-center gap-1.5 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm"
                 >
-                  <MapPin className="w-3.5 h-3.5" />
-                  <span>Location & Notes</span>
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Asset Notes</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -1305,62 +1355,31 @@ export default function InventoryManagementPage() {
                   </div>
                 </div>
 
-                {/* Stock Status & Supplier Details */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold">Stock Availability Status</Label>
-                    <Select value={formStatus} onValueChange={(v: any) => setFormStatus(v)}>
-                      <SelectTrigger className="text-xs h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="in_stock" className="text-xs">In Stock (Active)</SelectItem>
-                        <SelectItem value="low_stock" className="text-xs">Low Stock (Alert)</SelectItem>
-                        <SelectItem value="out_of_stock" className="text-xs">Out of Stock</SelectItem>
-                        <SelectItem value="discontinued" className="text-xs">Discontinued</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold">Vendor Supplier</Label>
-                    <Select value={formSupplierId} onValueChange={setFormSupplierId}>
-                      <SelectTrigger className="text-xs h-9">
-                        <SelectValue placeholder="Select Supplier..." />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-56">
-                        <SelectItem value="none" className="text-xs">-- No Supplier / Direct Purchase --</SelectItem>
-                        {suppliers.map((sup) => (
-                          <SelectItem key={sup.id} value={String(sup.id)} className="text-xs">
-                            {sup.name} {sup.category ? `(${sup.category})` : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {formSupplierId === "none" && (
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold">Custom Supplier / Store Name</Label>
-                    <Input
-                      placeholder="e.g., Local Electronics Mart, Connaught Place"
-                      value={formSupplierName}
-                      onChange={(e) => setFormSupplierName(e.target.value)}
-                      className="text-xs h-9"
-                    />
-                  </div>
-                )}
-
-                {/* Purchase Bill / Receipt URL */}
+                {/* Supplier Details */}
                 <div className="space-y-1">
-                  <Label className="text-xs font-semibold">Purchase Bill / Invoice Document URL</Label>
-                  <Input
-                    placeholder="https://... or uploaded bill receipt link"
-                    value={formBillUrl}
-                    onChange={(e) => setFormBillUrl(e.target.value)}
-                    className="text-xs h-9"
-                  />
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold">Vendor Supplier</Label>
+                    <button
+                      type="button"
+                      onClick={() => setVendorDialogOpen(true)}
+                      className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" /> + Add New Vendor
+                    </button>
+                  </div>
+                  <Select value={formSupplierId} onValueChange={setFormSupplierId}>
+                    <SelectTrigger className="text-xs h-9">
+                      <SelectValue placeholder="Select Supplier..." />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-56">
+                      <SelectItem value="none" className="text-xs">-- No Supplier / Direct Purchase --</SelectItem>
+                      {suppliers.map((sup) => (
+                        <SelectItem key={sup.id} value={String(sup.id)} className="text-xs">
+                          {sup.name} {sup.category ? `(${sup.category})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="flex justify-between items-center pt-2">
@@ -1380,52 +1399,13 @@ export default function InventoryManagementPage() {
                     onClick={() => setDialogTab("assignment")}
                     className="text-xs font-semibold gap-1"
                   >
-                    Next: Location & Notes →
+                    Next: Asset Notes →
                   </Button>
                 </div>
               </TabsContent>
 
-              {/* Tab 3: Location & Custodian Notes */}
+              {/* Tab 3: Asset Notes */}
               <TabsContent value="assignment" className="space-y-4 pt-1 outline-none">
-                {/* Storage Location & Assigned To (Employee Dropdown) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold">Storage Location / Shelf</Label>
-                    <Input
-                      placeholder="e.g., Computer Lab 2, Cabinet B"
-                      value={formLocation}
-                      onChange={(e) => setFormLocation(e.target.value)}
-                      className="text-xs h-9"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold">Assigned To (Employee / Custodian)</Label>
-                    <Select
-                      value={formAssignedToUserId}
-                      onValueChange={(val) => {
-                        setFormAssignedToUserId(val);
-                        const matched = employees.find((emp) => String(emp.id) === val);
-                        setFormAssignedToName(matched ? matched.name : "");
-                      }}
-                    >
-                      <SelectTrigger className="text-xs h-9">
-                        <SelectValue placeholder="Select Employee..." />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-56">
-                        <SelectItem value="none" className="text-xs">-- Unassigned / Central Storage --</SelectItem>
-                        {employees.map((emp) => (
-                          <SelectItem key={emp.id} value={String(emp.id)} className="text-xs">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-medium">{emp.name}</span>
-                              <span className="text-[10px] text-muted-foreground">({emp.role || "Staff"})</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
 
                 {/* Description */}
                 <div className="space-y-1">
@@ -1439,7 +1419,18 @@ export default function InventoryManagementPage() {
                   />
                 </div>
 
-                <div className="flex justify-start pt-2">
+                {/* Purchase Bill / Invoice Upload */}
+                <div className="space-y-1.5">
+                  <ImageUploader
+                    value={formBillUrl}
+                    onChange={setFormBillUrl}
+                    accessToken={accessToken}
+                    label="Purchase Bill / Invoice / Receipt"
+                    aspectRatio={16 / 9}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-4 border-t">
                   <Button
                     type="button"
                     variant="ghost"
@@ -1449,28 +1440,96 @@ export default function InventoryManagementPage() {
                   >
                     ← Back
                   </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDialogOpen(false)}
+                      disabled={saving}
+                      className="h-9 px-4 text-xs font-semibold"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={saving}
+                      size="sm"
+                      className="h-9 px-4 text-xs font-semibold gap-1.5 bg-primary text-primary-foreground"
+                    >
+                      {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                      {editingItem ? "Update Item" : "Save Item"}
+                    </Button>
+                  </div>
                 </div>
               </TabsContent>
             </Tabs>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-            {/* Form Actions */}
-            <div className="flex items-center justify-end gap-2 pt-3 border-t">
+      {/* Quick Add Vendor Dialog */}
+      <Dialog open={vendorDialogOpen} onOpenChange={setVendorDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <form onSubmit={handleQuickAddVendor} className="space-y-4">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold">Add New Vendor / Supplier</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-3 text-xs">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Vendor / Company Name *</Label>
+                <Input
+                  value={newVendorName}
+                  onChange={(e) => setNewVendorName(e.target.value)}
+                  placeholder="e.g., Apex Stationery Suppliers"
+                  className="h-9 text-xs"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Contact Phone Number *</Label>
+                <Input
+                  value={newVendorPhone}
+                  onChange={(e) => setNewVendorPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                  className="h-9 text-xs"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Service / Supply Category</Label>
+                <Input
+                  value={newVendorCategory}
+                  onChange={(e) => setNewVendorCategory(e.target.value)}
+                  placeholder="e.g., Stationery & Office Supplies"
+                  className="h-9 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setDialogOpen(false)}
-                disabled={saving}
-                className="h-9 px-4 text-xs font-semibold"
+                size="sm"
+                onClick={() => setVendorDialogOpen(false)}
+                disabled={savingVendor}
+                className="text-xs"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                disabled={saving}
-                className="h-9 px-4 text-xs font-semibold gap-1.5 bg-primary text-primary-foreground"
+                size="sm"
+                disabled={savingVendor}
+                className="text-xs font-semibold gap-1.5 bg-primary text-primary-foreground"
               >
-                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                {editingItem ? "Update Item" : "Save Item"}
+                {savingVendor ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                Save Vendor
               </Button>
             </div>
           </form>
