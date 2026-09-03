@@ -23,6 +23,7 @@ import {
   type UserFilters,
 } from "./_components/user-filters-drawer"
 import { usePersistedState } from "@/hooks/use-persisted-state"
+import { SalaryAccountDialog } from "./_components/salary-account-dialog"
 import { DebouncedSearchInput } from "@/components/shared/debounced-search-input"
 import {
   AlertDialog,
@@ -48,6 +49,8 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<AdminUserDetails | null>(null)
   const [removingUser, setRemovingUser] = useState<User | null>(null)
   const [passwordUser, setPasswordUser] = useState<User | null>(null)
+  const [salaryAccountOpen, setSalaryAccountOpen] = useState(false)
+  const [salaryAccountUser, setSalaryAccountUser] = useState<User | null>(null)
   const [viewOpen, setViewOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
@@ -442,6 +445,10 @@ export default function UsersPage() {
       buildUserColumns({
         onViewProfile: handleViewProfile,
         onEditUser: handleEditUser,
+        onManageSalaryAccount: (user) => {
+          setSalaryAccountUser(user)
+          setSalaryAccountOpen(true)
+        },
         onChangeEmploymentStatus: handleChangeEmploymentStatus,
         onGeneratePassword: (user) => {
           setPasswordUser(user)
@@ -660,6 +667,17 @@ export default function UsersPage() {
         onOpenChange={setPasswordDialogOpen}
         user={passwordUser}
         accessToken={accessToken}
+      />
+
+      <SalaryAccountDialog
+        user={salaryAccountUser}
+        open={salaryAccountOpen}
+        onOpenChange={(open) => {
+          setSalaryAccountOpen(open)
+          if (!open) setSalaryAccountUser(null)
+        }}
+        accessToken={accessToken}
+        onSaved={fetchUsers}
       />
     </div>
   );

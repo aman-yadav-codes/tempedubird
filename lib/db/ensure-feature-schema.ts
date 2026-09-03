@@ -283,6 +283,32 @@ export async function ensureFeatureSchema() {
       );
 
       ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS sub_tasks JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS is_daily_recurring BOOLEAN DEFAULT FALSE;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS last_recurring_date DATE;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS daily_recurrence_history JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS points NUMERIC(10, 2) DEFAULT 20.00;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS penalty_points NUMERIC(10, 2) DEFAULT 10.00;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS review_notes TEXT;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS review_image_url TEXT;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS review_submitted_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS review_submitted_by VARCHAR(255);
+
+      -- Staff Performance Points Ledger for positive rewards, negative deductions, and manual admin adjustments
+      CREATE TABLE IF NOT EXISTS staff_performance_points_ledger (
+        id SERIAL PRIMARY KEY,
+        employee_id INT NOT NULL,
+        institution_id INT,
+        task_id INT,
+        subtask_id VARCHAR(100),
+        point_type VARCHAR(50) NOT NULL, -- 'task_completed', 'task_failed', 'task_overdue', 'manual_bonus', 'manual_penalty'
+        points NUMERIC(10, 2) NOT NULL, -- Positive for reward (+), Negative for deduction (-)
+        reason TEXT,
+        awarded_by INT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_points_ledger_employee_id ON staff_performance_points_ledger(employee_id);
+      CREATE INDEX IF NOT EXISTS idx_points_ledger_task_id ON staff_performance_points_ledger(task_id);
+
       ALTER TABLE vendors ADD COLUMN IF NOT EXISTS institution_id INT;
       ALTER TABLE vendors ADD COLUMN IF NOT EXISTS vendor_type VARCHAR(50) DEFAULT 'vendor';
       ALTER TABLE vendors ADD COLUMN IF NOT EXISTS company_name VARCHAR(255);
@@ -332,6 +358,11 @@ export async function ensureFeatureSchema() {
       ALTER TABLE clients ADD COLUMN IF NOT EXISTS country VARCHAR(100) DEFAULT 'India';
       ALTER TABLE clients ADD COLUMN IF NOT EXISTS state VARCHAR(100);
       ALTER TABLE clients ADD COLUMN IF NOT EXISTS notes TEXT;
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS phones JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS emails JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS contacts JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS location_data JSONB DEFAULT '{}'::jsonb;
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS pincode VARCHAR(20);
 
       -- Products Table for Platform and Institution Store / Marketing
       CREATE TABLE IF NOT EXISTS products (

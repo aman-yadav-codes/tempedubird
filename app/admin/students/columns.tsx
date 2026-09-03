@@ -104,28 +104,6 @@ export function buildStudentColumns({
       ),
     },
     {
-      accessorKey: "email",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="-ml-3 h-8 px-3"
-        >
-          Email
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      cell: ({ row }) => {
-        const email = (row.getValue("email") as string | null) || "";
-        const isInternal = email.includes("@student.edubird.internal");
-        return (
-          <span className="text-muted-foreground">
-            {!email || isInternal ? "-" : email}
-          </span>
-        );
-      },
-    },
-    {
       id: "class_scope",
       header: "Class",
       cell: ({ row }) => {

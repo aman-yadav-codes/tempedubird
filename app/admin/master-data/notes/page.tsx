@@ -25,6 +25,9 @@ import { toast } from "sonner";
 
 import type { SerializedEditorState } from "lexical";
 import { AsyncSearchPopover } from "@/components/shared/async-search-popover";
+import { MarketplaceSellOption } from "@/components/admin/marketplace-sell-option";
+import { useProgressiveSave } from "@/hooks/use-progressive-save";
+import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
 import { ContentPricingOption } from "@/components/shared/content-pricing-option";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -629,6 +632,12 @@ export default function MasterDataNotesPage() {
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<NoteForm>(blankForm);
+
+  const { saveStatus: noteSaveStatus, clearDraft: clearNoteDraft } = useProgressiveSave({
+    formKey: `master_note:${form.id || "new"}`,
+    formState: form,
+    enabled: dialogOpen,
+  });
   const [active, setActive] = useState<NoteRow | null>(null);
   const [items, setItems] = useState<NoteItem[]>([]);
   const [itemsLoading, setItemsLoading] = useState(false);
@@ -1414,14 +1423,30 @@ export default function MasterDataNotesPage() {
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button onClick={() => void saveNote()} disabled={saving}>
-              {saving && <Loader2 className="size-4 animate-spin" />}
-              {form.id ? "Save Details" : "Create Note"}
-            </Button>
+          <DialogFooter className="flex items-center justify-between sm:justify-between w-full">
+            <ProgressiveSaveIndicator status={noteSaveStatus} />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDialogOpen(false);
+                  clearNoteDraft();
+                }}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  void saveNote();
+                  clearNoteDraft();
+                }}
+                disabled={saving}
+              >
+                {saving && <Loader2 className="size-4 animate-spin" />}
+                {form.id ? "Save Details" : "Create Note"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -43,6 +43,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useProgressiveSave } from "@/hooks/use-progressive-save";
+import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -213,6 +215,12 @@ export function StaffDocumentGeneratorClient({
   const [selectedStaffId, setSelectedStaffId] = useState<string>("");
   const [fieldForm, setFieldForm] = useState<Record<string, string>>({});
   const [savingLetter, setSavingLetter] = useState(false);
+
+  const { saveStatus: docSaveStatus, clearDraft: clearDocDraft } = useProgressiveSave({
+    formKey: `staff_doc_gen:${docType}:${selectedTemplate?.id || "draft"}`,
+    formState: { selectedTemplateId: selectedTemplate?.id, fieldForm },
+    enabled: generateOpen && step === 2,
+  });
 
   // View / Print Modal state
   const [previewLetter, setPreviewLetter] = useState<GeneratedDocRow | null>(null);
@@ -988,9 +996,12 @@ export function StaffDocumentGeneratorClient({
           <DialogFooter className="p-4 border-t bg-muted/10 shrink-0 flex items-center justify-between">
             {step === 2 ? (
               <>
-                <Button variant="outline" size="sm" onClick={() => setStep(1)}>
-                  &larr; Back to Templates
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setStep(1)}>
+                    &larr; Back to Templates
+                  </Button>
+                  <ProgressiveSaveIndicator status={docSaveStatus} />
+                </div>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
@@ -1002,7 +1013,10 @@ export function StaffDocumentGeneratorClient({
                   </Button>
                   <Button
                     size="sm"
-                    onClick={handleSaveDocument}
+                    onClick={() => {
+                      void handleSaveDocument();
+                      clearDocDraft();
+                    }}
                     disabled={savingLetter}
                     className="gap-1.5 bg-primary font-semibold"
                   >

@@ -58,6 +58,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useProgressiveSave } from "@/hooks/use-progressive-save";
+import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
 import type { SalesOrder, SalesOrderItem } from "@/lib/queries/orders";
@@ -117,6 +119,19 @@ export default function SalesOrdersPage() {
     items: [
       { product_name: "", product_code: "", quantity: 1, unit_price: 0, total_price: 0 },
     ],
+  });
+
+  const { saveStatus: orderSaveStatus, clearDraft: clearOrderDraft } = useProgressiveSave({
+    formKey: "sales_order:new",
+    formState: formData,
+    enabled: createDialogOpen,
+    onRestore: (draft) => {
+      setFormData((prev) => ({
+        ...prev,
+        ...draft,
+        items: Array.isArray(draft.items) && draft.items.length > 0 ? draft.items : prev.items,
+      }));
+    },
   });
 
   // Status update state
@@ -939,20 +954,26 @@ export default function SalesOrdersPage() {
               </div>
             </div>
 
-            <DialogFooter className="pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setCreateDialogOpen(false)}
-                disabled={creating}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" size="sm" disabled={creating} className="gap-1.5 font-bold">
-                {creating && <Loader2 className="size-3.5 animate-spin" />}
-                Generate Order
-              </Button>
+            <DialogFooter className="flex items-center justify-between sm:justify-between w-full pt-2">
+              <ProgressiveSaveIndicator status={orderSaveStatus} />
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setCreateDialogOpen(false);
+                    clearOrderDraft();
+                  }}
+                  disabled={creating}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm" disabled={creating} className="gap-1.5 font-bold">
+                  {creating && <Loader2 className="size-3.5 animate-spin" />}
+                  Generate Order
+                </Button>
+              </div>
             </DialogFooter>
           </form>
         </DialogContent>

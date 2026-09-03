@@ -53,6 +53,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useProgressiveSave } from "@/hooks/use-progressive-save";
+import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -170,6 +172,12 @@ export default function AdminStaffJobsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<JobFormData>(initialFormData);
   const [saving, setSaving] = useState(false);
+
+  const { saveStatus: jobSaveStatus, clearDraft: clearJobDraft } = useProgressiveSave({
+    formKey: `staff_job:${form.id || "new"}`,
+    formState: form,
+    enabled: dialogOpen,
+  });
 
   const [deleteTarget, setDeleteTarget] = useState<StaffJobPosting | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -902,14 +910,31 @@ export default function AdminStaffJobsPage() {
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveJob} disabled={saving} className="font-bold">
-              {saving ? <Loader2 className="size-4 animate-spin mr-1.5" /> : null}
-              {form.id ? "Update Job" : "Publish Job"}
-            </Button>
+          <DialogFooter className="flex items-center justify-between sm:justify-between w-full">
+            <ProgressiveSaveIndicator status={jobSaveStatus} />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDialogOpen(false);
+                  clearJobDraft();
+                }}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  void handleSaveJob();
+                  clearJobDraft();
+                }}
+                disabled={saving}
+                className="font-bold"
+              >
+                {saving ? <Loader2 className="size-4 animate-spin mr-1.5" /> : null}
+                {form.id ? "Update Job" : "Publish Job"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -6,7 +6,10 @@ import {
   Activity,
   ArrowRight,
   BarChart3,
+  Building,
+  Building2,
   Calendar,
+  CheckCircle2,
   ChevronRight,
   Clock,
   Compass,
@@ -14,13 +17,18 @@ import {
   Eye,
   Filter,
   Globe,
+  GraduationCap,
   HelpCircle,
   History,
   Layers,
   Loader2,
+  Mail,
   MapPin,
   Maximize2,
+  MessageSquare,
   MousePointerClick,
+  Package,
+  Phone,
   RefreshCw,
   Search,
   Send,
@@ -41,6 +49,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuthStore } from "@/store";
 import { isPlatformAdminUser } from "@/lib/auth/permissions";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
@@ -73,6 +88,22 @@ export default function AnalyticsDashboardPage() {
   const [topSearches, setTopSearches] = useState<any[]>([]);
   const [topLocations, setTopLocations] = useState<any[]>([]);
 
+  // Enquiries Data (All enquiries received by any institutions)
+  const [enquiriesList, setEnquiriesList] = useState<any[]>([]);
+  const [enquiriesSummary, setEnquiriesSummary] = useState({
+    total_enquiries: 0,
+    total_institutions: 0,
+    new_enquiries: 0,
+    in_progress: 0,
+    admissions_taken: 0,
+  });
+  const [enquiriesInstitutions, setEnquiriesInstitutions] = useState<Array<{ id: number; name: string }>>([]);
+  const [selectedInstitutionFilter, setSelectedInstitutionFilter] = useState<string>("all");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>("all");
+  const [selectedTimeframeFilter, setSelectedTimeframeFilter] = useState<string>("all");
+  const [selectedEnquiryDetail, setSelectedEnquiryDetail] = useState<any | null>(null);
+  const [enquiryModalOpen, setEnquiryModalOpen] = useState(false);
+
   // List Data for Clicks, Views, Impressions, Searches, Journeys
   const [eventsList, setEventsList] = useState<any[]>([]);
   const [journeysList, setJourneysList] = useState<any[]>([]);
@@ -98,7 +129,13 @@ export default function AnalyticsDashboardPage() {
         limit: "15",
       });
       if (search.trim()) params.set("search", search.trim());
-      if (activeInstitutionId) params.set("institutionId", String(activeInstitutionId));
+      if (activeTab === "enquiries" || activeTab === "enquiry") {
+        if (selectedInstitutionFilter !== "all") params.set("institutionFilter", selectedInstitutionFilter);
+        if (selectedStatusFilter !== "all") params.set("status", selectedStatusFilter);
+        if (selectedTimeframeFilter !== "all") params.set("timeframe", selectedTimeframeFilter);
+      } else if (activeInstitutionId) {
+        params.set("institutionId", String(activeInstitutionId));
+      }
 
       const res = await fetch(`/api/admin/analytics?${params.toString()}`, {
         headers: authHeader(),
@@ -116,6 +153,12 @@ export default function AnalyticsDashboardPage() {
           setJourneysList(json.data || []);
           setTotalRows(json.total || 0);
           setPageCount(json.pageCount || 1);
+        } else if (activeTab === "enquiries" || activeTab === "enquiry") {
+          setEnquiriesList(json.data || []);
+          setTotalRows(json.total || 0);
+          setPageCount(json.pageCount || 1);
+          if (json.summary) setEnquiriesSummary(json.summary);
+          if (json.institutions) setEnquiriesInstitutions(json.institutions);
         } else {
           setEventsList(json.data || []);
           setTotalRows(json.total || 0);
@@ -127,11 +170,11 @@ export default function AnalyticsDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, page, search, activeInstitutionId, authHeader]);
+  }, [activeTab, page, search, activeInstitutionId, selectedInstitutionFilter, selectedStatusFilter, selectedTimeframeFilter, authHeader]);
 
   useEffect(() => {
     setPage(1);
-  }, [activeTab, search]);
+  }, [activeTab, search, selectedInstitutionFilter, selectedStatusFilter, selectedTimeframeFilter]);
 
   useEffect(() => {
     fetchAnalyticsData();
@@ -171,6 +214,14 @@ export default function AnalyticsDashboardPage() {
 
   const getTabMeta = () => {
     switch (activeTab) {
+      case "enquiries":
+      case "enquiry":
+        return {
+          title: "All Institution Enquiries",
+          desc: "Comprehensive analytics of admission, course, and package enquiries received by any institution across the platform.",
+          icon: MessageSquare,
+          iconColor: "text-sky-500",
+        };
       case "clicks":
         return {
           title: "Option Clicks Telemetry",
@@ -245,7 +296,7 @@ export default function AnalyticsDashboardPage() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Filter by keyword, IP, URL..."
+                placeholder={activeTab === "enquiries" || activeTab === "enquiry" ? "Search applicant, phone, course..." : "Filter by keyword, IP, URL..."}
                 className="pl-9 h-9 text-xs rounded-xl"
               />
             </div>
@@ -261,6 +312,43 @@ export default function AnalyticsDashboardPage() {
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
           </Button>
         </div>
+      </div>
+
+      {/* Top Quick Tab Navigation Bar */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none border-b border-border/60">
+        {[
+          { key: "overview", label: "Overview", icon: Activity },
+          { key: "enquiries", label: "Enquiry", icon: MessageSquare, badge: enquiriesSummary.total_enquiries > 0 ? String(enquiriesSummary.total_enquiries) : undefined },
+          { key: "clicks", label: "Option Clicks", icon: MousePointerClick },
+          { key: "views", label: "Views", icon: Eye },
+          { key: "impressions", label: "Impressions", icon: Layers },
+          { key: "searches", label: "Search History", icon: Search },
+          { key: "journeys", label: "User Journey", icon: Compass },
+        ].map((tabItem) => {
+          const isActive = activeTab === tabItem.key || (tabItem.key === "enquiries" && activeTab === "enquiry");
+          const TabIcon = tabItem.icon;
+          return (
+            <Link
+              key={tabItem.key}
+              href={`/admin/analytics?tab=${tabItem.key}`}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                isActive
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+              }`}
+            >
+              <TabIcon className="h-4 w-4 shrink-0" />
+              <span>{tabItem.label}</span>
+              {tabItem.badge && (
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                  isActive ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
+                }`}>
+                  {tabItem.badge}
+                </span>
+              )}
+            </Link>
+          );
+        })}
       </div>
 
       {/* Main Content Rendered Directly Based on Sidebar Selection */}
@@ -441,7 +529,294 @@ export default function AnalyticsDashboardPage() {
           </div>
         )}
 
-        {/* 2. OPTION CLICKS TAB */}
+        {/* 2. ENQUIRY TAB (All enquiries received by any institutions) */}
+        {(activeTab === "enquiries" || activeTab === "enquiry") && (
+          <div className="space-y-6">
+            {/* Top Metric Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+              <Card className="p-4 rounded-2xl shadow-2xs border-border bg-card">
+                <div className="flex items-center justify-between text-muted-foreground mb-1.5">
+                  <span className="text-xs font-semibold">Total Enquiries</span>
+                  <MessageSquare className="h-4 w-4 text-sky-500" />
+                </div>
+                <div className="text-2xl font-black text-foreground">
+                  {enquiriesSummary.total_enquiries?.toLocaleString() || 0}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Across all institutions</p>
+              </Card>
+
+              <Card className="p-4 rounded-2xl shadow-2xs border-border bg-card">
+                <div className="flex items-center justify-between text-muted-foreground mb-1.5">
+                  <span className="text-xs font-semibold">Target Institutions</span>
+                  <Building2 className="h-4 w-4 text-amber-500" />
+                </div>
+                <div className="text-2xl font-black text-foreground">
+                  {enquiriesSummary.total_institutions?.toLocaleString() || 0}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Institutions with enquiries</p>
+              </Card>
+
+              <Card className="p-4 rounded-2xl shadow-2xs border-border bg-card">
+                <div className="flex items-center justify-between text-muted-foreground mb-1.5">
+                  <span className="text-xs font-semibold">New Inquiries</span>
+                  <Mail className="h-4 w-4 text-blue-500" />
+                </div>
+                <div className="text-2xl font-black text-sky-600 dark:text-sky-400">
+                  {enquiriesSummary.new_enquiries?.toLocaleString() || 0}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Awaiting initial response</p>
+              </Card>
+
+              <Card className="p-4 rounded-2xl shadow-2xs border-border bg-card">
+                <div className="flex items-center justify-between text-muted-foreground mb-1.5">
+                  <span className="text-xs font-semibold">In Progress</span>
+                  <Phone className="h-4 w-4 text-amber-500" />
+                </div>
+                <div className="text-2xl font-black text-amber-600 dark:text-amber-400">
+                  {enquiriesSummary.in_progress?.toLocaleString() || 0}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">In follow-up / active</p>
+              </Card>
+
+              <Card className="p-4 rounded-2xl shadow-2xs border-border bg-card">
+                <div className="flex items-center justify-between text-muted-foreground mb-1.5">
+                  <span className="text-xs font-semibold">Admissions Taken</span>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                </div>
+                <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                  {enquiriesSummary.admissions_taken?.toLocaleString() || 0}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Enrolled applicants</p>
+              </Card>
+            </div>
+
+            {/* Filters Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-card border border-border shadow-2xs">
+              <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-0">
+                {/* Institution Filter */}
+                <div className="w-full sm:w-[240px]">
+                  <Select
+                    value={selectedInstitutionFilter}
+                    onValueChange={(val) => {
+                      setSelectedInstitutionFilter(val);
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue placeholder="All Institutions" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-64">
+                      <SelectItem value="all" className="text-xs font-semibold">
+                        🏢 All Institutions (Any)
+                      </SelectItem>
+                      <SelectItem value="platform" className="text-xs">
+                        🌐 Platform Level (Unassigned)
+                      </SelectItem>
+                      {enquiriesInstitutions.map((inst) => (
+                        <SelectItem key={inst.id} value={String(inst.id)} className="text-xs">
+                          {inst.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Status Filter */}
+                <div className="w-full sm:w-[160px]">
+                  <Select
+                    value={selectedStatusFilter}
+                    onValueChange={(val) => {
+                      setSelectedStatusFilter(val);
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue placeholder="All Statuses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-xs">All Statuses</SelectItem>
+                      <SelectItem value="new enquiry" className="text-xs">New Enquiry</SelectItem>
+                      <SelectItem value="contacted" className="text-xs">Contacted</SelectItem>
+                      <SelectItem value="qualified" className="text-xs">Qualified</SelectItem>
+                      <SelectItem value="enrolled" className="text-xs">Enrolled</SelectItem>
+                      <SelectItem value="lost" className="text-xs">Lost / Closed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Timeframe Filter */}
+                <div className="w-full sm:w-[140px]">
+                  <Select
+                    value={selectedTimeframeFilter}
+                    onValueChange={(val) => {
+                      setSelectedTimeframeFilter(val);
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue placeholder="Timeframe" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-xs">All Time</SelectItem>
+                      <SelectItem value="today" className="text-xs">Today</SelectItem>
+                      <SelectItem value="week" className="text-xs">Past 7 Days</SelectItem>
+                      <SelectItem value="month" className="text-xs">Past 30 Days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="text-xs text-muted-foreground font-semibold">
+                Showing <strong>{totalRows}</strong> enquiries received by any institutions
+              </div>
+            </div>
+
+            {/* Enquiries Table */}
+            <Card className="rounded-2xl shadow-2xs overflow-hidden border-border">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-semibold">
+                      <th className="p-3.5">Applicant / Student</th>
+                      <th className="p-3.5">Target Institution</th>
+                      <th className="p-3.5">Contact Details</th>
+                      <th className="p-3.5">Program & Course / Package</th>
+                      <th className="p-3.5">Origin / Source</th>
+                      <th className="p-3.5">Status</th>
+                      <th className="p-3.5">Date</th>
+                      <th className="p-3.5 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {loading ? (
+                      <tr>
+                        <td colSpan={8} className="p-10 text-center text-muted-foreground">
+                          <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary mb-2" />
+                          Loading enquiries received by institutions...
+                        </td>
+                      </tr>
+                    ) : enquiriesList.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="p-10 text-center text-muted-foreground">
+                          No enquiries found matching selected filters.
+                        </td>
+                      </tr>
+                    ) : (
+                      enquiriesList.map((row) => {
+                        const isPackage =
+                          row.enquiry_type === "package" ||
+                          Boolean(row.package_name) ||
+                          String(row.preferred_program).toLowerCase().includes("package");
+
+                        return (
+                          <tr key={row.id} className="hover:bg-muted/20 transition-colors">
+                            <td className="p-3.5">
+                              <div className="space-y-0.5">
+                                <p className="font-bold text-foreground text-sm">{row.student_name}</p>
+                                {row.parent_name && (
+                                  <p className="text-[11px] text-purple-600 dark:text-purple-400 font-semibold">
+                                    👨‍👩‍👧 Parent: {row.parent_name} {row.parent_phone ? `(${row.parent_phone})` : ""}
+                                  </p>
+                                )}
+                              </div>
+                            </td>
+
+                            <td className="p-3.5">
+                              <div className="flex items-center gap-1.5 font-bold text-foreground max-w-[220px]">
+                                <Building2 className="h-4 w-4 text-primary shrink-0" />
+                                <span className="truncate">{row.institution_name || "EduBird Platform"}</span>
+                              </div>
+                            </td>
+
+                            <td className="p-3.5">
+                              <div className="space-y-0.5">
+                                <p className="font-semibold text-foreground">{row.phone}</p>
+                                {row.email && (
+                                  <p className="text-[11px] text-muted-foreground">{row.email}</p>
+                                )}
+                              </div>
+                            </td>
+
+                            <td className="p-3.5 max-w-[260px]">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {isPackage ? (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[9.5px] py-0 px-1.5 font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-500/10 border-amber-300"
+                                    >
+                                      📦 Package
+                                    </Badge>
+                                  ) : (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[9.5px] py-0 px-1.5 font-bold uppercase tracking-wider text-primary bg-primary/10 border-primary/30"
+                                    >
+                                      🎓 Program
+                                    </Badge>
+                                  )}
+                                  <p className="text-xs font-bold text-foreground truncate">
+                                    {row.package_name || row.preferred_program || "Course Program"}
+                                  </p>
+                                </div>
+                                {row.package_price && (
+                                  <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-bold text-primary bg-primary/5 border-primary/20">
+                                    💰 {row.package_price}
+                                  </Badge>
+                                )}
+                              </div>
+                            </td>
+
+                            <td className="p-3.5">
+                              <Badge variant="outline" className="text-[10.5px] bg-muted/60 font-semibold">
+                                {row.source || "Own Website"}
+                              </Badge>
+                            </td>
+
+                            <td className="p-3.5">
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] font-bold capitalize ${
+                                  String(row.status).toLowerCase().includes("enroll")
+                                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+                                    : String(row.status).toLowerCase().includes("new")
+                                    ? "bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30"
+                                    : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30"
+                                }`}
+                              >
+                                {row.status}
+                              </Badge>
+                            </td>
+
+                            <td className="p-3.5 text-[11px] text-muted-foreground whitespace-nowrap font-mono">
+                              {formatDate(row.created_at)}
+                            </td>
+
+                            <td className="p-3.5 text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelectedEnquiryDetail(row);
+                                  setEnquiryModalOpen(true);
+                                }}
+                                className="h-7 px-2.5 text-xs font-semibold"
+                              >
+                                View Details
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* 3. OPTION CLICKS TAB */}
         {activeTab === "clicks" && (
           <div className="space-y-4">
           <Card className="rounded-2xl shadow-2xs overflow-hidden border-border">
@@ -1010,6 +1385,49 @@ export default function AnalyticsDashboardPage() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Enquiry Details Modal */}
+      <Dialog open={enquiryModalOpen} onOpenChange={setEnquiryModalOpen}>
+        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+              <MessageSquare className="h-5 w-5 text-sky-500" />
+              {selectedEnquiryDetail?.student_name}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Enquiry received by <strong>{selectedEnquiryDetail?.institution_name || "EduBird Platform"}</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedEnquiryDetail && (
+            <div className="space-y-4 text-xs pt-1">
+              <div className="p-4 rounded-xl bg-muted/40 border border-border space-y-2">
+                <p className="font-bold text-foreground text-xs uppercase tracking-wider text-muted-foreground">Applicant Details</p>
+                <div className="space-y-1 text-xs">
+                  <p><span className="text-muted-foreground">Student / Applicant:</span> <strong className="text-foreground">{selectedEnquiryDetail.student_name}</strong></p>
+                  {selectedEnquiryDetail.parent_name && (
+                    <p><span className="text-muted-foreground">Parent / Guardian:</span> {selectedEnquiryDetail.parent_name} {selectedEnquiryDetail.parent_phone ? `(${selectedEnquiryDetail.parent_phone})` : ""}</p>
+                  )}
+                  <p><span className="text-muted-foreground">Target Institution:</span> <strong className="text-foreground inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5 text-primary inline" /> {selectedEnquiryDetail.institution_name || "EduBird Platform"}</strong></p>
+                  <p><span className="text-muted-foreground">Contact Phone:</span> <a href={`tel:${selectedEnquiryDetail.phone}`} className="font-semibold text-primary hover:underline">{selectedEnquiryDetail.phone}</a></p>
+                  <p><span className="text-muted-foreground">Email:</span> {selectedEnquiryDetail.email || "N/A"}</p>
+                  <p><span className="text-muted-foreground">Enquiry Item:</span> <strong>{selectedEnquiryDetail.package_name || selectedEnquiryDetail.preferred_program || "Course Program"}</strong></p>
+                  <p><span className="text-muted-foreground">Origin Source:</span> {selectedEnquiryDetail.source}</p>
+                  <p><span className="text-muted-foreground">Status:</span> <Badge variant="outline" className="text-[10px] ml-1">{selectedEnquiryDetail.status}</Badge></p>
+                  <p><span className="text-muted-foreground">Received Date:</span> {formatDate(selectedEnquiryDetail.created_at)}</p>
+                </div>
+              </div>
+
+              {selectedEnquiryDetail.notes && (
+                <div className="p-3.5 rounded-xl border border-border/80 bg-card space-y-1">
+                  <p className="font-bold text-foreground text-xs">Notes & Details</p>
+                  <p className="text-muted-foreground whitespace-pre-wrap">{selectedEnquiryDetail.notes}</p>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>

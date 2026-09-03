@@ -18,6 +18,7 @@ import {
     Mail,
     MessageSquare,
     MoreHorizontal,
+    Package,
     PhoneCall,
     Plus,
     Search,
@@ -52,10 +53,31 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useProgressiveSave } from "@/hooks/use-progressive-save";
+import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { useAuthStore } from "@/store";
+import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { readJsonResponse } from "@/lib/api/read-json-response";
+
+export type MarketingPackage = {
+    id: number;
+    name: string;
+    package_for: string;
+    package_for_types?: string[];
+    price: number;
+    price_unit: string;
+    price_monthly: number | null;
+    price_yearly: number | null;
+    price_once: number | null;
+    storage_limit_gb: number | null;
+    validity_count: number;
+    validity_unit: string;
+    description: string | null;
+    is_active: boolean;
+};
 
 export type SalesProgramOption = {
     id: number;
@@ -90,6 +112,13 @@ type EnquiryRecord = {
     email?: string | null;
     phone: string;
     preferred_program?: string | null;
+    enquiry_type?: "package" | "program" | string;
+    package_id?: number | null;
+    package_name?: string | null;
+    package_price?: string | null;
+    package_for?: string | null;
+    package_validity?: string | null;
+    metadata?: any;
     source: string;
     status: EnquiryStatusValue;
     notes?: string | null;
@@ -145,7 +174,21 @@ function EnquiryStatusBadge({ status }: { status: EnquiryStatusValue }) {
 
 export default function SalesEnquiriesPage() {
     useAdminGuard();
-    const { accessToken } = useAuthStore();
+    const { user, accessToken } = useAuthStore();
+    const { activeInstitution } = useActiveInstitution();
+
+    // Check if on Platform Admin side or platform admin staff
+    const pathname = typeof window !== "undefined" ? window.location.pathname : "";
+    const isPlatformSide = useMemo(() => {
+        if (pathname.includes("/platformadmin")) return true;
+        if (!activeInstitution || activeInstitution.name?.toLowerCase().includes("edubird")) return true;
+        const roles = (user as any)?.role_codes || user?.roles || [];
+        return roles.some((r: string) =>
+            String(r).toLowerCase().includes("platform") ||
+            String(r).toLowerCase().includes("super_admin") ||
+            String(r).toLowerCase() === "admin"
+        );
+    }, [pathname, activeInstitution, user]);
 
     const [enquiries, setEnquiries] = useState<EnquiryRecord[]>([]);
     const [loading, setLoading] = useState(true);
@@ -162,9 +205,76 @@ export default function SalesEnquiriesPage() {
     const [formParent, setFormParent] = useState("");
     const [formPhone, setFormPhone] = useState("");
     const [formEmail, setFormEmail] = useState("");
+    const [formEnquiryType, setFormEnquiryType] = useState<"package" | "program">("package");
+    const [formPackageId, setFormPackageId] = useState("");
     const [formProgram, setFormProgram] = useState("");
     const [formSource, setFormSource] = useState("Walk-in");
     const [formNotes, setFormNotes] = useState("");
+
+    // Packages list fetched from marketing packages API
+    const [packagesList, setPackagesList] = useState<MarketingPackage[]>([]);
+    const [loadingPackages, setLoadingPackages] = useState(false);
+
+    const fetchPackages = useCallback(async () => {
+        if (!accessToken) return;
+        setLoadingPackages(true);
+        try {
+            const res = await fetch(`/api/admin/marketing/packages?limit=100`, {
+                headers: { Authorization: `Bearer ${accessToken}` },
+            });
+            const json = await readJsonResponse<{ packages?: MarketingPackage[]; error?: string }>(res);
+            if (res.ok && json.packages) {
+                setPackagesList(json.packages);
+            }
+        } catch {
+            // fallback
+        } finally {
+            setLoadingPackages(false);
+        }
+    }, [accessToken]);
+
+    useEffect(() => {
+        fetchPackages();
+    }, [fetchPackages]);
+
+    // Initialize enquiry type when modal opens (platform defaults to package)
+    useEffect(() => {
+        if (createOpen) {
+            setFormEnquiryType(isPlatformSide ? "package" : "program");
+            if (isPlatformSide && packagesList.length > 0 && !formPackageId) {
+                setFormPackageId(String(packagesList[0].id));
+            }
+        }
+    }, [createOpen, isPlatformSide, packagesList, formPackageId]);
+
+    const enquiryFormState = useMemo(() => ({
+        formName,
+        formParent,
+        formPhone,
+        formEmail,
+        formEnquiryType,
+        formPackageId,
+        formProgram,
+        formSource,
+        formNotes,
+    }), [formName, formParent, formPhone, formEmail, formEnquiryType, formPackageId, formProgram, formSource, formNotes]);
+
+    const { saveStatus: enquirySaveStatus, clearDraft: clearEnquiryDraft } = useProgressiveSave({
+        formKey: "sales_enquiry:new",
+        formState: enquiryFormState,
+        enabled: createOpen,
+        onRestore: (draft) => {
+            if (draft.formName) setFormName(draft.formName);
+            if (draft.formParent) setFormParent(draft.formParent);
+            if (draft.formPhone) setFormPhone(draft.formPhone);
+            if (draft.formEmail) setFormEmail(draft.formEmail);
+            if (draft.formEnquiryType) setFormEnquiryType(draft.formEnquiryType);
+            if (draft.formPackageId) setFormPackageId(draft.formPackageId);
+            if (draft.formProgram) setFormProgram(draft.formProgram);
+            if (draft.formSource) setFormSource(draft.formSource);
+            if (draft.formNotes) setFormNotes(draft.formNotes);
+        },
+    });
 
     // Programs list fetched from institution admin
     const [programsOptions, setProgramsOptions] = useState<SalesProgramOption[]>([]);
@@ -233,6 +343,12 @@ export default function SalesEnquiriesPage() {
         fetchPrograms();
     }, [fetchPrograms]);
 
+    const selectedPackageObj = useMemo(() => {
+        return packagesList.find(
+            (p) => String(p.id) === formPackageId || p.name.toLowerCase() === formPackageId.toLowerCase()
+        );
+    }, [packagesList, formPackageId]);
+
     const handleCreateEnquiry = async () => {
         if (!formName.trim()) {
             toast.error("Please enter applicant / student name");
@@ -242,8 +358,27 @@ export default function SalesEnquiriesPage() {
             toast.error("Please enter contact phone number");
             return;
         }
+        if (formEnquiryType === "package" && !formPackageId && packagesList.length > 0) {
+            toast.error("Please select a package");
+            return;
+        }
+
         setSaving(true);
         try {
+            const selectedPkg = selectedPackageObj || packagesList.find(
+                (p) => String(p.id) === formPackageId || p.name.toLowerCase() === formPackageId.toLowerCase()
+            );
+
+            const packagePriceDisplay = selectedPkg
+                ? (selectedPkg.price_yearly
+                    ? `₹${Number(selectedPkg.price_yearly).toLocaleString()}/yr`
+                    : selectedPkg.price_monthly
+                    ? `₹${Number(selectedPkg.price_monthly).toLocaleString()}/mo`
+                    : selectedPkg.price
+                    ? `₹${Number(selectedPkg.price).toLocaleString()}/${selectedPkg.price_unit || "mo"}`
+                    : null)
+                : null;
+
             const res = await fetch(`/api/admin/sales/enquiries`, {
                 method: "POST",
                 headers: {
@@ -255,20 +390,30 @@ export default function SalesEnquiriesPage() {
                     parent_name: formParent,
                     phone: formPhone,
                     email: formEmail,
-                    preferred_program: formProgram,
+                    enquiry_type: formEnquiryType,
+                    package_id: selectedPkg?.id || null,
+                    package_name: selectedPkg?.name || (formEnquiryType === "package" ? formPackageId : null),
+                    package_price: packagePriceDisplay,
+                    package_for: selectedPkg?.package_for || null,
+                    package_validity: selectedPkg
+                        ? `${selectedPkg.validity_count} ${selectedPkg.validity_unit || "month"}`
+                        : null,
+                    package_price_num: selectedPkg?.price_yearly || selectedPkg?.price_monthly || selectedPkg?.price || null,
+                    preferred_program: formEnquiryType === "package" ? (selectedPkg?.name || formPackageId) : formProgram,
                     source: formSource,
                     notes: formNotes,
                 }),
             });
             const json = await readJsonResponse<{ data?: EnquiryRecord; error?: string }>(res);
             if (!res.ok) throw new Error(json.error || "Failed to add enquiry");
-            toast.success("New enquiry recorded successfully");
+            toast.success(formEnquiryType === "package" ? "Package enquiry recorded successfully" : "New enquiry recorded successfully");
             setCreateOpen(false);
             setFormName("");
             setFormParent("");
             setFormPhone("");
             setFormEmail("");
             setFormProgram("");
+            setFormPackageId("");
             setFormNotes("");
             fetchEnquiries();
         } catch (err: unknown) {
@@ -397,8 +542,75 @@ export default function SalesEnquiriesPage() {
         },
         {
             accessorKey: "preferred_program",
-            header: "Program & Course Details",
+            header: "Program & Course / Package Details",
             cell: ({ row }) => {
+                const isPkg =
+                    row.original.enquiry_type === "package" ||
+                    Boolean(row.original.package_name) ||
+                    packagesList.some(
+                        (pkg) => pkg.name.toLowerCase() === (row.original.preferred_program || "").toLowerCase()
+                    );
+
+                const pkgName = row.original.package_name || row.original.preferred_program;
+                const matchedPkg = packagesList.find(
+                    (pkg) =>
+                        pkg.name.toLowerCase() === (pkgName || "").toLowerCase() ||
+                        String(pkg.id) === String(row.original.package_id)
+                );
+
+                if (isPkg || matchedPkg) {
+                    const displayName = matchedPkg?.name || pkgName || "Platform Package";
+                    const priceText =
+                        row.original.package_price ||
+                        (matchedPkg?.price_yearly
+                            ? `₹${Number(matchedPkg.price_yearly).toLocaleString()}/yr`
+                            : matchedPkg?.price_monthly
+                            ? `₹${Number(matchedPkg.price_monthly).toLocaleString()}/mo`
+                            : matchedPkg?.price
+                            ? `₹${Number(matchedPkg.price).toLocaleString()}/${matchedPkg.price_unit || "mo"}`
+                            : null);
+                    const validityText =
+                        row.original.package_validity ||
+                        (matchedPkg?.validity_count
+                            ? `${matchedPkg.validity_count} ${matchedPkg.validity_unit || "Month"}`
+                            : null);
+                    const audienceText = row.original.package_for || matchedPkg?.package_for;
+
+                    return (
+                        <div className="space-y-1 py-0.5 max-w-[280px]">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                <Badge
+                                    variant="outline"
+                                    className="text-[9.5px] py-0 px-1.5 font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-500/10 border-amber-300 dark:border-amber-700/50"
+                                >
+                                    📦 Package
+                                </Badge>
+                                <p className="text-xs font-bold text-foreground truncate">{displayName}</p>
+                            </div>
+                            <div className="flex items-center gap-1 flex-wrap">
+                                {priceText && (
+                                    <Badge
+                                        variant="outline"
+                                        className="text-[10px] py-0 px-1.5 font-bold text-primary bg-primary/5 border-primary/20"
+                                    >
+                                        💰 {priceText}
+                                    </Badge>
+                                )}
+                                {validityText && (
+                                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-medium bg-muted/60">
+                                        ⏱️ {validityText}
+                                    </Badge>
+                                )}
+                                {audienceText && (
+                                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-medium bg-muted/60">
+                                        🏢 {audienceText}
+                                    </Badge>
+                                )}
+                            </div>
+                        </div>
+                    );
+                }
+
                 const programName = row.original.preferred_program || "General Enquiry";
                 const matched = programsOptions.find(
                     (p) => p.title.toLowerCase() === programName.toLowerCase() || String(p.id) === programName
@@ -688,99 +900,8 @@ export default function SalesEnquiriesPage() {
                                     className="text-xs"
                                 />
                             </div>
+
                             <div className="space-y-1.5 sm:col-span-1 min-w-0">
-                                <label className="text-xs font-semibold">Preferred Program / Class</label>
-                                <Select value={formProgram} onValueChange={(val) => setFormProgram(val)}>
-                                    <SelectTrigger className="w-full text-xs truncate">
-                                        <SelectValue placeholder={loadingPrograms ? "Loading programs..." : "Select Single Program"} />
-                                    </SelectTrigger>
-                                    <SelectContent className="max-h-60 max-w-sm">
-                                        {uniquePrograms.length > 0 ? (
-                                            uniquePrograms.map((p) => (
-                                                <SelectItem key={p.id} value={p.title} className="text-xs truncate">
-                                                    {p.title}
-                                                </SelectItem>
-                                            ))
-                                        ) : (
-                                            <SelectItem value="General Enquiry" className="text-xs">General Enquiry</SelectItem>
-                                        )}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            {/* Live Selected Program Info Preview Card */}
-                            {selectedProgramObj && (
-                                <div className="sm:col-span-2 p-3 rounded-xl bg-muted/40 border border-border/80 space-y-2 text-xs">
-                                    <div className="flex items-center justify-between">
-                                        <span className="font-extrabold text-foreground flex items-center gap-1.5">
-                                            <BookOpen className="h-4 w-4 text-primary" />
-                                            {selectedProgramObj.title}
-                                        </span>
-                                        {selectedProgramObj.teaching_method && (
-                                            <Badge variant="outline" className="text-[10px] font-bold bg-background">
-                                                🏫 {selectedProgramObj.teaching_method}
-                                            </Badge>
-                                        )}
-                                    </div>
-
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-border/50 text-[11px]">
-                                        <div className="space-y-0.5">
-                                            <span className="text-[10px] text-muted-foreground uppercase font-bold block">⏱️ Duration</span>
-                                            <span className="font-bold text-foreground">
-                                                {selectedProgramObj.duration_value ? `${selectedProgramObj.duration_value} ${selectedProgramObj.duration_unit || "Yr"}` : "Standard"}
-                                            </span>
-                                        </div>
-                                        <div className="space-y-0.5">
-                                            <span className="text-[10px] text-muted-foreground uppercase font-bold block">🪑 Available Seats</span>
-                                            <span className="font-bold text-foreground">
-                                                {selectedProgramObj.seats_available != null ? `${selectedProgramObj.seats_available} Seats` : "Open Intake"}
-                                            </span>
-                                        </div>
-                                        <div className="space-y-0.5">
-                                            <span className="text-[10px] text-muted-foreground uppercase font-bold block">🏫 Mode</span>
-                                            <span className="font-bold text-foreground truncate block">
-                                                {selectedProgramObj.teaching_method || "Classroom / Offline"}
-                                            </span>
-                                        </div>
-                                        <div className="space-y-0.5">
-                                            <span className="text-[10px] text-muted-foreground uppercase font-bold block">🌐 Languages</span>
-                                            <span className="font-bold text-foreground truncate block">
-                                                {selectedProgramObj.languages || "English, Hindi"}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Fee Structure Preview */}
-                                    {selectedProgramObj.fee_components && selectedProgramObj.fee_components.length > 0 && (
-                                        <div className="pt-1.5 border-t border-border/50 space-y-1">
-                                            <span className="text-[10px] text-muted-foreground uppercase font-bold block">
-                                                💰 Available Fee Plans:
-                                            </span>
-                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                                {selectedProgramObj.fee_components.map((f, i) => {
-                                                    const numAmt = Number(f.amount) || 0;
-                                                    const numDisc = Number(f.discount_value) || 0;
-                                                    const hasDisc = numDisc > 0;
-                                                    const deduction = hasDisc
-                                                        ? f.discount_type === "percentage" ? (numAmt * Math.min(100, numDisc)) / 100 : Math.min(numAmt, numDisc)
-                                                        : 0;
-                                                    const net = Math.max(0, numAmt - deduction);
-                                                    return (
-                                                        <Badge key={i} variant="secondary" className="text-[10.5px] font-semibold py-0.5 px-2 bg-background border border-border">
-                                                            <strong>{f.title || "Fee"}:</strong>&nbsp;
-                                                            {hasDisc && <span className="line-through text-muted-foreground mr-1">₹{numAmt.toLocaleString()}</span>}
-                                                            <span className="text-primary font-bold">₹{net.toLocaleString()}</span>
-                                                            <span className="text-muted-foreground ml-0.5">/{f.unit || "month"}</span>
-                                                        </Badge>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            <div className="space-y-1.5 sm:col-span-2 min-w-0">
                                 <label className="text-xs font-semibold">Enquiry Source</label>
                                 <Select value={formSource} onValueChange={setFormSource}>
                                     <SelectTrigger className="w-full text-xs">
@@ -798,6 +919,224 @@ export default function SalesEnquiriesPage() {
                                     </SelectContent>
                                 </Select>
                             </div>
+
+                            {/* Enquiry Item Selector: Choose Package vs Program */}
+                            <div className="space-y-2 sm:col-span-2 min-w-0 pt-1">
+                                <div className="flex items-center justify-between pb-0.5">
+                                    <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                        <span>Enquiry Interest / Item *</span>
+                                        {isPlatformSide && (
+                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 border-amber-300">
+                                                Platform Admin
+                                            </Badge>
+                                        )}
+                                    </label>
+                                    <div className="flex items-center gap-1 bg-muted/80 p-0.5 rounded-lg border border-border/60">
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormEnquiryType("package")}
+                                            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+                                                formEnquiryType === "package"
+                                                    ? "bg-background text-foreground shadow-xs font-bold"
+                                                    : "text-muted-foreground hover:text-foreground"
+                                            }`}
+                                        >
+                                            <Package className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                                            Choose Package
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormEnquiryType("program")}
+                                            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+                                                formEnquiryType === "program"
+                                                    ? "bg-background text-foreground shadow-xs font-bold"
+                                                    : "text-muted-foreground hover:text-foreground"
+                                            }`}
+                                        >
+                                            <BookOpen className="w-3.5 h-3.5 text-primary" />
+                                            Program / Class
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {formEnquiryType === "package" ? (
+                                    <div className="space-y-2">
+                                        <Select value={formPackageId} onValueChange={(val) => setFormPackageId(val)}>
+                                            <SelectTrigger className="w-full text-xs">
+                                                <SelectValue placeholder={loadingPackages ? "Loading packages..." : "Select Package"} />
+                                            </SelectTrigger>
+                                            <SelectContent className="max-h-64 max-w-md">
+                                                {packagesList.length > 0 ? (
+                                                    packagesList.map((pkg) => {
+                                                        const priceDisplay = pkg.price_yearly
+                                                            ? `₹${Number(pkg.price_yearly).toLocaleString()}/yr`
+                                                            : pkg.price_monthly
+                                                            ? `₹${Number(pkg.price_monthly).toLocaleString()}/mo`
+                                                            : pkg.price
+                                                            ? `₹${Number(pkg.price).toLocaleString()}/${pkg.price_unit || "mo"}`
+                                                            : "Free / Custom";
+                                                        return (
+                                                            <SelectItem key={pkg.id} value={String(pkg.id)} className="text-xs">
+                                                                <div className="flex items-center justify-between w-full gap-4">
+                                                                    <span className="font-semibold">{pkg.name}</span>
+                                                                    <span className="text-primary font-bold">{priceDisplay}</span>
+                                                                </div>
+                                                            </SelectItem>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    <SelectItem value="Standard Platform Package" className="text-xs">
+                                                        Standard Platform Package
+                                                    </SelectItem>
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+
+                                        {/* Live Selected Package Info Preview Card */}
+                                        {selectedPackageObj && (
+                                            <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-300/40 dark:border-amber-700/40 space-y-2 text-xs">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="font-extrabold text-foreground flex items-center gap-1.5">
+                                                        <Package className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                                        {selectedPackageObj.name}
+                                                    </span>
+                                                    <Badge variant="outline" className="text-[10px] font-bold bg-background text-amber-700 dark:text-amber-300 border-amber-300">
+                                                        🏢 {selectedPackageObj.package_for || "All Institutions"}
+                                                    </Badge>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-border/50 text-[11px]">
+                                                    <div className="space-y-0.5">
+                                                        <span className="text-[10px] text-muted-foreground uppercase font-bold block">⏱️ Validity</span>
+                                                        <span className="font-bold text-foreground">
+                                                            {selectedPackageObj.validity_count} {selectedPackageObj.validity_unit || "month"}
+                                                        </span>
+                                                    </div>
+                                                    <div className="space-y-0.5">
+                                                        <span className="text-[10px] text-muted-foreground uppercase font-bold block">💾 Storage</span>
+                                                        <span className="font-bold text-foreground">
+                                                            {selectedPackageObj.storage_limit_gb ? `${selectedPackageObj.storage_limit_gb} GB` : "Unlimited"}
+                                                        </span>
+                                                    </div>
+                                                    <div className="space-y-0.5">
+                                                        <span className="text-[10px] text-muted-foreground uppercase font-bold block">💰 Pricing</span>
+                                                        <span className="font-bold text-primary">
+                                                            {selectedPackageObj.price_yearly
+                                                                ? `₹${Number(selectedPackageObj.price_yearly).toLocaleString()}/yr`
+                                                                : selectedPackageObj.price_monthly
+                                                                ? `₹${Number(selectedPackageObj.price_monthly).toLocaleString()}/mo`
+                                                                : `₹${Number(selectedPackageObj.price).toLocaleString()}/${selectedPackageObj.price_unit || "mo"}`}
+                                                        </span>
+                                                    </div>
+                                                    <div className="space-y-0.5">
+                                                        <span className="text-[10px] text-muted-foreground uppercase font-bold block">🛡️ Status</span>
+                                                        <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                                            {selectedPackageObj.is_active ? "Active Plan" : "Draft"}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {selectedPackageObj.description && (
+                                                    <p className="text-[11px] text-muted-foreground pt-1 border-t border-border/40 whitespace-pre-line line-clamp-2">
+                                                        {selectedPackageObj.description}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <Select value={formProgram} onValueChange={(val) => setFormProgram(val)}>
+                                            <SelectTrigger className="w-full text-xs truncate">
+                                                <SelectValue placeholder={loadingPrograms ? "Loading programs..." : "Select Single Program"} />
+                                            </SelectTrigger>
+                                            <SelectContent className="max-h-60 max-w-sm">
+                                                {uniquePrograms.length > 0 ? (
+                                                    uniquePrograms.map((p) => (
+                                                        <SelectItem key={p.id} value={p.title} className="text-xs truncate">
+                                                            {p.title}
+                                                        </SelectItem>
+                                                    ))
+                                                ) : (
+                                                    <SelectItem value="General Enquiry" className="text-xs">General Enquiry</SelectItem>
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+
+                                        {/* Live Selected Program Info Preview Card */}
+                                        {selectedProgramObj && (
+                                            <div className="p-3 rounded-xl bg-muted/40 border border-border/80 space-y-2 text-xs">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="font-extrabold text-foreground flex items-center gap-1.5">
+                                                        <BookOpen className="h-4 w-4 text-primary" />
+                                                        {selectedProgramObj.title}
+                                                    </span>
+                                                    {selectedProgramObj.teaching_method && (
+                                                        <Badge variant="outline" className="text-[10px] font-bold bg-background">
+                                                            🏫 {selectedProgramObj.teaching_method}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-border/50 text-[11px]">
+                                                    <div className="space-y-0.5">
+                                                        <span className="text-[10px] text-muted-foreground uppercase font-bold block">⏱️ Duration</span>
+                                                        <span className="font-bold text-foreground">
+                                                            {selectedProgramObj.duration_value ? `${selectedProgramObj.duration_value} ${selectedProgramObj.duration_unit || "Yr"}` : "Standard"}
+                                                        </span>
+                                                    </div>
+                                                    <div className="space-y-0.5">
+                                                        <span className="text-[10px] text-muted-foreground uppercase font-bold block">🪑 Available Seats</span>
+                                                        <span className="font-bold text-foreground">
+                                                            {selectedProgramObj.seats_available != null ? `${selectedProgramObj.seats_available} Seats` : "Open Intake"}
+                                                        </span>
+                                                    </div>
+                                                    <div className="space-y-0.5">
+                                                        <span className="text-[10px] text-muted-foreground uppercase font-bold block">🏫 Mode</span>
+                                                        <span className="font-bold text-foreground truncate block">
+                                                            {selectedProgramObj.teaching_method || "Classroom / Offline"}
+                                                        </span>
+                                                    </div>
+                                                    <div className="space-y-0.5">
+                                                        <span className="text-[10px] text-muted-foreground uppercase font-bold block">🌐 Languages</span>
+                                                        <span className="font-bold text-foreground truncate block">
+                                                            {selectedProgramObj.languages || "English, Hindi"}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Fee Structure Preview */}
+                                                {selectedProgramObj.fee_components && selectedProgramObj.fee_components.length > 0 && (
+                                                    <div className="pt-1.5 border-t border-border/50 space-y-1">
+                                                        <span className="text-[10px] text-muted-foreground uppercase font-bold block">
+                                                            💰 Available Fee Plans:
+                                                        </span>
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            {selectedProgramObj.fee_components.map((f, i) => {
+                                                                const numAmt = Number(f.amount) || 0;
+                                                                const numDisc = Number(f.discount_value) || 0;
+                                                                const hasDisc = numDisc > 0;
+                                                                const deduction = hasDisc
+                                                                    ? f.discount_type === "percentage" ? (numAmt * Math.min(100, numDisc)) / 100 : Math.min(numAmt, numDisc)
+                                                                    : 0;
+                                                                const net = Math.max(0, numAmt - deduction);
+                                                                return (
+                                                                    <Badge key={i} variant="secondary" className="text-[10.5px] font-semibold py-0.5 px-2 bg-background border border-border">
+                                                                        <strong>{f.title || "Fee"}:</strong>&nbsp;
+                                                                        {hasDisc && <span className="line-through text-muted-foreground mr-1">₹{numAmt.toLocaleString()}</span>}
+                                                                        <span className="text-primary font-bold">₹{net.toLocaleString()}</span>
+                                                                        <span className="text-muted-foreground ml-0.5">/{f.unit || "month"}</span>
+                                                                    </Badge>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                             <div className="space-y-1.5 sm:col-span-2">
                                 <label className="text-xs font-semibold">Enquiry Notes & Details</label>
                                 <Textarea
@@ -808,12 +1147,30 @@ export default function SalesEnquiriesPage() {
                                 />
                             </div>
                         </div>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-                            <Button onClick={handleCreateEnquiry} disabled={saving} className="bg-rose-600 hover:bg-rose-700 text-white">
-                                {saving ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-                                Save Enquiry
-                            </Button>
+                        <DialogFooter className="flex items-center justify-between sm:justify-between w-full">
+                            <ProgressiveSaveIndicator status={enquirySaveStatus} />
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setCreateOpen(false);
+                                        clearEnquiryDraft();
+                                    }}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={() => {
+                                        void handleCreateEnquiry();
+                                        clearEnquiryDraft();
+                                    }}
+                                    disabled={saving}
+                                    className="bg-rose-600 hover:bg-rose-700 text-white"
+                                >
+                                    {saving ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
+                                    Save Enquiry
+                                </Button>
+                            </div>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
@@ -835,11 +1192,57 @@ export default function SalesEnquiriesPage() {
                                 <p><span className="text-muted-foreground">Target Institution:</span> <strong className="text-foreground">{selectedEnquiry?.institution_name || "EduBird Platform"}</strong></p>
                                 <p><span className="text-muted-foreground">Contact Phone:</span> {selectedEnquiry?.phone}</p>
                                 <p><span className="text-muted-foreground">Email:</span> {selectedEnquiry?.email || "N/A"}</p>
-                                <p><span className="text-muted-foreground">Program:</span> {selectedEnquiry?.preferred_program || "General"}</p>
+                                <p><span className="text-muted-foreground">Enquiry Item:</span> <strong className="text-foreground">{selectedEnquiry?.package_name || selectedEnquiry?.preferred_program || "General"}</strong></p>
                                 <p><span className="text-muted-foreground">Source:</span> {selectedEnquiry?.source}</p>
                                 <p><span className="text-muted-foreground">Status:</span> {selectedEnquiry?.status}</p>
                                 <p><span className="text-muted-foreground">Recorded On:</span> {selectedEnquiry?.created_at ? formatDate(selectedEnquiry.created_at) : "N/A"}</p>
                             </div>
+
+                            {/* Package Info Card in Details Drawer if enquiry is for a package */}
+                            {(() => {
+                                const isPkg =
+                                    selectedEnquiry?.enquiry_type === "package" ||
+                                    Boolean(selectedEnquiry?.package_name) ||
+                                    packagesList.some((p) => p.name.toLowerCase() === (selectedEnquiry?.preferred_program || "").toLowerCase());
+                                if (!isPkg) return null;
+                                const pkg = packagesList.find(
+                                    (p) =>
+                                        p.name.toLowerCase() === (selectedEnquiry?.package_name || selectedEnquiry?.preferred_program || "").toLowerCase() ||
+                                        String(p.id) === String(selectedEnquiry?.package_id)
+                                );
+                                return (
+                                    <div className="rounded-xl border p-4 space-y-2.5 bg-amber-500/5 border-amber-300/40 dark:border-amber-700/40 shadow-2xs">
+                                        <div className="flex items-center justify-between">
+                                            <p className="font-extrabold text-foreground flex items-center gap-1.5 text-xs">
+                                                <Package className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                                {pkg?.name || selectedEnquiry?.package_name || selectedEnquiry?.preferred_program}
+                                            </p>
+                                            <Badge variant="outline" className="text-[10px] font-bold text-amber-700 dark:text-amber-300 border-amber-300">
+                                                🏢 {pkg?.package_for || selectedEnquiry?.package_for || "All Institutions"}
+                                            </Badge>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-border/50">
+                                            <div>
+                                                <span className="text-[10px] text-muted-foreground uppercase font-bold block">💰 Pricing</span>
+                                                <span className="font-bold text-primary">
+                                                    {selectedEnquiry?.package_price || (pkg ? (pkg.price_yearly ? `₹${Number(pkg.price_yearly).toLocaleString()}/yr` : `₹${Number(pkg.price).toLocaleString()}/${pkg.price_unit || "mo"}`) : "Standard")}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] text-muted-foreground uppercase font-bold block">⏱️ Validity</span>
+                                                <span className="font-semibold">
+                                                    {selectedEnquiry?.package_validity || (pkg ? `${pkg.validity_count} ${pkg.validity_unit || "month"}` : "1 Year")}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {pkg?.description && (
+                                            <p className="text-[11px] text-muted-foreground pt-1 border-t border-border/40 whitespace-pre-line line-clamp-3">
+                                                {pkg.description}
+                                            </p>
+                                        )}
+                                    </div>
+                                );
+                            })()}
 
                             {/* Program Info Card in Details Drawer */}
                             {(() => {

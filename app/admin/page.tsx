@@ -236,7 +236,10 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (isReady && isStudent) {
-      router.replace(toRoleRoutePath("/admin/my-program", user));
+      const timer = setTimeout(() => {
+        router.replace(toRoleRoutePath("/admin/my-program", user));
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isReady, isStudent, router, user]);
 

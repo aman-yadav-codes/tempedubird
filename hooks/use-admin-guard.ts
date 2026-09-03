@@ -23,8 +23,10 @@ export function useAdminGuard() {
     if (!isInitialized || isPublicPage) return;
 
     if (!isAuthenticated) {
-      router.replace("/");
-      return;
+      const timer = setTimeout(() => {
+        router.replace("/");
+      }, 0);
+      return () => clearTimeout(timer);
     }
 
     if (!hasAdminAccess || !hasPageAccess) {
@@ -35,7 +37,10 @@ export function useAdminGuard() {
     }
 
     if (shouldUseRoleRoutePrefix(pathname, user)) {
-      router.replace(toRoleRoutePath(pathname, user));
+      const timer = setTimeout(() => {
+        router.replace(toRoleRoutePath(pathname, user));
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [hasAdminAccess, hasPageAccess, isAuthenticated, isInitialized, isPublicPage, pathname, router, user]);
 

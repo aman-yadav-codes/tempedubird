@@ -665,11 +665,10 @@ export function PaymentMethodsClient() {
               key={tab.id}
               type="button"
               onClick={() => setFilterGroup(tab.id as any)}
-              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
-                filterGroup === tab.id
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${filterGroup === tab.id
                   ? "bg-background text-foreground shadow-2xs font-bold"
                   : "text-muted-foreground hover:text-foreground"
-              }`}
+                }`}
             >
               {tab.label}
             </button>
@@ -723,9 +722,8 @@ export function PaymentMethodsClient() {
             return (
               <div
                 key={item.id}
-                className={`relative flex flex-col justify-between overflow-hidden rounded-xl border bg-card p-5 shadow-xs transition-all hover:shadow-md ${
-                  item.is_default ? "ring-2 ring-primary/40 border-primary" : ""
-                } ${!item.is_active ? "opacity-65" : ""}`}
+                className={`relative flex flex-col justify-between overflow-hidden rounded-xl border bg-card p-5 shadow-xs transition-all hover:shadow-md ${item.is_default ? "ring-2 ring-primary/40 border-primary" : ""
+                  } ${!item.is_active ? "opacity-65" : ""}`}
               >
                 {/* Top Badge & Dropdown */}
                 <div>
@@ -738,11 +736,10 @@ export function PaymentMethodsClient() {
                       {isGateway && (
                         <Badge
                           variant="secondary"
-                          className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0 ${
-                            item.gateway_environment === "test"
+                          className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0 ${item.gateway_environment === "test"
                               ? "bg-amber-500/15 text-amber-600 border border-amber-500/30"
                               : "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
-                          }`}
+                            }`}
                         >
                           {item.gateway_environment === "test" ? "Sandbox / Test" : "Live / Production"}
                         </Badge>

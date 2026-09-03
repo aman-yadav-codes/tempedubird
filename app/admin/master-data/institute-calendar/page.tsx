@@ -27,6 +27,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useProgressiveSave } from "@/hooks/use-progressive-save";
+import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -413,13 +415,21 @@ export function InstituteCalendarPageContent({
   const [importingDefaults, setImportingDefaults] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<EventForm>(() => defaultForm());
+
+  const { saveStatus: calendarSaveStatus, clearDraft: clearCalendarDraft } = useProgressiveSave({
+    formKey: `calendar_event:${form.id || "new"}`,
+    formState: form,
+    enabled: dialogOpen,
+  });
   const [singleDayHoliday, setSingleDayHoliday] = useState(true);
-  const selectedInstitutionId = defaultCalendarMode
-    ? "default"
+  const selectedInstitutionId = defaultCalendarMode || isPlatformAdmin
+    ? "company"
     : useSidebarInstitution && activeInstitution
     ? String(activeInstitution.id)
     : institutionId;
-  const selectedInstitutionName = defaultCalendarMode
+  const selectedInstitutionName = isPlatformAdmin
+    ? "EduBird Company Calendar"
+    : defaultCalendarMode
     ? "Platform default calendar"
     : useSidebarInstitution && activeInstitution
     ? activeInstitution.name
@@ -475,7 +485,7 @@ export function InstituteCalendarPageContent({
         start: startOfCalendarGrid(month).toISOString(),
         end: endOfCalendarGrid(month).toISOString(),
       });
-      if (defaultCalendarMode) {
+      if (defaultCalendarMode || isPlatformAdmin) {
         params.set("defaultCalendar", "1");
       } else {
         params.set("institutionId", selectedInstitutionId);
@@ -491,7 +501,7 @@ export function InstituteCalendarPageContent({
     } finally {
       setLoading(false);
     }
-  }, [authHeader, defaultCalendarMode, selectedInstitutionId, month]);
+  }, [authHeader, defaultCalendarMode, isPlatformAdmin, selectedInstitutionId, month]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -552,17 +562,17 @@ export function InstituteCalendarPageContent({
 
       const audiencePrefix = form.targetAudience === "STUDENTS" ? "[For: Students]" : form.targetAudience === "STAFF" ? "[For: Staff]" : "";
       const rawDesc = form.description.replace(/\[For:\s*(Students|Staff)\]\s*/gi, "").trim();
-      const finalDescription = audiencePrefix ? `${audiencePrefix} ${rawDesc}`.trim() : rawDesc;
+      const finalDescription = isPlatformAdmin ? rawDesc : (audiencePrefix ? `${audiencePrefix} ${rawDesc}`.trim() : rawDesc);
 
       const payload = {
         id: form.id,
-        ...(defaultCalendarMode
+        ...(defaultCalendarMode || isPlatformAdmin
           ? { default_calendar: true }
           : { institution_id: Number(selectedInstitutionId) }),
         title: form.title.trim(),
         description: finalDescription,
         event_type: form.eventType,
-        target_audience: form.targetAudience,
+        target_audience: isPlatformAdmin ? "ALL" : form.targetAudience,
         start_date: startDate,
         end_date: endDate,
         color: form.color,
@@ -591,7 +601,7 @@ export function InstituteCalendarPageContent({
     setSaving(true);
     try {
       const params = new URLSearchParams({ id: String(form.id) });
-      if (defaultCalendarMode) {
+      if (defaultCalendarMode || isPlatformAdmin) {
         params.set("defaultCalendar", "1");
       } else {
         params.set("institutionId", selectedInstitutionId);
@@ -663,16 +673,22 @@ export function InstituteCalendarPageContent({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground sm:text-2xl">
-            {defaultCalendarMode ? "Default Calendar" : "Institute Calendar"}
+            {isPlatformAdmin
+              ? "Company Calendar"
+              : defaultCalendarMode
+              ? "Default Calendar"
+              : "Institute Calendar"}
           </h1>
           <p className="text-sm leading-snug text-muted-foreground">
-            {defaultCalendarMode
+            {isPlatformAdmin
+              ? "Manage company holidays, notices, and events."
+              : defaultCalendarMode
               ? "Manage default holidays, notices, and events inherited by institutions."
               : "Manage institution holidays, notices, and academic events."}
           </p>
         </div>
         <div className="grid grid-cols-[40px_1fr_1fr] gap-2 sm:flex sm:items-center">
-          {!defaultCalendarMode && (
+          {!defaultCalendarMode && !isPlatformAdmin && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -719,8 +735,8 @@ export function InstituteCalendarPageContent({
       </div>
 
       <section className="rounded-lg border bg-card p-3 shadow-sm sm:p-4">
-        <div className={cn("grid gap-3", !useSidebarInstitution && !defaultCalendarMode && "md:grid-cols-[minmax(280px,420px)_1fr] md:items-end")}>
-          {!useSidebarInstitution && !defaultCalendarMode && (
+        <div className={cn("grid gap-3", !useSidebarInstitution && !defaultCalendarMode && !isPlatformAdmin && "md:grid-cols-[minmax(280px,420px)_1fr] md:items-end")}>
+          {!useSidebarInstitution && !defaultCalendarMode && !isPlatformAdmin && (
             <div className="space-y-2">
               <Label>Institution</Label>
               <AsyncSearchPopover<InstitutionOption>
@@ -755,36 +771,38 @@ export function InstituteCalendarPageContent({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/60">
-            <span className="text-xs font-semibold text-muted-foreground mr-1">Audience View:</span>
-            <Button
-              type="button"
-              size="sm"
-              variant={audienceFilter === "ALL" ? "default" : "outline"}
-              className="h-7 text-xs px-3"
-              onClick={() => setAudienceFilter("ALL")}
-            >
-              All Events ({events.length})
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={audienceFilter === "STUDENTS" ? "default" : "outline"}
-              className="h-7 text-xs px-3"
-              onClick={() => setAudienceFilter("STUDENTS")}
-            >
-              For Students ({audienceCounts.studentCount})
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={audienceFilter === "STAFF" ? "default" : "outline"}
-              className="h-7 text-xs px-3"
-              onClick={() => setAudienceFilter("STAFF")}
-            >
-              For Staff ({audienceCounts.staffCount})
-            </Button>
-          </div>
+          {!isPlatformAdmin && (
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/60">
+              <span className="text-xs font-semibold text-muted-foreground mr-1">Audience View:</span>
+              <Button
+                type="button"
+                size="sm"
+                variant={audienceFilter === "ALL" ? "default" : "outline"}
+                className="h-7 text-xs px-3"
+                onClick={() => setAudienceFilter("ALL")}
+              >
+                All Events ({events.length})
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={audienceFilter === "STUDENTS" ? "default" : "outline"}
+                className="h-7 text-xs px-3"
+                onClick={() => setAudienceFilter("STUDENTS")}
+              >
+                For Students ({audienceCounts.studentCount})
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={audienceFilter === "STAFF" ? "default" : "outline"}
+                className="h-7 text-xs px-3"
+                onClick={() => setAudienceFilter("STAFF")}
+              >
+                For Staff ({audienceCounts.staffCount})
+              </Button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -828,7 +846,7 @@ export function InstituteCalendarPageContent({
               <Loader2 className="size-6 animate-spin text-primary" />
             </div>
           )}
-          {!selectedInstitutionId && !defaultCalendarMode && (
+          {!selectedInstitutionId && !defaultCalendarMode && !isPlatformAdmin && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70">
               <div className="rounded-lg border bg-card px-5 py-4 text-center shadow-sm">
                 <CalendarDays className="mx-auto mb-2 size-6 text-primary" />
@@ -909,7 +927,7 @@ export function InstituteCalendarPageContent({
                         style={event.color ? { borderColor: event.color, color: event.color } : undefined}
                       >
                         <span className="min-w-0 flex-1 truncate">{event.title}</span>
-                        {aud !== "ALL" && (
+                        {aud !== "ALL" && !isPlatformAdmin && (
                           <span className="shrink-0 rounded bg-background/70 px-1 py-0.2 text-[9px] font-bold text-foreground">
                             {aud === "STUDENTS" ? "Students" : "Staff"}
                           </span>
@@ -946,27 +964,29 @@ export function InstituteCalendarPageContent({
                 id="calendar-title"
                 value={form.title}
                 onChange={(e) => setForm((current) => ({ ...current, title: e.target.value }))}
-                placeholder="Annual function, Diwali holiday, Staff meeting..."
+                placeholder={isPlatformAdmin ? "Annual company celebration, Diwali holiday, Company meeting..." : "Annual function, Diwali holiday, Staff meeting..."}
               />
             </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Target Audience (For Students / For Staff)</Label>
-              <Select
-                value={form.targetAudience}
-                onValueChange={(value) => setForm((current) => ({ ...current, targetAudience: value as TargetAudience }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select target audience..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {TARGET_AUDIENCES.map((aud) => (
-                    <SelectItem key={aud.value} value={aud.value}>
-                      {aud.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {!isPlatformAdmin && (
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Target Audience (For Students / For Staff)</Label>
+                <Select
+                  value={form.targetAudience}
+                  onValueChange={(value) => setForm((current) => ({ ...current, targetAudience: value as TargetAudience }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select target audience..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TARGET_AUDIENCES.map((aud) => (
+                      <SelectItem key={aud.value} value={aud.value}>
+                        {aud.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="grid gap-4 sm:col-span-2 sm:grid-cols-[180px_1fr]">
               <div className="space-y-2">
                 <Label>Event Type</Label>
@@ -1070,18 +1090,34 @@ export function InstituteCalendarPageContent({
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:justify-between">
-            <div>
+          <DialogFooter className="gap-2 flex items-center justify-between sm:justify-between w-full">
+            <div className="flex items-center gap-2">
               {form.id && (
                 <Button variant="destructive" onClick={() => void deleteEvent()} disabled={saving}>
                   <Trash2 className="mr-2 size-4" />
                   Delete
                 </Button>
               )}
+              <ProgressiveSaveIndicator status={calendarSaveStatus} />
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
-              <Button onClick={() => void saveEvent()} disabled={saving || !selectedInstitutionId}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDialogOpen(false);
+                  clearCalendarDraft();
+                }}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  void saveEvent();
+                  clearCalendarDraft();
+                }}
+                disabled={saving || !selectedInstitutionId}
+              >
                 {saving && <Loader2 className="mr-2 size-4 animate-spin" />}
                 Save Event
               </Button>

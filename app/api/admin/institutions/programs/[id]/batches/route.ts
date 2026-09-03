@@ -288,114 +288,126 @@ export async function POST(
       // ignore if exists
     }
 
-    // Determine or create section
-    const targetSectionName = sectionInput || batchName;
-    if (!sectionId) {
+    // Support multiple sections or single section input
+    const sectionsInputList: string[] = Array.isArray(body.sections) && body.sections.length > 0
+      ? body.sections.map((s: any) => String(s).trim()).filter(Boolean)
+      : Array.isArray(body.sectionNames) && body.sectionNames.length > 0
+      ? body.sectionNames.map((s: any) => String(s).trim()).filter(Boolean)
+      : sectionInput
+      ? [sectionInput]
+      : ["Section A"];
+
+    const savedSectionIds: number[] = [];
+
+    for (const secName of sectionsInputList) {
+      let secId: number | null = null;
       const existing = await db.query(
         `SELECT id FROM sections WHERE LOWER(name) = LOWER($1) AND COALESCE(is_deleted, FALSE) = FALSE LIMIT 1`,
-        [targetSectionName]
+        [secName]
       );
 
       if (existing.rows.length > 0) {
-        sectionId = existing.rows[0].id;
+        secId = existing.rows[0].id;
       } else {
         const created = await db.query(
           `INSERT INTO sections (name, slug, is_active) VALUES ($1, $2, TRUE) RETURNING id`,
-          [targetSectionName, slugify(targetSectionName)]
+          [secName, slugify(secName)]
         );
-        sectionId = created.rows[0].id;
+        secId = created.rows[0].id;
       }
-    }
 
-    // Upsert into program_sections
-    await db.query(
-      `
-      INSERT INTO program_sections (
-        program_id,
-        section_id,
-        batch_name,
-        section_name,
-        academic_term,
-        academic_year_number,
-        semester_number,
-        attendance_setup_id,
-        attendance_setup_title,
-        language_id,
-        language_name,
-        seats_available,
-        max_students,
-        price,
-        fee_amount,
-        discount_percent,
-        installments_count,
-        start_time,
-        end_time,
-        class_frequency,
-        teaching_method,
-        module_name,
-        module_details,
-        updated_at
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW()
-      )
-      ON CONFLICT (program_id, section_id)
-      DO UPDATE SET
-        batch_name = EXCLUDED.batch_name,
-        section_name = EXCLUDED.section_name,
-        academic_term = EXCLUDED.academic_term,
-        academic_year_number = EXCLUDED.academic_year_number,
-        semester_number = EXCLUDED.semester_number,
-        attendance_setup_id = EXCLUDED.attendance_setup_id,
-        attendance_setup_title = EXCLUDED.attendance_setup_title,
-        language_id = EXCLUDED.language_id,
-        language_name = EXCLUDED.language_name,
-        seats_available = EXCLUDED.seats_available,
-        max_students = EXCLUDED.max_students,
-        price = EXCLUDED.price,
-        fee_amount = EXCLUDED.fee_amount,
-        discount_percent = EXCLUDED.discount_percent,
-        installments_count = EXCLUDED.installments_count,
-        start_time = EXCLUDED.start_time,
-        end_time = EXCLUDED.end_time,
-        class_frequency = EXCLUDED.class_frequency,
-        teaching_method = EXCLUDED.teaching_method,
-        module_name = EXCLUDED.module_name,
-        module_details = EXCLUDED.module_details,
-        updated_at = NOW()
-      `,
-      [
-        programId,
-        sectionId,
-        batchName,
-        targetSectionName,
-        academicTerm,
-        academicYearNumber,
-        semesterNumber,
-        attendanceSetupId,
-        attendanceSetupTitle,
-        languageId,
-        languageName,
-        seatsAvailable,
-        seatsAvailable, // max_students
-        price,
-        price, // fee_amount
-        discountPercent,
-        installmentsCount,
-        startTime,
-        endTime,
-        classFrequency,
-        teachingMethod,
-        moduleName,
-        moduleDetails,
-      ]
-    );
+      savedSectionIds.push(secId);
+
+      // Upsert into program_sections
+      await db.query(
+        `
+        INSERT INTO program_sections (
+          program_id,
+          section_id,
+          batch_name,
+          section_name,
+          academic_term,
+          academic_year_number,
+          semester_number,
+          attendance_setup_id,
+          attendance_setup_title,
+          language_id,
+          language_name,
+          seats_available,
+          max_students,
+          price,
+          fee_amount,
+          discount_percent,
+          installments_count,
+          start_time,
+          end_time,
+          class_frequency,
+          teaching_method,
+          module_name,
+          module_details,
+          updated_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW()
+        )
+        ON CONFLICT (program_id, section_id)
+        DO UPDATE SET
+          batch_name = EXCLUDED.batch_name,
+          section_name = EXCLUDED.section_name,
+          academic_term = EXCLUDED.academic_term,
+          academic_year_number = EXCLUDED.academic_year_number,
+          semester_number = EXCLUDED.semester_number,
+          attendance_setup_id = EXCLUDED.attendance_setup_id,
+          attendance_setup_title = EXCLUDED.attendance_setup_title,
+          language_id = EXCLUDED.language_id,
+          language_name = EXCLUDED.language_name,
+          seats_available = EXCLUDED.seats_available,
+          max_students = EXCLUDED.max_students,
+          price = EXCLUDED.price,
+          fee_amount = EXCLUDED.fee_amount,
+          discount_percent = EXCLUDED.discount_percent,
+          installments_count = EXCLUDED.installments_count,
+          start_time = EXCLUDED.start_time,
+          end_time = EXCLUDED.end_time,
+          class_frequency = EXCLUDED.class_frequency,
+          teaching_method = EXCLUDED.teaching_method,
+          module_name = EXCLUDED.module_name,
+          module_details = EXCLUDED.module_details,
+          updated_at = NOW()
+        `,
+        [
+          programId,
+          secId,
+          batchName,
+          secName,
+          academicTerm,
+          academicYearNumber,
+          semesterNumber,
+          attendanceSetupId,
+          attendanceSetupTitle,
+          languageId,
+          languageName,
+          seatsAvailable,
+          seatsAvailable, // max_students
+          price,
+          price, // fee_amount
+          discountPercent,
+          installmentsCount,
+          startTime,
+          endTime,
+          classFrequency,
+          teachingMethod,
+          moduleName,
+          moduleDetails,
+        ]
+      );
+    }
 
     return NextResponse.json({
       message: `Batch "${batchName}" saved successfully`,
       data: {
-        section_id: sectionId,
+        section_id: savedSectionIds[0] || null,
         batch_name: batchName,
-        section_name: targetSectionName,
+        section_name: sectionsInputList.join(", "),
         language_id: languageId,
         language_name: languageName,
         seats_available: seatsAvailable,

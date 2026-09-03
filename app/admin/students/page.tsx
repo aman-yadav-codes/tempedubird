@@ -159,7 +159,7 @@ export default function AllStudentsPage() {
         page: String(pagination.pageIndex + 1),
         limit: String(pagination.pageSize),
       });
-      if (filters.search.trim()) params.set("search", filters.search.trim());
+      if (filters.search?.trim()) params.set("search", filters.search.trim());
       if (filters.programId) params.set("programId", filters.programId);
       if (filters.sectionId) params.set("sectionId", filters.sectionId);
       if (activeAcademicYearId) params.set("academicYearId", String(activeAcademicYearId));

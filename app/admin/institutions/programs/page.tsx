@@ -58,6 +58,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { AsyncSearchPopover } from "@/components/shared/async-search-popover";
 import { ImagePreviewSlider } from "@/components/shared/image-preview-slider";
+import { useProgressiveSave } from "@/hooks/use-progressive-save";
+import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
 import { InstitutionProgram, MasterType } from "@/lib/types/institution";
 import { slugify } from "@/lib/utils/slug";
 import { cn } from "@/lib/utils";
@@ -568,7 +570,7 @@ export default function ProgramsAdminPage() {
         id: string;
         fee_type: string;
         custom_title: string;
-        unit: "one-time" | "month" | "quarter" | "half-year" | "year" | "week";
+        unit: "one-time" | "month" | "quarter" | "half-year" | "year" | "semester" | "week";
         amount: string;
         installments_count: string;
         has_discount: boolean;
@@ -578,23 +580,68 @@ export default function ProgramsAdminPage() {
 
     const createDefaultBatchFeeOption = (
         type = "Course Tuition Fee",
-        unit: "one-time" | "month" | "quarter" | "half-year" | "year" | "week" = "one-time"
+        unit: "one-time" | "month" | "quarter" | "half-year" | "year" | "semester" | "week" = "one-time",
+        progInfo?: any
     ): BatchFeeScheduleOption => {
-        const installmentsMap: Record<string, string> = {
-            "one-time": "1",
-            "month": "12",
-            "quarter": "4",
-            "half-year": "2",
-            "year": "1",
-            "week": "52",
-        };
+        const info = progInfo || batchMeta.programInfo;
+        const rawDur = info?.duration_value || 1;
+        const durVal = typeof rawDur === "number" ? rawDur : parseInt(rawDur) || 1;
+        const durUnit = (info?.duration_unit || "year").toLowerCase();
+
+        let installments = "1";
+        if (unit === "one-time") {
+            installments = "1";
+        } else if (unit === "year") {
+            if (durUnit.includes("month")) {
+                installments = String(Math.max(1, Math.ceil(durVal / 12)));
+            } else if (durUnit.includes("sem")) {
+                installments = String(Math.max(1, Math.ceil(durVal / 2)));
+            } else {
+                installments = String(Math.max(1, durVal));
+            }
+        } else if (unit === "semester") {
+            if (durUnit.includes("month")) {
+                installments = String(Math.max(1, Math.ceil(durVal / 6)));
+            } else if (durUnit.includes("sem")) {
+                installments = String(Math.max(1, durVal));
+            } else {
+                installments = String(Math.max(1, durVal * 2));
+            }
+        } else if (unit === "half-year") {
+            if (durUnit.includes("month")) {
+                installments = String(Math.max(1, Math.ceil(durVal / 6)));
+            } else {
+                installments = String(Math.max(1, durVal * 2));
+            }
+        } else if (unit === "quarter") {
+            if (durUnit.includes("month")) {
+                installments = String(Math.max(1, Math.ceil(durVal / 3)));
+            } else {
+                installments = String(Math.max(1, durVal * 4));
+            }
+        } else if (unit === "month") {
+            if (durUnit.includes("month")) {
+                installments = String(Math.max(1, durVal));
+            } else if (durUnit.includes("sem")) {
+                installments = String(Math.max(1, durVal * 6));
+            } else {
+                installments = String(Math.max(1, durVal * 12));
+            }
+        } else if (unit === "week") {
+            if (durUnit.includes("month")) {
+                installments = String(Math.max(1, durVal * 4));
+            } else {
+                installments = String(Math.max(1, durVal * 52));
+            }
+        }
+
         return {
             id: `batch-fee-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
             fee_type: type,
             custom_title: "",
             unit,
             amount: "25000",
-            installments_count: installmentsMap[unit] || "1",
+            installments_count: installments,
             has_discount: false,
             discount_type: "percentage",
             discount_value: "",
@@ -624,13 +671,8 @@ export default function ProgramsAdminPage() {
 
     const initialBatchFormData = {
         batchName: "",
-        academicTerm: "",
-        academicYearNumber: "",
-        semesterNumber: "",
-        sectionId: "",
-        sectionName: "",
-        languageId: "",
-        languageName: "",
+        selectedSections: ["Section A"] as string[],
+        newCustomSection: "",
         seatsAvailable: "",
         teachingMethod: "Classroom",
         attendanceSetupId: "",
@@ -726,9 +768,9 @@ export default function ProgramsAdminPage() {
 
     const handleAddBatchFeeSchedule = (
         type = "Course Tuition Fee",
-        unit: "one-time" | "month" | "quarter" | "half-year" | "year" | "week" = "one-time"
+        unit: "one-time" | "month" | "quarter" | "half-year" | "year" | "semester" | "week" = "one-time"
     ) => {
-        setBatchFeeOptions(prev => [...prev, createDefaultBatchFeeOption(type, unit)]);
+        setBatchFeeOptions(prev => [...prev, createDefaultBatchFeeOption(type, unit, batchMeta.programInfo)]);
     };
 
     const handleRemoveBatchFeeSchedule = (id: string) => {
@@ -741,7 +783,7 @@ export default function ProgramsAdminPage() {
 
     const handleClearBatchForm = () => {
         setBatchForm(initialBatchFormData);
-        setBatchFeeOptions([createDefaultBatchFeeOption("Course Tuition Fee", "one-time")]);
+        setBatchFeeOptions([createDefaultBatchFeeOption("Course Tuition Fee", "one-time", batchMeta.programInfo)]);
     };
 
     const fetchProgramBatches = useCallback(async (programId: number) => {
@@ -773,10 +815,21 @@ export default function ProgramsAdminPage() {
         }
     }, [authHeader]);
 
+    const { saveStatus: batchSaveStatus, clearDraft: clearBatchDraft } = useProgressiveSave({
+        formKey: `program_batch:${batchTargetProgram?.id || "new"}`,
+        formState: { batchForm, batchFeeOptions },
+        enabled: batchModalOpen,
+    });
+
     const openBatchModal = (program: InstitutionProgram) => {
         setBatchTargetProgram(program);
         setBatchForm(initialBatchFormData);
-        setBatchFeeOptions([createDefaultBatchFeeOption("Course Tuition Fee", "one-time")]);
+        const progInfo = {
+            duration_value: program.duration_value,
+            duration_unit: program.duration_unit,
+            duration_type: (program as any).duration_type,
+        };
+        setBatchFeeOptions([createDefaultBatchFeeOption("Course Tuition Fee", "one-time", progInfo)]);
         setBatchActiveTab("details");
         setBatchModalOpen(true);
         fetchProgramBatches(program.id);
@@ -786,6 +839,10 @@ export default function ProgramsAdminPage() {
         e.preventDefault();
         if (!batchTargetProgram || !batchForm.batchName.trim()) {
             toast.error("Batch name is required");
+            return;
+        }
+        if (batchForm.selectedSections.length === 0) {
+            toast.error("Please select at least one section");
             return;
         }
         setSavingBatch(true);
@@ -803,15 +860,9 @@ export default function ProgramsAdminPage() {
                 headers: { ...authHeader, "Content-Type": "application/json" },
                 body: JSON.stringify({
                     batchName: batchForm.batchName.trim(),
-                    academicTerm: batchForm.academicTerm || undefined,
-                    academicYearNumber: batchForm.academicYearNumber ? Number(batchForm.academicYearNumber) : undefined,
-                    semesterNumber: batchForm.semesterNumber ? Number(batchForm.semesterNumber) : undefined,
+                    sections: batchForm.selectedSections,
                     attendanceSetupId: batchForm.attendanceSetupId ? batchForm.attendanceSetupId : undefined,
                     attendanceSetupTitle: batchForm.attendanceSetupTitle || undefined,
-                    sectionId: batchForm.sectionId ? Number(batchForm.sectionId) : undefined,
-                    sectionName: batchForm.sectionName.trim(),
-                    languageId: batchForm.languageId ? Number(batchForm.languageId) : undefined,
-                    languageName: batchForm.languageName.trim(),
                     seatsAvailable: batchForm.seatsAvailable ? Number(batchForm.seatsAvailable) : undefined,
                     teachingMethod: batchForm.teachingMethod.trim(),
                     price: computedPrice,
@@ -822,9 +873,12 @@ export default function ProgramsAdminPage() {
             });
             const json = await res.json();
             if (res.ok) {
-                toast.success(json.message || "Batch and Fee Structure saved successfully!");
+                toast.success(json.message || "Batch created successfully");
+                clearBatchDraft();
                 handleClearBatchForm();
-                fetchProgramBatches(batchTargetProgram.id);
+                if (batchTargetProgram) {
+                    fetchProgramBatches(batchTargetProgram.id);
+                }
                 setBatchActiveTab("list");
             } else {
                 toast.error(json.error || "Failed to create batch");
@@ -3998,49 +4052,10 @@ export default function ProgramsAdminPage() {
                                         )}
                                     </div>
 
-                                    {/* 1. Fetch Program Course Year & Semester Option */}
-                                    <div className="space-y-1.5 p-3 rounded-xl border border-primary/20 bg-primary/[0.03]">
-                                        <div className="flex items-center justify-between">
-                                            <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                                                <Calendar className="h-3.5 w-3.5 text-primary" />
-                                                Program Academic Year &amp; Semester Option
-                                            </Label>
-                                            <span className="text-[10px] text-muted-foreground font-normal">
-                                                Select academic term for this batch
-                                            </span>
-                                        </div>
-                                        <Select
-                                            value={(() => {
-                                                const matched = derivedAcademicTerms.find((t) => t.label === batchForm.academicTerm || t.key === batchForm.academicTerm);
-                                                return matched ? matched.key : (batchForm.academicTerm || "full_course");
-                                            })()}
-                                            onValueChange={(val) => {
-                                                const matched = derivedAcademicTerms.find((t) => t.key === val || t.label === val);
-                                                setBatchForm((prev) => ({
-                                                    ...prev,
-                                                    academicTerm: matched ? matched.label : val,
-                                                    academicYearNumber: matched?.year ? String(matched.year) : "",
-                                                    semesterNumber: matched?.semester ? String(matched.semester) : "",
-                                                }));
-                                            }}
-                                        >
-                                            <SelectTrigger className="text-xs h-9 bg-background font-medium">
-                                                <SelectValue placeholder="Choose Academic Year / Semester..." />
-                                            </SelectTrigger>
-                                            <SelectContent className="max-h-56">
-                                                {derivedAcademicTerms.map((t) => (
-                                                    <SelectItem key={t.key} value={t.key} className="text-xs">
-                                                        {t.label}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-
-                                    {/* 2. Batch Name, Section & Language */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                                    {/* 1. Batch Name & Multi-Section Selection */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         {/* Batch Name */}
-                                        <div className="space-y-1.5 md:col-span-2">
+                                        <div className="space-y-1.5">
                                             <Label className="text-xs font-semibold text-foreground">
                                                 Batch Name <span className="text-destructive">*</span>
                                             </Label>
@@ -4053,74 +4068,10 @@ export default function ProgramsAdminPage() {
                                             />
                                         </div>
 
-                                        {/* Section */}
+                                        {/* Seats / Max Students */}
                                         <div className="space-y-1.5">
                                             <Label className="text-xs font-semibold text-foreground">
-                                                Section
-                                            </Label>
-                                            <Select
-                                                value={batchForm.sectionName || batchForm.sectionId}
-                                                onValueChange={(val) => {
-                                                    const matched = batchMeta.sections.find(s => String(s.id) === val || s.name === val);
-                                                    if (matched) {
-                                                        setBatchForm(prev => ({ ...prev, sectionId: String(matched.id), sectionName: matched.name }));
-                                                    } else {
-                                                        setBatchForm(prev => ({ ...prev, sectionId: "", sectionName: val }));
-                                                    }
-                                                }}
-                                            >
-                                                <SelectTrigger className="text-xs h-9 bg-background">
-                                                    <SelectValue placeholder="Select Section" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="Section A">Section A</SelectItem>
-                                                    <SelectItem value="Section B">Section B</SelectItem>
-                                                    <SelectItem value="Section C">Section C</SelectItem>
-                                                    <SelectItem value="Section D">Section D</SelectItem>
-                                                    {batchMeta.sections?.filter(s => !["A", "B", "C", "D", "Section A", "Section B", "Section C", "Section D"].includes(s.name)).map(s => (
-                                                        <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-
-                                        {/* Language */}
-                                        <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold text-foreground">
-                                                Language / Medium
-                                            </Label>
-                                            <Select
-                                                value={batchForm.languageId || batchForm.languageName}
-                                                onValueChange={(val) => {
-                                                    const matched = batchMeta.languages.find(l => String(l.id) === val || l.name === val);
-                                                    if (matched) {
-                                                        setBatchForm(prev => ({ ...prev, languageId: String(matched.id), languageName: matched.name }));
-                                                    } else {
-                                                        setBatchForm(prev => ({ ...prev, languageId: "", languageName: val }));
-                                                    }
-                                                }}
-                                            >
-                                                <SelectTrigger className="text-xs h-9 bg-background">
-                                                    <SelectValue placeholder="Select Language" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="English">English</SelectItem>
-                                                    <SelectItem value="Hindi">Hindi</SelectItem>
-                                                    <SelectItem value="Bilingual">Bilingual (English + Hindi)</SelectItem>
-                                                    {batchMeta.languages?.filter(l => !["English", "Hindi"].includes(l.name)).map(l => (
-                                                        <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    </div>
-
-                                    {/* 3. Seats, Teaching Method & Attendance Setup Dropdown */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                                        {/* Max Students / Seats */}
-                                        <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold text-foreground">
-                                                Seats / Max Students
+                                                Seats / Max Students (per section)
                                             </Label>
                                             <Input
                                                 type="number"
@@ -4131,7 +4082,121 @@ export default function ProgramsAdminPage() {
                                                 className="text-xs h-9 bg-background"
                                             />
                                         </div>
+                                    </div>
 
+                                    {/* 2. Multi-Section Selector */}
+                                    <div className="space-y-2 p-3 rounded-xl border border-border/80 bg-background/80">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                                <Users className="h-3.5 w-3.5 text-primary" />
+                                                Assign Sections <span className="text-destructive">*</span>
+                                            </Label>
+                                            <span className="text-[11px] text-muted-foreground">
+                                                {batchForm.selectedSections.length} section(s) selected
+                                            </span>
+                                        </div>
+
+                                        {/* Quick Section Chips Toggle */}
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            {["Section A", "Section B", "Section C", "Section D", "Section E", "Section F"].map((sec) => {
+                                                const isSelected = batchForm.selectedSections.includes(sec);
+                                                return (
+                                                    <button
+                                                        key={sec}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setBatchForm(prev => ({
+                                                                ...prev,
+                                                                selectedSections: isSelected
+                                                                    ? prev.selectedSections.filter(s => s !== sec)
+                                                                    : [...prev.selectedSections, sec]
+                                                            }));
+                                                        }}
+                                                        className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                                            isSelected
+                                                                ? "bg-primary text-primary-foreground border-primary shadow-2xs"
+                                                                : "bg-muted/40 hover:bg-muted text-foreground border-border"
+                                                        }`}
+                                                    >
+                                                        {isSelected ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3 text-muted-foreground" />}
+                                                        <span>{sec}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* Custom Section Adder */}
+                                        <div className="flex items-center gap-2 pt-1">
+                                            <Input
+                                                placeholder="Add custom section name (e.g. Section G, Batch 1)..."
+                                                value={batchForm.newCustomSection}
+                                                onChange={(e) => setBatchForm(prev => ({ ...prev, newCustomSection: e.target.value }))}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter") {
+                                                        e.preventDefault();
+                                                        const custom = batchForm.newCustomSection.trim();
+                                                        if (custom && !batchForm.selectedSections.includes(custom)) {
+                                                            setBatchForm(prev => ({
+                                                                ...prev,
+                                                                selectedSections: [...prev.selectedSections, custom],
+                                                                newCustomSection: "",
+                                                            }));
+                                                        }
+                                                    }
+                                                }}
+                                                className="text-xs h-8 bg-background flex-1"
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => {
+                                                    const custom = batchForm.newCustomSection.trim();
+                                                    if (custom && !batchForm.selectedSections.includes(custom)) {
+                                                        setBatchForm(prev => ({
+                                                            ...prev,
+                                                            selectedSections: [...prev.selectedSections, custom],
+                                                            newCustomSection: "",
+                                                        }));
+                                                    }
+                                                }}
+                                                className="h-8 text-xs font-semibold"
+                                            >
+                                                + Add Section
+                                            </Button>
+                                        </div>
+
+                                        {/* Selected Section Badges */}
+                                        {batchForm.selectedSections.length > 0 && (
+                                            <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                                                <span className="text-[10px] uppercase font-bold text-muted-foreground mr-1">Active Sections:</span>
+                                                {batchForm.selectedSections.map((sec) => (
+                                                    <Badge
+                                                        key={sec}
+                                                        variant="secondary"
+                                                        className="text-xs font-semibold bg-primary/10 text-primary border border-primary/20 gap-1 pr-1.5"
+                                                    >
+                                                        <span>{sec}</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setBatchForm(prev => ({
+                                                                    ...prev,
+                                                                    selectedSections: prev.selectedSections.filter(s => s !== sec)
+                                                                }));
+                                                            }}
+                                                            className="hover:bg-primary/20 rounded-full p-0.5"
+                                                        >
+                                                            <X className="h-3 w-3" />
+                                                        </button>
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* 3. Teaching Method & Attendance Setup */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                                         {/* Teaching Method */}
                                         <div className="space-y-1.5">
                                             <Label className="text-xs font-semibold text-foreground">
@@ -4216,15 +4281,21 @@ export default function ProgramsAdminPage() {
 
                                 {/* Form Action Buttons */}
                                 <div className="flex items-center justify-between pt-2 border-t">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={handleClearBatchForm}
-                                        disabled={savingBatch}
-                                        className="h-9 px-4 text-xs font-semibold gap-1.5"
-                                    >
-                                        <RotateCcw className="w-3.5 h-3.5" /> Clear
-                                    </Button>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => {
+                                                handleClearBatchForm();
+                                                clearBatchDraft();
+                                            }}
+                                            disabled={savingBatch}
+                                            className="h-9 px-4 text-xs font-semibold gap-1.5"
+                                        >
+                                            <RotateCcw className="w-3.5 h-3.5" /> Clear
+                                        </Button>
+                                        <ProgressiveSaveIndicator status={batchSaveStatus} />
+                                    </div>
 
                                     <div className="flex items-center gap-2">
                                         <Button
@@ -4237,11 +4308,11 @@ export default function ProgramsAdminPage() {
                                         </Button>
                                         <Button
                                             type="submit"
-                                            disabled={savingBatch || !batchForm.batchName.trim()}
+                                            disabled={savingBatch || !batchForm.batchName.trim() || batchForm.selectedSections.length === 0}
                                             className="h-9 px-5 text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
                                         >
                                             {savingBatch ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                                            Save Batch
+                                            Save Batch ({batchForm.selectedSections.length} Section{batchForm.selectedSections.length > 1 ? "s" : ""})
                                         </Button>
                                     </div>
                                 </div>
@@ -4250,68 +4321,97 @@ export default function ProgramsAdminPage() {
 
                         {/* TAB 2: FEE STRUCTURE / PAYMENT PLANS */}
                         <TabsContent value="fee" className="flex-1 overflow-y-auto pr-1 space-y-4 data-[state=active]:flex data-[state=active]:flex-col">
-                            {/* Quick Add Payment Schedule Buttons */}
-                            <div className="p-3.5 rounded-xl border bg-muted/20 space-y-2">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-[11px] font-extrabold text-muted-foreground uppercase mr-1">
-                                        Add Payment Schedule:
-                                    </span>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "one-time")}
-                                        className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
-                                    >
-                                        💳 + One-Time Plan
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "month")}
-                                        className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
-                                    >
-                                        📅 + Monthly Plan
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "quarter")}
-                                        className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
-                                    >
-                                        🎓 + Quarterly (3 mo)
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "half-year")}
-                                        className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
-                                    >
-                                        🏛️ + Half-Yearly (6 mo)
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "year")}
-                                        className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
-                                    >
-                                        📆 + Yearly Plan
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "week")}
-                                        className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
-                                    >
-                                        ⏱️ + Weekly Plan
-                                    </Button>
-                                </div>
-                            </div>
+                            {/* Course Duration Header & Quick Add Payment Schedule Buttons */}
+                            {(() => {
+                                const progInfo = batchMeta.programInfo || batchTargetProgram;
+                                const rawDur = progInfo?.duration_value || 1;
+                                const durVal = typeof rawDur === "number" ? rawDur : parseInt(rawDur) || 1;
+                                const durUnit = (progInfo?.duration_unit || "year").toLowerCase();
+
+                                const isAnnual = durUnit.includes("annual") || durUnit.includes("year");
+                                const totalYears = isAnnual ? durVal : Math.max(1, Math.ceil(durVal / 12));
+                                const totalSemesters = durUnit.includes("sem") ? durVal : totalYears * 2;
+                                const totalMonths = durUnit.includes("month") ? durVal : totalYears * 12;
+
+                                return (
+                                    <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/[0.03] space-y-2.5 shadow-2xs">
+                                        <div className="flex items-center justify-between pb-1.5 border-b border-border/60">
+                                            <div className="flex items-center gap-2">
+                                                <Clock className="h-4 w-4 text-primary" />
+                                                <span className="text-xs font-bold text-foreground">
+                                                    Program Duration: {durVal} {progInfo?.duration_unit || "Years"}
+                                                </span>
+                                                <span className="text-[11px] text-muted-foreground">
+                                                    ({totalYears} Year{totalYears > 1 ? "s" : ""} • {totalSemesters} Semesters • {totalMonths} Months)
+                                                </span>
+                                            </div>
+                                            <Badge variant="outline" className="text-[10px] font-bold bg-background text-primary border-primary/30">
+                                                Auto-Calibrated
+                                            </Badge>
+                                        </div>
+
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="text-[11px] font-extrabold text-muted-foreground uppercase mr-1">
+                                                Add Payment Schedule:
+                                            </span>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "one-time")}
+                                                className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
+                                            >
+                                                💳 + One-Time Plan (1 Full Payment)
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "year")}
+                                                className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
+                                            >
+                                                🏛️ + Yearly Plan ({totalYears} Year{totalYears > 1 ? "s" : ""})
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "semester")}
+                                                className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
+                                            >
+                                                🎓 + Semester Plan ({totalSemesters} Semesters)
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "month")}
+                                                className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
+                                            >
+                                                📅 + Monthly Plan ({totalMonths} Months)
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "quarter")}
+                                                className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
+                                            >
+                                                + Quarterly ({totalYears * 4} Quarters)
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleAddBatchFeeSchedule("Course Tuition Fee", "half-year")}
+                                                className="h-7 text-[11px] font-bold bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/40 border-border/70 gap-1 rounded-lg"
+                                            >
+                                                + Half-Yearly ({totalYears * 2} Terms)
+                                            </Button>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
 
                             {/* Fee Schedules List */}
                             <div className="space-y-3">
@@ -4525,20 +4625,26 @@ export default function ProgramsAdminPage() {
 
                             {/* Fee Tab Action Bar */}
                             <div className="flex items-center justify-between pt-3 border-t">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => setBatchActiveTab("details")}
-                                    className="h-9 px-4 text-xs font-semibold gap-1.5"
-                                >
-                                    <ArrowLeft className="w-3.5 h-3.5" /> Back to Batch Details
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => setBatchActiveTab("details")}
+                                        className="h-9 px-4 text-xs font-semibold gap-1.5"
+                                    >
+                                        <ArrowLeft className="w-3.5 h-3.5" /> Back to Batch Details
+                                    </Button>
+                                    <ProgressiveSaveIndicator status={batchSaveStatus} />
+                                </div>
 
                                 <div className="flex items-center gap-2">
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        onClick={handleClearBatchForm}
+                                        onClick={() => {
+                                            handleClearBatchForm();
+                                            clearBatchDraft();
+                                        }}
                                         disabled={savingBatch}
                                         className="h-9 px-4 text-xs font-semibold gap-1.5"
                                     >

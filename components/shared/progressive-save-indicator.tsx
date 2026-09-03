@@ -7,11 +7,13 @@ import { cn } from "@/lib/utils";
 type ProgressiveSaveIndicatorProps = {
   status: SaveStatus;
   className?: string;
+  onClearDraft?: () => void;
 };
 
 export function ProgressiveSaveIndicator({
   status,
   className,
+  onClearDraft,
 }: ProgressiveSaveIndicatorProps) {
   if (status === "idle") return null;
 
@@ -36,6 +38,15 @@ export function ProgressiveSaveIndicator({
         <>
           <CheckCircle2 className="h-3 w-3 text-emerald-500" />
           <span>Draft saved automatically</span>
+          {onClearDraft && (
+            <button
+              type="button"
+              onClick={onClearDraft}
+              className="ml-1 text-[10px] text-muted-foreground hover:text-destructive underline cursor-pointer"
+            >
+              (Clear draft)
+            </button>
+          )}
         </>
       )}
 

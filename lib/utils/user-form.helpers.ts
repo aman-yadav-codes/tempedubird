@@ -30,6 +30,18 @@ export function currentMonth() {
     return String(new Date().getMonth() + 1);
 }
 
+export function todayDateString() {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
+export function defaultBirthDateString() {
+    return "2000-01-01";
+}
+
 export function asString(value: unknown) {
     return typeof value === "string" ? value : "";
 }
@@ -223,8 +235,12 @@ export function getInitialForm(user?: AdminUserDetails | null): AddUserForm {
         designation_id: user?.profile?.designation_id ? String(user.profile.designation_id) : "",
         designation_name: asString(user?.profile?.designation_name),
         gender: user?.profile?.gender ?? NO_GENDER,
-        joining_date: (user?.profile as any)?.joining_date ? String((user?.profile as any)?.joining_date).split("T")[0] : "",
-        date_of_birth: (user?.profile as any)?.date_of_birth ? String((user?.profile as any)?.date_of_birth).split("T")[0] : "",
+        joining_date: (user?.profile as any)?.joining_date
+            ? String((user?.profile as any)?.joining_date).split("T")[0]
+            : todayDateString(),
+        date_of_birth: (user?.profile as any)?.date_of_birth
+            ? String((user?.profile as any)?.date_of_birth).split("T")[0]
+            : defaultBirthDateString(),
         shift_timing: (user?.profile as any)?.shift_timing ? String((user?.profile as any)?.shift_timing) : "09:00 AM - 05:00 PM (General Shift)",
         employment_status: (user?.profile as any)?.employment_status ? String((user?.profile as any)?.employment_status) : "ACTIVE",
         hourly_charges: user?.profile?.hourly_charges ? String(user.profile.hourly_charges) : "",

@@ -12,6 +12,7 @@ const KNOWN_ROLE_PREFIXES = new Set([
   "institutionadmin",
   "institution-admin",
   "institute",
+  "staff",
   "teacher",
   "student",
   "students",
@@ -97,7 +98,17 @@ const ROLE_PREFIX_MAP: Record<string, string> = {
   university_owner: "instituteadmin",
   library_owner: "instituteadmin",
   pg_owner: "instituteadmin",
-  teacher: "instituteadmin",
+  teacher: "staff",
+  faculty: "staff",
+  hod: "staff",
+  tutor: "staff",
+  teaching_assistant: "staff",
+  doubt_expert: "staff",
+  academic_coordinator: "staff",
+  admission_counselor: "staff",
+  center_head: "staff",
+  administrative_staff: "staff",
+  staff: "staff",
   student: "students",
   parent: "parents",
   guardian: "parents",
@@ -116,6 +127,16 @@ const PREFIX_PRIORITY = [
   "library_owner",
   "pg_owner",
   "teacher",
+  "faculty",
+  "hod",
+  "tutor",
+  "teaching_assistant",
+  "doubt_expert",
+  "academic_coordinator",
+  "admission_counselor",
+  "center_head",
+  "administrative_staff",
+  "staff",
   "student",
   "parent",
   "guardian",
@@ -140,6 +161,17 @@ export function getRoleRoutePrefix(user: RoleRouteUser) {
   const mappedRole = PREFIX_PRIORITY.find((roleCode) => roleCodes.includes(roleCode));
   if (mappedRole) return ROLE_PREFIX_MAP[mappedRole];
 
+  const primaryLower = user?.primary_role?.toLowerCase() ?? "";
+  if (
+    primaryLower.includes("teacher") ||
+    primaryLower.includes("faculty") ||
+    primaryLower.includes("staff") ||
+    primaryLower.includes("tutor") ||
+    primaryLower.includes("counselor")
+  ) {
+    return "staff";
+  }
+
   return sanitizeRolePathSegment(roleCodes[0] ?? user?.primary_role);
 }
 
@@ -156,7 +188,7 @@ export function toCanonicalAdminPath(pathname: string) {
   const parts = pathOnly.split("/").filter(Boolean);
   const firstSegment = parts[0];
 
-  if (!firstSegment || firstSegment === "admin" || firstSegment === "platformadmin" || firstSegment === "instituteadmin" || firstSegment === "institutionadmin") {
+  if (!firstSegment || firstSegment === "admin" || firstSegment === "platformadmin" || firstSegment === "instituteadmin" || firstSegment === "institutionadmin" || firstSegment === "staff") {
     const rest = parts.slice(1).join("/");
     return `/admin${rest ? `/${rest}` : ""}${query ? `?${query}` : ""}`;
   }

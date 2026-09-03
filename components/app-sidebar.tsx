@@ -52,6 +52,7 @@ import {
     CalendarDays,
     StickyNote,
     LifeBuoy,
+    MessageSquare,
     MessageSquareWarning,
     MessageSquareHeart,
     School,
@@ -162,6 +163,7 @@ const navItems: SidebarItem[] = [
         icon: BarChart3,
         children: [
             { title: "Overview", url: "/admin/analytics?tab=overview", permissionPath: "/admin/analytics", icon: Activity },
+            { title: "Enquiry", url: "/admin/analytics?tab=enquiries", permissionPath: "/admin/analytics", icon: MessageSquare },
             { title: "Option Clicks", url: "/admin/analytics?tab=clicks", permissionPath: "/admin/analytics", icon: MousePointerClick },
             { title: "Views", url: "/admin/analytics?tab=views", permissionPath: "/admin/analytics", icon: Eye },
             { title: "Impressions", url: "/admin/analytics?tab=impressions", permissionPath: "/admin/analytics", icon: Layers },
@@ -219,11 +221,11 @@ const navItems: SidebarItem[] = [
         children: [
             { title: "All Staff", url: "/admin/staff", icon: UsersRound },
             { title: "Task Management", url: "/admin/operations/tasks", icon: ClipboardList },
+            { title: "Performance", url: "/admin/staff/performance", icon: TrendingUp },
             { title: "Attendance", url: "/admin/staff/attendance", icon: ClipboardCheck },
             { title: "Queries", url: "/admin/staff/queries", icon: HelpCircle },
             { title: "Our Jobs", url: "/admin/staff/jobs", icon: Briefcase },
             { title: "Applicant", url: "/admin/staff/applicants", icon: UserCheck },
-            { title: "Appreciation Certificate", url: "/admin/staff/appreciation-certificates", icon: Trophy },
         ],
     },
     {
@@ -410,27 +412,13 @@ const navItems: SidebarItem[] = [
         ],
     },
     {
-        title: "Notifications",
-        url: "/admin/notifications",
-        permissionPath: "/admin/notifications",
-        icon: Bell,
-        children: [
-            { title: "All", url: "/admin/notifications", permissionPath: "/admin/notifications", icon: BellRing },
-            { title: "Muted", url: "/admin/notifications/muted", permissionPath: "/admin/notifications/muted", icon: BellOff },
-            { title: "Controls", url: "/admin/notifications/settings", permissionPath: "/admin/notifications/settings", icon: Settings },
-        ],
-    },
-    {
-        title: "Support",
-        url: "/admin/support",
-        icon: LifeBuoy,
-    },
-    {
         title: "Settings",
         url: "/admin/settings",
         icon: Settings,
         children: [
             { title: "General", url: "/admin/settings", icon: Palette },
+            { title: "Controls", url: "/admin/notifications/settings", permissionPath: "/admin/notifications/settings", icon: Settings },
+            { title: "Support", url: "/admin/support", icon: LifeBuoy },
             { title: "Logs", url: "/admin/settings/logs", icon: History },
             { title: "Recycle Bin", url: "/admin/settings/recycle-bin", icon: Trash2 },
             { title: "Tracker", url: "/admin/settings/tracker", icon: Radar },
@@ -559,6 +547,7 @@ export function AppSidebar() {
     const isInstitutionAdmin = Boolean(user?.role_codes?.includes("institution_admin") && !isPlatformAdmin);
     const isParent = Boolean(user?.role_codes?.includes("parent") && !isPlatformAdmin && !isInstitutionAdmin);
     const isStudent = Boolean((user?.role_codes?.includes("student") || (user as any)?.roles?.includes("student") || user?.primary_role === "student") && !isPlatformAdmin && !isInstitutionAdmin && !isParent);
+    const isTeacher = Boolean((user?.role_codes?.includes("teacher") || (user as any)?.roles?.includes("teacher") || user?.primary_role === "teacher" || user?.primary_role?.toLowerCase() === "teacher") && !isPlatformAdmin && !isInstitutionAdmin);
     const isRoleInstitutionUser = Boolean(!isPlatformAdmin && !isInstitutionAdmin && user?.role_codes?.some((role) => ["student", "teacher", "parent", "driver"].includes(role)));
     const [activeInstitutionId, setActiveInstitutionId] = useState<number | null>(() => {
         return getStoredActiveInstitutionId();
@@ -659,12 +648,20 @@ export function AppSidebar() {
                     children: [
                         ...(item.children || []),
                         { title: "Academic Sessions", url: "/admin/institutions/academic-years", icon: CalendarDays },
-                        { title: "Curriculum & Master Data", url: "/admin/master-data", icon: LayoutGrid },
                     ],
                 }];
             }
-            if (isInstitutionAdmin && item.url === "/admin/master-data") {
-                return [];
+            if (item.url === "/admin/master-data") {
+                if (!isPlatformAdmin) {
+                    return [];
+                }
+                return [item];
+            }
+            if (item.url === "/admin/staff") {
+                if (!isPlatformAdmin && !isInstitutionAdmin) {
+                    return [];
+                }
+                return [item];
             }
             if (item.url === "/admin/marketing/packages") {
                 if (!isPlatformAdmin && !isInstitutionAdmin) return [];
@@ -690,14 +687,39 @@ export function AppSidebar() {
                 }
                 return [item];
             }
-            if (item.url === "/admin/content" && item.children) {
-                if (isInstitutionAdmin) {
+            if ((item.url === "/admin/content" || item.url === "/admin/content/notes" || item.title === "Academics") && item.children) {
+                if (isPlatformAdmin || isInstitutionAdmin) {
                     return [];
                 }
-                return isPlatformAdmin ? [item] : [];
+                return [item];
+            }
+            if (item.url === "/admin/generate" && item.children) {
+                if (isPlatformAdmin) {
+                    return [{
+                        ...item,
+                        children: item.children.map((child) => {
+                            if (child.url === "/admin/master-data/institute-calendar") {
+                                return { ...child, title: "Company Calendar" };
+                            }
+                            return child;
+                        }),
+                    }];
+                }
+                return [item];
             }
             if (item.url === "/admin/sales/leads") {
                 return isPlatformAdmin || isInstitutionAdmin ? [item] : [];
+            }
+            if (item.url === "/admin/finance/income" && item.children) {
+                if (isTeacher) {
+                    return [{
+                        ...item,
+                        children: [
+                            { title: "Allowance", url: "/admin/finance/allowance", icon: BadgeDollarSign },
+                        ],
+                    }];
+                }
+                return [item];
             }
             if (isRoleInstitutionUser && item.url === "/admin/institutions") {
                 return [];
@@ -709,19 +731,36 @@ export function AppSidebar() {
                 return [];
             }
             if (item.url === "/admin/classroom/attendance") {
-                return [{
-                    ...item,
-                    title: isParent ? "Child Classroom" : "My Classroom",
-                    children: isParent && item.children
-                        ? item.children.map((child) => ({
-                            ...child,
-                            title: child.title === "My Timetable"
+                const baseChildren = (item.children || [])
+                    .filter((child) => {
+                        if (isTeacher && (child.url === "/admin/students/notes" || child.title === "Notes")) {
+                            return false;
+                        }
+                        return true;
+                    })
+                    .map((child) => ({
+                        ...child,
+                        title: isParent
+                            ? child.title === "My Timetable"
                                 ? "Timetable"
                                 : child.title === "My Fee"
                                   ? "Child Fee"
-                                : child.title,
-                        }))
-                        : item.children,
+                                : child.title
+                            : child.title,
+                    }));
+
+                if (isTeacher) {
+                    baseChildren.push({
+                        title: "Task Management",
+                        url: "/admin/operations/tasks",
+                        icon: ClipboardList,
+                    });
+                }
+
+                return [{
+                    ...item,
+                    title: isParent ? "Child Classroom" : "My Classroom",
+                    children: baseChildren,
                 }];
             }
             if (isStudent && item.url === "/admin/students" && item.children) {
@@ -730,12 +769,32 @@ export function AppSidebar() {
                     children: item.children.filter((child) => child.url !== "/admin/students/notes"),
                 }];
             }
-            if (item.url === "/admin/institution/calendar" && isParent) {
-                return [{ ...item, title: "Institution" }];
-            }
-            if (item.url === "/admin/notifications") {
-                const children = (item.children ?? []).filter((child) => canPage(child.permissionPath ?? child.url));
-                return children.length > 0 ? [{ ...item, children }] : [];
+            if (item.url === "/admin/institution/calendar") {
+                if (isPlatformAdmin || isInstitutionAdmin) {
+                    return [];
+                }
+                const baseChildren = (item.children || [])
+                    .filter((child) => {
+                        if (isTeacher && (child.url === "/admin/institution/my-letters" || child.title === "My Letters")) {
+                            return false;
+                        }
+                        return true;
+                    })
+                    .map((child) => ({ ...child }));
+
+                if (isTeacher) {
+                    baseChildren.splice(3, 0, {
+                        title: "Performance",
+                        url: "/admin/staff/performance",
+                        icon: TrendingUp,
+                    });
+                }
+
+                return [{
+                    ...item,
+                    title: isParent ? "Institution" : "My Institution",
+                    children: baseChildren,
+                }];
             }
             if (item.url === "/admin/institutions" && item.children) {
                 return [{
@@ -759,7 +818,7 @@ export function AppSidebar() {
             }
             return [item];
         }),
-        [canPage, isInstitutionAdmin, isParent, isPlatformAdmin, isRoleInstitutionUser, isStudent]
+        [canPage, isInstitutionAdmin, isParent, isPlatformAdmin, isRoleInstitutionUser, isStudent, isTeacher]
     );
     const visibleNavItems = filterNavItems(
         roleAwareNavItems,
@@ -1196,42 +1255,6 @@ export function AppSidebar() {
                         </SidebarGroup>
                     ))}
                 </SidebarContent>
-
-                <SidebarFooter className="border-t border-sidebar-border/60 p-2">
-                    <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-sidebar-accent/40 border border-sidebar-border/60">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground font-black text-xs flex items-center justify-center shrink-0">
-                                {initials}
-                            </div>
-                            <div className="flex flex-col min-w-0 group-data-[collapsible=icon]:hidden">
-                                <span className="text-xs font-bold text-sidebar-foreground truncate">
-                                    {displayName}
-                                </span>
-                                <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5 truncate">
-                                    <ShieldCheck className="h-3 w-3 shrink-0" /> {activeWorkspaceRole}
-                                </span>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-1 group-data-[collapsible=icon]:hidden">
-                            <button
-                                type="button"
-                                onClick={() => setSwitchAccountOpen(true)}
-                                className="p-1.5 rounded-lg text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0"
-                                title="Switch Account / Quick Login"
-                            >
-                                <Sparkles className="h-4 w-4" />
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setLogoutOpen(true)}
-                                className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer shrink-0"
-                                title="Sign Out"
-                            >
-                                <LogOut className="h-4 w-4" />
-                            </button>
-                        </div>
-                    </div>
-                </SidebarFooter>
             </Sidebar>
 
             {/* Multi-Role Account Switcher Dialog */}

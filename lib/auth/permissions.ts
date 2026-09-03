@@ -85,7 +85,7 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "managestaff.experience_letters", label: "Experience Letters", description: "staff experience letters", scope: "institution", page: "/admin/staff/experience-letters" },
   { key: "managestaff.jobs", label: "Our Jobs", description: "staff vacancies and job postings", scope: "institution", page: "/admin/staff/jobs" },
   { key: "managestaff.applicants", label: "Staff Applicants", description: "job applicants and recruitment pipeline", scope: "institution", page: "/admin/staff/applicants" },
-  { key: "managestaff.appreciation_certificates", label: "Appreciation Certificates", description: "staff appreciation certificates", scope: "institution", page: "/admin/staff/appreciation-certificates" },
+  { key: "managestaff.performance", label: "Staff Performance", description: "staff performance, deliverables, and ROI", scope: "institution", page: "/admin/staff/performance" },
   { key: "managestaff.tasks", label: "Task Management", description: "staff task and deliverable operations", scope: "institution", page: "/admin/operations/tasks" },
   { key: "managestaff.letters", label: "Staff Letters", description: "staff joining and experience letters", scope: "institution", page: "/admin/staff/letters" },
   { key: "rolespermissions.scopetypes", label: "Scope Types", description: "scope types", scope: "platform", page: "/admin/access-control/scope-types" },
@@ -493,7 +493,7 @@ export function isAdminPathVisibleForRole(
       return isTeacherUser(user) || Boolean(user?.role_codes?.includes("driver"));
     }
     if (normalized === "/admin/institution/my-letters") {
-      return isTeacherUser(user) || Boolean(user?.role_codes?.includes("driver"));
+      return !isTeacherUser(user) && Boolean(user?.role_codes?.includes("driver"));
     }
     return isStudentUser(user) || isParentUser(user);
   }
@@ -503,19 +503,13 @@ export function isAdminPathVisibleForRole(
   }
 
   if (normalized === "/admin/staff" || normalized.startsWith("/admin/staff/")) {
+    if (normalized === "/admin/staff/performance") {
+      return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || isTeacherUser(user);
+    }
     return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
   }
 
   if (normalized === "/admin/master-data" || normalized.startsWith("/admin/master-data")) {
-    if (
-      normalized === "/admin/master-data/timetable-setup" ||
-      normalized === "/admin/master-data/attendance-setup" ||
-      normalized === "/admin/master-data/institute-calendar" ||
-      normalized === "/admin/master-data/card-templates" ||
-      normalized === "/admin/master-data"
-    ) {
-      return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
-    }
     return isPlatformAdminUser(user);
   }
 
@@ -534,6 +528,7 @@ export function isAdminPathVisibleForRole(
     return (
       isPlatformAdminUser(user) ||
       isInstitutionAdminUser(user) ||
+      isTeacherUser(user) ||
       Boolean(user?.permissions?.some((permission) => permission.startsWith("finance.platform.")))
     );
   }
@@ -548,6 +543,17 @@ export function isAdminPathVisibleForRole(
 
   if (normalized === "/admin/team" || normalized.startsWith("/admin/team/")) {
     return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, "admin.team.view") || hasPermission(user, "admin.team");
+  }
+
+  if (normalized === "/admin/operations" || normalized.startsWith("/admin/operations/")) {
+    if (normalized === "/admin/operations/tasks") {
+      return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || isTeacherUser(user);
+    }
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+  }
+
+  if (normalized === "/admin/content" || normalized.startsWith("/admin/content/")) {
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || isTeacherUser(user);
   }
 
   if (normalized === "/admin/generate" || normalized.startsWith("/admin/generate/")) {
@@ -1197,10 +1203,16 @@ export function hasAdminPagePermission(
   }
 
   if (normalized === "/admin/staff" || normalized.startsWith("/admin/staff")) {
+    if (normalized === "/admin/staff/performance") {
+      return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || isTeacherUser(user) || hasPermission(user, "managestaff.performance.view");
+    }
     return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
   }
 
   if (normalized === "/admin/operations" || normalized.startsWith("/admin/operations")) {
+    if (normalized === "/admin/operations/tasks") {
+      return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || isTeacherUser(user) || hasPermission(user, "operations.tasks.view");
+    }
     return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
   }
 
@@ -1213,7 +1225,7 @@ export function hasAdminPagePermission(
   }
 
   if (normalized === "/admin/content" || normalized.startsWith("/admin/content")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || isTeacherUser(user);
   }
 
   if (normalized === "/admin/marketing" || normalized.startsWith("/admin/marketing")) {
@@ -1253,16 +1265,8 @@ export function hasAdminPagePermission(
     );
   }
 
-  if (normalized === "/admin/master-data/practice-exams") {
-    return isPlatformAdminUser(user)
-      ? hasPermission(user, "content.practice_exam_reviews.view")
-      : hasPermission(user, "content.practice_exams.view");
-  }
-
-  if (normalized === "/admin/master-data/exams") {
-    return isPlatformAdminUser(user)
-      ? hasPermission(user, "content.exam_reviews.view")
-      : hasPermission(user, "content.exams.view");
+  if (normalized === "/admin/master-data" || normalized.startsWith("/admin/master-data")) {
+    return isPlatformAdminUser(user);
   }
 
   if (normalized === "/admin/classroom/my-timetable") {

@@ -5,6 +5,7 @@ export type RoleOption = {
     name: string;
     code?: string | null;
     scope_code?: string | null;
+    is_designation?: boolean;
 };
 
 export type DesignationOption = {

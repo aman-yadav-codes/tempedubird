@@ -89,7 +89,21 @@ export async function GET(req: Request) {
                     COALESCE(vs.pipeline_stage, 'new enquiry') AS pipeline_stage,
                     COALESCE(vs.estimated_value, 25000)::numeric AS estimated_value,
                     COALESCE(vs.notes, vs.follow_up, 'Direct Course Enquiry') AS notes,
-                    COALESCE(prog.title, vs.current_page_url, 'Course Program') AS preferred_program,
+                    COALESCE(
+                        vs.metadata->>'package_name',
+                        vs.metadata->>'preferred_package',
+                        prog.title,
+                        vs.metadata->>'preferred_program',
+                        vs.current_page_url,
+                        'Course Program'
+                    ) AS preferred_program,
+                    COALESCE(vs.metadata->>'enquiry_type', CASE WHEN vs.metadata->>'package_name' IS NOT NULL OR vs.metadata->>'package_id' IS NOT NULL THEN 'package' ELSE 'program' END) AS enquiry_type,
+                    vs.metadata->>'package_id' AS package_id,
+                    COALESCE(vs.metadata->>'package_name', vs.metadata->>'preferred_package', vs.metadata->>'package_title') AS package_name,
+                    vs.metadata->>'package_price' AS package_price,
+                    vs.metadata->>'package_for' AS package_for,
+                    vs.metadata->>'package_validity' AS package_validity,
+                    COALESCE(vs.metadata, '{}'::jsonb) AS metadata,
                     COALESCE(
                         NULLIF(vs.metadata->>'source', ''),
                         NULLIF(vs.metadata->>'origin_source', ''),
@@ -123,6 +137,13 @@ export async function GET(req: Request) {
                     COALESCE(p.fee_amount, 25000)::numeric AS estimated_value,
                     'Direct Student Enrollment Application' AS notes,
                     COALESCE(p.title, 'Academic Course') AS preferred_program,
+                    'program' AS enquiry_type,
+                    NULL AS package_id,
+                    NULL AS package_name,
+                    NULL AS package_price,
+                    NULL AS package_for,
+                    NULL AS package_validity,
+                    '{}'::jsonb AS metadata,
                     CASE 
                         WHEN se.institution_id IS NOT NULL THEN 'Own Website'
                         ELSE 'EduBird'
@@ -165,6 +186,13 @@ export async function GET(req: Request) {
                     ce.estimated_value,
                     ce.notes,
                     ce.preferred_program,
+                    ce.enquiry_type,
+                    ce.package_id,
+                    ce.package_name,
+                    ce.package_price,
+                    ce.package_for,
+                    ce.package_validity,
+                    ce.metadata,
                     ce.source,
                     ce.created_at,
                     ce.institution_id,
@@ -199,8 +227,26 @@ export async function POST(req: Request) {
         const preferredProgram = String(body.preferred_program || "").trim();
         const source = String(body.source || "Walk-in").trim();
         const notes = String(body.notes || "").trim();
-        const estimatedValue = Number(body.estimated_value || body.value || 25000);
         const pipelineStage = String(body.pipeline_stage || "new").trim();
+
+        // Package specific fields
+        const enquiryType = String(body.enquiry_type || (body.package_id || body.package_name ? "package" : "program")).trim();
+        const packageId = body.package_id ? Number(body.package_id) : null;
+        const packageName = String(body.package_name || "").trim();
+        const packagePrice = body.package_price ? String(body.package_price).trim() : null;
+        const packageFor = body.package_for ? String(body.package_for).trim() : null;
+        const packageValidity = body.package_validity ? String(body.package_validity).trim() : null;
+        const packageFeatures = Array.isArray(body.package_features) ? body.package_features : [];
+
+        const resolvedItemName = enquiryType === "package"
+            ? (packageName || preferredProgram || "Platform Package")
+            : (preferredProgram || packageName || "Course Program");
+
+        let estimatedValue = Number(body.estimated_value || body.value || 25000);
+        if (body.package_price_num && !isNaN(Number(body.package_price_num))) {
+            estimatedValue = Number(body.package_price_num);
+        }
+
         const url = new URL(req.url);
         const institutionIdParam = url.searchParams.get("institutionId") || req.headers.get("x-institution-id");
         let institutionId: number | null = null;
@@ -221,6 +267,7 @@ export async function POST(req: Request) {
         const fullNotes = [
             notes,
             parentName ? `Parent/Guardian: ${parentName}` : null,
+            enquiryType === "package" ? `Selected Package: ${resolvedItemName} (${packagePrice || "Standard"})` : null,
             `Source: ${source}`,
         ].filter(Boolean).join(" | ");
 
@@ -254,13 +301,21 @@ export async function POST(req: Request) {
                 pipelineStage,
                 estimatedValue,
                 fullNotes,
-                preferredProgram || "/courses",
+                resolvedItemName,
                 source,
                 JSON.stringify({
                     source: source,
                     source_type: source,
                     origin_source: source,
                     parent_name: parentName || null,
+                    enquiry_type: enquiryType,
+                    package_id: packageId,
+                    package_name: packageName || (enquiryType === "package" ? resolvedItemName : null),
+                    package_price: packagePrice || null,
+                    package_for: packageFor || null,
+                    package_validity: packageValidity || null,
+                    package_features: packageFeatures,
+                    preferred_program: resolvedItemName,
                 }),
             ]
         );

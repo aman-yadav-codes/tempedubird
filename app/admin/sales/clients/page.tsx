@@ -27,6 +27,13 @@ import {
   Building,
   GraduationCap,
   HeartHandshake,
+  Upload,
+  Download,
+  FileSpreadsheet,
+  Check,
+  ChevronRight,
+  ChevronLeft,
+  UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +55,14 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useProgressiveSave } from "@/hooks/use-progressive-save";
+import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -57,6 +72,33 @@ import {
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
+import {
+  GoogleLocationPicker,
+  type PickedLocation,
+} from "@/components/shared/google-location-picker";
+import { BulkUploadClientsDialog } from "./_components/bulk-upload-dialog";
+
+export type PhoneEntry = {
+  id: string;
+  number: string;
+  label: string;
+  is_primary: boolean;
+};
+
+export type EmailEntry = {
+  id: string;
+  email: string;
+  label: string;
+  is_primary: boolean;
+};
+
+export type ContactPersonEntry = {
+  id: string;
+  name: string;
+  designation: string;
+  phone: string;
+  email: string;
+};
 
 export type VendorClientItem = {
   id: number;
@@ -65,14 +107,22 @@ export type VendorClientItem = {
   contact_person: string | null;
   category: string;
   vendor_type: string; // 'client' | 'corporate' | 'sponsor' | 'partner' | 'vendor' | 'individual'
+  client_type?: string;
   email: string | null;
   phone: string | null;
+  phones?: PhoneEntry[];
+  emails?: EmailEntry[];
+  contacts?: ContactPersonEntry[];
   website: string | null;
   profile_image?: string | null;
   address: string | null;
   city: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  country?: string | null;
   location: string | null;
   area?: string | null;
+  location_data?: any;
   rating: number;
   description: string | null;
   notes: string | null;
@@ -103,6 +153,23 @@ const SUGGESTED_CATEGORIES = [
   "General Client",
 ];
 
+const PHONE_LABELS = [
+  "Primary Mobile",
+  "Office / Landline",
+  "WhatsApp",
+  "Alternate",
+  "Toll-Free",
+  "Accounts / Finance",
+];
+
+const EMAIL_LABELS = [
+  "Work / Official",
+  "Billing / Accounts",
+  "Support / Helpdesk",
+  "HR / Recruitment",
+  "Personal",
+];
+
 export default function SalesClientsPage() {
   const { accessToken } = useAuthStore();
   const { activeInstitution } = useActiveInstitution();
@@ -120,26 +187,71 @@ export default function SalesClientsPage() {
 
   // Modal State
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogTab, setDialogTab] = useState<"company" | "contacts" | "location">("company");
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<VendorClientItem | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
 
-  // Form Fields
+  // Form Fields - Tab 1: Company Details
   const [formName, setFormName] = useState("");
   const [formCompanyName, setFormCompanyName] = useState("");
   const [formContactPerson, setFormContactPerson] = useState("");
   const [formCategory, setFormCategory] = useState("Corporate Training Client");
   const [formType, setFormType] = useState("client");
-  const [formPhone, setFormPhone] = useState("");
-  const [formEmail, setFormEmail] = useState("");
   const [formWebsite, setFormWebsite] = useState("");
-  const [formCity, setFormCity] = useState("");
-  const [formLocation, setFormLocation] = useState("");
-  const [formAddress, setFormAddress] = useState("");
-  const [formRating, setFormRating] = useState("4.8");
   const [formDescription, setFormDescription] = useState("");
   const [formNotes, setFormNotes] = useState("");
   const [formStatus, setFormStatus] = useState<"active" | "inactive">("active");
+
+  // Form Fields - Tab 2: Multiple Contacts (Phones & Emails)
+  const [formPhones, setFormPhones] = useState<PhoneEntry[]>([
+    { id: "1", number: "", label: "Primary Mobile", is_primary: true },
+  ]);
+  const [formEmails, setFormEmails] = useState<EmailEntry[]>([
+    { id: "1", email: "", label: "Work / Official", is_primary: true },
+  ]);
+  const [formAdditionalContacts, setFormAdditionalContacts] = useState<ContactPersonEntry[]>([]);
+
+  // Form Fields - Tab 3: Location & Address
+  const [formAddress, setFormAddress] = useState("");
+  const [formCity, setFormCity] = useState("");
+  const [formState, setFormState] = useState("");
+  const [formArea, setFormArea] = useState("");
+  const [formPincode, setFormPincode] = useState("");
+  const [formCountry, setFormCountry] = useState("India");
+  const [formLocationPicked, setFormLocationPicked] = useState<PickedLocation | null>(null);
+
+  const clientFormState = useMemo(() => ({
+    formName,
+    formCompanyName,
+    formWebsite,
+    formDescription,
+    formPhones,
+    formEmails,
+    formAddress,
+    formCity,
+    formState,
+    formPincode,
+  }), [formName, formCompanyName, formWebsite, formDescription, formPhones, formEmails, formAddress, formCity, formState, formPincode]);
+
+  const { saveStatus: clientSaveStatus, clearDraft: clearClientDraft } = useProgressiveSave({
+    formKey: `sales_client:${editingItem?.id || "new"}`,
+    formState: clientFormState,
+    enabled: dialogOpen,
+    onRestore: (draft) => {
+      if (draft.formName) setFormName(draft.formName);
+      if (draft.formCompanyName) setFormCompanyName(draft.formCompanyName);
+      if (draft.formWebsite) setFormWebsite(draft.formWebsite);
+      if (draft.formDescription) setFormDescription(draft.formDescription);
+      if (Array.isArray(draft.formPhones)) setFormPhones(draft.formPhones);
+      if (Array.isArray(draft.formEmails)) setFormEmails(draft.formEmails);
+      if (draft.formAddress) setFormAddress(draft.formAddress);
+      if (draft.formCity) setFormCity(draft.formCity);
+      if (draft.formState) setFormState(draft.formState);
+      if (draft.formPincode) setFormPincode(draft.formPincode);
+    },
+  });
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
@@ -170,77 +282,234 @@ export default function SalesClientsPage() {
     fetchRecords();
   }, [fetchRecords]);
 
+  const handleAddPhone = () => {
+    setFormPhones((prev) => [
+      ...prev,
+      { id: String(Date.now()), number: "", label: "Alternate", is_primary: prev.length === 0 },
+    ]);
+  };
+
+  const handleRemovePhone = (index: number) => {
+    setFormPhones((prev) => {
+      if (prev.length <= 1) return prev;
+      const next = prev.filter((_, i) => i !== index);
+      if (!next.some((p) => p.is_primary)) {
+        next[0].is_primary = true;
+      }
+      return next;
+    });
+  };
+
+  const handleSetPrimaryPhone = (index: number) => {
+    setFormPhones((prev) =>
+      prev.map((p, i) => ({ ...p, is_primary: i === index }))
+    );
+  };
+
+  const handleUpdatePhone = (index: number, patch: Partial<PhoneEntry>) => {
+    setFormPhones((prev) =>
+      prev.map((p, i) => (i === index ? { ...p, ...patch } : p))
+    );
+  };
+
+  const handleAddEmail = () => {
+    setFormEmails((prev) => [
+      ...prev,
+      { id: String(Date.now()), email: "", label: "Billing / Accounts", is_primary: prev.length === 0 },
+    ]);
+  };
+
+  const handleRemoveEmail = (index: number) => {
+    setFormEmails((prev) => {
+      if (prev.length <= 1) return prev;
+      const next = prev.filter((_, i) => i !== index);
+      if (!next.some((e) => e.is_primary)) {
+        next[0].is_primary = true;
+      }
+      return next;
+    });
+  };
+
+  const handleSetPrimaryEmail = (index: number) => {
+    setFormEmails((prev) =>
+      prev.map((e, i) => ({ ...e, is_primary: i === index }))
+    );
+  };
+
+  const handleUpdateEmail = (index: number, patch: Partial<EmailEntry>) => {
+    setFormEmails((prev) =>
+      prev.map((e, i) => (i === index ? { ...e, ...patch } : e))
+    );
+  };
+
+  const handleAddContactPerson = () => {
+    setFormAdditionalContacts((prev) => [
+      ...prev,
+      { id: String(Date.now()), name: "", designation: "", phone: "", email: "" },
+    ]);
+  };
+
+  const handleRemoveContactPerson = (index: number) => {
+    setFormAdditionalContacts((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateContactPerson = (index: number, patch: Partial<ContactPersonEntry>) => {
+    setFormAdditionalContacts((prev) =>
+      prev.map((c, i) => (i === index ? { ...c, ...patch } : c))
+    );
+  };
+
   const handleOpenAdd = () => {
     setEditingItem(null);
+    setDialogTab("company");
     setFormName("");
     setFormCompanyName("");
     setFormContactPerson("");
-    setFormCategory("Corporate Training Client");
-    setFormType(activeTab === "all" ? "client" : activeTab);
-    setFormPhone("");
-    setFormEmail("");
+    setFormCategory("Corporate Client");
+    setFormType("corporate");
     setFormWebsite("");
-    setFormCity("");
-    setFormLocation("");
-    setFormAddress("");
-    setFormRating("4.8");
     setFormDescription("");
     setFormNotes("");
     setFormStatus("active");
+
+    // Multiple Phones
+    setFormPhones([{ id: "1", number: "", label: "Primary Mobile", is_primary: true }]);
+    // Multiple Emails
+    setFormEmails([{ id: "1", email: "", label: "Work / Official", is_primary: true }]);
+    // Additional Contacts
+    setFormAdditionalContacts([]);
+
+    // Location
+    setFormAddress("");
+    setFormCity("");
+    setFormState("");
+    setFormArea("");
+    setFormPincode("");
+    setFormCountry("India");
+    setFormLocationPicked(null);
+
     setDialogOpen(true);
   };
 
   const handleOpenEdit = (item: VendorClientItem) => {
     setEditingItem(item);
+    setDialogTab("company");
     setFormName(item.name || "");
     setFormCompanyName(item.company_name || item.name || "");
     setFormContactPerson(item.contact_person || item.name || "");
-    setFormCategory(item.category || "Corporate Training Client");
-    setFormType(item.vendor_type || "client");
-    setFormPhone(item.phone || "");
-    setFormEmail(item.email || "");
+    setFormCategory(item.category || "Corporate Client");
+    setFormType(item.vendor_type || item.client_type || "corporate");
     setFormWebsite(item.website || "");
-    setFormCity(item.city || "");
-    setFormLocation(item.location || item.area || "");
-    setFormAddress(item.address || "");
-    setFormRating(item.rating ? String(item.rating) : "4.8");
     setFormDescription(item.description || "");
     setFormNotes(item.notes || "");
     setFormStatus(item.status || "active");
+
+    // Phones
+    if (Array.isArray(item.phones) && item.phones.length > 0) {
+      setFormPhones(
+        item.phones.map((p, i) => ({
+          id: p.id || String(i + 1),
+          number: p.number || "",
+          label: p.label || (i === 0 ? "Primary Mobile" : "Alternate"),
+          is_primary: p.is_primary ?? (i === 0),
+        }))
+      );
+    } else if (item.phone) {
+      setFormPhones([{ id: "1", number: item.phone, label: "Primary Mobile", is_primary: true }]);
+    } else {
+      setFormPhones([{ id: "1", number: "", label: "Primary Mobile", is_primary: true }]);
+    }
+
+    // Emails
+    if (Array.isArray(item.emails) && item.emails.length > 0) {
+      setFormEmails(
+        item.emails.map((e, i) => ({
+          id: e.id || String(i + 1),
+          email: e.email || "",
+          label: e.label || (i === 0 ? "Work / Official" : "Billing / Accounts"),
+          is_primary: e.is_primary ?? (i === 0),
+        }))
+      );
+    } else if (item.email) {
+      setFormEmails([{ id: "1", email: item.email, label: "Work / Official", is_primary: true }]);
+    } else {
+      setFormEmails([{ id: "1", email: "", label: "Work / Official", is_primary: true }]);
+    }
+
+    // Additional Contacts
+    if (Array.isArray(item.contacts)) {
+      setFormAdditionalContacts(
+        item.contacts.map((c, i) => ({
+          id: c.id || String(i + 1),
+          name: c.name || "",
+          designation: c.designation || "",
+          phone: c.phone || "",
+          email: c.email || "",
+        }))
+      );
+    } else {
+      setFormAdditionalContacts([]);
+    }
+
+    // Location
+    setFormAddress(item.address || "");
+    setFormCity(item.city || "");
+    setFormState(item.state || "");
+    setFormArea(item.area || item.location || "");
+    setFormPincode(item.pincode || "");
+    setFormCountry(item.country || "India");
+    if (item.location_data && typeof item.location_data === "object") {
+      setFormLocationPicked(item.location_data);
+    } else {
+      setFormLocationPicked(null);
+    }
+
     setDialogOpen(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim()) {
-      toast.error("Please enter a name or business title");
+    const company = formCompanyName.trim();
+    const contact = formName.trim();
+    if (!company && !contact) {
+      toast.error("Please enter a business name or contact person name");
+      setDialogTab("company");
       return;
     }
-    if (!formPhone.trim()) {
-      toast.error("Please enter a phone number");
-      return;
-    }
+
+    const validPhones = formPhones.filter((p) => p.number.trim().length > 0);
+    const validEmails = formEmails.filter((e) => e.email.trim().length > 0);
+    const primaryPhone = validPhones.find((p) => p.is_primary)?.number || validPhones[0]?.number || "";
+    const primaryEmail = validEmails.find((e) => e.is_primary)?.email || validEmails[0]?.email || "";
 
     setSaving(true);
     try {
       const payload = {
         id: editingItem?.id,
-        name: formName.trim(),
-        company_name: formCompanyName.trim() || formName.trim(),
-        contact_person: formContactPerson.trim() || formName.trim(),
-        category: formCategory.trim() || "Corporate Training Client",
-        vendor_type: formType,
-        client_type: formType,
-        phone: formPhone.trim(),
-        email: formEmail.trim() || null,
+        name: contact || company,
+        company_name: company || contact,
+        contact_person: contact || company,
+        category: formCategory || "Corporate Client",
+        vendor_type: formType || "corporate",
+        client_type: formType || "corporate",
+        phone: primaryPhone || null,
+        email: primaryEmail || null,
+        phones: validPhones,
+        emails: validEmails,
+        contacts: formAdditionalContacts.filter((c) => c.name.trim().length > 0),
         website: formWebsite.trim() || null,
-        city: editingItem?.city || null,
-        location: editingItem?.location || null,
         address: formAddress.trim() || null,
+        city: formCity.trim() || null,
+        state: formState.trim() || null,
+        area: formArea.trim() || null,
+        location: formArea.trim() || null,
+        pincode: formPincode.trim() || null,
+        country: formCountry.trim() || "India",
+        location_data: formLocationPicked || null,
         rating: editingItem?.rating ? Number(editingItem.rating) : 4.8,
         description: formDescription.trim() || null,
         notes: formNotes.trim() || null,
-        status: editingItem?.status || "active",
+        status: formStatus || "active",
         institution_id: activeInstitution?.id || null,
       };
 
@@ -259,6 +528,7 @@ export default function SalesClientsPage() {
 
       toast.success(editingItem ? "Client updated successfully in database" : "Client added successfully to database");
       setDialogOpen(false);
+      clearClientDraft();
       fetchRecords();
     } catch (err: any) {
       toast.error(err.message || "Failed to save record");
@@ -346,6 +616,15 @@ export default function SalesClientsPage() {
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin text-primary" : ""}`} />
             Refresh
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setBulkDialogOpen(true)}
+            className="rounded-xl h-10 px-3.5 gap-2 border-primary/20 hover:bg-primary/5 text-primary font-semibold"
+          >
+            <Upload className="w-4 h-4" />
+            Bulk Upload
           </Button>
           <Button
             onClick={handleOpenAdd}
@@ -617,17 +896,31 @@ export default function SalesClientsPage() {
                       {item.phone && (
                         <div className="flex items-center gap-2">
                           <Phone className="w-3.5 h-3.5 text-primary shrink-0" />
-                          <a href={`tel:${item.phone}`} className="hover:underline hover:text-foreground font-mono">
-                            {item.phone}
-                          </a>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <a href={`tel:${item.phone}`} className="hover:underline hover:text-foreground font-mono">
+                              {item.phone}
+                            </a>
+                            {item.phones && item.phones.length > 1 && (
+                              <Badge variant="secondary" className="text-[10px] px-1 py-0 font-mono h-4">
+                                +{item.phones.length - 1} more
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       )}
                       {item.email && (
                         <div className="flex items-center gap-2">
                           <Mail className="w-3.5 h-3.5 text-primary shrink-0" />
-                          <a href={`mailto:${item.email}`} className="hover:underline hover:text-foreground truncate">
-                            {item.email}
-                          </a>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <a href={`mailto:${item.email}`} className="hover:underline hover:text-foreground truncate max-w-[170px]">
+                              {item.email}
+                            </a>
+                            {item.emails && item.emails.length > 1 && (
+                              <Badge variant="secondary" className="text-[10px] px-1 py-0 font-sans h-4">
+                                +{item.emails.length - 1} more
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       )}
                       {item.website && (
@@ -715,8 +1008,26 @@ export default function SalesClientsPage() {
                       </td>
                       <td className="p-3.5">{item.category}</td>
                       <td className="p-3.5 space-y-0.5 font-mono">
-                        {item.phone && <div>{item.phone}</div>}
-                        {item.email && <div className="text-muted-foreground font-sans truncate max-w-[160px]">{item.email}</div>}
+                        {item.phone && (
+                          <div className="flex items-center gap-1">
+                            <span>{item.phone}</span>
+                            {item.phones && item.phones.length > 1 && (
+                              <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5">
+                                +{item.phones.length - 1}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                        {item.email && (
+                          <div className="text-muted-foreground font-sans truncate max-w-[160px] flex items-center gap-1">
+                            <span className="truncate">{item.email}</span>
+                            {item.emails && item.emails.length > 1 && (
+                              <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5">
+                                +{item.emails.length - 1}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="p-3.5 max-w-[200px] truncate">{item.address || "-"}</td>
                       <td className="p-3.5">
@@ -756,10 +1067,10 @@ export default function SalesClientsPage() {
         </div>
       )}
 
-      {/* Add / Edit Dialog */}
+      {/* Add / Edit Dialog with 3 Dedicated Tabs */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl p-6">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl">
+          <DialogHeader className="p-6 pb-2">
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Building2 className="w-5 h-5 text-primary" />
               {editingItem ? "Edit Client Record" : "Add New Client"}
@@ -769,151 +1080,524 @@ export default function SalesClientsPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSave} className="space-y-4 pt-2">
-            {/* Record Type & Category */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Client Type *</Label>
-                <Select value={formType} onValueChange={setFormType}>
-                  <SelectTrigger className="text-xs h-9">
-                    <SelectValue placeholder="Select Client Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ENTITY_TYPES.map((t) => (
-                      <SelectItem key={t.id} value={t.id} className="text-xs">
-                        {t.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Category / Industry *</Label>
-                <Select value={formCategory} onValueChange={setFormCategory}>
-                  <SelectTrigger className="text-xs h-9">
-                    <SelectValue placeholder="Select Category" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-56">
-                    {SUGGESTED_CATEGORIES.map((cat) => (
-                      <SelectItem key={cat} value={cat} className="text-xs">
-                        {cat}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          {/* Navigation Tabs Bar */}
+          <div className="px-6 pb-3 border-b">
+            <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-xl border border-border/50">
+              <button
+                type="button"
+                onClick={() => setDialogTab("company")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold rounded-lg transition-all ${
+                  dialogTab === "company"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5 text-primary" />
+                Company Details
+              </button>
+              <button
+                type="button"
+                onClick={() => setDialogTab("contacts")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold rounded-lg transition-all ${
+                  dialogTab === "contacts"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Phone className="w-3.5 h-3.5 text-primary" />
+                Contacts & Numbers
+                {formPhones.filter((p) => p.number.trim()).length > 0 && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 ml-1">
+                    {formPhones.filter((p) => p.number.trim()).length}
+                  </Badge>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDialogTab("location")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold rounded-lg transition-all ${
+                  dialogTab === "location"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <MapPin className="w-3.5 h-3.5 text-primary" />
+                Location & Address
+              </button>
             </div>
+          </div>
 
-            {/* Name and Company Name */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Business / Company Name *</Label>
-                <Input
-                  placeholder="e.g., Apex Tech Solutions Pvt Ltd"
-                  value={formCompanyName}
-                  onChange={(e) => {
-                    setFormCompanyName(e.target.value);
-                    if (!formName) setFormName(e.target.value);
-                  }}
-                  className="text-xs h-9"
-                  required
-                />
-              </div>
+          <form onSubmit={handleSave} className="flex flex-col flex-1 overflow-hidden">
+            <div className="p-6 overflow-y-auto max-h-[calc(85vh-180px)] space-y-4">
+              {/* TAB 1: COMPANY DETAILS */}
+              {dialogTab === "company" && (
+                <div className="space-y-4">
+                  {/* Name and Company Name */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs font-semibold">Business / Company Name *</Label>
+                      <Input
+                        placeholder="e.g., Apex Tech Solutions Pvt Ltd"
+                        value={formCompanyName}
+                        onChange={(e) => {
+                          setFormCompanyName(e.target.value);
+                          if (!formName) setFormName(e.target.value);
+                        }}
+                        className="text-xs h-9"
+                        required
+                      />
+                    </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Contact Person / Owner Name *</Label>
-                <Input
-                  placeholder="e.g., Rajesh Sharma"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  className="text-xs h-9"
-                  required
-                />
-              </div>
-            </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs font-semibold">Contact Person / Owner Name *</Label>
+                      <Input
+                        placeholder="e.g., Rajesh Sharma"
+                        value={formName}
+                        onChange={(e) => setFormName(e.target.value)}
+                        className="text-xs h-9"
+                        required
+                      />
+                    </div>
+                  </div>
 
-            {/* Phone and Email */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Phone Number *</Label>
-                <Input
-                  placeholder="+91 98765 43210"
-                  value={formPhone}
-                  onChange={(e) => setFormPhone(e.target.value)}
-                  className="text-xs h-9 font-mono"
-                  required
-                />
-              </div>
+                  {/* Website */}
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">Website / Profile Link</Label>
+                    <Input
+                      placeholder="https://company.com"
+                      value={formWebsite}
+                      onChange={(e) => setFormWebsite(e.target.value)}
+                      className="text-xs h-9"
+                    />
+                  </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Email Address</Label>
-                <Input
-                  type="email"
-                  placeholder="partner@company.com"
-                  value={formEmail}
-                  onChange={(e) => setFormEmail(e.target.value)}
-                  className="text-xs h-9"
-                />
-              </div>
-            </div>
+                  {/* Description / Notes */}
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">Description / Services Provided</Label>
+                    <Textarea
+                      placeholder="Details of partnership, corporate terms, or student benefits..."
+                      value={formDescription}
+                      onChange={(e) => setFormDescription(e.target.value)}
+                      rows={3}
+                      className="text-xs resize-none"
+                    />
+                  </div>
 
-            {/* Website */}
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Website / Profile Link</Label>
-              <Input
-                placeholder="https://company.com"
-                value={formWebsite}
-                onChange={(e) => setFormWebsite(e.target.value)}
-                className="text-xs h-9"
-              />
-            </div>
+                  {/* Status Selection */}
+                  <div className="space-y-1 pt-1">
+                    <Label className="text-xs font-semibold">Account Status</Label>
+                    <Select value={formStatus} onValueChange={(val: any) => setFormStatus(val)}>
+                      <SelectTrigger className="text-xs h-9">
+                        <SelectValue placeholder="Select Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active" className="text-xs">Active (Available for sales & engagements)</SelectItem>
+                        <SelectItem value="inactive" className="text-xs">Inactive (Archived)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
 
-            {/* Full Address */}
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Full Address</Label>
-              <Input
-                placeholder="Street name, landmark, building number, city..."
-                value={formAddress}
-                onChange={(e) => setFormAddress(e.target.value)}
-                className="text-xs h-9"
-              />
-            </div>
+              {/* TAB 2: CONTACTS & NUMBERS */}
+              {dialogTab === "contacts" && (
+                <div className="space-y-5">
+                  {/* Phone Numbers Section */}
+                  <div className="rounded-xl border p-4 bg-card/60 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-primary" />
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Phone Numbers</h4>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                          {formPhones.length}
+                        </Badge>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAddPhone}
+                        className="text-xs h-7 gap-1 font-semibold"
+                      >
+                        <Plus className="w-3 h-3" />
+                        Add Phone
+                      </Button>
+                    </div>
 
-            {/* Description / Notes */}
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Description / Services Provided</Label>
-              <Textarea
-                placeholder="Details of partnership, corporate terms, or student benefits..."
-                value={formDescription}
-                onChange={(e) => setFormDescription(e.target.value)}
-                rows={2}
-                className="text-xs resize-none"
-              />
+                    <div className="space-y-2.5 pt-1">
+                      {formPhones.map((phoneItem, idx) => (
+                        <div key={phoneItem.id || idx} className="flex items-center gap-2">
+                          <Input
+                            placeholder="+91 98765 43210"
+                            value={phoneItem.number}
+                            onChange={(e) => handleUpdatePhone(idx, { number: e.target.value })}
+                            className="text-xs h-9 font-mono flex-1"
+                          />
+                          <Select
+                            value={phoneItem.label}
+                            onValueChange={(val) => handleUpdatePhone(idx, { label: val })}
+                          >
+                            <SelectTrigger className="text-xs h-9 w-36">
+                              <SelectValue placeholder="Type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PHONE_LABELS.map((lbl) => (
+                                <SelectItem key={lbl} value={lbl} className="text-xs">
+                                  {lbl}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+
+                          <button
+                            type="button"
+                            onClick={() => handleSetPrimaryPhone(idx)}
+                            className={`px-2 py-1.5 text-[11px] font-semibold rounded-md transition-all shrink-0 ${
+                              phoneItem.is_primary
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {phoneItem.is_primary ? "Primary" : "Make Primary"}
+                          </button>
+
+                          {formPhones.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemovePhone(idx)}
+                              className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-500/10 shrink-0"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Email Addresses Section */}
+                  <div className="rounded-xl border p-4 bg-card/60 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-primary" />
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Email Addresses</h4>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                          {formEmails.length}
+                        </Badge>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAddEmail}
+                        className="text-xs h-7 gap-1 font-semibold"
+                      >
+                        <Plus className="w-3 h-3" />
+                        Add Email
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2.5 pt-1">
+                      {formEmails.map((emailItem, idx) => (
+                        <div key={emailItem.id || idx} className="flex items-center gap-2">
+                          <Input
+                            type="email"
+                            placeholder="partner@company.com"
+                            value={emailItem.email}
+                            onChange={(e) => handleUpdateEmail(idx, { email: e.target.value })}
+                            className="text-xs h-9 flex-1"
+                          />
+                          <Select
+                            value={emailItem.label}
+                            onValueChange={(val) => handleUpdateEmail(idx, { label: val })}
+                          >
+                            <SelectTrigger className="text-xs h-9 w-36">
+                              <SelectValue placeholder="Type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {EMAIL_LABELS.map((lbl) => (
+                                <SelectItem key={lbl} value={lbl} className="text-xs">
+                                  {lbl}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+
+                          <button
+                            type="button"
+                            onClick={() => handleSetPrimaryEmail(idx)}
+                            className={`px-2 py-1.5 text-[11px] font-semibold rounded-md transition-all shrink-0 ${
+                              emailItem.is_primary
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {emailItem.is_primary ? "Primary" : "Make Primary"}
+                          </button>
+
+                          {formEmails.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveEmail(idx)}
+                              className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-500/10 shrink-0"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Additional Representatives (Optional) */}
+                  <div className="rounded-xl border p-4 bg-card/60 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <UsersRound className="w-4 h-4 text-primary" />
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Key Representatives</h4>
+                        {formAdditionalContacts.length > 0 && (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                            {formAdditionalContacts.length}
+                          </Badge>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAddContactPerson}
+                        className="text-xs h-7 gap-1 font-semibold"
+                      >
+                        <Plus className="w-3 h-3" />
+                        Add Representative
+                      </Button>
+                    </div>
+
+                    {formAdditionalContacts.length === 0 ? (
+                      <p className="text-[11px] text-muted-foreground italic">
+                        Optional: Add secondary contacts (e.g. HR Manager, Procurement Head).
+                      </p>
+                    ) : (
+                      <div className="space-y-2.5 pt-1">
+                        {formAdditionalContacts.map((c, idx) => (
+                          <div key={c.id || idx} className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center p-2.5 rounded-lg border bg-background">
+                            <Input
+                              placeholder="Full Name"
+                              value={c.name}
+                              onChange={(e) => handleUpdateContactPerson(idx, { name: e.target.value })}
+                              className="text-xs h-8"
+                            />
+                            <Input
+                              placeholder="Designation / Role"
+                              value={c.designation}
+                              onChange={(e) => handleUpdateContactPerson(idx, { designation: e.target.value })}
+                              className="text-xs h-8"
+                            />
+                            <Input
+                              placeholder="Direct Phone"
+                              value={c.phone}
+                              onChange={(e) => handleUpdateContactPerson(idx, { phone: e.target.value })}
+                              className="text-xs h-8 font-mono"
+                            />
+                            <div className="flex items-center gap-1.5">
+                              <Input
+                                placeholder="Direct Email"
+                                value={c.email}
+                                onChange={(e) => handleUpdateContactPerson(idx, { email: e.target.value })}
+                                className="text-xs h-8 flex-1"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveContactPerson(idx)}
+                                className="h-7 w-7 p-0 text-rose-600 hover:bg-rose-500/10 shrink-0"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: LOCATION & ADDRESS */}
+              {dialogTab === "location" && (
+                <div className="space-y-4">
+                  <div className="rounded-xl border p-4 bg-card/60 space-y-3">
+                    <GoogleLocationPicker
+                      value={formLocationPicked}
+                      onChange={(location) => {
+                        setFormLocationPicked(location);
+                        if (location.full_address || location.formatted_address) {
+                          setFormAddress(location.full_address || location.formatted_address);
+                        }
+                        if (location.city) setFormCity(location.city);
+                        if (location.state) setFormState(location.state);
+                        if (location.area) setFormArea(location.area);
+                        if (location.pincode) setFormPincode(location.pincode);
+                        if (location.country) setFormCountry(location.country);
+                      }}
+                    />
+
+                    <div className="space-y-3 pt-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs font-semibold">Street / Building Address</Label>
+                        <Input
+                          placeholder="Plot number, building name, street, road..."
+                          value={formAddress}
+                          onChange={(e) => setFormAddress(e.target.value)}
+                          className="text-xs h-9"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs font-semibold">City</Label>
+                          <Input
+                            placeholder="e.g. Mumbai, Noida, Bengaluru"
+                            value={formCity}
+                            onChange={(e) => setFormCity(e.target.value)}
+                            className="text-xs h-9"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs font-semibold">State / Region</Label>
+                          <Input
+                            placeholder="e.g. Maharashtra, Uttar Pradesh"
+                            value={formState}
+                            onChange={(e) => setFormState(e.target.value)}
+                            className="text-xs h-9"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs font-semibold">Area / Landmark</Label>
+                          <Input
+                            placeholder="e.g. Electronic City"
+                            value={formArea}
+                            onChange={(e) => setFormArea(e.target.value)}
+                            className="text-xs h-9"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs font-semibold">Pincode / Postal Code</Label>
+                          <Input
+                            placeholder="e.g. 560100"
+                            value={formPincode}
+                            onChange={(e) => setFormPincode(e.target.value)}
+                            className="text-xs h-9 font-mono"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs font-semibold">Country</Label>
+                          <Input
+                            placeholder="India"
+                            value={formCountry}
+                            onChange={(e) => setFormCountry(e.target.value)}
+                            className="text-xs h-9"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Dialog Action Buttons */}
-            <div className="flex items-center justify-end gap-2 pt-3 border-t">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setDialogOpen(false)}
-                className="rounded-xl h-9 text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={saving}
-                className="rounded-xl h-9 text-xs font-semibold gap-2"
-              >
-                {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {editingItem ? "Update Client" : "Save Client"}
-              </Button>
+            <div className="flex items-center justify-between p-4 px-6 border-t bg-muted/20 mt-auto">
+              <ProgressiveSaveIndicator status={clientSaveStatus} />
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setDialogOpen(false);
+                    clearClientDraft();
+                  }}
+                  className="rounded-xl h-9 text-xs"
+                >
+                  Cancel
+                </Button>
+
+                {dialogTab === "contacts" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setDialogTab("company")}
+                    className="rounded-xl h-9 text-xs gap-1"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    Back
+                  </Button>
+                )}
+                {dialogTab === "location" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setDialogTab("contacts")}
+                    className="rounded-xl h-9 text-xs gap-1"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    Back
+                  </Button>
+                )}
+
+                {dialogTab === "company" && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setDialogTab("contacts")}
+                    className="rounded-xl h-9 text-xs gap-1 font-semibold"
+                  >
+                    Next: Contacts
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+                {dialogTab === "contacts" && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setDialogTab("location")}
+                    className="rounded-xl h-9 text-xs gap-1 font-semibold"
+                  >
+                    Next: Location
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-xl h-9 text-xs font-semibold gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {editingItem ? "Update Client" : "Save Client"}
+                </Button>
+              </div>
             </div>
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Upload Dialog */}
+      <BulkUploadClientsDialog
+        open={bulkDialogOpen}
+        onOpenChange={setBulkDialogOpen}
+        institutionId={activeInstitution?.id}
+        accessToken={accessToken}
+        onSuccess={fetchRecords}
+      />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteConfirmId !== null} onOpenChange={(o) => !o && setDeleteConfirmId(null)}>

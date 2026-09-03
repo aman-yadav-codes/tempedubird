@@ -8,15 +8,35 @@ type UseProgressiveSaveOptions<T> = {
   formKey: string;
   formState: T;
   onSave?: (data: T) => Promise<void> | void;
+  onRestore?: (data: T) => void;
   debounceMs?: number;
   enabled?: boolean;
 };
+
+// Check if form object contains any non-empty user entered data
+function hasUserContent(obj: any): boolean {
+  if (!obj) return false;
+  if (typeof obj === "string") return obj.trim().length > 0;
+  if (typeof obj === "number") return obj > 0;
+  if (typeof obj === "boolean") return false;
+  if (Array.isArray(obj)) return obj.some(hasUserContent);
+  if (typeof obj === "object") {
+    return Object.entries(obj).some(([key, val]) => {
+      if (["is_active", "is_marketplace_enabled", "is_verified", "is_profile_complete", "gender", "status"].includes(key)) {
+        return false;
+      }
+      return hasUserContent(val);
+    });
+  }
+  return false;
+}
 
 export function useProgressiveSave<T extends Record<string, any>>({
   formKey,
   formState,
   onSave,
-  debounceMs = 2000,
+  onRestore,
+  debounceMs = 1500,
   enabled = true,
 }: UseProgressiveSaveOptions<T>) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
@@ -31,7 +51,11 @@ export function useProgressiveSave<T extends Record<string, any>>({
     try {
       const raw = window.sessionStorage.getItem(`progressive_draft:${formKey}`);
       if (!raw) return null;
-      return JSON.parse(raw) as T;
+      const parsed = JSON.parse(raw) as T;
+      if (hasUserContent(parsed)) {
+        return parsed;
+      }
+      return null;
     } catch {
       return null;
     }
@@ -42,6 +66,7 @@ export function useProgressiveSave<T extends Record<string, any>>({
     if (typeof window === "undefined" || !formKey) return;
     try {
       window.sessionStorage.removeItem(`progressive_draft:${formKey}`);
+      setSaveStatus("idle");
     } catch {
       // Ignore storage errors
     }
@@ -52,6 +77,12 @@ export function useProgressiveSave<T extends Record<string, any>>({
     async (overrideData?: T) => {
       if (!enabled) return;
       const dataToSave = overrideData ?? formStateRef.current;
+
+      // Only save if there is actual user-entered content
+      if (!hasUserContent(dataToSave)) {
+        setSaveStatus("idle");
+        return;
+      }
 
       setSaveStatus("saving");
 
@@ -78,7 +109,21 @@ export function useProgressiveSave<T extends Record<string, any>>({
     [enabled, formKey, onSave]
   );
 
-  // Debounced auto-save on form state changes (2 seconds after last keystroke)
+  // Check if draft exists on mount/enable and restore if onRestore callback provided
+  useEffect(() => {
+    if (!enabled || !formKey) return;
+    const existing = restoreDraft();
+    if (existing) {
+      if (onRestore) {
+        onRestore(existing);
+      }
+      setSaveStatus("saved");
+    } else {
+      setSaveStatus("idle");
+    }
+  }, [enabled, formKey]);
+
+  // Debounced auto-save on form state changes
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
@@ -86,6 +131,11 @@ export function useProgressiveSave<T extends Record<string, any>>({
     }
 
     if (!enabled) return;
+
+    if (!hasUserContent(formState)) {
+      setSaveStatus("idle");
+      return;
+    }
 
     if (timerRef.current) {
       clearTimeout(timerRef.current);
@@ -107,7 +157,9 @@ export function useProgressiveSave<T extends Record<string, any>>({
     if (timerRef.current) {
       clearTimeout(timerRef.current);
     }
-    void triggerSave();
+    if (hasUserContent(formStateRef.current)) {
+      void triggerSave();
+    }
   }, [triggerSave]);
 
   return {

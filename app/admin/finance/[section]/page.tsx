@@ -1,8 +1,9 @@
-import { BadgeDollarSign, BarChart3, CalendarDays, CreditCard, FileText, IndianRupee, Landmark, Tags, TrendingUp } from "lucide-react";
+import { BadgeDollarSign, BarChart3, CalendarDays, CreditCard, FileText, IndianRupee, Landmark, Tags, TrendingUp, UsersRound } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { AllowanceClient } from "@/app/admin/finance/allowance-client";
 import { Badge } from "@/components/ui/badge";
+import { EmployeePerformanceClient } from "@/app/admin/finance/employee-performance-client";
 import { ExpenseClient } from "@/app/admin/finance/expense-client";
 import { FinanceCategoriesClient } from "@/app/admin/finance/categories-client";
 import { IncomeClient } from "@/app/admin/finance/income-client";
@@ -41,6 +42,11 @@ const FINANCE_SECTIONS = {
     title: "Financial Performance",
     description: "Audit Profit & Loss, Gross Income, Net Income, and Weekly/Monthly/Yearly charts.",
     icon: BarChart3,
+  },
+  "employee-performance": {
+    title: "Employee Performance",
+    description: "Track employee sales generation, commissions, salary costs, and net ROI contribution.",
+    icon: UsersRound,
   },
   "payment-methods": {
     title: "Payment Methods & Gateways",
@@ -93,6 +99,10 @@ export default async function FinanceSectionPage({ params }: FinanceSectionPageP
     return <PerformanceClient />;
   }
 
+  if (section === "employee-performance") {
+    return <EmployeePerformanceClient />;
+  }
+
   if (section === "payment-methods") {
     return <PaymentMethodsClient />;
   }
@@ -100,6 +110,7 @@ export default async function FinanceSectionPage({ params }: FinanceSectionPageP
   if (section === "categories") {
     return <FinanceCategoriesClient />;
   }
+
 
   return (
     <div className="space-y-6">

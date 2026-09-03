@@ -38,6 +38,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useProgressiveSave } from "@/hooks/use-progressive-save";
+import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
 import {
   Select,
   SelectContent,
@@ -151,6 +153,12 @@ export default function AttendanceSetupPage() {
   const [editingSetup, setEditingSetup] = useState<AttendanceSetup | null>(null);
   const [form, setForm] = useState(initialForm);
   const [saving, setSaving] = useState(false);
+
+  const { saveStatus, clearDraft } = useProgressiveSave({
+    formKey: `attendance_setup:${editingSetup?.id || "new"}`,
+    formState: form,
+    enabled: dialogOpen,
+  });
 
   // Delete State
   const [deleteTarget, setDeleteTarget] = useState<AttendanceSetup | null>(null);
@@ -796,24 +804,30 @@ export default function AttendanceSetupPage() {
 
 
 
-            <DialogFooter className="pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setDialogOpen(false)}
-                disabled={saving}
-                className="text-xs h-9"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={saving}
-                className="text-xs h-9 font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
-              >
-                {saving && <Loader2 className="size-3.5 animate-spin" />}
-                {editingSetup ? "Save Changes" : "Create Setup"}
-              </Button>
+            <DialogFooter className="flex items-center justify-between sm:justify-between w-full pt-2">
+              <ProgressiveSaveIndicator status={saveStatus} />
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setDialogOpen(false);
+                    clearDraft();
+                  }}
+                  disabled={saving}
+                  className="text-xs h-9"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={saving}
+                  className="text-xs h-9 font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
+                >
+                  {saving && <Loader2 className="size-3.5 animate-spin" />}
+                  {editingSetup ? "Save Changes" : "Create Setup"}
+                </Button>
+              </div>
             </DialogFooter>
           </form>
         </DialogContent>

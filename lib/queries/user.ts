@@ -819,6 +819,32 @@ export const getUsersPaginatedQuery = async (
       filtersWhere.push(`
         (
           (
+            EXISTS (
+              SELECT 1
+              FROM institution_memberships staff_member
+              INNER JOIN roles staff_role ON staff_role.id = staff_member.role_id
+              WHERE staff_member.user_id = u.id
+                AND staff_member.is_active = TRUE
+                AND COALESCE(staff_member.is_deleted, FALSE) = FALSE
+                AND staff_role.code NOT IN ('student', 'guardian', 'parent')
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM user_profiles scoped_up
+              JOIN user_roles scoped_ur ON scoped_ur.user_id = u.id
+              JOIN roles scoped_r ON scoped_r.id = scoped_ur.role_id
+              WHERE scoped_up.user_id = u.id
+                AND scoped_r.code NOT IN ('student', 'guardian', 'parent')
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM user_roles global_ur
+              JOIN roles global_r ON global_r.id = global_ur.role_id
+              WHERE global_ur.user_id = u.id
+                AND global_r.code NOT IN ('student', 'guardian', 'parent')
+            )
+          )
+          AND (
             u.created_by = 1
             OR EXISTS (
               SELECT 1
@@ -835,37 +861,9 @@ export const getUsersPaginatedQuery = async (
                 JOIN roles global_r ON global_r.id = global_ur.role_id
                 LEFT JOIN scope_types global_st ON global_st.id = global_r.scope_id
                 WHERE global_ur.user_id = u.id
-                  AND global_st.code = 'platform'
+                  AND (global_st.code = 'platform' OR global_r.code IN ('platform_admin', 'super_admin'))
               )
             )
-          )
-          AND NOT EXISTS (
-            SELECT 1
-            FROM user_profiles inst_up
-            WHERE inst_up.user_id = u.id
-              AND inst_up.under_institution_id IS NOT NULL
-          )
-          AND NOT EXISTS (
-            SELECT 1
-            FROM institution_memberships im
-            WHERE im.user_id = u.id
-              AND im.institution_id IS NOT NULL
-              AND im.is_active = TRUE
-              AND COALESCE(im.is_deleted, FALSE) = FALSE
-          )
-          AND NOT EXISTS (
-            SELECT 1
-            FROM user_roles cr_ur
-            JOIN roles cr_r ON cr_r.id = cr_ur.role_id
-            WHERE cr_ur.user_id = u.created_by
-              AND cr_r.code = 'institution_admin'
-          )
-          AND EXISTS (
-            SELECT 1
-            FROM user_roles global_role
-            INNER JOIN roles global_role_meta ON global_role_meta.id = global_role.role_id
-            WHERE global_role.user_id = u.id
-              AND global_role_meta.code NOT IN ('student', 'guardian', 'parent')
           )
         )
       `);
@@ -899,6 +897,32 @@ export const getUsersPaginatedQuery = async (
       filtersWhere.push(`
         (
           (
+            EXISTS (
+              SELECT 1
+              FROM institution_memberships staff_member
+              INNER JOIN roles staff_role ON staff_role.id = staff_member.role_id
+              WHERE staff_member.user_id = u.id
+                AND staff_member.is_active = TRUE
+                AND COALESCE(staff_member.is_deleted, FALSE) = FALSE
+                AND staff_role.code IN ('teacher', 'driver')
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM user_profiles scoped_up
+              JOIN user_roles scoped_ur ON scoped_ur.user_id = u.id
+              JOIN roles scoped_r ON scoped_r.id = scoped_ur.role_id
+              WHERE scoped_up.user_id = u.id
+                AND scoped_r.code IN ('teacher', 'driver')
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM user_roles global_ur
+              JOIN roles global_r ON global_r.id = global_ur.role_id
+              WHERE global_ur.user_id = u.id
+                AND global_r.code IN ('teacher', 'driver')
+            )
+          )
+          AND (
             u.created_by = 1
             OR EXISTS (
               SELECT 1
@@ -907,27 +931,17 @@ export const getUsersPaginatedQuery = async (
               WHERE cr_ur.user_id = u.created_by
                 AND cr_r.code IN ('platform_admin', 'super_admin')
             )
-          )
-          AND NOT EXISTS (
-            SELECT 1
-            FROM user_profiles inst_up
-            WHERE inst_up.user_id = u.id
-              AND inst_up.under_institution_id IS NOT NULL
-          )
-          AND NOT EXISTS (
-            SELECT 1
-            FROM institution_memberships im
-            WHERE im.user_id = u.id
-              AND im.institution_id IS NOT NULL
-              AND im.is_active = TRUE
-              AND COALESCE(im.is_deleted, FALSE) = FALSE
-          )
-          AND EXISTS (
-            SELECT 1
-            FROM user_roles global_role
-            INNER JOIN roles global_role_meta ON global_role_meta.id = global_role.role_id
-            WHERE global_role.user_id = u.id
-              AND global_role_meta.code IN ('teacher', 'driver')
+            OR (
+              u.created_by IS NULL
+              AND EXISTS (
+                SELECT 1
+                FROM user_roles global_ur
+                JOIN roles global_r ON global_r.id = global_ur.role_id
+                LEFT JOIN scope_types global_st ON global_st.id = global_r.scope_id
+                WHERE global_ur.user_id = u.id
+                  AND (global_st.code = 'platform' OR global_r.code IN ('platform_admin', 'super_admin'))
+              )
+            )
           )
         )
       `);
@@ -1112,6 +1126,41 @@ async function getRoleScope(db: Queryable, roleId: number | null | undefined) {
   return result.rows[0] ?? null;
 }
 
+export async function getOrCreateEduBirdInstitution(
+  db: Queryable
+): Promise<{ id: number; name: string }> {
+  const existing = await db.query<{ id: number; name: string }>(
+    `SELECT id, name FROM institution_profiles 
+     WHERE (LOWER(name) = 'edubird' OR slug = 'edubird' OR LOWER(name) LIKE '%edubird%') 
+       AND COALESCE(is_deleted, FALSE) = FALSE 
+     ORDER BY CASE WHEN LOWER(name) = 'edubird' THEN 0 ELSE 1 END, id ASC LIMIT 1`
+  );
+  if (existing.rows[0]) {
+    return existing.rows[0];
+  }
+
+  const typeRes = await db.query<{ id: number }>(
+    `SELECT id FROM institution_types WHERE COALESCE(is_deleted, FALSE) = FALSE LIMIT 1`
+  );
+  let typeId = typeRes.rows[0]?.id;
+  if (!typeId) {
+    const newType = await db.query<{ id: number }>(
+      `INSERT INTO institution_types (name, slug, is_active, created_at, updated_at)
+       VALUES ('Platform & Head Office', 'platform-head-office', TRUE, NOW(), NOW())
+       RETURNING id`
+    );
+    typeId = newType.rows[0]?.id;
+  }
+
+  const inserted = await db.query<{ id: number; name: string }>(
+    `INSERT INTO institution_profiles (name, slug, institution_type_id, is_active, created_at, updated_at)
+     VALUES ('EduBird', 'edubird', $1, TRUE, NOW(), NOW())
+     RETURNING id, name`,
+    [typeId]
+  );
+  return inserted.rows[0];
+}
+
 async function assignScopedRole(
   db: Queryable,
   userId: number,
@@ -1187,6 +1236,12 @@ async function assignScopedRole(
       ].filter((id) => Number.isInteger(id) && id > 0)
     )
   );
+
+  // If adding staff with an institution role and no institution was selected (e.g. platform admin staff), default to EduBird
+  if (role.scope_code === "institution" && targetInstitutionIds.length === 0) {
+    const edubird = await getOrCreateEduBirdInstitution(db);
+    targetInstitutionIds.push(edubird.id);
+  }
 
   if (role.scope_code === "institution" && targetInstitutionIds.length > 0) {
     if (role.code === "teacher") {
@@ -1676,9 +1731,11 @@ export const createAdminUserWithDetails = async (
       [roleId]
     );
     const isStudentRole = roleCheck.rows[0]?.code === "student";
-
-    const existingUser = await getUserByEmailQuery(client, data.email);
+    const existingUser = data.email
+      ? await getUserByEmailQuery(client, data.email)
+      : (data.phone ? await getUserByPhoneQuery(client, data.phone) : null);
     let user: any;
+
 
     if (existingUser) {
       if (isStudentRole) {
@@ -1715,13 +1772,23 @@ export const createAdminUserWithDetails = async (
       });
     }
 
+    const roleMeta = await getRoleScope(client, roleId);
+    let resolvedInstitutionId = data.profile.under_institution_id ?? null;
+    let resolvedInstitutionIds = data.profile.institution_ids ?? [];
+
+    if (!resolvedInstitutionId && resolvedInstitutionIds.length === 0 && roleMeta?.scope_code === "institution") {
+      const edubird = await getOrCreateEduBirdInstitution(client);
+      resolvedInstitutionId = edubird.id;
+      resolvedInstitutionIds = [edubird.id];
+    }
+
     await assignScopedRole(
       client,
       user.id,
       roleId,
-      data.profile.under_institution_id ?? null,
+      resolvedInstitutionId,
       adminId,
-      data.profile.institution_ids ?? []
+      resolvedInstitutionIds
     );
 
     await client.query(
@@ -2065,8 +2132,8 @@ export const getAdminUserDetails = async (
             ELSE COALESCE(up.under_institution_id, membership.institution_id)
           END AS under_institution_id,
           CASE
-            WHEN platform_scope.has_platform_role THEN NULL
-            ELSE COALESCE(ip.name, membership.institution_name)
+            WHEN platform_scope.has_platform_role THEN 'EduBird'
+            ELSE COALESCE(ip.name, membership.institution_name, 'EduBird')
           END AS under_institution_name,
           CASE
             WHEN platform_scope.has_platform_role THEN NULL
@@ -2443,13 +2510,23 @@ export const updateAdminUserWithDetails = async (
       }
     }
 
+    const roleMeta = await getRoleScope(client, roleId);
+    let resolvedInstitutionId = data.profile.under_institution_id ?? null;
+    let resolvedInstitutionIds = data.profile.institution_ids ?? [];
+
+    if (!resolvedInstitutionId && resolvedInstitutionIds.length === 0 && roleMeta?.scope_code === "institution") {
+      const edubird = await getOrCreateEduBirdInstitution(client);
+      resolvedInstitutionId = edubird.id;
+      resolvedInstitutionIds = [edubird.id];
+    }
+
     await assignScopedRole(
       client,
       id,
       roleId,
-      data.profile.under_institution_id ?? null,
+      resolvedInstitutionId,
       adminId,
-      data.profile.institution_ids ?? []
+      resolvedInstitutionIds
     );
 
     await client.query(
@@ -2862,8 +2939,10 @@ export const removeUserFromInstitutions = async (
 };
 
 // get by email
-export const getUserByEmailQuery = async (db: Queryable, emailOrPhone: string) => {
-  const cleanInput = emailOrPhone.trim();
+export const getUserByEmailQuery = async (db: Queryable, emailOrPhone?: string | null) => {
+  if (!emailOrPhone) return null;
+  const cleanInput = String(emailOrPhone).trim();
+  if (!cleanInput) return null;
   const res = await db.query<UserRecordRow>(
     `
       SELECT
@@ -2884,8 +2963,10 @@ export const getUserByEmailQuery = async (db: Queryable, emailOrPhone: string) =
   return res.rows[0] || null;
 };
 
-export const getUserByPhoneQuery = async (db: Queryable, phone: string) => {
-  const cleanPhone = phone.trim();
+export const getUserByPhoneQuery = async (db: Queryable, phone?: string | null) => {
+  if (!phone) return null;
+  const cleanPhone = String(phone).trim();
+  if (!cleanPhone) return null;
   const res = await db.query<UserRecordRow & { role_names?: string[]; primary_role?: string; avatar_url?: string }>(
     `
       SELECT
@@ -2910,8 +2991,10 @@ export const getUserByPhoneQuery = async (db: Queryable, phone: string) => {
   return res.rows[0] || null;
 };
 
-export const resetUserPasswordQuery = async (db: Queryable, identifier: string, hashedPassword: string) => {
-  const cleanInput = identifier.trim();
+export const resetUserPasswordQuery = async (db: Queryable, identifier?: string | null, hashedPassword?: string) => {
+  if (!identifier) return null;
+  const cleanInput = String(identifier).trim();
+  if (!cleanInput) return null;
   const res = await db.query<{ id: number; full_name: string; email: string | null; phone: string | null }>(
     `
       UPDATE users
@@ -2925,3 +3008,4 @@ export const resetUserPasswordQuery = async (db: Queryable, identifier: string, 
   );
   return res.rows[0] || null;
 };
+

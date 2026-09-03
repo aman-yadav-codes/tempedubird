@@ -35,6 +35,12 @@ import {
   Filter,
   Sparkles,
   User,
+  FileCheck,
+  ImageIcon,
+  ExternalLink,
+  RotateCcw,
+  UploadCloud,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +60,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -63,8 +70,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { useProgressiveSave } from "@/hooks/use-progressive-save";
+import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
 import { useAuthStore } from "@/store";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
+
+export type TaskStatus = "pending" | "in_progress" | "under_review" | "recheck" | "completed" | "cancelled";
 
 export type SubTask = {
   id: string;
@@ -74,10 +85,12 @@ export type SubTask = {
   assigned_employee_name?: string | null;
   assigned_employee_role?: string | null;
   duration_hours?: number; // Duration / Estimated Hours
+  points?: number; // Performance Reward Points
+  penalty_points?: number; // Performance Penalty Points
   deadline_date?: string | null;
   deadline_time?: string | null;
   urgency: "low" | "medium" | "high" | "urgent";
-  status: "pending" | "in_progress" | "under_review" | "completed" | "cancelled";
+  status: TaskStatus;
   notes?: string | null;
 };
 
@@ -96,19 +109,35 @@ export type OperationTask = {
   estimated_hours: string | number;
   logged_hours: string | number;
   deadline: string | null;
-  status: "pending" | "in_progress" | "under_review" | "completed" | "cancelled";
+  status: TaskStatus;
   urgency: "low" | "medium" | "high" | "urgent";
+  is_daily_recurring?: boolean;
+  last_recurring_date?: string | null;
+  points?: string | number;
+  penalty_points?: string | number;
   sub_tasks?: SubTask[];
+  review_notes?: string | null;
+  review_image_url?: string | null;
+  review_submitted_at?: string | null;
+  review_submitted_by?: string | null;
   created_at: string;
   updated_at: string;
 };
 
-const SUBTASK_STATUSES = [
+const ALL_SUBTASK_STATUSES = [
   { id: "pending", label: "Pending", color: "bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-300" },
   { id: "in_progress", label: "In Progress", color: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300" },
-  { id: "under_review", label: "Under Review", color: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-300" },
+  { id: "under_review", label: "Under Review", color: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400" },
+  { id: "recheck", label: "Needs Recheck", color: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400" },
   { id: "completed", label: "Completed", color: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300" },
-  { id: "cancelled", label: "Cancelled", color: "bg-red-500/10 text-red-700 dark:text-red-300 border-red-300" },
+  { id: "cancelled", label: "Cancelled", color: "bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 border-zinc-300" },
+];
+
+const STAFF_ALLOWED_STATUSES = [
+  { id: "pending", label: "Pending", color: "bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-300" },
+  { id: "in_progress", label: "In Progress", color: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300" },
+  { id: "under_review", label: "Under Review (Submit for Approval)", color: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400" },
+  { id: "completed", label: "Completed", color: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300" },
 ];
 
 const SUBTASK_URGENCIES = [
@@ -123,8 +152,9 @@ const STATUS_TABS = [
   { id: "pending", label: "Pending", badgeColor: "bg-slate-100 text-slate-700 border-slate-300" },
   { id: "in_progress", label: "In Progress", badgeColor: "bg-blue-100 text-blue-800 border-blue-300" },
   { id: "under_review", label: "Under Review", badgeColor: "bg-amber-100 text-amber-800 border-amber-300" },
+  { id: "recheck", label: "Needs Recheck", badgeColor: "bg-rose-100 text-rose-800 border-rose-300" },
   { id: "completed", label: "Completed", badgeColor: "bg-emerald-100 text-emerald-800 border-emerald-300" },
-  { id: "cancelled", label: "Cancelled", badgeColor: "bg-rose-100 text-rose-800 border-rose-300" },
+  { id: "cancelled", label: "Cancelled", badgeColor: "bg-zinc-100 text-zinc-800 border-zinc-300" },
 ];
 
 export default function OperationsTasksPage() {
@@ -134,6 +164,7 @@ export default function OperationsTasksPage() {
   const [tasks, setTasks] = useState<OperationTask[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
+  const [modalStaffList, setModalStaffList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
 
@@ -157,6 +188,16 @@ export default function OperationsTasksPage() {
       return true;
     });
   }, [staffList]);
+
+  const uniqueModalStaffList = useMemo(() => {
+    const list = modalStaffList.length > 0 ? modalStaffList : staffList;
+    const seen = new Set<number>();
+    return list.filter((s) => {
+      if (!s.id || seen.has(s.id)) return false;
+      seen.add(s.id);
+      return true;
+    });
+  }, [modalStaffList, staffList]);
 
   // Selected Status Tab
   const [selectedStatusTab, setSelectedStatusTab] = useState<string>("all");
@@ -189,7 +230,44 @@ export default function OperationsTasksPage() {
   const [formTitle, setFormTitle] = useState("");
   const [formClientId, setFormClientId] = useState<string>("none");
   const [formClientName, setFormClientName] = useState("");
+  const [formAssignedStaffId, setFormAssignedStaffId] = useState<string>("none");
+  const [formAssignedStaffName, setFormAssignedStaffName] = useState("");
+  const [formAssignedStaffRole, setFormAssignedStaffRole] = useState("");
   const [formDetails, setFormDetails] = useState("");
+  const [formIsDailyRecurring, setFormIsDailyRecurring] = useState(false);
+  const [formPoints, setFormPoints] = useState("20");
+  const [formPenaltyPoints, setFormPenaltyPoints] = useState("10");
+
+  const taskFormState = useMemo(() => ({
+    formTitle,
+    formClientId,
+    formClientName,
+    formAssignedStaffId,
+    formAssignedStaffName,
+    formAssignedStaffRole,
+    formDetails,
+    formIsDailyRecurring,
+    formPoints,
+    formPenaltyPoints,
+  }), [formTitle, formClientId, formClientName, formAssignedStaffId, formAssignedStaffName, formAssignedStaffRole, formDetails, formIsDailyRecurring, formPoints, formPenaltyPoints]);
+
+  const { saveStatus: taskSaveStatus, clearDraft: clearTaskDraft } = useProgressiveSave({
+    formKey: `operations_task:${editingTask?.id || "new"}`,
+    formState: taskFormState,
+    enabled: taskDialogOpen,
+    onRestore: (draft) => {
+      if (draft.formTitle) setFormTitle(draft.formTitle);
+      if (draft.formClientId) setFormClientId(draft.formClientId);
+      if (draft.formClientName) setFormClientName(draft.formClientName);
+      if (draft.formAssignedStaffId) setFormAssignedStaffId(draft.formAssignedStaffId);
+      if (draft.formAssignedStaffName) setFormAssignedStaffName(draft.formAssignedStaffName);
+      if (draft.formAssignedStaffRole) setFormAssignedStaffRole(draft.formAssignedStaffRole);
+      if (draft.formDetails) setFormDetails(draft.formDetails);
+      if (draft.formIsDailyRecurring !== undefined) setFormIsDailyRecurring(draft.formIsDailyRecurring);
+      if (draft.formPoints) setFormPoints(draft.formPoints);
+      if (draft.formPenaltyPoints) setFormPenaltyPoints(draft.formPenaltyPoints);
+    },
+  });
 
   // Modal 2: Manage Sub-Tasks for a Task
   const [subtaskModalOpen, setSubtaskModalOpen] = useState(false);
@@ -197,11 +275,21 @@ export default function OperationsTasksPage() {
   const [activeSubTasks, setActiveSubTasks] = useState<SubTask[]>([]);
   const [savingSubtasks, setSavingSubtasks] = useState(false);
 
+  // Modal 3: Under Review Submission (Optional text or image)
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewModalTask, setReviewModalTask] = useState<OperationTask | null>(null);
+  const [reviewNotes, setReviewNotes] = useState("");
+  const [reviewImageUrl, setReviewImageUrl] = useState("");
+  const [uploadingReviewImage, setUploadingReviewImage] = useState(false);
+  const [submittingReview, setSubmittingReview] = useState(false);
+
   // New Subtask draft inputs
   const [newSubTitle, setNewSubTitle] = useState("");
   const [newSubPrice, setNewSubPrice] = useState("5000");
   const [newSubStaffId, setNewSubStaffId] = useState<string>("none");
   const [newSubDuration, setNewSubDuration] = useState("4");
+  const [newSubPoints, setNewSubPoints] = useState("20");
+  const [newSubPenaltyPoints, setNewSubPenaltyPoints] = useState("10");
   const [newSubDeadlineDate, setNewSubDeadlineDate] = useState("");
   const [newSubDeadlineNumber, setNewSubDeadlineNumber] = useState("18:00");
   const [newSubUrgency, setNewSubUrgency] = useState<"low" | "medium" | "high" | "urgent">("medium");
@@ -245,6 +333,8 @@ export default function OperationsTasksPage() {
     setNewSubPrice("5000");
     setNewSubStaffId("none");
     setNewSubDuration("4");
+    setNewSubPoints("20");
+    setNewSubPenaltyPoints("10");
     const d = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
     setNewSubDeadlineDate(d.toISOString().split("T")[0]);
     setNewSubDeadlineNumber("18:00");
@@ -258,7 +348,13 @@ export default function OperationsTasksPage() {
     setFormTitle("");
     setFormClientId("none");
     setFormClientName("");
+    setFormAssignedStaffId("none");
+    setFormAssignedStaffName("");
+    setFormAssignedStaffRole("");
     setFormDetails("");
+    setFormIsDailyRecurring(false);
+    setFormPoints("20");
+    setFormPenaltyPoints("10");
     setTaskDialogOpen(true);
   };
 
@@ -268,7 +364,13 @@ export default function OperationsTasksPage() {
     setFormTitle(t.title || "");
     setFormClientId(t.client_id ? String(t.client_id) : "none");
     setFormClientName(t.client_name || "");
+    setFormAssignedStaffId(t.assigned_employee_id ? String(t.assigned_employee_id) : "none");
+    setFormAssignedStaffName(t.assigned_employee_name || "");
+    setFormAssignedStaffRole(t.assigned_employee_role || "");
     setFormDetails(t.details || "");
+    setFormIsDailyRecurring(Boolean(t.is_daily_recurring));
+    setFormPoints(t.points !== undefined ? String(t.points) : "20");
+    setFormPenaltyPoints(t.penalty_points !== undefined ? String(t.penalty_points) : "10");
     setTaskDialogOpen(true);
   };
 
@@ -294,7 +396,13 @@ export default function OperationsTasksPage() {
           title: formTitle.trim(),
           client_id: formClientId !== "none" ? formClientId : null,
           client_name: formClientName.trim() || null,
+          assigned_employee_id: formAssignedStaffId !== "none" ? parseInt(formAssignedStaffId) : null,
+          assigned_employee_name: formAssignedStaffName.trim() || null,
+          assigned_employee_role: formAssignedStaffRole.trim() || null,
           details: formDetails.trim() || null,
+          is_daily_recurring: formIsDailyRecurring,
+          points: parseFloat(formPoints) || 20,
+          penalty_points: parseFloat(formPenaltyPoints) || 10,
           sub_tasks: editingTask?.sub_tasks || [],
         }),
       });
@@ -317,21 +425,38 @@ export default function OperationsTasksPage() {
   };
 
   // Step 2: Open Dedicated Sub-Tasks Manager Modal
-  const handleOpenSubtasksModal = (task: OperationTask) => {
+  const handleOpenSubtasksModal = async (task: OperationTask) => {
     setSelectedTaskForSubtasks(task);
     setActiveSubTasks(Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : []);
     resetSubtaskDraft();
     setSubtaskModalOpen(true);
+
+    try {
+      const params = new URLSearchParams();
+      if (task.institution_id) {
+        params.set("institution_id", String(task.institution_id));
+      }
+      const headers: Record<string, string> = {};
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+      const res = await fetch(`/api/admin/operations/tasks?${params.toString()}`, { headers });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.staff)) {
+        setModalStaffList(data.staff);
+      }
+    } catch {
+      // fallback to staffList
+    }
   };
 
-  // Add Sub-Task in Modal 2
+  // Add Sub-Task in Modal 2 (Prepends to top so latest appears first)
   const handleAddSubTaskToList = async () => {
     if (!newSubTitle.trim()) {
       toast.error("Please enter a sub-task deliverable name");
       return;
     }
 
-    const assignedStaff = staffList.find((s) => String(s.id) === newSubStaffId);
+    const effectiveStaffList = modalStaffList.length > 0 ? modalStaffList : staffList;
+    const assignedStaff = effectiveStaffList.find((s) => String(s.id) === newSubStaffId);
 
     const newSub: SubTask = {
       id: `sub_${Date.now()}`,
@@ -341,13 +466,15 @@ export default function OperationsTasksPage() {
       assigned_employee_name: assignedStaff ? assignedStaff.name : null,
       assigned_employee_role: assignedStaff ? assignedStaff.role : null,
       duration_hours: Number(newSubDuration) || 0,
+      points: Number(newSubPoints) || 20,
+      penalty_points: Number(newSubPenaltyPoints) || 10,
       deadline_date: newSubDeadlineDate || null,
       deadline_time: newSubDeadlineNumber || "18:00",
       urgency: newSubUrgency,
       status: newSubStatus,
     };
 
-    const updated = [...activeSubTasks, newSub];
+    const updated = [newSub, ...activeSubTasks];
     setActiveSubTasks(updated);
     resetSubtaskDraft();
 
@@ -416,16 +543,33 @@ export default function OperationsTasksPage() {
         body: JSON.stringify({ id: task.id, sub_tasks: updatedSubs }),
       });
 
-      if (!res.ok) throw new Error("Failed to update subtask status");
-      toast.success(`Subtask marked as ${newStatus.replace("_", " ")}`);
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Failed to update subtask status");
+      }
+      if (newStatus === "under_review") {
+        toast.success("Subtask submitted for review. Admins have been notified to inspect and approve.");
+      } else {
+        toast.success(`Subtask marked as ${newStatus.replace("_", " ")}`);
+      }
       fetchTasks();
-    } catch {
-      toast.error("Failed to update subtask status");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update subtask status");
       fetchTasks();
     }
   };
 
   const handleQuickTaskStatusChange = async (taskId: number, newStatus: string) => {
+    // If employee (or admin) marks task as under_review, prompt with optional text/image submission modal
+    if (newStatus === "under_review") {
+      const targetTask = tasks.find((t) => t.id === taskId);
+      setReviewModalTask(targetTask || null);
+      setReviewNotes(targetTask?.review_notes || "");
+      setReviewImageUrl(targetTask?.review_image_url || "");
+      setReviewModalOpen(true);
+      return;
+    }
+
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
@@ -436,11 +580,109 @@ export default function OperationsTasksPage() {
         body: JSON.stringify({ id: taskId, status: newStatus }),
       });
 
-      if (!res.ok) throw new Error("Failed to update task status");
-      toast.success(`Task moved to ${newStatus.replace("_", " ")}`);
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Failed to update task status");
+      }
+      if (newStatus === "completed") {
+        toast.success("Task marked as completed! Performance reward points awarded.");
+      } else {
+        toast.success(`Task moved to ${newStatus.replace("_", " ")}`);
+      }
       fetchTasks();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update status");
+    }
+  };
+
+  const handleSubmitUnderReview = async (skipProof = false) => {
+    if (!reviewModalTask) return;
+    setSubmittingReview(true);
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+      const payload: any = {
+        id: reviewModalTask.id,
+        status: "under_review",
+        review_notes: skipProof ? null : (reviewNotes.trim() || null),
+        review_image_url: skipProof ? null : (reviewImageUrl.trim() || null),
+      };
+
+      const res = await fetch("/api/admin/operations/tasks", {
+        method: "PUT",
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Failed to submit for review");
+      }
+
+      toast.success("Task submitted for review! Admins have been notified to inspect and approve.");
+      setReviewModalOpen(false);
+      setReviewModalTask(null);
+      setReviewNotes("");
+      setReviewImageUrl("");
+      fetchTasks();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to submit review");
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const handleUploadReviewFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image file size must be less than 5MB");
+      return;
+    }
+
+    setUploadingReviewImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "edubird/tasks");
+
+      const headers: Record<string, string> = {};
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+      const res = await fetch("/api/admin/uploads/image", {
+        method: "POST",
+        headers,
+        body: formData,
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.url) {
+        setReviewImageUrl(data.url);
+        toast.success("Proof image uploaded successfully!");
+      } else {
+        // Fallback to base64 Data URL so proof attachment always succeeds
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === "string") {
+            setReviewImageUrl(reader.result);
+            toast.success("Image attached as proof!");
+          }
+        };
+        reader.readAsDataURL(file);
+      }
     } catch {
-      toast.error("Failed to update status");
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === "string") {
+          setReviewImageUrl(reader.result);
+          toast.success("Image attached as proof!");
+        }
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setUploadingReviewImage(false);
     }
   };
 
@@ -466,6 +708,13 @@ export default function OperationsTasksPage() {
     }
   };
 
+  const allowedStatuses = useMemo(() => {
+    if (isStaffRole) {
+      return STAFF_ALLOWED_STATUSES;
+    }
+    return ALL_SUBTASK_STATUSES;
+  }, [isStaffRole]);
+
   const getUrgencyBadge = (urgency: string) => {
     const config = SUBTASK_URGENCIES.find((u) => u.id === urgency) || SUBTASK_URGENCIES[1];
     const Icon = config.icon;
@@ -478,7 +727,7 @@ export default function OperationsTasksPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    const config = SUBTASK_STATUSES.find((s) => s.id === status) || SUBTASK_STATUSES[0];
+    const config = ALL_SUBTASK_STATUSES.find((s) => s.id === status) || ALL_SUBTASK_STATUSES[0];
     return (
       <Badge variant="outline" className={`text-[10px] font-bold capitalize ${config.color}`}>
         {config.label}
@@ -508,11 +757,16 @@ export default function OperationsTasksPage() {
   );
 
   const displayedTasks = useMemo(() => {
-    if (scopeFilter === "assigned_to_me") {
-      return tasks.filter((t) => isTaskAssignedToMe(t));
+    let pool = scopeFilter === "assigned_to_me" ? tasks.filter((t) => isTaskAssignedToMe(t)) : tasks;
+
+    // "once task will not apear once complete marked"
+    // When viewing "All Tasks", hide completed Once tasks so only active tasks and daily tasks are displayed
+    if (selectedStatusTab === "all") {
+      pool = pool.filter((t) => !(t.status === "completed" && !t.is_daily_recurring));
     }
-    return tasks;
-  }, [tasks, scopeFilter, isTaskAssignedToMe]);
+
+    return pool;
+  }, [tasks, scopeFilter, selectedStatusTab, isTaskAssignedToMe]);
 
   const myAssignedTasksCount = useMemo(() => {
     return tasks.filter((t) => isTaskAssignedToMe(t)).length;
@@ -521,12 +775,13 @@ export default function OperationsTasksPage() {
   // Get task count for tab
   const getTabCount = (tabId: string) => {
     const pool = scopeFilter === "assigned_to_me" ? displayedTasks : tasks;
-    if (tabId === "all") return pool.length;
+    if (tabId === "all") return pool.filter((t) => !(t.status === "completed" && !t.is_daily_recurring)).length;
     if (tabId === "pending") return pool.filter((t) => t.status === "pending").length;
     if (tabId === "in_progress") return pool.filter((t) => t.status === "in_progress").length;
+    if (tabId === "under_review") return pool.filter((t) => t.status === "under_review").length;
+    if (tabId === "recheck") return pool.filter((t) => t.status === "recheck").length;
     if (tabId === "completed") return pool.filter((t) => t.status === "completed").length;
     if (tabId === "cancelled") return pool.filter((t) => t.status === "cancelled").length;
-    if (tabId === "under_review") return pool.filter((t) => t.status === "under_review").length;
     return 0;
   };
 
@@ -842,24 +1097,27 @@ export default function OperationsTasksPage() {
                 className="rounded-2xl border border-border/80 hover:border-primary/50 shadow-xs hover:shadow-md transition-all bg-card flex flex-col justify-between overflow-hidden"
               >
                 <CardContent className="p-5 space-y-4 text-xs">
-                  {/* Top Bar: Title, Urgency, Status, Action Button */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1 flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {getUrgencyBadge(task.urgency)}
-                        <span className="text-[11px] text-muted-foreground font-mono">#{task.id}</span>
-                        {hasMySubtasks && (
-                          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] gap-1 font-semibold">
-                            <Sparkles className="w-3 h-3 text-amber-500" /> Assigned to You
-                          </Badge>
-                        )}
-                      </div>
-                      <h3 className="text-base font-bold text-foreground leading-snug">
-                        {task.title}
-                      </h3>
+                  {/* Top Bar: Badges row, Status & Action Button on right */}
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {getUrgencyBadge(task.urgency)}
+                      <span className="text-[11px] text-muted-foreground font-mono">#{task.id}</span>
+                      <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] gap-1 font-semibold">
+                        <Sparkles className="w-3 h-3 text-amber-500" /> +{task.points || 20} / -{task.penalty_points || 10} pts
+                      </Badge>
+                      {task.is_daily_recurring && (
+                        <Badge variant="outline" className={task.status === "completed" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] gap-1 font-semibold" : "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 text-[10px] gap-1 font-semibold"}>
+                          <RefreshCw className="w-3 h-3" /> {task.status === "completed" ? "Daily Task (Completed Today)" : "Daily Recurring Task"}
+                        </Badge>
+                      )}
+                      {hasMySubtasks && (
+                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] gap-1 font-semibold">
+                          <Sparkles className="w-3 h-3 text-amber-500" /> Assigned to You
+                        </Badge>
+                      )}
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0 ml-auto">
                       {/* Quick Status Dropdown */}
                       <Select
                         value={task.status}
@@ -869,7 +1127,7 @@ export default function OperationsTasksPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {SUBTASK_STATUSES.map((s) => (
+                          {allowedStatuses.map((s) => (
                             <SelectItem key={s.id} value={s.id} className="text-xs">
                               {s.label}
                             </SelectItem>
@@ -885,6 +1143,13 @@ export default function OperationsTasksPage() {
                         <Plus className="w-3.5 h-3.5" /> + Sub-Tasks
                       </Button>
                     </div>
+                  </div>
+
+                  {/* FULL WIDTH TASK NAMING / TITLE */}
+                  <div className="w-full pt-1">
+                    <h3 className="text-base font-bold text-foreground leading-snug break-words w-full">
+                      {task.title}
+                    </h3>
                   </div>
 
                   {/* Client & Description */}
@@ -918,11 +1183,81 @@ export default function OperationsTasksPage() {
                     </div>
                     <div className="border-l pl-3">
                       <span className="text-muted-foreground block text-[10px] font-medium uppercase">Sub-Tasks</span>
-                      <span className="font-bold text-emerald-600 font-mono text-sm">
+                      <span className="font-bold text-foreground font-mono text-sm">
                         {completedSubs}/{subTasksList.length} Done
                       </span>
                     </div>
                   </div>
+
+                  {/* Under Review Deliverables / Proof Section */}
+                  {(task.review_notes || task.review_image_url || task.status === "under_review") && (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 space-y-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
+                          <FileCheck className="w-4 h-4 text-amber-600" />
+                          Review Deliverables & Proof
+                        </span>
+                        {task.review_submitted_at && (
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(task.review_submitted_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+
+                      {task.review_notes ? (
+                        <p className="text-foreground text-xs whitespace-pre-wrap bg-background/80 p-2.5 rounded-lg border leading-relaxed">
+                          {task.review_notes}
+                        </p>
+                      ) : (
+                        task.status === "under_review" && (
+                          <p className="text-[11px] text-muted-foreground italic">
+                            No notes attached. Deliverables submitted for administrative review.
+                          </p>
+                        )
+                      )}
+
+                      {task.review_image_url && (
+                        <div className="pt-1">
+                          <a
+                            href={task.review_image_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block group"
+                          >
+                            <img
+                              src={task.review_image_url}
+                              alt="Proof deliverable"
+                              className="max-h-36 rounded-lg border object-cover shadow-xs group-hover:opacity-90 transition-opacity"
+                            />
+                            <span className="text-[11px] text-primary group-hover:underline flex items-center gap-1 mt-1 font-semibold">
+                              <ExternalLink className="w-3 h-3" /> Click to view full proof image
+                            </span>
+                          </a>
+                        </div>
+                      )}
+
+                      {/* Admin Quick Decision Buttons */}
+                      {!isStaffRole && task.status === "under_review" && (
+                        <div className="flex items-center gap-2 pt-2 border-t border-amber-500/20">
+                          <Button
+                            size="sm"
+                            onClick={() => handleQuickTaskStatusChange(task.id, "completed")}
+                            className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1 shadow-xs"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Approve & Complete (+{task.points || 20} pts)
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleQuickTaskStatusChange(task.id, "recheck")}
+                            className="h-7 text-xs border-rose-300 text-rose-700 hover:bg-rose-50 font-bold gap-1"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" /> Request Recheck
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Progress Bar */}
                   {subTasksList.length > 0 && (
@@ -1030,7 +1365,7 @@ export default function OperationsTasksPage() {
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {SUBTASK_STATUSES.map((s) => (
+                                    {allowedStatuses.map((s) => (
                                       <SelectItem key={s.id} value={s.id} className="text-xs">
                                         {s.label}
                                       </SelectItem>
@@ -1096,6 +1431,14 @@ export default function OperationsTasksPage() {
                       <td className="p-3.5 pl-4 max-w-[280px]">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-bold text-foreground line-clamp-1">{task.title}</span>
+                          <Badge variant="outline" className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[9px] px-1.5 py-0 gap-0.5 font-bold shrink-0">
+                            <Sparkles className="w-2.5 h-2.5 text-amber-500" /> +{task.points || 20} / -{task.penalty_points || 10} pts
+                          </Badge>
+                          {task.is_daily_recurring && (
+                            <Badge variant="outline" className="bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30 text-[9px] px-1.5 py-0 gap-0.5 font-bold shrink-0">
+                              <RefreshCw className="w-2.5 h-2.5 text-blue-600" /> Daily Recurring
+                            </Badge>
+                          )}
                           {hasMySubtasks && (
                             <Badge variant="outline" className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[9px] px-1.5 py-0 gap-0.5 font-bold shrink-0">
                               <Sparkles className="w-2.5 h-2.5 text-amber-500" /> Assigned to You
@@ -1215,6 +1558,152 @@ export default function OperationsTasksPage() {
               )}
             </div>
 
+            {/* Assign to Staff Member */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-primary" />
+                Assign to Staff Member (Your Organization)
+              </Label>
+              <Select
+                value={formAssignedStaffId}
+                onValueChange={(val) => {
+                  setFormAssignedStaffId(val);
+                  if (val === "none") {
+                    setFormAssignedStaffName("");
+                    setFormAssignedStaffRole("");
+                  } else {
+                    const staff = uniqueStaffList.find((s) => String(s.id) === val);
+                    if (staff) {
+                      setFormAssignedStaffName(staff.name);
+                      setFormAssignedStaffRole(staff.role);
+                    }
+                  }
+                }}
+              >
+                <SelectTrigger className="text-xs h-9">
+                  <SelectValue placeholder="-- Select Staff Member --" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64 overflow-y-auto">
+                  <SelectItem value="none" className="text-xs">-- Unassigned (Assign Later) --</SelectItem>
+                  {uniqueStaffList.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)} className="text-xs">
+                      {s.name} ({s.role})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Task Cadence / Frequency Selector */}
+            <div className="space-y-2 p-3.5 rounded-xl border bg-muted/20">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-primary" />
+                  Task Frequency & Cadence *
+                </Label>
+                <span className="text-[10px] text-muted-foreground font-medium">Daily vs One-Time</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormIsDailyRecurring(false)}
+                  className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
+                    !formIsDailyRecurring
+                      ? "bg-background border-primary shadow-xs ring-1 ring-primary/40 text-foreground"
+                      : "bg-card/60 hover:bg-background/80 border-border text-muted-foreground"
+                  }`}
+                >
+                  <span className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                    ⚡ Once (One-Time)
+                  </span>
+                  <span className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
+                    Standard single deliverable. Disappears from active board once completed.
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFormIsDailyRecurring(true)}
+                  className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
+                    formIsDailyRecurring
+                      ? "bg-background border-primary shadow-xs ring-1 ring-primary/40 text-foreground"
+                      : "bg-card/60 hover:bg-background/80 border-border text-muted-foreground"
+                  }`}
+                >
+                  <span className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                    🔁 Daily Basis
+                  </span>
+                  <span className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
+                    Regenerates everyday. Must be marked completed daily, else penalty applies.
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* Points Configuration (Reward & Penalty) - Admin Only Editable */}
+            {!isStaffRole ? (
+              <div className="grid grid-cols-2 gap-3 p-3 rounded-xl border bg-card/60">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                    <Label className="text-xs font-bold text-foreground">
+                      Completion Points (Reward)
+                    </Label>
+                  </div>
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      value={formPoints}
+                      onChange={(e) => setFormPoints(e.target.value)}
+                      placeholder="20"
+                      className="text-xs h-9 font-mono bg-background"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-600">
+                      +PTS
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Added to staff score on completion</p>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                    <Label className="text-xs font-bold text-foreground">
+                      Penalty Points (Deduction)
+                    </Label>
+                  </div>
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      value={formPenaltyPoints}
+                      onChange={(e) => setFormPenaltyPoints(e.target.value)}
+                      placeholder="10"
+                      className="text-xs h-9 font-mono bg-background text-rose-600"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-rose-600">
+                      -PTS
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Deducted if uncompleted / missed</p>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 rounded-xl border bg-muted/20 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                  <div>
+                    <span className="font-bold text-foreground block">Performance Policy (Admin Controlled)</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      Staff receive +20 pts on completion; -10 pts penalty if missed. Points configurable by Admins only.
+                    </span>
+                  </div>
+                </div>
+                <Badge variant="outline" className="text-[10px] bg-background font-mono shrink-0">
+                  +20 / -10 pts
+                </Badge>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Main Task Details & Instructions</Label>
               <Textarea
@@ -1226,14 +1715,24 @@ export default function OperationsTasksPage() {
               />
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t">
-              <Button type="button" variant="outline" onClick={() => setTaskDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={savingTask} className="bg-primary font-bold">
-                {savingTask && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                {editingTask ? "Save Changes" : "Create Task & Continue to Sub-Tasks"}
-              </Button>
+            <div className="flex items-center justify-between pt-3 border-t">
+              <ProgressiveSaveIndicator status={taskSaveStatus} />
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setTaskDialogOpen(false);
+                    clearTaskDraft();
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={savingTask} className="bg-primary font-bold">
+                  {savingTask && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  {editingTask ? "Save Changes" : "Create Task & Continue to Sub-Tasks"}
+                </Button>
+              </div>
             </div>
           </form>
         </DialogContent>
@@ -1320,7 +1819,7 @@ export default function OperationsTasksPage() {
                     </SelectTrigger>
                     <SelectContent className="max-h-64 overflow-y-auto">
                       <SelectItem value="none" className="text-xs">-- Unassigned --</SelectItem>
-                      {uniqueStaffList.map((s) => (
+                      {uniqueModalStaffList.map((s) => (
                         <SelectItem key={s.id} value={String(s.id)} className="text-xs">
                           {s.name} ({s.role})
                         </SelectItem>
@@ -1386,7 +1885,7 @@ export default function OperationsTasksPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {SUBTASK_STATUSES.map((s) => (
+                      {allowedStatuses.map((s) => (
                         <SelectItem key={s.id} value={s.id} className="text-xs">
                           {s.label}
                         </SelectItem>
@@ -1395,6 +1894,56 @@ export default function OperationsTasksPage() {
                   </Select>
                 </div>
               </div>
+
+              {/* Row 3: Points (Reward) & Penalty Points */}
+              <div className="grid grid-cols-2 gap-3 p-2.5 rounded-xl border bg-muted/20">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-emerald-600" />
+                    <span>Completion Points (+Reward)</span>
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      value={newSubPoints}
+                      onChange={(e) => setNewSubPoints(e.target.value)}
+                      placeholder="20"
+                      className="text-xs h-8 font-mono bg-background"
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-emerald-600">
+                      +PTS
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 text-rose-600" />
+                    <span>Penalty Points (-Deduction)</span>
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      value={newSubPenaltyPoints}
+                      onChange={(e) => setNewSubPenaltyPoints(e.target.value)}
+                      placeholder="10"
+                      className="text-xs h-8 font-mono bg-background text-rose-600"
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-rose-600">
+                      -PTS
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {newSubStatus === "under_review" && (
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    Marking as <strong>Under Review</strong> indicates you have completed this deliverable. Platform & Institution Admins will be notified to inspect and approve.
+                  </span>
+                </div>
+              )}
 
               <div className="flex justify-end pt-1">
                 <Button type="button" size="sm" onClick={handleAddSubTaskToList} className="h-9 px-5 text-xs font-bold gap-1.5 shadow-sm">
@@ -1479,7 +2028,7 @@ export default function OperationsTasksPage() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {SUBTASK_STATUSES.map((s) => (
+                              {allowedStatuses.map((s) => (
                                 <SelectItem key={s.id} value={s.id} className="text-xs">
                                   {s.label}
                                 </SelectItem>
@@ -1503,6 +2052,156 @@ export default function OperationsTasksPage() {
                 Done & Close
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal 3: Submit Task Under Review Dialog (Optional Text & Image) */}
+      <Dialog open={reviewModalOpen} onOpenChange={setReviewModalOpen}>
+        <DialogContent className="sm:max-w-lg w-[92vw] max-h-[90vh] overflow-y-auto p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <FileCheck className="w-5 h-5 text-amber-500" />
+              <span>Submit Task for Review & Approval</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              You are marking &quot;{reviewModalTask?.title}&quot; as Under Review. You can optionally submit notes or attach a screenshot/proof image for administrators to inspect. Both fields are optional.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            {/* Optional Notes */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold flex items-center justify-between">
+                <span>Deliverable Summary / Review Notes</span>
+                <span className="text-[10px] text-muted-foreground font-normal">(Optional)</span>
+              </Label>
+              <Textarea
+                value={reviewNotes}
+                onChange={(e) => setReviewNotes(e.target.value)}
+                placeholder="e.g. Completed module setup, verified all 50 accounts. Deliverable link: https://..."
+                rows={3}
+                className="text-xs resize-none"
+              />
+            </div>
+
+            {/* Optional Image Proof */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-primary" />
+                  Proof Screenshot / Attachment
+                </span>
+                <span className="text-[10px] text-muted-foreground font-normal">(Optional)</span>
+              </Label>
+
+              {reviewImageUrl ? (
+                <div className="relative rounded-xl border p-2.5 bg-muted/20 flex items-center gap-3">
+                  <img
+                    src={reviewImageUrl}
+                    alt="Proof preview"
+                    className="w-20 h-16 object-cover rounded-lg border shadow-xs"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-foreground truncate">
+                      Image proof attached
+                    </p>
+                    <a
+                      href={reviewImageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-primary hover:underline flex items-center gap-1 mt-0.5"
+                    >
+                      <ExternalLink className="w-3 h-3" /> View image preview
+                    </a>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setReviewImageUrl("")}
+                    className="h-7 w-7 text-rose-600 hover:bg-rose-50"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-border/80 hover:border-primary/60 rounded-xl p-4 cursor-pointer bg-muted/10 hover:bg-muted/30 transition-all text-center">
+                    <UploadCloud className="w-6 h-6 text-muted-foreground mb-1" />
+                    <span className="text-xs font-bold text-foreground">
+                      {uploadingReviewImage ? "Uploading..." : "Upload Screenshot / Proof Image"}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground mt-0.5">
+                      PNG, JPG, or WEBP up to 5MB (Optional)
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleUploadReviewFile}
+                      disabled={uploadingReviewImage}
+                      className="hidden"
+                    />
+                  </label>
+
+                  <div className="flex items-center gap-2">
+                    <div className="h-px bg-border flex-1" />
+                    <span className="text-[10px] text-muted-foreground uppercase">or paste image URL</span>
+                    <div className="h-px bg-border flex-1" />
+                  </div>
+
+                  <Input
+                    type="url"
+                    value={reviewImageUrl}
+                    onChange={(e) => setReviewImageUrl(e.target.value)}
+                    placeholder="https://example.com/screenshot.png"
+                    className="text-xs h-8"
+                  />
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="flex items-center justify-between gap-2 pt-3 border-t">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setReviewModalOpen(false);
+                  setReviewModalTask(null);
+                  setReviewNotes("");
+                  setReviewImageUrl("");
+                }}
+                disabled={submittingReview}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => handleSubmitUnderReview(true)}
+                  disabled={submittingReview}
+                  className="text-xs font-medium text-muted-foreground hover:text-foreground"
+                >
+                  Skip & Submit
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => handleSubmitUnderReview(false)}
+                  disabled={submittingReview || uploadingReviewImage}
+                  className="text-xs bg-primary font-bold gap-1"
+                >
+                  {submittingReview ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  )}
+                  Submit for Review
+                </Button>
+              </div>
+            </DialogFooter>
           </div>
         </DialogContent>
       </Dialog>

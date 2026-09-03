@@ -3,6 +3,7 @@ import { getAuthenticatedUser, requireAdmin } from "@/lib/auth/auth";
 import {
   assertTeachingSubjectsMatchInstitutionBoard,
   createAdminUserWithDetails,
+  getOrCreateEduBirdInstitution,
   getUsersPaginatedQuery,
   removeUserFromInstitutions,
   softDeleteAdminUser,
@@ -45,11 +46,23 @@ async function getRoleMeta(roleId: number | null | undefined) {
   return result.rows[0] ?? null;
 }
 
-function roleAllowsDesignation(roleCode: string | null | undefined) {
-  return roleCode === "institution_admin" || roleCode === "teacher";
+function roleAllowsDesignation(roleCode: string | null | undefined, isPlatformActor = false) {
+  return (
+    roleCode === "institution_admin" ||
+    roleCode === "teacher" ||
+    isPlatformActor ||
+    !roleCode ||
+    roleCode === "administrative_staff" ||
+    roleCode === "staff" ||
+    roleCode === "faculty"
+  );
 }
 
-function getProfileRoleError(data: AdminCreateUserInput, roleCode: string | null | undefined) {
+function getProfileRoleError(
+  data: AdminCreateUserInput,
+  roleCode: string | null | undefined,
+  isPlatformActor = false
+) {
   const hasTeacherFields =
     data.profile.is_teacher ||
     Boolean(data.profile.teacher_type) ||
@@ -61,8 +74,8 @@ function getProfileRoleError(data: AdminCreateUserInput, roleCode: string | null
     return "Teacher profile fields are only allowed for Teacher role";
   }
 
-  if (data.profile.designation_id && !roleAllowsDesignation(roleCode)) {
-    return "Designation is only allowed for Institution Admin or Teacher role";
+  if (data.profile.designation_id && !roleAllowsDesignation(roleCode, isPlatformActor)) {
+    return "Designation is only allowed for Institution Admin, Teacher, or Platform Staff role";
   }
 
   if (roleCode === "institution_admin" && !data.profile.designation_id) {
@@ -374,6 +387,30 @@ export async function POST(req: Request) {
     }
 
     let roleMeta = await getRoleMeta(parsed.data.role_id ?? null);
+    if (!roleMeta && parsed.data.role_id) {
+      // Check if role_id refers to a designation in designations table
+      const desigRes = await db.query<{ id: number; name: string; slug: string }>(
+        `SELECT id, name, slug FROM designations WHERE id = $1 LIMIT 1`,
+        [parsed.data.role_id]
+      ).catch(() => ({ rows: [] }));
+      if (desigRes.rows[0]) {
+        parsed.data.profile.designation_id = desigRes.rows[0].id;
+        // Assign default staff/administrative_staff role for this designation
+        const staffRoleRes = await db.query<{ id: number; code: string; scope_code: string | null }>(
+          `SELECT r.id, r.code, st.code AS scope_code
+           FROM roles r
+           LEFT JOIN scope_types st ON st.id = r.scope_id
+           WHERE r.code IN ('administrative_staff', 'staff', 'faculty')
+           ORDER BY CASE WHEN r.code = 'administrative_staff' THEN 1 ELSE 2 END
+           LIMIT 1`
+        ).catch(() => ({ rows: [] }));
+        if (staffRoleRes.rows[0]) {
+          parsed.data.role_id = staffRoleRes.rows[0].id;
+          roleMeta = staffRoleRes.rows[0];
+        }
+      }
+    }
+
     if (!roleMeta) {
       const defaultStudentRoleRes = await db.query<{ id: number; code: string; scope_code: string | null }>(
         `SELECT r.id, r.code, st.code AS scope_code
@@ -407,7 +444,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: roleAssignmentError }, { status: 403 });
     }
 
-    const profileRoleError = getProfileRoleError(parsed.data, roleMeta?.code);
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
+    const profileRoleError = getProfileRoleError(parsed.data, roleMeta?.code, isPlatformAdmin);
     if (profileRoleError) {
       return NextResponse.json({ error: profileRoleError }, { status: 422 });
     }
@@ -425,6 +463,17 @@ export async function POST(req: Request) {
       userData.profile.under_institution_id = allowedInstitutionIds[0];
       userData.profile.institution_ids = [allowedInstitutionIds[0]];
       targetInstitutionIds = [allowedInstitutionIds[0]];
+    }
+
+    if (
+      isPlatformAdmin &&
+      targetInstitutionIds.length === 0 &&
+      roleMeta?.scope_code === "institution"
+    ) {
+      const edubird = await getOrCreateEduBirdInstitution(db);
+      userData.profile.under_institution_id = edubird.id;
+      userData.profile.institution_ids = [edubird.id];
+      targetInstitutionIds = [edubird.id];
     }
 
     if (!isGuardianCreatingStudent && !canCreateRoleInTargetInstitutions(currentUser, roleMeta?.code, targetInstitutionIds)) {

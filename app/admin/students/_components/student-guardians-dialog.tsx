@@ -112,6 +112,21 @@ export function StudentGuardiansDialog({
     setOccupation("");
   };
 
+  const handleRelationshipChange = (value: string) => {
+    setRelationship(value);
+    if (value === "Self" && student) {
+      if (student.full_name) {
+        setName(student.full_name);
+      }
+      if (student.email && !student.email.endsWith(".local")) {
+        setEmail(student.email);
+      }
+      if (student.phone) {
+        setPhone(student.phone);
+      }
+    }
+  };
+
   const handleAddGuardian = async () => {
     if (!name.trim()) {
       toast.error("Contact full name is required.");
@@ -283,7 +298,7 @@ export function StudentGuardiansDialog({
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs font-bold">Relationship</Label>
-                    <Select value={relationship} onValueChange={setRelationship}>
+                    <Select value={relationship} onValueChange={handleRelationshipChange}>
                       <SelectTrigger className="h-9 text-sm rounded-lg">
                         <SelectValue placeholder="Select relationship" />
                       </SelectTrigger>

@@ -29,7 +29,10 @@ import {
   ClipboardPaste,
   MoreHorizontal,
   Upload,
+  Languages,
+  Globe,
 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -105,7 +108,8 @@ function generateCourseSlug(
   authType: CourseAuthorityType = "board",
   boardName?: string,
   universityName?: string,
-  certificationProviderName?: string
+  certificationProviderName?: string,
+  medium?: string
 ): string {
   const cleanName = (name || "").trim();
   let authPart = "";
@@ -117,30 +121,91 @@ function generateCourseSlug(
     authPart = certificationProviderName;
   }
 
-  const combined = [cleanName, authPart].filter(Boolean).join(" ");
+  const combined = [cleanName, authPart, medium].filter(Boolean).join(" ");
   return toSlug(combined || cleanName);
 }
+
+function computeGeneratedCourseName(
+  categoryName: string,
+  authType: CourseAuthorityType = "board",
+  boardName?: string,
+  universityName?: string,
+  certificationProviderName?: string,
+  medium?: string
+): string {
+  const cat = (categoryName || "").trim();
+  let authPart = "";
+  if (authType === "board" && boardName) {
+    authPart = boardName.trim();
+  } else if (authType === "university" && universityName) {
+    authPart = universityName.trim();
+  } else if (authType === "certification" && certificationProviderName) {
+    authPart = certificationProviderName.trim();
+  }
+
+  let baseName = "";
+  if (cat && authPart) {
+    if (cat.toLowerCase().includes(authPart.toLowerCase())) {
+      baseName = cat;
+    } else {
+      baseName = `${cat} - ${authPart}`;
+    }
+  } else {
+    baseName = cat || authPart || "";
+  }
+
+  const med = (medium || "").trim();
+  if (med && baseName) {
+    const medSuffix = med.toLowerCase().includes("medium") ? med : `${med} Medium`;
+    if (!baseName.toLowerCase().includes(med.toLowerCase())) {
+      return `${baseName} - ${medSuffix}`;
+    }
+  }
+
+  return baseName;
+}
+
+const STANDARD_MEDIUMS = [
+  "English",
+  "Hindi",
+  "Bilingual (English + Hindi)",
+  "Sanskrit",
+  "Urdu",
+  "Bengali",
+  "Marathi",
+  "Telugu",
+  "Tamil",
+  "Gujarati",
+  "Kannada",
+  "Malayalam",
+  "Punjabi",
+  "Odia",
+  "Assamese",
+  "French",
+  "German",
+  "Spanish",
+];
 
 // Helper to determine the single authority type based on category name and hierarchy
 function detectAuthorityTypeFromCategory(categoryName: string, breadcrumb?: string): CourseAuthorityType {
   const text = `${categoryName} ${breadcrumb || ""}`.toLowerCase();
 
-  // 1. School / K-12 Academics -> Board
-  const schoolRegex = /(preschool|pre-school|nursery|kindergarten|kg|primary|middle|secondary|senior secondary|matric|high school|school|k-12|class|grade|\b(1-5|6-8|9-10|11-12|1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th|11th|12th|\d+th|\d+st|\d+nd|\d+rd)\b)/i;
+  // 1. School / K-12 Academics (LKG to Class 12th) -> Board
+  const schoolRegex = /(lkg|ukg|nursery|pre-school|preschool|kindergarten|kg|primary|middle|secondary|senior secondary|matric|high school|school|k-12|class|grade|standard|std|\b(1-5|6-8|9-10|11-12|1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th|11th|12th|\d+th|\d+st|\d+nd|\d+rd)\b|intermediate|\+2|plus two)/i;
   if (schoolRegex.test(text)) {
     return "board";
   }
 
-  // 2. Higher Education / Degrees / Diplomas -> University
-  const higherEdRegex = /(bachelor|bachelors|undergraduate|\bug\b|b\.?tech|b\.?e|b\.?sc|b\.?com|bba|bca|ba\b|llb|master|masters|postgraduate|\bpg\b|m\.?tech|m\.?sc|m\.?com|mba|mca|ma\b|phd|doctorate|diploma|polytechnic|degree|engineering|medical|university|college)/i;
-  if (higherEdRegex.test(text)) {
-    return "university";
+  // 2. Technical programs / Skill / IT & Software / Certifications / Competitive tracks -> Certification Body
+  const technicalRegex = /(technical|tech\s+program|it & software|coding|programming|software engineering|cloud|devops|cyber security|cybersecurity|data science|machine learning|ai|artificial intelligence|full stack|web development|networking|professional|competitive|government|govt|upsc|ssc|banking|railway|gate|cat|neet|jee|certification|certificate|certified|bootcamp|skill|vocational|short-term|training program)/i;
+  if (technicalRegex.test(text)) {
+    return "certification";
   }
 
-  // 3. Professional courses / Competitive / Government exams / Certifications -> Certification Body
-  const professionalRegex = /(professional|competitive|government|govt|upsc|ssc|banking|railway|gate|cat|neet|jee|certification|certificate|skill|vocational|bootcamp|developer|data science|it & software)/i;
-  if (professionalRegex.test(text)) {
-    return "certification";
+  // 3. Higher Education / Degrees / Bachelor, Master, PhD, Doctorate -> University
+  const higherEdRegex = /(degree|bachelor|bachelors|undergraduate|\bug\b|b\.?tech|btech|b\.?e\b|be\b|b\.?sc|bsc|b\.?com|bcom|bba|bca|ba\b|llb|b\.?ed|bed|mbbs|bds|b\.?pharm|bpharm|b\.?arch|barch|b\.?des|bdes|master|masters|postgraduate|\bpg\b|m\.?tech|mtech|m\.?e\b|me\b|m\.?sc|msc|m\.?com|mcom|mba|mca|ma\b|llm|m\.?ed|med|md\b|ms\b|m\.?pharm|mpharm|phd|ph\.d|doctorate|post-doc|postdoc|m\.?phil|mphil|diploma|polytechnic|university|college)/i;
+  if (higherEdRegex.test(text)) {
+    return "university";
   }
 
   return "board";
@@ -173,6 +238,7 @@ export default function MasterCoursesPage() {
   const [editingCourse, setEditingCourse] = useState<MasterCourse | null>(null);
 
   // Form fields
+  const [activeDialogTab, setActiveDialogTab] = useState<"basic" | "duration_icon" | "subjects">("basic");
   const [categoryId, setCategoryId] = useState("");
   const [categoryName, setCategoryName] = useState("");
   const [categoryBreadcrumb, setCategoryBreadcrumb] = useState("");
@@ -185,6 +251,8 @@ export default function MasterCoursesPage() {
   const [universityName, setUniversityName] = useState("");
   const [certificationProviderId, setCertificationProviderId] = useState("");
   const [certificationProviderName, setCertificationProviderName] = useState("");
+  const [medium, setMedium] = useState<string>("English");
+  const [customMediumInput, setCustomMediumInput] = useState("");
   const [durationValue, setDurationValue] = useState<string>("1");
   const [durationUnit, setDurationUnit] = useState<string>("years");
   const [seatsAvailable, setSeatsAvailable] = useState<string>("");
@@ -195,9 +263,17 @@ export default function MasterCoursesPage() {
   const [submitting, setSubmitting] = useState(false);
 
   // Dynamic Course Subjects state
-  const [subjectRows, setSubjectRows] = useState<{ id: string; name: string; code: string }[]>([
-    { id: "1", name: "", code: "" },
+  const [subjectRows, setSubjectRows] = useState<{
+    id: string;
+    name: string;
+    code: string;
+    term_type?: string;
+    term_number?: number;
+    term_name?: string;
+  }[]>([
+    { id: "1", name: "", code: "", term_type: "semester", term_number: 1, term_name: "Year 1 Semester 1" },
   ]);
+  const [selectedTermFilter, setSelectedTermFilter] = useState<string>("all");
   const [bulkInputText, setBulkInputText] = useState("");
   const [showBulkPaste, setShowBulkPaste] = useState(false);
 
@@ -341,29 +417,135 @@ export default function MasterCoursesPage() {
     const detected = detectAuthorityTypeFromCategory(cname, cbreadcrumb);
     setAuthorityType(detected);
 
-    // Auto-suggest course name and slug if empty
-    if (!courseName.trim()) {
-      setCourseName(cname);
-      setCourseSlug(generateCourseSlug(cname, detected, boardName, universityName, certificationProviderName));
-    }
+    const generated = computeGeneratedCourseName(cname, detected, boardName, universityName, certificationProviderName, medium);
+    setCourseName(generated);
+    setCourseSlug(generateCourseSlug(generated, detected, boardName, universityName, certificationProviderName, medium));
   };
 
-  const addSubjectRow = () => {
+  // Compute available terms from duration selected in Tab 2
+  const availableTerms = useMemo(() => {
+    const num = Math.max(1, Number(durationValue) || 1);
+    if (durationUnit === "years") {
+      const terms: {
+        key: string;
+        label: string;
+        term_type: string;
+        term_number: number;
+        term_name: string;
+        yearNumber: number;
+      }[] = [];
+      for (let yr = 1; yr <= num; yr++) {
+        const s1 = (yr - 1) * 2 + 1;
+        const s2 = (yr - 1) * 2 + 2;
+        terms.push({
+          key: `sem-${s1}`,
+          label: `Year ${yr} • Sem ${s1}`,
+          term_type: "semester",
+          term_number: s1,
+          term_name: `Year ${yr} Semester ${s1}`,
+          yearNumber: yr,
+        });
+        terms.push({
+          key: `sem-${s2}`,
+          label: `Year ${yr} • Sem ${s2}`,
+          term_type: "semester",
+          term_number: s2,
+          term_name: `Year ${yr} Semester ${s2}`,
+          yearNumber: yr,
+        });
+      }
+      return terms;
+    } else if (durationUnit === "years_annual") {
+      const terms: {
+        key: string;
+        label: string;
+        term_type: string;
+        term_number: number;
+        term_name: string;
+        yearNumber: number;
+      }[] = [];
+      for (let yr = 1; yr <= num; yr++) {
+        terms.push({
+          key: `year-${yr}`,
+          label: `Year ${yr} (Annual)`,
+          term_type: "year",
+          term_number: yr,
+          term_name: `Year ${yr} (Annual)`,
+          yearNumber: yr,
+        });
+      }
+      return terms;
+    } else if (durationUnit === "semesters") {
+      const terms: {
+        key: string;
+        label: string;
+        term_type: string;
+        term_number: number;
+        term_name: string;
+        yearNumber: number;
+      }[] = [];
+      for (let s = 1; s <= num; s++) {
+        const yr = Math.ceil(s / 2);
+        terms.push({
+          key: `sem-${s}`,
+          label: `Year ${yr} • Sem ${s}`,
+          term_type: "semester",
+          term_number: s,
+          term_name: `Semester ${s}`,
+          yearNumber: yr,
+        });
+      }
+      return terms;
+    }
+    return [
+      {
+        key: "full_course",
+        label: "Full Course / Core Curriculum",
+        term_type: "full_course",
+        term_number: 1,
+        term_name: "Core Curriculum",
+        yearNumber: 1,
+      },
+    ];
+  }, [durationValue, durationUnit]);
+
+  const addSubjectRow = (preferredTermNumber?: number, preferredTermName?: string, preferredTermType?: string) => {
+    const defaultTerm = availableTerms[0] || {
+      term_type: "semester",
+      term_number: 1,
+      term_name: "Year 1 Semester 1",
+    };
     setSubjectRows((prev) => [
       ...prev,
-      { id: String(Date.now() + Math.random()), name: "", code: "" },
+      {
+        id: String(Date.now()),
+        name: "",
+        code: "",
+        term_type: preferredTermType || defaultTerm.term_type,
+        term_number: preferredTermNumber ?? defaultTerm.term_number,
+        term_name: preferredTermName || defaultTerm.term_name,
+      },
     ]);
   };
 
   const removeSubjectRow = (id: string) => {
     if (subjectRows.length <= 1) {
-      setSubjectRows([{ id: "1", name: "", code: "" }]);
+      const defaultTerm = availableTerms[0] || {
+        term_type: "semester",
+        term_number: 1,
+        term_name: "Year 1 Semester 1",
+      };
+      setSubjectRows([{ id: "1", name: "", code: "", ...defaultTerm }]);
       return;
     }
     setSubjectRows((prev) => prev.filter((r) => r.id !== id));
   };
 
-  const updateSubjectRow = (id: string, field: "name" | "code", value: string) => {
+  const updateSubjectRow = (
+    id: string,
+    field: "name" | "code" | "term_number" | "term_name" | "term_type",
+    value: any
+  ) => {
     setSubjectRows((prev) =>
       prev.map((r) => (r.id === id ? { ...r, [field]: value } : r))
     );
@@ -378,10 +560,19 @@ export default function MasterCoursesPage() {
 
     if (names.length === 0) return;
 
+    let targetTerm = availableTerms[0];
+    if (selectedTermFilter !== "all") {
+      const found = availableTerms.find((t) => t.key === selectedTermFilter);
+      if (found) targetTerm = found;
+    }
+
     const newRows = names.map((n, i) => ({
       id: String(Date.now() + i),
       name: n,
       code: "",
+      term_type: targetTerm?.term_type || "semester",
+      term_number: targetTerm?.term_number || 1,
+      term_name: targetTerm?.term_name || "Semester 1",
     }));
 
     setSubjectRows((prev) => {
@@ -396,6 +587,7 @@ export default function MasterCoursesPage() {
 
   const resetForm = () => {
     setEditingCourse(null);
+    setActiveDialogTab("basic");
     setCategoryId("");
     setCategoryName("");
     setCategoryBreadcrumb("");
@@ -408,6 +600,8 @@ export default function MasterCoursesPage() {
     setUniversityName("");
     setCertificationProviderId("");
     setCertificationProviderName("");
+    setMedium("English");
+    setCustomMediumInput("");
     setDurationValue("1");
     setDurationUnit("years");
     setSeatsAvailable("");
@@ -415,7 +609,10 @@ export default function MasterCoursesPage() {
     setThumbnailUrl("");
     setIconUrl("");
     setSelectedSubjectIds([]);
-    setSubjectRows([{ id: "1", name: "", code: "" }]);
+    setSubjectRows([
+      { id: "1", name: "", code: "", term_type: "semester", term_number: 1, term_name: "Year 1 Semester 1" },
+    ]);
+    setSelectedTermFilter("all");
     setBulkInputText("");
     setShowBulkPaste(false);
   };
@@ -427,6 +624,7 @@ export default function MasterCoursesPage() {
 
   const openEditDialog = (course: MasterCourse) => {
     setEditingCourse(course);
+    setActiveDialogTab("basic");
     setCategoryId(String(course.category_id));
     setCategoryName(course.category_name || "");
     setCategoryBreadcrumb(course.category_breadcrumb || "");
@@ -441,6 +639,17 @@ export default function MasterCoursesPage() {
     setCertificationProviderName(course.certification_provider_name || "");
     setDurationValue(course.duration_value ? String(course.duration_value) : "1");
     setDurationUnit(course.duration_unit || "years");
+    
+    // Parse single medium
+    let courseMedium = "English";
+    if (Array.isArray(course.mediums) && course.mediums.length > 0) {
+      courseMedium = course.mediums[0];
+    } else if (course.medium) {
+      courseMedium = course.medium.split(",")[0].trim() || "English";
+    }
+    setMedium(courseMedium);
+    setCustomMediumInput("");
+
     setSeatsAvailable(course.seats_available ? String(course.seats_available) : "");
     setDescription(course.description || "");
     setThumbnailUrl(course.thumbnail_url || "");
@@ -449,15 +658,21 @@ export default function MasterCoursesPage() {
     
     if (course.subjects && course.subjects.length > 0) {
       setSubjectRows(
-        course.subjects.map((s) => ({
-          id: String(s.id),
+        course.subjects.map((s, i) => ({
+          id: String(s.id || i + 1),
           name: s.name,
           code: s.code || "",
+          term_type: s.term_type || "semester",
+          term_number: s.term_number || 1,
+          term_name: s.term_name || `Semester ${s.term_number || 1}`,
         }))
       );
     } else {
-      setSubjectRows([{ id: "1", name: "", code: "" }]);
+      setSubjectRows([
+        { id: "1", name: "", code: "", term_type: "semester", term_number: 1, term_name: "Year 1 Semester 1" },
+      ]);
     }
+    setSelectedTermFilter("all");
     setBulkInputText("");
     setShowBulkPaste(false);
     setDialogOpen(true);
@@ -475,7 +690,7 @@ export default function MasterCoursesPage() {
     }
     const finalCourseSlug = courseSlug.trim()
       ? toSlug(courseSlug)
-      : generateCourseSlug(finalCourseName, authorityType, boardName, universityName, certificationProviderName);
+      : generateCourseSlug(finalCourseName, authorityType, boardName, universityName, certificationProviderName, medium);
 
     setSubmitting(true);
     try {
@@ -484,6 +699,9 @@ export default function MasterCoursesPage() {
         .map((r) => ({
           name: r.name.trim(),
           code: r.code.trim() || null,
+          term_type: r.term_type || "semester",
+          term_number: r.term_number || 1,
+          term_name: r.term_name || `Semester ${r.term_number || 1}`,
         }));
 
       const payload = {
@@ -498,6 +716,8 @@ export default function MasterCoursesPage() {
           authorityType === "certification" && certificationProviderId ? Number(certificationProviderId) : null,
         durationValue: durationValue ? Number(durationValue) : null,
         durationUnit,
+        mediums: medium ? [medium] : ["English"],
+        medium: medium || "English",
         seatsAvailable: seatsAvailable ? Number(seatsAvailable) : null,
         description: description.trim() || null,
         thumbnail_url: thumbnailUrl.trim() || null,
@@ -763,15 +983,45 @@ export default function MasterCoursesPage() {
       },
     },
     {
+      id: "medium",
+      header: "Medium",
+      cell: ({ row }) => {
+        const c = row.original;
+        const mediums = Array.isArray(c.mediums) && c.mediums.length > 0
+          ? c.mediums
+          : c.medium
+          ? c.medium.split(",").map((s) => s.trim()).filter(Boolean)
+          : [];
+        if (mediums.length === 0) return <span className="text-xs text-muted-foreground">-</span>;
+        return (
+          <div className="flex items-center gap-1 flex-wrap max-w-[180px]">
+            {mediums.slice(0, 2).map((m) => (
+              <Badge key={m} variant="secondary" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20 font-medium">
+                {m}
+              </Badge>
+            ))}
+            {mediums.length > 2 && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-muted/30">
+                +{mediums.length - 2}
+              </Badge>
+            )}
+          </div>
+        );
+      },
+    },
+    {
       id: "duration",
       header: "Duration",
       cell: ({ row }) => {
         const c = row.original;
         if (!c.duration_value) return <span className="text-xs text-muted-foreground">-</span>;
+        const unitLabel = c.duration_unit === "years_annual"
+          ? `Year${Number(c.duration_value) > 1 ? "s" : ""} (Annual)`
+          : `${c.duration_unit}`;
         return (
           <span className="text-xs font-medium text-foreground flex items-center gap-1">
             <Clock className="h-3 w-3 text-muted-foreground" />
-            {c.duration_value} {c.duration_unit}
+            {c.duration_value} {unitLabel}
           </span>
         );
       },
@@ -936,55 +1186,55 @@ export default function MasterCoursesPage() {
         </Card>
       </div>
 
-      {/* Filter and Table Card */}
+      {/* Table Card */}
       <Card className="border border-border/80 shadow-xs">
-        <CardContent className="p-5 space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by course name, category, or code..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 bg-background/50 border-border"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Select value={authorityFilter} onValueChange={setAuthorityFilter}>
-                <SelectTrigger className="w-[190px] h-9 text-xs bg-background/50 border-border">
-                  <SelectValue placeholder="All Authority Types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Authority Types</SelectItem>
-                  <SelectItem value="board">School Boards</SelectItem>
-                  <SelectItem value="university">Universities</SelectItem>
-                  <SelectItem value="certification">Certifications / Bodies</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={fetchCourses}
-                disabled={loading}
-                title="Refresh"
-                className="h-9 w-9"
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              </Button>
-            </div>
-          </div>
-
-          {/* DataTable */}
+        <CardContent className="p-5">
+          {/* DataTable with Unified Single-Row Toolbar */}
           <DataTable
             columns={columns}
             data={courses}
             loading={loading}
-            searchKey="name"
             pagination={pagination}
             onPaginationChange={setPagination}
             pageCount={pageCount}
             showRowNumbers
+            toolbarLeft={
+              <div className="relative w-full sm:w-80">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by course name, category, or code..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9 h-9 text-xs bg-background/50 border-border"
+                />
+              </div>
+            }
+            toolbarRight={
+              <div className="flex items-center gap-2">
+                <Select value={authorityFilter} onValueChange={setAuthorityFilter}>
+                  <SelectTrigger className="w-[180px] h-9 text-xs bg-background/50 border-border">
+                    <SelectValue placeholder="All Authority Types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Authority Types</SelectItem>
+                    <SelectItem value="board">School Boards</SelectItem>
+                    <SelectItem value="university">Universities</SelectItem>
+                    <SelectItem value="certification">Certifications / Bodies</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={fetchCourses}
+                  disabled={loading}
+                  title="Refresh"
+                  className="h-9 w-9"
+                >
+                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                </Button>
+              </div>
+            }
             selectedActions={(selectedRows, resetSelection) => {
               const ids = selectedRows.map((r) => r.id);
               return (
@@ -1044,468 +1294,884 @@ export default function MasterCoursesPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="space-y-4 py-2">
-            {/* Step 1: Choose Main Category from categories table */}
-            <div className="space-y-1.5 p-3.5 rounded-2xl border border-border/80 bg-muted/20">
-              <Label className="text-xs font-bold text-foreground flex items-center justify-between">
-                <span>1. Main Category (from Manage Categories) *</span>
-                {categoryId && (
-                  <span className="text-[10px] text-muted-foreground font-mono">
-                    Category ID: #{categoryId}
-                  </span>
-                )}
-              </Label>
-              <AsyncSearchPopover<{ id: number; name: string; breadcrumb?: string; depth?: number }>
-                value={categoryId}
-                onChange={(val) => {
-                  setCategoryId(val);
-                  if (!val) {
-                    setCategoryName("");
-                    setCategoryBreadcrumb("");
-                  }
-                }}
-                onSelectItem={(item) => handleCategorySelect(item)}
-                selectedLabel={categoryName || undefined}
-                placeholder="Select main category from categories table..."
-                searchPlaceholder="Search categories by name..."
-                emptyText="No category found"
-                fetcher={async (search, page) => {
-                  const res = await fetch(
-                    `/api/admin/categories?page=${page}&limit=20&search=${encodeURIComponent(search)}`,
-                    { headers: authHeader }
-                  );
-                  if (!res.ok) throw new Error("Failed to load categories");
-                  const json = await res.json();
-                  return { data: json.data || [], hasMore: page < (json.pageCount || 1) };
-                }}
-                getValue={(item) => String(item.id)}
-                getLabel={(item) => item.breadcrumb || item.name}
-                renderItem={(item) => (
-                  <div className="flex flex-col py-0.5">
-                    <span className="font-semibold text-xs text-foreground">{item.name}</span>
-                    {item.breadcrumb && (
-                      <span className="text-[10px] text-muted-foreground">{item.breadcrumb}</span>
-                    )}
-                  </div>
-                )}
-              />
-              {categoryBreadcrumb && (
-                <p className="text-[11px] text-muted-foreground truncate" title={categoryBreadcrumb}>
-                  Selected Category: <strong className="text-foreground/80">{categoryBreadcrumb}</strong>
-                </p>
-              )}
-            </div>
-
-            {/* Step 2: Course / Program Name */}
-            <div className="space-y-1.5 p-3.5 rounded-2xl border border-border/80 bg-muted/20">
-              <Label className="text-xs font-bold text-foreground flex items-center justify-between">
-                <span>2. Course / Program Name *</span>
-                {courseSlug && (
-                  <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[220px]">
-                    slug: {courseSlug}
-                  </span>
-                )}
-              </Label>
-              <Input
-                placeholder="e.g. Class 1, Computer Science Engineering, UPSC General Studies..."
-                value={courseName}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setCourseName(val);
-                  setCourseSlug(generateCourseSlug(val, authorityType, boardName, universityName, certificationProviderName));
-                }}
-                className="h-10 text-sm font-semibold"
-                required
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Enter the exact course/program title to display across the platform.
-              </p>
-            </div>
-
-            {/* Course / Program Icon Upload (Same as Subject Icon) */}
-            <div className="space-y-2 p-3.5 rounded-2xl border border-border/80 bg-muted/20">
-              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <ImageIcon className="h-4 w-4 text-primary" />
-                Course / Program Icon
-              </Label>
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-xl border border-border bg-background flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
-                  {iconUrl ? (
-                    <img
-                      src={iconUrl}
-                      alt="Course Icon"
-                      className="h-full w-full object-contain p-1"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = "none";
-                      }}
-                    />
-                  ) : (
-                    <GraduationCap className="h-6 w-6 text-muted-foreground" />
+          <form onSubmit={handleSubmit} className="space-y-4 py-1">
+            {/* 3 Interactive Tabs */}
+            <Tabs
+              value={activeDialogTab}
+              onValueChange={(val: string) => setActiveDialogTab(val as any)}
+              className="w-full space-y-4"
+            >
+              <TabsList className="grid grid-cols-3 w-full h-11 p-1 bg-muted/60 rounded-xl border border-border/60">
+                <TabsTrigger
+                  value="basic"
+                  className="text-xs font-bold gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs rounded-lg transition-all"
+                >
+                  <BookOpen className="h-3.5 w-3.5 text-primary" />
+                  1. Basic Info
+                </TabsTrigger>
+                <TabsTrigger
+                  value="duration_icon"
+                  className="text-xs font-bold gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs rounded-lg transition-all"
+                >
+                  <Clock className="h-3.5 w-3.5 text-primary" />
+                  2. Duration & Icon
+                </TabsTrigger>
+                <TabsTrigger
+                  value="subjects"
+                  className="text-xs font-bold gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs rounded-lg transition-all"
+                >
+                  <ListPlus className="h-3.5 w-3.5 text-primary" />
+                  3. Subjects
+                  {subjectRows.filter((r) => r.name.trim()).length > 0 && (
+                    <Badge variant="secondary" className="text-[10px] py-0 px-1.5 font-semibold bg-primary/10 text-primary">
+                      {subjectRows.filter((r) => r.name.trim()).length}
+                    </Badge>
                   )}
-                </div>
-                <div className="flex-1 flex items-center gap-2">
-                  <input
-                    type="file"
-                    id="course-icon-upload-input"
-                    accept=".webp,.svg,.png,.jpg,.jpeg,image/webp,image/svg+xml,image/png,image/jpeg"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        handleCourseIconUpload(file);
-                        e.target.value = "";
+                </TabsTrigger>
+              </TabsList>
+
+              {/* TAB 1: Basic Info */}
+              <TabsContent value="basic" className="space-y-3.5 mt-0 focus-visible:outline-none">
+                {/* Step 1: Choose Main Category */}
+                <div className="space-y-1.5 p-3.5 rounded-2xl border border-border/80 bg-muted/20">
+                  <Label className="text-xs font-bold text-foreground flex items-center justify-between">
+                    <span>1. Main Category (from Manage Categories) *</span>
+                    {categoryId && (
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        Category ID: #{categoryId}
+                      </span>
+                    )}
+                  </Label>
+                  <AsyncSearchPopover<{ id: number; name: string; breadcrumb?: string; depth?: number }>
+                    value={categoryId}
+                    onChange={(val) => {
+                      setCategoryId(val);
+                      if (!val) {
+                        setCategoryName("");
+                        setCategoryBreadcrumb("");
                       }
                     }}
-                  />
-                  <label
-                    htmlFor="course-icon-upload-input"
-                    className={`px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 ${
-                      uploadingIcon ? "pointer-events-none opacity-60" : ""
-                    }`}
-                  >
-                    {uploadingIcon ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Upload className="h-3.5 w-3.5" />
+                    onSelectItem={(item) => handleCategorySelect(item)}
+                    selectedLabel={categoryName || undefined}
+                    placeholder="Select main category from categories table..."
+                    searchPlaceholder="Search categories by name..."
+                    emptyText="No category found"
+                    fetcher={async (search, page) => {
+                      const res = await fetch(
+                        `/api/admin/categories?page=${page}&limit=20&search=${encodeURIComponent(search)}`,
+                        { headers: authHeader }
+                      );
+                      if (!res.ok) throw new Error("Failed to load categories");
+                      const json = await res.json();
+                      return { data: json.data || [], hasMore: page < (json.pageCount || 1) };
+                    }}
+                    getValue={(item) => String(item.id)}
+                    getLabel={(item) => item.breadcrumb || item.name}
+                    renderItem={(item) => (
+                      <div className="flex flex-col py-0.5">
+                        <span className="font-semibold text-xs text-foreground">{item.name}</span>
+                        {item.breadcrumb && (
+                          <span className="text-[10px] text-muted-foreground">{item.breadcrumb}</span>
+                        )}
+                      </div>
                     )}
-                    Upload Icon
-                  </label>
-                  <Input
-                    placeholder="or paste icon URL (https://...)"
-                    value={iconUrl}
-                    onChange={(e) => setIconUrl(e.target.value)}
-                    className="h-8 text-xs flex-1"
                   />
-                  {iconUrl && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
-                      onClick={() => setIconUrl("")}
-                      title="Clear icon"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                  {categoryBreadcrumb && (
+                    <p className="text-[11px] text-muted-foreground truncate" title={categoryBreadcrumb}>
+                      Selected Category: <strong className="text-foreground/80">{categoryBreadcrumb}</strong>
+                    </p>
                   )}
                 </div>
-              </div>
-            </div>
 
-            {/* Step 3: Single Context-Aware Authority Dropdown based on Category */}
-            {authorityType === "board" && (
-              <div className="space-y-1.5 p-3.5 rounded-2xl border border-violet-500/20 bg-violet-500/5">
-                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <BookOpen className="h-4 w-4 text-violet-500" />
-                  3. Educational Board *
-                </Label>
-                <AsyncSearchPopover<{ id: number; name: string; slug: string; code?: string }>
-                  value={boardId}
-                  onChange={(val) => {
-                    setBoardId(val);
-                    if (!val) {
-                      setBoardName("");
-                      setCourseSlug(generateCourseSlug(courseName, "board", "", universityName, certificationProviderName));
-                    }
-                  }}
-                  onSelectItem={(item) => {
-                    setBoardId(String(item.id));
-                    setBoardName(item.name);
-                    setCourseSlug(generateCourseSlug(courseName, "board", item.name, universityName, certificationProviderName));
-                  }}
-                  selectedLabel={boardName || undefined}
-                  placeholder="Select Board (CBSE, ICSE, State Board, IB, Cambridge)..."
-                  searchPlaceholder="Search boards..."
-                  emptyText="No boards found"
-                  fetcher={async (search, page) => {
-                    const res = await fetch(
-                      `/api/admin/boards?page=${page}&limit=20&search=${encodeURIComponent(search)}`,
-                      { headers: authHeader }
-                    );
-                    if (!res.ok) throw new Error("Failed to load boards");
-                    const json = await res.json();
-                    return { data: json.data || [], hasMore: page < (json.pageCount || 1) };
-                  }}
-                  getValue={(item) => String(item.id)}
-                  getLabel={(item) => item.name}
-                />
-              </div>
-            )}
+                {/* Step 2: Context-Aware Authority Section */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      {authorityType === "board" && <BookOpen className="h-4 w-4 text-violet-500" />}
+                      {authorityType === "university" && <Building2 className="h-4 w-4 text-blue-500" />}
+                      {authorityType === "certification" && <BadgeCheck className="h-4 w-4 text-amber-500" />}
+                      <span>
+                        2. {authorityType === "board" ? "Educational Board *" : authorityType === "university" ? "University / Degree Granting Institution *" : "Affiliated By / Certification Body *"}
+                      </span>
+                    </Label>
 
-            {authorityType === "university" && (
-              <div className="space-y-1.5 p-3.5 rounded-2xl border border-blue-500/20 bg-blue-500/5">
-                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <Building2 className="h-4 w-4 text-blue-500" />
-                  3. University / Degree Granting Institution *
-                </Label>
-                <AsyncSearchPopover<{ id: number; name: string; slug?: string }>
-                  value={universityId}
-                  onChange={(val) => {
-                    setUniversityId(val);
-                    if (!val) {
-                      setUniversityName("");
-                      setCourseSlug(generateCourseSlug(courseName, "university", boardName, "", certificationProviderName));
-                    }
-                  }}
-                  onSelectItem={(item) => {
-                    setUniversityId(String(item.id));
-                    setUniversityName(item.name);
-                    setCourseSlug(generateCourseSlug(courseName, "university", boardName, item.name, certificationProviderName));
-                  }}
-                  selectedLabel={universityName || undefined}
-                  placeholder="Select university or enter university name..."
-                  searchPlaceholder="Search university from database..."
-                  emptyText="No university found"
-                  fetcher={async (search, page) => {
-                    const res = await fetch(
-                      `/api/admin/certifications?provider_type=affiliation&page=${page}&limit=20&search=${encodeURIComponent(search)}`,
-                      { headers: authHeader }
-                    );
-                    if (!res.ok) throw new Error("Failed to load universities");
-                    const json = await res.json();
-                    return { data: json.data || [], hasMore: page < (json.pageCount || 1) };
-                  }}
-                  getValue={(item) => String(item.id)}
-                  getLabel={(item) => item.name}
-                  allowCustomValue
-                  onCreateCustomValue={(customVal) => {
-                    setUniversityId("");
-                    setUniversityName(customVal);
-                    setCourseSlug(generateCourseSlug(courseName, "university", boardName, customVal, certificationProviderName));
-                  }}
-                />
-              </div>
-            )}
+                    {/* Authority Type Quick Switcher */}
+                    <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border/60 text-[10px] overflow-x-auto">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthorityType("board");
+                          const generated = computeGeneratedCourseName(categoryName, "board", boardName, universityName, certificationProviderName, medium);
+                          setCourseName(generated);
+                          setCourseSlug(generateCourseSlug(generated, "board", boardName, universityName, certificationProviderName, medium));
+                        }}
+                        className={`px-2 py-0.5 rounded-md font-semibold transition-all whitespace-nowrap ${
+                          authorityType === "board"
+                            ? "bg-violet-600 text-white shadow-2xs"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Board
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthorityType("university");
+                          const generated = computeGeneratedCourseName(categoryName, "university", boardName, universityName, certificationProviderName, medium);
+                          setCourseName(generated);
+                          setCourseSlug(generateCourseSlug(generated, "university", boardName, universityName, certificationProviderName, medium));
+                        }}
+                        className={`px-2 py-0.5 rounded-md font-semibold transition-all whitespace-nowrap ${
+                          authorityType === "university"
+                            ? "bg-blue-600 text-white shadow-2xs"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        University
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthorityType("certification");
+                          const generated = computeGeneratedCourseName(categoryName, "certification", boardName, universityName, certificationProviderName, medium);
+                          setCourseName(generated);
+                          setCourseSlug(generateCourseSlug(generated, "certification", boardName, universityName, certificationProviderName, medium));
+                        }}
+                        className={`px-2 py-0.5 rounded-md font-semibold transition-all whitespace-nowrap ${
+                          authorityType === "certification"
+                            ? "bg-amber-600 text-white shadow-2xs"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Certification
+                      </button>
+                    </div>
+                  </div>
 
-            {authorityType === "certification" && (
-              <div className="space-y-1.5 p-3.5 rounded-2xl border border-amber-500/20 bg-amber-500/5">
-                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <BadgeCheck className="h-4 w-4 text-amber-500" />
-                  3. Affiliated By / Certification Body *
-                </Label>
-                <AsyncSearchPopover<{ id: number; name: string; slug: string; code?: string }>
-                  value={certificationProviderId}
-                  onChange={(val) => {
-                    setCertificationProviderId(val);
-                    if (!val) {
-                      setCertificationProviderName("");
-                      setCourseSlug(generateCourseSlug(courseName, "certification", boardName, universityName, ""));
-                    }
-                  }}
-                  onSelectItem={(item) => {
-                    setCertificationProviderId(String(item.id));
-                    setCertificationProviderName(item.name);
-                    setCourseSlug(generateCourseSlug(courseName, "certification", boardName, universityName, item.name));
-                  }}
-                  selectedLabel={certificationProviderName || undefined}
-                  placeholder="Select certification provider (UGC, AICTE, NASSCOM, NPTEL)..."
-                  searchPlaceholder="Search certification providers..."
-                  emptyText="No certification providers found"
-                  fetcher={async (search, page) => {
-                    const res = await fetch(
-                      `/api/admin/certifications?page=${page}&limit=20&search=${encodeURIComponent(search)}`,
-                      { headers: authHeader }
-                    );
-                    if (!res.ok) throw new Error("Failed to load certification providers");
-                    const json = await res.json();
-                    return { data: json.data || [], hasMore: page < (json.pageCount || 1) };
-                  }}
-                  getValue={(item) => String(item.id)}
-                  getLabel={(item) => item.name}
-                />
-              </div>
-            )}
+                  {authorityType === "board" && (
+                    <div className="space-y-1.5 p-3.5 rounded-2xl border border-violet-500/20 bg-violet-500/5">
+                      <AsyncSearchPopover<{ id: number; name: string; slug: string; code?: string }>
+                        value={boardId}
+                        onChange={(val) => {
+                          setBoardId(val);
+                          if (!val) {
+                            setBoardName("");
+                            const generated = computeGeneratedCourseName(categoryName, "board", "", universityName, certificationProviderName, medium);
+                            setCourseName(generated);
+                            setCourseSlug(generateCourseSlug(generated, "board", "", universityName, certificationProviderName, medium));
+                          }
+                        }}
+                        onSelectItem={(item) => {
+                          setBoardId(String(item.id));
+                          setBoardName(item.name);
+                          const generated = computeGeneratedCourseName(categoryName, "board", item.name, universityName, certificationProviderName, medium);
+                          setCourseName(generated);
+                          setCourseSlug(generateCourseSlug(generated, "board", item.name, universityName, certificationProviderName, medium));
+                        }}
+                        selectedLabel={boardName || undefined}
+                        placeholder="Select Board (CBSE, ICSE, State Board, IB, Cambridge)..."
+                        searchPlaceholder="Search boards..."
+                        emptyText="No boards found"
+                        fetcher={async (search, page) => {
+                          const res = await fetch(
+                            `/api/admin/boards?page=${page}&limit=20&search=${encodeURIComponent(search)}`,
+                            { headers: authHeader }
+                          );
+                          if (!res.ok) throw new Error("Failed to load boards");
+                          const json = await res.json();
+                          return { data: json.data || [], hasMore: page < (json.pageCount || 1) };
+                        }}
+                        getValue={(item) => String(item.id)}
+                        getLabel={(item) => item.name}
+                      />
+                    </div>
+                  )}
 
-            {/* Step 4: Curriculum Subjects to Add */}
-            <div className="space-y-3 p-3.5 rounded-2xl border border-border/80 bg-muted/10">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <ListPlus className="h-4 w-4 text-primary" />
-                  4. Subjects to Add
-                  <Badge variant="secondary" className="text-[10px] py-0 px-1.5 font-semibold">
-                    {subjectRows.filter((r) => r.name.trim()).length} Entered
-                  </Badge>
-                </Label>
+                  {authorityType === "university" && (
+                    <div className="space-y-1.5 p-3.5 rounded-2xl border border-blue-500/20 bg-blue-500/5">
+                      <AsyncSearchPopover<{ id: number; name: string; slug?: string }>
+                        value={universityId}
+                        onChange={(val) => {
+                          setUniversityId(val);
+                          if (!val) {
+                            setUniversityName("");
+                            const generated = computeGeneratedCourseName(categoryName, "university", boardName, "", certificationProviderName, medium);
+                            setCourseName(generated);
+                            setCourseSlug(generateCourseSlug(generated, "university", boardName, "", certificationProviderName, medium));
+                          }
+                        }}
+                        onSelectItem={(item) => {
+                          setUniversityId(String(item.id));
+                          setUniversityName(item.name);
+                          const generated = computeGeneratedCourseName(categoryName, "university", boardName, item.name, certificationProviderName, medium);
+                          setCourseName(generated);
+                          setCourseSlug(generateCourseSlug(generated, "university", boardName, item.name, certificationProviderName, medium));
+                        }}
+                        selectedLabel={universityName || undefined}
+                        placeholder="Select university or enter university name..."
+                        searchPlaceholder="Search university from database..."
+                        emptyText="No university found"
+                        fetcher={async (search, page) => {
+                          const res = await fetch(
+                            `/api/admin/certifications?provider_type=affiliation&page=${page}&limit=20&search=${encodeURIComponent(search)}`,
+                            { headers: authHeader }
+                          );
+                          if (!res.ok) throw new Error("Failed to load universities");
+                          const json = await res.json();
+                          return { data: json.data || [], hasMore: page < (json.pageCount || 1) };
+                        }}
+                        getValue={(item) => String(item.id)}
+                        getLabel={(item) => item.name}
+                        allowCustomValue
+                        onCreateCustomValue={(customVal) => {
+                          setUniversityId("");
+                          setUniversityName(customVal);
+                          const generated = computeGeneratedCourseName(categoryName, "university", boardName, customVal, certificationProviderName, medium);
+                          setCourseName(generated);
+                          setCourseSlug(generateCourseSlug(generated, "university", boardName, customVal, certificationProviderName, medium));
+                        }}
+                      />
+                    </div>
+                  )}
 
-                <div className="flex items-center gap-1.5">
+                  {authorityType === "certification" && (
+                    <div className="space-y-1.5 p-3.5 rounded-2xl border border-amber-500/20 bg-amber-500/5">
+                      <AsyncSearchPopover<{ id: number; name: string; slug: string; code?: string }>
+                        value={certificationProviderId}
+                        onChange={(val) => {
+                          setCertificationProviderId(val);
+                          if (!val) {
+                            setCertificationProviderName("");
+                            const generated = computeGeneratedCourseName(categoryName, "certification", boardName, universityName, "", medium);
+                            setCourseName(generated);
+                            setCourseSlug(generateCourseSlug(generated, "certification", boardName, universityName, "", medium));
+                          }
+                        }}
+                        onSelectItem={(item) => {
+                          setCertificationProviderId(String(item.id));
+                          setCertificationProviderName(item.name);
+                          const generated = computeGeneratedCourseName(categoryName, "certification", boardName, universityName, item.name, medium);
+                          setCourseName(generated);
+                          setCourseSlug(generateCourseSlug(generated, "certification", boardName, universityName, item.name, medium));
+                        }}
+                        selectedLabel={certificationProviderName || undefined}
+                        placeholder="Select certification provider (UGC, AICTE, NASSCOM, NPTEL)..."
+                        searchPlaceholder="Search certification providers..."
+                        emptyText="No certification providers found"
+                        fetcher={async (search, page) => {
+                          const res = await fetch(
+                            `/api/admin/certifications?page=${page}&limit=20&search=${encodeURIComponent(search)}`,
+                            { headers: authHeader }
+                          );
+                          if (!res.ok) throw new Error("Failed to load certification providers");
+                          const json = await res.json();
+                          return { data: json.data || [], hasMore: page < (json.pageCount || 1) };
+                        }}
+                        getValue={(item) => String(item.id)}
+                        getLabel={(item) => item.name}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Step 3: Medium of Instruction */}
+                <div className="space-y-2 p-3.5 rounded-2xl border border-border/80 bg-muted/20">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Languages className="h-4 w-4 text-primary" />
+                      3. Medium of Instruction *
+                    </Label>
+                    <span className="text-[11px] font-semibold text-primary">
+                      Current: {medium}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <Select
+                      value={STANDARD_MEDIUMS.includes(medium) ? medium : "custom"}
+                      onValueChange={(val) => {
+                        if (val !== "custom") {
+                          setMedium(val);
+                          const generated = computeGeneratedCourseName(categoryName, authorityType, boardName, universityName, certificationProviderName, val);
+                          setCourseName(generated);
+                          setCourseSlug(generateCourseSlug(generated, authorityType, boardName, universityName, certificationProviderName, val));
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-9 text-xs bg-background">
+                        <SelectValue placeholder="Choose Medium..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STANDARD_MEDIUMS.map((m) => (
+                          <SelectItem key={m} value={m} className="text-xs">
+                            {m}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="custom" className="text-xs font-semibold text-primary">
+                          + Custom Medium...
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    {(!STANDARD_MEDIUMS.includes(medium) || customMediumInput) ? (
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          placeholder="Type custom medium..."
+                          value={customMediumInput || (STANDARD_MEDIUMS.includes(medium) ? "" : medium)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setCustomMediumInput(val);
+                            if (val.trim()) {
+                              setMedium(val.trim());
+                              const generated = computeGeneratedCourseName(categoryName, authorityType, boardName, universityName, certificationProviderName, val.trim());
+                              setCourseName(generated);
+                              setCourseSlug(generateCourseSlug(generated, authorityType, boardName, universityName, certificationProviderName, val.trim()));
+                            }
+                          }}
+                          className="h-9 text-xs bg-background flex-1"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 overflow-x-auto">
+                        {["English", "Hindi", "Bilingual (English + Hindi)"].map((quickMed) => (
+                          <button
+                            key={quickMed}
+                            type="button"
+                            onClick={() => {
+                              setMedium(quickMed);
+                              setCustomMediumInput("");
+                              const generated = computeGeneratedCourseName(categoryName, authorityType, boardName, universityName, certificationProviderName, quickMed);
+                              setCourseName(generated);
+                              setCourseSlug(generateCourseSlug(generated, authorityType, boardName, universityName, certificationProviderName, quickMed));
+                            }}
+                            className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all border whitespace-nowrap ${
+                              medium === quickMed
+                                ? "bg-primary text-primary-foreground border-primary shadow-2xs"
+                                : "bg-background text-foreground border-border/80 hover:bg-muted"
+                            }`}
+                          >
+                            {quickMed}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Step 4: Course / Program Name */}
+                <div className="space-y-1.5 p-3.5 rounded-2xl border border-border/80 bg-muted/20">
+                  <Label className="text-xs font-bold text-foreground flex items-center justify-between">
+                    <span>4. Course / Program Name *</span>
+                    {courseSlug && (
+                      <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[220px]">
+                        slug: {courseSlug}
+                      </span>
+                    )}
+                  </Label>
+                  <Input
+                    placeholder="e.g. Class 10 - CBSE - English Medium, B.Tech - Sharda University - English Medium..."
+                    value={courseName}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCourseName(val);
+                      setCourseSlug(generateCourseSlug(val, authorityType, boardName, universityName, certificationProviderName, medium));
+                    }}
+                    className="h-10 text-sm font-semibold bg-background"
+                    required
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Auto-generated from Category, Board/University, and Medium.
+                  </p>
+                </div>
+
+                {/* Course Description */}
+                <div className="space-y-1.5 p-3.5 rounded-2xl border border-border/80 bg-muted/20">
+                  <Label className="text-xs font-semibold">5. Course Description / Highlights (Optional)</Label>
+                  <Textarea
+                    placeholder="Overview of curriculum, eligibility criteria, teaching methodologies..."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={2}
+                    className="bg-background"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-border/60">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)}>
+                    Cancel
+                  </Button>
                   <Button
                     type="button"
-                    variant="outline"
                     size="sm"
-                    onClick={() => setSubjectPopoverOpen(true)}
-                    className="h-7 px-2 text-[11px] font-semibold text-primary border-primary/30 hover:bg-primary/10 gap-1"
+                    onClick={() => setActiveDialogTab("duration_icon")}
+                    className="text-xs font-semibold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
                   >
-                    <BookOpen className="h-3.5 w-3.5" />
-                    Fetch from Subject Table
+                    Next: Duration & Icon →
                   </Button>
+                </div>
+              </TabsContent>
 
+              {/* TAB 2: Duration & Icon */}
+              <TabsContent value="duration_icon" className="space-y-4 mt-0 focus-visible:outline-none">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {/* Left: Duration & Academic Structure */}
+                  <div className="space-y-2.5 p-3.5 rounded-2xl border border-border/80 bg-muted/20 flex flex-col justify-between">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <Clock className="h-4 w-4 text-primary" />
+                        1. Duration & Structure *
+                      </Label>
+                      <span className="text-[10px] text-muted-foreground font-semibold">
+                        {durationUnit === "years"
+                          ? `${durationValue || 1} Year${Number(durationValue) > 1 ? "s" : ""} • ${(Number(durationValue) || 1) * 2} Semesters`
+                          : durationUnit === "years_annual"
+                          ? `${durationValue || 1} Year${Number(durationValue) > 1 ? "s" : ""} (Annual)`
+                          : durationUnit === "semesters"
+                          ? `${durationValue || 1} Semesters • ${Math.ceil((Number(durationValue) || 1) / 2)} Years`
+                          : `${durationValue || 1} ${durationUnit}`}
+                      </span>
+                    </div>
+
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        type="number"
+                        min="1"
+                        max="10"
+                        placeholder="e.g. 4"
+                        value={durationValue}
+                        onChange={(e) => setDurationValue(e.target.value)}
+                        className="w-24 h-9 text-xs font-semibold bg-background"
+                        required
+                      />
+                      <Select value={durationUnit} onValueChange={setDurationUnit}>
+                        <SelectTrigger className="flex-1 h-9 text-xs bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="years">Years (with Semesters)</SelectItem>
+                          <SelectItem value="years_annual">Years (without Semesters / Annual)</SelectItem>
+                          <SelectItem value="semesters">Semesters</SelectItem>
+                          <SelectItem value="months">Months</SelectItem>
+                          <SelectItem value="weeks">Weeks</SelectItem>
+                          <SelectItem value="days">Days</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Interactive Visual Breakdown Badges */}
+                    {durationUnit === "years" && (
+                      <div className="p-2.5 rounded-xl bg-background/80 border border-border/60 space-y-1.5">
+                        <div className="text-[10px] font-bold text-muted-foreground flex items-center justify-between">
+                          <span>Generated Academic Breakdown:</span>
+                          <span className="text-primary font-semibold">{(Number(durationValue) || 1) * 2} Total Semesters</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-0.5">
+                          {Array.from({ length: Math.min(10, Math.max(1, Number(durationValue) || 1)) }).map((_, yIdx) => {
+                            const yr = yIdx + 1;
+                            const s1 = (yr - 1) * 2 + 1;
+                            const s2 = (yr - 1) * 2 + 2;
+                            return (
+                              <div key={yr} className="flex items-center gap-1 bg-muted/60 px-2 py-0.5 rounded-md border text-[10px]">
+                                <strong className="text-foreground font-semibold">Y{yr}:</strong>
+                                <span className="text-indigo-600 dark:text-indigo-400 font-mono font-medium">Sem {s1}</span>
+                                <span className="text-muted-foreground">•</span>
+                                <span className="text-indigo-600 dark:text-indigo-400 font-mono font-medium">Sem {s2}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {durationUnit === "years_annual" && (
+                      <div className="p-2.5 rounded-xl bg-background/80 border border-border/60 space-y-1.5">
+                        <div className="text-[10px] font-bold text-muted-foreground flex items-center justify-between">
+                          <span>Generated Academic Breakdown:</span>
+                          <span className="text-primary font-semibold">{durationValue || 1} Total Year{Number(durationValue) > 1 ? "s" : ""} (Annual)</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-0.5">
+                          {Array.from({ length: Math.min(10, Math.max(1, Number(durationValue) || 1)) }).map((_, yIdx) => {
+                            const yr = yIdx + 1;
+                            return (
+                              <div key={yr} className="flex items-center gap-1.5 bg-muted/60 px-2.5 py-1 rounded-md border text-[10px]">
+                                <strong className="text-foreground font-semibold">Year {yr}</strong>
+                                <span className="text-muted-foreground text-[9px] font-medium">(Annual)</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {durationUnit === "semesters" && (
+                      <div className="p-2.5 rounded-xl bg-background/80 border border-border/60 space-y-1.5">
+                        <div className="text-[10px] font-bold text-muted-foreground flex items-center justify-between">
+                          <span>Generated Semesters:</span>
+                          <span className="text-primary font-semibold">{durationValue || 1} Semesters</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-0.5">
+                          {Array.from({ length: Math.min(20, Math.max(1, Number(durationValue) || 1)) }).map((_, sIdx) => {
+                            const sem = sIdx + 1;
+                            const yr = Math.ceil(sem / 2);
+                            return (
+                              <span key={sem} className="bg-muted/60 px-2 py-0.5 rounded-md border text-[10px] font-mono text-indigo-600 dark:text-indigo-400 font-semibold">
+                                Y{yr} • Sem {sem}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: Course / Program Icon Upload */}
+                  <div className="space-y-2 p-3.5 rounded-2xl border border-border/80 bg-muted/20 flex flex-col justify-between">
+                    <div className="space-y-1">
+                      <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <ImageIcon className="h-4 w-4 text-primary" />
+                        2. Course / Program Icon
+                      </Label>
+                      <p className="text-[11px] text-muted-foreground">
+                        Upload custom vector icon (WebP, SVG, PNG) or paste URL.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 pt-1">
+                      <div className="h-14 w-14 rounded-2xl border border-border bg-background flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
+                        {iconUrl ? (
+                          <img
+                            src={iconUrl}
+                            alt="Course Icon"
+                            className="h-full w-full object-contain p-1.5"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <GraduationCap className="h-7 w-7 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="flex-1 flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="file"
+                            id="course-icon-upload-input"
+                            accept=".webp,.svg,.png,.jpg,.jpeg,image/webp,image/svg+xml,image/png,image/jpeg"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                handleCourseIconUpload(file);
+                                e.target.value = "";
+                              }
+                            }}
+                          />
+                          <label
+                            htmlFor="course-icon-upload-input"
+                            className={`px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 ${
+                              uploadingIcon ? "pointer-events-none opacity-60" : ""
+                            }`}
+                          >
+                            {uploadingIcon ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Upload className="h-3.5 w-3.5" />
+                            )}
+                            Upload Icon
+                          </label>
+                          <Input
+                            placeholder="or paste icon URL..."
+                            value={iconUrl}
+                            onChange={(e) => setIconUrl(e.target.value)}
+                            className="h-8 text-xs flex-1 bg-background"
+                          />
+                          {iconUrl && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                              onClick={() => setIconUrl("")}
+                              title="Clear icon"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-border/60">
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => setShowBulkPaste(!showBulkPaste)}
-                    className="h-7 px-2 text-[11px] font-semibold text-muted-foreground hover:text-foreground gap-1"
+                    onClick={() => setActiveDialogTab("basic")}
+                    className="text-xs text-muted-foreground hover:text-foreground"
                   >
-                    <ClipboardPaste className="h-3.5 w-3.5" />
-                    {showBulkPaste ? "Hide Paste" : "Bulk Paste"}
+                    ← Back to Basic Info
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setActiveDialogTab("subjects")}
+                    className="text-xs font-semibold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    Next: Subjects (Year & Semester Wise) →
                   </Button>
                 </div>
-              </div>
+              </TabsContent>
 
-              {/* Datalist for fast subject name autocomplete from subjects table */}
-              <datalist id="existing-master-subjects-list">
-                {masterSubjects.map((s) => (
-                  <option key={s.id} value={s.name}>
-                    {s.code ? `Code: ${s.code}` : s.name}
-                  </option>
-                ))}
-              </datalist>
+              {/* TAB 3: Subjects (Year & Semester Wise) */}
+              <TabsContent value="subjects" className="space-y-3.5 mt-0 focus-visible:outline-none">
+                <datalist id="existing-master-subjects-list">
+                  {masterSubjects.map((s) => (
+                    <option key={s.id} value={s.name}>
+                      {s.code ? `Code: ${s.code}` : s.name}
+                    </option>
+                  ))}
+                </datalist>
 
-              {/* Bulk Paste Box */}
-              {showBulkPaste && (
-                <div className="p-3 rounded-2xl border border-primary/30 bg-primary/5 space-y-2">
-                  <Label className="text-[11px] font-semibold text-muted-foreground block">
-                    Paste multiple subjects (comma or line separated):
-                  </Label>
-                  <Textarea
-                    placeholder="e.g. Mathematics, Physics, Chemistry, Biology, English, Computer Science"
-                    value={bulkInputText}
-                    onChange={(e) => setBulkInputText(e.target.value)}
-                    rows={3}
-                    className="text-xs bg-background"
-                  />
-                  <div className="flex justify-end gap-2">
+                <div className="space-y-3 p-3.5 rounded-2xl border border-border/80 bg-muted/20">
+                  {/* Semester / Year Filter Bar */}
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <ListPlus className="h-4 w-4 text-primary" />
+                        Curriculum Subjects (Year & Semester Wise)
+                        <Badge variant="secondary" className="text-[10px] py-0 px-1.5 font-semibold bg-primary/10 text-primary">
+                          {subjectRows.filter((r) => r.name.trim()).length} Total
+                        </Badge>
+                      </Label>
+
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowBulkPaste(!showBulkPaste)}
+                          className="h-7 px-2 text-[11px] font-semibold text-primary hover:text-primary gap-1"
+                        >
+                          <ClipboardPaste className="h-3.5 w-3.5" />
+                          {showBulkPaste ? "Hide Quick Paste" : "Quick Bulk Paste"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Term Selector Pills */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTermFilter("all")}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border whitespace-nowrap ${
+                          selectedTermFilter === "all"
+                            ? "bg-primary text-primary-foreground border-primary shadow-2xs"
+                            : "bg-background text-foreground border-border/80 hover:bg-muted"
+                        }`}
+                      >
+                        All Terms ({subjectRows.filter((r) => r.name.trim()).length})
+                      </button>
+                      {availableTerms.map((term) => {
+                        const count = subjectRows.filter(
+                          (r) => r.term_number === term.term_number && r.name.trim()
+                        ).length;
+                        const isActive = selectedTermFilter === term.key;
+                        return (
+                          <button
+                            key={term.key}
+                            type="button"
+                            onClick={() => setSelectedTermFilter(term.key)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border whitespace-nowrap flex items-center gap-1.5 ${
+                              isActive
+                                ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
+                                : "bg-background text-foreground border-border/80 hover:bg-muted"
+                            }`}
+                          >
+                            <span>{term.label}</span>
+                            {count > 0 && (
+                              <span className={`text-[10px] px-1 rounded-full font-mono font-bold ${
+                                isActive ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                              }`}>
+                                {count}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Bulk Paste Box */}
+                  {showBulkPaste && (
+                    <div className="p-3 rounded-2xl border border-primary/30 bg-primary/5 space-y-2">
+                      <Label className="text-[11px] font-semibold text-muted-foreground block">
+                        Paste multiple subjects (comma or line separated) into{" "}
+                        <strong className="text-foreground">
+                          {selectedTermFilter === "all"
+                            ? availableTerms[0]?.label || "Semester 1"
+                            : availableTerms.find((t) => t.key === selectedTermFilter)?.label}
+                        </strong>:
+                      </Label>
+                      <Textarea
+                        placeholder="e.g. Mathematics, Physics, Chemistry, Biology, English, Computer Science"
+                        value={bulkInputText}
+                        onChange={(e) => setBulkInputText(e.target.value)}
+                        rows={3}
+                        className="text-xs bg-background"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => setShowBulkPaste(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-7 text-xs bg-primary text-primary-foreground font-semibold"
+                          onClick={handleApplyBulkPaste}
+                        >
+                          Add All to List
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dynamic Subject Rows */}
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {subjectRows
+                      .filter((r) => {
+                        if (selectedTermFilter === "all") return true;
+                        const matchedTerm = availableTerms.find((t) => t.key === selectedTermFilter);
+                        return matchedTerm ? r.term_number === matchedTerm.term_number : true;
+                      })
+                      .map((row, idx) => (
+                        <div
+                          key={row.id}
+                          className="p-2.5 rounded-xl border border-border/80 bg-background flex items-center gap-2 group hover:border-primary/40 transition-colors shadow-2xs"
+                        >
+                          <span className="text-[11px] font-bold text-muted-foreground w-6 text-center shrink-0">
+                            #{idx + 1}
+                          </span>
+
+                          {/* Term / Semester Selector */}
+                          <Select
+                            value={String(row.term_number || 1)}
+                            onValueChange={(val) => {
+                              const num = Number(val);
+                              const targetTerm = availableTerms.find((t) => t.term_number === num);
+                              updateSubjectRow(row.id, "term_number", num);
+                              if (targetTerm) {
+                                updateSubjectRow(row.id, "term_type", targetTerm.term_type);
+                                updateSubjectRow(row.id, "term_name", targetTerm.term_name);
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="h-8 text-[11px] w-36 sm:w-44 bg-muted/40 font-semibold shrink-0">
+                              <SelectValue placeholder="Semester..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableTerms.map((t) => (
+                                <SelectItem key={t.key} value={String(t.term_number)} className="text-xs">
+                                  {t.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+
+                          {/* Autocomplete input with datalist */}
+                          <Input
+                            list="existing-master-subjects-list"
+                            placeholder="Subject Name (e.g. Mathematics)"
+                            value={row.name}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              updateSubjectRow(row.id, "name", val);
+                              const matched = masterSubjects.find(
+                                (s) => s.name.toLowerCase() === val.trim().toLowerCase()
+                              );
+                              if (matched && matched.code && !row.code) {
+                                updateSubjectRow(row.id, "code", matched.code);
+                              }
+                            }}
+                            className="h-8 text-xs flex-1 bg-background"
+                          />
+
+                          <Input
+                            placeholder="Code"
+                            value={row.code}
+                            onChange={(e) => updateSubjectRow(row.id, "code", e.target.value)}
+                            className="h-8 text-xs w-24 sm:w-28 shrink-0 bg-background"
+                          />
+
+                          {subjectRows.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                              onClick={() => removeSubjectRow(row.id)}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+
+                  <div className="flex items-center gap-2">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => setShowBulkPaste(false)}
+                      onClick={() => {
+                        const targetTerm = selectedTermFilter !== "all"
+                          ? availableTerms.find((t) => t.key === selectedTermFilter)
+                          : availableTerms[0];
+                        addSubjectRow(targetTerm?.term_number, targetTerm?.term_name, targetTerm?.term_type);
+                      }}
+                      className="flex-1 h-8 text-xs font-semibold border-dashed gap-1.5 hover:border-primary hover:text-primary"
                     >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="h-7 text-xs bg-primary text-primary-foreground font-semibold"
-                      onClick={handleApplyBulkPaste}
-                    >
-                      Add All to List
+                      <Plus className="h-3.5 w-3.5" />
+                      Add Subject to{" "}
+                      {selectedTermFilter === "all"
+                        ? "Course"
+                        : availableTerms.find((t) => t.key === selectedTermFilter)?.label}
                     </Button>
                   </div>
                 </div>
-              )}
 
-              {/* Dynamic Subject Rows */}
-              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                {subjectRows.map((row, idx) => (
-                  <div
-                    key={row.id}
-                    className="p-2.5 rounded-xl border border-border/80 bg-card/60 flex items-center gap-2 group hover:border-primary/40 transition-colors shadow-2xs"
+                <div className="flex items-center justify-between pt-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setActiveDialogTab("duration_icon")}
+                    className="text-xs text-muted-foreground"
                   >
-                    <span className="text-[11px] font-bold text-muted-foreground w-6 text-center shrink-0">
-                      #{idx + 1}
-                    </span>
+                    ← Back to Duration & Icon
+                  </Button>
+                </div>
+              </TabsContent>
+            </Tabs>
 
-                    {/* Autocomplete input with datalist */}
-                    <Input
-                      list="existing-master-subjects-list"
-                      placeholder={`Subject #${idx + 1} Name (e.g. Mathematics)`}
-                      value={row.name}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        updateSubjectRow(row.id, "name", val);
-                        const matched = masterSubjects.find(
-                          (s) => s.name.toLowerCase() === val.trim().toLowerCase()
-                        );
-                        if (matched && matched.code && !row.code) {
-                          updateSubjectRow(row.id, "code", matched.code);
-                        }
-                      }}
-                      className="h-8 text-xs flex-1"
-                    />
-
-                    <Input
-                      placeholder="Code (Optional)"
-                      value={row.code}
-                      onChange={(e) => updateSubjectRow(row.id, "code", e.target.value)}
-                      className="h-8 text-xs w-36 sm:w-44 shrink-0"
-                    />
-
-                    {subjectRows.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
-                        onClick={() => removeSubjectRow(row.id)}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addSubjectRow}
-                  className="flex-1 h-8 text-xs font-semibold border-dashed gap-1.5 hover:border-primary hover:text-primary"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Add Another Subject
+            {activeDialogTab === "subjects" && (
+              <DialogFooter className="gap-2 pt-3 border-t border-border/60">
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                  Cancel
                 </Button>
-              </div>
-            </div>
-
-            {/* Step 5: Duration */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">5. Duration</Label>
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  min="1"
-                  placeholder="e.g. 1"
-                  value={durationValue}
-                  onChange={(e) => setDurationValue(e.target.value)}
-                  className="w-28"
-                />
-                <Select value={durationUnit} onValueChange={setDurationUnit}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="days">Days</SelectItem>
-                    <SelectItem value="weeks">Weeks</SelectItem>
-                    <SelectItem value="months">Months</SelectItem>
-                    <SelectItem value="years">Years</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Step 6: Description */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">6. Course Description / Highlights (Optional)</Label>
-              <Textarea
-                placeholder="Overview of curriculum, eligibility criteria, teaching methodologies..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={2}
-              />
-            </div>
-
-            <DialogFooter className="gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={submitting} className="bg-primary text-primary-foreground font-semibold">
-                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {editingCourse ? "Save Changes" : "Create Course"}
-              </Button>
-            </DialogFooter>
+                <Button type="submit" disabled={submitting} className="bg-primary text-primary-foreground font-semibold">
+                  {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {editingCourse ? "Save Changes" : "Create Course"}
+                </Button>
+              </DialogFooter>
+            )}
           </form>
         </DialogContent>
       </Dialog>
@@ -1579,6 +2245,23 @@ export default function MasterCoursesPage() {
                         <Badge key={s.id} variant="secondary" className="text-xs py-0.5">
                           <GraduationCap className="h-3 w-3 mr-1 text-primary" />
                           {s.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {((Array.isArray(viewingCourse.mediums) && viewingCourse.mediums.length > 0) || viewingCourse.medium) && (
+                  <div className="py-2 border-b border-border/60 space-y-1.5">
+                    <span className="text-xs font-medium text-muted-foreground block">Medium of Instruction</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(Array.isArray(viewingCourse.mediums) && viewingCourse.mediums.length > 0
+                        ? viewingCourse.mediums
+                        : (viewingCourse.medium || "").split(",").map((s) => s.trim()).filter(Boolean)
+                      ).map((m) => (
+                        <Badge key={m} variant="secondary" className="text-xs py-0.5 bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20 font-medium">
+                          <Languages className="h-3 w-3 mr-1 text-blue-500" />
+                          {m}
                         </Badge>
                       ))}
                     </div>

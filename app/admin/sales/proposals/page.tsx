@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   FileSignature,
   Plus,
@@ -44,6 +44,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useProgressiveSave } from "@/hooks/use-progressive-save";
+import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
@@ -99,6 +102,37 @@ export default function SalesProposalsPage() {
 
   // View Proposal Preview State
   const [previewProposal, setPreviewProposal] = useState<Proposal | null>(null);
+
+  const proposalFormState = useMemo(() => ({
+    title,
+    clientName,
+    clientEmail,
+    clientPhone,
+    courseTitle,
+    baseAmount,
+    discountPercentage,
+    validUntil,
+    status,
+    notes,
+  }), [title, clientName, clientEmail, clientPhone, courseTitle, baseAmount, discountPercentage, validUntil, status, notes]);
+
+  const { saveStatus: proposalSaveStatus, clearDraft: clearProposalDraft } = useProgressiveSave({
+    formKey: "sales_proposal:new",
+    formState: proposalFormState,
+    enabled: dialogOpen,
+    onRestore: (draft) => {
+      if (draft.title) setTitle(draft.title);
+      if (draft.clientName) setClientName(draft.clientName);
+      if (draft.clientEmail) setClientEmail(draft.clientEmail);
+      if (draft.clientPhone) setClientPhone(draft.clientPhone);
+      if (draft.courseTitle) setCourseTitle(draft.courseTitle);
+      if (draft.baseAmount) setBaseAmount(draft.baseAmount);
+      if (draft.discountPercentage) setDiscountPercentage(draft.discountPercentage);
+      if (draft.validUntil) setValidUntil(draft.validUntil);
+      if (draft.notes) setNotes(draft.notes);
+      if (draft.status) setStatus(draft.status);
+    },
+  });
 
   const resolvedInstId = activeInstitutionId || user?.memberships?.[0]?.institution_id;
 
@@ -630,13 +664,23 @@ export default function SalesProposalsPage() {
               </div>
             </div>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Saving..." : "Create Proposal"}
-              </Button>
+            <DialogFooter className="flex items-center justify-between sm:justify-between w-full">
+              <ProgressiveSaveIndicator status={proposalSaveStatus} />
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setDialogOpen(false);
+                    clearProposalDraft();
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={saving}>
+                  {saving ? "Saving..." : "Create Proposal"}
+                </Button>
+              </div>
             </DialogFooter>
           </form>
         </DialogContent>

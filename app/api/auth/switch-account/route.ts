@@ -111,10 +111,15 @@ export async function POST(req: Request) {
       redirectTo = "/instituteadmin/dashboard";
     } else if (sessionUser.role_codes?.includes("platform_admin") || sessionUser.is_super_admin) {
       redirectTo = "/platformadmin/dashboard";
-    } else if (sessionUser.role_codes?.includes("teacher")) {
-      redirectTo = "/instituteadmin/master-data";
+    } else if (
+      sessionUser.role_codes?.includes("teacher") ||
+      sessionUser.role_codes?.includes("faculty") ||
+      sessionUser.role_codes?.includes("staff") ||
+      sessionUser.role_codes?.includes("administrative_staff")
+    ) {
+      redirectTo = "/staff";
     } else if (sessionUser.role_codes?.includes("driver")) {
-      redirectTo = "/admin/institution/my-attendance";
+      redirectTo = "/driver";
     }
 
     const response = NextResponse.json({

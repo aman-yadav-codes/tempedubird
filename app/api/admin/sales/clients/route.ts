@@ -92,6 +92,11 @@ export async function GET(req: Request) {
       notes: r.notes || r.description,
       status: r.status || "active",
       institution_id: r.institution_id,
+      phones: Array.isArray(r.phones) ? r.phones : (r.metadata?.phones || (r.phone ? [{ number: r.phone, label: "Primary", is_primary: true }] : [])),
+      emails: Array.isArray(r.emails) ? r.emails : (r.metadata?.emails || (r.email ? [{ email: r.email, label: "Work", is_primary: true }] : [])),
+      contacts: Array.isArray(r.contacts) ? r.contacts : (r.metadata?.contacts || []),
+      location_data: r.location_data || r.metadata?.location_data || null,
+      pincode: r.pincode || null,
       created_at: r.created_at,
       updated_at: r.updated_at,
     }));
@@ -120,6 +125,92 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
+
+    const targetInstitutionId = isPlatformAdminUser(user)
+      ? (body.institution_id ? Number(body.institution_id) : null)
+      : userInstId;
+
+    // Handle Bulk Upload of Clients
+    if (body.bulk && Array.isArray(body.clients)) {
+      const insertedClients = [];
+      for (const item of body.clients) {
+        const clientName = item.name?.trim() || item.company_name?.trim();
+        if (!clientName) continue;
+
+        const companyName = item.company_name?.trim() || clientName;
+        const contactPerson = item.contact_person?.trim() || clientName;
+        const phone = item.phone?.trim() || (Array.isArray(item.phones) && item.phones[0]?.number ? String(item.phones[0].number).trim() : null);
+        const email = item.email?.trim() || (Array.isArray(item.emails) && item.emails[0]?.email ? String(item.emails[0].email).trim() : null);
+        const phonesJson = JSON.stringify(
+          Array.isArray(item.phones) && item.phones.length > 0
+            ? item.phones
+            : (phone ? [{ number: phone, label: "Primary", is_primary: true }] : [])
+        );
+        const emailsJson = JSON.stringify(
+          Array.isArray(item.emails) && item.emails.length > 0
+            ? item.emails
+            : (email ? [{ email: email, label: "Work", is_primary: true }] : [])
+        );
+        const contactsJson = JSON.stringify(Array.isArray(item.contacts) ? item.contacts : []);
+        const locationJson = JSON.stringify(item.location_data || {});
+
+        const inserted = await db.query(
+          `INSERT INTO clients (
+            name,
+            company_name,
+            contact_person,
+            category,
+            client_type,
+            phone,
+            email,
+            website,
+            address,
+            city,
+            state,
+            pincode,
+            phones,
+            emails,
+            contacts,
+            location_data,
+            description,
+            status,
+            institution_id,
+            updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb, $15::jsonb, $16::jsonb, $17, $18, $19, NOW())
+          RETURNING *`,
+          [
+            clientName,
+            companyName,
+            contactPerson,
+            item.category || "Corporate Client",
+            item.client_type || "corporate",
+            phone,
+            email,
+            item.website?.trim() || null,
+            item.address?.trim() || null,
+            item.city?.trim() || null,
+            item.state?.trim() || null,
+            item.pincode?.trim() || null,
+            phonesJson,
+            emailsJson,
+            contactsJson,
+            locationJson,
+            item.description?.trim() || null,
+            item.status || "active",
+            targetInstitutionId,
+          ]
+        );
+        if (inserted.rows[0]) insertedClients.push(inserted.rows[0]);
+      }
+
+      return NextResponse.json({
+        success: true,
+        count: insertedClients.length,
+        clients: insertedClients,
+        message: `Successfully uploaded ${insertedClients.length} clients in bulk`,
+      }, { status: 201 });
+    }
+
     const {
       name,
       company_name,
@@ -136,22 +227,39 @@ export async function POST(req: Request) {
       location,
       country = "India",
       state,
+      pincode,
       map_url,
       rating = 4.5,
       description,
       notes,
       status = "active",
       institution_id,
+      phones = [],
+      emails = [],
+      contacts = [],
+      location_data = null,
     } = body;
 
-    if (!name || !name.trim()) {
+    const finalClientName = name?.trim() || company_name?.trim();
+    if (!finalClientName) {
       return NextResponse.json({ error: "Name or Organization name is required" }, { status: 400 });
     }
 
     const finalLocation = location || area || null;
-    const targetInstitutionId = isPlatformAdminUser(user)
-      ? (institution_id ? Number(institution_id) : null)
-      : userInstId;
+    const finalPhone = phone?.trim() || (Array.isArray(phones) && phones[0]?.number ? String(phones[0].number).trim() : null);
+    const finalEmail = email?.trim() || (Array.isArray(emails) && emails[0]?.email ? String(emails[0].email).trim() : null);
+    const phonesJson = JSON.stringify(
+      Array.isArray(phones) && phones.length > 0
+        ? phones
+        : (finalPhone ? [{ number: finalPhone, label: "Primary", is_primary: true }] : [])
+    );
+    const emailsJson = JSON.stringify(
+      Array.isArray(emails) && emails.length > 0
+        ? emails
+        : (finalEmail ? [{ email: finalEmail, label: "Work", is_primary: true }] : [])
+    );
+    const contactsJson = JSON.stringify(Array.isArray(contacts) ? contacts : []);
+    const locationJson = JSON.stringify(location_data || {});
 
     const res = await db.query(
       `INSERT INTO clients (
@@ -170,23 +278,28 @@ export async function POST(req: Request) {
         location,
         country,
         state,
+        pincode,
         map_url,
         rating,
         description,
         notes,
         status,
         institution_id,
+        phones,
+        emails,
+        contacts,
+        location_data,
         updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23::jsonb, $24::jsonb, $25::jsonb, $26::jsonb, NOW())
       RETURNING *`,
       [
-        name.trim(),
-        company_name?.trim() || null,
-        contact_person?.trim() || null,
+        finalClientName,
+        company_name?.trim() || finalClientName,
+        contact_person?.trim() || finalClientName,
         category || "Corporate Client",
         client_type || "corporate",
-        phone?.trim() || null,
-        email?.trim() || null,
+        finalPhone,
+        finalEmail,
         website?.trim() || null,
         profile_image || null,
         address?.trim() || null,
@@ -195,12 +308,17 @@ export async function POST(req: Request) {
         finalLocation,
         country || "India",
         state?.trim() || null,
+        pincode?.trim() || null,
         map_url || null,
         Number(rating) || 4.5,
         description?.trim() || null,
         notes?.trim() || null,
         status || "active",
         targetInstitutionId,
+        phonesJson,
+        emailsJson,
+        contactsJson,
+        locationJson,
       ]
     );
 
@@ -241,12 +359,17 @@ export async function PUT(req: Request) {
       location,
       country,
       state,
+      pincode,
       map_url,
       rating,
       description,
       notes,
       status,
       institution_id,
+      phones,
+      emails,
+      contacts,
+      location_data,
     } = body;
 
     if (!id) {
@@ -254,6 +377,12 @@ export async function PUT(req: Request) {
     }
 
     const finalLocation = location !== undefined ? location : area;
+    const finalPhone = phone !== undefined ? (phone?.trim() || null) : undefined;
+    const finalEmail = email !== undefined ? (email?.trim() || null) : undefined;
+    const phonesJson = phones !== undefined ? JSON.stringify(phones) : undefined;
+    const emailsJson = emails !== undefined ? JSON.stringify(emails) : undefined;
+    const contactsJson = contacts !== undefined ? JSON.stringify(contacts) : undefined;
+    const locationJson = location_data !== undefined ? JSON.stringify(location_data) : undefined;
 
     const res = await db.query(
       `UPDATE clients SET
@@ -272,14 +401,19 @@ export async function PUT(req: Request) {
         location = COALESCE($13, location),
         country = COALESCE($14, country),
         state = COALESCE($15, state),
-        map_url = COALESCE($16, map_url),
-        rating = COALESCE($17, rating),
-        description = COALESCE($18, description),
-        notes = COALESCE($19, notes),
-        status = COALESCE($20, status),
-        institution_id = COALESCE($21, institution_id),
+        pincode = COALESCE($16, pincode),
+        map_url = COALESCE($17, map_url),
+        rating = COALESCE($18, rating),
+        description = COALESCE($19, description),
+        notes = COALESCE($20, notes),
+        status = COALESCE($21, status),
+        institution_id = COALESCE($22, institution_id),
+        phones = COALESCE($23::jsonb, phones),
+        emails = COALESCE($24::jsonb, emails),
+        contacts = COALESCE($25::jsonb, contacts),
+        location_data = COALESCE($26::jsonb, location_data),
         updated_at = NOW()
-      WHERE id = $22
+      WHERE id = $27
       RETURNING *`,
       [
         name ?? null,
@@ -287,8 +421,8 @@ export async function PUT(req: Request) {
         contact_person ?? null,
         category ?? null,
         client_type ?? null,
-        phone ?? null,
-        email ?? null,
+        finalPhone ?? null,
+        finalEmail ?? null,
         website ?? null,
         profile_image ?? null,
         address ?? null,
@@ -297,12 +431,17 @@ export async function PUT(req: Request) {
         finalLocation ?? null,
         country ?? null,
         state ?? null,
+        pincode ?? null,
         map_url ?? null,
         rating ? Number(rating) : undefined,
         description ?? null,
         notes ?? null,
         status ?? null,
         institution_id ? Number(institution_id) : undefined,
+        phonesJson ?? null,
+        emailsJson ?? null,
+        contactsJson ?? null,
+        locationJson ?? null,
         id,
       ]
     );

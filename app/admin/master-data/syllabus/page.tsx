@@ -85,6 +85,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useProgressiveSave } from "@/hooks/use-progressive-save";
+import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
 import { useAuthStore } from "@/store";
 import type { Syllabus, SyllabusNode } from "@/lib/types/syllabus";
 
@@ -486,6 +488,7 @@ export default function SyllabusPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSyllabus, setEditingSyllabus] = useState<Syllabus | null>(null);
   const [form, setForm] = useState<SyllabusForm>(() => blankSyllabusForm());
+
   const [saving, setSaving] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [activeSyllabus, setActiveSyllabus] = useState<Syllabus | null>(null);
@@ -557,6 +560,12 @@ export default function SyllabusPage() {
 
   // Map of subjectId -> DraftSyllabusNode[] for individual subject tabs
   const [subjectNodesMap, setSubjectNodesMap] = useState<Record<string, DraftSyllabusNode[]>>({});
+
+  const { saveStatus: progressiveStatus, clearDraft: clearSyllabusDraft } = useProgressiveSave({
+    formKey: `syllabus:${editingSyllabus?.id || form.subject_id || "new"}`,
+    formState: { form, subjectNodesMap },
+    enabled: dialogOpen,
+  });
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
   const [expandedAccordions, setExpandedAccordions] = useState<Set<string>>(new Set());
 
@@ -830,10 +839,46 @@ export default function SyllabusPage() {
     if (!accessToken) return;
     setLoadingSubjectsList(true);
     try {
-      const params = new URLSearchParams({ limit: "150" });
+      // 1. If course is selected, fetch the course's exact mapped subjects
       if (courseId && courseId !== "all" && courseId !== "") {
-        params.set("courseId", courseId);
+        const courseRes = await fetch(`/api/admin/content/courses/${courseId}`, {
+          headers: authHeaders(),
+        });
+        const courseJson = await readJson(courseRes);
+        if (courseRes.ok && courseJson.data && Array.isArray(courseJson.data.subjects)) {
+          const mappedSubjects = courseJson.data.subjects.map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            code: s.code || null,
+            icon_url: s.icon_url || null,
+            term_type: s.term_type || "full_course",
+            term_number: s.term_number || 1,
+            term_name: s.term_name || "",
+            course_id: Number(courseId),
+            course_name: courseJson.data.name,
+          }));
+          setSubjectsList(mappedSubjects);
+          if (mappedSubjects.length > 0) {
+            const first = mappedSubjects[0];
+            setForm((prev) => {
+              const exists = mappedSubjects.some((s: any) => String(s.id) === prev.subject_id);
+              if (!exists || !prev.subject_id) {
+                return {
+                  ...prev,
+                  subject_id: String(first.id),
+                  subject_label: first.name,
+                  title: `${first.name} Syllabus`,
+                };
+              }
+              return prev;
+            });
+          }
+          return;
+        }
       }
+
+      // 2. Otherwise fetch subjects by category or generic list
+      const params = new URLSearchParams({ limit: "150" });
       if (categoryId && categoryId !== "all" && categoryId !== "") {
         params.set("categoryId", categoryId);
       }
@@ -842,11 +887,18 @@ export default function SyllabusPage() {
       });
       const json = await readJson(res);
       if (res.ok && Array.isArray(json.data)) {
-        setSubjectsList(json.data);
-        if (json.data.length > 0) {
-          const first = json.data[0];
+        // Deduplicate by ID
+        const seen = new Set<number>();
+        const uniqueSubjects = json.data.filter((s: any) => {
+          if (seen.has(s.id)) return false;
+          seen.add(s.id);
+          return true;
+        });
+        setSubjectsList(uniqueSubjects);
+        if (uniqueSubjects.length > 0) {
+          const first = uniqueSubjects[0];
           setForm((prev) => {
-            const exists = json.data.some((s: any) => String(s.id) === prev.subject_id);
+            const exists = uniqueSubjects.some((s: any) => String(s.id) === prev.subject_id);
             if (!exists || !prev.subject_id) {
               return {
                 ...prev,
@@ -1832,11 +1884,12 @@ export default function SyllabusPage() {
                   }}
                   selectedLabel={selectedCourseName || undefined}
                   placeholder="Search & choose Course / Program (e.g. B.Com, B.Tech, Class 3)..."
-                  searchPlaceholder="Type course or program name to search..."
+                  searchPlaceholder="Type course or program name..."
                   emptyText="No matching course/program found"
                   showDefaultOption
                   defaultOptionLabel="All Courses / Universal"
                   defaultOptionValue=""
+                  popoverClassName="!w-[min(460px,calc(100vw-32px))] shadow-xl"
                   fetcher={async (search, page) => {
                     const params = new URLSearchParams({
                       page: String(page),
@@ -1859,7 +1912,7 @@ export default function SyllabusPage() {
                     <div className="flex flex-col py-0.5">
                       <span className="font-semibold text-xs text-foreground">{item.name}</span>
                       <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                        {item.code && <span className="font-mono">{item.code}</span>}
+                        {item.code && <span className="font-mono bg-muted/60 px-1 rounded">{item.code}</span>}
                         {(item.category_breadcrumb || item.category_name) && (
                           <span>• {item.category_breadcrumb || item.category_name}</span>
                         )}
@@ -1914,6 +1967,7 @@ export default function SyllabusPage() {
                   showDefaultOption
                   defaultOptionLabel="All Classes / Categories"
                   defaultOptionValue=""
+                  popoverClassName="!w-[min(380px,calc(100vw-32px))] shadow-xl"
                   fetcher={async (search, page) => {
                     const params = new URLSearchParams({
                       page: String(page),
@@ -1933,87 +1987,104 @@ export default function SyllabusPage() {
               </div>
             </div>
 
-            {/* Individual Subject Tabs Selection */}
+            {/* Individual Subject Tabs Selection (Year & Semester Wise Grouping) */}
             {(() => {
-              // Extract unique academic terms from subjectsList (e.g. Year 1, Semester 1...)
-              const termPills: Array<{ key: string; label: string; count: number }> = [];
-              const termMap = new Map<string, number>();
+              // Group subjects by their academic term
+              type TermGroup = {
+                key: string;
+                title: string;
+                subtitle?: string;
+                term_type: string;
+                term_number: number;
+                subjects: typeof subjectsList;
+              };
+
+              const termMap = new Map<string, TermGroup>();
 
               for (const sub of subjectsList) {
                 let termKey = "full_course";
-                let termLabel = "Universal / Full Course";
-                if (sub.term_type === "semester") {
-                  const derivedYear = Math.max(1, Math.ceil((sub.term_number || 1) / 2));
-                  termKey = `sem-${sub.term_number || 1}`;
-                  termLabel = `Year ${derivedYear} • Sem ${sub.term_number || 1}`;
-                } else if (sub.term_type === "year") {
-                  termKey = `year-${sub.term_number || 1}`;
-                  termLabel = `Year ${sub.term_number || 1} (Annual)`;
+                let termTitle = "Full Course / Core Curriculum";
+                let termSubtitle = "Core Subjects";
+                const termType = sub.term_type || "full_course";
+                const termNum = sub.term_number || 1;
+
+                if (termType === "semester") {
+                  const derivedYear = Math.max(1, Math.ceil(termNum / 2));
+                  termKey = `sem-${termNum}`;
+                  termTitle = `Year ${derivedYear} • Semester ${termNum}`;
+                  termSubtitle = sub.term_name || `Semester ${termNum} Curriculum`;
+                } else if (termType === "year") {
+                  termKey = `year-${termNum}`;
+                  termTitle = `Year ${termNum} (Annual)`;
+                  termSubtitle = sub.term_name || `Year ${termNum} Annual Curriculum`;
                 }
-                termMap.set(termKey, (termMap.get(termKey) || 0) + 1);
+
+                if (!termMap.has(termKey)) {
+                  termMap.set(termKey, {
+                    key: termKey,
+                    title: termTitle,
+                    subtitle: termSubtitle,
+                    term_type: termType,
+                    term_number: termNum,
+                    subjects: [],
+                  });
+                }
+                termMap.get(termKey)!.subjects.push(sub);
               }
 
-              for (const [key, count] of Array.from(termMap.entries())) {
-                let label = key;
-                if (key.startsWith("sem-")) {
-                  const num = Number(key.replace("sem-", ""));
-                  const yr = Math.max(1, Math.ceil(num / 2));
-                  label = `Year ${yr} • Sem ${num}`;
-                } else if (key.startsWith("year-")) {
-                  label = `Year ${key.replace("year-", "")} (Annual)`;
-                } else {
-                  label = "Full Course";
+              // Sort term groups chronologically
+              const sortedGroups = Array.from(termMap.values()).sort((a, b) => {
+                if (a.term_type === "semester" && b.term_type === "semester") {
+                  return a.term_number - b.term_number;
                 }
-                termPills.push({ key, label, count });
-              }
-
-              // Filter subjects according to search and term
-              const filteredSubjects = subjectsList.filter((sub) => {
-                if (subjectFilterSearch.trim()) {
-                  const q = subjectFilterSearch.toLowerCase();
-                  const matchName = sub.name?.toLowerCase().includes(q);
-                  const matchCode = sub.code?.toLowerCase().includes(q);
-                  if (!matchName && !matchCode) return false;
+                if (a.term_type === "year" && b.term_type === "year") {
+                  return a.term_number - b.term_number;
                 }
-
-                if (activeSubjectTermFilter !== "all") {
-                  if (activeSubjectTermFilter.startsWith("sem-")) {
-                    const semNum = Number(activeSubjectTermFilter.replace("sem-", ""));
-                    return sub.term_type === "semester" && sub.term_number === semNum;
-                  }
-                  if (activeSubjectTermFilter.startsWith("year-")) {
-                    const yrNum = Number(activeSubjectTermFilter.replace("year-", ""));
-                    return sub.term_type === "year" && sub.term_number === yrNum;
-                  }
-                  if (activeSubjectTermFilter === "full_course") {
-                    return !sub.term_type || sub.term_type === "full_course";
-                  }
-                }
-                return true;
+                return 0;
               });
 
+              // Filter groups according to search and active term tab
+              const filteredGroups = sortedGroups
+                .filter((g) => {
+                  if (activeSubjectTermFilter === "all") return true;
+                  return g.key === activeSubjectTermFilter;
+                })
+                .map((g) => {
+                  let subs = g.subjects;
+                  if (subjectFilterSearch.trim()) {
+                    const q = subjectFilterSearch.toLowerCase();
+                    subs = subs.filter(
+                      (s) => s.name?.toLowerCase().includes(q) || s.code?.toLowerCase().includes(q)
+                    );
+                  }
+                  return { ...g, subjects: subs };
+                })
+                .filter((g) => g.subjects.length > 0);
+
+              const totalSubjectsCount = subjectsList.length;
+
               return (
-                <div className="space-y-2">
+                <div className="space-y-3 p-3.5 rounded-2xl border border-border/80 bg-muted/20">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                         <GraduationCap className="h-4 w-4 text-primary" />
-                        <span>Subjects ({filteredSubjects.length})</span>
+                        <span>Curriculum Subjects ({totalSubjectsCount})</span>
                       </Label>
                       <span className="text-[11px] text-muted-foreground font-normal">
-                        Click a subject tab below to add or edit its syllabus:
+                        Select a subject below to configure its Units & Chapters:
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {subjectsList.length > 5 && (
+                      {totalSubjectsCount > 4 && (
                         <div className="relative">
                           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                           <Input
-                            placeholder="Quick search subject..."
+                            placeholder="Filter subjects..."
                             value={subjectFilterSearch}
                             onChange={(e) => setSubjectFilterSearch(e.target.value)}
-                            className="pl-8 h-7 text-xs w-44 bg-background"
+                            className="pl-8 h-7 text-xs w-36 bg-background"
                           />
                         </div>
                       )}
@@ -2025,138 +2096,156 @@ export default function SyllabusPage() {
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
                           <CheckCircle2 className="h-3.5 w-3.5" />
-                          Auto-Save Active
+                          Auto-Save
                         </span>
                       )}
                     </div>
                   </div>
 
                   {/* Term Breakdown Pills if multi-term course */}
-                  {termPills.length > 1 && (
-                    <div className="flex flex-wrap gap-1 pb-1">
+                  {sortedGroups.length > 1 && (
+                    <div className="flex flex-wrap gap-1.5 pb-1 border-b border-border/60">
                       <button
                         type="button"
                         onClick={() => setActiveSubjectTermFilter("all")}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
                           activeSubjectTermFilter === "all"
                             ? "bg-primary text-primary-foreground border-primary shadow-xs"
                             : "bg-background text-muted-foreground border-border hover:text-foreground"
                         }`}
                       >
-                        All Terms ({subjectsList.length})
+                        All Academic Terms ({totalSubjectsCount})
                       </button>
-                      {termPills.map((p) => (
+                      {sortedGroups.map((g) => (
                         <button
-                          key={p.key}
+                          key={g.key}
                           type="button"
-                          onClick={() => setActiveSubjectTermFilter(p.key)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border flex items-center gap-1.5 ${
-                            activeSubjectTermFilter === p.key
-                              ? "bg-indigo-600 text-white border-indigo-700 shadow-xs"
+                          onClick={() => setActiveSubjectTermFilter(g.key)}
+                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border flex items-center gap-1.5 ${
+                            activeSubjectTermFilter === g.key
+                              ? "bg-primary text-primary-foreground border-primary shadow-xs"
                               : "bg-background text-muted-foreground border-border hover:text-foreground"
                           }`}
                         >
-                          <span>{p.label}</span>
-                          <span className="text-[10px] px-1 py-0.2 rounded-full font-mono bg-primary/10 text-primary">
-                            {p.count}
+                          <span>{g.title}</span>
+                          <span
+                            className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                              activeSubjectTermFilter === g.key
+                                ? "bg-primary-foreground/20 text-primary-foreground"
+                                : "bg-primary/10 text-primary"
+                            }`}
+                          >
+                            {g.subjects.length}
                           </span>
                         </button>
                       ))}
                     </div>
                   )}
 
-                  {/* Individual Subject Tabs (Horizontal Scrollable / Wrapping) */}
-                  <div className="p-2.5 rounded-2xl border border-border bg-muted/10 overflow-hidden">
-                    {loadingSubjectsList ? (
-                      <div className="flex items-center justify-center py-6 text-muted-foreground text-xs gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                        <span>Fetching subjects for selected course...</span>
-                      </div>
-                    ) : filteredSubjects.length === 0 ? (
-                      <div className="py-6 text-center text-muted-foreground text-xs space-y-1">
-                        <p className="font-semibold text-foreground">No subjects found for this selection.</p>
-                        <p className="text-[11px]">
-                          Choose a different course/program or class, or add subjects in Master Subjects first.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-                        {filteredSubjects.map((sub) => {
-                          const isSelected = form.subject_id === String(sub.id);
-                          const count = subjectNodesMap[String(sub.id)]?.length || 0;
-                          const derivedYear = sub.term_type === "semester" ? Math.max(1, Math.ceil((sub.term_number || 1) / 2)) : sub.term_number || 1;
+                  {/* Year & Semester Wise Subjects List */}
+                  {loadingSubjectsList ? (
+                    <div className="flex items-center justify-center py-8 text-muted-foreground text-xs gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      <span>Loading course subjects breakdown...</span>
+                    </div>
+                  ) : filteredGroups.length === 0 ? (
+                    <div className="py-6 text-center text-muted-foreground text-xs space-y-1">
+                      <p className="font-semibold text-foreground">No subjects found for this selection.</p>
+                      <p className="text-[11px]">
+                        Choose a course/program above, or add subjects in Master Subjects first.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                      {filteredGroups.map((group) => (
+                        <div
+                          key={group.key}
+                          className="p-3 rounded-xl bg-background border border-border/70 space-y-2 shadow-2xs"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-primary" />
+                              <h4 className="text-xs font-bold text-foreground">{group.title}</h4>
+                              {group.subtitle && (
+                                <span className="text-[11px] text-muted-foreground">({group.subtitle})</span>
+                              )}
+                            </div>
+                            <Badge variant="secondary" className="text-[10px] font-mono font-semibold">
+                              {group.subjects.length} Subject{group.subjects.length > 1 ? "s" : ""}
+                            </Badge>
+                          </div>
 
-                          return (
-                            <button
-                              key={sub.id}
-                              type="button"
-                              onClick={() => {
-                                setForm((prev) => ({
-                                  ...prev,
-                                  subject_id: String(sub.id),
-                                  subject_label: sub.name,
-                                  title: `${sub.name} Syllabus`,
-                                }));
-                                const nodes = subjectNodesMap[String(sub.id)] || [];
-                                if (nodes.length > 0) {
-                                  setExpandedAccordions(new Set(nodes.map((n) => n.id)));
-                                }
-                              }}
-                              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition-all border text-left cursor-pointer shadow-2xs ${
-                                isSelected
-                                  ? "bg-primary text-primary-foreground border-primary shadow-xs ring-2 ring-primary/20 scale-[1.02]"
-                                  : "bg-background hover:bg-muted text-foreground border-border hover:border-primary/40"
-                              }`}
-                            >
-                              <img
-                                src={sub.icon_url || "/icons/default-subject.svg"}
-                                alt=""
-                                className="h-4 w-4 rounded object-contain shrink-0"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src = "/icons/default-subject.svg";
-                                }}
-                              />
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                            {group.subjects.map((sub) => {
+                              const isSelected = form.subject_id === String(sub.id);
+                              const nodeCount = subjectNodesMap[String(sub.id)]?.length || 0;
 
-                              <div className="flex flex-col min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="truncate max-w-[150px]">{sub.name}</span>
-                                  {sub.code && (
-                                    <span className={`text-[10px] font-mono font-medium ${isSelected ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
-                                      ({sub.code})
-                                    </span>
-                                  )}
-                                </div>
+                              return (
+                                <button
+                                  key={`${group.key}-${sub.id}`}
+                                  type="button"
+                                  onClick={() => {
+                                    setForm((prev) => ({
+                                      ...prev,
+                                      subject_id: String(sub.id),
+                                      subject_label: sub.name,
+                                      title: `${sub.name} Syllabus`,
+                                    }));
+                                    const nodes = subjectNodesMap[String(sub.id)] || [];
+                                    if (nodes.length > 0) {
+                                      setExpandedAccordions(new Set(nodes.map((n) => n.id)));
+                                    }
+                                  }}
+                                  className={`flex items-center justify-between p-2.5 rounded-xl border text-left cursor-pointer transition-all shadow-2xs ${
+                                    isSelected
+                                      ? "bg-primary/10 border-primary text-foreground ring-2 ring-primary/30 shadow-xs"
+                                      : "bg-card hover:bg-muted/40 text-foreground border-border hover:border-primary/40"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <img
+                                      src={sub.icon_url || "/icons/default-subject.svg"}
+                                      alt=""
+                                      className="h-7 w-7 rounded-lg object-contain bg-background border p-0.5 shrink-0"
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).src = "/icons/default-subject.svg";
+                                      }}
+                                    />
+                                    <div className="flex flex-col min-w-0">
+                                      <span className="font-bold text-xs truncate max-w-[140px]">
+                                        {sub.name}
+                                      </span>
+                                      {sub.code && (
+                                        <span className="font-mono text-[10px] text-muted-foreground">
+                                          {sub.code}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
 
-                                {sub.term_type === "semester" && (
-                                  <span className={`text-[9px] font-semibold ${isSelected ? "text-primary-foreground/90" : "text-indigo-600 dark:text-indigo-400"}`}>
-                                    Y{derivedYear} • Sem {sub.term_number || 1}
-                                  </span>
-                                )}
-                                {sub.term_type === "year" && (
-                                  <span className={`text-[9px] font-semibold ${isSelected ? "text-primary-foreground/90" : "text-amber-600 dark:text-amber-400"}`}>
-                                    Year {sub.term_number || 1}
-                                  </span>
-                                )}
-                              </div>
-
-                              <Badge
-                                variant="outline"
-                                className={`text-[9px] px-1.5 py-0 rounded-full font-bold ml-1 ${
-                                  isSelected
-                                    ? "bg-primary-foreground/20 text-primary-foreground border-primary-foreground/30"
-                                    : count > 0
-                                    ? "bg-primary/10 text-primary border-primary/30"
-                                    : "bg-muted text-muted-foreground border-border"
-                                }`}
-                              >
-                                {count} {count === 1 ? "unit" : "units"}
-                              </Badge>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <Badge
+                                      variant={nodeCount > 0 ? "default" : "outline"}
+                                      className={`text-[9px] px-1.5 py-0 rounded-full font-semibold ${
+                                        nodeCount > 0
+                                          ? "bg-primary text-primary-foreground"
+                                          : "bg-muted text-muted-foreground"
+                                      }`}
+                                    >
+                                      {nodeCount} {nodeCount === 1 ? "unit" : "units"}
+                                    </Badge>
+                                    {isSelected && (
+                                      <Check className="h-4 w-4 text-primary font-bold ml-0.5" />
+                                    )}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })()}
@@ -2927,12 +3016,29 @@ export default function SyllabusPage() {
             </label>
           </div>
 
-          <DialogFooter className="pt-2">
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={saveSyllabus} disabled={saving || !form.subject_id}>
-              {saving && <Loader2 className="size-4 animate-spin mr-1.5" />}
-              {editingSyllabus ? "Save Changes" : "Create Template"}
-            </Button>
+          <DialogFooter className="pt-2 flex items-center justify-between sm:justify-between w-full">
+            <ProgressiveSaveIndicator status={progressiveStatus} />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDialogOpen(false);
+                  clearSyllabusDraft();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  void saveSyllabus();
+                  clearSyllabusDraft();
+                }}
+                disabled={saving || !form.subject_id}
+              >
+                {saving && <Loader2 className="size-4 animate-spin mr-1.5" />}
+                {editingSyllabus ? "Save Changes" : "Create Template"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

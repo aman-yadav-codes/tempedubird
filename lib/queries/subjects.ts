@@ -173,6 +173,11 @@ export async function listSubjects(
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
+  const courseJoinParam = opts.courseId ? `$${params.length}` : null;
+  const orderByClause = opts.courseId
+    ? `ORDER BY COALESCE(mcs.term_number, s.term_number, 1) ASC, s.name ASC`
+    : `ORDER BY s.name ASC`;
+
   const [dataResult, countResult] = await Promise.all([
     db.query(
       `
@@ -182,14 +187,14 @@ export async function listSubjects(
           c.name AS category_name,
           s.board_id,
           b.name AS board_name,
-          s.course_id,
+          COALESCE(mcs.course_id, s.course_id) AS course_id,
           mc.name AS course_name,
           mc.authority_type,
           COALESCE(mc.university_name, u.name) AS university_name,
           cp.name AS certification_provider_name,
-          COALESCE(s.term_type, 'full_course') AS term_type,
-          COALESCE(s.term_number, 1) AS term_number,
-          COALESCE(s.term_name, '') AS term_name,
+          COALESCE(mcs.term_type, s.term_type, 'full_course') AS term_type,
+          COALESCE(mcs.term_number, s.term_number, 1) AS term_number,
+          COALESCE(mcs.term_name, s.term_name, '') AS term_name,
           s.name,
           s.slug,
           s.code,
@@ -199,13 +204,14 @@ export async function listSubjects(
           s.created_at,
           s.updated_at
         FROM subjects s
-        LEFT JOIN master_courses mc ON mc.id = s.course_id
+        LEFT JOIN master_course_subjects mcs ON mcs.subject_id = s.id ${courseJoinParam ? `AND mcs.course_id = ${courseJoinParam}` : ""}
+        LEFT JOIN master_courses mc ON mc.id = COALESCE(mcs.course_id, s.course_id)
         LEFT JOIN categories c ON c.id = COALESCE(s.category_id, mc.category_id)
         LEFT JOIN boards b ON b.id = COALESCE(s.board_id, mc.board_id)
         LEFT JOIN institution_profiles u ON u.id = mc.university_id
         LEFT JOIN certification_providers cp ON cp.id = mc.certification_provider_id
         ${whereClause}
-        ORDER BY s.name ASC
+        ${orderByClause}
         LIMIT $${params.length + 1} OFFSET $${params.length + 2}
       `,
       [...params, limit, offset]
@@ -238,43 +244,72 @@ export async function createSubject(
   const termNumber = data.termNumber || data.term_number || 1;
   const termName = data.termName || data.term_name || null;
 
-  // Duplicate Check by normalized name
+  // 1. Check for active or inactive subject with the same name
   const existing = await db.query(
-    `SELECT id, name FROM subjects WHERE LOWER(TRIM(name)) = LOWER(TRIM($1)) AND is_deleted = FALSE LIMIT 1`,
+    `SELECT id, name, is_deleted FROM subjects WHERE LOWER(TRIM(name)) = LOWER(TRIM($1)) LIMIT 1`,
     [cleanName]
   );
 
   if (existing.rows.length > 0) {
     const existingSubject = existing.rows[0];
-    if (data.courseId || data.categoryId) {
-      if (data.courseId) {
-        await db.query(
-          `INSERT INTO master_course_subjects (course_id, subject_id, term_type, term_number, term_name)
-           VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (course_id, subject_id) DO UPDATE
-           SET term_type = EXCLUDED.term_type,
-               term_number = EXCLUDED.term_number,
-               term_name = EXCLUDED.term_name`,
-          [data.courseId, existingSubject.id, termType, termNumber, termName]
-        );
-      }
-      if (data.categoryId) {
-        await db.query(
-          `UPDATE subjects 
-           SET category_id = COALESCE(category_id, $1), 
-               course_id = COALESCE(course_id, $2),
-               term_type = COALESCE(term_type, $3),
-               term_number = COALESCE(term_number, $4),
-               term_name = COALESCE(term_name, $5)
-           WHERE id = $6`,
-          [data.categoryId, data.courseId ?? null, termType, termNumber, termName, existingSubject.id]
-        );
-      }
-      return (await getSubjectById(db, existingSubject.id)) || (existingSubject as Subject);
+    
+    // Revive if deleted or update active
+    await db.query(
+      `UPDATE subjects 
+       SET is_deleted = FALSE,
+           is_active = TRUE,
+           code = COALESCE($1, code),
+           icon_url = COALESCE($2, icon_url),
+           deleted_at = NULL,
+           deleted_by = NULL,
+           category_id = COALESCE($3, category_id),
+           course_id = COALESCE($4, course_id),
+           term_type = COALESCE($5, term_type),
+           term_number = COALESCE($6, term_number),
+           term_name = COALESCE($7, term_name),
+           updated_at = NOW()
+       WHERE id = $8`,
+      [
+        data.code?.trim() || null,
+        data.icon_url?.trim() || null,
+        data.categoryId ?? null,
+        data.courseId ?? null,
+        termType,
+        termNumber,
+        termName,
+        existingSubject.id,
+      ]
+    );
+
+    if (data.courseId) {
+      await db.query(
+        `INSERT INTO master_course_subjects (course_id, subject_id, term_type, term_number, term_name)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (course_id, subject_id) DO UPDATE
+         SET term_type = EXCLUDED.term_type,
+             term_number = EXCLUDED.term_number,
+             term_name = EXCLUDED.term_name`,
+        [data.courseId, existingSubject.id, termType, termNumber, termName]
+      );
     }
-    const error: any = new Error(`A subject named "${existingSubject.name}" already exists`);
-    error.code = "23505";
-    throw error;
+
+    return (await getSubjectById(db, existingSubject.id)) || (existingSubject as Subject);
+  }
+
+  // 2. Ensure unique slug for new subject
+  let finalSlug = data.slug.trim();
+  let slugCandidate = finalSlug;
+  let slugIndex = 1;
+  while (true) {
+    const slugCheck = await db.query(
+      `SELECT id FROM subjects WHERE slug = $1 AND is_deleted = FALSE LIMIT 1`,
+      [slugCandidate]
+    );
+    if (slugCheck.rows.length === 0) {
+      finalSlug = slugCandidate;
+      break;
+    }
+    slugCandidate = `${finalSlug}-${slugIndex++}`;
   }
 
   const res = await db.query(
@@ -291,7 +326,7 @@ export async function createSubject(
       termNumber,
       termName,
       cleanName,
-      data.slug.trim(),
+      finalSlug,
       data.code?.trim() || null,
       data.icon_url?.trim() || "/icons/default-subject.svg",
       data.is_active !== undefined ? data.is_active : true,

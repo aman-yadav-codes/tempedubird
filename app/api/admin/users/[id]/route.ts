@@ -4,6 +4,7 @@ import { db } from "@/lib/db/db";
 import {
   assertTeachingSubjectsMatchInstitutionBoard,
   getAdminUserDetails,
+  getOrCreateEduBirdInstitution,
   removeUserFromInstitutions,
   softDeleteAdminUser,
   updateAdminUserWithDetails,
@@ -466,7 +467,19 @@ export async function PATCH(
     }
 
     const userData = normalizeRoleProfile(parsed.data, roleMeta);
-    const targetInstitutionIds = getTargetInstitutionIds(userData);
+    let targetInstitutionIds = getTargetInstitutionIds(userData);
+
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
+    if (
+      isPlatformAdmin &&
+      targetInstitutionIds.length === 0 &&
+      roleMeta?.scope_code === "institution"
+    ) {
+      const edubird = await getOrCreateEduBirdInstitution(db);
+      userData.profile.under_institution_id = edubird.id;
+      userData.profile.institution_ids = [edubird.id];
+      targetInstitutionIds = [edubird.id];
+    }
     if (
       targetInstitutionIds.length > 0 &&
       !targetInstitutionIds.every((institutionId) =>

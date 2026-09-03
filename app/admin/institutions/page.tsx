@@ -51,6 +51,8 @@ import { GoogleLocationPicker, PickedLocation } from "@/components/shared/google
 import { MasterType, InstitutionProfile, InstitutionBranch, InstitutionCourse } from "@/lib/types/institution";
 import { InstitutionBranchManager } from "@/components/admin/institutions/institution-branch-manager";
 import { InstitutionCourseManager } from "@/components/admin/institutions/institution-course-manager";
+import { useProgressiveSave } from "@/hooks/use-progressive-save";
+import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
 import { cn } from "@/lib/utils";
 
 type InstitutionMedia = {
@@ -448,8 +450,8 @@ export default function InstitutionsAdminPage() {
     const [vision, setVision] = useState("");
     const [goal, setGoal] = useState("");
     const [aiContent, setAiContent] = useState<Record<string, unknown> | null>(null);
-    const [submitting, setSubmitting] = useState(false);
     const [generatingAi, setGeneratingAi] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const [imageUrl, setImageUrl] = useState("");
     const [logoFile, setLogoFile] = useState<InstitutionUploadFile | null>(null);
     const [mediaList, setMediaList] = useState<InstitutionMedia[]>([]);
@@ -475,6 +477,30 @@ export default function InstitutionsAdminPage() {
     const [stagedBranches, setStagedBranches] = useState<InstitutionBranch[]>([]);
     const [stagedCourses, setStagedCourses] = useState<InstitutionCourse[]>([]);
     const [isMarketplaceEnabled, setIsMarketplaceEnabled] = useState(true);
+
+    const institutionFormState = useMemo(() => ({
+        name,
+        slug,
+        institutionTypeId,
+        institutionSubtypeId,
+        establishedYear,
+        about,
+        mission,
+        vision,
+        goal,
+        founderName,
+        founderTitle,
+        founderAbout,
+        boardId,
+        parentUniversityId,
+        isMarketplaceEnabled,
+    }), [name, slug, institutionTypeId, institutionSubtypeId, establishedYear, about, mission, vision, goal, founderName, founderTitle, founderAbout, boardId, parentUniversityId, isMarketplaceEnabled]);
+
+    const { saveStatus: institutionSaveStatus, clearDraft: clearInstitutionDraft } = useProgressiveSave({
+        formKey: `institution_profile:${editing?.id || "new"}`,
+        formState: institutionFormState,
+        enabled: dialogOpen,
+    });
 
     const [viewing, setViewing] = useState<InstitutionProfile | null>(null);
     const [viewOpen, setViewOpen] = useState(false);
@@ -1684,12 +1710,13 @@ export default function InstitutionsAdminPage() {
                     </div>
 
                     <div className="flex justify-between items-center mt-6 pt-4 border-t border-border">
-                        <div>
+                        <div className="flex items-center gap-2">
                             {activeStep > 0 && (
                                 <Button variant="outline" onClick={() => setActiveStep((s) => s - 1)}>
                                     <ArrowLeft className="mr-2 h-4 w-4" /> Back
                                 </Button>
                             )}
+                            <ProgressiveSaveIndicator status={institutionSaveStatus} />
                         </div>
                         <div className="flex gap-2">
                             <Button
@@ -1697,6 +1724,7 @@ export default function InstitutionsAdminPage() {
                                 onClick={() => {
                                     setDialogOpen(false);
                                     setEditing(null);
+                                    clearInstitutionDraft();
                                 }}
                             >
                                 Cancel
@@ -1714,7 +1742,14 @@ export default function InstitutionsAdminPage() {
                                 </Button>
                             ) : (
                                 <Button
-                                    onClick={() => (editing ? handleUpdate() : handleCreate())}
+                                    onClick={() => {
+                                        if (editing) {
+                                            void handleUpdate();
+                                        } else {
+                                            void handleCreate();
+                                        }
+                                        clearInstitutionDraft();
+                                    }}
                                     disabled={submitting}
                                     className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
                                 >

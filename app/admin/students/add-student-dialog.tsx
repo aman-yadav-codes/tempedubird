@@ -3921,10 +3921,24 @@ export function AddStudentDialog({
                         <Label>Relationship</Label>
                         <Input
                           value={guardian.relationship}
-                          onChange={(event) => setStudentRecords((prev) => ({
-                            ...prev,
-                            guardians: prev.guardians.map((item, itemIndex) => itemIndex === index ? { ...item, relationship: event.target.value } : item),
-                          }))}
+                          onChange={(event) => {
+                            const newRel = event.target.value;
+                            const isSelf = newRel.trim().toLowerCase() === "self";
+                            setStudentRecords((prev) => ({
+                              ...prev,
+                              guardians: prev.guardians.map((item, itemIndex) =>
+                                itemIndex === index
+                                  ? {
+                                      ...item,
+                                      relationship: newRel,
+                                      guardian_name: isSelf && !item.guardian_name ? form.full_name : item.guardian_name,
+                                      guardian_email: isSelf && !item.guardian_email ? (form.email || "") : item.guardian_email,
+                                      guardian_phone: isSelf && !item.guardian_phone ? (form.phone || "") : item.guardian_phone,
+                                    }
+                                  : item
+                              ),
+                            }));
+                          }}
                           placeholder="Father, Mother, Guardian"
                         />
                         <FieldError message={errors[`guardian.${index}.relationship`]} />

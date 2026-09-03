@@ -27,6 +27,7 @@ import { AddUserDialog, type RoleOption } from "@/app/admin/users/add-user-dialo
 import { buildUserColumns, type User } from "@/app/admin/users/columns";
 import { UserProfileSheet } from "@/app/admin/users/user-profile-sheet";
 import { UserPasswordDialog } from "@/app/admin/users/_components/user-password-dialog";
+import { SalaryAccountDialog } from "@/app/admin/users/_components/salary-account-dialog";
 import { usePersistedState } from "@/hooks/use-persisted-state";
 import {
   getDefaultStaffFilters,
@@ -79,6 +80,8 @@ export function StaffProfileList() {
   const [removingUser, setRemovingUser] = useState<User | null>(null);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [passwordUser, setPasswordUser] = useState<User | null>(null);
+  const [salaryAccountOpen, setSalaryAccountOpen] = useState(false);
+  const [salaryAccountUser, setSalaryAccountUser] = useState<User | null>(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -123,8 +126,18 @@ export function StaffProfileList() {
         includeCurrentUser: "true",
         staffScope: "all",
       });
+      if (filters.search?.trim()) {
+        params.set("search", filters.search.trim());
+      }
+      if (filters.status && filters.status !== "all") {
+        params.set("status", filters.status);
+      }
       if (filters.roleCode && filters.roleCode !== "all") {
-        params.set("roleCode", filters.roleCode);
+        if (/^\d+$/.test(filters.roleCode)) {
+          params.set("roleId", filters.roleCode);
+        } else {
+          params.set("roleCode", filters.roleCode);
+        }
       }
       const isPlatformAdmin = Boolean(
         currentUser?.role_codes?.includes("platform_admin") ||
@@ -193,8 +206,13 @@ export function StaffProfileList() {
     if (!accessToken) return;
 
     try {
+      const isPlatformAdmin = Boolean(
+        currentUser?.is_super_admin || currentUser?.role_codes?.includes("platform_admin")
+      );
+
+      // Fetch standard system roles
       const params = new URLSearchParams({
-        type: "institutionRoles",
+        type: isPlatformAdmin ? "roles" : "institutionRoles",
         search: "",
         page: "1",
         limit: "100",
@@ -203,17 +221,23 @@ export function StaffProfileList() {
         headers: authHeader(),
       });
       const json = await readJsonResponse(res);
+      const standardRoles: RoleOption[] = json?.data ?? [];
 
-      if (!res.ok) {
-        if (res.status === 401 || res.status === 403) return;
-        throw new Error(getApiErrorMessage(json, "Failed to fetch staff roles"));
+      // Deduplicate roles by ID to prevent key/value collisions
+      const seenIds = new Set<number>();
+      const uniqueRoles: RoleOption[] = [];
+      for (const role of standardRoles) {
+        if (role && typeof role.id === "number" && !seenIds.has(role.id)) {
+          seenIds.add(role.id);
+          uniqueRoles.push(role);
+        }
       }
 
-      setRoles(json.data ?? []);
+      setRoles(uniqueRoles);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err));
     }
-  }, [accessToken, authHeader]);
+  }, [accessToken, authHeader, currentUser]);
 
   const fetchUserDetails = useCallback(async (userId: number, forbiddenMessage: string) => {
     if (!accessToken) return null;
@@ -461,6 +485,10 @@ export function StaffProfileList() {
       buildUserColumns({
         onViewProfile: handleViewProfile,
         onEditUser: handleEditUser,
+        onManageSalaryAccount: (user) => {
+          setSalaryAccountUser(user);
+          setSalaryAccountOpen(true);
+        },
         onGeneratePassword: (user) => {
           setPasswordUser(user);
           setPasswordDialogOpen(true);
@@ -543,6 +571,17 @@ export function StaffProfileList() {
           setViewOpen(open);
           if (!open) setViewingUser(null);
         }}
+      />
+
+      <SalaryAccountDialog
+        user={salaryAccountUser}
+        open={salaryAccountOpen}
+        onOpenChange={(open) => {
+          setSalaryAccountOpen(open);
+          if (!open) setSalaryAccountUser(null);
+        }}
+        accessToken={accessToken}
+        onSaved={fetchStaff}
       />
 
       {editingUser && (

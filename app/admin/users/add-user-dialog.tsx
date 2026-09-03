@@ -39,6 +39,7 @@ import { toast } from "sonner";
 import { useProgressiveSave } from "@/hooks/use-progressive-save";
 import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -91,12 +92,14 @@ import {
   blankSalaryAccount,
   blankSalaryComponent,
   blankUserDocument,
+  defaultBirthDateString,
   getInitialForm,
   hasAnyValue,
   normalizeEmail,
   normalizeNullableText,
   normalizeText,
   safeTrim,
+  todayDateString,
 } from "@/lib/utils/user-form.helpers";
 import type { AdminUserDetails } from "@/lib/queries/user";
 import { CertificationCard } from "@/app/admin/users/_components/certification-card";
@@ -329,13 +332,25 @@ export function AddUserDialog({
     entityLabel?.toLowerCase().includes("faculty") ||
     createLabel?.toLowerCase().includes("staff");
 
+  const currentUserIsPlatformAdmin = Boolean(
+    currentUser?.is_super_admin ||
+    currentUser?.role_codes?.includes("platform_admin") ||
+    currentUser?.roles?.includes("Platform Admin")
+  );
+
   const availableRoles = useMemo(() => {
+    const seenIds = new Set<string | number>();
     return roles.filter((role) => {
+      if (!role || role.id == null) return false;
+      const roleKey = role.id;
+      if (seenIds.has(roleKey)) return false;
+      seenIds.add(roleKey);
+
       const code = (role.code || "").toLowerCase();
       const name = (role.name || "").toLowerCase();
 
       if (isStaffContext) {
-        // Exclude Student, Parent / Guardian, Tutor, Guest, Vendor, Platform Admin from Staff Role dropdown
+        // Exclude Student, Parent / Guardian, Tutor, Guest, Vendor from Staff Role dropdown
         if (
           code === "student" ||
           name.includes("student") ||
@@ -348,31 +363,42 @@ export function AddUserDialog({
           code === "guest" ||
           name.includes("guest") ||
           code === "vendor" ||
-          name.includes("vendor") ||
-          code === "platform_admin" ||
-          name.includes("platform admin")
+          name.includes("vendor")
         ) {
+          return false;
+        }
+        // If current user is NOT platform admin, do not show Platform Admin in staff role list
+        if (!currentUserIsPlatformAdmin && (code === "platform_admin" || name.includes("platform admin"))) {
           return false;
         }
       }
       return true;
     });
-  }, [roles, isStaffContext]);
+  }, [roles, isStaffContext, currentUserIsPlatformAdmin]);
 
   const selectedRole = useMemo(
     () => roles.find((role) => String(role.id) === form.role_id),
     [roles, form.role_id]
   );
-  const selectedRoleIsInstitutionScoped = selectedRole?.scope_code === "institution";
+  const selectedRoleIsPlatformAdmin = Boolean(
+    selectedRole?.code === "platform_admin" ||
+    (selectedRole?.name || "").toLowerCase().includes("platform admin") ||
+    selectedRole?.scope_code === "platform"
+  );
+  const selectedRoleIsInstitutionScoped = Boolean(
+    selectedRole?.scope_code === "institution" && !selectedRoleIsPlatformAdmin
+  );
   const selectedRoleIsTeacher = selectedRole?.code === "teacher";
-  const selectedRoleIsStaff = selectedRole?.code === "teacher" || selectedRole?.code === "driver";
+  const selectedRoleIsStaff = selectedRole?.code === "teacher" || selectedRole?.code === "driver" || selectedRole?.code === "faculty";
   const selectedRoleIsGuest = selectedRole?.code === "guest";
-  const selectedRoleCanHaveDesignation = selectedRole?.code === "institution_admin";
-  const showAccountInstitution = selectedRoleIsInstitutionScoped && !selectedRoleIsTeacher;
-  const currentUserIsPlatformAdmin = Boolean(
-    currentUser?.is_super_admin ||
-    currentUser?.role_codes?.includes("platform_admin") ||
-    currentUser?.roles?.includes("Platform Admin")
+  const selectedRoleCanHaveDesignation = Boolean(
+    selectedRole?.code === "institution_admin" ||
+    selectedRoleIsTeacher ||
+    selectedRole?.is_designation ||
+    currentUserIsPlatformAdmin
+  );
+  const showAccountInstitution = Boolean(
+    selectedRoleIsInstitutionScoped && !selectedRoleIsPlatformAdmin && !currentUserIsPlatformAdmin
   );
   const lockInstitutionToPreferred = Boolean(
     effectivePreferredInstitution &&
@@ -443,7 +469,7 @@ function getRoleDisplay(role: RoleOption) {
   const showSecurityStep = false;
   const editUserId = user?.id;
   const userFormKey = `user:${isEdit ? editUserId ?? "edit" : "new"}`;
-  const { saveStatus, handleBlur } = useProgressiveSave({
+  const { saveStatus, handleBlur, restoreDraft, clearDraft } = useProgressiveSave({
     formKey: userFormKey,
     formState: form,
     enabled: actualOpen,
@@ -452,6 +478,7 @@ function getRoleDisplay(role: RoleOption) {
   const dialogSteps = useMemo(
     () => [
       { label: "Account Details", icon: UserRound },
+      { label: "Address & Location", icon: MapPin },
       { label: "Background & Education", icon: Briefcase },
       { label: "Upload Documents", icon: FileText },
       { label: "Salary Details", icon: IndianRupee },
@@ -459,9 +486,11 @@ function getRoleDisplay(role: RoleOption) {
     ],
     []
   );
-  const documentsStepIndex = 2;
-  const salaryStepIndex = 3;
-  const commissionStepIndex = 4;
+  const addressStepIndex = 1;
+  const backgroundStepIndex = 2;
+  const documentsStepIndex = 3;
+  const salaryStepIndex = 4;
+  const commissionStepIndex = 5;
   const securityStepIndex = -1;
   const reviewStepIndex = -1;
   const isLastStep = activeStep === dialogSteps.length - 1;
@@ -570,6 +599,17 @@ function getRoleDisplay(role: RoleOption) {
     form.designation_name,
     selectedRoleCanHaveDesignation,
   ]);
+
+  useEffect(() => {
+    if (selectedRoleIsPlatformAdmin) {
+      setErrors((prev) => {
+        if (!prev.under_institution_id) return prev;
+        const next = { ...prev };
+        delete next.under_institution_id;
+        return next;
+      });
+    }
+  }, [selectedRoleIsPlatformAdmin]);
 
   useEffect(() => {
     if (selectedRoleIsTeacher || showAccountInstitution) {
@@ -1117,6 +1157,7 @@ function getRoleDisplay(role: RoleOption) {
     setErrors({});
     setPasswordErrors({});
     setPasswordForm({ password: "", confirmPassword: "" });
+    clearDraft();
     setForm(applyPreferredInstitution(getInitialForm(user)));
     setSelectedInstitutionBoardId(
       preferredInstitution?.boardId ??
@@ -1140,6 +1181,22 @@ function getRoleDisplay(role: RoleOption) {
       setErrors({});
       setPasswordErrors({});
       setPasswordForm({ password: "", confirmPassword: "" });
+
+      if (!isEdit) {
+        const draft = restoreDraft();
+        if (draft) {
+          setForm({
+            ...draft,
+            joining_date: draft.joining_date || todayDateString(),
+            date_of_birth: draft.date_of_birth || defaultBirthDateString(),
+          });
+          setSelectedInstitutionBoardId(
+            preferredInstitution?.boardId ?? null
+          );
+          return;
+        }
+      }
+
       setForm(applyPreferredInstitution(getInitialForm(user)));
       setSelectedInstitutionBoardId(
         preferredInstitution?.boardId ??
@@ -1163,7 +1220,7 @@ function getRoleDisplay(role: RoleOption) {
     }, 0);
 
     return () => window.clearTimeout(timeout);
-  }, [actualOpen, applyPreferredInstitution, preferredInstitution, roles, user]);
+  }, [actualOpen, applyPreferredInstitution, isEdit, preferredInstitution, restoreDraft, roles, user]);
 
   useEffect(() => {
     if (!actualOpen || !user) {
@@ -1265,12 +1322,14 @@ function getRoleDisplay(role: RoleOption) {
       }
 
       if (
-        showAccountInstitution &&
+        !currentUserIsPlatformAdmin &&
+        !selectedRoleIsPlatformAdmin &&
+        selectedRoleIsInstitutionScoped &&
         form.institution_ids.length === 0 &&
         !form.under_institution_id &&
-        !preferredInstitution
+        !effectivePreferredInstitution
       ) {
-        nextErrors.under_institution_id = "Select at least one institution for this role.";
+        nextErrors.under_institution_id = "Please select an institution for this staff member.";
       }
     }
 
@@ -1305,14 +1364,17 @@ function getRoleDisplay(role: RoleOption) {
     const compactCertifications = form.certifications.filter((certification) =>
       Boolean(safeTrim(certification.name))
     );
-    const selectedInstitutionIds = showInstitutionMultiSelect
-      ? form.institution_ids
-        .map((value) => Number(value))
-        .filter((value) => Number.isInteger(value) && value > 0)
-      : (showInstitutionSingleSelect || selectedRoleIsTeacher) && form.under_institution_id
-        ? [Number(form.under_institution_id)].filter((value) => Number.isInteger(value) && value > 0)
-        : [];
-    const primaryInstitutionId = selectedInstitutionIds[0] ?? null;
+    const isPlatformStaff = currentUserIsPlatformAdmin || selectedRoleIsPlatformAdmin || !selectedRoleIsInstitutionScoped;
+    const selectedInstitutionIds = isPlatformStaff
+      ? (form.under_institution_id ? [Number(form.under_institution_id)].filter((value) => Number.isInteger(value) && value > 0) : [])
+      : showInstitutionMultiSelect
+        ? form.institution_ids
+          .map((value) => Number(value))
+          .filter((value) => Number.isInteger(value) && value > 0)
+        : (showInstitutionSingleSelect || selectedRoleIsTeacher) && form.under_institution_id
+          ? [Number(form.under_institution_id)].filter((value) => Number.isInteger(value) && value > 0)
+          : [];
+    const primaryInstitutionId = selectedInstitutionIds[0] ?? (form.under_institution_id ? Number(form.under_institution_id) : null);
 
     return {
       full_name: normalizeText(form.full_name),
@@ -1331,11 +1393,14 @@ function getRoleDisplay(role: RoleOption) {
           ? form.teacher_type || (primaryInstitutionId ? "institute_teacher" : "individual_teacher")
           : null,
         under_institution_id: primaryInstitutionId,
+        under_institution_name: isPlatformStaff && !form.under_institution_name ? "EduBird" : form.under_institution_name || null,
         institution_ids: selectedInstitutionIds,
         designation_id:
-          selectedRoleCanHaveDesignation && form.designation_id
+          form.designation_id
             ? Number(form.designation_id)
-            : null,
+            : selectedRole?.is_designation
+              ? Number(selectedRole.id)
+              : null,
         gender: form.gender === NO_GENDER ? null : normalizeText(form.gender),
         joining_date: form.joining_date || null,
         date_of_birth: form.date_of_birth || null,
@@ -1493,6 +1558,7 @@ function getRoleDisplay(role: RoleOption) {
       }
 
       toast.success(isEdit ? "User updated successfully" : "User added successfully");
+      clearDraft();
       setDialogOpen(false);
       resetForm();
       onSaved();
@@ -1891,148 +1957,6 @@ function getRoleDisplay(role: RoleOption) {
                   </div>
                 )}
               </div>
-
-              {/* Location selection based on map pin & address search */}
-              <div className="space-y-2 sm:col-span-2 rounded-lg border bg-muted/10 p-3">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="add-user-address" className="text-xs font-semibold flex items-center gap-1.5">
-                    <MapPin className="h-3.5 w-3.5 text-primary" />
-                    Address & Map Pin Location
-                  </Label>
-                  <span className="text-[11px] text-muted-foreground">Select on map or search address</span>
-                </div>
-                <GoogleLocationPicker
-                  value={form.location}
-                  onChange={(location) => {
-                    setForm((prev) => ({
-                      ...prev,
-                      location,
-                      full_address:
-                        location.full_address ||
-                        location.formatted_address ||
-                        [location.city, location.state].filter(Boolean).join(", "),
-                    }));
-                  }}
-                />
-                <div className="space-y-1">
-                  <Label htmlFor="add-user-address" className="text-[11px] text-muted-foreground font-normal">
-                    Address / City
-                  </Label>
-                  <Input
-                    id="add-user-address"
-                    value={form.full_address || ""}
-                    onChange={(event) => updateForm("full_address", event.target.value)}
-                    placeholder="Street address or city"
-                    className="text-xs h-9 bg-background"
-                    autoComplete="off"
-                  />
-                </div>
-              </div>
-              {showRoleAssignment && (
-              <div className="space-y-1.5">
-                <Label htmlFor="add-user-role">Role</Label>
-                <Select
-                  value={form.role_id}
-                  onValueChange={(value) => {
-                    const nextRole = roles.find((role) => String(role.id) === value);
-                    const nextRoleIsTeacher = nextRole?.code === "teacher";
-                    const nextRoleIsInstitutionScoped = nextRole?.scope_code === "institution";
-                    const enforcePreferredInstitution = Boolean(
-                      preferredInstitution &&
-                      nextRoleIsInstitutionScoped &&
-                      !currentUserIsPlatformAdmin
-                    );
-                    const preferredInstitutionId = enforcePreferredInstitution && preferredInstitution
-                      ? String(preferredInstitution.id)
-                      : "";
-                    const nextRoleAllowsMultipleInstitutions =
-                      currentUserIsPlatformAdmin && nextRole?.code === "institution_admin";
-                    const nextRoleCanHaveDesignation =
-                      nextRole?.code === "institution_admin" || nextRoleIsTeacher;
-                    if (!nextRoleIsInstitutionScoped) {
-                      setSelectedInstitutionBoardId(null);
-                    }
-                    setForm((prev) => ({
-                      ...prev,
-                      role_id: value,
-                      is_teacher: nextRoleIsTeacher,
-                      teacher_type: nextRoleIsTeacher
-                        ? "institute_teacher"
-                        : "",
-                      ...(nextRoleIsInstitutionScoped && !nextRoleIsTeacher
-                        ? {
-                          institution_ids: preferredInstitutionId
-                            ? [preferredInstitutionId]
-                            : nextRoleAllowsMultipleInstitutions
-                            ? (prev.institution_ids.length
-                              ? prev.institution_ids
-                              : prev.under_institution_id
-                                ? [prev.under_institution_id]
-                                : [])
-                            : (prev.under_institution_id
-                              ? [prev.under_institution_id]
-                              : prev.institution_ids[0]
-                                ? [prev.institution_ids[0]]
-                                : []),
-                          under_institution_id: preferredInstitutionId || prev.under_institution_id || prev.institution_ids[0] || "",
-                          under_institution_name: preferredInstitutionId && preferredInstitution
-                            ? preferredInstitution.name
-                            : prev.under_institution_name,
-                          designation_id: nextRoleCanHaveDesignation ? prev.designation_id : "",
-                          designation_name: nextRoleCanHaveDesignation ? prev.designation_name : "",
-                          teaching_categories: [],
-                          teaching_subjects: [],
-                          hourly_charges: "",
-                        }
-                        : {
-                          institution_ids: [],
-                          under_institution_id: nextRoleIsTeacher
-                            ? preferredInstitutionId || prev.under_institution_id
-                            : "",
-                          under_institution_name: nextRoleIsTeacher
-                            ? (preferredInstitutionId && preferredInstitution
-                              ? preferredInstitution.name
-                              : prev.under_institution_name)
-                            : "",
-                          ...(!nextRoleIsTeacher
-                            ? {
-                              designation_id: "",
-                              designation_name: "",
-                              teaching_categories: [],
-                              teaching_subjects: [],
-                              hourly_charges: "",
-                            }
-                            : {}),
-                        }),
-                    }));
-                  }}
-                >
-                  <SelectTrigger id="add-user-role" className="w-full">
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableRoles.map((role) => {
-                      const display = getRoleDisplay(role);
-                      return (
-                        <SelectItem key={role.id} value={String(role.id)}>
-                          <span className="flex items-center gap-2">
-                            <span className="text-base">{display.icon}</span>
-                            <span className="font-medium">{display.label}</span>
-                          </span>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-                {selectedRoleIsGuest && (
-                  <p className="text-xs text-muted-foreground">
-                    Guest is a temporary role for users whose institution has not been
-                    created yet. It has no institution or admin permissions and can be
-                    changed to Institution Admin later.
-                  </p>
-                )}
-              </div>
-              )}
               {/* Bio & Avatar in a balanced 2-column layout to reduce scrolling */}
               <div className="grid gap-3 sm:grid-cols-2">
                 {/* Profile Picture / Avatar */}
@@ -2123,21 +2047,121 @@ function getRoleDisplay(role: RoleOption) {
                 </div>
               </div>
 
-              {/* Account Options - Active & Marketplace */}
-              {showAdminControls && (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="flex h-10 items-center gap-2.5 rounded-md border px-3 bg-muted/20">
-                    <Checkbox
-                      id="add-user-active"
-                      checked={Boolean(form.is_active)}
-                      onCheckedChange={(checked) =>
-                        updateForm("is_active", checked === true)
-                      }
-                    />
-                    <Label htmlFor="add-user-active" className="cursor-pointer text-xs font-medium">
-                      Active Account
+              {/* Choose Role & Show on EduBird Marketplace Options */}
+              <div className="grid gap-3 sm:grid-cols-2 items-end">
+                {showRoleAssignment && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="add-user-role" className="text-xs font-semibold">
+                      Choose Role <span className="text-destructive">*</span>
                     </Label>
+                    <Select
+                      value={form.role_id}
+                      onValueChange={(value) => {
+                        const nextRole = roles.find((role) => String(role.id) === value);
+                        const nextRoleIsTeacher = nextRole?.code === "teacher";
+                        const nextRoleIsInstitutionScoped = nextRole?.scope_code === "institution" && !currentUserIsPlatformAdmin;
+                        const enforcePreferredInstitution = Boolean(
+                          preferredInstitution &&
+                          nextRoleIsInstitutionScoped &&
+                          !currentUserIsPlatformAdmin
+                        );
+                        const preferredInstitutionId = enforcePreferredInstitution && preferredInstitution
+                          ? String(preferredInstitution.id)
+                          : "";
+                        const nextRoleAllowsMultipleInstitutions =
+                          currentUserIsPlatformAdmin && nextRole?.code === "institution_admin";
+                        const nextRoleCanHaveDesignation = Boolean(
+                          nextRole?.code === "institution_admin" ||
+                          nextRoleIsTeacher ||
+                          nextRole?.is_designation ||
+                          currentUserIsPlatformAdmin
+                        );
+                        if (!nextRoleIsInstitutionScoped) {
+                          setSelectedInstitutionBoardId(null);
+                        }
+                        const isDesig = Boolean(nextRole?.is_designation);
+                        setForm((prev) => ({
+                          ...prev,
+                          role_id: value,
+                          is_teacher: nextRoleIsTeacher,
+                          teacher_type: nextRoleIsTeacher
+                            ? "institute_teacher"
+                            : "",
+                          designation_id: isDesig ? String(nextRole?.id) : nextRoleCanHaveDesignation ? prev.designation_id : "",
+                          designation_name: isDesig ? (nextRole?.name || "") : nextRoleCanHaveDesignation ? prev.designation_name : "",
+                          ...(nextRoleIsInstitutionScoped && !nextRoleIsTeacher
+                            ? {
+                              institution_ids: preferredInstitutionId
+                                ? [preferredInstitutionId]
+                                : nextRoleAllowsMultipleInstitutions
+                                ? (prev.institution_ids.length
+                                  ? prev.institution_ids
+                                  : prev.under_institution_id
+                                    ? [prev.under_institution_id]
+                                    : [])
+                                : (prev.under_institution_id
+                                  ? [prev.under_institution_id]
+                                  : prev.institution_ids[0]
+                                    ? [prev.institution_ids[0]]
+                                    : []),
+                              under_institution_id: preferredInstitutionId || prev.under_institution_id || prev.institution_ids[0] || "",
+                              under_institution_name: preferredInstitutionId && preferredInstitution
+                                ? preferredInstitution.name
+                                : prev.under_institution_name,
+                              teaching_categories: [],
+                              teaching_subjects: [],
+                              hourly_charges: "",
+                            }
+                            : {
+                              institution_ids: [],
+                              under_institution_id: nextRoleIsTeacher
+                                ? preferredInstitutionId || prev.under_institution_id
+                                : "",
+                              under_institution_name: nextRoleIsTeacher
+                                ? (preferredInstitutionId && preferredInstitution
+                                  ? preferredInstitution.name
+                                  : prev.under_institution_name)
+                                : "",
+                              ...(!nextRoleIsTeacher
+                                ? {
+                                  teaching_categories: [],
+                                  teaching_subjects: [],
+                                  hourly_charges: "",
+                                }
+                                : {}),
+                            }),
+                        }));
+                      }}
+                    >
+                      <SelectTrigger id="add-user-role" className="w-full h-10 bg-background text-xs">
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableRoles.map((role) => {
+                          const display = getRoleDisplay(role);
+                          return (
+                            <SelectItem key={`role-${role.id}`} value={String(role.id)}>
+                              <span className="flex items-center gap-2">
+                                <span className="text-base">{display.icon}</span>
+                                <span className="font-medium">{display.label}</span>
+                              </span>
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                    {selectedRoleIsGuest && (
+                      <p className="text-xs text-muted-foreground">
+                        Guest is a temporary role for users whose institution has not been
+                        created yet. It has no institution or admin permissions and can be
+                        changed to Institution Admin later.
+                      </p>
+                    )}
                   </div>
+                )}
+
+                {/* Account Options - Marketplace */}
+                {showAdminControls && (
                   <div className="flex h-10 items-center gap-2.5 rounded-md border px-3 bg-primary/5 border-primary/20">
                     <Checkbox
                       id="add-user-marketplace"
@@ -2147,16 +2171,122 @@ function getRoleDisplay(role: RoleOption) {
                       }
                     />
                     <Label htmlFor="add-user-marketplace" className="cursor-pointer text-xs font-medium">
-                      Show on marketplace
+                      Show on EduBird Marketplace
                     </Label>
                   </div>
+                )}
+              </div>
+
+              {/* Institution Selection for Institution-Scoped Staff Roles (Hidden on Platform Admin side) */}
+              {selectedRoleIsInstitutionScoped && !currentUserIsPlatformAdmin && (
+                <div className="space-y-1.5">
+                  {effectivePreferredInstitution ? (
+                    <div className="p-3 rounded-xl border border-primary/20 bg-primary/[0.03] flex items-center justify-between shadow-2xs">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-primary" />
+                        <div>
+                          <span className="text-xs font-bold text-foreground block">Assigned Institution</span>
+                          <span className="text-[11px] text-muted-foreground">{effectivePreferredInstitution.name}</span>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] bg-background text-primary border-primary/30">
+                        Active Workspace
+                      </Badge>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 p-3 rounded-xl border border-border/80 bg-muted/10">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="add-user-institution" className="text-xs font-semibold flex items-center gap-1.5">
+                          <Building2 className="h-3.5 w-3.5 text-primary" />
+                          <span>Institution <span className="text-destructive">*</span></span>
+                        </Label>
+                        {form.under_institution_id && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              updateForm("under_institution_id", "");
+                              updateForm("under_institution_name", "");
+                              updateForm("institution_ids", []);
+                            }}
+                            className="h-5 text-[10px] text-muted-foreground hover:text-destructive px-1"
+                          >
+                            Clear Institution
+                          </Button>
+                        )}
+                      </div>
+                      <AsyncSearchPopover<InstitutionOption>
+                        value={form.under_institution_id}
+                        selectedLabel={form.under_institution_name || undefined}
+                        onChange={(value) => {
+                          updateForm("under_institution_id", value);
+                          updateForm("institution_ids", value ? [value] : []);
+                        }}
+                        onSelectItem={(item) => {
+                          updateForm("under_institution_id", String(item.id));
+                          updateForm("under_institution_name", item.name);
+                          updateForm("institution_ids", [String(item.id)]);
+                          if (item.board_id) {
+                            setSelectedInstitutionBoardId(item.board_id);
+                          }
+                          setErrors((prev) => {
+                            const next = { ...prev };
+                            delete next.under_institution_id;
+                            return next;
+                          });
+                        }}
+                        placeholder="Search & choose institution (e.g. Maasarda institute)..."
+                        searchPlaceholder="Type institution name..."
+                        emptyText="No matching institution found"
+                        fetcher={fetchInstitutions}
+                        getValue={(item) => String(item.id)}
+                        getLabel={(item) => item.name}
+                      />
+                      <FieldError message={errors.under_institution_id} />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
 
-          {/* STEP 1: Background, Education & Experience with Multiple Entries */}
+          {/* STEP 1: Address & Location */}
           {activeStep === 1 && (
+            <div className="space-y-4">
+              <div className="space-y-3 rounded-xl border bg-card/60 p-4 shadow-xs">
+                <GoogleLocationPicker
+                  value={form.location}
+                  onChange={(location) => {
+                    setForm((prev) => ({
+                      ...prev,
+                      location,
+                      full_address:
+                        location.full_address ||
+                        location.formatted_address ||
+                        [location.city, location.state].filter(Boolean).join(", "),
+                    }));
+                  }}
+                />
+                <div className="space-y-1.5 pt-1">
+                  <Label htmlFor="add-user-address" className="text-xs font-semibold text-foreground">
+                    Address / City / Street
+                  </Label>
+                  <Input
+                    id="add-user-address"
+                    value={form.full_address || ""}
+                    onChange={(event) => updateForm("full_address", event.target.value)}
+                    placeholder="Street address or city"
+                    className="text-xs h-9 bg-background font-medium"
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: Background, Education & Experience with Multiple Entries */}
+          {activeStep === 2 && (
             <div className="space-y-6">
               {/* Education Qualifications Section */}
               <div className="space-y-3">
@@ -2333,8 +2463,8 @@ function getRoleDisplay(role: RoleOption) {
             </div>
           )}
 
-          {/* STEP 2: Upload Documents */}
-          {activeStep === 2 && (
+          {/* STEP 3: Upload Documents */}
+          {activeStep === 3 && (
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b pb-2">
                 <div>
@@ -2464,7 +2594,8 @@ function getRoleDisplay(role: RoleOption) {
             </div>
           )}
 
-          {activeStep === 3 && (
+          {/* STEP 4: Employee Salary Details */}
+          {activeStep === 4 && (
             <div className="space-y-4">
               <div className="rounded-lg border bg-card p-4 space-y-4 shadow-sm">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
@@ -2807,283 +2938,12 @@ function getRoleDisplay(role: RoleOption) {
                       ))}
                   </div>
                 </div>
-
-                {/* ─── SALARY ACCOUNT & BANKING DETAILS ─── */}
-                <div className="space-y-3 pt-3 border-t">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <Landmark className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                        Salary Account & Bank Details
-                      </Label>
-                      <p className="text-[11px] text-muted-foreground">
-                        Direct salary disbursement account, UPI ID, and statutory compliance numbers (PAN, PF, ESI).
-                      </p>
-                    </div>
-                    <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                      Disbursement Ready
-                    </span>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl border bg-muted/20 space-y-3.5">
-                    {/* Payment Mode & Account Type */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">Disbursement / Payment Method</Label>
-                        <Select
-                          value={form.salary_account?.payment_mode || "BANK_TRANSFER"}
-                          onValueChange={(val) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              salary_account: {
-                                ...(prev.salary_account || blankSalaryAccount()),
-                                payment_mode: val,
-                              },
-                            }))
-                          }
-                        >
-                          <SelectTrigger className="h-8 text-xs bg-background">
-                            <SelectValue placeholder="Select Payment Mode" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="BANK_TRANSFER">🏦 Direct Bank Transfer (NEFT / RTGS / IMPS)</SelectItem>
-                            <SelectItem value="UPI">📱 UPI / VPA Transfer</SelectItem>
-                            <SelectItem value="CHEQUE">📝 Company Cheque</SelectItem>
-                            <SelectItem value="CASH">💵 Cash Disbursement</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">Account Type</Label>
-                        <Select
-                          value={form.salary_account?.account_type || "SALARY"}
-                          onValueChange={(val) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              salary_account: {
-                                ...(prev.salary_account || blankSalaryAccount()),
-                                account_type: val,
-                              },
-                            }))
-                          }
-                        >
-                          <SelectTrigger className="h-8 text-xs bg-background">
-                            <SelectValue placeholder="Select Account Type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="SALARY">💼 Salary Account (Zero Balance)</SelectItem>
-                            <SelectItem value="SAVINGS">🏦 Savings Account</SelectItem>
-                            <SelectItem value="CURRENT">🏢 Current Account</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    {/* Bank Name & Account Holder Name */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">Bank Name</Label>
-                        <Input
-                          placeholder="e.g. State Bank of India, HDFC, ICICI..."
-                          value={form.salary_account?.bank_name || ""}
-                          onChange={(e) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              salary_account: {
-                                ...(prev.salary_account || blankSalaryAccount()),
-                                bank_name: e.target.value,
-                              },
-                            }))
-                          }
-                          className="h-8 text-xs bg-background"
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">Account Holder Name</Label>
-                        <Input
-                          placeholder="Full name as per bank records"
-                          value={form.salary_account?.account_holder_name || ""}
-                          onChange={(e) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              salary_account: {
-                                ...(prev.salary_account || blankSalaryAccount()),
-                                account_holder_name: e.target.value,
-                              },
-                            }))
-                          }
-                          className="h-8 text-xs bg-background"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Account Number & IFSC Code */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">Bank Account Number</Label>
-                        <Input
-                          placeholder="e.g. 12345678901234"
-                          value={form.salary_account?.account_number || ""}
-                          onChange={(e) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              salary_account: {
-                                ...(prev.salary_account || blankSalaryAccount()),
-                                account_number: e.target.value,
-                              },
-                            }))
-                          }
-                          className="h-8 text-xs bg-background font-mono"
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">IFSC Code</Label>
-                        <Input
-                          placeholder="e.g. SBIN0001234"
-                          value={form.salary_account?.ifsc_code || ""}
-                          onChange={(e) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              salary_account: {
-                                ...(prev.salary_account || blankSalaryAccount()),
-                                ifsc_code: e.target.value.toUpperCase(),
-                              },
-                            }))
-                          }
-                          className="h-8 text-xs bg-background uppercase font-mono"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Branch Name & UPI ID */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">Branch Name / Location</Label>
-                        <Input
-                          placeholder="e.g. Connaught Place, New Delhi"
-                          value={form.salary_account?.branch_name || ""}
-                          onChange={(e) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              salary_account: {
-                                ...(prev.salary_account || blankSalaryAccount()),
-                                branch_name: e.target.value,
-                              },
-                            }))
-                          }
-                          className="h-8 text-xs bg-background"
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">UPI ID / VPA (Optional)</Label>
-                        <Input
-                          placeholder="e.g. staff@okhdfcbank / 9876543210@paytm"
-                          value={form.salary_account?.upi_id || ""}
-                          onChange={(e) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              salary_account: {
-                                ...(prev.salary_account || blankSalaryAccount()),
-                                upi_id: e.target.value.toLowerCase().trim(),
-                              },
-                            }))
-                          }
-                          className="h-8 text-xs bg-background font-mono"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Statutory Compliance Identifiers: PAN, UAN/PF, ESI */}
-                    <div className="pt-2 border-t border-border/60">
-                      <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">
-                        Statutory Identification (PAN / PF / ESI)
-                      </span>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold">PAN Card Number</Label>
-                          <Input
-                            placeholder="e.g. ABCDE1234F"
-                            maxLength={10}
-                            value={form.salary_account?.pan_number || ""}
-                            onChange={(e) =>
-                              setForm((prev) => ({
-                                ...prev,
-                                salary_account: {
-                                  ...(prev.salary_account || blankSalaryAccount()),
-                                  pan_number: e.target.value.toUpperCase().trim(),
-                                },
-                              }))
-                            }
-                            className="h-8 text-xs bg-background uppercase font-mono"
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold">EPF / UAN Number</Label>
-                          <Input
-                            placeholder="12-digit UAN"
-                            maxLength={12}
-                            value={form.salary_account?.uan_number || ""}
-                            onChange={(e) =>
-                              setForm((prev) => ({
-                                ...prev,
-                                salary_account: {
-                                  ...(prev.salary_account || blankSalaryAccount()),
-                                  uan_number: e.target.value.trim(),
-                                },
-                              }))
-                            }
-                            className="h-8 text-xs bg-background font-mono"
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold">ESI Number</Label>
-                          <Input
-                            placeholder="17-digit ESI Number"
-                            maxLength={17}
-                            value={form.salary_account?.esi_number || ""}
-                            onChange={(e) =>
-                              setForm((prev) => ({
-                                ...prev,
-                                salary_account: {
-                                  ...(prev.salary_account || blankSalaryAccount()),
-                                  esi_number: e.target.value.trim(),
-                                },
-                              }))
-                            }
-                            className="h-8 text-xs bg-background font-mono"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Salary Remarks */}
-                <div className="space-y-1.5 pt-2 border-t">
-                  <Label className="text-xs font-medium">Salary Terms & Remarks (Optional)</Label>
-                  <Textarea
-                    placeholder="Bank details, probation terms, revision period, appraisal notes..."
-                    value={form.salary_notes || ""}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        salary_notes: e.target.value,
-                      }))
-                    }
-                    className="min-h-[60px] text-xs resize-none"
-                  />
-                </div>
               </div>
             </div>
           )}
 
-          {activeStep === 4 && (
+          {/* STEP 5: Commission & Incentive Structure */}
+          {activeStep === 5 && (
             <div className="space-y-4">
               <div className="rounded-lg border bg-card p-4 space-y-4 shadow-sm">
                 <div className="flex items-center justify-between border-b pb-3">
@@ -3455,7 +3315,14 @@ function getRoleDisplay(role: RoleOption) {
           )}
 
           <div className="flex items-center justify-between gap-2 border-t pt-4">
-            <ProgressiveSaveIndicator status={saveStatus} />
+            <ProgressiveSaveIndicator
+              status={saveStatus}
+              onClearDraft={() => {
+                clearDraft();
+                resetForm();
+                toast.info("Draft cleared");
+              }}
+            />
             <div className="flex items-center gap-2">
               {activeStep > 0 && (
                 <Button

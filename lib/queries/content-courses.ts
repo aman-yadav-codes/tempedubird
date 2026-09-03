@@ -49,7 +49,9 @@ export async function ensureMasterCoursesTable(db: Pool) {
 
     ALTER TABLE master_courses
       ADD COLUMN IF NOT EXISTS thumbnail_url TEXT,
-      ADD COLUMN IF NOT EXISTS icon_url TEXT;
+      ADD COLUMN IF NOT EXISTS icon_url TEXT,
+      ADD COLUMN IF NOT EXISTS mediums TEXT[],
+      ADD COLUMN IF NOT EXISTS medium VARCHAR(255);
 
     CREATE TABLE IF NOT EXISTS master_course_subjects (
       course_id INT NOT NULL REFERENCES master_courses(id) ON DELETE CASCADE,
@@ -158,6 +160,8 @@ export async function listMasterCourses(
       cp.name AS certification_provider_name,
       mc.duration_value,
       mc.duration_unit,
+      mc.mediums,
+      mc.medium,
       mc.seats_available,
       mc.description,
       mc.thumbnail_url,
@@ -322,13 +326,15 @@ export async function createMasterCourse(
       certification_provider_id,
       duration_value,
       duration_unit,
+      mediums,
+      medium,
       seats_available,
       description,
       thumbnail_url,
       icon_url,
       is_active
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
     RETURNING id
     `,
     [
@@ -343,6 +349,8 @@ export async function createMasterCourse(
       data.certificationProviderId ?? null,
       data.durationValue ?? null,
       data.durationUnit || "months",
+      data.mediums || [],
+      data.medium || (Array.isArray(data.mediums) ? data.mediums.join(", ") : null),
       data.seatsAvailable ?? null,
       data.description?.trim() || null,
       data.thumbnail_url?.trim() || null,
@@ -380,19 +388,38 @@ export async function createMasterCourse(
         sid = existing.rows[0].id;
       } else {
         const ins = await db.query(
-          `INSERT INTO subjects (category_id, board_id, course_id, name, slug, code, is_active)
-           VALUES ($1, $2, $3, $4, $5, $6, true)
+          `INSERT INTO subjects (category_id, board_id, course_id, name, slug, code, term_type, term_number, term_name, is_active)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
            RETURNING id`,
-          [data.categoryId, data.boardId || null, courseId, cleanSubjName, effectiveSlug, item.code?.trim() || null]
+          [
+            data.categoryId,
+            data.boardId || null,
+            courseId,
+            cleanSubjName,
+            effectiveSlug,
+            item.code?.trim() || null,
+            item.term_type || "semester",
+            item.term_number || 1,
+            item.term_name?.trim() || null,
+          ]
         );
         sid = ins.rows[0].id;
       }
 
       await db.query(
-        `INSERT INTO master_course_subjects (course_id, subject_id)
-         VALUES ($1, $2)
-         ON CONFLICT DO NOTHING`,
-        [courseId, sid]
+        `INSERT INTO master_course_subjects (course_id, subject_id, term_type, term_number, term_name)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (course_id, subject_id) DO UPDATE
+         SET term_type = EXCLUDED.term_type,
+             term_number = EXCLUDED.term_number,
+             term_name = EXCLUDED.term_name`,
+        [
+          courseId,
+          sid,
+          item.term_type || "semester",
+          item.term_number || 1,
+          item.term_name?.trim() || null,
+        ]
       );
     }
   }
@@ -454,6 +481,12 @@ export async function updateMasterCourse(
   if (data.durationUnit !== undefined) {
     values.push(data.durationUnit);
     fields.push(`duration_unit = $${values.length}`);
+  }
+  if (data.mediums !== undefined) {
+    values.push(data.mediums || []);
+    fields.push(`mediums = $${values.length}`);
+    values.push(data.medium || (Array.isArray(data.mediums) ? data.mediums.join(", ") : null));
+    fields.push(`medium = $${values.length}`);
   }
   if (data.seatsAvailable !== undefined) {
     values.push(data.seatsAvailable);
@@ -519,19 +552,38 @@ export async function updateMasterCourse(
         sid = existing.rows[0].id;
       } else {
         const ins = await db.query(
-          `INSERT INTO subjects (category_id, board_id, course_id, name, slug, code, is_active)
-           VALUES ($1, $2, $3, $4, $5, $6, true)
+          `INSERT INTO subjects (category_id, board_id, course_id, name, slug, code, term_type, term_number, term_name, is_active)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
            RETURNING id`,
-          [data.categoryId || null, data.boardId || null, id, cleanSubjName, effectiveSlug, item.code?.trim() || null]
+          [
+            data.categoryId || null,
+            data.boardId || null,
+            id,
+            cleanSubjName,
+            effectiveSlug,
+            item.code?.trim() || null,
+            item.term_type || "semester",
+            item.term_number || 1,
+            item.term_name?.trim() || null,
+          ]
         );
         sid = ins.rows[0].id;
       }
 
       await db.query(
-        `INSERT INTO master_course_subjects (course_id, subject_id)
-         VALUES ($1, $2)
-         ON CONFLICT DO NOTHING`,
-        [id, sid]
+        `INSERT INTO master_course_subjects (course_id, subject_id, term_type, term_number, term_name)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (course_id, subject_id) DO UPDATE
+         SET term_type = EXCLUDED.term_type,
+             term_number = EXCLUDED.term_number,
+             term_name = EXCLUDED.term_name`,
+        [
+          id,
+          sid,
+          item.term_type || "semester",
+          item.term_number || 1,
+          item.term_name?.trim() || null,
+        ]
       );
     }
   }

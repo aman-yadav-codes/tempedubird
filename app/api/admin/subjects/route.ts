@@ -91,6 +91,13 @@ export async function POST(req: Request) {
         }
       }
 
+      if (createdSubjects.length === 0 && errors.length > 0) {
+        return NextResponse.json(
+          { error: errors[0].error || "Failed to create subject" },
+          { status: 400 }
+        );
+      }
+
       return NextResponse.json({
         data: createdSubjects,
         count: createdSubjects.length,

@@ -5,6 +5,9 @@ export interface MasterCourseSubject {
   name: string;
   code?: string | null;
   slug?: string;
+  term_type?: string | null;
+  term_number?: number | null;
+  term_name?: string | null;
 }
 
 export interface MasterCourse {
@@ -24,6 +27,8 @@ export interface MasterCourse {
   certification_provider_name?: string | null;
   duration_value?: number | null;
   duration_unit?: "days" | "weeks" | "months" | "years" | string | null;
+  mediums?: string[] | null;
+  medium?: string | null;
   seats_available?: number | null;
   description?: string | null;
   thumbnail_url?: string | null;
@@ -56,12 +61,20 @@ export interface CreateMasterCourseData {
   certificationProviderId?: number | null;
   durationValue?: number | null;
   durationUnit?: string | null;
+  mediums?: string[] | null;
+  medium?: string | null;
   seatsAvailable?: number | null;
   description?: string | null;
   thumbnail_url?: string | null;
   icon_url?: string | null;
   subjectIds?: number[];
-  customSubjects?: { name: string; code?: string | null }[];
+  customSubjects?: {
+    name: string;
+    code?: string | null;
+    term_type?: string | null;
+    term_number?: number | null;
+    term_name?: string | null;
+  }[];
   isActive?: boolean;
 }
 
@@ -77,11 +90,19 @@ export interface UpdateMasterCourseData {
   certificationProviderId?: number | null;
   durationValue?: number | null;
   durationUnit?: string | null;
+  mediums?: string[] | null;
+  medium?: string | null;
   seatsAvailable?: number | null;
   description?: string | null;
   thumbnail_url?: string | null;
   icon_url?: string | null;
   subjectIds?: number[];
-  customSubjects?: { name: string; code?: string | null }[];
+  customSubjects?: {
+    name: string;
+    code?: string | null;
+    term_type?: string | null;
+    term_number?: number | null;
+    term_name?: string | null;
+  }[];
   isActive?: boolean;
 }

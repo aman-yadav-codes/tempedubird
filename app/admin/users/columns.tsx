@@ -1,7 +1,7 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { ArrowUpDown, KeyRound, MoreHorizontal, UserCheck, ShieldAlert, Users } from "lucide-react"
+import { ArrowUpDown, KeyRound, MoreHorizontal, UserCheck, ShieldAlert, Users, Landmark } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -35,6 +35,7 @@ export type User = {
 type UserColumnsOptions = {
   onViewProfile: (user: User) => void
   onEditUser: (user: User) => void
+  onManageSalaryAccount?: (user: User) => void
   onGeneratePassword?: (user: User) => void
   onChangeEmploymentStatus?: (user: User, status: string) => void
   onToggleShowInTeam?: (user: User, showInTeam: boolean) => void
@@ -46,6 +47,7 @@ type UserColumnsOptions = {
 export function buildUserColumns({
   onViewProfile,
   onEditUser,
+  onManageSalaryAccount,
   onGeneratePassword,
   onChangeEmploymentStatus,
   onToggleShowInTeam,
@@ -231,6 +233,15 @@ export function buildUserColumns({
               <DropdownMenuItem onClick={() => onEditUser(user)}>
                 Edit {entityLabel.toLowerCase()}
               </DropdownMenuItem>
+              {onManageSalaryAccount && (
+                <DropdownMenuItem
+                  onClick={() => onManageSalaryAccount(user)}
+                  className="cursor-pointer font-medium"
+                >
+                  <Landmark className="mr-2 h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  Salary & Bank Account
+                </DropdownMenuItem>
+              )}
               {onGeneratePassword && (
                 <DropdownMenuItem onClick={() => onGeneratePassword(user)}>
                   <KeyRound className="mr-2 h-4 w-4" />
