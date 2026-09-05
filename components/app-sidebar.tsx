@@ -2,6 +2,7 @@
 
 import NextImage from "next/image";
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
+import { Gift } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -219,6 +220,9 @@ const navItems: SidebarItem[] = [
         url: "/admin/staff",
         icon: Users,
         children: [
+            { title: "My Data", url: "/admin/staff/my-data", icon: Sparkles },
+            { title: "Noticeboard", url: "/admin/institutions/news", icon: Bell },
+            { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
             { title: "All Staff", url: "/admin/staff", icon: UsersRound },
             { title: "Task Management", url: "/admin/operations/tasks", icon: ClipboardList },
             { title: "Performance", url: "/admin/staff/performance", icon: TrendingUp },
@@ -546,8 +550,8 @@ export function AppSidebar() {
     const isPlatformAdmin = Boolean(user?.role_codes?.includes("platform_admin") || user?.is_super_admin);
     const isInstitutionAdmin = Boolean(user?.role_codes?.includes("institution_admin") && !isPlatformAdmin);
     const isParent = Boolean(user?.role_codes?.includes("parent") && !isPlatformAdmin && !isInstitutionAdmin);
-    const isStudent = Boolean((user?.role_codes?.includes("student") || (user as any)?.roles?.includes("student") || user?.primary_role === "student") && !isPlatformAdmin && !isInstitutionAdmin && !isParent);
-    const isTeacher = Boolean((user?.role_codes?.includes("teacher") || (user as any)?.roles?.includes("teacher") || user?.primary_role === "teacher" || user?.primary_role?.toLowerCase() === "teacher") && !isPlatformAdmin && !isInstitutionAdmin);
+    const isStudent = Boolean((user?.role_codes?.includes("student") || (user as { roles?: string[] })?.roles?.includes("student") || user?.primary_role === "student") && !isPlatformAdmin && !isInstitutionAdmin && !isParent);
+    const isTeacher = Boolean((user?.role_codes?.includes("teacher") || (user as { roles?: string[] })?.roles?.includes("teacher") || user?.primary_role === "teacher" || user?.primary_role?.toLowerCase() === "teacher") && !isPlatformAdmin && !isInstitutionAdmin);
     const isRoleInstitutionUser = Boolean(!isPlatformAdmin && !isInstitutionAdmin && user?.role_codes?.some((role) => ["student", "teacher", "parent", "driver"].includes(role)));
     const [activeInstitutionId, setActiveInstitutionId] = useState<number | null>(() => {
         return getStoredActiveInstitutionId();
@@ -641,15 +645,21 @@ export function AppSidebar() {
             if (!isStudent && item.url === "/admin/my-program") {
                 return [];
             }
-            if (isInstitutionAdmin && item.url === "/admin/students") {
-                return [{
-                    ...item,
-                    title: "Manage Students",
-                    children: [
-                        ...(item.children || []),
-                        { title: "Academic Sessions", url: "/admin/institutions/academic-years", icon: CalendarDays },
-                    ],
-                }];
+            if (item.url === "/admin/students") {
+                if (isTeacher) {
+                    return [];
+                }
+                if (isInstitutionAdmin) {
+                    return [{
+                        ...item,
+                        title: "Manage Students",
+                        children: [
+                            ...(item.children || []),
+                            { title: "Academic Sessions", url: "/admin/institutions/academic-years", icon: CalendarDays },
+                        ],
+                    }];
+                }
+                return [item];
             }
             if (item.url === "/admin/master-data") {
                 if (!isPlatformAdmin) {
@@ -658,8 +668,25 @@ export function AppSidebar() {
                 return [item];
             }
             if (item.url === "/admin/staff") {
-                if (!isPlatformAdmin && !isInstitutionAdmin) {
+                if (isStudent || isParent) {
                     return [];
+                }
+                if (!isPlatformAdmin && !isInstitutionAdmin) {
+                    return [{
+                        ...item,
+                        title: "Manage Staff",
+                        children: [
+                            { title: "My Data", url: "/admin/staff/my-data", icon: Sparkles },
+                            { title: "My Attendance", url: "/admin/institution/my-attendance", icon: ClipboardCheck },
+                            { title: "My Tasks", url: "/admin/operations/tasks?scope=me", icon: ClipboardList },
+                            { title: "Performance", url: "/admin/staff/performance", icon: TrendingUp },
+                            { title: "My Salary", url: "/admin/institution/my-salary", icon: IndianRupee },
+                            { title: "Noticeboard", url: "/admin/institutions/news", icon: Bell },
+                            { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
+                            { title: "Queries", url: "/admin/staff/queries", icon: HelpCircle },
+                            { title: "Support", url: "/admin/support", icon: LifeBuoy },
+                        ],
+                    }];
                 }
                 return [item];
             }
@@ -688,12 +715,13 @@ export function AppSidebar() {
                 return [item];
             }
             if ((item.url === "/admin/content" || item.url === "/admin/content/notes" || item.title === "Academics") && item.children) {
-                if (isPlatformAdmin || isInstitutionAdmin) {
-                    return [];
-                }
+                if (isStudent || isParent || isTeacher) return [];
                 return [item];
             }
             if (item.url === "/admin/generate" && item.children) {
+                if (!isPlatformAdmin && !isInstitutionAdmin) {
+                    return [];
+                }
                 if (isPlatformAdmin) {
                     return [{
                         ...item,
@@ -731,13 +759,25 @@ export function AppSidebar() {
                 return [];
             }
             if (item.url === "/admin/classroom/attendance") {
+                if (isTeacher) {
+                    return [{
+                        title: "My Classroom",
+                        url: "/admin/students",
+                        icon: School,
+                        children: [
+                            { title: "All Students", url: "/admin/students", icon: UsersRound },
+                            { title: "Attendance", url: "/admin/students/attendance", icon: ClipboardCheck },
+                            { title: "Assignments", url: "/admin/content/assignments", icon: ClipboardList },
+                            { title: "Practice Exams", url: "/admin/content/practice-exams", icon: BookCheck },
+                            { title: "Exams", url: "/admin/content/exams", icon: FileText },
+                            { title: "Lecture Notes", url: "/admin/content/notes", icon: StickyNote },
+                            { title: "My Timetable", url: "/admin/classroom/my-timetable", icon: CalendarDays },
+                            { title: "Growth Chart", url: "/admin/content/growth-chart", icon: TrendingUp },
+                        ],
+                    }];
+                }
+
                 const baseChildren = (item.children || [])
-                    .filter((child) => {
-                        if (isTeacher && (child.url === "/admin/students/notes" || child.title === "Notes")) {
-                            return false;
-                        }
-                        return true;
-                    })
                     .map((child) => ({
                         ...child,
                         title: isParent
@@ -748,14 +788,6 @@ export function AppSidebar() {
                                 : child.title
                             : child.title,
                     }));
-
-                if (isTeacher) {
-                    baseChildren.push({
-                        title: "Task Management",
-                        url: "/admin/operations/tasks",
-                        icon: ClipboardList,
-                    });
-                }
 
                 return [{
                     ...item,
@@ -770,25 +802,11 @@ export function AppSidebar() {
                 }];
             }
             if (item.url === "/admin/institution/calendar") {
-                if (isPlatformAdmin || isInstitutionAdmin) {
+                if (isPlatformAdmin || isInstitutionAdmin || isTeacher || !isParent) {
                     return [];
                 }
                 const baseChildren = (item.children || [])
-                    .filter((child) => {
-                        if (isTeacher && (child.url === "/admin/institution/my-letters" || child.title === "My Letters")) {
-                            return false;
-                        }
-                        return true;
-                    })
                     .map((child) => ({ ...child }));
-
-                if (isTeacher) {
-                    baseChildren.splice(3, 0, {
-                        title: "Performance",
-                        url: "/admin/staff/performance",
-                        icon: TrendingUp,
-                    });
-                }
 
                 return [{
                     ...item,
@@ -807,6 +825,9 @@ export function AppSidebar() {
                 }];
             }
             if (item.url === "/admin/settings" && item.children) {
+                if (!isPlatformAdmin && !isInstitutionAdmin) {
+                    return [];
+                }
                 return [{
                     ...item,
                     children: item.children.filter((child) => {
@@ -839,26 +860,40 @@ export function AppSidebar() {
         .join("")
         .toUpperCase()
         .slice(0, 2);
+        const formatStaffRole = (code: string | null | undefined): string => {
+        if (!code) return "Staff";
+        return code
+            .split("_")
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+            .join(" ");
+    };
+
+    const activeWorkspaceLogo = isPlatformAdmin
+        ? null
+        : isParent
+            ? null
+            : isStudent
+                ? (activeStudentEnrollment as any)?.institutionLogo ?? (activeStudentEnrollment as any)?.institution_logo_url ?? (studentInstitution as any)?.institution_logo ?? (studentInstitution as any)?.institution_logo_url ?? null
+            : staffInstitution?.logoUrl ?? activeInstitution?.logoUrl ?? null;
+
     const activeWorkspaceName = isPlatformAdmin
         ? "EduBird Platform"
         : isParent
             ? activeChild?.name ?? "EduBird"
             : isStudent
                 ? activeStudentEnrollment?.institutionName ?? studentInstitution?.institution_name ?? "EduBird"
-            : staffInstitution
-                ? staffInstitution.name
-            : activeInstitution?.name ?? "EduBird";
+            : staffInstitution?.name ?? activeInstitution?.name ?? "EduBird";
+
     const activeWorkspaceRole = isPlatformAdmin
         ? "Platform Admin"
         : isParent
             ? activeChild?.institutionName ?? "Parent"
             : isStudent
                 ? activeStudentEnrollment
-                    ? `${activeStudentEnrollment.programName}${activeStudentEnrollment.sectionName ? ` · ${activeStudentEnrollment.sectionName}` : ""}`
+                    ? `${activeStudentEnrollment.programName}${activeStudentEnrollment.sectionName ? ` • ${activeStudentEnrollment.sectionName}` : ""}`
                     : "Student"
-            : staffInstitution
-                ? staffInstitution.roleName ?? displayEmail ?? "Staff"
-            : activeInstitution?.roleName ?? "Institution";
+            : staffInstitution?.roleName ?? activeInstitution?.roleName ?? user?.primary_role ?? (user?.role_codes?.[0] ? formatStaffRole(user.role_codes[0]) : "Staff");
+
     const activeWorkspaceInitial = isPlatformAdmin ? "E" : (activeWorkspaceName[0] ?? "E").toUpperCase();
     const canSwitchInstitution = isInstitutionAdmin && !isPlatformAdmin && institutionTeams.length > 1;
     const canSwitchChild = isParent && parentChildren.length > 1;
@@ -880,7 +915,7 @@ export function AppSidebar() {
                     headers: { Authorization: `Bearer ${accessToken}` },
                     cache: "no-store",
                 });
-                const json = await readJsonResponse<{ data?: any[]; error?: string }>(res);
+                const json = await readJsonResponse<{ data?: ActiveChildSummary[]; error?: string }>(res);
                 if (!res.ok) {
                     const error = new Error(json.error ?? "Failed to load children") as ChildLoadError;
                     error.status = res.status;
@@ -1021,8 +1056,18 @@ export function AppSidebar() {
                                             size="lg"
                                             className="data-[state=open]:bg-destructive/15 data-[state=open]:text-destructive"
                                         >
-                                            <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive text-xs font-bold text-destructive-foreground">
-                                                {activeWorkspaceInitial}
+                                            <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive/10 text-xs font-bold text-destructive-foreground overflow-hidden border border-border/40 shrink-0">
+                                                {activeWorkspaceLogo ? (
+                                                    <img
+                                                        src={activeWorkspaceLogo}
+                                                        alt={activeWorkspaceName}
+                                                        className="h-full w-full object-cover rounded-lg"
+                                                    />
+                                                ) : (
+                                                    <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive text-xs font-bold text-destructive-foreground">
+                                                        {activeWorkspaceInitial}
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="grid flex-1 text-left text-sm leading-tight">
                                                 <span className="truncate font-semibold">{activeWorkspaceName}</span>
@@ -1103,9 +1148,19 @@ export function AppSidebar() {
                                     size="lg"
                                     className="cursor-default hover:bg-transparent hover:text-foreground active:bg-transparent"
                                 >
-                                    <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive text-xs font-bold text-destructive-foreground">
-                                        {activeWorkspaceInitial}
-                                    </div>
+                                    <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive/10 text-xs font-bold text-destructive-foreground overflow-hidden border border-border/40 shrink-0">
+                                                {activeWorkspaceLogo ? (
+                                                    <img
+                                                        src={activeWorkspaceLogo}
+                                                        alt={activeWorkspaceName}
+                                                        className="h-full w-full object-cover rounded-lg"
+                                                    />
+                                                ) : (
+                                                    <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive text-xs font-bold text-destructive-foreground">
+                                                        {activeWorkspaceInitial}
+                                                    </div>
+                                                )}
+                                            </div>
                                     <div className="grid flex-1 text-left text-sm leading-tight">
                                         <span className="truncate font-semibold">{activeWorkspaceName}</span>
                                         <span className="truncate text-xs text-muted-foreground">{activeWorkspaceRole}</span>
@@ -1135,33 +1190,15 @@ export function AppSidebar() {
                                             { title: "My Timetable", url: "/admin/classroom/my-timetable", icon: CalendarDays },
                                             { title: "ID Card", url: "/admin/classroom/id-card", icon: IdCard },
                                             { title: "My Fee", url: "/admin/classroom/fees", icon: CreditCard },
-                                        ],
-                                    },
-                                ] : []),
-                                { title: "My Enrollments", url: "/student/enrollments", icon: GraduationCap, badge: studentEnrollments.length > 0 ? "Enrolled" : undefined },
-                                { title: "My Enquiries", url: "/student/enquiries", icon: HelpCircle },
-                                { title: "My Guardians", url: "/student/guardians", icon: Users },
-                                ...(studentEnrollments.length > 0 ? [
-                                    {
-                                        title: "My Institution",
-                                        url: "/admin/institution/calendar",
-                                        icon: Building,
-                                        children: [
                                             { title: "Calendar", url: "/admin/institution/calendar", icon: CalendarDays },
                                             { title: "Noticeboard", url: "/admin/institutions/news", icon: Megaphone },
                                             { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
                                         ],
                                     },
                                 ] : []),
-                                {
-                                    title: "Notifications",
-                                    url: "/admin/notifications",
-                                    icon: Bell,
-                                    children: [
-                                        { title: "All Alerts", url: "/admin/notifications", icon: BellRing },
-                                        { title: "Controls", url: "/admin/notifications/settings", icon: Settings },
-                                    ],
-                                },
+                                { title: "My Enrollments", url: "/student/enrollments", icon: GraduationCap, badge: studentEnrollments.length > 0 ? "Enrolled" : undefined },
+                                { title: "My Enquiries", url: "/student/enquiries", icon: HelpCircle },
+                                { title: "My Guardians", url: "/student/guardians", icon: Users },
                             ],
                         },
                         {

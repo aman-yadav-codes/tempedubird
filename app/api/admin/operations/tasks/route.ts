@@ -3,7 +3,7 @@ import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
 import { ensureFeatureSchema } from "@/lib/db/ensure-feature-schema";
 import { publishRealtimeNotification } from "@/lib/notifications/socket-publisher";
-import { isPlatformAdminUser } from "@/lib/auth/permissions";
+import { isPlatformAdminUser, isInstitutionAdminUser, hasPermission } from "@/lib/auth/permissions";
 
 async function processDailyRecurringTasksAndPenalties(dbInstance: any) {
   try {
@@ -133,16 +133,36 @@ export async function GET(req: Request) {
       query += ` AND client_id = $${params.length}`;
     }
 
-    const effectiveEmployeeId = employeeId === "me" ? (user?.id ? String(user.id) : "") : employeeId;
-    if (effectiveEmployeeId && effectiveEmployeeId !== "all") {
-      params.push(effectiveEmployeeId);
+    const isInstAdmin = user ? isInstitutionAdminUser(user) : false;
+    const canManageAllTasks =
+      (user && isPlatformAdminUser(user)) ||
+      isInstAdmin ||
+      (user && hasPermission(user, "operations.tasks.manage", { institutionId: targetInstId || undefined })) ||
+      (user && hasPermission(user, "operations.tasks.view_all", { institutionId: targetInstId || undefined })) ||
+      (user && hasPermission(user, "managestaff.allstaff.view", { institutionId: targetInstId || undefined }));
+
+    if (!canManageAllTasks && user?.id) {
+      params.push(String(user.id));
       query += ` AND (
         assigned_employee_id::text = $${params.length}
+        OR created_by = $${params.length}::int
         OR EXISTS (
           SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) elem 
           WHERE elem->>'assigned_employee_id' = $${params.length}
         )
       )`;
+    } else {
+      const effectiveEmployeeId = employeeId === "me" ? (user?.id ? String(user.id) : "") : employeeId;
+      if (effectiveEmployeeId && effectiveEmployeeId !== "all") {
+        params.push(effectiveEmployeeId);
+        query += ` AND (
+          assigned_employee_id::text = $${params.length}
+          OR EXISTS (
+            SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) elem 
+            WHERE elem->>'assigned_employee_id' = $${params.length}
+          )
+        )`;
+      }
     }
 
     query += ` ORDER BY 

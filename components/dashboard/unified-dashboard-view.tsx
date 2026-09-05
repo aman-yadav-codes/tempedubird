@@ -440,8 +440,8 @@ export function UnifiedDashboardView({
                   <p className="text-xs text-muted-foreground italic py-3">No pending student inquiries.</p>
                 ) : (
                   <div className="space-y-2">
-                    {actionRequired?.pendingEnquiries?.slice(0, 3).map((lead) => (
-                      <div key={lead.id} className="p-2.5 rounded-lg bg-background/80 border border-border/60 text-xs space-y-1">
+                    {actionRequired?.pendingEnquiries?.slice(0, 3).map((lead, idx) => (
+                      <div key={`lead-${lead.id}-${idx}`} className="p-2.5 rounded-lg bg-background/80 border border-border/60 text-xs space-y-1">
                         <div className="flex items-center justify-between font-bold text-foreground">
                           <span>{lead.student_name}</span>
                           <span className="text-[10px] text-muted-foreground font-normal">
@@ -484,8 +484,8 @@ export function UnifiedDashboardView({
                   <p className="text-xs text-muted-foreground italic py-3">All student documents verified.</p>
                 ) : (
                   <div className="space-y-2">
-                    {actionRequired?.unverifiedDocuments?.slice(0, 3).map((doc) => (
-                      <div key={doc.id} className="p-2.5 rounded-lg bg-background/80 border border-border/60 text-xs space-y-1">
+                    {actionRequired?.unverifiedDocuments?.slice(0, 3).map((doc, idx) => (
+                      <div key={`doc-${doc.id}-${idx}`} className="p-2.5 rounded-lg bg-background/80 border border-border/60 text-xs space-y-1">
                         <div className="flex items-center justify-between font-bold text-foreground">
                           <span>{doc.student_name}</span>
                           <Badge variant="secondary" className="text-[9px] font-bold">
@@ -526,8 +526,8 @@ export function UnifiedDashboardView({
                   <p className="text-xs text-muted-foreground italic py-3">No unresolved support tickets.</p>
                 ) : (
                   <div className="space-y-2">
-                    {actionRequired?.openTickets?.slice(0, 3).map((ticket) => (
-                      <div key={ticket.id} className="p-2.5 rounded-lg bg-background/80 border border-border/60 text-xs space-y-1">
+                    {actionRequired?.openTickets?.slice(0, 3).map((ticket, idx) => (
+                      <div key={`ticket-${ticket.id}-${idx}`} className="p-2.5 rounded-lg bg-background/80 border border-border/60 text-xs space-y-1">
                         <div className="flex items-center justify-between font-bold text-foreground">
                           <span className="truncate max-w-[140px]">{ticket.subject}</span>
                           <Badge variant="destructive" className="text-[9px] font-bold uppercase">

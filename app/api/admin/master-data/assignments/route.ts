@@ -6,7 +6,7 @@ import {
   getRequestedInstitutionId,
   getScopedInstitutionIds,
 } from "@/lib/auth/institution-scope";
-import { hasPermission, isPlatformAdminUser, isInstitutionAdminUser } from "@/lib/auth/permissions";
+import { hasPermission, isPlatformAdminUser, isInstitutionAdminUser, isTeacherUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
 import {
   ensureAssignmentTemplateSchema,
@@ -43,8 +43,10 @@ function permissionInstitutionIds(
         .filter(
           (membership) =>
             isInstitutionAdminUser(user) ||
+            isTeacherUser(user) ||
             membership.permissions.includes("*") ||
-            membership.permissions.includes(permission)
+            membership.permissions.includes(permission) ||
+            hasPermission(user, permission, { institutionId: membership.institution_id })
         )
         .map((membership) => membership.institution_id),
       ...((user as any).under_institution_id ? [(user as any).under_institution_id as number] : []),
@@ -392,10 +394,9 @@ export async function GET(req: Request) {
             AND (
               (
                 $7::text = 'marketplace'
-                AND at.is_public = TRUE
+                AND (at.is_public = TRUE OR at.marketplace_approved = TRUE)
                 AND at.is_active = TRUE
                 AND at.blocked_by_platform = FALSE
-                AND NOT (at.source_institution_id = ANY($6::int[]))
               )
               OR (
                 $7::text <> 'marketplace'
@@ -768,22 +769,125 @@ export async function PATCH(req: Request) {
     if (ids.length === 0) throw new Error("Select at least one assignment");
 
     if (body.action === "approveMarketplace") {
-      const result = await db.query(
+      const result = await db.query<{
+        id: number;
+        title: string;
+        created_by: number;
+        marketplace_requested_by: number;
+        source_institution_id: number;
+      }>(
         `
           UPDATE assignment_templates
           SET is_public = TRUE,
               marketplace_approved = TRUE,
               marketplace_approved_at = CURRENT_TIMESTAMP,
               marketplace_approved_by = $2,
+              marketplace_rejected_at = NULL,
+              marketplace_rejection_reason = NULL,
               updated_by = $2,
               updated_at = CURRENT_TIMESTAMP
           WHERE id = ANY($1::int[])
             AND marketplace_requested = TRUE
             AND blocked_by_platform = FALSE
             AND COALESCE(is_deleted, FALSE) = FALSE
+          RETURNING id, title, created_by, marketplace_requested_by, source_institution_id
         `,
         [ids, currentUser.id]
       );
+
+      // Notify authors
+      try {
+        const notifService = new NotificationService(db);
+        await Promise.all(
+          result.rows.map((row) => {
+            const authorId = row.marketplace_requested_by || row.created_by;
+            if (!authorId) return Promise.resolve();
+            return notifService.create({
+              type: "content.marketplace.approved",
+              recipients: [authorId],
+              institutionId: row.source_institution_id,
+              entityType: "assignment",
+              entityId: row.id,
+              createdBy: currentUser.id,
+              priority: "high",
+              payload: {
+                actor_name: currentUser.full_name || "Platform Admin",
+                title: "Assignment Approved for Marketplace",
+                item_title: row.title,
+                item_type: "assignment",
+                status: "allowed",
+                message: `Great news! Your assignment "${row.title}" has been approved by Platform Admin and is now live on the marketplace.`,
+                url: "/admin/classroom/assignments",
+              },
+            });
+          })
+        );
+      } catch (err) {
+        console.error("[assignments.approveMarketplace.notif]", err);
+      }
+
+      return NextResponse.json({ updated: result.rowCount ?? 0 });
+    }
+
+    if (body.action === "declineMarketplace") {
+      const declineReason = String(body.reason || "Declined by platform admin").trim();
+      const result = await db.query<{
+        id: number;
+        title: string;
+        created_by: number;
+        marketplace_requested_by: number;
+        source_institution_id: number;
+      }>(
+        `
+          UPDATE assignment_templates
+          SET is_public = FALSE,
+              marketplace_approved = FALSE,
+              marketplace_approved_at = NULL,
+              marketplace_approved_by = NULL,
+              marketplace_requested = FALSE,
+              marketplace_rejected_at = CURRENT_TIMESTAMP,
+              marketplace_rejection_reason = $3,
+              updated_by = $2,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ANY($1::int[])
+            AND COALESCE(is_deleted, FALSE) = FALSE
+          RETURNING id, title, created_by, marketplace_requested_by, source_institution_id
+        `,
+        [ids, currentUser.id, declineReason]
+      );
+
+      // Notify authors
+      try {
+        const notifService = new NotificationService(db);
+        await Promise.all(
+          result.rows.map((row) => {
+            const authorId = row.marketplace_requested_by || row.created_by;
+            if (!authorId) return Promise.resolve();
+            return notifService.create({
+              type: "content.marketplace.declined",
+              recipients: [authorId],
+              institutionId: row.source_institution_id,
+              entityType: "assignment",
+              entityId: row.id,
+              createdBy: currentUser.id,
+              priority: "high",
+              payload: {
+                actor_name: currentUser.full_name || "Platform Admin",
+                title: "Assignment Marketplace Request Declined",
+                item_title: row.title,
+                item_type: "assignment",
+                status: "declined",
+                reason: declineReason,
+                message: `Your request to publish assignment "${row.title}" to the marketplace was declined.${declineReason ? ` Reason: ${declineReason}` : ""}`,
+                url: "/admin/classroom/assignments",
+              },
+            });
+          })
+        );
+      } catch (err) {
+        console.error("[assignments.declineMarketplace.notif]", err);
+      }
+
       return NextResponse.json({ updated: result.rowCount ?? 0 });
     }
 

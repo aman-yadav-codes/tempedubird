@@ -57,6 +57,7 @@ const PUBLIC_TOP_LEVEL_SEGMENTS = new Set([
 ]);
 const ADMIN_CHILD_SEGMENTS = new Set([
   "access-control",
+  "affiliate",
   "account",
   "ai-settings",
   "analytics",

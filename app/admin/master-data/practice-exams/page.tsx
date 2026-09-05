@@ -739,28 +739,30 @@ export default function PracticeExamsPage() {
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant={practiceExamView === "my" ? "default" : "outline"}
-          onClick={() => {
-            setPracticeExamView("my");
-            setPagination((current) => ({ ...current, pageIndex: 0 }));
-          }}
-        >
-          {isPlatformAdmin ? "All Practice Exams" : "My Practice Exams"}
-        </Button>
-        <Button
-          type="button"
-          variant={practiceExamView === "marketplace" ? "default" : "outline"}
-          onClick={() => {
-            setPracticeExamView("marketplace");
-            setPagination((current) => ({ ...current, pageIndex: 0 }));
-          }}
-        >
-          Marketplace
-        </Button>
-      </div>
+      {!isPlatformAdmin && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant={practiceExamView === "my" ? "default" : "outline"}
+            onClick={() => {
+              setPracticeExamView("my");
+              setPagination((current) => ({ ...current, pageIndex: 0 }));
+            }}
+          >
+            My Practice Exams
+          </Button>
+          <Button
+            type="button"
+            variant={practiceExamView === "marketplace" ? "default" : "outline"}
+            onClick={() => {
+              setPracticeExamView("marketplace");
+              setPagination((current) => ({ ...current, pageIndex: 0 }));
+            }}
+          >
+            Marketplace
+          </Button>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total Practice Exams" value={stats.total} />

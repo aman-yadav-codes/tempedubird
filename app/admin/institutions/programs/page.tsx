@@ -807,9 +807,11 @@ export default function ProgramsAdminPage() {
                         }));
                     }
                 }
+            } else {
+                toast.error(json.error || "Failed to load batches");
             }
         } catch {
-            // ignore
+            toast.error("Network error while loading batches");
         } finally {
             setLoadingBatches(false);
         }
@@ -877,7 +879,7 @@ export default function ProgramsAdminPage() {
                 clearBatchDraft();
                 handleClearBatchForm();
                 if (batchTargetProgram) {
-                    fetchProgramBatches(batchTargetProgram.id);
+                    await fetchProgramBatches(batchTargetProgram.id);
                 }
                 setBatchActiveTab("list");
             } else {
@@ -899,7 +901,7 @@ export default function ProgramsAdminPage() {
             });
             if (res.ok) {
                 toast.success("Batch removed from program");
-                fetchProgramBatches(batchTargetProgram.id);
+                await fetchProgramBatches(batchTargetProgram.id);
             } else {
                 const json = await res.json();
                 toast.error(json.error || "Failed to remove batch");

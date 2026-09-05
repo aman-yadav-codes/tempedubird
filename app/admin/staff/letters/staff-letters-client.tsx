@@ -236,6 +236,16 @@ export function StaffLettersClient({ mode = "admin" }: { mode?: StaffLettersMode
     () => accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
     [accessToken]
   );
+
+  const canManageAllLetters = Boolean(
+    user &&
+      (user.role_codes?.includes("platform_admin") ||
+        user.role_codes?.includes("institution_admin") ||
+        user.primary_role === "platform_admin" ||
+        user.primary_role === "institution_admin")
+  );
+  const effectiveMode: StaffLettersMode = mode === "self" || !canManageAllLetters ? "self" : "admin";
+
   const [rows, setRows] = useState<StaffLetterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -252,7 +262,7 @@ export function StaffLettersClient({ mode = "admin" }: { mode?: StaffLettersMode
     try {
       const params = new URLSearchParams({
         institutionId,
-        mode,
+        mode: effectiveMode,
         page: String(page),
         limit: "10",
         search: debouncedSearch,
@@ -322,16 +332,16 @@ export function StaffLettersClient({ mode = "admin" }: { mode?: StaffLettersMode
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">{mode === "self" ? "My Letters" : "Staff Letters"}</h1>
+          <h1 className="text-2xl font-bold">{effectiveMode === "self" ? "My Letters & Documents" : "Staff Letters"}</h1>
           <p className="text-muted-foreground">
-            {mode === "self"
-              ? "View offer, joining, and staff letters generated for your account."
+            {effectiveMode === "self"
+              ? "View offer letters, salary slips, and documents generated for your account."
               : "Review offer, joining, and staff letters generated for teachers and drivers."}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <Badge variant="outline" className="rounded-md">{activeInstitution.name}</Badge>
-          {mode === "admin" && (
+          {effectiveMode === "admin" && (
             <Button asChild className="gap-1.5 font-semibold">
               <Link href={toRoleRoutePath("/admin/master-data/card-templates", user)}>
                 <Plus className="size-4" />
@@ -351,7 +361,7 @@ export function StaffLettersClient({ mode = "admin" }: { mode?: StaffLettersMode
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder={mode === "self" ? "Search letters..." : "Search staff or letters..."}
+                placeholder={effectiveMode === "self" ? "Search letters..." : "Search staff or letters..."}
                 className="w-full pl-9 sm:w-80"
               />
             </div>
@@ -365,7 +375,7 @@ export function StaffLettersClient({ mode = "admin" }: { mode?: StaffLettersMode
         <LetterTable
           rows={rows}
           loading={loading}
-          mode={mode}
+          mode={effectiveMode}
           deletingId={deletingId}
           onDelete={setDeleteTarget}
         />

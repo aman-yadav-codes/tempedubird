@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
+  Award,
   BookOpen,
   CheckCircle2,
   Clock,
@@ -21,6 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { buildCourseUrl } from "@/lib/utils/seo-slug";
+import { parseCourseTitle } from "@/app/(public)/courses/course-parser";
 import { UniversalFeedbackDialog } from "@/components/public/universal-feedback-dialog";
 import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
 
@@ -54,38 +56,46 @@ export interface CourseCardProps {
   onEnquire?: (program: { id: number; title: string; institute: string; price: string; duration: string; institution_id?: number }) => void;
 }
 
-export function CourseCard({
-  id,
-  title,
-  institute,
-  duration,
-  level,
-  price,
-  image,
-  images = [],
-  iconUrl,
-  verified,
-  category,
-  students,
-  selectedCategory,
-  seatsAvailable,
-  teachingMethod,
-  programType,
-  languages = [],
-  subjects = [],
-  sections = [],
-  viewMode = "grid",
-  institutionId,
-  institution_id,
-  fee_amount,
-  rating,
-  reviews,
-  onEnroll,
-  onEnquire,
-}: CourseCardProps) {
+export function CourseCard(props: CourseCardProps) {
+  const {
+    id,
+    title,
+    institute,
+    duration,
+    level,
+    price,
+    image,
+    images = [],
+    iconUrl,
+    verified,
+    category,
+    students,
+    selectedCategory,
+    seatsAvailable,
+    teachingMethod,
+    programType,
+    languages = [],
+    subjects = [],
+    sections = [],
+    viewMode = "grid",
+    institutionId,
+    institution_id,
+    fee_amount,
+    rating,
+    reviews,
+    onEnroll,
+    onEnquire,
+  } = props;
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [enquiryOpen, setEnquiryOpen] = useState(false);
-  const courseUrl = buildCourseUrl(id, title, institute);
+  const parsed = parseCourseTitle(
+    title,
+    selectedCategory || category,
+    (props as any).boardName,
+    (props as any).universityName,
+    languages && languages.length > 0 ? languages[0] : null
+  );
+  const courseUrl = buildCourseUrl(id, parsed.programName, institute);
   const isList = viewMode === "list";
   const subjectPreview = subjects.slice(0, 2).join(", ");
   const sectionPreview = sections.slice(0, 2).join(", ");
@@ -121,9 +131,33 @@ export function CourseCard({
           <div className="space-y-1 pt-0.5">
             <h3 className="text-base sm:text-lg font-black uppercase tracking-tight text-foreground transition-colors group-hover:text-primary leading-snug line-clamp-2">
               <Link href={courseUrl} className="hover:underline">
-                {title}
+                {parsed.programName}
               </Link>
             </h3>
+
+            {(parsed.affiliation || parsed.medium) && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                {parsed.affiliation && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] font-bold bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 gap-1 truncate max-w-[220px] px-1.5 py-0.5"
+                    title={parsed.affiliation}
+                  >
+                    <Award className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span className="truncate">{parsed.affiliation}</span>
+                  </Badge>
+                )}
+                {parsed.medium && (
+                  <Badge
+                    variant="secondary"
+                    className="text-[10px] font-bold bg-blue-500/10 text-blue-800 dark:text-blue-300 border-blue-500/30 gap-1 truncate px-1.5 py-0.5"
+                  >
+                    <Languages className="h-3 w-3 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span>{parsed.medium}</span>
+                  </Badge>
+                )}
+              </div>
+            )}
 
             {/* Institute Name with Green Check Icon immediately following */}
             <div className="flex items-center flex-wrap gap-1.5 text-xs text-muted-foreground">

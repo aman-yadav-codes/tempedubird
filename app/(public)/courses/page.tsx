@@ -20,6 +20,7 @@ import {
   ChevronRight,
   HelpCircle,
   ExternalLink,
+  Languages,
 } from "lucide-react";
 
 import { CourseCard } from "@/components/public/course-card";
@@ -28,6 +29,7 @@ import {
   DEFAULT_FILTERS,
   type FilterState,
 } from "@/components/public/course-filter-sheet";
+import { parseCourseTitle } from "./course-parser";
 import { InstitutePagination } from "@/components/public/institutes/institute-pagination";
 import { DebouncedSearchInput } from "@/components/shared/debounced-search-input";
 import { Button } from "@/components/ui/button";
@@ -161,6 +163,8 @@ function countActiveFilters(filters: FilterState) {
   if (filters.minRating > 0) count++;
   if (filters.tags.length > 0) count++;
   if (filters.sort !== "default") count++;
+  if (filters.affiliationType && filters.affiliationType !== "all") count++;
+  if (filters.medium && filters.medium !== "all") count++;
   return count;
 }
 
@@ -215,19 +219,53 @@ function filterCourses(state: CoursesDirectoryState, courses: CourseListItem[]):
   const query = state.search.trim().toLowerCase();
 
   if (query) {
-    list = list.filter(
-      (course) =>
+    list = list.filter((course) => {
+      const parsed = parseCourseTitle(course.title, course.selectedCategory ?? course.category);
+      return (
         course.title.toLowerCase().includes(query) ||
+        parsed.programName.toLowerCase().includes(query) ||
+        (parsed.affiliation ?? "").toLowerCase().includes(query) ||
+        (parsed.medium ?? "").toLowerCase().includes(query) ||
         course.institute.toLowerCase().includes(query) ||
         course.category.toLowerCase().includes(query) ||
         (course.tags ?? []).some((tag) => tag.toLowerCase().includes(query)) ||
         (course.subjects ?? []).some((sub) => sub.toLowerCase().includes(query)) ||
-        (course.selectedCategory ?? "").toLowerCase().includes(query),
-    );
+        (course.selectedCategory ?? "").toLowerCase().includes(query)
+      );
+    });
   }
 
   if (state.category !== "all") {
     list = list.filter((course) => course.category.toLowerCase() === state.category.toLowerCase());
+  }
+
+  // Affiliation Filter: Board wise, University wise, Certification wise
+  if (state.filters.affiliationType && state.filters.affiliationType !== "all") {
+    list = list.filter((course) => {
+      const parsed = parseCourseTitle(
+        course.title,
+        course.selectedCategory ?? course.category,
+        (course as any).boardName,
+        (course as any).universityName
+      );
+      return parsed.affiliationType === state.filters.affiliationType;
+    });
+  }
+
+  // Medium of Instruction Filter
+  if (state.filters.medium && state.filters.medium !== "all") {
+    const targetMed = state.filters.medium.toLowerCase().replace(" medium", "").trim();
+    list = list.filter((course) => {
+      const parsed = parseCourseTitle(
+        course.title,
+        course.selectedCategory ?? course.category,
+        (course as any).boardName,
+        (course as any).universityName,
+        course.languages && course.languages.length > 0 ? course.languages[0] : null
+      );
+      const courseMedium = (parsed.medium || (course.languages?.length ? course.languages.join(" ") : "")).toLowerCase();
+      return courseMedium.includes(targetMed);
+    });
   }
 
   if (state.filters.priceRange) {
@@ -324,7 +362,7 @@ function CourseListingBanner({
   );
 }
 
-export default function CoursesPage() {
+function CoursesPageContent() {
   const { isInstitutionalAdmin, activeInstitutionId } = useCategoryAvailability();
   const resultsTopRef = useRef<HTMLDivElement | null>(null);
   const [publicCategories, setPublicCategories] = useState<PublicCourseCategory[]>([]);
@@ -606,14 +644,15 @@ export default function CoursesPage() {
         {/* Filter Bar */}
         <div className="sticky top-16 z-30 rounded-2xl border border-border bg-background/95 p-3 shadow-xs backdrop-blur">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+              {/* 1. Category Filter */}
               <Select value={state.category} onValueChange={(category) => updateState({ category })}>
-                <SelectTrigger className="h-10 w-[190px] bg-background font-medium rounded-xl">
+                <SelectTrigger className="h-10 w-[170px] bg-background font-medium rounded-xl">
                   <SelectValue />
                   {categoriesLoading && <Loader2 className="ml-2 h-4 w-4 animate-spin text-muted-foreground" />}
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Courses</SelectItem>
+                  <SelectItem value="all">All Categories</SelectItem>
                   {categoriesLoading && (
                     <SelectItem value="loading-categories" disabled>
                       Loading categories...
@@ -627,10 +666,48 @@ export default function CoursesPage() {
                 </SelectContent>
               </Select>
 
+              {/* 2. Affiliation Type Filter (Board wise, University wise, Certification wise) */}
+              <Select
+                value={state.filters.affiliationType || "all"}
+                onValueChange={(val: any) =>
+                  updateState({ filters: { ...state.filters, affiliationType: val } })
+                }
+              >
+                <SelectTrigger className="h-10 w-[185px] bg-background font-medium rounded-xl">
+                  <Award className="mr-1.5 h-3.5 w-3.5 text-primary shrink-0" />
+                  <SelectValue placeholder="Affiliation" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Affiliations</SelectItem>
+                  <SelectItem value="board">Board Wise (CBSE/State)</SelectItem>
+                  <SelectItem value="university">University Wise (Degrees)</SelectItem>
+                  <SelectItem value="certification">Certification Wise</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* 3. Medium Filter */}
+              <Select
+                value={state.filters.medium || "all"}
+                onValueChange={(val: any) =>
+                  updateState({ filters: { ...state.filters, medium: val } })
+                }
+              >
+                <SelectTrigger className="h-10 w-[160px] bg-background font-medium rounded-xl">
+                  <Languages className="mr-1.5 h-3.5 w-3.5 text-primary shrink-0" />
+                  <SelectValue placeholder="Medium" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Mediums</SelectItem>
+                  <SelectItem value="English Medium">English Medium</SelectItem>
+                  <SelectItem value="Hindi Medium">Hindi Medium</SelectItem>
+                  <SelectItem value="Bilingual">Bilingual / Others</SelectItem>
+                </SelectContent>
+              </Select>
+
               {isAnythingActive && (
                 <button
                   onClick={clearAll}
-                  className="h-10 rounded-xl border border-primary/40 bg-primary/10 px-4 text-xs font-bold text-primary transition hover:bg-primary hover:text-primary-foreground cursor-pointer"
+                  className="h-10 rounded-xl border border-primary/40 bg-primary/10 px-3.5 text-xs font-bold text-primary transition hover:bg-primary hover:text-primary-foreground cursor-pointer"
                 >
                   Clear Filters
                 </button>
@@ -886,5 +963,23 @@ export default function CoursesPage() {
         course={selectedEnquiryCourse}
       />
     </div>
+  );
+}
+
+export default function CoursesPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="container mx-auto px-4 py-8 space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <CourseCardSkeleton />
+            <CourseCardSkeleton />
+            <CourseCardSkeleton />
+          </div>
+        </div>
+      }
+    >
+      <CoursesPageContent />
+    </React.Suspense>
   );
 }

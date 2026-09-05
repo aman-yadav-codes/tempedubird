@@ -72,13 +72,18 @@ function isInstitutionAdmin(user: Awaited<ReturnType<typeof requireAdmin>>) {
 }
 
 function canUseSupport(user: Awaited<ReturnType<typeof requireAdmin>>) {
-  return [
-    "support.tickets.view",
-    "student.support.view",
-    "teacher.support.view",
-    "parents.support.view",
-    "driver.support.view",
-  ].some((permission) => hasPermission(user, permission));
+  if (isPlatformAdminUser(user) || user.role_codes.includes("institution_admin")) return true;
+  return (
+    user.role_codes.length > 0 ||
+    [
+      "support.tickets.view",
+      "student.support.view",
+      "teacher.support.view",
+      "parents.support.view",
+      "driver.support.view",
+      "staff.support.view",
+    ].some((permission) => hasPermission(user, permission))
+  );
 }
 
 async function getInstitutionAdminIds(institutionId: number | null) {

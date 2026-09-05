@@ -26,11 +26,12 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store";
 
 const TARGETS: Record<string, string[]> = {
-  student: ["institution_admin", "teacher", "driver"],
-  teacher: ["institution_admin", "driver", "student", "parent"],
-  parent: ["institution_admin", "driver", "teacher"],
-  driver: ["institution_admin", "teacher", "parent"],
-  institution_admin: ["teacher", "driver", "student", "parent"],
+  student: ["institution_admin", "teacher", "driver", "staff"],
+  teacher: ["institution_admin", "driver", "student", "parent", "staff"],
+  parent: ["institution_admin", "driver", "teacher", "staff"],
+  driver: ["institution_admin", "teacher", "parent", "staff"],
+  staff: ["institution_admin", "teacher", "driver", "student", "parent"],
+  institution_admin: ["teacher", "driver", "student", "parent", "staff"],
 };
 
 const MODULES: Record<string, string> = {
@@ -38,6 +39,7 @@ const MODULES: Record<string, string> = {
   teacher: "teacher.myinstitution.complaints",
   parent: "parent.myinstitution.complaints",
   driver: "driver.myinstitution.complaints",
+  staff: "staff.myinstitution.complaints",
   institution_admin: "institution.complaints",
 };
 
@@ -47,6 +49,7 @@ const ROLE_LABELS: Record<string, string> = {
   student: "Student",
   parent: "Parent",
   driver: "Driver",
+  staff: "Staff / Employee",
 };
 
 type Complaint = {

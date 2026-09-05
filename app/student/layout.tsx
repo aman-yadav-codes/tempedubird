@@ -36,6 +36,7 @@ import {
   Briefcase,
   ShoppingBag,
   MessageSquareHeart,
+  Gift,
 } from "lucide-react";
 import { useAuthStore } from "@/store";
 import { clearBrowserSessionData } from "@/lib/auth/clear-browser-session";
@@ -86,8 +87,6 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
   const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({
     "My Classroom": true,
-    "My Institution": false,
-    Notifications: false,
   });
 
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -113,19 +112,21 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
       .then((res) => res.json())
       .then((json) => {
         const list = json.enrollments || json.data || [];
-        if (Array.isArray(list)) {
+        if (Array.isArray(list) && list.length > 0) {
           setEnrollments(list);
           const storedId = getStoredActiveStudentEnrollmentId();
           const selected =
-            list.find((e: any) => e.id === storedId || e.enrollment_id === storedId) ||
+            list.find((e: any) => (e.id || e.enrollment_id) === storedId) ||
             list[0];
           if (selected) {
             const enId = selected.id || selected.enrollment_id;
             const instId = selected.institutionId || selected.institution_id;
             setActiveEnrollmentId(enId);
             setStoredActiveStudentEnrollmentId(enId);
-            if (instId && !getStoredActiveInstitutionId()) {
+            document.cookie = `edubird_active_student_enrollment_id=${enId}; path=/; max-age=31536000; SameSite=Lax`;
+            if (instId) {
               setStoredActiveInstitutionId(instId);
+              document.cookie = `edubird_active_institution_id=${instId}; path=/; max-age=31536000; SameSite=Lax`;
             }
           }
         }
@@ -166,6 +167,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
       title: "Platform",
       items: [
         { label: "Dashboard", href: "/student/dashboard", icon: LayoutDashboard },
+        { label: "Affiliate & Earn", href: "/student/affiliate", icon: Gift, badge: "Earn" },
         ...(hasEnrolledCourses
           ? [
               {
@@ -175,15 +177,34 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                 children: [
                   { label: "Attendance", href: "/student/classroom/attendance" },
                   { label: "Assignments", href: "/student/classroom/assignments" },
+                  { label: "Notes", href: "/notes" },
                   { label: "Practice Exams", href: "/student/classroom/practice-exams" },
                   { label: "Exams & Results", href: "/student/classroom/exams" },
                   { label: "My Timetable", href: "/student/classroom/my-timetable" },
                   { label: "ID Card", href: "/student/classroom/id-card" },
                   { label: "My Fee", href: "/student/classroom/fees" },
+                  { label: "Calendar", href: "/student/institution/calendar" },
+                  { label: "Noticeboard", href: "/student/institutions/news" },
+                  { label: "Complaints", href: "/student/institution/complaints" },
                 ],
               },
             ]
           : []),
+        {
+          label: "Academics & Learning",
+          href: "/practice",
+          icon: BookOpen,
+          children: [
+            { label: "Practice Tests", href: "/practice" },
+            { label: "Lecture Notes", href: "/notes" },
+            { label: "Exams", href: "/exams" },
+            { label: "Explore Courses", href: "/courses" },
+            { label: "Top Institutes", href: "/institutes" },
+            { label: "Expert Faculty", href: "/teachers" },
+            { label: "Academic Store", href: "/products" },
+            { label: "Vendor Services", href: "/admin/vendors" },
+          ],
+        },
         {
           label: "My Enrollments",
           href: "/student/enrollments",
@@ -193,44 +214,6 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
         { label: "My Subscription", href: "/student/subscription", icon: Sparkles },
         { label: "My Enquiries", href: "/student/enquiries", icon: HelpCircle },
         { label: "My Guardians", href: "/student/guardians", icon: Users },
-        { label: "Reviews & Feedback", href: "/student/reviews", icon: MessageSquareHeart },
-        ...(hasEnrolledCourses
-          ? [
-              {
-                label: "My Institution",
-                href: "/student/institution/calendar",
-                icon: Building,
-                children: [
-                  { label: "Calendar", href: "/student/institution/calendar" },
-                  { label: "Noticeboard", href: "/student/institutions/news" },
-                  { label: "Reviews & Feedback", href: "/student/reviews" },
-                  { label: "Complaints", href: "/student/institution/complaints" },
-                ],
-              },
-            ]
-          : []),
-        {
-          label: "Notifications",
-          href: "/student/notifications",
-          icon: Bell,
-          children: [
-            { label: "All Alerts", href: "/student/notifications" },
-            { label: "Controls", href: "/student/notifications/settings" },
-          ],
-        },
-      ],
-    },
-    {
-      title: "Academic & Learning",
-      items: [
-        { label: "Practice Tests", href: "/practice", icon: CheckSquare, badge: "Quizzes" },
-        { label: "Lecture Notes", href: "/notes", icon: BookMarked },
-        { label: "Exams", href: "/exams", icon: FileText, badge: "Tests" },
-        { label: "Explore Courses", href: "/courses", icon: BookOpen },
-        { label: "Top Institutes", href: "/institutes", icon: Building2 },
-        { label: "Expert Faculty", href: "/teachers", icon: UserCheck },
-        { label: "Academic Store", href: "/products", icon: ShoppingBag },
-        { label: "Vendor Services", href: "/admin/vendors", icon: Briefcase },
       ],
     },
   ];
@@ -497,35 +480,39 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
               <AdminAcademicSessionSelector />
             </div>
 
-            {/* ENROLLED INSTITUTION / PROGRAM SWITCHER (FOR MULTIPLE ENROLLED INSTITUTIONS) */}
-            {enrollments.length > 1 ? (
+            {/* ENROLLED INSTITUTION / PROGRAM SWITCHER DROPDOWN */}
+            {enrollments.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary text-xs font-bold transition-colors cursor-pointer outline-none max-w-[220px]"
-                    title="Switch Enrolled Institution & Course"
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary text-xs font-bold transition-all cursor-pointer outline-none max-w-[260px] shadow-2xs"
+                    title="Choose Enrolled Institute & Program"
                   >
-                    <Building className="h-3.5 w-3.5 shrink-0 text-primary" />
-                    <div className="flex flex-col text-left leading-none min-w-0">
+                    <Building className="h-4 w-4 shrink-0 text-primary" />
+                    <div className="flex flex-col text-left leading-tight min-w-0">
                       <span className="truncate text-xs font-bold text-foreground">
-                        {activeEnrollment?.institution_name || "Active Institute"}
+                        {activeEnrollment?.institution_name || "Select Institute"}
                       </span>
                       <span className="text-[10px] text-muted-foreground truncate font-normal">
-                        {activeEnrollment?.program_title || "My Course"}
+                        {activeEnrollment?.program_title || "My Classroom Course"}
                       </span>
                     </div>
-                    <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-0.5" />
+                    <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-1" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-64 p-1.5 space-y-1 bg-card border-border shadow-xl rounded-xl">
-                  <DropdownMenuLabel className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider px-2 py-1">
-                    Switch Enrolled Institution
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
+                <DropdownMenuContent align="start" className="w-72 p-1.5 space-y-1 bg-card border-border shadow-2xl rounded-xl z-50">
+                  <div className="px-2.5 py-1.5 border-b border-border/60">
+                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                      Enrolled Institutes & Courses
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Switch institute to update all My Classroom records
+                    </p>
+                  </div>
                   {enrollments.map((en: any) => {
                     const enId = en.id || en.enrollment_id;
-                    const isSel = enId === activeEnrollmentId;
+                    const isSel = enId === activeEnrollmentId || (!activeEnrollmentId && en === enrollments[0]);
                     return (
                       <DropdownMenuItem
                         key={enId}
@@ -535,34 +522,40 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                           const instId = en.institutionId || en.institution_id;
                           if (instId) {
                             setStoredActiveInstitutionId(instId);
+                            document.cookie = `edubird_active_institution_id=${instId}; path=/; max-age=31536000; SameSite=Lax`;
                           }
+                          document.cookie = `edubird_active_student_enrollment_id=${enId}; path=/; max-age=31536000; SameSite=Lax`;
                           window.setTimeout(() => {
                             window.location.reload();
                           }, 50);
                         }}
                         className={cn(
-                          "cursor-pointer p-2 rounded-lg flex flex-col items-start gap-0.5",
-                          isSel ? "bg-primary/10 text-primary font-bold" : "hover:bg-muted"
+                          "cursor-pointer p-2.5 rounded-lg flex flex-col items-start gap-1 transition-colors",
+                          isSel ? "bg-primary/10 text-primary font-bold border border-primary/20" : "hover:bg-muted"
                         )}
                       >
-                        <span className="text-xs font-bold text-foreground truncate w-full">{en.institution_name}</span>
-                        <span className="text-[10px] text-muted-foreground truncate w-full">
-                          {en.program_title} {en.academic_year_name ? `• ${en.academic_year_name}` : ""}
+                        <div className="flex items-center justify-between w-full">
+                          <span className="text-xs font-bold text-foreground truncate">{en.institution_name}</span>
+                          {isSel && (
+                            <Badge className="text-[9px] px-1.5 py-0 bg-primary text-primary-foreground font-bold shrink-0">
+                              Active
+                            </Badge>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-muted-foreground truncate w-full font-medium">
+                          {en.program_title}
                         </span>
+                        {en.academic_year_name && (
+                          <span className="text-[10px] text-muted-foreground/80 font-normal">
+                            Session: {en.academic_year_name}
+                          </span>
+                        )}
                       </DropdownMenuItem>
                     );
                   })}
                 </DropdownMenuContent>
               </DropdownMenu>
-            ) : enrollments.length === 1 ? (
-              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border bg-card text-xs font-medium text-muted-foreground max-w-[280px]">
-                <Building className="h-4 w-4 shrink-0 text-primary" />
-                <div className="flex flex-col min-w-0 text-left">
-                  <span className="truncate text-xs font-bold text-foreground">{enrollments[0]?.institution_name}</span>
-                  <span className="truncate text-[10px] text-muted-foreground">{enrollments[0]?.program_title}</span>
-                </div>
-              </div>
-            ) : null}
+            )}
 
             <div className="hidden xl:flex items-center gap-2 text-xs font-bold text-muted-foreground border-l border-border/60 pl-3">
               <Link href="/student/dashboard" className="hover:text-primary transition-colors">Student Portal</Link>

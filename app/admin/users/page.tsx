@@ -24,6 +24,8 @@ import {
 } from "./_components/user-filters-drawer"
 import { usePersistedState } from "@/hooks/use-persisted-state"
 import { SalaryAccountDialog } from "./_components/salary-account-dialog"
+import { AffiliatesView } from "./_components/affiliates-view"
+import { Share2, Users as UsersIcon } from "lucide-react"
 import { DebouncedSearchInput } from "@/components/shared/debounced-search-input"
 import {
   AlertDialog,
@@ -43,6 +45,7 @@ function getErrorMessage(err: unknown) {
 export default function UsersPage() {
   const router = useRouter()
   const { accessToken, clearAuth, user: currentUser } = useAuthStore()
+  const [activeMainTab, setActiveMainTab] = useState<"users" | "affiliates">("users")
   const [users, setUsers] = useState<User[]>([])
   const [roles, setRoles] = useState<RoleOption[]>([])
   const [viewingUser, setViewingUser] = useState<AdminUserDetails | null>(null)
@@ -475,17 +478,55 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6 w-full max-w-full">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Users</h1>
-          <p className="text-muted-foreground">Manage platform users and their roles.</p>
+          <h1 className="text-2xl font-bold tracking-tight">Users & Affiliates</h1>
+          <p className="text-muted-foreground text-xs md:text-sm">Manage platform users, roles, and affiliate referral network.</p>
         </div>
-        <AddUserDialog
-          roles={roles}
-          accessToken={accessToken}
-          onSaved={handleUserCreated}
-        />
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setActiveMainTab("users")}
+              className={`rounded-lg text-xs font-bold gap-1.5 cursor-pointer h-8 px-3 ${
+                activeMainTab === "users"
+                  ? "bg-white text-slate-900 shadow-xs hover:bg-white"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+              }`}
+            >
+              <UsersIcon className="h-3.5 w-3.5" />
+              All Users
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setActiveMainTab("affiliates")}
+              className={`rounded-lg text-xs font-bold gap-1.5 cursor-pointer h-8 px-3 ${
+                activeMainTab === "affiliates"
+                  ? "bg-white text-slate-900 shadow-xs hover:bg-white"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+              }`}
+            >
+              <Share2 className="h-3.5 w-3.5 text-[#D91B1B]" />
+              Affiliates
+            </Button>
+          </div>
+          {activeMainTab === "users" && (
+            <AddUserDialog
+              roles={roles}
+              accessToken={accessToken}
+              onSaved={handleUserCreated}
+            />
+          )}
+        </div>
       </div>
+
+      {activeMainTab === "affiliates" ? (
+        <AffiliatesView />
+      ) : (
 
       <DataTable 
         columns={userColumns} 
@@ -561,6 +602,7 @@ export default function UsersPage() {
             : undefined
         }
       />
+      )}
 
       <UserProfileSheet
         user={viewingUser}

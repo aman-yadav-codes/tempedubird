@@ -54,9 +54,6 @@ export async function GET(req: Request) {
     const targetStudentProfileId = spCheck.rows[0]?.id;
 
     if (targetStudentProfileId) {
-      // Clean up old foreign dummy enrollments
-      await db.query(`DELETE FROM student_enrollments WHERE student_id = $1 AND institution_id <> $2`, [targetStudentProfileId, targetInstId]);
-
       const currentEnr = await db.query<{ count: string }>(`
         SELECT COUNT(*) as count FROM student_enrollments WHERE student_id = $1 AND COALESCE(is_deleted, FALSE) = FALSE
       `, [targetStudentProfileId]);

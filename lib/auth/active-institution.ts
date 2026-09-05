@@ -8,6 +8,7 @@ export type ActiveInstitutionSummary = {
   id: number;
   name: string;
   roleName: string | null;
+  logoUrl?: string | null;
   boardId?: number | null;
   boardName?: string | null;
 };
@@ -28,6 +29,7 @@ export function getUserInstitutionOptions(user: SessionUser | null | undefined):
       id: Number(membership.institution_id),
       name: membership.institution_name || `Institution #${membership.institution_id}`,
       roleName: membership.role_name ?? null,
+      logoUrl: (membership as any).institution_logo_url || (membership as any).logo_url || null,
       boardId: membership.institution_board_id ?? null,
       boardName: membership.institution_board_name ?? null,
     });
@@ -43,6 +45,7 @@ export function getUserInstitutionOptions(user: SessionUser | null | undefined):
           id,
           name: inst.name || `Institution #${id}`,
           roleName: inst.role_name || inst.role || null,
+          logoUrl: inst.logo_url || inst.logoUrl || null,
           boardId: inst.board_id ?? null,
           boardName: inst.board_name ?? null,
         });
@@ -57,6 +60,7 @@ export function getUserInstitutionOptions(user: SessionUser | null | undefined):
       id: directId,
       name: directName || `Institution #${directId}`,
       roleName: "Institution Admin",
+      logoUrl: (user as any)?.institution_logo_url || (user as any)?.profile?.institution_logo_url || null,
       boardId: null,
       boardName: null,
     });
@@ -95,6 +99,7 @@ export function getStoredActiveInstitutionSummary(): ActiveInstitutionSummary | 
         id: Number(parsed.id),
         name: String(parsed.name),
         roleName: parsed.roleName ?? null,
+        logoUrl: parsed.logoUrl ?? null,
         boardId: parsed.boardId ?? null,
         boardName: parsed.boardName ?? null,
       };
@@ -115,6 +120,7 @@ export function setStoredActiveInstitutionId(institutionId: number, summary?: Pa
         id: institutionId,
         name: summary.name,
         roleName: summary.roleName ?? null,
+        logoUrl: summary.logoUrl ?? null,
         boardId: summary.boardId ?? null,
         boardName: summary.boardName ?? null,
       })

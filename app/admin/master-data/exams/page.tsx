@@ -1480,28 +1480,30 @@ export default function ExamsPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant={examView === "my" ? "default" : "outline"}
-          onClick={() => {
-            setExamView("my");
-            setPagination((current) => ({ ...current, pageIndex: 0 }));
-          }}
-        >
-          {isPlatformAdmin ? "All Exams" : "My Exams"}
-        </Button>
-        <Button
-          type="button"
-          variant={examView === "marketplace" ? "default" : "outline"}
-          onClick={() => {
-            setExamView("marketplace");
-            setPagination((current) => ({ ...current, pageIndex: 0 }));
-          }}
-        >
-          Marketplace
-        </Button>
-      </div>
+      {!isPlatformAdmin && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant={examView === "my" ? "default" : "outline"}
+            onClick={() => {
+              setExamView("my");
+              setPagination((current) => ({ ...current, pageIndex: 0 }));
+            }}
+          >
+            My Exams
+          </Button>
+          <Button
+            type="button"
+            variant={examView === "marketplace" ? "default" : "outline"}
+            onClick={() => {
+              setExamView("marketplace");
+              setPagination((current) => ({ ...current, pageIndex: 0 }));
+            }}
+          >
+            Marketplace
+          </Button>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total Exams" value={stats.total} />

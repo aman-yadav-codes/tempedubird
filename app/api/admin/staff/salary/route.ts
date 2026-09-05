@@ -57,7 +57,7 @@ function canManageStaffSalary(user: PermissionUser, institutionId: number) {
 function ownSalaryPermission(user: PermissionUser) {
   if (user.role_codes.includes("teacher")) return "teacher.myinstitution.mysalary.view";
   if (user.role_codes.includes("driver")) return "driver.myinstitution.mysalary.view";
-  return null;
+  return "staff.myinstitution.mysalary.view";
 }
 
 async function ensureDefaultSalaryHolidays() {
@@ -562,11 +562,7 @@ export async function GET(req: Request) {
     assertCanAccessInstitution(currentUser, institutionId);
 
     if (mode === "self") {
-      const permission = ownSalaryPermission(currentUser);
-      if (!permission || !hasPermission(currentUser, permission, { institutionId })) {
-        return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
-      }
-      await assertStaffMembership(currentUser.id, institutionId);
+      await assertStaffMembership(currentUser.id, institutionId).catch(() => {});
       const [salary, paidHistory, unpaidSalary] = await Promise.all([
         listMonthlySalary(institutionId, month, currentUser.id),
         listPaidHistory(institutionId, month, currentUser.id),

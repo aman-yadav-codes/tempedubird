@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/db";
 import { getAuthUser } from "@/lib/auth/get-auth-user";
-import { isPlatformAdminUser } from "@/lib/auth/permissions";
+import { isPlatformAdminUser, isInstitutionAdminUser, hasPermission } from "@/lib/auth/permissions";
 
 export type StaffPerformanceRecord = {
   employee_id: number;
@@ -95,11 +95,24 @@ export async function GET(req: NextRequest) {
       targetInstitutionId = Number(institutionIdParam);
     }
 
+    const isInstAdmin = user ? isInstitutionAdminUser(user) : false;
+    const canViewAllStaff =
+      isPlatformAdmin ||
+      isInstAdmin ||
+      (user && hasPermission(user, "managestaff.performance.view_all", { institutionId: targetInstitutionId || undefined })) ||
+      (user && hasPermission(user, "managestaff.allstaff.view", { institutionId: targetInstitutionId || undefined }));
+
     // 1. Fetch Staff / Employees
     const staffParams: unknown[] = [];
     let staffWhereClause = `
       WHERE COALESCE(u.is_deleted, FALSE) = FALSE
     `;
+
+    // Strict Employee Isolation: regular employees only see their own performance record
+    if (!canViewAllStaff && user?.id) {
+      staffParams.push(user.id);
+      staffWhereClause += ` AND u.id = $${staffParams.length}`;
+    }
 
     if (targetInstitutionId) {
       staffParams.push(targetInstitutionId);

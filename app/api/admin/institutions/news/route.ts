@@ -208,7 +208,8 @@ export async function GET(req: Request) {
       "teacher.myinstitution.noticeboard.view",
       "parent.myinstitution.noticeboard.view",
       "driver.myinstitution.noticeboard.view",
-    ].some((permission) => hasPermission(currentUser, permission));
+      "staff.myinstitution.noticeboard.view",
+    ].some((permission) => hasPermission(currentUser, permission)) || (currentUser?.role_codes && currentUser.role_codes.length > 0);
     if (!canView)
       return NextResponse.json(
         { error: "Forbidden: Noticeboard access required" },

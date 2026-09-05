@@ -21,6 +21,7 @@ import {
   Briefcase,
   ArrowRight,
   Sparkles,
+  ShieldCheck,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,14 @@ import { useAuthStore } from "@/store";
 import { toRoleRoutePath } from "@/lib/auth/role-routes";
 
 const MASTER_DATA_MODULES = [
+  {
+    title: "Marketplace & Teacher Approvals",
+    url: "/admin/approvals",
+    icon: ShieldCheck,
+    description: "Review, allow, or decline marketplace requests for assignments, notes, practice exams, exams, and teachers.",
+    badge: "Approvals",
+    color: "from-emerald-500/10 to-teal-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400",
+  },
   {
     title: "Category Tree",
     url: "/admin/content/tree",

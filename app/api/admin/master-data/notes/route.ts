@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
 import { getPageCount, getPagination } from "@/lib/queries/pagination";
+import { NotificationService } from "@/services/notificationService";
 import {
   approveNoteMarketplace,
   createNote,
@@ -186,6 +187,107 @@ export async function PATCH(req: Request) {
       const id = asPositiveInteger(body.id);
       if (!id) return NextResponse.json({ error: "Note is required" }, { status: 422 });
       await approveNoteMarketplace(db, user, id);
+
+      try {
+        const noteRes = await db.query<{
+          title: string;
+          created_by: number;
+          marketplace_requested_by: number;
+          institution_id: number;
+        }>(
+          `SELECT title, created_by, marketplace_requested_by, institution_id FROM notes WHERE id = $1`,
+          [id]
+        );
+        const row = noteRes.rows[0];
+        if (row) {
+          const authorId = row.marketplace_requested_by || row.created_by;
+          if (authorId) {
+            const notifService = new NotificationService(db);
+            await notifService.create({
+              type: "content.marketplace.approved",
+              recipients: [authorId],
+              institutionId: row.institution_id,
+              entityType: "note",
+              entityId: id,
+              createdBy: user.id,
+              priority: "high",
+              payload: {
+                actor_name: user.full_name || "Platform Admin",
+                title: "Notes Approved for Marketplace",
+                item_title: row.title,
+                item_type: "note",
+                status: "allowed",
+                message: `Great news! Your notes "${row.title}" have been approved by Platform Admin and are now live on the marketplace.`,
+                url: "/admin/master-data/notes",
+              },
+            });
+          }
+        }
+      } catch (err) {
+        console.error("[notes.approveMarketplace.notif]", err);
+      }
+
+      return NextResponse.json({ success: true });
+    }
+    if (body.action === "declineMarketplace") {
+      const id = asPositiveInteger(body.id);
+      if (!id) return NextResponse.json({ error: "Note is required" }, { status: 422 });
+      const declineReason = String(body.reason || "Declined by platform admin").trim();
+
+      const noteRes = await db.query<{
+        title: string;
+        created_by: number;
+        marketplace_requested_by: number;
+        institution_id: number;
+      }>(
+        `
+          UPDATE notes
+          SET is_public = FALSE,
+              marketplace_approved = FALSE,
+              marketplace_approved_at = NULL,
+              marketplace_approved_by = NULL,
+              marketplace_requested = FALSE,
+              marketplace_rejected_at = CURRENT_TIMESTAMP,
+              marketplace_rejection_reason = $2,
+              updated_by = $3,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = $1
+          RETURNING title, created_by, marketplace_requested_by, institution_id
+        `,
+        [id, declineReason, user.id]
+      );
+
+      try {
+        const row = noteRes.rows[0];
+        if (row) {
+          const authorId = row.marketplace_requested_by || row.created_by;
+          if (authorId) {
+            const notifService = new NotificationService(db);
+            await notifService.create({
+              type: "content.marketplace.declined",
+              recipients: [authorId],
+              institutionId: row.institution_id,
+              entityType: "note",
+              entityId: id,
+              createdBy: user.id,
+              priority: "high",
+              payload: {
+                actor_name: user.full_name || "Platform Admin",
+                title: "Notes Marketplace Request Declined",
+                item_title: row.title,
+                item_type: "note",
+                status: "declined",
+                reason: declineReason,
+                message: `Your request to publish notes "${row.title}" to the marketplace was declined.${declineReason ? ` Reason: ${declineReason}` : ""}`,
+                url: "/admin/master-data/notes",
+              },
+            });
+          }
+        }
+      } catch (err) {
+        console.error("[notes.declineMarketplace.notif]", err);
+      }
+
       return NextResponse.json({ success: true });
     }
     if (body.action === "removeFromMarketplace") {

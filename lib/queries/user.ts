@@ -245,6 +245,7 @@ export type AdminUserDetails = {
     teacher_type: string | null;
     under_institution_id: number | null;
     under_institution_name: string | null;
+      institution_logo_url: string | null;
     under_institution_board_id: number | null;
     designation_id: number | null;
     designation_name: string | null;
@@ -422,6 +423,7 @@ export const getUserById = async (
         sm.id,
         sm.institution_id,
         ip.name AS institution_name,
+        ip.logo_url AS institution_logo_url,
         ip.board_id AS institution_board_id,
         b.name AS institution_board_name,
         r.id AS role_id,
@@ -530,6 +532,7 @@ export const getUserById = async (
       id: row.id,
       institution_id: row.institution_id,
       institution_name: row.institution_name,
+      institution_logo_url: row.institution_logo_url,
       institution_board_id: row.institution_board_id,
       institution_board_name: row.institution_board_name,
       role_id: row.role_id,
@@ -2406,6 +2409,7 @@ ORDER BY ue.to_year DESC, ue.from_year DESC, ue.id DESC
       teacher_type: null,
       under_institution_id: null,
       under_institution_name: null,
+      institution_logo_url: null,
       under_institution_board_id: null,
       designation_id: null,
       designation_name: null,

@@ -50,6 +50,7 @@ import { DocumentFileUpload, type UploadedDocumentFile } from "@/components/shar
 import { GoogleLocationPicker, PickedLocation } from "@/components/shared/google-location-picker";
 import { MasterType, InstitutionProfile, InstitutionBranch, InstitutionCourse } from "@/lib/types/institution";
 import { InstitutionBranchManager } from "@/components/admin/institutions/institution-branch-manager";
+import { InstitutionAgreementDialog } from "@/components/admin/institutions/institution-agreement-dialog";
 import { InstitutionCourseManager } from "@/components/admin/institutions/institution-course-manager";
 import { useProgressiveSave } from "@/hooks/use-progressive-save";
 import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
@@ -291,7 +292,8 @@ function buildColumns(
     setEditing: (t: InstitutionProfile | null) => void,
     handleToggle: (t: InstitutionProfile) => Promise<void>,
     activeLoadingId: number | null,
-    setViewTarget: (t: InstitutionProfile | null) => void
+    setViewTarget: (t: InstitutionProfile | null) => void,
+    setAgreementTarget: (t: InstitutionProfile | null) => void
 ): ColumnDef<InstitutionProfile>[] {
     return [
         {
@@ -403,6 +405,9 @@ function buildColumns(
                             <DropdownMenuItem onClick={() => setEditing(item)}>
                                 Edit
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setAgreementTarget(item)}>
+                                Agreement
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                                 onClick={() => handleToggle(item)}
                                 disabled={activeLoadingId === item.id}
@@ -438,6 +443,7 @@ export default function InstitutionsAdminPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
 
+    const [agreementTarget, setAgreementTarget] = useState<InstitutionProfile | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [name, setName] = useState("");
     const [institutionTypeId, setInstitutionTypeId] = useState<number | string>("");
@@ -1181,7 +1187,7 @@ export default function InstitutionsAdminPage() {
         if (item) {
             fetchMedia(item.id);
         }
-    });
+    }, setAgreementTarget);
 
     const pathname = usePathname();
     const isPlatformAdmin = Boolean(
@@ -1785,6 +1791,12 @@ export default function InstitutionsAdminPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+            <InstitutionAgreementDialog
+                open={!!agreementTarget}
+                onOpenChange={(open) => !open && setAgreementTarget(null)}
+                institution={agreementTarget}
+            />
+
             <Sheet open={viewOpen} onOpenChange={(open) => {
                 setViewOpen(open);
                 if (!open) setViewing(null);

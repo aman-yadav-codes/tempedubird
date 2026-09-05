@@ -6,7 +6,7 @@ import {
   getRequestedInstitutionId,
   getScopedInstitutionIds,
 } from "@/lib/auth/institution-scope";
-import { hasPermission, isInstitutionAdminUser, isPlatformAdminUser } from "@/lib/auth/permissions";
+import { hasPermission, isInstitutionAdminUser, isPlatformAdminUser, isTeacherUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
 import {
   ensureExamSchema,
@@ -44,8 +44,10 @@ function permissionInstitutionIds(
         .filter(
           (membership) =>
             isInstitutionAdminUser(user) ||
+            isTeacherUser(user) ||
             membership.permissions.includes("*") ||
-            membership.permissions.includes(permission)
+            membership.permissions.includes(permission) ||
+            hasPermission(user, permission, { institutionId: membership.institution_id })
         )
         .map((membership) => membership.institution_id),
       ...((user as any).under_institution_id ? [(user as any).under_institution_id as number] : []),
@@ -758,13 +760,11 @@ export async function GET(req: Request) {
                     FROM practice_exam_templates child
                     WHERE child.exam_series_id = es.id
                       AND COALESCE(child.exam_kind, 'practice') = 'exam'
-                      AND child.is_public = TRUE
+                      AND (child.is_public = TRUE OR child.marketplace_approved = TRUE)
                       AND child.is_active = TRUE
                       AND child.blocked_by_platform = FALSE
                       AND COALESCE(child.is_deleted, FALSE) = FALSE
-                      AND (child.exam_date + child.exam_time) <= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')
                   )
-                  AND NOT (es.source_institution_id = ANY($5::int[]))
                 )
               OR (
                 $6::text <> 'marketplace'
@@ -1621,13 +1621,21 @@ export async function PATCH(req: Request) {
     }
 
     if (body.action === "approveMarketplace") {
-      const result = await db.query(
+      const result = await db.query<{
+        id: number;
+        title: string;
+        created_by: number;
+        marketplace_requested_by: number;
+        source_institution_id: number;
+      }>(
         `
           UPDATE practice_exam_templates
           SET is_public = TRUE,
               marketplace_approved = TRUE,
               marketplace_approved_at = CURRENT_TIMESTAMP,
               marketplace_approved_by = $2,
+              marketplace_rejected_at = NULL,
+              marketplace_rejection_reason = NULL,
               updated_by = $2,
               updated_at = CURRENT_TIMESTAMP
           WHERE id = ANY($1::int[])
@@ -1643,9 +1651,102 @@ export async function PATCH(req: Request) {
             )
             AND blocked_by_platform = FALSE
             AND COALESCE(is_deleted, FALSE) = FALSE
+          RETURNING id, title, created_by, marketplace_requested_by, source_institution_id
         `,
         [ids, currentUser.id]
       );
+
+      try {
+        const notifService = new NotificationService(db);
+        await Promise.all(
+          result.rows.map((row) => {
+            const authorId = row.marketplace_requested_by || row.created_by;
+            if (!authorId) return Promise.resolve();
+            return notifService.create({
+              type: "content.marketplace.approved",
+              recipients: [authorId],
+              institutionId: row.source_institution_id,
+              entityType: "exam",
+              entityId: row.id,
+              createdBy: currentUser.id,
+              priority: "high",
+              payload: {
+                actor_name: currentUser.full_name || "Platform Admin",
+                title: "Exam Approved for Marketplace",
+                item_title: row.title,
+                item_type: "exam",
+                status: "allowed",
+                message: `Great news! Your exam "${row.title}" has been approved by Platform Admin and is now live on the marketplace.`,
+                url: "/admin/master-data/exams",
+              },
+            });
+          })
+        );
+      } catch (err) {
+        console.error("[exams.approveMarketplace.notif]", err);
+      }
+
+      return NextResponse.json({ updated: result.rowCount ?? 0 });
+    }
+
+    if (body.action === "declineMarketplace") {
+      const declineReason = String(body.reason || "Declined by platform admin").trim();
+      const result = await db.query<{
+        id: number;
+        title: string;
+        created_by: number;
+        marketplace_requested_by: number;
+        source_institution_id: number;
+      }>(
+        `
+          UPDATE practice_exam_templates
+          SET is_public = FALSE,
+              marketplace_approved = FALSE,
+              marketplace_approved_at = NULL,
+              marketplace_approved_by = NULL,
+              marketplace_requested = FALSE,
+              marketplace_rejected_at = CURRENT_TIMESTAMP,
+              marketplace_rejection_reason = $3,
+              updated_by = $2,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ANY($1::int[])
+            AND COALESCE(is_deleted, FALSE) = FALSE
+          RETURNING id, title, created_by, marketplace_requested_by, source_institution_id
+        `,
+        [ids, currentUser.id, declineReason]
+      );
+
+      try {
+        const notifService = new NotificationService(db);
+        await Promise.all(
+          result.rows.map((row) => {
+            const authorId = row.marketplace_requested_by || row.created_by;
+            if (!authorId) return Promise.resolve();
+            return notifService.create({
+              type: "content.marketplace.declined",
+              recipients: [authorId],
+              institutionId: row.source_institution_id,
+              entityType: "exam",
+              entityId: row.id,
+              createdBy: currentUser.id,
+              priority: "high",
+              payload: {
+                actor_name: currentUser.full_name || "Platform Admin",
+                title: "Exam Marketplace Request Declined",
+                item_title: row.title,
+                item_type: "exam",
+                status: "declined",
+                reason: declineReason,
+                message: `Your request to publish exam "${row.title}" to the marketplace was declined.${declineReason ? ` Reason: ${declineReason}` : ""}`,
+                url: "/admin/master-data/exams",
+              },
+            });
+          })
+        );
+      } catch (err) {
+        console.error("[exams.declineMarketplace.notif]", err);
+      }
+
       return NextResponse.json({ updated: result.rowCount ?? 0 });
     }
 

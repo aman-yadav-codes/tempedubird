@@ -2,13 +2,39 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Loader2 } from "lucide-react";
+import {
+  Bell,
+  Loader2,
+  Building2,
+  Users,
+  User,
+  ShieldCheck,
+  GraduationCap,
+  BookOpen,
+  CheckSquare,
+  BookMarked,
+  Library,
+  Award,
+  Clock,
+  UserCheck,
+  TrendingUp,
+  Plus,
+  FileSpreadsheet,
+  AlertCircle,
+  CreditCard,
+  Settings,
+  HelpCircle,
+  School,
+  Phone,
+  ClipboardList,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { ACTIVE_CHILD_CHANGE_EVENT, getStoredActiveChildStudentId } from "@/lib/auth/active-child";
 import { toRoleRoutePath } from "@/lib/auth/role-routes";
 import { useAuthStore } from "@/store";
+import { UnifiedDashboardView, ContextOption, DashboardMetricCard, ActiveModuleItem, QuickShortcut } from "@/components/dashboard/unified-dashboard-view";
 
 type DashboardCard = {
   label: string;
@@ -150,86 +176,11 @@ async function fetchDashboard(accessToken: string) {
   return promise;
 }
 
-function formatActivityDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function dashboardCopy(role: DashboardPayload["role"] | undefined) {
-  if (role === "platform_admin") {
-    return {
-      title: "Dashboard",
-      subtitle: "Platform overview across institutions, support, and assignments.",
-    };
-  }
-  if (role === "institution_admin") {
-    return {
-      title: "Dashboard",
-      subtitle: "Institution overview for teachers, students, and support.",
-    };
-  }
-  if (role === "teacher") {
-    return {
-      title: "Dashboard",
-      subtitle: "Teacher workspace summary.",
-    };
-  }
-  if (role === "student") {
-    return {
-      title: "Dashboard",
-      subtitle: "Your assignments, attendance, and latest updates.",
-    };
-  }
-  if (role === "parent") {
-    return {
-      title: "Dashboard",
-      subtitle: "Child overview for attendance, assignments, and updates.",
-    };
-  }
-  return {
-    title: "Dashboard",
-    subtitle: "Welcome back to the admin panel.",
-  };
-}
-
-import { UnifiedDashboardView, ContextOption, DashboardMetricCard, ActiveModuleItem, QuickShortcut } from "@/components/dashboard/unified-dashboard-view";
-import {
-  Building2,
-  Users,
-  ShieldCheck,
-  GraduationCap,
-  BookOpen,
-  CheckSquare,
-  BookMarked,
-  Library,
-  Award,
-  Clock,
-  UserCheck,
-  TrendingUp,
-  Plus,
-  FileSpreadsheet,
-  AlertCircle,
-  CreditCard,
-  Settings,
-  HelpCircle,
-  School,
-  Phone,
-  ClipboardList,
-} from "lucide-react";
-
 export default function AdminPage() {
   const router = useRouter();
   const { isReady } = useAdminGuard();
   const { accessToken, user } = useAuthStore();
   const [dashboard, setDashboard] = useState<DashboardPayload | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [activeChildVersion, setActiveChildVersion] = useState(0);
 
   const isStudent = user?.role_codes?.includes("student") || user?.roles?.includes("student") || user?.primary_role === "student";
@@ -260,19 +211,14 @@ export default function AdminPage() {
 
     let cancelled = false;
     async function loadDashboard() {
-      setLoading(true);
-      setError(null);
       try {
         const json = await fetchDashboard(accessToken);
         if (!cancelled) setDashboard(json);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to load dashboard";
         if (!cancelled) {
-          setError(message);
           toast.error(message);
         }
-      } finally {
-        if (!cancelled) setLoading(false);
       }
     }
 
@@ -710,6 +656,14 @@ export default function AdminPage() {
         icon: BookMarked,
         colorBg: "bg-amber-500/10",
         colorText: "text-amber-600 dark:text-amber-400",
+      },
+      {
+        title: "My Data Workspace",
+        description: "Access all your personal records: notices, complaints, tasks, performance, attendance, queries, and documents.",
+        href: "/admin/staff/my-data",
+        icon: User,
+        colorBg: "bg-primary/10",
+        colorText: "text-primary",
       },
       {
         title: "My Assigned Tasks",

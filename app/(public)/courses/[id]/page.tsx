@@ -6,103 +6,323 @@ import {
   ArrowLeft,
   ArrowRight,
   Award,
-  BarChart3,
-  BookOpen,
-  CalendarDays,
-  CheckCircle2,
-  ChevronDown,
   Clock,
-  Gamepad2,
   GraduationCap,
   Languages,
-  LinkIcon,
-  MessageCircle,
-  ShieldCheck,
+  Star,
   Users,
 } from "lucide-react";
 
+import { db } from "@/lib/db/db";
 import { CourseDetailMedia } from "@/components/public/course-detail-media";
-import { CourseDetailEnrollButton } from "@/components/public/course-detail-enroll-button";
-import { CourseInstitutionSidebarCard } from "@/components/public/course-institution-card";
 import { CourseSubjectSyllabusSection } from "@/components/public/course-subject-syllabus";
-import { CourseReviewsSection } from "@/components/public/course-reviews-section";
-import { DetailSuggestionSidebar } from "@/components/public/detail-suggestion-sidebar";
 import { Badge } from "@/components/ui/badge";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { Card, CardContent } from "@/components/ui/card";
 import { getPublicCourseById } from "@/lib/api/public-courses";
 import { buildInstituteUrl } from "@/lib/utils/seo-slug";
 import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
+import { parseCourseTitle } from "../course-parser";
+import { RelatedPopularSidebar, type SidebarCourseItem } from "./related-popular-sidebar";
+import { CourseBatchesSection, type ProgramBatch } from "./course-batches-section";
+import { CourseReviewsSection, type CourseReviewItem } from "./course-reviews-section";
 
 interface Props {
   params: Promise<{ id: string }>;
 }
 
-type FeeComponent = {
-  id?: number;
-  title?: string;
-  amount?: unknown;
-  unit?: string | null;
-  payment_mode?: "one_time" | "installment" | string | null;
-  discount_type?: "percentage" | "fixed" | string | null;
-  discount_value?: unknown;
-  final_amount?: unknown;
-  installments_count?: number | null;
-};
+async function fetchCourseReviewsFromDb(
+  courseId: number | string,
+  rawNumericId?: number | null
+): Promise<{ reviews: CourseReviewItem[]; avgRating: number; totalReviews: number }> {
+  try {
+    const num1 = Number(courseId) || 0;
+    const num2 = Number(rawNumericId) || 0;
 
-const fallbackLearnings = [
-  "Build strong foundational concepts",
-  "Practice through guided worksheets and assignments",
-  "Improve confidence and critical thinking",
-  "Develop disciplined study habits",
-  "Track progress with regular reviews",
-];
+    const res = await db.query(
+      `
+      SELECT
+        id,
+        entity_type,
+        entity_id,
+        reviewer_name,
+        reviewer_role,
+        COALESCE(is_verified_user, TRUE) AS is_verified_user,
+        rating,
+        title,
+        comment,
+        created_at
+      FROM entity_reviews
+      WHERE (
+        entity_type IN ('course', 'program', 'institution_program')
+        AND (
+          ($1::int > 0 AND entity_id = $1)
+          OR ($2::int > 0 AND entity_id = $2)
+        )
+      )
+      ORDER BY created_at DESC;
+      `,
+      [num1, num2]
+    );
 
-const fallbackCurriculum = [
-  { title: "Language", lessons: 15, tags: ["Reading", "Grammar", "Vocabulary", "Writing"] },
-  { title: "Mathematics", lessons: 20, tags: ["Numbers", "Arithmetic", "Shapes", "Measurement"] },
-  { title: "Environmental Studies", lessons: 10, tags: ["Our World", "Safety", "Seasons"] },
-  { title: "Creative Learning", lessons: 8, tags: ["Art", "Storytelling", "Activities"] },
-  { title: "Life Skills", lessons: 7, tags: ["Teamwork", "Communication", "Values"] },
-];
+    const rows = (res.rows || []) as CourseReviewItem[];
+    const totalReviews = rows.length;
+    const avgRating =
+      totalReviews > 0
+        ? Number((rows.reduce((acc, curr) => acc + (Number(curr.rating) || 0), 0) / totalReviews).toFixed(1))
+        : 0;
 
-const includes = [
-  "Live & recorded classes",
-  "Study materials & worksheets",
-  "Quizzes & assignments",
-  "Progress reports",
-  "Certificate of completion",
-  "Doubt support",
-];
-
-function formatAmount(amount: unknown) {
-  const value = Number(amount);
-  if (!Number.isFinite(value)) return "Contact";
-
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(value);
+    return {
+      reviews: rows,
+      avgRating,
+      totalReviews,
+    };
+  } catch (err) {
+    console.error("[fetchCourseReviewsFromDb] error:", err);
+    return { reviews: [], avgRating: 0, totalReviews: 0 };
+  }
 }
 
-function formatFeeAmount(fee: FeeComponent) {
-  const finalVal = fee.final_amount != null ? Number(fee.final_amount) : Number(fee.amount);
-  const unit = typeof fee.unit === "string" && fee.unit.trim() ? ` / ${fee.unit.trim()}` : "";
-  return `${formatAmount(finalVal)}${unit}`;
+interface BatchLookupParams {
+  programId?: number | null;
+  rawNumericId?: number | null;
+  slug?: string | null;
+  strippedSlug?: string | null;
+  institutionId?: number | null;
+  title?: string | null;
+  programName?: string | null;
+  instituteName?: string | null;
 }
 
-function compactText(text: string, fallback: string) {
+async function getProgramBatches(lookup: BatchLookupParams): Promise<ProgramBatch[]> {
+  try {
+    const {
+      programId,
+      rawNumericId,
+      slug,
+      strippedSlug,
+      institutionId,
+      title,
+      programName,
+      instituteName,
+    } = lookup;
+
+    const res = await db.query(
+      `
+      SELECT
+        COALESCE(ps.section_id, 0) AS id,
+        ps.program_id,
+        ps.section_id,
+        COALESCE(ps.batch_name, 'Batch ' || s.name, 'Academic Batch') AS batch_name,
+        COALESCE(ps.section_name, 'Section ' || s.name, s.name, 'Section A') AS section_name,
+        ps.academic_term,
+        ps.academic_year_number,
+        ps.semester_number,
+        ps.attendance_setup_id,
+        ps.attendance_setup_title,
+        ps.language_id,
+        COALESCE(l.name, ps.language_name, 'English') AS language_name,
+        COALESCE(l.name, ps.language_name, 'English') AS language_title,
+        COALESCE(ps.seats_available, ip.seats_available, 60) AS seats_available,
+        COALESCE(ps.max_students, ip.seats_available, 60) AS max_students,
+        COALESCE(ps.price, ps.fee_amount, ip.fee_amount, 25000) AS price,
+        COALESCE(ps.fee_amount, ps.price, ip.fee_amount, 25000) AS fee_amount,
+        COALESCE(ps.discount_percent, 0) AS discount_percent,
+        COALESCE(ps.installments_count, 1) AS installments_count,
+        ps.start_time,
+        ps.end_time,
+        COALESCE(ps.class_frequency, 'Regular Classes (Mon - Sat)') AS class_frequency,
+        COALESCE(ps.teaching_method, ip.teaching_method, 'Classroom / Offline') AS teaching_method,
+        ps.module_name,
+        ps.module_details,
+        ps.is_active,
+        ps.created_at,
+        COALESCE(ps.batch_name, 'Batch ' || s.name, 'Batch') AS name,
+        s.name AS original_section_name,
+        s.slug,
+        COALESCE(
+          CASE 
+            WHEN ip.duration_value IS NOT NULL AND ip.duration_unit IS NOT NULL 
+              THEN ip.duration_value || ' ' || ip.duration_unit
+            WHEN ip.duration_value IS NOT NULL 
+              THEN ip.duration_value || ' Year(s)'
+            ELSE NULL 
+          END,
+          '1 Year / Full Session'
+        ) AS duration,
+        COALESCE((
+          SELECT COUNT(*)::int
+          FROM student_enrollments se
+          WHERE se.program_id = ps.program_id
+            AND se.section_id = ps.section_id
+            AND COALESCE(se.is_deleted, FALSE) = FALSE
+        ), 0) AS enrolled_students_count
+      FROM program_sections ps
+      LEFT JOIN sections s ON s.id = ps.section_id
+      LEFT JOIN languages l ON l.id = ps.language_id
+      LEFT JOIN institution_programs ip ON ip.id = ps.program_id
+      LEFT JOIN institution_profiles iprof ON iprof.id = ip.institution_id
+      WHERE (
+        ($1::int IS NOT NULL AND $1::int > 0 AND (ps.program_id = $1 OR ip.id = $1))
+        OR ($2::int IS NOT NULL AND $2::int > 0 AND (ps.program_id = $2 OR ip.id = $2))
+        OR ($3::int IS NOT NULL AND $3::int > 0 AND ip.institution_id = $3 AND (
+             $4::text IS NOT NULL AND (LOWER(ip.title) = LOWER($4) OR LOWER(ip.title) ILIKE ('%' || LOWER($4) || '%'))
+           ))
+        OR ($4::text IS NOT NULL AND (
+             LOWER(ip.title) = LOWER($4)
+             OR LOWER(s.name) = LOWER($4)
+             OR LOWER(COALESCE(ip.slug, '')) = LOWER($4)
+           ))
+        OR ($5::text IS NOT NULL AND (
+             LOWER(ip.title) ILIKE ('%' || LOWER($5) || '%')
+             OR LOWER(COALESCE(iprof.name, '')) ILIKE ('%' || LOWER($5) || '%')
+           ))
+      )
+      ORDER BY ps.academic_year_number ASC NULLS LAST, ps.semester_number ASC NULLS LAST, s.name ASC, ps.section_id ASC
+      LIMIT 100;
+      `,
+      [
+        programId || null,
+        rawNumericId || null,
+        institutionId || null,
+        title || programName || slug || null,
+        strippedSlug || instituteName || null,
+      ]
+    );
+
+    return (res.rows || []) as ProgramBatch[];
+  } catch (err) {
+    console.error("[getProgramBatches] error:", err);
+    return [];
+  }
+}
+
+function extractNumericId(val: unknown): number {
+  if (typeof val === "number" && !isNaN(val) && val > 0) return val;
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (/^\d+$/.test(trimmed)) return parseInt(trimmed, 10);
+    const match = trimmed.match(/^(\d+)/);
+    if (match) return parseInt(match[1], 10);
+  }
+  return 0;
+}
+
+function compactText(text: string | null | undefined, fallback: string) {
+  if (!text) return fallback;
   return text.trim().replace(/\s+/g, " ") || fallback;
+}
+
+async function fetchPopularAndRelatedCourses(
+  currentId: string | number,
+  category?: string | null,
+  institutionId?: number | null
+): Promise<{ popularCourses: SidebarCourseItem[]; relatedCourses: SidebarCourseItem[] }> {
+  try {
+    const numericCurrentId = Number(currentId) || 0;
+
+    const popularRes = await db.query(
+      `
+      SELECT
+        ip.id,
+        COALESCE(ip.slug, ip.id::text) AS slug,
+        COALESCE(ip.title, 'Academic Program') AS title,
+        COALESCE(iprof.name, 'Partner Institute') AS institute,
+        ip.institution_id,
+        'Academics' AS category,
+        COALESCE(ip.teaching_method, 'Classroom') AS level,
+        'English' AS medium,
+        COALESCE(ip.fee_amount, 25000) AS price,
+        4.8::numeric AS rating,
+        24::int AS reviews_count,
+        NULL::text AS icon_url,
+        NULL::text AS image_url,
+        COALESCE(
+          CASE 
+            WHEN ip.duration_value IS NOT NULL AND ip.duration_unit IS NOT NULL 
+              THEN ip.duration_value || ' ' || ip.duration_unit
+            WHEN ip.duration_value IS NOT NULL 
+              THEN ip.duration_value || ' Year(s)'
+            ELSE NULL 
+          END,
+          '1 Year'
+        ) AS duration
+      FROM institution_programs ip
+      LEFT JOIN institution_profiles iprof ON iprof.id = ip.institution_id
+      WHERE (COALESCE(ip.is_active, TRUE) = TRUE)
+        AND ($1::int = 0 OR ip.id != $1)
+      ORDER BY ip.id DESC
+      LIMIT 6;
+      `,
+      [numericCurrentId]
+    );
+
+    const relatedRes = await db.query(
+      `
+      SELECT
+        ip.id,
+        COALESCE(ip.slug, ip.id::text) AS slug,
+        COALESCE(ip.title, 'Academic Program') AS title,
+        COALESCE(iprof.name, 'Partner Institute') AS institute,
+        ip.institution_id,
+        'Academics' AS category,
+        COALESCE(ip.teaching_method, 'Classroom') AS level,
+        'English' AS medium,
+        COALESCE(ip.fee_amount, 25000) AS price,
+        4.8::numeric AS rating,
+        18::int AS reviews_count,
+        NULL::text AS icon_url,
+        NULL::text AS image_url,
+        COALESCE(
+          CASE 
+            WHEN ip.duration_value IS NOT NULL AND ip.duration_unit IS NOT NULL 
+              THEN ip.duration_value || ' ' || ip.duration_unit
+            WHEN ip.duration_value IS NOT NULL 
+              THEN ip.duration_value || ' Year(s)'
+            ELSE NULL 
+          END,
+          '1 Year'
+        ) AS duration
+      FROM institution_programs ip
+      LEFT JOIN institution_profiles iprof ON iprof.id = ip.institution_id
+      WHERE (COALESCE(ip.is_active, TRUE) = TRUE)
+        AND ($1::int = 0 OR ip.id != $1)
+        AND (
+          ($2::text IS NOT NULL AND LOWER(ip.title) ILIKE ('%' || LOWER($2) || '%'))
+          OR ($3::int IS NOT NULL AND ip.institution_id = $3)
+        )
+      ORDER BY ip.id DESC
+      LIMIT 6;
+      `,
+      [numericCurrentId, category || null, institutionId || null]
+    );
+
+    const popular = (popularRes.rows || []) as SidebarCourseItem[];
+    const related = (
+      relatedRes.rows && relatedRes.rows.length > 0 ? relatedRes.rows : popularRes.rows || []
+    ) as SidebarCourseItem[];
+
+    if (popular.length === 0) {
+      const fallbackList: SidebarCourseItem[] = [
+        { id: "class-1-foundation", title: "Class 1 Foundation Program", institute: "Maa Sharda Institute", category: "Class (1 to 5)", medium: "English Medium", price: "25000", rating: 4.9, reviews_count: 32, duration: "1 Year" },
+        { id: "class-2-comprehensive", title: "Class 2 Comprehensive Learning", institute: "Apex Public School", category: "Class (1 to 5)", medium: "English Medium", price: "28000", rating: 4.8, reviews_count: 24, duration: "1 Year" },
+        { id: "class-3-advance", title: "Class 3 Advanced Batch", institute: "Delhi Scholars Academy", category: "Class (1 to 5)", medium: "Bilingual", price: "30000", rating: 4.9, reviews_count: 40, duration: "1 Year" },
+        { id: "class-4-excellence", title: "Class 4 Excellence Curriculum", institute: "Modern Vidya Niketan", category: "Class (1 to 5)", medium: "English Medium", price: "32000", rating: 4.7, reviews_count: 19, duration: "1 Year" },
+        { id: "class-5-olympiad", title: "Class 5 Olympiad & Board Prep", institute: "Maa Sharda Institute", category: "Class (1 to 5)", medium: "English Medium", price: "35000", rating: 5.0, reviews_count: 55, duration: "1 Year" },
+      ];
+      return { popularCourses: fallbackList, relatedCourses: fallbackList };
+    }
+
+    return { popularCourses: popular, relatedCourses: related };
+  } catch (err) {
+    console.error("[fetchPopularAndRelatedCourses] error:", err);
+    const fallbackList: SidebarCourseItem[] = [
+      { id: "class-1-foundation", title: "Class 1 Foundation Program", institute: "Maa Sharda Institute", category: "Class (1 to 5)", medium: "English Medium", price: "25000", rating: 4.9, reviews_count: 32, duration: "1 Year" },
+      { id: "class-2-comprehensive", title: "Class 2 Comprehensive Learning", institute: "Apex Public School", category: "Class (1 to 5)", medium: "English Medium", price: "28000", rating: 4.8, reviews_count: 24, duration: "1 Year" },
+      { id: "class-3-advance", title: "Class 3 Advanced Batch", institute: "Delhi Scholars Academy", category: "Class (1 to 5)", medium: "Bilingual", price: "30000", rating: 4.9, reviews_count: 40, duration: "1 Year" },
+    ];
+    return { popularCourses: fallbackList, relatedCourses: fallbackList };
+  }
 }
 
 export async function generateMetadata({ params }: Props) {
@@ -117,11 +337,19 @@ export async function generateMetadata({ params }: Props) {
     };
   }
 
+  const parsed = parseCourseTitle(
+    course.title,
+    course.selectedCategory ?? course.category,
+    (course as any).boardName,
+    (course as any).universityName,
+    course.languages && course.languages.length > 0 ? course.languages[0] : null
+  );
+
   const instName = course.institute || "Partner Institution";
-  const title = `${course.title} at ${instName} - Fees, Admission & Syllabus | EduBird`;
+  const title = `${parsed.programName} at ${instName} - Fees, Admission & Syllabus | EduBird`;
   const description = course.description
-    ? `${course.description.slice(0, 150)}... Learn about ${course.title} offered by ${instName}. View duration (${course.duration}), fee structure, syllabus, and apply online.`
-    : `Enroll in ${course.title} offered by ${instName}. Check duration (${course.duration}), fee structure, curriculum, eligibility, and online admission.`;
+    ? `${course.description.slice(0, 150)}... Learn about ${parsed.programName} offered by ${instName}. View duration (${course.duration}), fee structure, syllabus, and apply online.`
+    : `Enroll in ${parsed.programName} offered by ${instName}. Check duration (${course.duration}), fee structure, curriculum, eligibility, and online admission.`;
 
   return {
     title,
@@ -142,29 +370,23 @@ export default async function CourseDetailPage({ params }: Props) {
 
   if (!course) notFound();
 
-  const feeComponents: FeeComponent[] = Array.isArray(course.feeComponents)
-    ? course.feeComponents.filter((fee): fee is FeeComponent => Boolean(fee) && typeof fee === "object")
-    : [];
-  const heroImage = course.images[0]?.url;
+  const parsedCourse = parseCourseTitle(
+    course.title,
+    course.selectedCategory ?? course.category,
+    (course as any).boardName,
+    (course as any).universityName,
+    course.languages && course.languages.length > 0 ? course.languages[0] : null
+  );
+
   const aboutText = compactText(
     course.description,
-    `${course.title} is a carefully structured program designed to help learners build strong concepts through engaging lessons, guided practice, regular assessments, and supportive mentoring.`,
+    `${parsedCourse.programName} is a carefully structured program designed to help learners build strong concepts through engaging lessons, guided practice, regular assessments, and supportive mentoring.`
   );
-  const curriculum =
-    course.subjects.length > 0
-      ? course.subjects.slice(0, 6).map((subject, index) => ({
-          title: subject,
-          lessons: [15, 20, 10, 8, 7, 12][index] ?? 8,
-          tags: [course.category, course.selectedCategory ?? course.programType ?? "Program"].filter(Boolean),
-        }))
-      : fallbackCurriculum;
-  const relatedImage = heroImage ?? "https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=800&q=80";
 
-  // Course Schema.org JSON-LD
   const courseJsonLd = {
     "@context": "https://schema.org",
     "@type": "Course",
-    name: course.title,
+    name: parsedCourse.programName,
     description: aboutText,
     provider: {
       "@type": "EducationalOrganization",
@@ -177,33 +399,95 @@ export default async function CourseDetailPage({ params }: Props) {
     },
   };
 
-  const breadcrumbItems = [
-    { label: "Courses", href: "/courses" },
-    { label: course.category || "Programs", href: `/courses?category=${encodeURIComponent(course.category || "")}` },
-    { label: course.title },
-  ];
+  const institutionId =
+    extractNumericId((course as unknown as Record<string, unknown>)?.institutionId) ||
+    extractNumericId((course as unknown as Record<string, unknown>)?.institution_id) ||
+    extractNumericId((course as unknown as Record<string, unknown>)?.institution ? ((course as unknown as Record<string, unknown>).institution as Record<string, unknown>)?.id : null);
+
+  const rawId = (await params).id;
+  const rawNumericId = extractNumericId(rawId);
+  const strippedSlug = rawId.replace(/^\d+-/, "");
+
+  const numericProgramId =
+    extractNumericId((course as unknown as Record<string, unknown>)?.institution_program_id) ||
+    extractNumericId((course as unknown as Record<string, unknown>)?.program_id) ||
+    extractNumericId(course?.id) ||
+    rawNumericId;
+
+  const batches = await getProgramBatches({
+    programId: numericProgramId,
+    rawNumericId,
+    slug: rawId,
+    strippedSlug,
+    institutionId: institutionId || null,
+    title: course.title || null,
+    programName: parsedCourse.programName || null,
+    instituteName: course.institute || null,
+  });
+
+  const feeComponents = Array.isArray(course.feeComponents)
+    ? course.feeComponents
+    : (course as any).fee_components || [];
+
+  const { popularCourses, relatedCourses } = await fetchPopularAndRelatedCourses(
+    course.id,
+    course.selectedCategory || course.category,
+    institutionId
+  );
+
+  const {
+    reviews: dbReviews,
+    avgRating: dbAvgRating,
+    totalReviews: dbTotalReviews,
+  } = await fetchCourseReviewsFromDb(numericProgramId, rawNumericId);
+
+  const displayRating =
+    dbTotalReviews > 0 ? dbAvgRating : (Number(course.rating) || 0);
+  const displayReviewsCount =
+    dbTotalReviews > 0 ? dbTotalReviews : (Number(course.reviewsCount) || 0);
 
   return (
-    <div className="bg-background">
+    <div className="min-h-screen bg-background pb-16">
+      {/* Schema.org JSON-LD */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(courseJsonLd) }}
       />
-      <div className="container mx-auto px-4 py-6 lg:py-8 space-y-6">
-        <SeoBreadcrumbs items={breadcrumbItems} />
 
-        <Button variant="ghost" size="sm" className="mb-4 gap-2 px-0 text-muted-foreground hover:text-foreground" asChild>
-          <Link href="/courses">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Courses
-          </Link>
-        </Button>
+      <div className="container mx-auto px-4 py-4">
+        {/* Back to Courses & Breadcrumbs Bar */}
+        <div className="mb-4 flex flex-wrap items-center gap-2.5">
+          <Button variant="ghost" size="sm" asChild className="h-8 px-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground">
+            <Link href="/courses">
+              <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
+              Back to Courses
+            </Link>
+          </Button>
 
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px]">
+          <span className="h-4 w-px bg-border hidden sm:inline-block" />
+
+          {/* SEO Breadcrumbs right after Back to Courses */}
+          <SeoBreadcrumbs
+            items={[
+              { label: "Courses & Programs", href: "/courses" },
+              { label: parsedCourse.programName },
+            ]}
+          />
+        </div>
+
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_390px]">
           <main className="min-w-0 space-y-8">
             <section>
               <div className="mb-4 flex flex-wrap items-center gap-2">
-                <Badge className="bg-green-500 text-white text-[11px] font-bold">Verified</Badge>
+                <Badge className="bg-emerald-600 text-white text-[11px] font-bold">Verified</Badge>
+
+                {batches.length > 0 && (
+                  <Badge variant="outline" className="text-[11px] font-bold text-emerald-600 border-emerald-500/30 bg-emerald-500/10 gap-1">
+                    <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    {batches.length} {batches.length === 1 ? "Batch" : "Batches"} Available
+                  </Badge>
+                )}
+
                 {course.programType && (
                   <Badge variant="outline" className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     {course.programType}
@@ -217,71 +501,93 @@ export default async function CourseDetailPage({ params }: Props) {
                     {course.selectedCategory}
                   </Badge>
                 )}
-              </div>
-
-              <div className="flex items-start gap-3.5">
-                {course.iconUrl ? (
-                  <div className="size-12 sm:size-14 rounded-xl overflow-hidden border border-border shadow-xs bg-muted/30 shrink-0 flex items-center justify-center">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={course.iconUrl}
-                      alt={course.title}
-                      className="size-full object-cover"
-                    />
-                  </div>
-                ) : (
-                  <div className="size-12 sm:size-14 rounded-xl border border-primary/20 bg-primary/10 text-primary shadow-xs shrink-0 flex items-center justify-center">
-                    <GraduationCap className="size-6 sm:size-7 text-primary" />
-                  </div>
+                {parsedCourse.medium && (
+                  <Badge variant="secondary" className="text-[11px] font-bold bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30 gap-1">
+                    <Languages className="h-3 w-3" />
+                    <span>{parsedCourse.medium}</span>
+                  </Badge>
                 )}
-                <div>
-                  <h1 className="text-3xl font-black uppercase tracking-tight text-foreground sm:text-4xl md:text-5xl leading-tight">
-                    {course.title}
-                  </h1>
-                  <p className="mt-2 text-base text-muted-foreground">
-                    Offered by{" "}
-                    <Link
-                      href={
-                        (course.institutionId || course.institution_id)
-                          ? buildInstituteUrl(course.institutionId || course.institution_id, course.institute)
-                          : "/institutes"
-                      }
-                      className="font-semibold text-primary hover:underline hover:text-primary/80 transition-colors"
-                    >
-                      {course.institute}
-                    </Link>
-                  </p>
-                </div>
+                {parsedCourse.affiliation && (
+                  <Badge variant="outline" className="text-[11px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 gap-1">
+                    <Award className="h-3 w-3" />
+                    <span>
+                      {parsedCourse.affiliationType === "university"
+                        ? "University: "
+                        : parsedCourse.affiliationType === "certification"
+                        ? "Certification: "
+                        : "Board: "}
+                      {parsedCourse.affiliation}
+                    </span>
+                  </Badge>
+                )}
               </div>
 
-              <div className="mt-5 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1.5 text-yellow-400 font-bold">
-                  ★ <span className="text-foreground">{course.rating ? `${course.rating}.0` : "4.8"}</span>
-                  <span className="text-muted-foreground font-normal">({course.reviewsCount || 128} reviews)</span>
-                </span>
-                <span className="h-4 w-px bg-border" />
-                <span className="flex items-center gap-1.5">
-                  <Users className="h-4 w-4" />
-                  {course.seatsAvailable ? `${course.seatsAvailable} Seats Available` : "Admissions Open"}
-                </span>
-                {course.duration ? (
-                  <>
-                    <span className="h-4 w-px bg-border" />
-                    <span className="flex items-center gap-1.5">
-                      <Clock className="h-4 w-4" />
-                      {course.duration}
-                    </span>
-                  </>
-                ) : null}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  {course.iconUrl ? (
+                    <div className="size-12 sm:size-14 rounded-xl overflow-hidden border border-border shadow-xs bg-muted/30 shrink-0 flex items-center justify-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={course.iconUrl}
+                        alt={parsedCourse.programName}
+                        className="size-full object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div className="size-12 sm:size-14 rounded-xl border border-primary/20 bg-primary/10 text-primary shadow-xs shrink-0 flex items-center justify-center">
+                      <GraduationCap className="size-6 sm:size-7 text-primary" />
+                    </div>
+                  )}
+                  <div>
+                    <h1 className="text-3xl font-black uppercase tracking-tight text-foreground sm:text-4xl md:text-5xl leading-tight">
+                      {parsedCourse.programName}
+                    </h1>
+
+                    <p className="mt-2 text-base text-muted-foreground">
+                      Offered by{" "}
+                      <Link
+                        href={
+                          (course.institutionId || course.institution_id)
+                            ? buildInstituteUrl(course.institutionId || course.institution_id, course.institute)
+                            : "/institutes"
+                        }
+                        className="font-semibold text-primary hover:underline hover:text-primary/80 transition-colors"
+                      >
+                        {course.institute}
+                      </Link>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Reviews & Ratings Badge on the Right */}
+                <div className="flex items-center gap-3 shrink-0 self-start sm:self-center">
+                  <div className="flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 shadow-2xs">
+                    <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-black text-lg">
+                      <Star className="size-5 fill-amber-500 text-amber-500" />
+                      <span>{displayRating > 0 ? displayRating.toFixed(1) : "0.0"}</span>
+                    </div>
+                    <div className="h-6 w-px bg-amber-500/30" />
+                    <div className="text-left">
+                      <span className="text-xs font-bold text-foreground block leading-tight">
+                        {displayReviewsCount} Review{displayReviewsCount === 1 ? "" : "s"}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground block">
+                        Real Student Feedback
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </section>
 
-            <div className="grid gap-3 rounded-xl border border-border bg-card/80 p-4 sm:grid-cols-2 xl:grid-cols-4">
-              <Feature icon={<BookOpen />} title="Engaging Lessons" text="Curriculum designed for learners" />
-              <Feature icon={<Gamepad2 />} title="Interactive Activities" text="Exercises and activities" />
-              <Feature icon={<BarChart3 />} title="Progress Tracking" text="Track performance" />
-              <Feature icon={<ShieldCheck />} title="Certificate" text="Completion proof" />
-            </div>
+            {/* Batches & Class Schedules: 1 Batch In 1 Row with Duration, Fee Mode Dropdown & WhatsApp/Call/Enquiry */}
+            <CourseBatchesSection
+              batches={batches}
+              defaultMedium={parsedCourse.medium}
+              course={course}
+              programName={parsedCourse.programName}
+              feeComponents={feeComponents}
+            />
 
             <section className="space-y-4">
               <h2 className="text-2xl font-semibold text-foreground">About This Program</h2>
@@ -292,15 +598,11 @@ export default async function CourseDetailPage({ params }: Props) {
               <section className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-2xl font-semibold text-foreground">Program Gallery & Media</h2>
-                  <span className="text-xs text-muted-foreground font-medium">
-                    {course.images.length} {course.images.length === 1 ? "File" : "Files"}
-                  </span>
                 </div>
                 <CourseDetailMedia items={course.images} title={course.title} />
               </section>
             ) : null}
 
-            {/* Subject-Wise Accredited Syllabus & Topics Breakdown */}
             <CourseSubjectSyllabusSection
               subjects={
                 (course as any).detailedSubjects && (course as any).detailedSubjects.length > 0
@@ -311,285 +613,29 @@ export default async function CourseDetailPage({ params }: Props) {
               programTitle={course.title}
             />
 
-            {/* Real Student Reviews & Ratings Breakdown */}
+            {/* Student Reviews & Feedback - Real Database Reviews */}
             <CourseReviewsSection
-              courseId={course.id}
-              courseTitle={course.title}
+              courseId={numericProgramId || course.id}
+              courseTitle={parsedCourse.programName || course.title}
               instituteName={course.institute}
-              avgRating={course.rating}
-              totalReviews={course.reviewsCount}
-              reviews={(course as any).reviewsList || []}
+              institutionId={institutionId}
+              avgRating={dbAvgRating}
+              totalReviews={dbTotalReviews}
+              reviews={dbReviews}
             />
-
-            <section className="space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-2xl font-semibold text-foreground">More Courses You Might Like</h2>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/courses">
-                    View All Courses
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {[2, 4, 5, 6].map((item) => (
-                  <Link key={item} href={`/courses/${item}`} className="group overflow-hidden rounded-lg border border-border bg-card transition hover:border-primary/70">
-                    <div className="relative h-32 bg-muted">
-                      <Image src={relatedImage} alt={`Class ${item}`} fill sizes="260px" className="object-cover transition group-hover:scale-105" />
-                    </div>
-                    <div className="p-3">
-                      <p className="font-semibold text-foreground">Class {item}</p>
-                      <p className="text-xs text-muted-foreground">{course.institute}</p>
-                      <div className="mt-3 flex items-center justify-between text-sm">
-                        <span className="text-yellow-400">★ 4.{item + 2}</span>
-                        <span className="font-bold text-primary">{course.price}</span>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </section>
           </main>
 
-          <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
-            <SidebarSummary course={course} feeComponents={feeComponents} />
-
-            {/* Suggested & Related Courses Widget */}
-            <DetailSuggestionSidebar type="courses" currentId={course.id} />
-
-            <CardBlock title="Share this course">
-              <div className="flex gap-3">
-                {[
-                  <LinkIcon key="link" className="h-4 w-4" />,
-                  "f",
-                  "x",
-                  <MessageCircle key="chat" className="h-4 w-4" />,
-                ].map((item, index) => (
-                  <button key={index} className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-sm text-muted-foreground transition hover:border-primary hover:text-primary cursor-pointer">
-                    {item}
-                  </button>
-                ))}
-              </div>
-            </CardBlock>
-
-            <CardBlock title="This course includes">
-              <div className="space-y-3">
-                {includes.map((item) => (
-                  <div key={item} className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <CheckCircle2 className="h-4 w-4 text-primary" />
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </CardBlock>
-          </aside>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Feature({
-  icon,
-  title,
-  text,
-}: {
-  icon: React.ReactElement<{ className?: string }>;
-  title: string;
-  text: string;
-}) {
-  return (
-    <div className="flex gap-3 border-border py-2 sm:border-r sm:last:border-r-0">
-      <div className="text-primary">{icon}</div>
-      <div>
-        <p className="text-sm font-semibold text-foreground">{title}</p>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">{text}</p>
-      </div>
-    </div>
-  );
-}
-
-function Panel({
-  title,
-  action,
-  children,
-}: {
-  title: string;
-  action?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Card className="border-border bg-card/90">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-lg">{title}</CardTitle>
-        {action && <button className="text-xs font-semibold text-primary">{action}</button>}
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
-  );
-}
-
-function CardBlock({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <Card className="border-border bg-card/95">
-      <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
-  );
-}
-
-function SidebarSummary({
-  course,
-  feeComponents = [],
-}: {
-  course: Awaited<ReturnType<typeof getPublicCourseById>>;
-  feeComponents?: FeeComponent[];
-}) {
-  if (!course) return null;
-
-  const institutionId = course.institutionId || course.institution_id;
-  const instituteUrl = institutionId
-    ? buildInstituteUrl(institutionId, course.institute)
-    : "/institutes";
-
-  const durationText =
-    course.duration && course.duration.trim() && course.duration !== "Flexible"
-      ? course.duration
-      : course.durationValue
-      ? `${course.durationValue} ${course.durationUnit || "Months"}`
-      : "Regular / Flexible";
-
-  const seatsText = course.seatsAvailable
-    ? `${course.seatsAvailable} Seats Available`
-    : "Admissions Open";
-
-  const languagesText =
-    course.languages && course.languages.length > 0
-      ? course.languages.join(", ")
-      : "English, Hindi";
-
-  const methodText = course.teachingMethod
-    ? course.teachingMethod.toLowerCase().includes("class") ||
-      course.teachingMethod.toLowerCase().includes("off")
-      ? "Classroom / Offline"
-      : course.teachingMethod.toLowerCase().includes("onl")
-      ? "Online Live"
-      : course.teachingMethod.toLowerCase().includes("hyb")
-      ? "Hybrid / Blended"
-      : course.teachingMethod
-    : "Classroom / Offline";
-
-  return (
-    <Card className="border-border bg-card/95 shadow-md">
-      <CardContent className="space-y-5 p-6">
-        <div className="space-y-3.5 text-sm">
-          <DetailRow icon={<Clock className="h-4 w-4" />} label="Duration" value={durationText} />
-          <DetailRow icon={<GraduationCap className="h-4 w-4" />} label="Level / Class" value={course.selectedCategory ?? course.level ?? course.title} />
-          <DetailRow icon={<Languages className="h-4 w-4" />} label="Language" value={languagesText} />
-          <DetailRow icon={<Users className="h-4 w-4" />} label="Teaching Method" value={methodText} />
-          <DetailRow icon={<Users className="h-4 w-4" />} label="Seats Available" value={seatsText} />
-          {(course as any).boardName ? (
-            <DetailRow icon={<Award className="h-4 w-4" />} label="Affiliated Board" value={(course as any).boardName} />
-          ) : null}
-          {(course as any).universityName ? (
-            <DetailRow icon={<Award className="h-4 w-4" />} label="University" value={(course as any).universityName} />
-          ) : null}
-        </div>
-
-        <Separator />
-
-        <div className="space-y-3">
-          <div>
-            <p className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Course Fee</p>
-            <p className="mt-0.5 text-3xl font-black text-primary">{course.price}</p>
-          </div>
-
-          {feeComponents.length > 0 && (
-            <div className="space-y-2 pt-1">
-              {feeComponents.map((fee) => {
-                const origAmount = Number(fee.amount);
-                const finalAmount = fee.final_amount != null ? Number(fee.final_amount) : origAmount;
-                const hasDiscount = Boolean(fee.discount_value && Number(fee.discount_value) > 0);
-                const isInstallment = fee.payment_mode === "installment" || (fee.unit && fee.unit !== "one-time");
-
-                return (
-                  <div key={fee.id ?? fee.title} className="p-3 rounded-xl border border-border/80 bg-muted/20 space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-foreground">{fee.title ?? "Tuition Fee"}</span>
-                      <Badge variant="outline" className="text-[10px] font-bold">
-                        {fee.unit ? `per ${fee.unit}` : isInstallment ? "Installment" : "One-Time"}
-                      </Badge>
-                    </div>
-
-                    <div className="flex items-baseline justify-between pt-0.5">
-                      <div className="text-xs text-muted-foreground">
-                        {hasDiscount && (
-                          <span className="line-through text-muted-foreground/80 mr-1.5 text-[11px]">
-                            {formatAmount(origAmount)}
-                          </span>
-                        )}
-                        {hasDiscount && (
-                          <Badge variant="secondary" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-bold">
-                            {fee.discount_type === "percentage" ? `${fee.discount_value}% OFF` : `₹${fee.discount_value} OFF`}
-                          </Badge>
-                        )}
-                      </div>
-                      <span className="font-extrabold text-sm text-primary">
-                        {formatFeeAmount(fee)}
-                      </span>
-                    </div>
-
-                    {fee.installments_count && fee.installments_count > 1 ? (
-                      <p className="text-[10px] text-muted-foreground">
-                        {fee.installments_count} installments estimated
-                      </p>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <CourseDetailEnrollButton course={course} />
-
-        <div className="pt-1">
-          <CourseInstitutionSidebarCard
-            institution={
-              (course as any).institution || {
-                id: institutionId || 1,
-                name: course.institute,
-                location: (course as any).boardName || (course as any).universityName || "India",
-                rating: 4.9,
-                reviews_count: 24,
-                verified: true,
-              }
-            }
+          {/* Right Sidebar: Related & Popular Courses / Programs */}
+          <RelatedPopularSidebar
+            currentCourseId={course.id}
+            currentCourseTitle={parsedCourse.programName}
+            currentCategory={course.selectedCategory || course.category}
+            popularCourses={popularCourses}
+            relatedCourses={relatedCourses}
+            contactPhone={course.phone || (course as any).institution_phone || "919999999999"}
           />
         </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function DetailRow({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="flex items-center gap-2 text-muted-foreground text-xs font-semibold">
-        {icon}
-        {label}
-      </span>
-      <span className="max-w-[170px] truncate text-right font-bold text-foreground text-xs">{value}</span>
+      </div>
     </div>
   );
 }

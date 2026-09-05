@@ -190,6 +190,14 @@ export function StaffDocumentGeneratorClient({
   const { accessToken, user } = useAuthStore();
   const { activeInstitution } = useActiveInstitution();
   const isPlatformAdmin = Boolean(user?.role_codes?.includes("platform_admin") || user?.is_super_admin);
+  const canManageAllDocuments = Boolean(
+    user &&
+      (user.role_codes?.includes("platform_admin") ||
+        user.role_codes?.includes("institution_admin") ||
+        user.primary_role === "platform_admin" ||
+        user.primary_role === "institution_admin" ||
+        user.is_super_admin)
+  );
 
   const authHeaders = useMemo(
     () => (accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined),
@@ -538,35 +546,39 @@ export function StaffDocumentGeneratorClient({
             size="sm"
             onClick={() => {
               loadLetters();
-              loadTemplatesAndStaff();
+              if (canManageAllDocuments) loadTemplatesAndStaff();
             }}
           >
             Refresh
           </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/admin/master-data/card-templates">Templates Library</Link>
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              loadTemplatesAndStaff();
-              setStep(1);
-              setGenerateOpen(true);
-            }}
-            className="gap-1.5 shadow-sm"
-          >
-            <Plus className="size-4" />
-            Generate {entityName}
-          </Button>
+          {canManageAllDocuments && (
+            <>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/admin/master-data/card-templates">Templates Library</Link>
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  loadTemplatesAndStaff();
+                  setStep(1);
+                  setGenerateOpen(true);
+                }}
+                className="gap-1.5 shadow-sm"
+              >
+                <Plus className="size-4" />
+                Generate {entityName}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
       {/* STATS SUMMARY CARDS */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className={`grid gap-4 ${canManageAllDocuments ? "sm:grid-cols-3" : "sm:grid-cols-1"}`}>
         <Card className="shadow-xs">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-              Total Issued {entityName}s
+              {canManageAllDocuments ? `Total Issued ${entityName}s` : `My Issued ${entityName}s`}
             </CardTitle>
             <PageIcon className="size-4 text-primary" />
           </CardHeader>
@@ -576,31 +588,35 @@ export function StaffDocumentGeneratorClient({
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-              Card Templates Available
-            </CardTitle>
-            <Building2 className="size-4 text-emerald-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-black text-foreground">{templates.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">Under category library</p>
-          </CardContent>
-        </Card>
+        {canManageAllDocuments && (
+          <>
+            <Card className="shadow-xs">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                  Card Templates Available
+                </CardTitle>
+                <Building2 className="size-4 text-emerald-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-black text-foreground">{templates.length}</div>
+                <p className="text-xs text-muted-foreground mt-1">Under category library</p>
+              </CardContent>
+            </Card>
 
-        <Card className="shadow-xs">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-              Active Staff Members
-            </CardTitle>
-            <Users className="size-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-black text-foreground">{staffList.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">Available for auto-fill</p>
-          </CardContent>
-        </Card>
+            <Card className="shadow-xs">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                  Active Staff Members
+                </CardTitle>
+                <Users className="size-4 text-blue-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-black text-foreground">{staffList.length}</div>
+                <p className="text-xs text-muted-foreground mt-1">Available for auto-fill</p>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* ARCHIVED LETTERS TABLE */}
@@ -637,22 +653,28 @@ export function StaffDocumentGeneratorClient({
           ) : letters.length === 0 ? (
             <div className="p-12 text-center border-t">
               <PageIcon className="size-10 text-muted-foreground/40 mx-auto mb-3" />
-              <h3 className="font-bold text-sm text-foreground">No {entityName.toLowerCase()}s issued yet</h3>
+              <h3 className="font-bold text-sm text-foreground">
+                {canManageAllDocuments ? `No ${entityName.toLowerCase()}s issued yet` : `No ${entityName.toLowerCase()}s issued to you yet`}
+              </h3>
               <p className="text-xs text-muted-foreground max-w-sm mx-auto mt-1 mb-4">
-                Choose from your templates to generate, customize, and issue official documents.
+                {canManageAllDocuments
+                  ? "Choose from your templates to generate, customize, and issue official documents."
+                  : "Documents generated for you will appear here for viewing and downloading."}
               </p>
-              <Button
-                size="sm"
-                onClick={() => {
-                  loadTemplatesAndStaff();
-                  setStep(1);
-                  setGenerateOpen(true);
-                }}
-                className="gap-1.5"
-              >
-                <Plus className="size-4" />
-                Generate Now
-              </Button>
+              {canManageAllDocuments && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    loadTemplatesAndStaff();
+                    setStep(1);
+                    setGenerateOpen(true);
+                  }}
+                  className="gap-1.5"
+                >
+                  <Plus className="size-4" />
+                  Generate Now
+                </Button>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -720,15 +742,17 @@ export function StaffDocumentGeneratorClient({
                             <Printer className="size-3.5" />
                             Print
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setDeleteTarget(row)}
-                            className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
-                            title="Delete"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
+                          {canManageAllDocuments && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setDeleteTarget(row)}
+                              className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
+                              title="Delete"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

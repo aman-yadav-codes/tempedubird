@@ -3,7 +3,7 @@
 
 import { z } from "zod";
 
-// ─── Login ───────────────────────────────────────────────────────────────────
+// --- Login --------------------------------------------------------------------
 
 export const loginSchema = z.object({
   email: z.string().min(1, "Email or phone number is required"),
@@ -12,7 +12,7 @@ export const loginSchema = z.object({
 
 export type LoginInput = z.infer<typeof loginSchema>;
 
-// ─── Register ────────────────────────────────────────────────────────────────
+// --- Register -----------------------------------------------------------------
 
 export const registerSchema = z
   .object({
@@ -34,6 +34,7 @@ export const registerSchema = z
     confirmPassword: z.string().min(1, "Please confirm your password"),
     role_id: z.coerce.number().int().positive().optional().nullable(),
     role_code: z.string().trim().min(1).max(80).optional().nullable(),
+    referral_code: z.string().trim().optional().nullable(),
     designation_id: z.coerce.number().int().positive().optional().nullable(),
     is_teacher: z.boolean().optional(),
     teacher_type: z.enum(["individual_teacher", "institute_teacher"]).optional().nullable(),

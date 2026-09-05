@@ -728,28 +728,30 @@ export default function AssignmentsPage() {
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant={assignmentView === "my" ? "default" : "outline"}
-          onClick={() => {
-            setAssignmentView("my");
-            setPagination((current) => ({ ...current, pageIndex: 0 }));
-          }}
-        >
-          {isPlatformAdmin ? "All Assignments" : "My Assignments"}
-        </Button>
-        <Button
-          type="button"
-          variant={assignmentView === "marketplace" ? "default" : "outline"}
-          onClick={() => {
-            setAssignmentView("marketplace");
-            setPagination((current) => ({ ...current, pageIndex: 0 }));
-          }}
-        >
-          Marketplace
-        </Button>
-      </div>
+      {!isPlatformAdmin && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant={assignmentView === "my" ? "default" : "outline"}
+            onClick={() => {
+              setAssignmentView("my");
+              setPagination((current) => ({ ...current, pageIndex: 0 }));
+            }}
+          >
+            My Assignments
+          </Button>
+          <Button
+            type="button"
+            variant={assignmentView === "marketplace" ? "default" : "outline"}
+            onClick={() => {
+              setAssignmentView("marketplace");
+              setPagination((current) => ({ ...current, pageIndex: 0 }));
+            }}
+          >
+            Marketplace
+          </Button>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total Assignments" value={stats.total} />

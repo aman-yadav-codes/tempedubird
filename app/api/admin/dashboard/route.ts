@@ -137,11 +137,12 @@ async function getInstitutionDashboardDetails(institutionIds: number[]) {
       id: number;
       name: string;
       slug: string;
+      logo_url?: string | null;
       location_name: string | null;
       student_count: number;
       program_count: number;
     }>(
-      `SELECT ip.id, ip.name, ip.slug, ip.location_name,
+      `SELECT ip.id, ip.name, ip.slug, ip.logo_url, ip.location_name,
               COALESCE(st_count.count, 0)::int as student_count,
               COALESCE(prog_count.count, 0)::int as program_count
        FROM institution_profiles ip
@@ -273,8 +274,12 @@ async function getInstitutionDashboardDetails(institutionIds: number[]) {
        FROM student_documents sd
        INNER JOIN student_profiles sp ON sp.id = sd.student_id
        INNER JOIN users u ON u.id = sp.user_id
-       INNER JOIN student_enrollments se ON se.student_id = sp.id
-       WHERE se.institution_id = ANY($1::int[])
+       WHERE EXISTS (
+         SELECT 1 FROM student_enrollments se
+         WHERE se.student_id = sp.id
+           AND se.institution_id = ANY($1::int[])
+           AND COALESCE(se.is_deleted, FALSE) = FALSE
+       )
          AND COALESCE(sd.is_verified, FALSE) = FALSE
          AND COALESCE(sd.is_deleted, FALSE) = FALSE
        ORDER BY sd.id DESC

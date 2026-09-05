@@ -611,7 +611,7 @@ function SalaryDetailSheet({
 
 export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
   const { isReady } = useAdminGuard();
-  const { accessToken } = useAuthStore();
+  const { accessToken, user } = useAuthStore();
   const { activeInstitution } = useActiveInstitution();
   const [month, setMonth] = useState(currentMonth());
   const [tab, setTab] = useState("salary");
@@ -627,6 +627,15 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
   const [paying, setPaying] = useState(false);
   const [payTarget, setPayTarget] = useState<PayTarget>(null);
 
+  const canManageAllSalary = Boolean(
+    user &&
+      (user.role_codes?.includes("platform_admin") ||
+        user.role_codes?.includes("institution_admin") ||
+        user.primary_role === "platform_admin" ||
+        user.primary_role === "institution_admin")
+  );
+  const effectiveMode: SalaryMode = mode === "self" || !canManageAllSalary ? "self" : "admin";
+
   const authHeaders = useMemo(
     () => accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
     [accessToken]
@@ -637,7 +646,7 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
     if (!isReady || !authHeaders || !institutionId) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams({ institutionId, month, mode });
+      const params = new URLSearchParams({ institutionId, month, mode: effectiveMode });
       const res = await fetch(`/api/admin/staff/salary?${params.toString()}`, { headers: authHeaders });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to load salary");
@@ -651,7 +660,7 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
     } finally {
       setLoading(false);
     }
-  }, [authHeaders, institutionId, isReady, mode, month]);
+  }, [authHeaders, effectiveMode, institutionId, isReady, month]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => void loadSalary(), 0);
@@ -659,7 +668,7 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
   }, [loadSalary]);
 
   const filteredRows = useMemo(() => {
-    if (mode === "self") return rows;
+    if (effectiveMode === "self") return rows;
     const q = search.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter((row) =>
@@ -667,7 +676,7 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q))
     );
-  }, [mode, rows, search]);
+  }, [effectiveMode, rows, search]);
 
   const selectedRows = useMemo(
     () => filteredRows.filter((row) => selectedIds.includes(row.staff_user_id)),
@@ -841,10 +850,10 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
-            {mode === "self" ? "My Salary" : "Staff Salary"}
+            {effectiveMode === "self" ? "My Salary" : "Staff Salary"}
           </h1>
           <p className="text-muted-foreground">
-            {mode === "self"
+            {effectiveMode === "self"
               ? "View monthly attendance breakdown, salary deductions, and paid history."
               : "Review staff salary structure, calculate payouts from attendance, and track payment history."}
           </p>
@@ -852,7 +861,7 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
         <Badge variant="outline" className="rounded-md">{activeInstitution.name}</Badge>
       </div>
 
-      {mode === "self" ? (
+      {effectiveMode === "self" ? (
         <Tabs value={tab} onValueChange={setTab} className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <SalaryTabButtons tabs={selfTabs} value={tab} onChange={setTab} />
@@ -922,7 +931,7 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
               <PaidHistoryTable
                 rows={paidHistory}
                 loading={loading}
-                mode={mode}
+                mode={effectiveMode}
                 onRowClick={setPaidHistoryDetail}
               />
             </div>
@@ -1170,7 +1179,7 @@ export function StaffSalaryClient({ mode }: { mode: SalaryMode }) {
               <PaidHistoryTable
                 rows={paidHistory}
                 loading={loading}
-                mode={mode}
+                mode={effectiveMode}
                 onRowClick={setPaidHistoryDetail}
               />
             </div>

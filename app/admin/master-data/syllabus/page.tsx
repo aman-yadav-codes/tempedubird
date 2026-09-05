@@ -87,6 +87,7 @@ import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useProgressiveSave } from "@/hooks/use-progressive-save";
 import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
+import { isPlatformAdminUser } from "@/lib/auth/permissions";
 import { useAuthStore } from "@/store";
 import type { Syllabus, SyllabusNode } from "@/lib/types/syllabus";
 
@@ -475,6 +476,7 @@ export default function SyllabusPage() {
   const { isReady } = useAdminGuard();
   const isMobile = useIsMobile();
   const { accessToken, user } = useAuthStore();
+  const isPlatformAdmin = isPlatformAdminUser(user);
   const { activeInstitution, activeInstitutionId } = useActiveInstitution();
   const [initialUrlState] = useState(getInitialSyllabusUrlState);
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
@@ -757,9 +759,6 @@ export default function SyllabusPage() {
     return `${c.name}${c.code ? ` (${c.code})` : ""}`;
   }
 
-  const isPlatformAdmin = Boolean(
-    user?.is_super_admin || user?.role_codes?.includes("platform_admin")
-  );
   const authHeaders = useCallback(() => ({
     Authorization: `Bearer ${accessToken}`,
   }), [accessToken]);
@@ -1726,24 +1725,26 @@ export default function SyllabusPage() {
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {[
-          { value: "my", label: "My Syllabus" },
-          { value: "marketplace", label: "Marketplace" },
-        ].map((item) => (
-          <Button
-            key={item.value}
-            type="button"
-            variant={syllabusView === item.value ? "default" : "outline"}
-            onClick={() => {
-              setSyllabusView(item.value as "my" | "marketplace");
-              setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-            }}
-          >
-            {item.label}
-          </Button>
-        ))}
-      </div>
+      {!isPlatformAdmin && (
+        <div className="flex flex-wrap gap-2">
+          {[
+            { value: "my", label: "My Syllabus" },
+            { value: "marketplace", label: "Marketplace" },
+          ].map((item) => (
+            <Button
+              key={item.value}
+              type="button"
+              variant={syllabusView === item.value ? "default" : "outline"}
+              onClick={() => {
+                setSyllabusView(item.value as "my" | "marketplace");
+                setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+              }}
+            >
+              {item.label}
+            </Button>
+          ))}
+        </div>
+      )}
 
       <DataTable
         columns={columns}

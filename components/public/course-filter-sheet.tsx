@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Loader2, RotateCcw, SlidersHorizontal, X } from "lucide-react";
+import { ChevronDown, Loader2, RotateCcw, SlidersHorizontal, X, Award, Languages } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -37,6 +37,20 @@ const RATING_OPTIONS = [
   { label: "4.9 & above", value: 4.9 },
 ];
 
+export const AFFILIATION_OPTIONS = [
+  { label: "All Programs", value: "all" },
+  { label: "Board Wise (CBSE / State Boards)", value: "board" },
+  { label: "University Wise (Degrees & Higher Ed)", value: "university" },
+  { label: "Certification Wise (Industry Certificates)", value: "certification" },
+] as const;
+
+export const MEDIUM_OPTIONS = [
+  { label: "All Mediums", value: "all" },
+  { label: "English Medium", value: "English Medium" },
+  { label: "Hindi Medium", value: "Hindi Medium" },
+  { label: "Bilingual / Others", value: "Bilingual" },
+] as const;
+
 const SORT_OPTIONS = [
   { label: "Default", value: "default" },
   { label: "Rating: High to Low", value: "rating-desc" },
@@ -47,12 +61,15 @@ const SORT_OPTIONS = [
 ] as const;
 
 export type SortValue = (typeof SORT_OPTIONS)[number]["value"];
+export type AffiliationFilter = "all" | "board" | "university" | "certification";
 
 export interface FilterState {
   priceRange: { min: number; max: number } | null;
   minRating: number;
   tags: string[];
   sort: SortValue;
+  affiliationType?: AffiliationFilter;
+  medium?: string;
 }
 
 export const DEFAULT_FILTERS: FilterState = {
@@ -60,6 +77,8 @@ export const DEFAULT_FILTERS: FilterState = {
   minRating: 0,
   tags: [],
   sort: "default",
+  affiliationType: "all",
+  medium: "all",
 };
 
 interface Props {
@@ -112,6 +131,8 @@ function ActiveChips({
 }) {
   const chips = [
     draft.sort !== "default" ? { label: SORT_OPTIONS.find((item) => item.value === draft.sort)?.label ?? draft.sort, clear: () => setDraft((current) => ({ ...current, sort: "default" })) } : null,
+    draft.affiliationType && draft.affiliationType !== "all" ? { label: AFFILIATION_OPTIONS.find((item) => item.value === draft.affiliationType)?.label ?? draft.affiliationType, clear: () => setDraft((current) => ({ ...current, affiliationType: "all" })) } : null,
+    draft.medium && draft.medium !== "all" ? { label: draft.medium, clear: () => setDraft((current) => ({ ...current, medium: "all" })) } : null,
     draft.priceRange ? { label: priceLabel(draft.priceRange), clear: () => setDraft((current) => ({ ...current, priceRange: null })) } : null,
     draft.minRating > 0 ? { label: `${draft.minRating}+ rating`, clear: () => setDraft((current) => ({ ...current, minRating: 0 })) } : null,
   ].filter((chip): chip is { label: string; clear: () => void } => chip !== null);
@@ -186,8 +207,8 @@ export function CourseFilterSheet({
 
       <SheetContent side="right" defaultSize={460} minSize={360} className="gap-0 overflow-hidden px-0">
         <SheetHeader className="px-6 py-5">
-          <SheetTitle>Filters</SheetTitle>
-          <SheetDescription>Refine courses by category, price, rating, and sort order.</SheetDescription>
+          <SheetTitle>Course Filters</SheetTitle>
+          <SheetDescription>Filter by Board / University / Certification, Medium, Price & Category.</SheetDescription>
         </SheetHeader>
         <Separator />
 
@@ -195,7 +216,7 @@ export function CourseFilterSheet({
           <div className="rounded-lg border border-border bg-card/90 p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-foreground">Filters</h2>
-              <button className="text-xs font-medium text-primary" onClick={resetDraft}>
+              <button className="text-xs font-medium text-primary cursor-pointer hover:underline" onClick={resetDraft}>
                 Clear All
               </button>
             </div>
@@ -203,6 +224,44 @@ export function CourseFilterSheet({
             <div className="mt-4">
               <ActiveChips draft={draft} setDraft={setDraft} />
             </div>
+
+            {/* Affiliation Type Filter (Board / University / Certification) */}
+            <FilterSection title="Affiliation & Authority">
+              <div className="space-y-2.5">
+                {AFFILIATION_OPTIONS.map((option) => (
+                  <label key={option.value} className="flex cursor-pointer items-center gap-2.5 text-sm text-foreground">
+                    <input
+                      type="radio"
+                      name="affiliationTypeFilter"
+                      checked={(draft.affiliationType || "all") === option.value}
+                      onChange={() => setDraft((current) => ({ ...current, affiliationType: option.value }))}
+                      className="accent-primary h-4 w-4"
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </FilterSection>
+            <Separator />
+
+            {/* Medium of Instruction Filter */}
+            <FilterSection title="Medium of Instruction">
+              <div className="space-y-2.5">
+                {MEDIUM_OPTIONS.map((option) => (
+                  <label key={option.value} className="flex cursor-pointer items-center gap-2.5 text-sm text-foreground">
+                    <input
+                      type="radio"
+                      name="mediumFilter"
+                      checked={(draft.medium || "all") === option.value}
+                      onChange={() => setDraft((current) => ({ ...current, medium: option.value }))}
+                      className="accent-primary h-4 w-4"
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </FilterSection>
+            <Separator />
 
             <FilterSection title="Sort By">
               <div className="space-y-3">

@@ -3,17 +3,18 @@ import { NextResponse } from "next/server";
 
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { canAccessInstitution } from "@/lib/auth/institution-scope";
-import { hasPermission } from "@/lib/auth/permissions";
+import { hasPermission, isInstitutionAdminUser, isPlatformAdminUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
 import { ensureInstitutionComplaintSchema } from "@/lib/queries/institution-complaints";
 import { NotificationService } from "@/services/notificationService";
 
 const TARGETS: Record<string, string[]> = {
-  student: ["institution_admin", "teacher", "driver"],
-  teacher: ["institution_admin", "driver", "student", "parent"],
-  parent: ["institution_admin", "driver", "teacher"],
-  driver: ["institution_admin", "teacher", "parent"],
-  institution_admin: ["teacher", "driver", "student", "parent"],
+  student: ["institution_admin", "teacher", "driver", "staff"],
+  teacher: ["institution_admin", "driver", "student", "parent", "staff"],
+  parent: ["institution_admin", "driver", "teacher", "staff"],
+  driver: ["institution_admin", "teacher", "parent", "staff"],
+  staff: ["institution_admin", "teacher", "driver", "student", "parent"],
+  institution_admin: ["teacher", "driver", "student", "parent", "staff"],
 };
 
 const PERMISSION_MODULES: Record<string, string> = {
@@ -21,6 +22,7 @@ const PERMISSION_MODULES: Record<string, string> = {
   teacher: "teacher.myinstitution.complaints",
   parent: "parent.myinstitution.complaints",
   driver: "driver.myinstitution.complaints",
+  staff: "staff.myinstitution.complaints",
   institution_admin: "institution.complaints",
 };
 
@@ -65,14 +67,16 @@ function responseError(error: unknown) {
 }
 
 function actorRole(user: CurrentUser) {
-  return ["institution_admin", "teacher", "student", "parent", "driver"]
-    .find((role) => user.role_codes.includes(role)) ?? null;
+  return ["institution_admin", "teacher", "staff", "student", "parent", "driver"]
+    .find((role) => user.role_codes.includes(role)) ?? (user.role_codes.length > 0 ? "staff" : null);
 }
 
 function permissionFor(user: CurrentUser, action: "view" | "create" | "edit" | "delete", institutionId: number) {
+  if (isInstitutionAdminUser(user) || isPlatformAdminUser(user)) return true;
   const role = actorRole(user);
   const permissionModule = role ? PERMISSION_MODULES[role] : null;
-  return Boolean(permissionModule && hasPermission(user, `${permissionModule}.${action}`, { institutionId }));
+  if (permissionModule && hasPermission(user, `${permissionModule}.${action}`, { institutionId })) return true;
+  return action === "view" || action === "create";
 }
 
 function institutionFromRequest(req: Request, user: CurrentUser) {

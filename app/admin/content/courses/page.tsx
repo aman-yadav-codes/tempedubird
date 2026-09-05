@@ -1574,94 +1574,10 @@ export default function MasterCoursesPage() {
                   )}
                 </div>
 
-                {/* Step 3: Medium of Instruction */}
-                <div className="space-y-2 p-3.5 rounded-2xl border border-border/80 bg-muted/20">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                      <Languages className="h-4 w-4 text-primary" />
-                      3. Medium of Instruction *
-                    </Label>
-                    <span className="text-[11px] font-semibold text-primary">
-                      Current: {medium}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <Select
-                      value={STANDARD_MEDIUMS.includes(medium) ? medium : "custom"}
-                      onValueChange={(val) => {
-                        if (val !== "custom") {
-                          setMedium(val);
-                          const generated = computeGeneratedCourseName(categoryName, authorityType, boardName, universityName, certificationProviderName, val);
-                          setCourseName(generated);
-                          setCourseSlug(generateCourseSlug(generated, authorityType, boardName, universityName, certificationProviderName, val));
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="h-9 text-xs bg-background">
-                        <SelectValue placeholder="Choose Medium..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {STANDARD_MEDIUMS.map((m) => (
-                          <SelectItem key={m} value={m} className="text-xs">
-                            {m}
-                          </SelectItem>
-                        ))}
-                        <SelectItem value="custom" className="text-xs font-semibold text-primary">
-                          + Custom Medium...
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-
-                    {(!STANDARD_MEDIUMS.includes(medium) || customMediumInput) ? (
-                      <div className="flex items-center gap-1.5">
-                        <Input
-                          placeholder="Type custom medium..."
-                          value={customMediumInput || (STANDARD_MEDIUMS.includes(medium) ? "" : medium)}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setCustomMediumInput(val);
-                            if (val.trim()) {
-                              setMedium(val.trim());
-                              const generated = computeGeneratedCourseName(categoryName, authorityType, boardName, universityName, certificationProviderName, val.trim());
-                              setCourseName(generated);
-                              setCourseSlug(generateCourseSlug(generated, authorityType, boardName, universityName, certificationProviderName, val.trim()));
-                            }
-                          }}
-                          className="h-9 text-xs bg-background flex-1"
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5 overflow-x-auto">
-                        {["English", "Hindi", "Bilingual (English + Hindi)"].map((quickMed) => (
-                          <button
-                            key={quickMed}
-                            type="button"
-                            onClick={() => {
-                              setMedium(quickMed);
-                              setCustomMediumInput("");
-                              const generated = computeGeneratedCourseName(categoryName, authorityType, boardName, universityName, certificationProviderName, quickMed);
-                              setCourseName(generated);
-                              setCourseSlug(generateCourseSlug(generated, authorityType, boardName, universityName, certificationProviderName, quickMed));
-                            }}
-                            className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all border whitespace-nowrap ${
-                              medium === quickMed
-                                ? "bg-primary text-primary-foreground border-primary shadow-2xs"
-                                : "bg-background text-foreground border-border/80 hover:bg-muted"
-                            }`}
-                          >
-                            {quickMed}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Step 4: Course / Program Name */}
+                {/* Step 3: Course / Program Name */}
                 <div className="space-y-1.5 p-3.5 rounded-2xl border border-border/80 bg-muted/20">
                   <Label className="text-xs font-bold text-foreground flex items-center justify-between">
-                    <span>4. Course / Program Name *</span>
+                    <span>3. Course / Program Name *</span>
                     {courseSlug && (
                       <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[220px]">
                         slug: {courseSlug}
@@ -1669,7 +1585,7 @@ export default function MasterCoursesPage() {
                     )}
                   </Label>
                   <Input
-                    placeholder="e.g. Class 10 - CBSE - English Medium, B.Tech - Sharda University - English Medium..."
+                    placeholder="e.g. Class 10 - CBSE, B.Tech - Sharda University..."
                     value={courseName}
                     onChange={(e) => {
                       const val = e.target.value;
@@ -1680,13 +1596,13 @@ export default function MasterCoursesPage() {
                     required
                   />
                   <p className="text-[11px] text-muted-foreground">
-                    Auto-generated from Category, Board/University, and Medium.
+                    Auto-generated from Category and Board/University.
                   </p>
                 </div>
 
                 {/* Course Description */}
                 <div className="space-y-1.5 p-3.5 rounded-2xl border border-border/80 bg-muted/20">
-                  <Label className="text-xs font-semibold">5. Course Description / Highlights (Optional)</Label>
+                  <Label className="text-xs font-semibold">4. Course Description / Highlights (Optional)</Label>
                   <Textarea
                     placeholder="Overview of curriculum, eligibility criteria, teaching methodologies..."
                     value={description}

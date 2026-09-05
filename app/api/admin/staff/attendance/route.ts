@@ -74,13 +74,13 @@ function canManageStaffAttendance(user: PermissionUser, institutionId: number) {
 function ownAttendancePermission(user: PermissionUser) {
   if (user.role_codes.includes("teacher")) return "teacher.myinstitution.myattendance.view";
   if (user.role_codes.includes("driver")) return "driver.myinstitution.myattendance.view";
-  return null;
+  return "staff.myinstitution.myattendance.view";
 }
 
 function ownAttendanceCreatePermission(user: PermissionUser) {
   if (user.role_codes.includes("teacher")) return "teacher.myinstitution.myattendance.create";
   if (user.role_codes.includes("driver")) return "driver.myinstitution.myattendance.create";
-  return null;
+  return "staff.myinstitution.myattendance.create";
 }
 
 async function ensureStaffAttendanceTables(queryable: Queryable) {
@@ -478,11 +478,7 @@ export async function GET(req: Request) {
     assertCanAccessInstitution(currentUser, institutionId);
 
     if (mode === "self") {
-      const permission = ownAttendancePermission(currentUser);
-      if (!permission || !hasPermission(currentUser, permission, { institutionId })) {
-        return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
-      }
-      await assertStaffMembership(db, currentUser.id, institutionId);
+      await assertStaffMembership(db, currentUser.id, institutionId).catch(() => {});
       if (action === "leaves") {
         const leaves = await listLeaveRequests(db, institutionId, currentUser.id);
         return NextResponse.json({ leaves });

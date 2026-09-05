@@ -4,6 +4,92 @@ import { db } from "@/lib/db/db";
 import { assertRowsWithinInstitutionScope } from "@/lib/auth/institution-scope";
 import { slugify } from "@/lib/utils/slug";
 
+let programSectionsSchemaReady: Promise<void> | null = null;
+
+async function ensureProgramSectionsSchema(db: any) {
+  if (!programSectionsSchemaReady) {
+    programSectionsSchemaReady = (async () => {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS program_sections (
+          id SERIAL,
+          program_id INT NOT NULL,
+          section_id INT NOT NULL,
+          batch_name VARCHAR(255),
+          section_name VARCHAR(255),
+          academic_term VARCHAR(100),
+          academic_year_number INT,
+          semester_number INT,
+          attendance_setup_id INT,
+          attendance_setup_title VARCHAR(255),
+          language_id INT,
+          language_name VARCHAR(100),
+          seats_available INT,
+          max_students INT,
+          price NUMERIC(12,2),
+          fee_amount NUMERIC(12,2),
+          discount_percent NUMERIC(5,2) DEFAULT 0,
+          installments_count INT DEFAULT 1,
+          start_time VARCHAR(20),
+          end_time VARCHAR(20),
+          class_frequency VARCHAR(100),
+          teaching_method VARCHAR(100),
+          module_name VARCHAR(255),
+          module_details TEXT,
+          is_active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+      `).catch(() => {});
+
+      await db.query(`
+        ALTER TABLE program_sections
+          ADD COLUMN IF NOT EXISTS batch_name VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS section_name VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS academic_term VARCHAR(100),
+          ADD COLUMN IF NOT EXISTS academic_year_number INT,
+          ADD COLUMN IF NOT EXISTS semester_number INT,
+          ADD COLUMN IF NOT EXISTS attendance_setup_id INT,
+          ADD COLUMN IF NOT EXISTS attendance_setup_title VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS language_id INT,
+          ADD COLUMN IF NOT EXISTS language_name VARCHAR(100),
+          ADD COLUMN IF NOT EXISTS seats_available INT,
+          ADD COLUMN IF NOT EXISTS max_students INT,
+          ADD COLUMN IF NOT EXISTS price NUMERIC(12,2),
+          ADD COLUMN IF NOT EXISTS fee_amount NUMERIC(12,2),
+          ADD COLUMN IF NOT EXISTS discount_percent NUMERIC(5,2) DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS installments_count INT DEFAULT 1,
+          ADD COLUMN IF NOT EXISTS start_time VARCHAR(20),
+          ADD COLUMN IF NOT EXISTS end_time VARCHAR(20),
+          ADD COLUMN IF NOT EXISTS class_frequency VARCHAR(100),
+          ADD COLUMN IF NOT EXISTS teaching_method VARCHAR(100),
+          ADD COLUMN IF NOT EXISTS module_name VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS module_details TEXT,
+          ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE,
+          ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+      `).catch(() => {});
+
+      await db.query(`
+        DO $
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'uq_program_sections_prog_sec' OR conname = 'program_sections_pkey'
+          ) THEN
+            ALTER TABLE program_sections ADD CONSTRAINT uq_program_sections_prog_sec UNIQUE (program_id, section_id);
+          END IF;
+        EXCEPTION
+          WHEN OTHERS THEN NULL;
+        END $;
+      `).catch(() => {});
+    })().catch((err) => {
+      programSectionsSchemaReady = null;
+      throw err;
+    });
+  }
+  return programSectionsSchemaReady;
+}
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -12,6 +98,7 @@ export async function GET(
     const currentUser = await getAuthenticatedUser(req);
     const { id } = await params;
     const programId = Number(id);
+    await ensureProgramSectionsSchema(db);
 
     await assertRowsWithinInstitutionScope(
       db,
@@ -70,38 +157,55 @@ export async function GET(
     );
 
     // Fetch program & course duration details
-    const programInfoRes = await db.query(
-      `
-      SELECT
-        ip.id,
-        ip.institution_id,
-        ip.title,
-        ip.course_id,
-        c.duration_value,
-        c.duration_unit,
-        c.duration_type
-      FROM institution_programs ip
-      LEFT JOIN courses c ON c.id = ip.course_id
-      WHERE ip.id = $1
-      `,
-      [programId]
-    );
-
-    const programInfo = programInfoRes.rows[0] || null;
+    let programInfo: any = null;
+    try {
+      const programInfoRes = await db.query(
+        `
+        SELECT
+          ip.id,
+          ip.institution_id,
+          ip.title,
+          ip.course_id,
+          COALESCE(ip.duration_value, c.duration_value) AS duration_value,
+          COALESCE(ip.duration_unit, c.duration_unit) AS duration_unit
+        FROM institution_programs ip
+        LEFT JOIN master_courses c ON c.id = ip.course_id
+        WHERE ip.id = $1
+        `,
+        [programId]
+      );
+      programInfo = programInfoRes.rows[0] || null;
+    } catch {
+      try {
+        const fallbackRes = await db.query(
+          `SELECT id, institution_id, title, duration_value, duration_unit FROM institution_programs WHERE id = $1`,
+          [programId]
+        );
+        programInfo = fallbackRes.rows[0] || null;
+      } catch {
+        programInfo = null;
+      }
+    }
 
     // Fetch master course subjects terms if available
-    const courseTermsRes = await db.query(
-      `
-      SELECT DISTINCT
-        mcs.term_type,
-        mcs.term_number,
-        mcs.term_name
-      FROM master_course_subjects mcs
-      WHERE mcs.course_id = (SELECT course_id FROM institution_programs WHERE id = $1)
-      ORDER BY mcs.term_number ASC
-      `,
-      [programId]
-    );
+    let courseTerms: any[] = [];
+    try {
+      const courseTermsRes = await db.query(
+        `
+        SELECT DISTINCT
+          mcs.term_type,
+          mcs.term_number,
+          mcs.term_name
+        FROM master_course_subjects mcs
+        WHERE mcs.course_id = (SELECT course_id FROM institution_programs WHERE id = $1)
+        ORDER BY mcs.term_number ASC
+        `,
+        [programId]
+      );
+      courseTerms = courseTermsRes.rows;
+    } catch {
+      courseTerms = [];
+    }
 
     // Fetch available attendance setups for students
     let attendanceSetups: any[] = [];
@@ -181,26 +285,32 @@ export async function GET(
     );
 
     // Fetch program subjects/modules
-    const subjectsRes = await db.query(
-      `
-      SELECT s.id, s.name, s.slug, s.code
-      FROM program_subjects ps
-      JOIN subjects s ON s.id = ps.subject_id
-      WHERE ps.program_id = $1 AND COALESCE(s.is_deleted, FALSE) = FALSE
-      ORDER BY s.name ASC
-      `,
-      [programId]
-    );
+    let subjects: any[] = [];
+    try {
+      const subjectsRes = await db.query(
+        `
+        SELECT s.id, s.name, s.slug, s.code
+        FROM program_subjects ps
+        JOIN subjects s ON s.id = ps.subject_id
+        WHERE ps.program_id = $1 AND COALESCE(s.is_deleted, FALSE) = FALSE
+        ORDER BY s.name ASC
+        `,
+        [programId]
+      );
+      subjects = subjectsRes.rows;
+    } catch {
+      subjects = [];
+    }
 
     return NextResponse.json({
       data: res.rows,
       meta: {
         programInfo,
-        courseTerms: courseTermsRes.rows,
+        courseTerms,
         attendanceSetups,
         sections: sectionsRes.rows,
         languages: languagesRes.rows,
-        subjects: subjectsRes.rows,
+        subjects,
       },
     });
   } catch (error: any) {
@@ -217,6 +327,7 @@ export async function POST(
     const currentUser = await requireAdmin(req);
     const { id } = await params;
     const programId = Number(id);
+    await ensureProgramSectionsSchema(db);
 
     await assertRowsWithinInstitutionScope(
       db,

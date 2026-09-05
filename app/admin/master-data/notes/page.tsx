@@ -1199,37 +1199,28 @@ export default function MasterDataNotesPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant={notesView === "my" ? "default" : "outline"}
-          onClick={() => {
-            setNotesView("my");
-            setPagination((current) => ({ ...current, pageIndex: 0 }));
-          }}
-        >
-          {isPlatformAdmin ? "All Notes" : "My Notes"}
-        </Button>
-        {isPlatformAdmin && (
+      {!isPlatformAdmin && (
+        <div className="flex flex-wrap gap-2">
           <Button
-            variant={notesView === "requests" ? "default" : "outline"}
+            variant={notesView === "my" ? "default" : "outline"}
             onClick={() => {
-              setNotesView("requests");
+              setNotesView("my");
               setPagination((current) => ({ ...current, pageIndex: 0 }));
             }}
           >
-            Requests
+            My Notes
           </Button>
-        )}
-        <Button
-          variant={notesView === "marketplace" ? "default" : "outline"}
-          onClick={() => {
-            setNotesView("marketplace");
-            setPagination((current) => ({ ...current, pageIndex: 0 }));
-          }}
-        >
-          Marketplace
-        </Button>
-      </div>
+          <Button
+            variant={notesView === "marketplace" ? "default" : "outline"}
+            onClick={() => {
+              setNotesView("marketplace");
+              setPagination((current) => ({ ...current, pageIndex: 0 }));
+            }}
+          >
+            Marketplace
+          </Button>
+        </div>
+      )}
 
       <DataTable
         columns={columns}

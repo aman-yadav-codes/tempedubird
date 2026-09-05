@@ -75,14 +75,28 @@ export function AdminUserProfileMenu() {
   const isParent = Boolean(user.role_codes?.includes("parent") && !isPlatformAdmin && !isInstitutionAdmin);
   const isStudent = Boolean(user.role_codes?.includes("student") && !isPlatformAdmin && !isInstitutionAdmin && !isParent);
 
-  let roleBadgeLabel = "User";
+  const formatRoleName = (code: string | null | undefined): string => {
+    if (!code) return "Staff";
+    return code
+      .split("_")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
+  };
+
+  const detectedRole =
+    user.primary_role ||
+    user.roles?.[0] ||
+    user.memberships?.[0]?.role_name ||
+    (user.role_codes?.[0] ? formatRoleName(user.role_codes[0]) : null);
+
+  let roleBadgeLabel = detectedRole || "User";
   let roleBadgeVariant: "default" | "secondary" | "outline" | "destructive" = "secondary";
 
   if (isPlatformAdmin) {
     roleBadgeLabel = "Super Admin";
     roleBadgeVariant = "destructive";
   } else if (isInstitutionAdmin) {
-    roleBadgeLabel = "Professional / Admin";
+    roleBadgeLabel = detectedRole || "Professional / Admin";
     roleBadgeVariant = "default";
   } else if (isParent) {
     roleBadgeLabel = "Guardian / Parent";
@@ -90,6 +104,9 @@ export function AdminUserProfileMenu() {
   } else if (isStudent) {
     roleBadgeLabel = "Student";
     roleBadgeVariant = "outline";
+  } else if (detectedRole) {
+    roleBadgeLabel = detectedRole;
+    roleBadgeVariant = "default";
   }
 
   const handleDemoSwitch = async (role: "student" | "guardian" | "professional" | "platform_admin") => {

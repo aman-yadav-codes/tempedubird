@@ -395,8 +395,7 @@ export async function listNotes(db: Queryable, user: PermissionUser, opts: ListN
   }
 
   if (view === "marketplace") {
-    where.push("note.marketplace_approved = TRUE");
-    where.push("note.is_public = TRUE");
+    where.push("(note.marketplace_approved = TRUE OR note.is_public = TRUE)");
     where.push("note.is_active = TRUE");
   }
 

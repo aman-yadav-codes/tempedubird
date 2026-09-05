@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/auth/auth";
 import { canAccessInstitution } from "@/lib/auth/institution-scope";
-import { hasPermission, isInstitutionAdminUser } from "@/lib/auth/permissions";
+import { hasPermission, isInstitutionAdminUser, isPlatformAdminUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
 import { getPageCount, getPagination } from "@/lib/queries/pagination";
 
@@ -63,17 +63,19 @@ async function assertStaffLetterAccess(
   institutionId: number | null,
   mode: "admin" | "self",
 ) {
+  if (mode === "self") {
+    // Every employee can see documents/letters generated for them
+    return;
+  }
+
   if (institutionId) {
     if (!canAccessInstitution(currentUser, institutionId)) {
       throw new Error("Forbidden: Admin access required");
     }
-    if (mode === "admin") {
-      if (!isInstitutionAdminUser(currentUser)) throw new Error("Forbidden: Admin access required");
-      return;
-    }
     if (
-      !hasPermission(currentUser, "teacher.myinstitution.myletters.view", { institutionId }) &&
-      !hasPermission(currentUser, "driver.myinstitution.myletters.view", { institutionId })
+      !isInstitutionAdminUser(currentUser) &&
+      !hasPermission(currentUser, "managestaff.allstaff.view", { institutionId }) &&
+      !hasPermission(currentUser, "admin.staff.view", { institutionId })
     ) {
       throw new Error("Forbidden: Admin access required");
     }
@@ -179,9 +181,17 @@ export async function GET(req: Request) {
     const currentUser = await requireAdmin(req);
     await ensureStaffLettersSchema();
     const url = new URL(req.url);
-    const institutionId = parseOptionalPositiveId(url.searchParams.get("institutionId"));
     const mode = url.searchParams.get("mode") === "self" ? "self" : "admin";
-    await assertStaffLetterAccess(currentUser, institutionId, mode);
+    const requestedInstitutionId = parseOptionalPositiveId(url.searchParams.get("institutionId"));
+    const institutionId = isPlatformAdminUser(currentUser)
+      ? requestedInstitutionId
+      : (requestedInstitutionId ?? (currentUser as any).institution_id ?? (currentUser as any).active_institution_id ?? currentUser.memberships?.[0]?.institution_id ?? null);
+    const isPlatform = isPlatformAdminUser(currentUser);
+    const isInstAdmin = isInstitutionAdminUser(currentUser);
+    const canManageAll = isPlatform || isInstAdmin || (institutionId ? hasPermission(currentUser, "managestaff.allstaff.view", { institutionId }) || hasPermission(currentUser, "admin.staff.view", { institutionId }) : false);
+    const effectiveMode = mode === "self" || !canManageAll ? "self" : "admin";
+
+    await assertStaffLetterAccess(currentUser, institutionId, effectiveMode);
 
     const { page, limit, offset } = getPagination(
       url.searchParams.get("page"),
@@ -191,8 +201,8 @@ export async function GET(req: Request) {
     const searchValue = `%${search}%`;
     const listParams: unknown[] = [institutionId, search, searchValue, limit, offset];
     const countParams: unknown[] = [institutionId, search, searchValue];
-    const selfFilter = mode === "self" ? "AND sgl.staff_user_id = $6" : "";
-    if (mode === "self") {
+    const selfFilter = effectiveMode === "self" ? "AND sgl.staff_user_id = $6" : "";
+    if (effectiveMode === "self") {
       listParams.push(currentUser.id);
       countParams.push(currentUser.id);
     }

@@ -23,6 +23,7 @@ export async function GET(req: Request) {
           ip.id,
           COALESCE(ip.name, ip.slug) as name,
           ip.slug,
+          ip.logo_url,
           it.name as type_name
         FROM institution_profiles ip
         LEFT JOIN institution_types it ON it.id = ip.institution_type_id
@@ -46,6 +47,7 @@ export async function GET(req: Request) {
           ip.id,
           COALESCE(ip.name, ip.slug) as name,
           ip.slug,
+          ip.logo_url,
           it.name as type_name
         FROM institution_profiles ip
         LEFT JOIN institution_types it ON it.id = ip.institution_type_id
@@ -68,6 +70,7 @@ export async function GET(req: Request) {
           ip.id,
           COALESCE(ip.name, ip.slug) as name,
           ip.slug,
+          ip.logo_url,
           it.name as type_name
         FROM institution_profiles ip
         LEFT JOIN institution_types it ON it.id = ip.institution_type_id

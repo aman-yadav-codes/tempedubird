@@ -34,6 +34,7 @@ import {
   HelpCircle,
   Send,
   Navigation,
+  Languages,
 } from "lucide-react";
 import { Star, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
@@ -46,6 +47,8 @@ import { DetailSuggestionSidebar } from "@/components/public/detail-suggestion-s
 import { ProgramEnrollmentDialog, type ProgramEnrollmentTarget } from "@/components/public/program-enrollment-dialog";
 import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
 import { UniversalFeedbackDialog, type UniversalEntityTarget } from "@/components/public/universal-feedback-dialog";
+import { buildCourseUrl } from "@/lib/utils/seo-slug";
+import { parseCourseTitle } from "@/app/(public)/courses/course-parser";
 
 const fallbackBanners = [
   "https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=1200&q=80",
@@ -477,46 +480,67 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                       Courses & Streams ({courses.length})
                     </h3>
                     <div className="grid gap-4 sm:grid-cols-2">
-                      {courses.map((course: any) => (
-                        <Card key={course.id} className="p-5 hover:border-primary/50 transition-colors shadow-2xs space-y-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <h4 className="text-base font-bold text-foreground">{course.course_name}</h4>
-                              {course.stream && (
-                                <Badge variant="secondary" className="text-xs font-semibold mt-1">
-                                  {course.stream}
-                                </Badge>
+                      {courses.map((course: any) => {
+                        const courseUrl = course.program_id
+                          ? buildCourseUrl(course.program_id, course.course_name, profile?.name, profile?.location_name)
+                          : buildCourseUrl(course.id, course.course_name, profile?.name, profile?.location_name);
+
+                        return (
+                          <Card key={course.id} className="group p-5 hover:border-primary/50 transition-colors shadow-2xs space-y-3 flex flex-col justify-between">
+                            <div className="space-y-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <Link href={courseUrl} className="group-hover:text-primary transition-colors block">
+                                    <h4 className="text-base font-bold text-foreground group-hover:text-primary transition-colors hover:underline">
+                                      {course.course_name}
+                                    </h4>
+                                  </Link>
+                                  {course.stream && (
+                                    <Badge variant="secondary" className="text-xs font-semibold mt-1">
+                                      {course.stream}
+                                    </Badge>
+                                  )}
+                                </div>
+                                {course.board_or_university && (
+                                  <Badge variant="outline" className="text-[11px] font-medium">
+                                    {course.board_or_university}
+                                  </Badge>
+                                )}
+                              </div>
+
+                              {course.description && (
+                                <p className="text-xs text-muted-foreground line-clamp-2">{course.description}</p>
                               )}
                             </div>
-                            {course.board_or_university && (
-                              <Badge variant="outline" className="text-[11px] font-medium">
-                                {course.board_or_university}
-                              </Badge>
-                            )}
-                          </div>
 
-                          {course.description && (
-                            <p className="text-xs text-muted-foreground line-clamp-2">{course.description}</p>
-                          )}
+                            <div className="space-y-3 pt-2 border-t border-border">
+                              <div className="flex items-center justify-between text-xs">
+                                {course.price ? (
+                                  <div>
+                                    <span className="text-muted-foreground">Fee / Price: </span>
+                                    <span className="font-extrabold text-foreground text-sm">{course.price}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">Contact for fees</span>
+                                )}
 
-                          <div className="pt-2 border-t border-border flex items-center justify-between text-xs">
-                            {course.price ? (
-                              <div>
-                                <span className="text-muted-foreground">Fee / Price: </span>
-                                <span className="font-extrabold text-foreground text-sm">{course.price}</span>
+                                {course.duration && (
+                                  <span className="font-medium text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
+                                    {course.duration}
+                                  </span>
+                                )}
                               </div>
-                            ) : (
-                              <span className="text-muted-foreground">Contact for fees</span>
-                            )}
 
-                            {course.duration && (
-                              <span className="font-medium text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
-                                {course.duration}
-                              </span>
-                            )}
-                          </div>
-                        </Card>
-                      ))}
+                              <Button asChild variant="outline" size="sm" className="w-full text-xs font-semibold gap-1.5 hover:bg-primary hover:text-white">
+                                <Link href={courseUrl}>
+                                  <BookOpen className="h-3.5 w-3.5" />
+                                  View Course Details
+                                </Link>
+                              </Button>
+                            </div>
+                          </Card>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -531,63 +555,110 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                       </h3>
                     )}
                     <div className="grid gap-4 sm:grid-cols-2">
-                      {programs.map((prog: any) => (
-                        <Card key={prog.id} className="p-5 hover:border-primary/50 transition-colors shadow-2xs">
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <Badge variant="secondary" className="font-medium text-xs">
-                              {prog.program_type_name || "Degree Course"}
-                            </Badge>
-                            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
-                              {prog.seats_available || 60} Seats
-                            </Badge>
-                          </div>
+                      {programs.map((prog: any) => {
+                        const parsed = parseCourseTitle(
+                          prog.title,
+                          prog.program_type_name,
+                          profile?.board_name,
+                          profile?.parent_university_name
+                        );
+                        const courseUrl = buildCourseUrl(prog.id, parsed.programName, profile?.name, profile?.location_name);
 
-                          <h3 className="text-lg font-bold text-foreground mb-1">{prog.title}</h3>
-                          <p className="text-xs text-muted-foreground line-clamp-2 mb-4">{prog.about || "Comprehensive degree program with modern syllabus and lab practice."}</p>
-
-                          <div className="pt-3 border-t border-border flex items-center justify-between text-xs mb-3">
+                        return (
+                          <Card key={prog.id} className="group p-5 hover:border-primary/50 transition-colors shadow-2xs flex flex-col justify-between">
                             <div>
-                              <span className="text-muted-foreground">Course Fee: </span>
-                              <span className="font-extrabold text-foreground text-sm">₹{Number(prog.fee_amount || 120000).toLocaleString("en-IN")}</span>
-                              <span className="text-muted-foreground"> / {prog.fee_unit || "year"}</span>
+                              <div className="flex items-start justify-between gap-2 mb-2">
+                                <Badge variant="secondary" className="font-medium text-xs">
+                                  {prog.program_type_name || "Degree Course"}
+                                </Badge>
+                                <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
+                                  {prog.seats_available || 60} Seats
+                                </Badge>
+                              </div>
+
+                              <Link href={courseUrl} className="group-hover:text-primary transition-colors block">
+                                <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors mb-1 hover:underline">
+                                  {parsed.programName}
+                                </h3>
+                              </Link>
+
+                              {(parsed.affiliation || parsed.medium) && (
+                                <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
+                                  {parsed.affiliation && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px] font-bold bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 gap-1 truncate max-w-[240px] px-1.5 py-0.5"
+                                      title={parsed.affiliation}
+                                    >
+                                      <Award className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                                      <span className="truncate">{parsed.affiliation}</span>
+                                    </Badge>
+                                  )}
+                                  {parsed.medium && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="text-[10px] font-bold bg-blue-500/10 text-blue-800 dark:text-blue-300 border-blue-500/30 gap-1 truncate px-1.5 py-0.5"
+                                    >
+                                      <Languages className="h-3 w-3 text-blue-600 dark:text-blue-400 shrink-0" />
+                                      <span>{parsed.medium}</span>
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
+
+                              <p className="text-xs text-muted-foreground line-clamp-2 mb-4">
+                                {prog.about || "Comprehensive degree program with modern syllabus and lab practice."}
+                              </p>
                             </div>
 
-                            <div className="text-right">
-                              <span className="font-medium text-muted-foreground">{prog.duration_value || 4} {prog.duration_unit || "Years"}</span>
-                            </div>
-                          </div>
+                            <div>
+                              <div className="pt-3 border-t border-border flex items-center justify-between text-xs mb-3">
+                                <div>
+                                  <span className="text-muted-foreground">Course Fee: </span>
+                                  <span className="font-extrabold text-foreground text-sm">₹{Number(prog.fee_amount || 120000).toLocaleString("en-IN")}</span>
+                                  <span className="text-muted-foreground"> / {prog.fee_unit || "year"}</span>
+                                </div>
 
-                          <div className="flex items-center justify-between gap-2 pt-3 border-t border-border mt-3">
-                            <Button
-                              onClick={() => {
-                                setSelectedUniversalTarget({
-                                  type: "program",
-                                  id: prog.id,
-                                  title: prog.title,
-                                  subtitle: `${prog.program_type_name || 'Degree Program'} • ${prog.duration_value || 4} Years`,
-                                  avg_rating: 4.9,
-                                  review_count: 3,
-                                });
-                                setUniversalFeedbackOpen(true);
-                              }}
-                              variant="outline"
-                              size="sm"
-                              className="w-full text-xs font-semibold gap-1.5 hover:bg-primary hover:text-white"
-                            >
-                              <MessageSquare className="h-3.5 w-3.5 text-primary" />
-                              Rate & Review Program
-                            </Button>
-                            <Button
-                              onClick={() => handleEnrollProgramClick(prog)}
-                              className="w-full font-bold text-xs gap-1.5 shadow-xs"
-                              size="sm"
-                            >
-                              <GraduationCap className="h-4 w-4" />
-                              Enroll Now
-                            </Button>
-                          </div>
-                        </Card>
-                      ))}
+                                <div className="text-right">
+                                  <span className="font-medium text-muted-foreground">{prog.duration_value || 4} {prog.duration_unit || "Years"}</span>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2 pt-3 border-t border-border mt-3">
+                                <Button
+                                  onClick={() => {
+                                    setSelectedUniversalTarget({
+                                      type: "program",
+                                      id: prog.id,
+                                      title: prog.title,
+                                      subtitle: `${prog.program_type_name || 'Degree Program'} • ${prog.duration_value || 4} Years`,
+                                      avg_rating: 4.9,
+                                      review_count: 3,
+                                    });
+                                    setUniversalFeedbackOpen(true);
+                                  }}
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full text-xs font-semibold gap-1.5 hover:bg-primary hover:text-white"
+                                >
+                                  <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                                  Rate & Review Program
+                                </Button>
+                                <Button
+                                  asChild
+                                  className="w-full font-bold text-xs gap-1.5 shadow-xs"
+                                  size="sm"
+                                >
+                                  <Link href={courseUrl}>
+                                    <BookOpen className="h-4 w-4" />
+                                    View Course
+                                  </Link>
+                                </Button>
+                              </div>
+                            </div>
+                          </Card>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : courses.length === 0 ? (
