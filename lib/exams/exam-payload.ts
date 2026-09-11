@@ -75,27 +75,29 @@ export function parseExamMetadataPayload(body: Record<string, unknown>) {
   const durationMinutes = parsePositiveInt(body.duration_minutes, "Duration minutes");
   const examDate = String(body.exam_date ?? "").trim();
   const examTime = String(body.exam_time ?? "").trim();
-  const examPlace = String(body.exam_place ?? "").trim();
-  const examMode = String(body.exam_mode ?? "offline").trim().toLowerCase();
+  const rawMode = String(body.exam_mode ?? "offline").trim().toLowerCase();
+  const examMode = rawMode === "online" ? "online" : "offline";
+  const rawExamPlace = String(body.exam_place ?? "").trim();
+  const examPlace = examMode === "online" ? (rawExamPlace || "Online") : (rawExamPlace || "School");
   const resultDate = String(body.result_date ?? "").trim();
   const instantResult = body.instant_result === true;
   const institutionId = Number(body.source_institution_id);
   const targetType = String(body.target_type ?? "INSTITUTION").toUpperCase();
   const allowedTargetTypes = new Set(["INSTITUTION", "PROGRAM", "SECTION", "STUDENT"]);
+  const practiceExamTemplateId = Number(body.practice_exam_template_id);
 
   if (!title && (!Number.isInteger(examSeriesId) || examSeriesId <= 0)) {
     throw new Error("Exam title is required");
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(examDate)) throw new Error("Exam date is required");
   if (!/^\d{2}:\d{2}/.test(examTime)) throw new Error("Exam time is required");
-  if (!examPlace) throw new Error("Exam place is required");
-  if (!["offline", "online", "hybrid"].includes(examMode)) {
-    throw new Error("Exam mode is invalid");
+  if (examMode !== "online" && !examPlace) {
+    throw new Error("Exam place is required");
   }
-  if (!instantResult && !/^\d{4}-\d{2}-\d{2}$/.test(resultDate)) {
-    throw new Error("Result date is required");
+  if (resultDate && !/^\d{4}-\d{2}-\d{2}$/.test(resultDate)) {
+    throw new Error("Invalid result date format (expected YYYY-MM-DD)");
   }
-  if (!instantResult && resultDate < examDate) {
+  if (resultDate && resultDate < examDate) {
     throw new Error("Result date cannot be before the exam date");
   }
   if (!Number.isInteger(institutionId) || institutionId <= 0) {
@@ -133,6 +135,7 @@ export function parseExamMetadataPayload(body: Record<string, unknown>) {
     targetProgramId,
     syllabusNodeIds: parsePositiveIntArray(body.syllabus_node_ids),
     aiQuestionFormat: parseAiQuestionFormat(body.ai_question_format),
+    practiceExamTemplateId: Number.isInteger(practiceExamTemplateId) && practiceExamTemplateId > 0 ? practiceExamTemplateId : null,
     isPublic: body.is_public === true,
     isActive: body.is_active === true,
     isPaid: body.is_paid === true || (Number(body.price) > 0),

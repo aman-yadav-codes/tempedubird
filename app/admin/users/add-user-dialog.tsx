@@ -651,7 +651,7 @@ function getRoleDisplay(role: RoleOption) {
   ]);
 
   useEffect(() => {
-    if (!selectedRoleIsTeacher || form.teacher_type === "institute_teacher" || showAccountInstitution) {
+    if (currentUserIsPlatformAdmin || !selectedRoleIsTeacher || form.teacher_type === "institute_teacher" || showAccountInstitution) {
       return;
     }
 
@@ -1390,7 +1390,7 @@ function getRoleDisplay(role: RoleOption) {
         is_marketplace_enabled: form.is_marketplace_enabled ?? true,
         is_teacher: selectedRoleIsTeacher,
         teacher_type: selectedRoleIsTeacher
-          ? form.teacher_type || (primaryInstitutionId ? "institute_teacher" : "individual_teacher")
+          ? (isPlatformStaff && !primaryInstitutionId ? "individual_teacher" : form.teacher_type || (primaryInstitutionId ? "institute_teacher" : "individual_teacher"))
           : null,
         under_institution_id: primaryInstitutionId,
         under_institution_name: isPlatformStaff && !form.under_institution_name ? "EduBird" : form.under_institution_name || null,
@@ -1861,7 +1861,7 @@ function getRoleDisplay(role: RoleOption) {
                   <span className="text-[11px] text-muted-foreground">Joining, birthday, and shift details</span>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="add-user-joining-date" className="text-xs font-medium">Joining Date</Label>
                     <Input
@@ -1920,27 +1920,6 @@ function getRoleDisplay(role: RoleOption) {
                           </SelectItem>
                         ))}
                         <SelectItem value="custom">✍️ Custom Timing...</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="add-user-emp-status" className="text-xs font-medium">Employment Status</Label>
-                    <Select
-                      value={form.employment_status || "ACTIVE"}
-                      onValueChange={(val) => updateForm("employment_status", val)}
-                    >
-                      <SelectTrigger id="add-user-emp-status" className="h-9 text-xs bg-background font-medium">
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ACTIVE">🟢 Active</SelectItem>
-                        <SelectItem value="PROBATION">⏳ On Probation</SelectItem>
-                        <SelectItem value="ON_LEAVE">🗓️ On Leave</SelectItem>
-                        <SelectItem value="NOTICE_PERIOD">⚠️ Notice Period</SelectItem>
-                        <SelectItem value="RETIRED">👴 Retired</SelectItem>
-                        <SelectItem value="TERMINATED">🚫 Fired / Terminated</SelectItem>
-                        <SelectItem value="RESIGNED">📄 Resigned</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

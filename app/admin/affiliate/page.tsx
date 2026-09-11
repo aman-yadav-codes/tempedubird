@@ -110,8 +110,11 @@ export default function AffiliatePage() {
   }, [fetchAffiliateData]);
 
   const affiliateCode = data?.affiliate?.affiliate_code || user?.phone || "";
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://edubird.in";
-  const referralLink = `${origin}/?ref=${encodeURIComponent(affiliateCode)}`;
+  const [origin, setOrigin] = useState("");
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+  const referralLink = affiliateCode ? `${origin}/?ref=${encodeURIComponent(affiliateCode)}` : "";
 
   const handleCopyCode = () => {
     if (!affiliateCode) return;
@@ -176,7 +179,7 @@ export default function AffiliatePage() {
               Share, Refer & <span className="text-rose-400">Earn Together</span>
             </h1>
             <p className="text-slate-300 text-xs md:text-sm max-w-2xl font-medium leading-relaxed">
-              Every member is an affiliate! Share your unique affiliate code (your mobile number) with students, guardians, and educators. Earn ?50 bonus on every join plus up to {commissionRate}% commission on courses.
+              Every member is an affiliate! Share your unique affiliate code (your mobile number) with students, guardians, and educators. Earn ₹50 bonus on every join plus up to {commissionRate}% commission on courses.
             </p>
           </div>
 
@@ -555,7 +558,7 @@ export default function AffiliatePage() {
                           </td>
                           <td className="py-3.5 px-4">
                             <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                              +?{Number(item.reward_amount || 50).toFixed(2)}
+                              +₹{Number(item.reward_amount || 50).toFixed(2)}
                             </span>
                           </td>
                           <td className="py-3.5 px-4">
@@ -631,7 +634,7 @@ export default function AffiliatePage() {
                           </td>
                           <td className="py-3.5 px-4">
                             <span className="font-bold text-emerald-600">
-                              +?{Number(entry.amount).toFixed(2)}
+                              +₹{Number(entry.amount).toFixed(2)}
                             </span>
                           </td>
                           <td className="py-3.5 px-4">

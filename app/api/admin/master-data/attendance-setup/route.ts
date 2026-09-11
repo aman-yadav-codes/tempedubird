@@ -4,29 +4,43 @@ import { db } from "@/lib/db/db";
 import { getPagination, getPageCount } from "@/lib/queries/pagination";
 
 async function ensureAttendanceSetupTable() {
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS institution_attendance_setups (
-      id SERIAL PRIMARY KEY,
-      institution_id INT,
-      title VARCHAR(255) NOT NULL,
-      target_type VARCHAR(50) NOT NULL DEFAULT 'STUDENTS',
-      attendance_mode VARCHAR(50) NOT NULL DEFAULT 'FULL_DAY',
-      who_can_mark VARCHAR(50) NOT NULL DEFAULT 'INSTITUTION_ADMIN',
-      start_time VARCHAR(20) DEFAULT '08:00',
-      end_time VARCHAR(20) DEFAULT '14:30',
-      grace_period_mins INT DEFAULT 15,
-      half_day_time VARCHAR(20) DEFAULT '11:30',
-      min_attendance_percentage INT DEFAULT 75,
-      working_days JSONB DEFAULT '["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]'::jsonb,
-      auto_notify_absent BOOLEAN DEFAULT TRUE,
-      is_active BOOLEAN DEFAULT TRUE,
-      is_default BOOLEAN DEFAULT FALSE,
-      is_dummy BOOLEAN DEFAULT FALSE,
-      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-    );
-    ALTER TABLE institution_attendance_setups ADD COLUMN IF NOT EXISTS who_can_mark VARCHAR(50) DEFAULT 'INSTITUTION_ADMIN';
-  `);
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS institution_attendance_setups (
+        id SERIAL PRIMARY KEY,
+        institution_id INT,
+        title VARCHAR(255) NOT NULL,
+        scope_type VARCHAR(50) NOT NULL DEFAULT 'INSTITUTION',
+        program_id INT,
+        program_title VARCHAR(255),
+        target_type VARCHAR(50) NOT NULL DEFAULT 'STUDENTS',
+        attendance_mode VARCHAR(50) NOT NULL DEFAULT 'FULL_DAY',
+        who_can_mark VARCHAR(50) NOT NULL DEFAULT 'INSTITUTION_ADMIN',
+        start_time VARCHAR(20) DEFAULT '08:00',
+        end_time VARCHAR(20) DEFAULT '14:30',
+        grace_period_mins INT DEFAULT 15,
+        half_day_time VARCHAR(20) DEFAULT '11:30',
+        min_attendance_percentage INT DEFAULT 75,
+        working_days JSONB DEFAULT '["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]'::jsonb,
+        auto_notify_absent BOOLEAN DEFAULT TRUE,
+        is_active BOOLEAN DEFAULT TRUE,
+        is_default BOOLEAN DEFAULT FALSE,
+        is_dummy BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await db.query(`ALTER TABLE institution_attendance_setups ADD COLUMN IF NOT EXISTS who_can_mark VARCHAR(50) DEFAULT 'INSTITUTION_ADMIN'`).catch(() => {});
+    await db.query(`ALTER TABLE institution_attendance_setups ADD COLUMN IF NOT EXISTS scope_type VARCHAR(50) DEFAULT 'INSTITUTION'`).catch(() => {});
+    await db.query(`ALTER TABLE institution_attendance_setups ADD COLUMN IF NOT EXISTS program_id INT`).catch(() => {});
+    await db.query(`ALTER TABLE institution_attendance_setups ADD COLUMN IF NOT EXISTS program_title VARCHAR(255)`).catch(() => {});
+    await db.query(`ALTER TABLE institution_attendance_setups ADD COLUMN IF NOT EXISTS batch_id INT`).catch(() => {});
+    await db.query(`ALTER TABLE institution_attendance_setups ADD COLUMN IF NOT EXISTS batch_name VARCHAR(255)`).catch(() => {});
+    await db.query(`ALTER TABLE institution_attendance_setups ADD COLUMN IF NOT EXISTS applicable_role_ids JSONB DEFAULT '[]'::jsonb`).catch(() => {});
+    await db.query(`ALTER TABLE institution_attendance_setups ADD COLUMN IF NOT EXISTS applicable_role_names JSONB DEFAULT '[]'::jsonb`).catch(() => {});
+  } catch (err) {
+    console.error("ensureAttendanceSetupTable error:", err);
+  }
 }
 
 const DEFAULT_DUMMY_SETUPS = [
@@ -47,9 +61,9 @@ const DEFAULT_DUMMY_SETUPS = [
     is_dummy: true,
   },
   {
-    title: "Faculty & Staff Shift (Sample)",
+    title: "Faculty & Staff Half-Day Shift (Sample)",
     target_type: "STAFF",
-    attendance_mode: "BIOMETRIC",
+    attendance_mode: "HALF_DAY",
     who_can_mark: "BOTH",
     start_time: "07:45",
     end_time: "15:30",
@@ -103,9 +117,8 @@ export async function GET(req: Request) {
     const search = url.searchParams.get("search")?.trim() || "";
     const targetType = url.searchParams.get("target_type")?.trim() || "";
 
-    // Check if this institution or global has any setups. If 0 records exist, seed default dummy templates!
     const existingCheck = await db.query<{ count: number }>(
-      `SELECT COUNT(*)::int AS count FROM institution_attendance_setups WHERE (institution_id = $1 OR (institution_id IS NULL AND $1 IS NULL))`,
+      `SELECT COUNT(*)::int AS count FROM institution_attendance_setups WHERE (institution_id = $1 OR ($1 IS NOT NULL AND institution_id IS NULL))`,
       [institutionId ?? null]
     );
 
@@ -137,7 +150,7 @@ export async function GET(req: Request) {
             dummy.is_default,
             dummy.is_dummy,
           ]
-        );
+        ).catch(() => {});
       }
     }
 
@@ -146,9 +159,7 @@ export async function GET(req: Request) {
 
     if (institutionId) {
       params.push(institutionId);
-      whereClauses.push(`institution_id = $${params.length}`);
-    } else {
-      whereClauses.push(`institution_id IS NULL`);
+      whereClauses.push(`(institution_id = $${params.length} OR institution_id IS NULL)`);
     }
 
     if (search) {
@@ -206,6 +217,7 @@ export async function GET(req: Request) {
       },
     });
   } catch (error: any) {
+    console.error("Attendance setup GET error:", error);
     const status = error.message?.includes("Unauthorized") ? 401 : 500;
     return NextResponse.json({ error: error.message || "Failed to fetch attendance setups" }, { status });
   }
@@ -220,6 +232,13 @@ export async function POST(req: Request) {
     const institutionId = getEffectiveInstitutionId(user, body.institution_id);
     const {
       title,
+      scope_type = "INSTITUTION",
+      program_id = null,
+      program_title = null,
+      batch_id = null,
+      batch_name = null,
+      applicable_role_ids = [],
+      applicable_role_names = [],
       target_type = "STUDENTS",
       attendance_mode = "FULL_DAY",
       who_can_mark = "INSTITUTION_ADMIN",
@@ -248,16 +267,25 @@ export async function POST(req: Request) {
     const insertRes = await db.query(
       `
       INSERT INTO institution_attendance_setups (
-        institution_id, title, target_type, attendance_mode, who_can_mark,
+        institution_id, title, scope_type, program_id, program_title,
+        batch_id, batch_name, applicable_role_ids, applicable_role_names,
+        target_type, attendance_mode, who_can_mark,
         start_time, end_time, grace_period_mins, half_day_time,
         min_attendance_percentage, working_days, auto_notify_absent,
         is_active, is_default, is_dummy
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, FALSE)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, FALSE)
       RETURNING *
       `,
       [
         institutionId ?? null,
         title.trim(),
+        scope_type || "INSTITUTION",
+        program_id ? Number(program_id) : null,
+        program_title?.trim() || null,
+        batch_id ? Number(batch_id) : null,
+        batch_name?.trim() || null,
+        JSON.stringify(applicable_role_ids || []),
+        JSON.stringify(applicable_role_names || []),
         target_type,
         attendance_mode,
         who_can_mark || "INSTITUTION_ADMIN",
@@ -275,6 +303,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ data: insertRes.rows[0], message: "Attendance setup created successfully" }, { status: 201 });
   } catch (error: any) {
+    console.error("Attendance setup POST error:", error);
     const status = error.message?.includes("Unauthorized") ? 401 : 500;
     return NextResponse.json({ error: error.message || "Failed to create attendance setup" }, { status });
   }
@@ -290,6 +319,13 @@ export async function PUT(req: Request) {
     const {
       id,
       title,
+      scope_type,
+      program_id,
+      program_title,
+      batch_id,
+      batch_name,
+      applicable_role_ids,
+      applicable_role_names,
       target_type,
       attendance_mode,
       who_can_mark,
@@ -320,25 +356,39 @@ export async function PUT(req: Request) {
       UPDATE institution_attendance_setups
       SET
         title = COALESCE($1, title),
-        target_type = COALESCE($2, target_type),
-        attendance_mode = COALESCE($3, attendance_mode),
-        who_can_mark = COALESCE($4, who_can_mark),
-        start_time = COALESCE($5, start_time),
-        end_time = COALESCE($6, end_time),
-        grace_period_mins = COALESCE($7, grace_period_mins),
-        half_day_time = COALESCE($8, half_day_time),
-        min_attendance_percentage = COALESCE($9, min_attendance_percentage),
-        working_days = COALESCE($10, working_days),
-        auto_notify_absent = COALESCE($11, auto_notify_absent),
-        is_active = COALESCE($12, is_active),
-        is_default = COALESCE($13, is_default),
+        scope_type = COALESCE($2, scope_type),
+        program_id = COALESCE($3, program_id),
+        program_title = COALESCE($4, program_title),
+        batch_id = COALESCE($5, batch_id),
+        batch_name = COALESCE($6, batch_name),
+        applicable_role_ids = COALESCE($7, applicable_role_ids),
+        applicable_role_names = COALESCE($8, applicable_role_names),
+        target_type = COALESCE($9, target_type),
+        attendance_mode = COALESCE($10, attendance_mode),
+        who_can_mark = COALESCE($11, who_can_mark),
+        start_time = COALESCE($12, start_time),
+        end_time = COALESCE($13, end_time),
+        grace_period_mins = COALESCE($14, grace_period_mins),
+        half_day_time = COALESCE($15, half_day_time),
+        min_attendance_percentage = COALESCE($16, min_attendance_percentage),
+        working_days = COALESCE($17, working_days),
+        auto_notify_absent = COALESCE($18, auto_notify_absent),
+        is_active = COALESCE($19, is_active),
+        is_default = COALESCE($20, is_default),
         is_dummy = FALSE,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $14
+      WHERE id = $21
       RETURNING *
       `,
       [
         title?.trim() || null,
+        scope_type || null,
+        program_id !== undefined ? (program_id ? Number(program_id) : null) : null,
+        program_title?.trim() || null,
+        batch_id !== undefined ? (batch_id ? Number(batch_id) : null) : null,
+        batch_name?.trim() || null,
+        applicable_role_ids !== undefined ? JSON.stringify(applicable_role_ids) : null,
+        applicable_role_names !== undefined ? JSON.stringify(applicable_role_names) : null,
         target_type || null,
         attendance_mode || null,
         who_can_mark || null,
@@ -361,6 +411,7 @@ export async function PUT(req: Request) {
 
     return NextResponse.json({ data: updateRes.rows[0], message: "Attendance setup updated successfully" });
   } catch (error: any) {
+    console.error("Attendance setup PUT error:", error);
     const status = error.message?.includes("Unauthorized") ? 401 : 500;
     return NextResponse.json({ error: error.message || "Failed to update attendance setup" }, { status });
   }
@@ -389,6 +440,7 @@ export async function DELETE(req: Request) {
 
     return NextResponse.json({ message: "Attendance setup deleted successfully", data: deleteRes.rows[0] });
   } catch (error: any) {
+    console.error("Attendance setup DELETE error:", error);
     const status = error.message?.includes("Unauthorized") ? 401 : 500;
     return NextResponse.json({ error: error.message || "Failed to delete attendance setup" }, { status });
   }

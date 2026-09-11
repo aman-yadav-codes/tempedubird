@@ -31,12 +31,7 @@ export async function PUT(req: Request, context: Context) {
   try {
     const currentUser = await requireAdmin(req);
     await ensureAssignmentTemplateSchema();
-    if (isPlatformAdminUser(currentUser)) {
-      return NextResponse.json(
-        { error: "Platform Admin cannot manage assignment questions" },
-        { status: 403 }
-      );
-    }
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const { id: value } = await context.params;
     const id = parseId(value);
     const result = await db.query<{
@@ -56,13 +51,14 @@ export async function PUT(req: Request, context: Context) {
     if (!assignment) {
       return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
     }
-    if (assignment.blocked_by_platform) {
+    if (assignment.blocked_by_platform && !isPlatformAdmin) {
       return NextResponse.json(
         { error: "This assignment is blocked by Platform Admin" },
         { status: 423 }
       );
     }
     if (
+      !isPlatformAdmin &&
       !hasPermission(currentUser, "content.assignments.edit", {
         institutionId: assignment.source_institution_id,
       })

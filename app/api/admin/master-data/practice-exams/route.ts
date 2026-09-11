@@ -408,7 +408,16 @@ export async function GET(req: Request) {
             AND (
               (
                 $7::text = 'marketplace'
-                AND (at.is_public = TRUE OR at.marketplace_approved = TRUE)
+                AND (
+                  at.is_public = TRUE
+                  OR at.marketplace_approved = TRUE
+                  OR EXISTS (
+                    SELECT 1 FROM users u
+                    LEFT JOIN user_roles ur ON ur.user_id = u.id
+                    LEFT JOIN roles r ON r.id = ur.role_id
+                    WHERE u.id = at.created_by AND (r.code = 'platform_admin' OR r.code = 'platform_superadmin')
+                  )
+                )
                 AND at.is_active = TRUE
                 AND at.blocked_by_platform = FALSE
               )
@@ -497,36 +506,11 @@ export async function GET(req: Request) {
               WHEN target.target_type = 'STUDENT' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || COALESCE(' > ' || COALESCE(target_scope_program.title, target_scope_master_course.name), '') || ' > ' || target_user.full_name
               ELSE NULL
             END AS target_label,
-            COALESCE(
-              (
-                SELECT json_agg(asn.syllabus_node_id ORDER BY asn.id)
-                FROM practice_exam_syllabus_nodes asn
-                WHERE asn.practice_exam_id = assn.id
-              ),
-              '[]'::json
-            ) AS syllabus_node_ids,
-            COALESCE(
-              (
-                SELECT json_agg(
-                  json_build_object(
-                    'id', sn.id,
-                    'title', sn.title,
-                    'node_type', sn.node_type,
-                    'subject_id', sub.id,
-                    'subject_name', sub.name,
-                    'syllabus_id', s.id,
-                    'syllabus_title', s.title
-                  )
-                  ORDER BY sub.name, s.title, sn.sort_order, sn.id
-                )
-                FROM practice_exam_syllabus_nodes asn
-                INNER JOIN syllabus_nodes sn ON sn.id = asn.syllabus_node_id
-                INNER JOIN syllabi s ON s.id = sn.syllabus_id
-                INNER JOIN subjects sub ON sub.id = s.subject_id
-                WHERE asn.practice_exam_id = assn.id
-              ),
-              '[]'::json
-            ) AS syllabus_nodes,
+            at.subject_id,
+            at.subject_name,
+            at.syllabus_data,
+            '[]'::json AS syllabus_node_ids,
+            '[]'::json AS syllabus_nodes,
             COUNT(DISTINCT q.id)::int AS question_count,
             COUNT(DISTINCT qf.id)::int AS attachment_count
           FROM filtered f
@@ -562,7 +546,7 @@ export async function GET(req: Request) {
           LEFT JOIN users target_user ON target_user.id = target_student.user_id
           LEFT JOIN practice_exam_template_questions q ON q.template_id = at.id
           LEFT JOIN practice_exam_template_question_files qf ON qf.question_id = q.id
-          GROUP BY at.id, ip.id, parent_at.id, parent_ip.id, creator.id, updater.id, blocker.id,
+          GROUP BY at.id, at.subject_id, at.subject_name, at.syllabus_data, ip.id, parent_at.id, parent_ip.id, creator.id, updater.id, blocker.id,
                    requester.id, approver.id, assn.id, target.id, target_program.id, target_master_course.id,
                    target_section.id, target_user.id, target_scope_program.id, target_scope_master_course.id
           ORDER BY
@@ -661,23 +645,26 @@ export async function POST(req: Request) {
     const client = await db.connect();
     try {
       await client.query("BEGIN");
-      const isPublic = isPlatformAdmin ? payload.isPublic : false;
-      const marketplaceApproved = isPlatformAdmin && payload.isPublic;
+      const isPublic = isPlatformAdmin ? (payload.isPublic !== false) : false;
+      const marketplaceApproved = isPlatformAdmin;
       const result = await client.query<{ id: number }>(
         `
           INSERT INTO practice_exam_templates
-            (title, description, total_marks, ai_question_format, duration_minutes, is_public,
+            (title, description, total_marks, duration_minutes, ai_question_format, is_public,
              marketplace_requested, marketplace_requested_at, marketplace_requested_by,
              marketplace_approved, marketplace_approved_at, marketplace_approved_by,
              is_active, is_paid, price, version, source_institution_id,
+             subject_id, subject_name, syllabus_data,
              created_by, updated_by)
           VALUES (
-            $1, $2, $3, $4::jsonb, $5, $10,
-            $6, CASE WHEN $6 THEN CURRENT_TIMESTAMP ELSE NULL END,
-            CASE WHEN $6 THEN $9::integer ELSE NULL::integer END,
-            $11, CASE WHEN $11 THEN CURRENT_TIMESTAMP ELSE NULL END,
-            CASE WHEN $11 THEN $9::integer ELSE NULL::integer END,
-            $7, $12, $13, 1, $8, $9, $9
+            $1, $2, $3, $4, $5::jsonb, $6,
+            $7, CASE WHEN $7 THEN CURRENT_TIMESTAMP ELSE NULL END,
+            CASE WHEN $7 THEN $9::integer ELSE NULL::integer END,
+            $10, CASE WHEN $10 THEN CURRENT_TIMESTAMP ELSE NULL END,
+            CASE WHEN $10 THEN $9::integer ELSE NULL::integer END,
+            $8, $12, $13, 1, $11,
+            $14, $15, $16::jsonb,
+            $9, $9
           )
           RETURNING id
         `,
@@ -685,18 +672,22 @@ export async function POST(req: Request) {
           payload.title,
           payload.description,
           payload.totalMarks,
-          JSON.stringify(payload.aiQuestionFormat),
           payload.durationMinutes,
+          JSON.stringify(payload.aiQuestionFormat),
+          isPublic,
           payload.isPublic,
           payload.isActive,
-          payload.institutionId,
           currentUser.id,
-          isPublic,
           marketplaceApproved,
+          payload.institutionId,
           payload.isPaid,
           payload.price,
+          payload.subjectId,
+          payload.subjectName,
+          JSON.stringify(payload.syllabusData ?? []),
         ]
       );
+      
       const templateId = result.rows[0].id;
       const practiceExam = await client.query<{ id: number }>(
         `

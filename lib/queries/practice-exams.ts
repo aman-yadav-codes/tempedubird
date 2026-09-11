@@ -32,8 +32,20 @@ export function ensurePracticeExamSchema() {
           ADD COLUMN IF NOT EXISTS parent_template_id INTEGER,
           ADD COLUMN IF NOT EXISTS ai_question_format JSONB DEFAULT '{"enabled":false,"true_false":0,"objective":0}'::jsonb NOT NULL,
           ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT FALSE NOT NULL,
-          ADD COLUMN IF NOT EXISTS price NUMERIC(10,2) DEFAULT 0 NOT NULL,
-          ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE NOT NULL,
+          ADD COLUMN IF NOT EXISTS subject_id VARCHAR(100),
+          ADD COLUMN IF NOT EXISTS subject_name VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS syllabus_data JSONB DEFAULT '[]'::jsonb,
+          ADD COLUMN IF NOT EXISTS conducting_body TEXT,
+          ADD COLUMN IF NOT EXISTS exam_category TEXT,
+          ADD COLUMN IF NOT EXISTS official_website_url TEXT,
+          ADD COLUMN IF NOT EXISTS apply_url TEXT,
+          ADD COLUMN IF NOT EXISTS notification_pdf_url TEXT,
+          ADD COLUMN IF NOT EXISTS application_start_date DATE,
+          ADD COLUMN IF NOT EXISTS application_end_date DATE,
+          ADD COLUMN IF NOT EXISTS admit_card_date DATE,
+          ADD COLUMN IF NOT EXISTS eligibility_criteria TEXT,
+          ADD COLUMN IF NOT EXISTS application_fee NUMERIC(10,2) DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS is_government_exam BOOLEAN DEFAULT FALSE NOT NULL,
           ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
 
         UPDATE practice_exam_templates
@@ -290,43 +302,7 @@ export function ensurePracticeExamSchema() {
           AND template.exam_series_id IS NULL
           AND COALESCE(exam.is_deleted, FALSE) = FALSE;
 
-        CREATE TABLE IF NOT EXISTS practice_exam_syllabus_nodes (
-          id SERIAL PRIMARY KEY,
-          practice_exam_id INTEGER NOT NULL,
-          syllabus_node_id INTEGER NOT NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-          CONSTRAINT uq_practice_exam_syllabus_node UNIQUE (practice_exam_id, syllabus_node_id)
-        );
-
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1 FROM pg_constraint WHERE conname = 'fk_pesn_exam'
-          ) THEN
-            ALTER TABLE practice_exam_syllabus_nodes
-              ADD CONSTRAINT fk_pesn_exam
-              FOREIGN KEY (practice_exam_id)
-              REFERENCES practice_exams(id)
-              ON DELETE CASCADE;
-          END IF;
-
-          IF NOT EXISTS (
-            SELECT 1 FROM pg_constraint WHERE conname = 'fk_asn_syllabus_node'
-          ) THEN
-            ALTER TABLE practice_exam_syllabus_nodes
-              ADD CONSTRAINT fk_asn_syllabus_node
-              FOREIGN KEY (syllabus_node_id)
-              REFERENCES syllabus_nodes(id)
-              ON DELETE CASCADE;
-          END IF;
-        END
-        $$;
-
-        CREATE INDEX IF NOT EXISTS idx_pesn_exam
-          ON practice_exam_syllabus_nodes(practice_exam_id);
-
-        CREATE INDEX IF NOT EXISTS idx_asn_node
-          ON practice_exam_syllabus_nodes(syllabus_node_id);
+        
       `)
       .then(() => undefined)
       .catch((error) => {
@@ -342,21 +318,8 @@ export async function replacePracticeExamSyllabusNodes(
   practiceExamId: number,
   nodeIds: number[]
 ) {
-  await client.query(`DELETE FROM practice_exam_syllabus_nodes WHERE practice_exam_id = $1`, [
-    practiceExamId,
-  ]);
-
-  if (nodeIds.length === 0) return;
-
-  await client.query(
-    `
-      INSERT INTO practice_exam_syllabus_nodes (practice_exam_id, syllabus_node_id)
-      SELECT $1, node_id
-      FROM unnest($2::int[]) AS selected(node_id)
-      ON CONFLICT DO NOTHING
-    `,
-    [practiceExamId, nodeIds]
-  );
+  // No-op: syllabus tables removed
+  return;
 }
 
 export async function replacePracticeExamQuestions(

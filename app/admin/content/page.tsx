@@ -27,9 +27,7 @@ const INSTITUTION_EXCLUDED_HREFS = new Set([
   "/admin/content/boards",
   "/admin/content/universities",
   "/admin/content/certifications",
-  "/admin/content/subjects",
   "/admin/content/courses",
-  "/admin/content/syllabus",
 ]);
 
 const CONTENT_MODULES = [
@@ -74,28 +72,12 @@ const CONTENT_MODULES = [
     color: "from-amber-500/20 to-orange-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30",
   },
   {
-    title: "Subjects",
-    description: "Course subjects mapped to categories and examination boards with syllabus structures.",
-    href: "/admin/content/subjects",
-    icon: GraduationCap,
-    badge: "Curriculum",
-    color: "from-emerald-500/20 to-teal-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
-  },
-  {
     title: "Courses & Programs",
     description: "Standardized programs, degrees, diplomas, and competitive exam tracks mapped to boards or universities.",
     href: "/admin/content/courses",
     icon: BookCheck,
     badge: "Catalog",
     color: "from-teal-500/20 to-emerald-500/20 text-teal-600 dark:text-teal-400 border-teal-500/30",
-  },
-  {
-    title: "Syllabus",
-    description: "Structured syllabus templates, units, chapters, topics, and learning outcome breakdowns.",
-    href: "/admin/content/syllabus",
-    icon: BookOpen,
-    badge: "Syllabus Master",
-    color: "from-fuchsia-500/20 to-pink-500/20 text-fuchsia-600 dark:text-fuchsia-400 border-fuchsia-500/30",
   },
   {
     title: "Card Templates",

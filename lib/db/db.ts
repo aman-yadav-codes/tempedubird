@@ -146,121 +146,138 @@ const connectTimeoutMs = getNumberEnv("DATABASE_CONNECT_TIMEOUT_MS", 20_000);
 const queryTimeoutMs = getNumberEnv("DATABASE_QUERY_TIMEOUT_MS", 35_000);
 const useDatabaseSsl = process.env.DATABASE_SSL !== "false";
 
-const dbPool = new Pool({
-  connectionString: normalizeDatabaseUrl(process.env.DATABASE_URL),
-  max: Number(process.env.DATABASE_POOL_MAX ?? 10),
-  idleTimeoutMillis: Number(process.env.DATABASE_IDLE_TIMEOUT_MS ?? 30_000),
-  connectionTimeoutMillis: connectTimeoutMs,
-  query_timeout: queryTimeoutMs,
-  keepAlive: true,
-  ssl: useDatabaseSsl
-    ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "true" }
-    : false,
-});
+const globalForPg = globalThis as unknown as {
+  pgPool: Pool | undefined;
+  pgPoolInitialized: boolean | undefined;
+};
 
-const rawConnect = dbPool.connect.bind(dbPool) as () => Promise<PoolClient>;
-const rawQuery = dbPool.query.bind(dbPool) as typeof dbPool.query;
+const dbPool =
+  globalForPg.pgPool ??
+  new Pool({
+    connectionString: normalizeDatabaseUrl(process.env.DATABASE_URL),
+    max: Number(process.env.DATABASE_POOL_MAX ?? 10),
+    idleTimeoutMillis: Number(process.env.DATABASE_IDLE_TIMEOUT_MS ?? 30_000),
+    connectionTimeoutMillis: connectTimeoutMs,
+    query_timeout: queryTimeoutMs,
+    keepAlive: true,
+    ssl: useDatabaseSsl
+      ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "true" }
+      : false,
+  });
 
-async function connectWithLogging() {
-  return retryTransient<PoolClient>(
-    async () => {
-      const startedAt = Date.now();
-      debugLog("[db.connect.start]");
-
-      try {
-        const client = await withTimeout(rawConnect(), connectTimeoutMs, "connect");
-        debugLog("[db.connect.ok]", { elapsed_ms: Date.now() - startedAt });
-        return client;
-      } catch (error) {
-        debugWarn("[db.connect.error]", {
-          elapsed_ms: Date.now() - startedAt,
-          ...getDbErrorMeta(error),
-        });
-        throw error;
-      }
-    },
-    2,
-    "connect"
-  );
+if (process.env.NODE_ENV !== "production") {
+  globalForPg.pgPool = dbPool;
 }
 
-dbPool.query = (<T extends QueryResultRow = QueryResultRow>(
-  queryTextOrConfig: string | QueryConfig<unknown[]>,
-  values?: unknown[]
-) => {
-  const preview = getQueryPreview(queryTextOrConfig);
+if (!globalForPg.pgPoolInitialized) {
+  globalForPg.pgPoolInitialized = true;
 
-  return retryTransient(
-    async () => {
-      const startedAt = Date.now();
-      const pendingTimer = setTimeout(() => {
-        debugWarn("[db.query.pending]", {
-          elapsed_ms: Date.now() - startedAt,
-          timeout_ms: queryTimeoutMs,
-          preview,
-        });
-      }, Math.min(queryTimeoutMs, 5_000));
-      debugLog("[db.query.start]", { preview });
-
-      try {
-        const result = (await rawQuery(queryTextOrConfig, values)) as QueryResult<T>;
-        const elapsedMs = Date.now() - startedAt;
-        debugLog(elapsedMs > 1_000 ? "[db.query.slow]" : "[db.query.ok]", {
-          elapsed_ms: elapsedMs,
-          rows: result.rowCount,
-          preview,
-        });
-        return result;
-      } catch (error) {
-        debugWarn("[db.query.error]", {
-          elapsed_ms: Date.now() - startedAt,
-          preview,
-          ...getDbErrorMeta(error),
-        });
-        throw error;
-      } finally {
-        clearTimeout(pendingTimer);
-      }
-    },
-    2,
-    preview
-  );
-}) as typeof dbPool.query;
-
-dbPool.connect = ((callback?: (err: Error | undefined, client?: PoolClient, release?: (release?: unknown) => void) => void) => {
-  const promise = connectWithLogging();
-
-  if (typeof callback === "function") {
-    void promise
-      .then((client) => {
-        callback(undefined, client, client.release.bind(client));
-      })
-      .catch((error: Error) => {
-        callback(error);
-      });
-    return;
+  const rawConnect = dbPool.connect.bind(dbPool) as () => Promise<PoolClient>;
+  const rawQuery = dbPool.query.bind(dbPool) as typeof dbPool.query;
+  
+  async function connectWithLogging() {
+    return retryTransient<PoolClient>(
+      async () => {
+        const startedAt = Date.now();
+        debugLog("[db.connect.start]");
+  
+        try {
+          const client = await withTimeout(rawConnect(), connectTimeoutMs, "connect");
+          debugLog("[db.connect.ok]", { elapsed_ms: Date.now() - startedAt });
+          return client;
+        } catch (error) {
+          debugWarn("[db.connect.error]", {
+            elapsed_ms: Date.now() - startedAt,
+            ...getDbErrorMeta(error),
+          });
+          throw error;
+        }
+      },
+      2,
+      "connect"
+    );
   }
-
-  return promise;
-}) as typeof dbPool.connect;
-
-dbPool.on("connect", () => {
-  debugLog("[db.pool.client.ready]");
-});
-
-dbPool.on("error", (error) => {
-  console.warn("[db.pool.error]", error instanceof Error ? error.message : error);
-});
-
-if (isDebuggingEnabled()) {
-  void dbPool
-    .query("SELECT 1 AS connected")
-    .then(() => {
-      console.log("[db.ready] Database connection verified");
-    })
-    .catch((error) => {
-      console.warn("[db.ready.error]", getDbErrorMeta(error));
-    });
+  
+  dbPool.query = (<T extends QueryResultRow = QueryResultRow>(
+    queryTextOrConfig: string | QueryConfig<unknown[]>,
+    values?: unknown[]
+  ) => {
+    const preview = getQueryPreview(queryTextOrConfig);
+  
+    return retryTransient(
+      async () => {
+        const startedAt = Date.now();
+        const pendingTimer = setTimeout(() => {
+          debugWarn("[db.query.pending]", {
+            elapsed_ms: Date.now() - startedAt,
+            timeout_ms: queryTimeoutMs,
+            preview,
+          });
+        }, Math.min(queryTimeoutMs, 5_000));
+        debugLog("[db.query.start]", { preview });
+  
+        try {
+          const result = (await rawQuery(queryTextOrConfig, values)) as QueryResult<T>;
+          const elapsedMs = Date.now() - startedAt;
+          debugLog(elapsedMs > 1_000 ? "[db.query.slow]" : "[db.query.ok]", {
+            elapsed_ms: elapsedMs,
+            rows: result.rowCount,
+            preview,
+          });
+          return result;
+        } catch (error) {
+          debugWarn("[db.query.error]", {
+            elapsed_ms: Date.now() - startedAt,
+            preview,
+            ...getDbErrorMeta(error),
+          });
+          throw error;
+        } finally {
+          clearTimeout(pendingTimer);
+        }
+      },
+      2,
+      preview
+    );
+  }) as typeof dbPool.query;
+  
+  dbPool.connect = ((callback?: (err: Error | undefined, client?: PoolClient, release?: (release?: unknown) => void) => void) => {
+    const promise = connectWithLogging();
+  
+    if (typeof callback === "function") {
+      void promise
+        .then((client) => {
+          callback(undefined, client, client.release.bind(client));
+        })
+        .catch((error: Error) => {
+          callback(error);
+        });
+      return;
+    }
+  
+    return promise;
+  }) as typeof dbPool.connect;
+  
+  dbPool.on("connect", () => {
+    debugLog("[db.pool.client.ready]");
+  });
+  
+  dbPool.on("error", (error) => {
+    console.warn("[db.pool.error]", error instanceof Error ? error.message : error);
+  });
+  
+  if (isDebuggingEnabled()) {
+    void dbPool
+      .query("SELECT 1 AS connected")
+      .then(() => {
+        console.log("[db.ready] Database connection verified");
+      })
+      .catch((error) => {
+        console.warn("[db.ready.error]", getDbErrorMeta(error));
+      });
+  }
+  
+  
 }
 
 export const db = dbPool;

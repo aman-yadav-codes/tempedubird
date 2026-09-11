@@ -210,6 +210,12 @@ export interface InstitutionProgram {
   subject_category_names?: string[];
   section_ids?: number[];
   section_names?: string[];
+  batches_count?: number;
+  batches_summary?: Array<{
+    batch_name: string;
+    sections_count: number;
+    sections: string;
+  }>;
 }
 
 export interface ListProgramsOptions {

@@ -28,13 +28,13 @@ export async function GET(req: NextRequest) {
         SELECT
           n.id,
           n.institution_id,
-          COALESCE(syl.title, sub.name, 'Lecture Notes') AS title,
+          COALESCE(n.title, sub.name, 'Lecture Notes') AS title,
           COALESCE(sub.name, 'General Subject') AS subject,
           COALESCE(prog.title, 'Academic Course') AS program_name,
           '/files/sample-notes.pdf' AS file_url,
           COALESCE(items.item_count, 1) * 45 AS downloads_count,
           COALESCE(creator.full_name, 'Senior Faculty') AS author_name,
-          COALESCE(syl.description, 'Comprehensive chapter notes, reference materials, formula sheets, and study handouts.') AS description,
+          'Comprehensive chapter notes, reference materials, formula sheets, and study handouts.' AS description,
           n.created_at,
           'Free' AS price,
           TRUE AS is_free,
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
         FROM study_notes n
         LEFT JOIN institution_profiles ip ON ip.id = n.institution_id
         LEFT JOIN subjects sub ON sub.id = n.subject_id
-        LEFT JOIN syllabi syl ON syl.id = n.syllabus_id
+        
         LEFT JOIN institution_programs prog ON prog.id = n.program_id
         LEFT JOIN users creator ON creator.id = n.created_by
         LEFT JOIN LATERAL (

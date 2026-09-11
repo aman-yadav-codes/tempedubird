@@ -1,7 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, Loader2, MoreHorizontal, Plus, RefreshCw, Save, Trash2, UserMinus } from "lucide-react";
+import {
+  BookOpen,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  ChevronRight,
+  GraduationCap,
+  Layers,
+  Loader2,
+  MoreHorizontal,
+  Plus,
+  RefreshCw,
+  Save,
+  Trash2,
+  UserCheck,
+  UserMinus,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 
@@ -50,7 +67,16 @@ import { useAuthStore } from "@/store";
 
 type InstitutionOption = { id: number; name?: string; organization_name?: string; slug?: string };
 type ProgramOption = { id: number; title: string; institution_id: number; academic_year_id?: number | null; academic_year_name?: string | null };
-type SectionOption = { id: number; name: string };
+type BatchOption = {
+  id?: number;
+  batch_name: string;
+  name: string;
+  section_ids?: number[];
+  sections?: string[];
+  section_name?: string;
+  enrolled_students_count?: number;
+};
+type SectionOption = { id: number; name: string; batch_name?: string };
 type AcademicYearOption = { id: number; name: string };
 type SubjectOption = {
   id: number;
@@ -70,11 +96,13 @@ type ClassTeacherMapping = {
   teacher_id?: number | null;
   teacher_name?: string | null;
   teacher_email?: string | null;
+  batch_name?: string | null;
 };
 type ClassTeacherRow = {
   id: number;
   program_id: number;
   program_name: string;
+  batch_name?: string;
   section_id: number;
   section_name: string;
   academic_year_id: number;
@@ -193,7 +221,7 @@ export default function TimetableSetupPage() {
   const authHeader = useMemo(() => ({ Authorization: `Bearer ${accessToken}` }), [accessToken]);
   const isPlatformAdmin = Boolean(user?.role_codes?.includes("platform_admin") || user?.is_super_admin);
   const useSidebarInstitution = Boolean(activeInstitution && !isPlatformAdmin);
-  const [tab, setTab] = useState<"mapping" | "slots" | "periods">("mapping");
+  const [tab, setTab] = useState<"periods" | "mapping" | "slots">("periods");
 
   const [institutionId, setInstitutionId] = useState("");
   const [institutionName, setInstitutionName] = useState("");
@@ -205,8 +233,14 @@ export default function TimetableSetupPage() {
     : institutionName;
   const [programId, setProgramId] = useState("");
   const [programName, setProgramName] = useState("");
+
+  // Batches and sections state
+  const [batches, setBatches] = useState<BatchOption[]>([]);
+  const [selectedBatchName, setSelectedBatchName] = useState<string>("ALL");
+  const [allSections, setAllSections] = useState<SectionOption[]>([]);
   const [sections, setSections] = useState<SectionOption[]>([]);
   const [sectionId, setSectionId] = useState("");
+
   const [academicYearId, setAcademicYearId] = useState("");
   const [academicYearName, setAcademicYearName] = useState("");
   const [classTeacher, setClassTeacher] = useState<ClassTeacherMapping | null>(null);
@@ -248,6 +282,9 @@ export default function TimetableSetupPage() {
   const resetProgram = useCallback(() => {
     setProgramId("");
     setProgramName("");
+    setBatches([]);
+    setSelectedBatchName("ALL");
+    setAllSections([]);
     setSections([]);
     setSectionId("");
     setAcademicYearId("");
@@ -374,20 +411,87 @@ export default function TimetableSetupPage() {
     if (!id) return;
     setProgramDetailLoading(true);
     try {
-      const res = await fetch(`/api/admin/institutions/programs/${id}`, { headers: authHeader });
-      const json = await res.json();
-      if (!res.ok) {
-        toast.error(json.error ?? "Failed to load program");
-        return;
+      const batchRes = await fetch(`/api/admin/institutions/programs/${id}/batches`, { headers: authHeader });
+      const batchJson = await batchRes.json().catch(() => ({}));
+
+      const rawBatches: BatchOption[] = Array.isArray(batchJson.data) ? batchJson.data : [];
+      setBatches(rawBatches);
+
+      const secList: SectionOption[] = [];
+      if (rawBatches.length > 0) {
+        for (const b of rawBatches) {
+          const bName = b.batch_name || b.name || "Default Batch";
+          if (b.section_ids && b.section_ids.length > 0) {
+            b.section_ids.forEach((sId: number, idx: number) => {
+              const sName = b.sections?.[idx] || `Section ${sId}`;
+              if (!secList.some((existing) => existing.id === sId)) {
+                secList.push({
+                  id: sId,
+                  name: sName,
+                  batch_name: bName,
+                });
+              }
+            });
+          } else if (b.id) {
+            if (!secList.some((existing) => existing.id === b.id)) {
+              secList.push({
+                id: b.id,
+                name: b.section_name || b.name || `Section ${b.id}`,
+                batch_name: bName,
+              });
+            }
+          }
+        }
       }
-      setSections((json.data.section_ids || []).map((sectionIdValue: number, index: number) => ({
-        id: sectionIdValue,
-        name: json.data.section_names?.[index] || `Section ${sectionIdValue}`,
-      })));
+
+      if (secList.length === 0) {
+        const progRes = await fetch(`/api/admin/institutions/programs/${id}`, { headers: authHeader });
+        const progJson = await progRes.json().catch(() => ({}));
+        if (progJson.data?.section_ids) {
+          (progJson.data.section_ids || []).forEach((sId: number, idx: number) => {
+            secList.push({
+              id: sId,
+              name: progJson.data.section_names?.[idx] || `Section ${sId}`,
+              batch_name: "Default Batch",
+            });
+          });
+        }
+      }
+
+      setAllSections(secList);
+      setSections(secList);
+      setSelectedBatchName("ALL");
+      if (secList.length > 0) {
+        setSectionId(String(secList[0].id));
+      } else {
+        setSectionId("");
+      }
     } finally {
       setProgramDetailLoading(false);
     }
   }
+
+  // Handle batch filtering
+  const handleBatchChange = (batchName: string) => {
+    setSelectedBatchName(batchName);
+    if (batchName === "ALL") {
+      setSections(allSections);
+      if (allSections.length > 0 && !allSections.some((s) => String(s.id) === sectionId)) {
+        setSectionId(String(allSections[0].id));
+      }
+    } else {
+      const filtered = allSections.filter((s) => (s.batch_name || "Default Batch") === batchName);
+      setSections(filtered);
+      if (filtered.length > 0) {
+        if (!filtered.some((s) => String(s.id) === sectionId)) {
+          setSectionId(String(filtered[0].id));
+        }
+      } else {
+        setSectionId("");
+      }
+    }
+    setClassTeacher(null);
+  };
 
   const loadClassTeacher = useCallback(async () => {
     if (!programId || !sectionId || !academicYearId) {
@@ -548,11 +652,12 @@ export default function TimetableSetupPage() {
     return () => window.clearTimeout(timer);
   }, [isReady, loadClassTeacherList, tab]);
 
-  async function saveClassTeacher() {
+  async function saveClassTeacherExplicit(teacherIdToSave?: number | null) {
     if (!programId || !sectionId || !academicYearId) {
       toast.error("Select program, section, and academic year");
       return;
     }
+    const targetTeacherId = teacherIdToSave !== undefined ? teacherIdToSave : (classTeacher?.teacher_id ?? null);
     setMappingSaving(true);
     try {
       const res = await fetch("/api/admin/timetable/class-teacher", {
@@ -562,12 +667,13 @@ export default function TimetableSetupPage() {
           programId,
           sectionId,
           academicYearId,
-          teacherId: classTeacher?.teacher_id ?? null,
+          teacherId: targetTeacherId,
         }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) return toast.error(json.error ?? "Failed to save class teacher");
-      toast.success(classTeacher?.teacher_id ? "Class teacher saved" : "Class teacher assignment cleared");
+      toast.success(targetTeacherId ? "Class teacher assigned successfully" : "Class teacher assignment cleared");
+      setEditingClassTeacher(false);
       await loadClassTeacher();
       await loadClassTeacherList();
     } finally {
@@ -602,7 +708,7 @@ export default function TimetableSetupPage() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) return toast.error(json.error ?? "Failed to save timetable");
-      toast.success("Timetable saved");
+      toast.success("Timetable period schedule saved successfully");
       await loadTimetable();
     } finally {
       setTimetableSaving(false);
@@ -676,6 +782,9 @@ export default function TimetableSetupPage() {
       clearSelectionRef.current = null;
       setClearTargets([]);
       await loadClassTeacherList();
+      if (clearTargets.some((t) => String(t.section_id) === sectionId && String(t.program_id) === programId)) {
+        await loadClassTeacher();
+      }
     } finally {
       setClearSaving(false);
     }
@@ -689,17 +798,27 @@ export default function TimetableSetupPage() {
         return;
       }
 
-      const programRefresh = programId ? loadProgramDetail(programId) : Promise.resolve();
       if (tab === "periods") {
-        await Promise.all([programRefresh, loadTimetable()]);
+        if (programId) await loadProgramDetail(programId);
+        await loadTimetable();
+        await loadClassTeacher();
         return;
       }
 
-      await Promise.all([programRefresh, loadClassTeacher(), loadClassTeacherList()]);
+      if (programId) await loadProgramDetail(programId);
+      await loadClassTeacher();
+      await loadClassTeacherList();
     } finally {
       setRefreshing(false);
     }
   }
+
+  // Selected section object
+  const currentSection = useMemo(() => {
+    return allSections.find((s) => String(s.id) === sectionId);
+  }, [allSections, sectionId]);
+
+  const activeBatchName = currentSection?.batch_name || selectedBatchName !== "ALL" ? selectedBatchName : (batches[0]?.batch_name || "Batch");
 
   const classTeacherColumns = useMemo<ColumnDef<ClassTeacherRow>[]>(() => [
     {
@@ -729,28 +848,55 @@ export default function TimetableSetupPage() {
     },
     {
       accessorKey: "program_name",
-      header: "Class / Program",
-      cell: ({ row }) => <span className="font-medium">{row.original.program_name}</span>,
+      header: "Course & Program",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <BookOpen className="size-4 text-primary shrink-0" />
+          <span className="font-medium text-foreground">{row.original.program_name}</span>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "batch_name",
+      header: "Batch",
+      cell: ({ row }) => (
+        <Badge variant="secondary" className="font-medium">
+          {row.original.batch_name || "Default Batch"}
+        </Badge>
+      ),
     },
     {
       accessorKey: "section_name",
       header: "Section",
+      cell: ({ row }) => (
+        <span className="font-semibold text-foreground">{row.original.section_name}</span>
+      ),
     },
     {
       accessorKey: "academic_year_name",
       header: "Academic Year",
+      cell: ({ row }) => (
+        <Badge variant="outline" className="text-xs">
+          {row.original.academic_year_name}
+        </Badge>
+      ),
     },
     {
       accessorKey: "teacher_name",
       header: "Class Teacher",
       cell: ({ row }) => (
-        <div className="min-w-0">
-          <p className="font-medium">{row.original.teacher_name}</p>
-          {row.original.teacher_email && (
-            <p className="max-w-64 truncate text-xs text-muted-foreground">
-              {row.original.teacher_email}
-            </p>
-          )}
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-xs">
+            {row.original.teacher_name?.charAt(0)?.toUpperCase() || "T"}
+          </div>
+          <div className="min-w-0">
+            <p className="font-medium text-foreground text-sm">{row.original.teacher_name}</p>
+            {row.original.teacher_email && (
+              <p className="max-w-64 truncate text-xs text-muted-foreground">
+                {row.original.teacher_email}
+              </p>
+            )}
+          </div>
         </div>
       ),
     },
@@ -773,7 +919,7 @@ export default function TimetableSetupPage() {
                 setClearTargets([row.original]);
               }}
             >
-              <UserMinus className="size-4" />
+              <UserMinus className="size-4 mr-2" />
               Clear Class Teacher
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -786,43 +932,47 @@ export default function TimetableSetupPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Timetable Setup</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Timetable Setup & Management</h1>
           <p className="text-sm text-muted-foreground">
-            Configure student class timetables, period slot timings, and staff class teacher assignments.
+            Create and manage timetables on a Course & Program, Batch, and Section basis, and assign class teachers.
           </p>
         </div>
       </div>
 
+      {/* Tabs */}
       <div className="flex items-center justify-between gap-3 border-b border-border">
         <div className="flex min-w-0 gap-2 overflow-x-auto">
           <button
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              tab === "periods" ? "border-primary text-foreground font-bold" : "border-transparent text-muted-foreground hover:text-foreground"
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              tab === "periods" ? "border-primary text-primary font-bold" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
             onClick={() => setTab("periods")}
           >
+            <CalendarDays className="size-4" />
             <span>Student Timetable</span>
             <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
               For Students
             </Badge>
           </button>
           <button
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              tab === "mapping" ? "border-primary text-foreground font-bold" : "border-transparent text-muted-foreground hover:text-foreground"
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              tab === "mapping" ? "border-primary text-primary font-bold" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
             onClick={() => setTab("mapping")}
           >
+            <UserCheck className="size-4" />
             <span>Class Teacher Mapping</span>
             <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30">
               For Staff
             </Badge>
           </button>
           <button
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              tab === "slots" ? "border-primary text-foreground font-bold" : "border-transparent text-muted-foreground hover:text-foreground"
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              tab === "slots" ? "border-primary text-primary font-bold" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
             onClick={() => setTab("slots")}
           >
+            <Layers className="size-4" />
             <span>Timetable Slots</span>
             <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30">
               Period Schedule
@@ -833,225 +983,454 @@ export default function TimetableSetupPage() {
           type="button"
           variant="outline"
           size="sm"
-          className="mb-1 shrink-0"
+          className="mb-1 shrink-0 gap-1.5"
           onClick={() => void refreshActiveTab()}
           disabled={refreshing || !selectedInstitutionId}
-          aria-label={`Refresh ${tab === "mapping" ? "class teacher mapping" : tab === "slots" ? "timetable slots" : "period teacher mapping"}`}
+          aria-label="Refresh timetable data"
         >
           <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
           <span className="hidden sm:inline">Refresh</span>
         </Button>
       </div>
 
+      {/* Scope Selectors (Course & Program, Batch, Section, Academic Year) */}
       {(!useSidebarInstitution || tab === "mapping" || tab === "periods") && (
-      <section className="rounded-md border border-border bg-card p-4">
-        <div className={`grid gap-3 md:grid-cols-2 ${useSidebarInstitution ? "xl:grid-cols-3" : "xl:grid-cols-4"}`}>
-          {!useSidebarInstitution && (
-          <div className="min-h-[104px] space-y-2 rounded-md border border-border bg-background/40 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <Label>Institution</Label>
-              <Badge variant="outline" className="shrink-0">Step 1</Badge>
-            </div>
-            <AsyncSearchPopover<InstitutionOption>
-                value={institutionId}
-                onChange={(value) => {
-                  setInstitutionId(value);
-                  if (!value) setInstitutionName("");
-                }}
-                onSelectItem={(item) => setInstitutionName(item.organization_name || item.name || item.slug || `Institution ${item.id}`)}
-                selectedLabel={institutionName || undefined}
-                placeholder="Select institution..."
-                searchPlaceholder="Search institutions..."
-                fetcher={fetchInstitutions}
-                getValue={(item) => String(item.id)}
-                getLabel={(item) => item.organization_name || item.name || item.slug || `Institution ${item.id}`}
-            />
+        <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-3 border-b border-border/60 pb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <BookOpen className="size-3.5 text-primary" />
+              Target Selection (Course, Program, Batch & Section)
+            </span>
+            {programName && (
+              <span className="text-xs font-medium text-primary">
+                {programName} {currentSection ? `• Section: ${currentSection.name}` : ""}
+              </span>
+            )}
           </div>
-          )}
+          <div className={`grid gap-3 grid-cols-1 sm:grid-cols-2 ${useSidebarInstitution ? "lg:grid-cols-4" : "lg:grid-cols-5"}`}>
+            {!useSidebarInstitution && (
+              <div className="space-y-1.5 rounded-lg border border-border/80 bg-background/50 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs font-semibold text-muted-foreground">Institution</Label>
+                  <Badge variant="secondary" className="text-[10px] h-4 px-1.5">Step 1</Badge>
+                </div>
+                <AsyncSearchPopover<InstitutionOption>
+                  value={institutionId}
+                  onChange={(value) => {
+                    setInstitutionId(value);
+                    if (!value) setInstitutionName("");
+                  }}
+                  onSelectItem={(item) => setInstitutionName(item.organization_name || item.name || item.slug || `Institution ${item.id}`)}
+                  selectedLabel={institutionName || undefined}
+                  placeholder="Select institution..."
+                  searchPlaceholder="Search institutions..."
+                  fetcher={fetchInstitutions}
+                  getValue={(item) => String(item.id)}
+                  getLabel={(item) => item.organization_name || item.name || item.slug || `Institution ${item.id}`}
+                />
+              </div>
+            )}
 
-          {(tab === "mapping" || tab === "periods") && (
-            <>
-              <div className="min-h-[104px] space-y-2 rounded-md border border-border bg-background/40 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <Label>Program with Available Slots</Label>
-                  <Badge variant="outline" className="shrink-0">Step {useSidebarInstitution ? 1 : 2}</Badge>
+            {(tab === "mapping" || tab === "periods") && (
+              <>
+                {/* Step 2: Course & Program */}
+                <div className="space-y-1.5 rounded-lg border border-border/80 bg-background/50 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs font-semibold text-muted-foreground">Course & Program</Label>
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">Step {useSidebarInstitution ? 1 : 2}</Badge>
+                  </div>
+                  <AsyncSearchPopover<ProgramOption>
+                    value={programId}
+                    onChange={(value) => {
+                      setProgramId(value);
+                      setProgramName("");
+                      setBatches([]);
+                      setSelectedBatchName("ALL");
+                      setAllSections([]);
+                      setSections([]);
+                      setSectionId("");
+                      setClassTeacher(null);
+                      setProgramDetailLoading(Boolean(value));
+                    }}
+                    onSelectItem={(item) => {
+                      setProgramId(String(item.id));
+                      setProgramName(item.title);
+                      setSectionId("");
+                      setClassTeacher(null);
+                      loadProgramDetail(String(item.id));
+                    }}
+                    selectedLabel={programName || undefined}
+                    placeholder={selectedInstitutionId ? "Select Course & Program..." : "Select institution first"}
+                    searchPlaceholder="Search courses and programs..."
+                    disabled={!selectedInstitutionId}
+                    fetcher={fetchPrograms}
+                    getValue={(item) => String(item.id)}
+                    getLabel={(item) => item.title}
+                  />
                 </div>
-                <AsyncSearchPopover<ProgramOption>
-                  value={programId}
-                  onChange={(value) => {
-                    setProgramId(value);
-                    setProgramName("");
-                    setSections([]);
-                    setSectionId("");
-                    setClassTeacher(null);
-                    setProgramDetailLoading(Boolean(value));
-                  }}
-                  onSelectItem={(item) => {
-                    setProgramId(String(item.id));
-                    setProgramName(item.title);
-                    setSectionId("");
-                    setClassTeacher(null);
-                    loadProgramDetail(String(item.id));
-                  }}
-                  selectedLabel={programName || undefined}
-                  placeholder={selectedInstitutionId ? "Select program..." : "Select institution first"}
-                  searchPlaceholder="Search programs..."
-                  disabled={!selectedInstitutionId}
-                  fetcher={fetchPrograms}
-                  getValue={(item) => String(item.id)}
-                  getLabel={(item) => item.title}
-                />
-              </div>
-              <div className="min-h-[104px] space-y-2 rounded-md border border-border bg-background/40 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <Label>Section</Label>
-                  <Badge variant="outline" className="shrink-0">Step {useSidebarInstitution ? 2 : 3}</Badge>
+
+                {/* Step 3: Batch Selector */}
+                <div className="space-y-1.5 rounded-lg border border-border/80 bg-background/50 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs font-semibold text-muted-foreground">Batch</Label>
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">Step {useSidebarInstitution ? 2 : 3}</Badge>
+                  </div>
+                  <Select
+                    value={selectedBatchName}
+                    onValueChange={handleBatchChange}
+                    disabled={programDetailLoading || !programId}
+                  >
+                    <SelectTrigger className="w-full">
+                      {programDetailLoading ? (
+                        <span className="flex items-center gap-2 text-muted-foreground text-xs">
+                          <Loader2 className="size-3.5 animate-spin" />
+                          Loading batches...
+                        </span>
+                      ) : (
+                        <SelectValue placeholder={batches.length ? "All Batches" : "No batches found"} />
+                      )}
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All Batches ({batches.length || allSections.length})</SelectItem>
+                      {batches.map((batch, idx) => {
+                        const bName = batch.batch_name || batch.name || `Batch ${idx + 1}`;
+                        return (
+                          <SelectItem key={`${bName}-${idx}`} value={bName}>
+                            {bName} {batch.enrolled_students_count ? `(${batch.enrolled_students_count} std)` : ""}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Select
-                  value={sectionId}
-                  onValueChange={(value) => {
-                    setSectionId(value);
-                    setClassTeacher(null);
-                  }}
-                  disabled={programDetailLoading || !sections.length}
-                >
-                  <SelectTrigger className="w-full">
-                    {programDetailLoading ? (
-                      <span className="flex items-center gap-2 text-muted-foreground">
-                        <Loader2 className="size-4 animate-spin" />
-                        Loading sections...
-                      </span>
-                    ) : (
-                      <SelectValue placeholder={sections.length ? "Select section..." : programId ? "No sections" : "Select program first"} />
-                    )}
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sections.map((section) => <SelectItem key={section.id} value={String(section.id)}>{section.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="min-h-[104px] space-y-2 rounded-md border border-border bg-background/40 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <Label>Academic Year</Label>
-                  <Badge variant="outline" className="shrink-0">Step {useSidebarInstitution ? 3 : 4}</Badge>
+
+                {/* Step 4: Section */}
+                <div className="space-y-1.5 rounded-lg border border-border/80 bg-background/50 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs font-semibold text-muted-foreground">Section</Label>
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">Step {useSidebarInstitution ? 3 : 4}</Badge>
+                  </div>
+                  <Select
+                    value={sectionId}
+                    onValueChange={(value) => {
+                      setSectionId(value);
+                      setClassTeacher(null);
+                    }}
+                    disabled={programDetailLoading || !sections.length}
+                  >
+                    <SelectTrigger className="w-full">
+                      {programDetailLoading ? (
+                        <span className="flex items-center gap-2 text-muted-foreground text-xs">
+                          <Loader2 className="size-3.5 animate-spin" />
+                          Loading sections...
+                        </span>
+                      ) : (
+                        <SelectValue placeholder={sections.length ? "Select section..." : programId ? "No sections" : "Select program first"} />
+                      )}
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sections.map((section) => (
+                        <SelectItem key={section.id} value={String(section.id)}>
+                          {section.name} {section.batch_name && selectedBatchName === "ALL" ? `(${section.batch_name})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <AsyncSearchPopover<AcademicYearOption>
-                  value={academicYearId}
-                  onChange={(value) => {
-                    setAcademicYearId(value);
-                    setClassTeacher(null);
-                    if (!value) setAcademicYearName("");
-                  }}
-                  onSelectItem={(item) => setAcademicYearName(item.name)}
-                  selectedLabel={academicYearName || undefined}
-                  placeholder={
-                    !selectedInstitutionId
-                      ? "Select institution first"
-                      : yearsLoading
-                        ? "Current year loading..."
-                        : "Select year..."
-                  }
-                  searchPlaceholder="Search years..."
-                  disabled={!selectedInstitutionId}
-                  loading={yearsLoading}
-                  fetcher={fetchAcademicYears}
-                  getValue={(item) => String(item.id)}
-                  getLabel={(item) => item.name}
-                />
-              </div>
-            </>
-          )}
-        </div>
-      </section>
+
+                {/* Step 5: Academic Year */}
+                <div className="space-y-1.5 rounded-lg border border-border/80 bg-background/50 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs font-semibold text-muted-foreground">Academic Year</Label>
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">Step {useSidebarInstitution ? 4 : 5}</Badge>
+                  </div>
+                  <AsyncSearchPopover<AcademicYearOption>
+                    value={academicYearId}
+                    onChange={(value) => {
+                      setAcademicYearId(value);
+                      setClassTeacher(null);
+                      if (!value) setAcademicYearName("");
+                    }}
+                    onSelectItem={(item) => setAcademicYearName(item.name)}
+                    selectedLabel={academicYearName || undefined}
+                    placeholder={
+                      !selectedInstitutionId
+                        ? "Select institution first"
+                        : yearsLoading
+                          ? "Current year loading..."
+                          : "Select year..."
+                    }
+                    searchPlaceholder="Search years..."
+                    disabled={!selectedInstitutionId}
+                    loading={yearsLoading}
+                    fetcher={fetchAcademicYears}
+                    getValue={(item) => String(item.id)}
+                    getLabel={(item) => item.name}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </section>
       )}
 
-      {tab === "mapping" ? (
-        <>
-          <section className="rounded-md border bg-card">
-            <div className="flex items-center justify-between border-b border-border p-4">
-              <div>
-                <h2 className="font-semibold">Class Teacher Mapping</h2>
-                <p className="text-xs text-muted-foreground">Assign one class teacher to the selected program, section, and academic year.</p>
+      {/* Tab Content */}
+      {tab === "periods" ? (
+        <div className="space-y-5">
+          {/* Period Timetable Schedule Grid */}
+          <section className="rounded-xl border bg-card shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border p-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <CalendarDays className="size-5" />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-base">Period Subject & Teacher Timetable</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Click any period cell to assign or edit the subject and lecture teacher for that day and slot.
+                  </p>
+                </div>
               </div>
               <Button
-                onClick={saveClassTeacher}
+                onClick={saveTimetable}
+                disabled={timetableLoading || timetableSaving || !timetableSlots.length || !programId || !sectionId || !academicYearId}
+                className="gap-1.5"
+              >
+                {timetableSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                {timetableSaving ? "Saving Timetable..." : "Save Timetable"}
+              </Button>
+            </div>
+
+            {timetableLoading ? (
+              <div className="p-4">
+                <ClassTeacherSkeleton />
+              </div>
+            ) : timetableSlots.length ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px] text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/40">
+                      <th className="w-36 p-3.5 text-left font-semibold text-muted-foreground">Day</th>
+                      {timetableSlots.map((slot) => (
+                        <th key={slot.id} className="min-w-36 p-3.5 text-left font-semibold text-muted-foreground">
+                          <span className="block text-foreground font-semibold">{slot.slot_name || `Slot ${slot.slot_order}`}</span>
+                          <span className="text-[11px] font-medium text-muted-foreground">{String(slot.start_time).slice(0, 5)} - {String(slot.end_time).slice(0, 5)}</span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DAYS.map((day) => (
+                      <tr key={day.value} className="border-b border-border/70 last:border-b-0 hover:bg-muted/10 transition">
+                        <td className="p-3.5 font-bold text-foreground bg-muted/20 border-r border-border/50">{day.label}</td>
+                        {timetableSlots.map((slot) => {
+                          const entryKey = keyFor(day.value, slot.id);
+                          const entry = viewEntries.get(entryKey);
+                          const draftEntry = entryMap[entryKey];
+                          if (slot.slot_type !== "CLASS") {
+                            return (
+                              <td key={slot.id} className="p-3">
+                                <div className="rounded-lg border border-dashed bg-muted/30 p-3 text-center text-xs font-semibold text-muted-foreground">
+                                  {{
+                                    BREAK: "☕ Break",
+                                    LUNCH: "🍱 Lunch",
+                                    ASSEMBLY: "🔔 Assembly",
+                                    ACTIVITY: "🎨 Activity",
+                                    CLASS: "Class",
+                                  }[slot.slot_type]}
+                                </div>
+                              </td>
+                            );
+                          }
+
+                          return (
+                            <td key={slot.id} className="p-2.5 align-top">
+                              <button
+                                type="button"
+                                onClick={() => openAssignment(day.label, slot, entryKey)}
+                                disabled={timetableSaving}
+                                className={`min-h-20 w-full rounded-xl border p-3 text-left transition ${
+                                  draftEntry || entry
+                                    ? "bg-primary/5 border-primary/30 hover:border-primary hover:bg-primary/10 shadow-xs"
+                                    : "bg-background border-border/70 hover:border-primary/50 hover:bg-muted/30"
+                                } disabled:cursor-not-allowed disabled:opacity-60`}
+                              >
+                                {draftEntry ? (
+                                  <>
+                                    <div className="flex items-center gap-1.5">
+                                      <BookOpen className="size-3.5 text-primary shrink-0" />
+                                      <span className="block font-semibold text-foreground text-xs leading-tight truncate">{draftEntry.subjectName}</span>
+                                    </div>
+                                    <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                      <Users className="size-3 shrink-0 text-primary/70" />
+                                      <span className="truncate">{draftEntry.teacherName || "Choose teacher"}</span>
+                                    </div>
+                                  </>
+                                ) : entry ? (
+                                  <>
+                                    <div className="flex items-center gap-1.5">
+                                      <BookOpen className="size-3.5 text-primary shrink-0" />
+                                      <span className="block font-semibold text-foreground text-xs leading-tight truncate">{entry.subject_name}</span>
+                                    </div>
+                                    <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                      <Users className="size-3 shrink-0 text-primary/70" />
+                                      <span className="truncate">{entry.teacher_name || "Choose teacher"}</span>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="flex flex-col items-center justify-center py-2 text-muted-foreground/60 hover:text-primary transition">
+                                    <Plus className="size-4 mb-0.5" />
+                                    <span className="text-[11px] font-medium">Assign</span>
+                                  </div>
+                                )}
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3 p-12 text-center text-sm text-muted-foreground">
+                <CalendarDays className="size-10 text-muted-foreground/40" />
+                <p className="max-w-md">
+                  Select a Course & Program, Batch/Section, and Academic Year above. If no slots appear, configure timetable bell slots first.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setTab("slots")}
+                  disabled={!selectedInstitutionId}
+                  className="gap-1.5 mt-2"
+                >
+                  <Plus className="size-4" />
+                  Configure Timetable Slots
+                </Button>
+              </div>
+            )}
+          </section>
+        </div>
+      ) : tab === "mapping" ? (
+        <div className="space-y-6">
+          {/* Top Quick Assign Card */}
+          <section className="rounded-xl border bg-card p-4 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
+              <div>
+                <h2 className="font-semibold text-base">Assign Class Teacher</h2>
+                <p className="text-xs text-muted-foreground">
+                  Assign or update the dedicated class teacher for the selected Course, Batch, Section, and Academic Year.
+                </p>
+              </div>
+              <Button
+                onClick={() => void saveClassTeacherExplicit()}
                 disabled={programDetailLoading || loading || mappingSaving || !programId || !sectionId || !academicYearId}
+                className="gap-1.5"
               >
                 {mappingSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                 {mappingSaving ? "Saving..." : "Save Class Teacher"}
               </Button>
             </div>
-            <div>
+            <div className="pt-4">
               {programDetailLoading || loading ? (
                 <ClassTeacherSkeleton />
               ) : programId && sectionId && academicYearId ? (
-                <div className="grid gap-4 p-4 md:grid-cols-[1fr_420px] md:items-center">
+                <div className="grid gap-4 md:grid-cols-[1fr_420px] md:items-center">
                   <div>
-                    <p className="font-medium">Class Teacher</p>
-                    <p className="text-xs text-muted-foreground">
-                      This teacher is responsible for the selected section during this academic year.
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs font-semibold text-primary border-primary/30">
+                        {programName}
+                      </Badge>
+                      <Badge variant="secondary" className="text-xs">
+                        {activeBatchName} • Section {currentSection?.name || sectionId}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      This teacher will be responsible for attendance, classroom conduct, and student records for this section during {academicYearName}.
                     </p>
                   </div>
                   {classTeacher?.teacher_id && classTeacher.teacher_name && !editingClassTeacher ? (
-                    <div className="flex min-w-0 items-center justify-between gap-3 rounded-md border bg-background p-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">{classTeacher.teacher_name}</p>
-                        {classTeacher.teacher_email && (
-                          <p className="truncate text-xs text-muted-foreground">{classTeacher.teacher_email}</p>
-                        )}
+                    <div className="flex min-w-0 items-center justify-between gap-3 rounded-xl border bg-muted/20 p-3.5">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-xs">
+                          {classTeacher.teacher_name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">{classTeacher.teacher_name}</p>
+                          {classTeacher.teacher_email && (
+                            <p className="truncate text-xs text-muted-foreground">{classTeacher.teacher_email}</p>
+                          )}
+                        </div>
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setEditingClassTeacher(true)}
-                        disabled={mappingSaving}
-                      >
-                        Change
-                      </Button>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingClassTeacher(true)}
+                          disabled={mappingSaving}
+                        >
+                          Change
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => void saveClassTeacherExplicit(null)}
+                          disabled={mappingSaving}
+                        >
+                          Clear
+                        </Button>
+                      </div>
                     </div>
                   ) : (
-                    <AsyncSearchPopover<TeacherOption>
-                      value={classTeacher?.teacher_id ? String(classTeacher.teacher_id) : ""}
-                      onChange={(value) => {
-                        setClassTeacher(value ? { teacher_id: Number(value) } : null);
-                      }}
-                      onSelectItem={(teacher) => {
-                        setClassTeacher({
-                          teacher_id: teacher.id,
-                          teacher_name: teacher.full_name,
-                          teacher_email: teacher.email,
-                        });
-                        setEditingClassTeacher(false);
-                      }}
-                      selectedLabel={classTeacher?.teacher_name || undefined}
-                      placeholder="Select class teacher..."
-                      searchPlaceholder="Search teachers..."
-                      fetcher={fetchTeachers}
-                      getValue={(item) => String(item.id)}
-                      getLabel={(item) => item.full_name}
-                      renderItem={(item) => (
-                        <div className="flex flex-col py-1 text-left">
-                          <span className="text-sm font-medium">{item.full_name}</span>
-                          {item.email && <span className="text-[10px] text-muted-foreground">{item.email}</span>}
-                        </div>
-                      )}
-                    />
+                    <div className="space-y-2">
+                      <AsyncSearchPopover<TeacherOption>
+                        value={classTeacher?.teacher_id ? String(classTeacher.teacher_id) : ""}
+                        onChange={(value) => {
+                          setClassTeacher(value ? { teacher_id: Number(value) } : null);
+                        }}
+                        onSelectItem={(teacher) => {
+                          setClassTeacher({
+                            teacher_id: teacher.id,
+                            teacher_name: teacher.full_name,
+                            teacher_email: teacher.email,
+                          });
+                          setEditingClassTeacher(false);
+                        }}
+                        selectedLabel={classTeacher?.teacher_name || undefined}
+                        placeholder="Select class teacher..."
+                        searchPlaceholder="Search institution teachers..."
+                        fetcher={fetchTeachers}
+                        getValue={(item) => String(item.id)}
+                        getLabel={(item) => item.full_name}
+                        renderItem={(item) => (
+                          <div className="flex flex-col py-1 text-left">
+                            <span className="text-sm font-medium">{item.full_name}</span>
+                            {item.email && <span className="text-[10px] text-muted-foreground">{item.email}</span>}
+                          </div>
+                        )}
+                      />
+                    </div>
                   )}
                 </div>
               ) : (
                 <div className="p-8 text-center text-sm text-muted-foreground">
-                  Select a program, section, and academic year to assign a class teacher.
+                  Select a Course & Program, Batch/Section, and Academic Year in the filter bar above to assign a class teacher.
                 </div>
               )}
             </div>
           </section>
-          <section>
-            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+
+          {/* Table of all mapped class teachers */}
+          <section className="space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h2 className="font-semibold">Class Teachers</h2>
+                <h2 className="font-semibold text-base">Class Teachers Directory</h2>
                 <p className="text-xs text-muted-foreground">
-                  Review class teachers assigned to every program section and academic year.
+                  Review all class teachers assigned across courses, batches, and sections.
                 </p>
               </div>
               <Input
@@ -1060,8 +1439,8 @@ export default function TimetableSetupPage() {
                   setClassTeacherSearch(event.target.value);
                   setClassTeacherPagination((current) => ({ ...current, pageIndex: 0 }));
                 }}
-                placeholder="Search class, section, teacher..."
-                className="w-full sm:w-72"
+                placeholder="Search course, batch, section, teacher..."
+                className="w-full sm:w-80"
                 disabled={!selectedInstitutionId}
               />
             </div>
@@ -1070,7 +1449,7 @@ export default function TimetableSetupPage() {
               data={classTeacherRows}
               showRowNumbers
               loading={classTeacherListLoading}
-              emptyText={selectedInstitutionId ? "No class teachers assigned." : "Select an institution to view class teachers."}
+              emptyText={selectedInstitutionId ? "No class teachers assigned yet." : "Select an institution to view class teachers."}
               getRowId={(row) => String(row.id)}
               manualPagination
               pageCount={classTeacherPageCount}
@@ -1085,6 +1464,7 @@ export default function TimetableSetupPage() {
                     setClearTargets(selectedRows);
                   }}
                   disabled={clearSaving}
+                  className="gap-1.5"
                 >
                   <UserMinus className="size-4" />
                   Clear Class Teachers
@@ -1092,133 +1472,31 @@ export default function TimetableSetupPage() {
               )}
             />
           </section>
-        </>
-      ) : tab === "periods" ? (
-          <section className="rounded-md border bg-card">
-            <div className="flex items-center justify-between border-b border-border p-4">
-              <div className="flex items-center gap-2">
-                <CalendarDays className="size-5 text-destructive" />
-                <div>
-                  <h2 className="font-semibold">Period Teacher Mapping</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Assign subjects and teachers to every class period for the selected section.
-                  </p>
-                </div>
-              </div>
-              <Button onClick={saveTimetable} disabled={timetableLoading || timetableSaving || !timetableSlots.length}>
-                {timetableSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                {timetableSaving ? "Saving..." : "Save Period Mapping"}
-              </Button>
-            </div>
-
-            {timetableLoading ? (
-              <div className="p-4">
-                <ClassTeacherSkeleton />
-              </div>
-            ) : timetableSlots.length ? (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px] text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="w-36 p-3 text-left font-medium text-muted-foreground">Day</th>
-                      {timetableSlots.map((slot) => (
-                        <th key={slot.id} className="min-w-36 p-3 text-left font-medium text-muted-foreground">
-                          <span className="block text-foreground">{slot.slot_name || `Slot ${slot.slot_order}`}</span>
-                          <span className="text-[11px]">{String(slot.start_time).slice(0, 5)} - {String(slot.end_time).slice(0, 5)}</span>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {DAYS.map((day) => (
-                      <tr key={day.value} className="border-b border-border/70 last:border-b-0">
-                        <td className="p-3 font-medium">{day.label}</td>
-                        {timetableSlots.map((slot) => {
-                          const entryKey = keyFor(day.value, slot.id);
-                          const entry = viewEntries.get(entryKey);
-                          const draftEntry = entryMap[entryKey];
-                          if (slot.slot_type !== "CLASS") {
-                            return (
-                              <td key={slot.id} className="p-3">
-                                <div className="rounded-md border border-dashed bg-muted/20 p-3 text-center text-xs font-semibold text-muted-foreground">
-                                  {{
-                                    BREAK: "Break",
-                                    LUNCH: "Lunch",
-                                    ASSEMBLY: "Assembly",
-                                    ACTIVITY: "Activity",
-                                    CLASS: "Class",
-                                  }[slot.slot_type]}
-                                </div>
-                              </td>
-                            );
-                          }
-
-                          return (
-                            <td key={slot.id} className="p-3 align-top">
-                              <button
-                                type="button"
-                                onClick={() => openAssignment(day.label, slot, entryKey)}
-                                disabled={timetableSaving}
-                                className="min-h-16 w-full rounded-md border bg-background p-3 text-left transition hover:border-primary/60 hover:bg-muted/30 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                {draftEntry ? (
-                                  <>
-                                    <span className="block font-medium">{draftEntry.subjectName}</span>
-                                    <span className="mt-1 block text-xs text-muted-foreground">
-                                      {draftEntry.teacherName || "Choose teacher"}
-                                    </span>
-                                  </>
-                                ) : entry ? (
-                                  <>
-                                    <span className="block font-medium">{entry.subject_name}</span>
-                                    <span className="mt-1 block text-xs text-muted-foreground">
-                                      {entry.teacher_name || "Choose teacher"}
-                                    </span>
-                                  </>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">Assign period</span>
-                                )}
-                              </button>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-3 p-10 text-center text-sm text-muted-foreground">
-                <p>Select program, section, and academic year. Configure timetable slots first if no grid appears.</p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setTab("slots")}
-                  disabled={!selectedInstitutionId}
-                >
-                  <Plus className="size-4" />
-                  Create Timetable Slot
-                </Button>
-              </div>
-            )}
-          </section>
+        </div>
       ) : tab === "slots" ? (
-        <section className="rounded-md border bg-card">
+        <section className="rounded-xl border bg-card shadow-sm">
           <div className="flex items-center justify-between border-b border-border p-4">
             <div>
-              <h2 className="font-semibold">Timetable Slots</h2>
-              <p className="text-xs text-muted-foreground">Define class, break, and lunch periods for the selected institution.</p>
+              <h2 className="font-semibold text-base">Timetable Period Slots & Bell Schedule</h2>
+              <p className="text-xs text-muted-foreground">Define class periods, intervals, and lunch timings for this institution.</p>
             </div>
             <div className="flex gap-2">
               <Button
                 variant="outline"
+                size="sm"
                 onClick={() => setSlots((prev) => [...prev, blankSlot(prev.length + 1)])}
                 disabled={!selectedInstitutionId || slotsLoading || slotsSaving}
+                className="gap-1.5"
               >
                 <Plus className="size-4" />
                 Add Slot
               </Button>
-              <Button onClick={saveSlots} disabled={!selectedInstitutionId || slotsLoading || slotsSaving}>
+              <Button
+                size="sm"
+                onClick={saveSlots}
+                disabled={!selectedInstitutionId || slotsLoading || slotsSaving}
+                className="gap-1.5"
+              >
                 {slotsSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                 {slotsSaving ? "Saving..." : "Save Slots"}
               </Button>
@@ -1228,39 +1506,40 @@ export default function TimetableSetupPage() {
             {slotsLoading ? (
               <TimetableSlotsSkeleton />
             ) : slots.length ? slots.map((slot, index) => (
-              <div key={slot.clientKey} className="grid gap-3 rounded-md border p-3 md:grid-cols-[90px_1fr_130px_130px_140px_44px] md:items-end">
+              <div key={slot.clientKey} className="grid gap-3 rounded-xl border border-border/80 bg-background/50 p-3 md:grid-cols-[90px_1fr_130px_130px_140px_44px] md:items-end">
                 <div className="space-y-1">
-                  <Label>Order</Label>
+                  <Label className="text-xs font-medium">Order</Label>
                   <Input type="number" value={slot.slotOrder} onChange={(event) => setSlots((prev) => prev.map((row, i) => i === index ? { ...row, slotOrder: Number(event.target.value) } : row))} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Name</Label>
+                  <Label className="text-xs font-medium">Period Name</Label>
                   <Input value={slot.slotName} onChange={(event) => setSlots((prev) => prev.map((row, i) => i === index ? { ...row, slotName: event.target.value } : row))} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Start</Label>
+                  <Label className="text-xs font-medium">Start Time</Label>
                   <Input type="time" value={slot.startTime} onChange={(event) => setSlots((prev) => prev.map((row, i) => i === index ? { ...row, startTime: event.target.value } : row))} />
                 </div>
                 <div className="space-y-1">
-                  <Label>End</Label>
+                  <Label className="text-xs font-medium">End Time</Label>
                   <Input type="time" value={slot.endTime} onChange={(event) => setSlots((prev) => prev.map((row, i) => i === index ? { ...row, endTime: event.target.value } : row))} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Type</Label>
+                  <Label className="text-xs font-medium">Type</Label>
                   <Select value={slot.slotType} onValueChange={(value: SlotType) => setSlots((prev) => prev.map((row, i) => i === index ? { ...row, slotType: value } : row))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="CLASS">Class</SelectItem>
-                      <SelectItem value="BREAK">Break</SelectItem>
-                      <SelectItem value="LUNCH">Lunch</SelectItem>
-                      <SelectItem value="ASSEMBLY">Assembly</SelectItem>
-                      <SelectItem value="ACTIVITY">Activity</SelectItem>
+                      <SelectItem value="CLASS">Class Lecture</SelectItem>
+                      <SelectItem value="BREAK">Short Break</SelectItem>
+                      <SelectItem value="LUNCH">Lunch Break</SelectItem>
+                      <SelectItem value="ASSEMBLY">Morning Assembly</SelectItem>
+                      <SelectItem value="ACTIVITY">Activity / Sports</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="text-muted-foreground hover:text-destructive"
                   onClick={() => setSlots((prev) => prev.filter((_, i) => i !== index))}
                   disabled={slotsSaving}
                 >
@@ -1268,14 +1547,15 @@ export default function TimetableSetupPage() {
                 </Button>
               </div>
             )) : (
-              <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-                Select an institution and add slots.
+              <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+                Select an institution and click <strong>Add Slot</strong> to configure the daily period schedule.
               </div>
             )}
           </div>
         </section>
       ) : null}
 
+      {/* Sheet for assigning a subject & teacher to a period */}
       <Sheet open={Boolean(activeCell)} onOpenChange={(open) => !open && setActiveCell(null)}>
         <SheetContent
           className="w-full gap-0 overflow-hidden sm:max-w-lg"
@@ -1285,17 +1565,20 @@ export default function TimetableSetupPage() {
           resizeStorageKey="timetable-setup-period-assignment-sheet"
         >
           <SheetHeader className="shrink-0 border-b p-5 pr-12 text-left">
-            <SheetTitle>Assign Class Period</SheetTitle>
+            <SheetTitle className="flex items-center gap-2">
+              <CalendarDays className="size-5 text-primary" />
+              Assign Period Lecture
+            </SheetTitle>
             <SheetDescription>
               {activeCell
-                ? `${activeCell.dayLabel} - ${activeCell.slot.slot_name || `Slot ${activeCell.slot.slot_order}`} - ${String(activeCell.slot.start_time).slice(0, 5)} to ${String(activeCell.slot.end_time).slice(0, 5)}`
+                ? `${activeCell.dayLabel} • ${activeCell.slot.slot_name || `Slot ${activeCell.slot.slot_order}`} (${String(activeCell.slot.start_time).slice(0, 5)} to ${String(activeCell.slot.end_time).slice(0, 5)})`
                 : "Choose the subject and teacher for this period."}
             </SheetDescription>
           </SheetHeader>
 
           <div className="flex-1 space-y-5 overflow-y-auto p-5">
             <div className="space-y-2">
-              <Label>Subject</Label>
+              <Label className="text-xs font-semibold">Subject</Label>
               <Select
                 value={assignment.subjectId || "none"}
                 onValueChange={(value) => {
@@ -1323,7 +1606,7 @@ export default function TimetableSetupPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Teacher</Label>
+              <Label className="text-xs font-semibold">Teaching Teacher</Label>
               <AsyncSearchPopover<TeacherOption>
                 value={assignment.teacherId}
                 onChange={(value) => {
@@ -1347,7 +1630,7 @@ export default function TimetableSetupPage() {
                 renderItem={(teacher) => (
                   <div className="flex min-w-0 items-center justify-between gap-3 py-1 text-left">
                     <div className="min-w-0">
-                      <p className="truncate font-medium">{teacher.full_name}</p>
+                      <p className="truncate font-medium text-sm">{teacher.full_name}</p>
                       {teacher.email && (
                         <p className="truncate text-xs text-muted-foreground">{teacher.email}</p>
                       )}
@@ -1355,7 +1638,7 @@ export default function TimetableSetupPage() {
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Badge variant="outline" className="shrink-0">
+                          <Badge variant="outline" className="shrink-0 text-xs">
                             {teacher.teaching_subjects?.length ?? 0} subjects
                           </Badge>
                         </TooltipTrigger>
@@ -1373,7 +1656,7 @@ export default function TimetableSetupPage() {
                 )}
               />
               <p className="text-xs text-muted-foreground">
-                Only active teachers from {selectedInstitutionName || "the selected institution"} are available.
+                Only active teachers from {selectedInstitutionName || "the selected institution"} are listed.
               </p>
             </div>
           </div>
@@ -1384,6 +1667,7 @@ export default function TimetableSetupPage() {
               variant="outline"
               onClick={clearAssignment}
               disabled={!activeCell || !entryMap[activeCell.key]}
+              className="text-destructive hover:text-destructive"
             >
               Clear Period
             </Button>
@@ -1395,14 +1679,17 @@ export default function TimetableSetupPage() {
                 type="button"
                 onClick={applyAssignment}
                 disabled={!assignment.subjectId || !assignment.teacherId}
+                className="gap-1.5"
               >
-                Assign Period
+                <Check className="size-4" />
+                Apply Period
               </Button>
             </div>
           </SheetFooter>
         </SheetContent>
       </Sheet>
 
+      {/* Confirmation modal for clearing multiple class teachers */}
       <AlertDialog
         open={clearTargets.length > 0}
         onOpenChange={(open) => {
@@ -1417,7 +1704,7 @@ export default function TimetableSetupPage() {
             <AlertDialogTitle>Clear class teacher assignment?</AlertDialogTitle>
             <AlertDialogDescription>
               {clearTargets.length === 1
-                ? `${clearTargets[0].teacher_name} will be removed from ${clearTargets[0].program_name}, section ${clearTargets[0].section_name}.`
+                ? `${clearTargets[0].teacher_name} will be removed as class teacher from ${clearTargets[0].program_name} (${clearTargets[0].section_name}).`
                 : `The class teacher will be cleared from ${clearTargets.length} selected classes.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1429,8 +1716,9 @@ export default function TimetableSetupPage() {
                 clearClassTeachers();
               }}
               disabled={clearSaving}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {clearSaving && <Loader2 className="size-4 animate-spin" />}
+              {clearSaving && <Loader2 className="size-4 animate-spin mr-1.5" />}
               {clearSaving ? "Clearing..." : "Clear Class Teacher"}
             </AlertDialogAction>
           </AlertDialogFooter>

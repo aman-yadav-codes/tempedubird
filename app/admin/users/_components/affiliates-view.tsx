@@ -200,7 +200,7 @@ export function AffiliatesView() {
         throw new Error(errJson.error || "Failed to credit bonus");
       }
 
-      toast.success(`?${bonusAmount} bonus credited to ${bonusAffiliate.user_name || "affiliate"}`);
+      toast.success(`₹${bonusAmount} bonus credited to ${bonusAffiliate.user_name || "affiliate"}`);
       setBonusOpen(false);
       setBonusAmount("");
       setBonusDesc("");

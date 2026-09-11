@@ -54,7 +54,6 @@ const REGISTER_ROLES = [
   { value: "student", label: "Student (Access courses, notes & exams)" },
   { value: "guardian", label: "Guardian / Parent (Monitor student academic progress)" },
   { value: "institution_admin", label: "Institution / Organization (Manage institution & courses)" },
-  { value: "affiliate", label: "Affiliate Partner (Earn commissions by referring students & partners)" },
 ];
 
 async function parseJsonResponse(res: Response) {
@@ -166,8 +165,18 @@ export function AuthModalDialog({
       searchParams?.get("affiliate") ||
       searchParams?.get("code") ||
       "";
-    if (refCode && !signUpReferralCode) {
-      setSignUpReferralCode(refCode);
+    if (refCode) {
+      try {
+        localStorage.setItem("edubird_referral_code", refCode);
+      } catch {}
+      if (!signUpReferralCode) {
+        setSignUpReferralCode(refCode);
+      }
+    } else if (!signUpReferralCode && typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("edubird_referral_code");
+        if (stored) setSignUpReferralCode(stored);
+      } catch {}
     }
   }, [searchParams, signUpReferralCode]);
 

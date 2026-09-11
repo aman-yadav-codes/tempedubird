@@ -55,6 +55,7 @@ import { useUserLocation } from "@/hooks/use-user-location";
 import { Card, CardContent } from "@/components/ui/card";
 import { CategoriesSection } from "@/components/home/categories-section";
 import { FeaturedCoursesSection } from "@/components/home/featured-courses-section";
+import { PublicExamsSection } from "@/components/home/public-exams-section";
 import { WhyChooseUsSection } from "@/components/home/why-choose-us-section";
 import { CtaSection } from "@/components/home/cta-section";
 
@@ -853,6 +854,9 @@ export function PlatformAdminLanding() {
 
       {/* 5. FEATURED & HIGHEST RATED COURSES */}
       <FeaturedCoursesSection />
+
+      {/* 5B. PUBLIC & GOVERNMENT SELECTION EXAMINATIONS */}
+      <PublicExamsSection />
 
       {/* 6. TOP VERIFIED PARTNER INSTITUTIONS & UNIVERSITIES */}
       {partnerInstitutes.length > 0 && (

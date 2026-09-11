@@ -6,7 +6,21 @@ import {
   UpdateCertificationProviderData,
 } from "@/lib/types/certification-provider";
 
-export async function ensureCertificationProvidersTable(db: Pool) {
+let certSchemaReady: Promise<void> | null = null;
+
+export async function ensureCertificationProvidersTable(db: Pool): Promise<void> {
+  if (certSchemaReady) return certSchemaReady;
+  certSchemaReady = (async () => {
+    try {
+      await initCertProvidersSchemaDirect(db);
+    } catch (e) {
+      console.error("Error ensuring cert providers schema:", e);
+    }
+  })();
+  return certSchemaReady;
+}
+
+export async function initCertProvidersSchemaDirect(db: Pool) {
   await db.query(`
     CREATE TABLE IF NOT EXISTS certification_providers (
       id SERIAL PRIMARY KEY,

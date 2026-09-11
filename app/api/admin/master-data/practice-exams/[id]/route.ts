@@ -60,36 +60,8 @@ async function getTemplate(id: number, academicYearId: number | null = null) {
           WHEN target.target_type = 'STUDENT' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || COALESCE(' > ' || COALESCE(target_scope_program.title, target_scope_master_course.name), '') || ' > ' || target_user.full_name
           ELSE NULL
         END AS target_label,
-        COALESCE(
-          (
-            SELECT json_agg(asn.syllabus_node_id ORDER BY asn.id)
-            FROM practice_exam_syllabus_nodes asn
-            WHERE asn.practice_exam_id = assn.id
-          ),
-          '[]'::json
-        ) AS syllabus_node_ids,
-        COALESCE(
-          (
-            SELECT json_agg(
-              json_build_object(
-                'id', sn.id,
-                'title', sn.title,
-                'node_type', sn.node_type,
-                'subject_id', sub.id,
-                'subject_name', sub.name,
-                'syllabus_id', s.id,
-                'syllabus_title', s.title
-              )
-              ORDER BY sub.name, s.title, sn.sort_order, sn.id
-            )
-            FROM practice_exam_syllabus_nodes asn
-            INNER JOIN syllabus_nodes sn ON sn.id = asn.syllabus_node_id
-            INNER JOIN syllabi s ON s.id = sn.syllabus_id
-            INNER JOIN subjects sub ON sub.id = s.subject_id
-            WHERE asn.practice_exam_id = assn.id
-          ),
-          '[]'::json
-        ) AS syllabus_nodes
+        '[]'::json AS syllabus_node_ids,
+        '[]'::json AS syllabus_nodes
       FROM practice_exam_templates at
       INNER JOIN institution_profiles ip
         ON ip.id = at.source_institution_id
@@ -295,19 +267,14 @@ export async function PATCH(req: Request, context: Context) {
   try {
     const currentUser = await requireAdmin(req);
     await ensurePracticeExamSchema();
-    if (isPlatformAdminUser(currentUser)) {
-      return NextResponse.json(
-        { error: "Platform Admin can block practice exams but cannot edit their content" },
-        { status: 403 }
-      );
-    }
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const { id: value } = await context.params;
     const id = parseId(value);
     const existing = await getTemplate(id);
     if (!existing) {
       return NextResponse.json({ error: "Practice Exam not found" }, { status: 404 });
     }
-    if (existing.blocked_by_platform) {
+    if (existing.blocked_by_platform && !isPlatformAdmin) {
       return NextResponse.json(
         { error: "This practice exam is blocked by Platform Admin and cannot be edited" },
         { status: 423 }
@@ -315,6 +282,7 @@ export async function PATCH(req: Request, context: Context) {
     }
     const institutionId = Number(existing.source_institution_id);
     if (
+      !isPlatformAdmin &&
       !hasPermission(currentUser, "content.practice_exams.edit", { institutionId })
     ) {
       return NextResponse.json(
@@ -346,8 +314,8 @@ export async function PATCH(req: Request, context: Context) {
           SET title = $2,
               description = $3,
               total_marks = $4,
-              ai_question_format = $5::jsonb,
-              duration_minutes = $6,
+              duration_minutes = $5,
+              ai_question_format = $6::jsonb,
               is_public = FALSE,
               marketplace_requested = $7,
               marketplace_requested_at = CASE WHEN $7 THEN COALESCE(marketplace_requested_at, CURRENT_TIMESTAMP) ELSE NULL END,
@@ -358,6 +326,9 @@ export async function PATCH(req: Request, context: Context) {
               is_active = $8,
               is_paid = $10,
               price = $11,
+              subject_id = $12,
+              subject_name = $13,
+              syllabus_data = $14::jsonb,
               version = version + 1,
               updated_by = $9,
               updated_at = CURRENT_TIMESTAMP
@@ -369,15 +340,19 @@ export async function PATCH(req: Request, context: Context) {
           payload.title,
           payload.description,
           payload.totalMarks,
-          JSON.stringify(payload.aiQuestionFormat),
           payload.durationMinutes,
+          JSON.stringify(payload.aiQuestionFormat),
           payload.isPublic,
           payload.isActive,
           currentUser.id,
           payload.isPaid,
           payload.price,
+          payload.subjectId,
+          payload.subjectName,
+          JSON.stringify(payload.syllabusData ?? []),
         ]
       );
+      
       const nextVersion = Number(versionResult.rows[0]?.version ?? 1);
       let practiceExamId = Number(existing.assigned_practice_exam_id);
       if (Number.isInteger(practiceExamId) && practiceExamId > 0) {
@@ -481,19 +456,14 @@ export async function DELETE(req: Request, context: Context) {
   try {
     const currentUser = await requireAdmin(req);
     await ensurePracticeExamSchema();
-    if (isPlatformAdminUser(currentUser)) {
-      return NextResponse.json(
-        { error: "Platform Admin cannot delete institution practice exams" },
-        { status: 403 }
-      );
-    }
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const { id: value } = await context.params;
     const id = parseId(value);
     const existing = await getTemplate(id);
     if (!existing) {
       return NextResponse.json({ error: "Practice Exam not found" }, { status: 404 });
     }
-    if (existing.blocked_by_platform) {
+    if (existing.blocked_by_platform && !isPlatformAdmin) {
       return NextResponse.json(
         { error: "Blocked practice exams cannot be deleted" },
         { status: 423 }
@@ -501,6 +471,7 @@ export async function DELETE(req: Request, context: Context) {
     }
     const institutionId = Number(existing.source_institution_id);
     if (
+      !isPlatformAdmin &&
       !hasPermission(currentUser, "content.practice_exams.delete", { institutionId })
     ) {
       return NextResponse.json(
@@ -539,6 +510,3 @@ export async function DELETE(req: Request, context: Context) {
     return errorResponse(error);
   }
 }
-
-
-

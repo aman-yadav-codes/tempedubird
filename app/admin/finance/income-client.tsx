@@ -314,6 +314,7 @@ export function IncomeClient() {
     paid_by: "",
     paid_by_label: "",
     paid_to: "",
+    paid_to_label: "",
     description: "",
   });
   const [invoiceFiles, setInvoiceFiles] = useState<UploadedDocumentFile[]>([]);
@@ -351,8 +352,8 @@ export function IncomeClient() {
       const pm = paymentMethods.find((m) => String(m.id) === pmId);
       if (pm) {
         const isUpi = ["phonepe", "google_pay", "paytm", "bhim_upi", "other_upi"].includes(pm.method_type);
-        const isBank = pm.method_type === "net_banking";
-        const effectiveMethod: "cash" | "upi" | "net_banking" = isUpi ? "upi" : isBank ? "net_banking" : "cash";
+        const isCash = pm.method_type === "cash";
+        const effectiveMethod: "cash" | "upi" | "net_banking" = isUpi ? "upi" : isCash ? "cash" : "net_banking";
         setForm((current) => ({ ...current, payment_method: effectiveMethod }));
       }
     } else {
@@ -368,8 +369,8 @@ export function IncomeClient() {
     if (defaultPm) {
       setSelectedPaymentMethodKey(`pm_${defaultPm.id}`);
       const isUpi = ["phonepe", "google_pay", "paytm", "bhim_upi", "other_upi"].includes(defaultPm.method_type);
-      const isBank = defaultPm.method_type === "net_banking";
-      effectivePm = isUpi ? "upi" : isBank ? "net_banking" : "cash";
+      const isCash = defaultPm.method_type === "cash";
+      effectivePm = isUpi ? "upi" : isCash ? "cash" : "net_banking";
     } else {
       setSelectedPaymentMethodKey("cash");
     }
@@ -385,7 +386,8 @@ export function IncomeClient() {
       amount: "",
       paid_by: "",
       paid_by_label: "",
-      paid_to: currentUserOption?.value || String(user?.id || ""),
+      paid_to: String(user?.id || ""),
+      paid_to_label: user?.full_name || "Admin",
       description: "",
     });
     setAddOpen(true);
@@ -406,7 +408,8 @@ export function IncomeClient() {
       amount: String(row.amount || ""),
       paid_by: row.paid_by || "",
       paid_by_label: row.payer_name || row.paid_by_label || "",
-      paid_to: row.paid_to || "",
+      paid_to: row.paid_to || String(user?.id || ""),
+      paid_to_label: row.paid_to_label || user?.full_name || "Admin",
       description: row.description || "",
     });
     setEditOpen(true);
@@ -418,17 +421,14 @@ export function IncomeClient() {
       toast.error("Select an income category (Payment For).");
       return;
     }
-    if (!form.paid_to) {
-      toast.error("Select a receiver (Paid To).");
-      return;
-    }
     if (!form.amount || Number(form.amount) <= 0) {
       toast.error("Enter a valid income amount.");
       return;
     }
     setSaving(true);
     try {
-      const paidToLabel = paidToOptions.find((opt) => opt.value === form.paid_to)?.label || form.paid_to;
+      const effectivePaidTo = form.paid_to || String(user?.id || "");
+      const effectivePaidToLabel = form.paid_to_label || user?.full_name || "Admin";
       let effectivePaidBy = form.paid_by;
       let effectivePaidByLabel = form.paid_by_label;
       if (payerMode === "employee") {
@@ -446,8 +446,8 @@ export function IncomeClient() {
           paid_by: effectivePaidBy,
           paid_by_label: effectivePaidByLabel,
           payer_name: effectivePaidByLabel,
-          paid_to: form.paid_to,
-          paid_to_label: paidToLabel,
+          paid_to: effectivePaidTo,
+          paid_to_label: effectivePaidToLabel,
           amount: Number(form.amount),
           income_date: form.income_date,
           description: form.description.trim(),
@@ -1056,13 +1056,17 @@ export function IncomeClient() {
                       </div>
                       {paymentMethods.map((pm) => (
                         <SelectItem key={pm.id} value={`pm_${pm.id}`}>
-                          {pm.method_type === "net_banking" && `🏦 ${pm.bank_name || pm.title} (${pm.account_number ? `..${pm.account_number.slice(-4)}` : "A/C"})`}
-                          {pm.method_type === "phonepe" && `🟣 PhonePe (${pm.upi_id || pm.title})`}
-                          {pm.method_type === "google_pay" && `🔵 Google Pay (${pm.upi_id || pm.title})`}
-                          {pm.method_type === "paytm" && `🔷 Paytm (${pm.upi_id || pm.title})`}
-                          {pm.method_type === "bhim_upi" && `🟢 BHIM UPI (${pm.upi_id || pm.title})`}
-                          {pm.method_type === "other_upi" && `⚡ ${pm.title} (${pm.upi_id || ""})`}
-                          {!["net_banking", "phonepe", "google_pay", "paytm", "bhim_upi", "other_upi"].includes(pm.method_type) && pm.title}
+                          {pm.method_type === "net_banking" && `🏦 ${pm.bank_name || pm.title} (${pm.account_number ? `..${pm.account_number.slice(-4)}` : "A/C"})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "phonepe" && `🟣 PhonePe (${pm.upi_id || pm.title})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "google_pay" && `🔵 Google Pay (${pm.upi_id || pm.title})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "paytm" && `🔷 Paytm (${pm.upi_id || pm.title})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "bhim_upi" && `🟢 BHIM UPI (${pm.upi_id || pm.title})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "other_upi" && `⚡ ${pm.title} (${pm.upi_id || ""})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "payment_gateway" && `💳 ${pm.title} (${pm.gateway_provider || "Gateway"})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "pos_card" && `💳 POS Card (${pm.title})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "cheque" && `📝 Cheque (${pm.title})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "cash" && `💵 Cash (${pm.title})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {!["net_banking", "phonepe", "google_pay", "paytm", "bhim_upi", "other_upi", "payment_gateway", "pos_card", "cheque", "cash"].includes(pm.method_type) && `${pm.title}${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
                         </SelectItem>
                       ))}
                     </>
@@ -1259,29 +1263,7 @@ export function IncomeClient() {
               />
             </div>
 
-            <div className="space-y-2 sm:col-span-2">
-              <div className="flex items-center justify-between">
-                <Label>Paid To (Receiver) <span className="text-rose-500">*</span></Label>
-                <span className="text-[11px] text-muted-foreground">
-                  Default: {user?.full_name || "You"} (person recording income)
-                </span>
-              </div>
-              <Select
-                value={form.paid_to}
-                onValueChange={(value) => setForm((current) => ({ ...current, paid_to: value }))}
-              >
-                <SelectTrigger className="w-full bg-background">
-                  <SelectValue placeholder="Select receiver" />
-                </SelectTrigger>
-                <SelectContent>
-                  {paidToOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+
 
             {/* AUTOMATIC INVOICE GENERATION NOTICE */}
             <div className="space-y-2 sm:col-span-2">
@@ -1345,16 +1327,38 @@ export function IncomeClient() {
             <div className="space-y-2">
               <Label>Payment Method <span className="text-rose-500">*</span></Label>
               <Select
-                value={form.payment_method}
-                onValueChange={(value) => setForm((current) => ({ ...current, payment_method: value }))}
+                value={selectedPaymentMethodKey}
+                onValueChange={handleSelectPaymentMethod}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue placeholder="Select payment method" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="upi">UPI</SelectItem>
-                  <SelectItem value="net_banking">Net Banking</SelectItem>
+                  <SelectItem value="cash">💵 Cash Collection</SelectItem>
+                  <SelectItem value="upi">⚡ UPI (Direct / Cashier)</SelectItem>
+                  <SelectItem value="net_banking">🏦 Net Banking (Direct Transfer)</SelectItem>
+                  {paymentMethods.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                        Configured Accounts &amp; UPI
+                      </div>
+                      {paymentMethods.map((pm) => (
+                        <SelectItem key={pm.id} value={`pm_${pm.id}`}>
+                          {pm.method_type === "net_banking" && `🏦 ${pm.bank_name || pm.title} (${pm.account_number ? `..${pm.account_number.slice(-4)}` : "A/C"})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "phonepe" && `🟣 PhonePe (${pm.upi_id || pm.title})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "google_pay" && `🔵 Google Pay (${pm.upi_id || pm.title})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "paytm" && `🔷 Paytm (${pm.upi_id || pm.title})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "bhim_upi" && `🟢 BHIM UPI (${pm.upi_id || pm.title})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "other_upi" && `⚡ ${pm.title} (${pm.upi_id || ""})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "payment_gateway" && `💳 ${pm.title} (${pm.gateway_provider || "Gateway"})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "pos_card" && `💳 POS Card (${pm.title})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "cheque" && `📝 Cheque (${pm.title})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {pm.method_type === "cash" && `💵 Cash (${pm.title})${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                          {!["net_banking", "phonepe", "google_pay", "paytm", "bhim_upi", "other_upi", "payment_gateway", "pos_card", "cheque", "cash"].includes(pm.method_type) && `${pm.title}${pm.institution_name ? ` • ${pm.institution_name}` : ""}`}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -1440,24 +1444,7 @@ export function IncomeClient() {
                 onChange={(e) => setForm((current) => ({ ...current, amount: normalizeAmountInput(e.target.value) }))}
               />
             </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Paid To (Receiver) <span className="text-rose-500">*</span></Label>
-              <Select
-                value={form.paid_to}
-                onValueChange={(value) => setForm((current) => ({ ...current, paid_to: value }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select receiver" />
-                </SelectTrigger>
-                <SelectContent>
-                  {paidToOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+
             <div className="space-y-2 sm:col-span-2">
               <Label>Description / Remarks</Label>
               <Textarea

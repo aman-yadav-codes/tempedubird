@@ -60,7 +60,21 @@ function addValidity(startDate: Date, count: number, unit: string) {
   return next.toISOString().slice(0, 10);
 }
 
-export async function ensureSubscriptionSchema(db: Queryable) {
+let subscriptionSchemaReady: Promise<void> | null = null;
+
+export async function ensureSubscriptionSchema(db: Queryable): Promise<void> {
+  if (subscriptionSchemaReady) return subscriptionSchemaReady;
+  subscriptionSchemaReady = (async () => {
+    try {
+      await ensureSalesSchema(db);
+    } catch (e) {
+      console.error('Error ensuring sales schema:', e);
+    }
+  })();
+  return subscriptionSchemaReady;
+}
+
+export async function initSubscriptionSchemaDirect(db: Queryable) {
   await ensureSalesSchema(db);
   await db.query(`
     CREATE TABLE IF NOT EXISTS institution_subscriptions (

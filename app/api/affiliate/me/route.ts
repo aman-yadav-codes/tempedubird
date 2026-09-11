@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth/auth";
+import { getAuthUser } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
 import { getUserAffiliateDashboard, ensureAffiliateProfile } from "@/lib/queries/affiliates";
 
 export async function GET(req: Request) {
   try {
-    const user = await getAuthenticatedUser(req);
+    const user = await getAuthUser(req);
     if (!user || !user.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

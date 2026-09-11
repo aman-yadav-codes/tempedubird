@@ -238,12 +238,7 @@ export async function POST(req: Request, context: Context) {
   try {
     const currentUser = await requireAdmin(req);
     await ensureAssignmentTemplateSchema();
-    if (isPlatformAdminUser(currentUser)) {
-      return NextResponse.json(
-        { error: "Platform Admin cannot generate assignment questions" },
-        { status: 403 }
-      );
-    }
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
 
     const { id: value } = await context.params;
     const id = parseId(value);
@@ -277,13 +272,14 @@ export async function POST(req: Request, context: Context) {
     if (!assignment) {
       return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
     }
-    if (assignment.blocked_by_platform) {
+    if (assignment.blocked_by_platform && !isPlatformAdmin) {
       return NextResponse.json(
         { error: "This assignment is blocked by Platform Admin" },
         { status: 423 }
       );
     }
     if (
+      !isPlatformAdmin &&
       !hasPermission(currentUser, "content.assignments.edit", {
         institutionId: assignment.source_institution_id,
       })
@@ -312,25 +308,10 @@ export async function POST(req: Request, context: Context) {
 
     const provider = await getActiveAiProviderForInstitution(
       db,
-      assignment.source_institution_id,
-      false
+      assignment.source_institution_id ?? null,
+      isPlatformAdmin
     );
     if (!provider?.token?.trim()) throw new Error("Configure API key first");
-
-    const syllabusRes = await db.query<{ label: string }>(
-      `
-        SELECT CONCAT_WS(' / ', s.title, sn.title) AS label
-        FROM assignments assn
-        INNER JOIN assignment_syllabus_nodes atsn ON atsn.assignment_id = assn.id
-        INNER JOIN syllabus_nodes sn ON sn.id = atsn.syllabus_node_id
-        LEFT JOIN syllabi s ON s.id = sn.syllabus_id
-        WHERE assn.template_id = $1
-          AND COALESCE(assn.is_deleted, FALSE) = FALSE
-        ORDER BY s.title NULLS LAST, sn.sort_order, sn.title
-        LIMIT 20
-      `,
-      [id]
-    );
 
     const marks = distributeMarks(Number(assignment.total_marks), requestedTypes);
     const result = await generateJsonWithProvider({
@@ -341,7 +322,7 @@ export async function POST(req: Request, context: Context) {
         totalMarks: Number(assignment.total_marks),
         counts,
         instructions: String(body.instructions ?? "").trim(),
-        syllabus: syllabusRes.rows.map((row) => row.label).filter(Boolean),
+        syllabus: [],
       }),
     });
 

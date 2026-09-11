@@ -2,7 +2,7 @@
 
 import NextImage from "next/image";
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
-import { Gift } from "lucide-react";
+import { ArrowLeftRight, Gift } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -178,6 +178,7 @@ const navItems: SidebarItem[] = [
         icon: Users,
         children: [
             { title: "All Users", url: "/admin/users", icon: UsersRound },
+            { title: "Affiliate Records", url: "/admin/users/affiliates", permissionPath: "/admin/users", icon: Share2 },
         ],
     },
     {
@@ -204,18 +205,6 @@ const navItems: SidebarItem[] = [
         ],
     },
     {
-        title: "Academics",
-        url: "/admin/content/notes",
-        icon: BookOpen,
-        children: [
-            { title: "Notes", url: "/admin/content/notes", icon: StickyNote },
-            { title: "Assignments", url: "/admin/content/assignments", icon: ClipboardList },
-            { title: "Exams", url: "/admin/content/exams", icon: FileText },
-            { title: "Practice Exams", url: "/admin/content/practice-exams", icon: ClipboardCheck },
-            { title: "Growth Chart", url: "/admin/content/growth-chart", icon: TrendingUp },
-        ],
-    },
-    {
         title: "Manage Staff",
         url: "/admin/staff",
         icon: Users,
@@ -230,6 +219,18 @@ const navItems: SidebarItem[] = [
             { title: "Queries", url: "/admin/staff/queries", icon: HelpCircle },
             { title: "Our Jobs", url: "/admin/staff/jobs", icon: Briefcase },
             { title: "Applicant", url: "/admin/staff/applicants", icon: UserCheck },
+        ],
+    },
+    {
+        title: "Academics",
+        url: "/admin/content/notes",
+        icon: BookOpen,
+        children: [
+            { title: "Notes", url: "/admin/content/notes", icon: StickyNote },
+            { title: "Assignments", url: "/admin/content/assignments", icon: ClipboardList },
+            { title: "Exams", url: "/admin/content/exams", icon: Landmark },
+            { title: "Practice Exams", url: "/admin/content/practice-exams", icon: ClipboardCheck },
+            { title: "Government & Selection Exams", url: "/admin/content/public-exams", icon: Landmark },
         ],
     },
     {
@@ -275,6 +276,7 @@ const navItems: SidebarItem[] = [
         url: "/admin/finance/income",
         icon: IndianRupee,
         children: [
+            { title: "Purchase & Sell Requests", url: "/admin/finance/requests", icon: ArrowLeftRight },
             { title: "Income", url: "/admin/finance/income", icon: TrendingUp },
             { title: "Expense", url: "/admin/finance/expense", icon: CreditCard },
             { title: "Invoice", url: "/admin/finance/invoice", icon: FileText },
@@ -286,7 +288,7 @@ const navItems: SidebarItem[] = [
         ],
     },
     {
-        title: "Sales & Marketing",
+        title: "Marketing",
         url: "/admin/marketing/packages",
         icon: Megaphone,
         children: [
@@ -323,9 +325,7 @@ const navItems: SidebarItem[] = [
             { title: "Boards", url: "/admin/content/boards", icon: BookOpen },
             { title: "Universities", url: "/admin/content/universities", icon: Building2 },
             { title: "Affiliated By / Certifications", url: "/admin/content/certifications", icon: BadgeCheck },
-            { title: "Subjects", url: "/admin/content/subjects", icon: GraduationCap },
             { title: "Courses & Programs", url: "/admin/content/courses", icon: BookCheck },
-            { title: "Syllabus", url: "/admin/content/syllabus", icon: BookOpen },
             { title: "Assignments", url: "/admin/content/assignments", icon: ClipboardList },
             { title: "Practice Exams", url: "/admin/content/practice-exams", icon: ClipboardCheck },
             { title: "Government & Selection Exams", url: "/admin/content/exams", icon: Landmark },
@@ -393,7 +393,7 @@ const navItems: SidebarItem[] = [
             { title: "Inventory", url: "/admin/inventory", icon: Boxes },
             { title: "Team", url: "/admin/team", icon: Users },
             { title: "Institute Calendar", url: "/admin/master-data/institute-calendar", icon: CalendarDays },
-            { title: "Timetable Setup", url: "/admin/master-data/timetable-setup", icon: CalendarDays },
+            { title: "Timetable", url: "/admin/master-data/timetable-setup", icon: CalendarDays },
             { title: "Attendance Setup", url: "/admin/master-data/attendance-setup", icon: ClipboardCheck },
             { title: "Noticeboard", url: "/admin/institutions/news", icon: Bell },
             { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
@@ -481,6 +481,8 @@ function getActiveSidebarLeaf(
             return;
         }
 
+
+
         if (item.url.startsWith("/admin/analytics")) {
             const itemTab = item.url.includes("tab=")
                 ? item.url.split("tab=")[1]?.split("&")[0]
@@ -497,7 +499,7 @@ function getActiveSidebarLeaf(
 
         const itemPath = item.url.split("?")[0];
         if (adminPathMatchesRoute(pathname, itemPath)) {
-            matches.push({ key, pathLength: normalizeAdminPath(itemPath).length });
+            matches.push({ key: item.url, pathLength: normalizeAdminPath(itemPath).length });
         }
     };
 
@@ -537,6 +539,50 @@ function filterNavItems(
         .filter((item): item is SidebarItem => item !== null);
 }
 
+let cachedInstitutionOptionsKey: string | null = null;
+let cachedInstitutionOptions: ActiveInstitutionSummary[] | null = null;
+let cachedInstitutionOptionsPromise: Promise<ActiveInstitutionSummary[]> | null = null;
+
+async function getCachedInstitutionOptions(
+    accessToken: string,
+    isPlatformAdmin: boolean,
+    userId?: number | null
+): Promise<ActiveInstitutionSummary[]> {
+    const key = `${userId ?? "anon"}_${isPlatformAdmin ? "platform" : "inst"}`;
+    if (cachedInstitutionOptionsKey === key && cachedInstitutionOptions) {
+        return cachedInstitutionOptions;
+    }
+    if (cachedInstitutionOptionsPromise) return cachedInstitutionOptionsPromise;
+
+    const url = isPlatformAdmin
+        ? "/api/admin/institutions/options"
+        : "/api/admin/institutions/options?scope=mine";
+
+    cachedInstitutionOptionsPromise = fetch(url, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+    })
+        .then(async (res) => {
+            const json = await readJsonResponse<{ institutions?: Array<{ id: number; name: string; type_name?: string }> }>(res);
+            if (!res.ok) return [];
+            const rows = (json.institutions ?? []).map((inst) => ({
+                id: inst.id,
+                name: inst.name,
+                roleName: isPlatformAdmin ? "Platform Admin" : "Institution Admin",
+                boardId: null,
+                boardName: null,
+            }));
+            cachedInstitutionOptionsKey = key;
+            cachedInstitutionOptions = rows;
+            return rows;
+        })
+        .catch(() => [])
+        .finally(() => {
+            cachedInstitutionOptionsPromise = null;
+        });
+
+    return cachedInstitutionOptionsPromise;
+}
+
 export function AppSidebar() {
     const pathname = usePathname();
     const searchParams = useSearchParams();
@@ -566,34 +612,23 @@ export function AppSidebar() {
     const [activeStudentEnrollmentId, setActiveStudentEnrollmentId] = useState<number | null>(() =>
         getStoredActiveStudentEnrollmentId()
     );
+    const userInstitutionOptions = useMemo(() => getUserInstitutionOptions(user), [user]);
     const [fetchedInstitutions, setFetchedInstitutions] = useState<ActiveInstitutionSummary[]>([]);
 
     useEffect(() => {
         if ((!isInstitutionAdmin && !isPlatformAdmin) || !accessToken) return;
+        const key = `${user?.id ?? "anon"}_${isPlatformAdmin ? "platform" : "inst"}`;
+        if (cachedInstitutionOptionsKey === key && cachedInstitutionOptions) {
+            setFetchedInstitutions(cachedInstitutionOptions);
+            return;
+        }
         let cancelled = false;
-        fetch("/api/admin/institutions/options", {
-            headers: { Authorization: `Bearer ${accessToken}` },
-            cache: "no-store",
-        })
-            .then(async (res) => {
-                const json = await readJsonResponse<{ institutions?: Array<{ id: number; name: string; type_name?: string }> }>(res);
-                if (!res.ok || cancelled) return;
-                const rows = (json.institutions ?? []).map((inst) => ({
-                    id: inst.id,
-                    name: inst.name,
-                    roleName: isPlatformAdmin ? "Platform Admin" : "Institution Admin",
-                    boardId: null,
-                    boardName: null,
-                }));
-                if (rows.length > 0) {
-                    setFetchedInstitutions(rows);
-                }
-            })
-            .catch(() => {});
+        getCachedInstitutionOptions(accessToken, isPlatformAdmin, user?.id).then((rows) => {
+            if (cancelled || rows.length === 0) return;
+            setFetchedInstitutions(rows);
+        });
         return () => { cancelled = true; };
-    }, [accessToken, isInstitutionAdmin, isPlatformAdmin]);
-
-    const userInstitutionOptions = useMemo(() => getUserInstitutionOptions(user), [user]);
+    }, [accessToken, isInstitutionAdmin, isPlatformAdmin, user?.id]);
     const institutionTeams = useMemo(() => {
         if (!isInstitutionAdmin && !isPlatformAdmin) return [];
         const unique = new Map<number, ActiveInstitutionSummary>();
@@ -715,7 +750,7 @@ export function AppSidebar() {
                 return [item];
             }
             if ((item.url === "/admin/content" || item.url === "/admin/content/notes" || item.title === "Academics") && item.children) {
-                if (isStudent || isParent || isTeacher) return [];
+                if (isPlatformAdmin || isStudent || isParent || isTeacher) return [];
                 return [item];
             }
             if (item.url === "/admin/generate" && item.children) {
@@ -743,6 +778,7 @@ export function AppSidebar() {
                     return [{
                         ...item,
                         children: [
+                            { title: "Purchase & Sell Requests", url: "/admin/finance/requests", icon: ArrowLeftRight },
                             { title: "Allowance", url: "/admin/finance/allowance", icon: BadgeDollarSign },
                         ],
                     }];

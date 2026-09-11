@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { useAuthStore } from "@/store";
 import { toast } from "sonner";
@@ -31,6 +32,7 @@ import {
   Upload,
   Languages,
   Globe,
+  AlertTriangle,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -93,6 +95,7 @@ import {
   CourseAuthorityType,
 } from "@/lib/types/content-course";
 import { Subject } from "@/lib/types/subject";
+import { CourseSyllabusDialog } from "./course-syllabus-dialog";
 
 function toSlug(text: string) {
   return text
@@ -108,8 +111,7 @@ function generateCourseSlug(
   authType: CourseAuthorityType = "board",
   boardName?: string,
   universityName?: string,
-  certificationProviderName?: string,
-  medium?: string
+  certificationProviderName?: string
 ): string {
   const cleanName = (name || "").trim();
   let authPart = "";
@@ -121,7 +123,7 @@ function generateCourseSlug(
     authPart = certificationProviderName;
   }
 
-  const combined = [cleanName, authPart, medium].filter(Boolean).join(" ");
+  const combined = [cleanName, authPart].filter(Boolean).join(" ");
   return toSlug(combined || cleanName);
 }
 
@@ -130,8 +132,7 @@ function computeGeneratedCourseName(
   authType: CourseAuthorityType = "board",
   boardName?: string,
   universityName?: string,
-  certificationProviderName?: string,
-  medium?: string
+  certificationProviderName?: string
 ): string {
   const cat = (categoryName || "").trim();
   let authPart = "";
@@ -152,14 +153,6 @@ function computeGeneratedCourseName(
     }
   } else {
     baseName = cat || authPart || "";
-  }
-
-  const med = (medium || "").trim();
-  if (med && baseName) {
-    const medSuffix = med.toLowerCase().includes("medium") ? med : `${med} Medium`;
-    if (!baseName.toLowerCase().includes(med.toLowerCase())) {
-      return `${baseName} - ${medSuffix}`;
-    }
   }
 
   return baseName;
@@ -212,6 +205,8 @@ function detectAuthorityTypeFromCategory(categoryName: string, breadcrumb?: stri
 }
 
 export default function MasterCoursesPage() {
+  const router = useRouter();
+  const pathname = usePathname();
   const { isReady } = useAdminGuard();
   const { accessToken } = useAuthStore();
 
@@ -332,6 +327,10 @@ export default function MasterCoursesPage() {
   // Delete dialog state
   const [deleteTarget, setDeleteTarget] = useState<MasterCourse | null>(null);
 
+  // Syllabus dialog state
+  const [syllabusCourse, setSyllabusCourse] = useState<MasterCourse | null>(null);
+  const [syllabusDialogOpen, setSyllabusDialogOpen] = useState(false);
+
   const authHeader = useMemo(() => ({ Authorization: `Bearer ${accessToken}` }), [accessToken]);
 
   // Debounce search
@@ -417,10 +416,32 @@ export default function MasterCoursesPage() {
     const detected = detectAuthorityTypeFromCategory(cname, cbreadcrumb);
     setAuthorityType(detected);
 
-    const generated = computeGeneratedCourseName(cname, detected, boardName, universityName, certificationProviderName, medium);
+    const generated = computeGeneratedCourseName(cname, detected, boardName, universityName, certificationProviderName);
     setCourseName(generated);
-    setCourseSlug(generateCourseSlug(generated, detected, boardName, universityName, certificationProviderName, medium));
+    setCourseSlug(generateCourseSlug(generated, detected, boardName, universityName, certificationProviderName));
   };
+
+  // Check for duplicate course name in real-time
+  const duplicateCourseWarning = useMemo(() => {
+    const trimmed = (courseName || "").trim().toLowerCase();
+    if (!trimmed) return null;
+    const match = courses.find(
+      (c) => c.name.trim().toLowerCase() === trimmed && (!editingCourse || c.id !== editingCourse.id)
+    );
+    return match ? match.name : null;
+  }, [courseName, courses, editingCourse]);
+
+  // Check for duplicate subject names in real-time
+  const duplicateSubjectNames = useMemo(() => {
+    const counts: Record<string, number> = {};
+    subjectRows.forEach((r) => {
+      const trimmed = (r.name || "").trim().toLowerCase();
+      if (trimmed) {
+        counts[trimmed] = (counts[trimmed] || 0) + 1;
+      }
+    });
+    return Object.keys(counts).filter((k) => counts[k] > 1);
+  }, [subjectRows]);
 
   // Compute available terms from duration selected in Tab 2
   const availableTerms = useMemo(() => {
@@ -688,21 +709,43 @@ export default function MasterCoursesPage() {
     if (!finalCourseName) {
       return toast.error("Please enter the Course / Program Name");
     }
+
+    if (duplicateCourseWarning) {
+      return toast.error(`A course named "${duplicateCourseWarning}" already exists. Course names must be unique.`);
+    }
+
+    if (duplicateSubjectNames.length > 0) {
+      return toast.error("Please resolve duplicate subjects before saving the course.");
+    }
+
     const finalCourseSlug = courseSlug.trim()
       ? toSlug(courseSlug)
-      : generateCourseSlug(finalCourseName, authorityType, boardName, universityName, certificationProviderName, medium);
+      : generateCourseSlug(finalCourseName, authorityType, boardName, universityName, certificationProviderName);
 
     setSubmitting(true);
     try {
       const validCustomSubjects = subjectRows
         .filter((r) => r.name.trim().length > 0)
-        .map((r) => ({
-          name: r.name.trim(),
-          code: r.code.trim() || null,
-          term_type: r.term_type || "semester",
-          term_number: r.term_number || 1,
-          term_name: r.term_name || `Semester ${r.term_number || 1}`,
-        }));
+        .map((r) => {
+          let effectiveTermType = r.term_type || "semester";
+          let effectiveTermNumber = r.term_number || 1;
+          let effectiveTermName = r.term_name || `Semester ${effectiveTermNumber}`;
+          if (durationUnit === "years_annual") {
+            effectiveTermType = "year";
+            effectiveTermName = `Year ${effectiveTermNumber} (Annual)`;
+          } else if (["months", "weeks", "days"].includes(durationUnit)) {
+            effectiveTermType = "full_course";
+            effectiveTermName = "Core Curriculum";
+            effectiveTermNumber = 1;
+          }
+          return {
+            name: r.name.trim(),
+            code: r.code.trim() || null,
+            term_type: effectiveTermType,
+            term_number: effectiveTermNumber,
+            term_name: effectiveTermName,
+          };
+        });
 
       const payload = {
         name: finalCourseName,
@@ -939,28 +982,6 @@ export default function MasterCoursesPage() {
       },
     },
     {
-      accessorKey: "category_name",
-      header: "Category & Tree",
-      cell: ({ row }) => {
-        const c = row.original;
-        return (
-          <div className="flex flex-col max-w-[220px]">
-            <span className="font-medium text-xs text-foreground truncate">{c.category_name}</span>
-            {c.category_breadcrumb && (
-              <span className="text-[11px] text-muted-foreground truncate" title={c.category_breadcrumb}>
-                {c.category_breadcrumb}
-              </span>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      id: "authority",
-      header: "Affiliation / Authority",
-      cell: ({ row }) => getAuthorityBadge(row.original),
-    },
-    {
       id: "subjects",
       header: "Subjects",
       cell: ({ row }) => {
@@ -976,33 +997,6 @@ export default function MasterCoursesPage() {
             {list.length > 2 && (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-muted/30">
                 +{list.length - 2}
-              </Badge>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      id: "medium",
-      header: "Medium",
-      cell: ({ row }) => {
-        const c = row.original;
-        const mediums = Array.isArray(c.mediums) && c.mediums.length > 0
-          ? c.mediums
-          : c.medium
-          ? c.medium.split(",").map((s) => s.trim()).filter(Boolean)
-          : [];
-        if (mediums.length === 0) return <span className="text-xs text-muted-foreground">-</span>;
-        return (
-          <div className="flex items-center gap-1 flex-wrap max-w-[180px]">
-            {mediums.slice(0, 2).map((m) => (
-              <Badge key={m} variant="secondary" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20 font-medium">
-                {m}
-              </Badge>
-            ))}
-            {mediums.length > 2 && (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-muted/30">
-                +{mediums.length - 2}
               </Badge>
             )}
           </div>
@@ -1080,6 +1074,16 @@ export default function MasterCoursesPage() {
               >
                 <Edit2 className="h-4 w-4 text-muted-foreground" />
                 Edit Course
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  setSyllabusCourse(item);
+                  setSyllabusDialogOpen(true);
+                }}
+                className="cursor-pointer gap-2 text-primary font-medium focus:text-primary"
+              >
+                <GraduationCap className="h-4 w-4 text-primary" />
+                Add Syllabus
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={activeToggleLoadingId === item.id}
@@ -1401,9 +1405,9 @@ export default function MasterCoursesPage() {
                         type="button"
                         onClick={() => {
                           setAuthorityType("board");
-                          const generated = computeGeneratedCourseName(categoryName, "board", boardName, universityName, certificationProviderName, medium);
+                          const generated = computeGeneratedCourseName(categoryName, "board", boardName, universityName, certificationProviderName);
                           setCourseName(generated);
-                          setCourseSlug(generateCourseSlug(generated, "board", boardName, universityName, certificationProviderName, medium));
+                          setCourseSlug(generateCourseSlug(generated, "board", boardName, universityName, certificationProviderName));
                         }}
                         className={`px-2 py-0.5 rounded-md font-semibold transition-all whitespace-nowrap ${
                           authorityType === "board"
@@ -1417,9 +1421,9 @@ export default function MasterCoursesPage() {
                         type="button"
                         onClick={() => {
                           setAuthorityType("university");
-                          const generated = computeGeneratedCourseName(categoryName, "university", boardName, universityName, certificationProviderName, medium);
+                          const generated = computeGeneratedCourseName(categoryName, "university", boardName, universityName, certificationProviderName);
                           setCourseName(generated);
-                          setCourseSlug(generateCourseSlug(generated, "university", boardName, universityName, certificationProviderName, medium));
+                          setCourseSlug(generateCourseSlug(generated, "university", boardName, universityName, certificationProviderName));
                         }}
                         className={`px-2 py-0.5 rounded-md font-semibold transition-all whitespace-nowrap ${
                           authorityType === "university"
@@ -1433,9 +1437,9 @@ export default function MasterCoursesPage() {
                         type="button"
                         onClick={() => {
                           setAuthorityType("certification");
-                          const generated = computeGeneratedCourseName(categoryName, "certification", boardName, universityName, certificationProviderName, medium);
+                          const generated = computeGeneratedCourseName(categoryName, "certification", boardName, universityName, certificationProviderName);
                           setCourseName(generated);
-                          setCourseSlug(generateCourseSlug(generated, "certification", boardName, universityName, certificationProviderName, medium));
+                          setCourseSlug(generateCourseSlug(generated, "certification", boardName, universityName, certificationProviderName));
                         }}
                         className={`px-2 py-0.5 rounded-md font-semibold transition-all whitespace-nowrap ${
                           authorityType === "certification"
@@ -1456,17 +1460,17 @@ export default function MasterCoursesPage() {
                           setBoardId(val);
                           if (!val) {
                             setBoardName("");
-                            const generated = computeGeneratedCourseName(categoryName, "board", "", universityName, certificationProviderName, medium);
+                            const generated = computeGeneratedCourseName(categoryName, "board", "", universityName, certificationProviderName);
                             setCourseName(generated);
-                            setCourseSlug(generateCourseSlug(generated, "board", "", universityName, certificationProviderName, medium));
+                            setCourseSlug(generateCourseSlug(generated, "board", "", universityName, certificationProviderName));
                           }
                         }}
                         onSelectItem={(item) => {
                           setBoardId(String(item.id));
                           setBoardName(item.name);
-                          const generated = computeGeneratedCourseName(categoryName, "board", item.name, universityName, certificationProviderName, medium);
+                          const generated = computeGeneratedCourseName(categoryName, "board", item.name, universityName, certificationProviderName);
                           setCourseName(generated);
-                          setCourseSlug(generateCourseSlug(generated, "board", item.name, universityName, certificationProviderName, medium));
+                          setCourseSlug(generateCourseSlug(generated, "board", item.name, universityName, certificationProviderName));
                         }}
                         selectedLabel={boardName || undefined}
                         placeholder="Select Board (CBSE, ICSE, State Board, IB, Cambridge)..."
@@ -1495,17 +1499,17 @@ export default function MasterCoursesPage() {
                           setUniversityId(val);
                           if (!val) {
                             setUniversityName("");
-                            const generated = computeGeneratedCourseName(categoryName, "university", boardName, "", certificationProviderName, medium);
+                            const generated = computeGeneratedCourseName(categoryName, "university", boardName, "", certificationProviderName);
                             setCourseName(generated);
-                            setCourseSlug(generateCourseSlug(generated, "university", boardName, "", certificationProviderName, medium));
+                            setCourseSlug(generateCourseSlug(generated, "university", boardName, "", certificationProviderName));
                           }
                         }}
                         onSelectItem={(item) => {
                           setUniversityId(String(item.id));
                           setUniversityName(item.name);
-                          const generated = computeGeneratedCourseName(categoryName, "university", boardName, item.name, certificationProviderName, medium);
+                          const generated = computeGeneratedCourseName(categoryName, "university", boardName, item.name, certificationProviderName);
                           setCourseName(generated);
-                          setCourseSlug(generateCourseSlug(generated, "university", boardName, item.name, certificationProviderName, medium));
+                          setCourseSlug(generateCourseSlug(generated, "university", boardName, item.name, certificationProviderName));
                         }}
                         selectedLabel={universityName || undefined}
                         placeholder="Select university or enter university name..."
@@ -1526,9 +1530,9 @@ export default function MasterCoursesPage() {
                         onCreateCustomValue={(customVal) => {
                           setUniversityId("");
                           setUniversityName(customVal);
-                          const generated = computeGeneratedCourseName(categoryName, "university", boardName, customVal, certificationProviderName, medium);
+                          const generated = computeGeneratedCourseName(categoryName, "university", boardName, customVal, certificationProviderName);
                           setCourseName(generated);
-                          setCourseSlug(generateCourseSlug(generated, "university", boardName, customVal, certificationProviderName, medium));
+                          setCourseSlug(generateCourseSlug(generated, "university", boardName, customVal, certificationProviderName));
                         }}
                       />
                     </div>
@@ -1542,17 +1546,17 @@ export default function MasterCoursesPage() {
                           setCertificationProviderId(val);
                           if (!val) {
                             setCertificationProviderName("");
-                            const generated = computeGeneratedCourseName(categoryName, "certification", boardName, universityName, "", medium);
+                            const generated = computeGeneratedCourseName(categoryName, "certification", boardName, universityName, "");
                             setCourseName(generated);
-                            setCourseSlug(generateCourseSlug(generated, "certification", boardName, universityName, "", medium));
+                            setCourseSlug(generateCourseSlug(generated, "certification", boardName, universityName, ""));
                           }
                         }}
                         onSelectItem={(item) => {
                           setCertificationProviderId(String(item.id));
                           setCertificationProviderName(item.name);
-                          const generated = computeGeneratedCourseName(categoryName, "certification", boardName, universityName, item.name, medium);
+                          const generated = computeGeneratedCourseName(categoryName, "certification", boardName, universityName, item.name);
                           setCourseName(generated);
-                          setCourseSlug(generateCourseSlug(generated, "certification", boardName, universityName, item.name, medium));
+                          setCourseSlug(generateCourseSlug(generated, "certification", boardName, universityName, item.name));
                         }}
                         selectedLabel={certificationProviderName || undefined}
                         placeholder="Select certification provider (UGC, AICTE, NASSCOM, NPTEL)..."
@@ -1590,11 +1594,24 @@ export default function MasterCoursesPage() {
                     onChange={(e) => {
                       const val = e.target.value;
                       setCourseName(val);
-                      setCourseSlug(generateCourseSlug(val, authorityType, boardName, universityName, certificationProviderName, medium));
+                      setCourseSlug(generateCourseSlug(val, authorityType, boardName, universityName, certificationProviderName));
                     }}
-                    className="h-10 text-sm font-semibold bg-background"
+                    className={`h-10 text-sm font-semibold bg-background ${
+                      duplicateCourseWarning ? "border-destructive ring-1 ring-destructive/40 text-destructive" : ""
+                    }`}
                     required
                   />
+                  {duplicateCourseWarning && (
+                    <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 flex items-start gap-2.5 text-destructive text-xs font-semibold animate-in fade-in duration-200">
+                      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-destructive" />
+                      <div>
+                        <p className="font-bold">Immediate Warning: A course named &quot;{duplicateCourseWarning}&quot; already exists!</p>
+                        <p className="text-[11px] font-normal text-destructive/90 mt-0.5">
+                          Duplicate course names are strictly prohibited. Please provide a distinct, unique course or program name.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   <p className="text-[11px] text-muted-foreground">
                     Auto-generated from Category and Board/University.
                   </p>
@@ -1659,7 +1676,41 @@ export default function MasterCoursesPage() {
                         className="w-24 h-9 text-xs font-semibold bg-background"
                         required
                       />
-                      <Select value={durationUnit} onValueChange={setDurationUnit}>
+                      <Select
+                        value={durationUnit}
+                        onValueChange={(nextUnit) => {
+                          setDurationUnit(nextUnit);
+                          setSubjectRows((prev) =>
+                            prev.map((r) => {
+                              if (nextUnit === "years_annual") {
+                                const yr = r.term_number || 1;
+                                return {
+                                  ...r,
+                                  term_type: "year",
+                                  term_number: yr,
+                                  term_name: `Year ${yr} (Annual)`,
+                                };
+                              } else if (nextUnit === "years" || nextUnit === "semesters") {
+                                const s = r.term_number || 1;
+                                const yr = Math.ceil(s / 2);
+                                return {
+                                  ...r,
+                                  term_type: "semester",
+                                  term_number: s,
+                                  term_name: `Year ${yr} Semester ${s}`,
+                                };
+                              } else {
+                                return {
+                                  ...r,
+                                  term_type: "full_course",
+                                  term_number: 1,
+                                  term_name: "Core Curriculum",
+                                };
+                              }
+                            })
+                          );
+                        }}
+                      >
                         <SelectTrigger className="flex-1 h-9 text-xs bg-background">
                           <SelectValue />
                         </SelectTrigger>
@@ -1853,6 +1904,17 @@ export default function MasterCoursesPage() {
                 <div className="space-y-3 p-3.5 rounded-2xl border border-border/80 bg-muted/20">
                   {/* Semester / Year Filter Bar */}
                   <div className="space-y-2">
+                    {duplicateSubjectNames.length > 0 && (
+                      <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 flex items-start gap-2.5 text-destructive text-xs font-semibold animate-in fade-in duration-200">
+                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-destructive" />
+                        <div>
+                          <p className="font-bold">Immediate Warning: Duplicate subject name(s) detected!</p>
+                          <p className="text-[11px] font-normal text-destructive/90 mt-0.5">
+                            Each subject in a course must be unique. Please remove or rename duplicate subjects highlighted in red.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                         <ListPlus className="h-4 w-4 text-primary" />
@@ -1967,78 +2029,91 @@ export default function MasterCoursesPage() {
                         const matchedTerm = availableTerms.find((t) => t.key === selectedTermFilter);
                         return matchedTerm ? r.term_number === matchedTerm.term_number : true;
                       })
-                      .map((row, idx) => (
-                        <div
-                          key={row.id}
-                          className="p-2.5 rounded-xl border border-border/80 bg-background flex items-center gap-2 group hover:border-primary/40 transition-colors shadow-2xs"
-                        >
-                          <span className="text-[11px] font-bold text-muted-foreground w-6 text-center shrink-0">
-                            #{idx + 1}
-                          </span>
-
-                          {/* Term / Semester Selector */}
-                          <Select
-                            value={String(row.term_number || 1)}
-                            onValueChange={(val) => {
-                              const num = Number(val);
-                              const targetTerm = availableTerms.find((t) => t.term_number === num);
-                              updateSubjectRow(row.id, "term_number", num);
-                              if (targetTerm) {
-                                updateSubjectRow(row.id, "term_type", targetTerm.term_type);
-                                updateSubjectRow(row.id, "term_name", targetTerm.term_name);
-                              }
-                            }}
+                      .map((row, idx) => {
+                        const isDuplicate = duplicateSubjectNames.includes(row.name.trim().toLowerCase());
+                        return (
+                          <div
+                            key={row.id}
+                            className={`p-2.5 rounded-xl border flex items-center gap-2 group transition-colors shadow-2xs ${
+                              isDuplicate
+                                ? "border-destructive/80 bg-destructive/5 ring-1 ring-destructive/30"
+                                : "border-border/80 bg-background hover:border-primary/40"
+                            }`}
                           >
-                            <SelectTrigger className="h-8 text-[11px] w-36 sm:w-44 bg-muted/40 font-semibold shrink-0">
-                              <SelectValue placeholder="Semester..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availableTerms.map((t) => (
-                                <SelectItem key={t.key} value={String(t.term_number)} className="text-xs">
-                                  {t.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            <span className="text-[11px] font-bold text-muted-foreground w-6 text-center shrink-0">
+                              #{idx + 1}
+                            </span>
 
-                          {/* Autocomplete input with datalist */}
-                          <Input
-                            list="existing-master-subjects-list"
-                            placeholder="Subject Name (e.g. Mathematics)"
-                            value={row.name}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              updateSubjectRow(row.id, "name", val);
-                              const matched = masterSubjects.find(
-                                (s) => s.name.toLowerCase() === val.trim().toLowerCase()
-                              );
-                              if (matched && matched.code && !row.code) {
-                                updateSubjectRow(row.id, "code", matched.code);
-                              }
-                            }}
-                            className="h-8 text-xs flex-1 bg-background"
-                          />
-
-                          <Input
-                            placeholder="Code"
-                            value={row.code}
-                            onChange={(e) => updateSubjectRow(row.id, "code", e.target.value)}
-                            className="h-8 text-xs w-24 sm:w-28 shrink-0 bg-background"
-                          />
-
-                          {subjectRows.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
-                              onClick={() => removeSubjectRow(row.id)}
+                            {/* Term / Semester Selector */}
+                            <Select
+                              value={String(row.term_number || 1)}
+                              onValueChange={(val) => {
+                                const num = Number(val);
+                                const targetTerm = availableTerms.find((t) => t.term_number === num);
+                                updateSubjectRow(row.id, "term_number", num);
+                                if (targetTerm) {
+                                  updateSubjectRow(row.id, "term_type", targetTerm.term_type);
+                                  updateSubjectRow(row.id, "term_name", targetTerm.term_name);
+                                }
+                              }}
                             >
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      ))}
+                              <SelectTrigger className="h-8 text-[11px] w-36 sm:w-44 bg-muted/40 font-semibold shrink-0">
+                                <SelectValue placeholder="Semester..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableTerms.map((t) => (
+                                  <SelectItem key={t.key} value={String(t.term_number)} className="text-xs">
+                                    {t.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+
+                            {/* Autocomplete input with datalist */}
+                            <Input
+                              list="existing-master-subjects-list"
+                              placeholder="Subject Name (e.g. Mathematics)"
+                              value={row.name}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                updateSubjectRow(row.id, "name", val);
+                                const matched = masterSubjects.find(
+                                  (s) => s.name.toLowerCase() === val.trim().toLowerCase()
+                                );
+                                if (matched && matched.code && !row.code) {
+                                  updateSubjectRow(row.id, "code", matched.code);
+                                }
+                              }}
+                              className="h-8 text-xs flex-1 bg-background"
+                            />
+
+                            <Input
+                              placeholder="Code"
+                              value={row.code}
+                              onChange={(e) => updateSubjectRow(row.id, "code", e.target.value)}
+                              className="h-8 text-xs w-24 sm:w-28 shrink-0 bg-background"
+                            />
+
+                            {isDuplicate && (
+                              <Badge variant="destructive" className="text-[9px] px-1.5 py-0.5 gap-1 shrink-0">
+                                <AlertTriangle className="h-2.5 w-2.5" /> Duplicate
+                              </Badge>
+                            )}
+
+                            {subjectRows.length > 1 && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                                onClick={() => removeSubjectRow(row.id)}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      })}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -2205,7 +2280,7 @@ export default function MasterCoursesPage() {
                 </div>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-2 space-y-2">
                 <Button
                   onClick={() => {
                     setViewOpen(false);
@@ -2214,6 +2289,18 @@ export default function MasterCoursesPage() {
                   className="w-full bg-primary text-primary-foreground font-semibold"
                 >
                   <Edit2 className="h-4 w-4 mr-1.5" /> Edit Course / Program
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setViewOpen(false);
+                    setSyllabusCourse(viewingCourse);
+                    setSyllabusDialogOpen(true);
+                  }}
+                  className="w-full text-xs font-semibold gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                >
+                  <GraduationCap className="h-4 w-4" /> Manage Syllabus (Units & Chapters)
                 </Button>
               </div>
             </div>
@@ -2371,6 +2458,13 @@ export default function MasterCoursesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Course Syllabus Management Dialog */}
+      <CourseSyllabusDialog
+        course={syllabusCourse}
+        open={syllabusDialogOpen}
+        onOpenChange={setSyllabusDialogOpen}
+      />
     </div>
   );
 }

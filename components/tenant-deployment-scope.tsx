@@ -20,12 +20,54 @@ type TenantResponse = {
   } | null;
 };
 
+let cachedTenantResponse: TenantResponse | null = null;
+let cachedTenantPromise: Promise<TenantResponse | null> | null = null;
+
+function getStoredTenant(): TenantResponse | null {
+  if (cachedTenantResponse) return cachedTenantResponse;
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem("edubird_cached_tenant");
+    if (raw) {
+      cachedTenantResponse = JSON.parse(raw);
+      return cachedTenantResponse;
+    }
+  } catch {}
+  return null;
+}
+
+async function getCachedTenant(): Promise<TenantResponse | null> {
+  const existing = getStoredTenant();
+  if (existing) return existing;
+  if (cachedTenantPromise) return cachedTenantPromise;
+
+  cachedTenantPromise = fetch("/api/tenant/current")
+    .then(async (res) => {
+      if (!res.ok) return null;
+      const json = await readJsonResponse<TenantResponse>(res);
+      cachedTenantResponse = json;
+      try {
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("edubird_cached_tenant", JSON.stringify(json));
+        }
+      } catch {}
+      return json;
+    })
+    .catch(() => null)
+    .finally(() => {
+      cachedTenantPromise = null;
+    });
+
+  return cachedTenantPromise;
+}
+
 export function TenantDeploymentScope() {
   const router = useRouter();
   const { user, isAuthenticated, isInitialized, clearAuth } = useAuthStore();
-  const [tenant, setTenant] = useState<TenantResponse["tenant"]>(null);
+  const [tenant, setTenant] = useState<TenantResponse["tenant"]>(cachedTenantResponse?.tenant ?? null);
   const [appType, setAppType] = useState<TenantResponse["appType"]>(
-    (process.env.NEXT_PUBLIC_APP_TYPE as TenantResponse["appType"] | undefined) ?? "all"
+    cachedTenantResponse?.appType ??
+      ((process.env.NEXT_PUBLIC_APP_TYPE as TenantResponse["appType"] | undefined) ?? "all")
   );
 
   useEffect(() => {
@@ -33,10 +75,8 @@ export function TenantDeploymentScope() {
 
     async function loadTenant() {
       try {
-        const response = await fetch("/api/tenant/current", { cache: "no-store" });
-        if (!response.ok) return;
-        const json = await readJsonResponse<TenantResponse>(response);
-        if (cancelled || !json.appType) return;
+        const json = await getCachedTenant();
+        if (cancelled || !json || !json.appType) return;
         setAppType(json.appType);
         setTenant(json.tenant);
         if (json.appType === "institution" && json.tenant?.institution_id) {

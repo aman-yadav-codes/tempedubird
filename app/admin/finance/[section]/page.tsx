@@ -1,4 +1,7 @@
-import { BadgeDollarSign, BarChart3, CalendarDays, CreditCard, FileText, IndianRupee, Landmark, Tags, TrendingUp, UsersRound } from "lucide-react";
+"use client";
+
+import { use } from "react";
+import { ArrowLeftRight, BadgeDollarSign, BarChart3, CalendarDays, CreditCard, FileText, IndianRupee, Landmark, Tags, TrendingUp, UsersRound } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { AllowanceClient } from "@/app/admin/finance/allowance-client";
@@ -11,8 +14,14 @@ import { InvoicesClient } from "@/app/admin/finance/invoices-client";
 import { PaymentMethodsClient } from "@/app/admin/finance/payment-methods-client";
 import { PerformanceClient } from "@/app/admin/finance/performance-client";
 import { RecurringExpensesClient } from "@/app/admin/finance/recurring-expenses-client";
+import { PurchaseSellRequestsClient } from "@/app/admin/finance/purchase-sell-client";
 
 const FINANCE_SECTIONS = {
+  requests: {
+    title: "Purchase & Sell Requests",
+    description: "Submit purchase & sell requests with multi-tier amount routing and designated approvers.",
+    icon: ArrowLeftRight,
+  },
   income: {
     title: "Income",
     description: "Track institution and platform income records.",
@@ -68,12 +77,16 @@ type FinanceSectionPageProps = {
   }>;
 };
 
-export default async function FinanceSectionPage({ params }: FinanceSectionPageProps) {
-  const { section } = await params;
+export default function FinanceSectionPage({ params }: FinanceSectionPageProps) {
+  const { section } = use(params);
   if (!(section in FINANCE_SECTIONS)) notFound();
 
   const config = FINANCE_SECTIONS[section as FinanceSection];
   const Icon = config.icon;
+
+  if (section === "requests") {
+    return <PurchaseSellRequestsClient />;
+  }
 
   if (section === "income") {
     return <IncomeClient />;

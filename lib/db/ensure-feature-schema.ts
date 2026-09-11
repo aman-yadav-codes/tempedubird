@@ -292,6 +292,7 @@ export async function ensureFeatureSchema() {
       ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS review_image_url TEXT;
       ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS review_submitted_at TIMESTAMP WITH TIME ZONE;
       ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS review_submitted_by VARCHAR(255);
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS assigned_employees JSONB DEFAULT '[]'::jsonb;
 
       -- Staff Performance Points Ledger for positive rewards, negative deductions, and manual admin adjustments
       CREATE TABLE IF NOT EXISTS staff_performance_points_ledger (
@@ -363,6 +364,12 @@ export async function ensureFeatureSchema() {
       ALTER TABLE clients ADD COLUMN IF NOT EXISTS contacts JSONB DEFAULT '[]'::jsonb;
       ALTER TABLE clients ADD COLUMN IF NOT EXISTS location_data JSONB DEFAULT '{}'::jsonb;
       ALTER TABLE clients ADD COLUMN IF NOT EXISTS pincode VARCHAR(20);
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS profile_image TEXT;
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS location VARCHAR(150);
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS map_url TEXT;
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS rating NUMERIC(3, 1) DEFAULT 4.5;
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS description TEXT;
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
 
       -- Products Table for Platform and Institution Store / Marketing
       CREATE TABLE IF NOT EXISTS products (
@@ -504,6 +511,12 @@ export async function ensureFeatureSchema() {
           ALTER TABLE practice_tests ADD COLUMN IF NOT EXISTS created_by_role VARCHAR(50) DEFAULT 'institution_admin';
         END IF;
 
+        -- Ensure timetable_entries has subject_id column
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'timetable_entries') THEN
+          ALTER TABLE timetable_entries ADD COLUMN IF NOT EXISTS subject_id INT REFERENCES subjects(id) ON DELETE CASCADE;
+          CREATE INDEX IF NOT EXISTS idx_tte_subject ON timetable_entries(subject_id);
+        END IF;
+
         -- Ensure sales commission columns
         IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'sales_commissions') THEN
           ALTER TABLE sales_commissions ADD COLUMN IF NOT EXISTS employee_id INT;
@@ -612,7 +625,141 @@ export async function ensureFeatureSchema() {
       `);
     }
 
+    // ─── Staff Performance Points Ledger ──────────────────────────────────────
+    // Tracks automatic point transactions (task completion, penalty, etc.)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS staff_performance_points_ledger (
+        id             BIGSERIAL PRIMARY KEY,
+        employee_id    INTEGER NOT NULL,
+        institution_id INTEGER,
+        task_id        INTEGER,
+        subtask_id     TEXT,
+        point_type     VARCHAR(100),
+        points         NUMERIC(10,2) NOT NULL,
+        reason         TEXT,
+        awarded_by     INTEGER,
+        created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_spl_employee  ON staff_performance_points_ledger(employee_id);
+      CREATE INDEX IF NOT EXISTS idx_spl_task       ON staff_performance_points_ledger(task_id);
+      CREATE INDEX IF NOT EXISTS idx_spl_created_at ON staff_performance_points_ledger(created_at DESC);
+    `);
+
+    // ─── Task Score Adjustments (manual bonus / penalty by admin) ──────────────
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS task_score_adjustments (
+        id              SERIAL PRIMARY KEY,
+        task_id         INTEGER REFERENCES operations_tasks(id) ON DELETE CASCADE,
+        institution_id  INTEGER,
+        employee_id     INTEGER NOT NULL,
+        employee_name   VARCHAR(255),
+        adjustment_type VARCHAR(20) NOT NULL CHECK (adjustment_type IN ('bonus', 'penalty')),
+        points          NUMERIC(8,2) NOT NULL CHECK (points > 0),
+        reason          TEXT NOT NULL,
+        created_by      INTEGER,
+        created_by_name VARCHAR(255),
+        created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_tsa_task_id     ON task_score_adjustments(task_id);
+      CREATE INDEX IF NOT EXISTS idx_tsa_employee_id ON task_score_adjustments(employee_id);
+      CREATE INDEX IF NOT EXISTS idx_tsa_created_at  ON task_score_adjustments(created_at DESC);
+    `);
+
+    // ─── Penalty Rules (automatic rule-based penalties) ────────────────────────
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS penalty_rules (
+        id              SERIAL PRIMARY KEY,
+        institution_id  INTEGER,
+        rule_type       VARCHAR(30) NOT NULL
+          CHECK (rule_type IN ('attendance_late', 'task_deadline')),
+        name            VARCHAR(255) NOT NULL,
+        is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+
+        -- Threshold: how late before this rule fires
+        -- attendance_late: minutes past grace period
+        -- task_deadline:   hours/days past deadline
+        threshold_value  NUMERIC(10,2) NOT NULL DEFAULT 0,
+        threshold_unit   VARCHAR(20)   NOT NULL DEFAULT 'minutes'
+          CHECK (threshold_unit IN ('minutes', 'hours', 'days')),
+
+        -- How to compute the deduction
+        penalty_mode    VARCHAR(20) NOT NULL DEFAULT 'fixed'
+          CHECK (penalty_mode IN ('fixed', 'per_unit')),
+        penalty_points  NUMERIC(8,2) NOT NULL DEFAULT 5 CHECK (penalty_points > 0),
+        max_penalty     NUMERIC(8,2),   -- NULL = no cap
+
+        description     TEXT,
+        created_by      INTEGER,
+        created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_penalty_rules_type_inst
+        ON penalty_rules(rule_type, institution_id, is_active);
+
+      -- Finance Approval Slabs (Amount threshold routing)
+      CREATE TABLE IF NOT EXISTS finance_approval_slabs (
+        id SERIAL PRIMARY KEY,
+        scope_type VARCHAR(20) NOT NULL DEFAULT 'institution' CHECK (scope_type IN ('institution', 'platform')),
+        institution_id INTEGER REFERENCES institution_profiles(id) ON DELETE CASCADE,
+        min_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
+        max_amount NUMERIC(12, 2),
+        responsible_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        responsible_user_name VARCHAR(255),
+        responsible_user_role VARCHAR(100),
+        label VARCHAR(255),
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_finance_slabs_inst_scope
+        ON finance_approval_slabs(institution_id, scope_type, is_active);
+
+      -- Finance Purchase and Sell Requests
+      CREATE TABLE IF NOT EXISTS finance_purchase_sell_requests (
+        id SERIAL PRIMARY KEY,
+        request_number VARCHAR(50) UNIQUE NOT NULL,
+        scope_type VARCHAR(20) NOT NULL DEFAULT 'institution' CHECK (scope_type IN ('institution', 'platform')),
+        institution_id INTEGER REFERENCES institution_profiles(id) ON DELETE CASCADE,
+        request_type VARCHAR(20) NOT NULL CHECK (request_type IN ('purchase', 'sell')),
+        title VARCHAR(255) NOT NULL,
+        category VARCHAR(100),
+        estimated_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
+        quantity NUMERIC(10, 2) NOT NULL DEFAULT 1,
+        unit VARCHAR(50) NOT NULL DEFAULT 'units',
+        party_name VARCHAR(255),
+        description TEXT,
+        attachment_url TEXT,
+        attachment_name VARCHAR(255),
+        urgency VARCHAR(20) NOT NULL DEFAULT 'medium' CHECK (urgency IN ('low', 'medium', 'high', 'urgent')),
+        status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled')),
+        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_by_name VARCHAR(255),
+        created_by_role VARCHAR(100),
+        created_by_email VARCHAR(255),
+        assigned_approver_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        assigned_approver_name VARCHAR(255),
+        assigned_approver_role VARCHAR(100),
+        matched_slab_id INTEGER REFERENCES finance_approval_slabs(id) ON DELETE SET NULL,
+        matched_slab_label VARCHAR(255),
+        reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        reviewed_by_name VARCHAR(255),
+        reviewed_at TIMESTAMP WITH TIME ZONE,
+        review_notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_finance_requests_inst_scope
+        ON finance_purchase_sell_requests(institution_id, scope_type, status);
+      CREATE INDEX IF NOT EXISTS idx_finance_requests_creator
+        ON finance_purchase_sell_requests(created_by);
+      CREATE INDEX IF NOT EXISTS idx_finance_requests_approver
+        ON finance_purchase_sell_requests(assigned_approver_id);
+
+      ALTER TABLE finance_purchase_sell_requests ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT '[]'::jsonb;
+    `);
+
     schemaReady = true;
+
   } catch (error) {
     console.error("[ensureFeatureSchema] Error updating schema:", error);
   }

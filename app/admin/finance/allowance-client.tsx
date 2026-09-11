@@ -1212,12 +1212,6 @@ function AdminAllowanceClient() {
             {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
             Refresh
           </Button>
-          {spendableOwnAllowances.length > 0 ? (
-            <Button size="sm" onClick={() => setExpenditureOpen(true)} className="gap-2">
-              <Plus className="size-4" />
-              Add Expenditure
-            </Button>
-          ) : null}
           {canCreate ? (
             <Button size="sm" onClick={() => setAddOpen(true)} className="gap-2">
               <Plus className="size-4" />

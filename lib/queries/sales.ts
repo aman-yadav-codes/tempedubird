@@ -90,7 +90,21 @@ const STATUS_PRIORITY_SQL = `
   END
 `;
 
-export async function ensureSalesSchema(db: Queryable) {
+let salesSchemaReady: Promise<void> | null = null;
+
+export async function ensureSalesSchema(db: Queryable): Promise<void> {
+  if (salesSchemaReady) return salesSchemaReady;
+  salesSchemaReady = (async () => {
+    try {
+      await initSalesSchemaDirect(db);
+    } catch (e) {
+      console.error('Sales schema initialization error:', e);
+    }
+  })();
+  return salesSchemaReady;
+}
+
+export async function initSalesSchemaDirect(db: Queryable) {
   if (!schemaReady) {
     schemaReady = (async () => {
       await db.query(`

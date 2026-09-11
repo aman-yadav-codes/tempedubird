@@ -1,854 +1,621 @@
-import type { Pool, PoolClient } from "pg";
+import type { PoolClient } from "pg";
 
-import { assertCanAccessInstitution, getAllowedInstitutionIds } from "@/lib/auth/institution-scope";
-import { hasPermission, isPlatformAdminUser, isStudentUser, type PermissionUser } from "@/lib/auth/permissions";
-import { resolveInstitutionDefaultAcademicYearId } from "@/lib/queries/academic-sessions";
+import { db } from "@/lib/db/db";
+import { getAllowedInstitutionIds } from "@/lib/auth/institution-scope";
+import type { PermissionUser } from "@/lib/auth/permissions";
+import { hasPermission, isPlatformAdminUser } from "@/lib/auth/permissions";
+import type {
+  NoteTemplateQuestion,
+  NoteTemplateRow,
+} from "@/lib/types/notes";
 
-type Queryable = Pool | PoolClient;
-
-export type StudyNoteRow = {
-  id: number;
-  title: string;
-  institution_id: number;
-  institution_name: string | null;
-  subject_id: number | null;
-  subject_name: string | null;
-  syllabus_id: number | null;
-  syllabus_title: string | null;
-  syllabus_node_id?: number | null;
-  syllabus_node_title?: string | null;
-  program_id: number | null;
-  program_title: string | null;
-  section_id: number | null;
-  section_name: string | null;
-  is_active: boolean;
-  is_paid?: boolean;
-  price?: number;
-  item_count: number;
-  first_item_title: string | null;
-  is_public: boolean;
-  marketplace_requested: boolean;
-  marketplace_requested_at: string | null;
-  marketplace_requested_by: number | null;
-  marketplace_requested_by_name: string | null;
-  marketplace_approved: boolean;
-  marketplace_approved_at: string | null;
-  marketplace_approved_by: number | null;
-  marketplace_approved_by_name: string | null;
-  source_note_id: number | null;
-  source_institution_id: number | null;
-  source_institution_name: string | null;
-  has_inherited_note: boolean;
-  created_by: number | null;
-  created_by_name: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-export type NoteAttachment = {
-  url: string;
-  name?: string;
-  type?: string;
-  size?: number;
-};
-
-export type StudyNoteItemRow = {
-  id: number;
-  note_id: number;
-  syllabus_node_id: number | null;
-  node_title: string | null;
-  node_type: string | null;
-  title: string;
-  body: string;
-  attachment_url?: string | null;
-  attachment_name?: string | null;
-  attachments: NoteAttachment[];
-  is_active: boolean;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
-};
-
-type ListNotesOptions = {
-  search?: string;
-  limit?: number;
-  offset?: number;
-  institutionId?: number | null;
-  subjectId?: number | null;
-  syllabusId?: number | null;
-  academicYearId?: number | null;
-  view?: "my" | "requests" | "marketplace" | "classroom";
-  studentEnrollmentScope?: StudentNoteEnrollmentScope | null;
-};
-
-type StudentNoteEnrollmentScope = {
-  institution_id: number;
-  program_id: number | null;
-  section_id: number | null;
-  academic_year_id: number;
-};
-
-type NoteInput = {
-  institution_id: number;
-  title?: string | null;
-  subject_id?: number | null;
-  syllabus_id?: number | null;
-  syllabus_node_id?: number | null;
-  program_id?: number | null;
-  section_id?: number | null;
-  is_active?: boolean;
-  is_paid?: boolean;
-  price?: number;
-  marketplace_requested?: boolean;
-};
-
-type NoteItemInput = {
-  note_id: number;
-  syllabus_node_id?: number | null;
-  title: string;
-  body: string;
-  attachment_url?: string | null;
-  attachment_name?: string | null;
-  attachments?: NoteAttachment[];
-  is_active?: boolean;
-};
+type Queryable = Pick<PoolClient, "query">;
 
 let notesSchemaReady: Promise<void> | null = null;
 
-function asPositiveInteger(value: unknown) {
-  const number = Number(value);
-  return Number.isInteger(number) && number > 0 ? number : null;
-}
-
-function isPlatformUser(user: PermissionUser) {
-  return isPlatformAdminUser(user);
-}
-
-export async function ensureNotesSchema(db: Queryable) {
+export function ensureNotesSchema(queryable: Queryable = db) {
   if (!notesSchemaReady) {
     notesSchemaReady = (async () => {
-      await db.query(`
+      await queryable.query(`
         CREATE TABLE IF NOT EXISTS study_notes (
           id SERIAL PRIMARY KEY,
           institution_id INTEGER NOT NULL REFERENCES institution_profiles(id) ON DELETE CASCADE,
-          subject_id INTEGER REFERENCES subjects(id) ON DELETE SET NULL,
-          syllabus_id INTEGER REFERENCES syllabi(id) ON DELETE SET NULL,
-          syllabus_node_id INTEGER REFERENCES syllabus_nodes(id) ON DELETE SET NULL,
-          program_id INTEGER REFERENCES institution_programs(id) ON DELETE SET NULL,
-          section_id INTEGER REFERENCES sections(id) ON DELETE SET NULL,
+          title VARCHAR(255) NOT NULL DEFAULT '',
+          description TEXT,
+          subject_id VARCHAR(100),
+          subject_name VARCHAR(255),
+          syllabus_data JSONB DEFAULT '[]'::jsonb,
+          target_type VARCHAR(50) DEFAULT 'INSTITUTION',
+          target_id INTEGER,
+          target_program_id INTEGER,
+          ai_question_format JSONB DEFAULT '{"enabled":false,"true_false":0,"objective":0,"subjective":0}'::jsonb NOT NULL,
+          is_public BOOLEAN DEFAULT FALSE NOT NULL,
+          is_paid BOOLEAN DEFAULT FALSE NOT NULL,
+          price NUMERIC(10,2) DEFAULT 0 NOT NULL,
+          marketplace_requested BOOLEAN DEFAULT FALSE NOT NULL,
+          marketplace_requested_at TIMESTAMP,
+          marketplace_requested_by INTEGER REFERENCES users(id),
+          marketplace_approved BOOLEAN DEFAULT FALSE NOT NULL,
+          marketplace_approved_at TIMESTAMP,
+          marketplace_approved_by INTEGER REFERENCES users(id),
+          source_note_id INTEGER REFERENCES study_notes(id) ON DELETE SET NULL,
+          source_institution_id INTEGER REFERENCES institution_profiles(id) ON DELETE SET NULL,
+          parent_template_id INTEGER REFERENCES study_notes(id) ON DELETE SET NULL,
           academic_year_id INTEGER REFERENCES academic_years(id) ON DELETE SET NULL,
-          title TEXT NOT NULL DEFAULT '',
-          body TEXT NOT NULL DEFAULT '',
-          is_active BOOLEAN NOT NULL DEFAULT TRUE,
-          is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-          deleted_at TIMESTAMP NULL,
+          blocked_by_platform BOOLEAN DEFAULT FALSE NOT NULL,
+          blocked_by INTEGER REFERENCES users(id),
+          blocked_at TIMESTAMP,
+          block_reason TEXT,
+          is_active BOOLEAN DEFAULT TRUE NOT NULL,
+          is_deleted BOOLEAN DEFAULT FALSE NOT NULL,
+          deleted_at TIMESTAMP,
           deleted_by INTEGER REFERENCES users(id),
-          created_by INTEGER REFERENCES users(id),
+          created_by INTEGER NOT NULL REFERENCES users(id),
           updated_by INTEGER REFERENCES users(id),
-          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
-      await db.query(`ALTER TABLE study_notes ALTER COLUMN title DROP NOT NULL`);
-      await db.query(`ALTER TABLE study_notes ALTER COLUMN body DROP NOT NULL`);
-      await db.query(`ALTER TABLE study_notes ALTER COLUMN title SET DEFAULT ''`);
-      await db.query(`ALTER TABLE study_notes ALTER COLUMN body SET DEFAULT ''`);
-      await db.query(`
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+        );
+
         ALTER TABLE study_notes
-          ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE,
-          ADD COLUMN IF NOT EXISTS is_paid BOOLEAN NOT NULL DEFAULT FALSE,
-          ADD COLUMN IF NOT EXISTS price NUMERIC(10,2) NOT NULL DEFAULT 0,
-          ADD COLUMN IF NOT EXISTS marketplace_requested BOOLEAN NOT NULL DEFAULT FALSE,
-          ADD COLUMN IF NOT EXISTS marketplace_requested_at TIMESTAMP NULL,
-          ADD COLUMN IF NOT EXISTS marketplace_requested_by INTEGER REFERENCES users(id),
-          ADD COLUMN IF NOT EXISTS marketplace_approved BOOLEAN NOT NULL DEFAULT FALSE,
-          ADD COLUMN IF NOT EXISTS marketplace_approved_at TIMESTAMP NULL,
-          ADD COLUMN IF NOT EXISTS marketplace_approved_by INTEGER REFERENCES users(id),
-          ADD COLUMN IF NOT EXISTS source_note_id INTEGER REFERENCES study_notes(id) ON DELETE SET NULL,
-          ADD COLUMN IF NOT EXISTS source_institution_id INTEGER REFERENCES institution_profiles(id) ON DELETE SET NULL,
-          ADD COLUMN IF NOT EXISTS academic_year_id INTEGER REFERENCES academic_years(id) ON DELETE SET NULL
-      `);
-      await db.query(`
-        UPDATE study_notes note
-        SET academic_year_id = institution.default_academic_year_id
-        FROM institution_profiles institution
-        WHERE note.academic_year_id IS NULL
-          AND institution.id = note.institution_id
-          AND institution.default_academic_year_id IS NOT NULL
-      `);
-      await db.query(`
+          ADD COLUMN IF NOT EXISTS title VARCHAR(255) DEFAULT '',
+          ADD COLUMN IF NOT EXISTS description TEXT,
+          ADD COLUMN IF NOT EXISTS subject_id VARCHAR(100),
+          ADD COLUMN IF NOT EXISTS subject_name VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS syllabus_data JSONB DEFAULT '[]'::jsonb,
+          ADD COLUMN IF NOT EXISTS target_type VARCHAR(50) DEFAULT 'INSTITUTION',
+          ADD COLUMN IF NOT EXISTS target_id INTEGER,
+          ADD COLUMN IF NOT EXISTS target_program_id INTEGER,
+          ADD COLUMN IF NOT EXISTS ai_question_format JSONB DEFAULT '{"enabled":false,"true_false":0,"objective":0,"subjective":0}'::jsonb,
+          ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE,
+          ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT FALSE,
+          ADD COLUMN IF NOT EXISTS price NUMERIC(10,2) DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS marketplace_requested BOOLEAN DEFAULT FALSE,
+          ADD COLUMN IF NOT EXISTS marketplace_requested_at TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS marketplace_requested_by INTEGER,
+          ADD COLUMN IF NOT EXISTS marketplace_approved BOOLEAN DEFAULT FALSE,
+          ADD COLUMN IF NOT EXISTS marketplace_approved_at TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS marketplace_approved_by INTEGER,
+          ADD COLUMN IF NOT EXISTS source_note_id INTEGER,
+          ADD COLUMN IF NOT EXISTS source_institution_id INTEGER,
+          ADD COLUMN IF NOT EXISTS parent_template_id INTEGER,
+          ADD COLUMN IF NOT EXISTS academic_year_id INTEGER,
+          ADD COLUMN IF NOT EXISTS blocked_by_platform BOOLEAN DEFAULT FALSE,
+          ADD COLUMN IF NOT EXISTS blocked_by INTEGER,
+          ADD COLUMN IF NOT EXISTS blocked_at TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS block_reason TEXT,
+          ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE,
+          ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE,
+          ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+
         CREATE TABLE IF NOT EXISTS study_note_items (
           id SERIAL PRIMARY KEY,
           note_id INTEGER NOT NULL REFERENCES study_notes(id) ON DELETE CASCADE,
-          syllabus_node_id INTEGER REFERENCES syllabus_nodes(id) ON DELETE SET NULL,
-          title TEXT NOT NULL,
-          body TEXT NOT NULL,
-          attachment_url TEXT,
-          attachment_name TEXT,
-          attachments JSONB NOT NULL DEFAULT '[]'::jsonb,
+          question_text TEXT NOT NULL DEFAULT '',
+          question_type VARCHAR(50) NOT NULL DEFAULT 'true_false',
+          answer_text TEXT DEFAULT '',
+          correct_answer TEXT,
+          options JSONB DEFAULT '[]'::jsonb,
+          files JSONB DEFAULT '[]'::jsonb,
+          answer_files JSONB DEFAULT '[]'::jsonb,
+          display_order INTEGER NOT NULL DEFAULT 1,
           is_active BOOLEAN NOT NULL DEFAULT TRUE,
           is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-          deleted_at TIMESTAMP NULL,
-          deleted_by INTEGER REFERENCES users(id),
-          created_by INTEGER REFERENCES users(id),
-          updated_by INTEGER REFERENCES users(id),
-          sort_order INTEGER NOT NULL DEFAULT 0,
+          deleted_at TIMESTAMP,
           created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
-      await db.query(`
+        );
+
         ALTER TABLE study_note_items
-          ADD COLUMN IF NOT EXISTS attachment_url TEXT,
-          ADD COLUMN IF NOT EXISTS attachment_name TEXT,
-          ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb
+          ADD COLUMN IF NOT EXISTS question_text TEXT DEFAULT '',
+          ADD COLUMN IF NOT EXISTS question_type VARCHAR(50) DEFAULT 'true_false',
+          ADD COLUMN IF NOT EXISTS answer_text TEXT DEFAULT '',
+          ADD COLUMN IF NOT EXISTS correct_answer TEXT,
+          ADD COLUMN IF NOT EXISTS options JSONB DEFAULT '[]'::jsonb,
+          ADD COLUMN IF NOT EXISTS files JSONB DEFAULT '[]'::jsonb,
+          ADD COLUMN IF NOT EXISTS answer_files JSONB DEFAULT '[]'::jsonb,
+          ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 1,
+          ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
+
+        CREATE INDEX IF NOT EXISTS idx_study_notes_inst ON study_notes(institution_id);
+        CREATE INDEX IF NOT EXISTS idx_study_notes_del ON study_notes(is_deleted);
+        CREATE INDEX IF NOT EXISTS idx_study_notes_mkt ON study_notes(marketplace_requested, marketplace_approved, is_public);
+        CREATE INDEX IF NOT EXISTS idx_study_note_items_note ON study_note_items(note_id);
       `);
-      await db.query(`
-        ALTER TABLE study_notes
-          ADD COLUMN IF NOT EXISTS syllabus_node_id INTEGER REFERENCES syllabus_nodes(id) ON DELETE SET NULL
-      `);
-      await db.query(`
-        INSERT INTO study_note_items (note_id, syllabus_node_id, title, body, is_active, created_by, updated_by, sort_order, created_at, updated_at)
-        SELECT note.id, note.syllabus_node_id, COALESCE(NULLIF(note.title, ''), 'Note'), COALESCE(note.body, ''), note.is_active, note.created_by, note.updated_by, 1, note.created_at, note.updated_at
-        FROM study_notes note
-        WHERE COALESCE(note.body, '') <> ''
-          AND NOT EXISTS (
-            SELECT 1 FROM study_note_items item WHERE item.note_id = note.id
-          )
-      `);
-      await db.query(`CREATE INDEX IF NOT EXISTS idx_study_notes_institution ON study_notes(institution_id)`);
-      await db.query(`CREATE INDEX IF NOT EXISTS idx_study_notes_subject ON study_notes(subject_id)`);
-      await db.query(`CREATE INDEX IF NOT EXISTS idx_study_notes_syllabus ON study_notes(syllabus_id)`);
-      await db.query(`CREATE INDEX IF NOT EXISTS idx_study_notes_program_section ON study_notes(program_id, section_id)`);
-      await db.query(`CREATE INDEX IF NOT EXISTS idx_study_notes_session ON study_notes(institution_id, academic_year_id, is_deleted, is_active)`);
-      await db.query(`CREATE INDEX IF NOT EXISTS idx_study_notes_deleted ON study_notes(is_deleted)`);
-      await db.query(`CREATE INDEX IF NOT EXISTS idx_study_notes_marketplace ON study_notes(marketplace_requested, marketplace_approved, is_public)`);
-      await db.query(`CREATE INDEX IF NOT EXISTS idx_study_note_items_note ON study_note_items(note_id)`);
-      await db.query(`CREATE INDEX IF NOT EXISTS idx_study_note_items_node ON study_note_items(syllabus_node_id)`);
-    })().catch((error) => {
+    })().catch((err) => {
       notesSchemaReady = null;
-      throw error;
+      throw err;
     });
   }
   return notesSchemaReady;
 }
 
-async function getStudentEnrollmentScope(db: Queryable, userId: number) {
-  const result = await db.query<StudentNoteEnrollmentScope>(
-    `
-      SELECT se.institution_id, se.program_id, se.section_id, se.academic_year_id
-      FROM student_profiles sp
-      INNER JOIN student_enrollments se
-        ON se.student_id = sp.id
-       AND se.status = 'active'
-       AND COALESCE(se.is_deleted, FALSE) = FALSE
-      INNER JOIN academic_years academic_year
-        ON academic_year.id = se.academic_year_id
-       AND academic_year.institution_id = se.institution_id
-       AND COALESCE(academic_year.is_deleted, FALSE) = FALSE
-      WHERE sp.user_id = $1
-    `,
-    [userId]
+export async function replaceNoteQuestions(
+  client: Queryable,
+  noteId: number,
+  questions: NoteTemplateQuestion[]
+) {
+  await client.query(`DELETE FROM study_note_items WHERE note_id = $1`, [noteId]);
+
+  if (questions.length === 0) return;
+
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    await client.query(
+      `
+        INSERT INTO study_note_items (
+          note_id, question_text, question_type, answer_text, correct_answer,
+          options, files, answer_files, display_order, is_active, is_deleted
+        )
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9, TRUE, FALSE)
+      `,
+      [
+        noteId,
+        q.question_text.trim(),
+        q.question_type,
+        q.answer_text ? q.answer_text.trim() : "",
+        q.correct_answer ?? null,
+        JSON.stringify(q.options || []),
+        JSON.stringify(q.files || []),
+        JSON.stringify(q.answer_files || []),
+        i + 1,
+      ]
+    );
+  }
+
+  await client.query(
+    `UPDATE study_notes SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+    [noteId]
   );
-  return result.rows;
 }
 
-function noteSelectSql(inheritedInstitutionParam?: number, inheritedAcademicYearParam?: number) {
-  return `
-    SELECT
-      note.id,
-      COALESCE(note.title, '') AS title,
-      note.institution_id,
-      institution.name AS institution_name,
-      note.subject_id,
-      subject.name AS subject_name,
-      note.syllabus_id,
-      syllabus.title AS syllabus_title,
-      note.syllabus_node_id,
-      node.title AS syllabus_node_title,
-      note.program_id,
-      COALESCE(program.title, master_course.name) AS program_title,
-      note.section_id,
-      section.name AS section_name,
-      note.academic_year_id,
-      note.is_active,
-      COALESCE(note.is_paid, FALSE) AS is_paid,
-      COALESCE(note.price, 0)::float8 AS price,
-      COALESCE(items.item_count, 0)::int AS item_count,
-      items.first_item_title,
-      note.is_public,
-      note.marketplace_requested,
-      note.marketplace_requested_at,
-      note.marketplace_requested_by,
-      requester.full_name AS marketplace_requested_by_name,
-      note.marketplace_approved,
-      note.marketplace_approved_at,
-      note.marketplace_approved_by,
-      approver.full_name AS marketplace_approved_by_name,
-      note.source_note_id,
-      note.source_institution_id,
-      source_institution.name AS source_institution_name,
-      ${
-        inheritedInstitutionParam
-          ? `EXISTS (
-              SELECT 1
-              FROM study_notes inherited_note
-              WHERE inherited_note.source_note_id = note.id
-                AND inherited_note.institution_id = $${inheritedInstitutionParam}
-                ${inheritedAcademicYearParam ? `AND inherited_note.academic_year_id = $${inheritedAcademicYearParam}` : ""}
-                AND COALESCE(inherited_note.is_deleted, FALSE) = FALSE
-            )`
-          : "FALSE"
-      } AS has_inherited_note,
-      note.created_by,
-      creator.full_name AS created_by_name,
-      note.created_at,
-      note.updated_at
-    FROM study_notes note
-    INNER JOIN institution_profiles institution ON institution.id = note.institution_id
-    LEFT JOIN subjects subject ON subject.id = note.subject_id
-    LEFT JOIN syllabi syllabus ON syllabus.id = note.syllabus_id
-    LEFT JOIN syllabus_nodes node ON node.id = note.syllabus_node_id
-    LEFT JOIN institution_programs program ON program.id = note.program_id
-    LEFT JOIN master_courses master_course ON master_course.id = note.program_id
-    LEFT JOIN sections section ON section.id = note.section_id
-    LEFT JOIN users requester ON requester.id = note.marketplace_requested_by
-    LEFT JOIN users approver ON approver.id = note.marketplace_approved_by
-    LEFT JOIN users creator ON creator.id = note.created_by
-    LEFT JOIN institution_profiles source_institution ON source_institution.id = note.source_institution_id
-    LEFT JOIN LATERAL (
-      SELECT
-        COUNT(*)::int AS item_count,
-        (ARRAY_AGG(item.title ORDER BY item.sort_order ASC, item.id ASC))[1] AS first_item_title
-      FROM study_note_items item
-      WHERE item.note_id = note.id
-        AND COALESCE(item.is_deleted, FALSE) = FALSE
-    ) items ON TRUE
-  `;
-}
-
-function joinWhere(where: string[]) {
-  return where.length ? `WHERE ${where.join(" AND ")}` : "";
-}
-
-export async function listNotes(db: Queryable, user: PermissionUser, opts: ListNotesOptions = {}) {
-  await ensureNotesSchema(db);
-  const params: unknown[] = [];
-  const where = ["COALESCE(note.is_deleted, FALSE) = FALSE"];
+export async function listNotes(
+  dbQuery: Queryable,
+  user: PermissionUser,
+  opts: {
+    search?: string;
+    limit?: number;
+    offset?: number;
+    institutionId?: number | null;
+    view?: "my" | "marketplace" | "requests";
+  } = {}
+) {
+  await ensureNotesSchema(dbQuery);
   const search = opts.search?.trim() ?? "";
   const view = opts.view ?? "my";
+  const limit = opts.limit ?? 10;
+  const offset = opts.offset ?? 0;
+  const isPlatformAdmin = isPlatformAdminUser(user);
+  const allowedInstitutionIds = getAllowedInstitutionIds(user);
+
+  const whereParams: unknown[] = [];
+  const where: string[] = ["COALESCE(note.is_deleted, FALSE) = FALSE"];
 
   if (search) {
-    params.push(`%${search}%`);
-    where.push(`(subject.name ILIKE $${params.length} OR syllabus.title ILIKE $${params.length} OR program.title ILIKE $${params.length} OR institution.name ILIKE $${params.length} OR EXISTS (
-      SELECT 1 FROM study_note_items search_item
-      WHERE search_item.note_id = note.id
-        AND COALESCE(search_item.is_deleted, FALSE) = FALSE
-        AND (search_item.title ILIKE $${params.length} OR search_item.body ILIKE $${params.length})
-    ))`);
-  }
-
-  const institutionId = asPositiveInteger(opts.institutionId);
-  if (institutionId && view !== "marketplace") {
-    assertCanAccessInstitution(user, institutionId);
-    params.push(institutionId);
-    where.push(`note.institution_id = $${params.length}`);
-  } else if (!isPlatformUser(user) && !isStudentUser(user) && view !== "marketplace") {
-    const allowedInstitutionIds = getAllowedInstitutionIds(user) ?? [];
-    if (!allowedInstitutionIds.length) {
-      where.push("FALSE");
-    } else {
-      params.push(allowedInstitutionIds);
-      where.push(`note.institution_id = ANY($${params.length}::int[])`);
-    }
-  }
-
-  const subjectId = asPositiveInteger(opts.subjectId);
-  if (subjectId) {
-    params.push(subjectId);
-    where.push(`note.subject_id = $${params.length}`);
-  }
-
-  const syllabusId = asPositiveInteger(opts.syllabusId);
-  if (syllabusId) {
-    params.push(syllabusId);
-    where.push(`note.syllabus_id = $${params.length}`);
-  }
-
-  const academicYearId = asPositiveInteger(opts.academicYearId);
-  if (academicYearId && view !== "marketplace") {
-    params.push(academicYearId);
-    where.push(`note.academic_year_id = $${params.length}`);
-  }
-
-  if (view === "my") {
-    params.push(user.id);
-    where.push(`note.created_by = $${params.length}`);
-  }
-
-  if (view === "requests") {
-    if (!isPlatformUser(user)) {
-      where.push("FALSE");
-    }
-    where.push("note.marketplace_requested = TRUE");
-    where.push("note.marketplace_approved = FALSE");
+    whereParams.push(`%${search}%`);
+    where.push(`(
+      note.title ILIKE $${whereParams.length}
+      OR COALESCE(note.description, '') ILIKE $${whereParams.length}
+      OR COALESCE(note.subject_name, '') ILIKE $${whereParams.length}
+      OR COALESCE(program.title, '') ILIKE $${whereParams.length}
+      OR institution.name ILIKE $${whereParams.length}
+    )`);
   }
 
   if (view === "marketplace") {
-    where.push("(note.marketplace_approved = TRUE OR note.is_public = TRUE)");
-    where.push("note.is_active = TRUE");
-  }
-
-  if (isStudentUser(user)) {
-    const enrollments = opts.studentEnrollmentScope
-      ? [opts.studentEnrollmentScope]
-      : await getStudentEnrollmentScope(db, user.id);
-    if (!enrollments.length) {
+    where.push(`(
+      note.marketplace_approved = TRUE
+      OR note.is_public = TRUE
+      OR EXISTS (
+        SELECT 1 FROM users u
+        LEFT JOIN user_roles ur ON ur.user_id = u.id
+        LEFT JOIN roles r ON r.id = ur.role_id
+        WHERE u.id = note.created_by AND (r.code = 'platform_admin' OR COALESCE(u.is_super_admin, FALSE) = TRUE)
+      )
+    )`);
+    where.push("COALESCE(note.blocked_by_platform, FALSE) = FALSE");
+  } else if (view === "requests") {
+    if (!isPlatformAdmin) {
       where.push("FALSE");
     } else {
-      params.push(enrollments.map((item) => item.institution_id));
-      const institutionParam = params.length;
-      params.push(enrollments.map((item) => item.program_id).filter(Boolean));
-      const programParam = params.length;
-      params.push(enrollments.map((item) => item.section_id).filter(Boolean));
-      const sectionParam = params.length;
-      params.push(enrollments.map((item) => item.academic_year_id).filter(Boolean));
-      const academicYearParam = params.length;
-      where.push(`note.is_active = TRUE`);
-      where.push(`note.institution_id = ANY($${institutionParam}::int[])`);
-      where.push(`note.academic_year_id = ANY($${academicYearParam}::int[])`);
-      where.push(`(note.program_id IS NULL OR note.program_id = ANY($${programParam}::int[]))`);
-      where.push(`(note.section_id IS NULL OR note.section_id = ANY($${sectionParam}::int[]))`);
+      where.push("note.marketplace_requested = TRUE");
+      where.push("note.marketplace_approved = FALSE");
+      where.push("note.blocked_by_platform = FALSE");
+    }
+  } else {
+    // "my" view
+    if (opts.institutionId) {
+      whereParams.push(opts.institutionId);
+      where.push(`note.institution_id = $${whereParams.length}`);
+    } else if (allowedInstitutionIds !== null) {
+      whereParams.push(allowedInstitutionIds);
+      where.push(`note.institution_id = ANY($${whereParams.length}::int[])`);
     }
   }
 
-  const limit = opts.limit ?? 10;
-  const offset = opts.offset ?? 0;
-  let inheritedInstitutionParam: number | undefined;
-  let inheritedAcademicYearParam: number | undefined;
-  if (view === "marketplace" && institutionId && !isPlatformUser(user) && !isStudentUser(user)) {
-    assertCanAccessInstitution(user, institutionId);
-    params.push(institutionId);
-    inheritedInstitutionParam = params.length;
-    if (academicYearId) {
-      params.push(academicYearId);
-      inheritedAcademicYearParam = params.length;
-      where.push(`$${inheritedAcademicYearParam}::int IS NOT NULL`);
-    }
-    where.push(`note.institution_id <> $${inheritedInstitutionParam}`);
-  }
-  const whereSql = joinWhere(where);
-  const [dataResult, countResult] = await Promise.all([
-    db.query<StudyNoteRow>(
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+  const currentInstId = opts.institutionId ?? (allowedInstitutionIds && allowedInstitutionIds.length === 1 ? allowedInstitutionIds[0] : null);
+  const currentInstParamIndex = whereParams.length + 1;
+  const limitParamIndex = whereParams.length + 2;
+  const offsetParamIndex = whereParams.length + 3;
+  const dataParams = [...whereParams, currentInstId, limit, offset];
+
+  const [dataRes, countRes, statsRes] = await Promise.all([
+    dbQuery.query<NoteTemplateRow>(
       `
-        ${noteSelectSql(inheritedInstitutionParam, inheritedAcademicYearParam)}
+        SELECT
+          note.id,
+          note.title,
+          note.description,
+          note.subject_id,
+          note.subject_name,
+          note.syllabus_data,
+          note.ai_question_format,
+          note.is_public,
+          note.is_paid,
+          note.price::float8 AS price,
+          note.marketplace_requested,
+          note.marketplace_requested_at,
+          note.marketplace_requested_by,
+          req_user.full_name AS marketplace_requested_by_name,
+          note.marketplace_approved,
+          note.marketplace_approved_at,
+          note.marketplace_approved_by,
+          app_user.full_name AS marketplace_approved_by_name,
+          note.source_note_id,
+          note.source_institution_id,
+          src_inst.name AS source_institution_name,
+          note.parent_template_id,
+          (
+            SELECT COALESCE(child_ip.name, child_ip.slug, 'Institution ' || child_ip.id::text)
+            FROM study_notes child
+            INNER JOIN institution_profiles child_ip ON child_ip.id = child.institution_id
+            WHERE (child.parent_template_id = note.id OR child.source_note_id = note.id)
+              AND ($${currentInstParamIndex}::int IS NOT NULL AND child.institution_id = $${currentInstParamIndex}::int)
+              AND COALESCE(child.is_deleted, FALSE) = FALSE
+              AND COALESCE(child_ip.is_deleted, FALSE) = FALSE
+              AND child_ip.is_active = TRUE
+            ORDER BY child.updated_at DESC, child.id DESC
+            LIMIT 1
+          ) AS inherited_by_institution_name,
+          note.is_active,
+          note.institution_id,
+          institution.name AS institution_name,
+          note.target_type,
+          note.target_id,
+          note.target_program_id,
+          CASE
+            WHEN note.target_type = 'INSTITUTION' THEN institution.name || ' > Whole institution'
+            WHEN note.target_type = 'PROGRAM' THEN institution.name || ' > ' || COALESCE(program.title, 'Class')
+            WHEN note.target_type = 'SECTION' THEN institution.name || ' > ' || COALESCE(program.title, 'Class') || ' > ' || COALESCE(section.name, 'Section')
+            WHEN note.target_type = 'STUDENT' THEN institution.name || ' > ' || COALESCE(program.title, 'Class') || ' > ' || COALESCE(stu_user.full_name, 'Student')
+            ELSE NULL
+          END AS target_label,
+          COALESCE(program.title, 'Whole Course') AS target_program_label,
+          note.blocked_by_platform,
+          note.blocked_at,
+          note.block_reason,
+          block_user.full_name AS blocked_by_name,
+          note.created_by,
+          creator.full_name AS created_by_name,
+          updater.full_name AS updated_by_name,
+          note.created_at,
+          note.updated_at,
+          COALESCE(items.question_count, 0)::int AS item_count,
+          COALESCE(items.question_count, 0)::int AS question_count,
+          COALESCE(items.attachment_count, 0)::int AS attachment_count
+        FROM study_notes note
+        INNER JOIN institution_profiles institution ON institution.id = note.institution_id
+        LEFT JOIN institution_programs program ON program.id = note.target_program_id OR (note.target_type = 'PROGRAM' AND program.id = note.target_id)
+        LEFT JOIN sections section ON section.id = note.target_id AND note.target_type = 'SECTION'
+        LEFT JOIN student_profiles stu_profile ON stu_profile.id = note.target_id AND note.target_type = 'STUDENT'
+        LEFT JOIN users stu_user ON stu_user.id = stu_profile.user_id
+        LEFT JOIN users creator ON creator.id = note.created_by
+        LEFT JOIN users updater ON updater.id = note.updated_by
+        LEFT JOIN users req_user ON req_user.id = note.marketplace_requested_by
+        LEFT JOIN users app_user ON app_user.id = note.marketplace_approved_by
+        LEFT JOIN users block_user ON block_user.id = note.blocked_by
+        LEFT JOIN institution_profiles src_inst ON src_inst.id = note.source_institution_id
+        LEFT JOIN LATERAL (
+          SELECT
+            COUNT(*)::int AS question_count,
+            COALESCE(SUM(jsonb_array_length(COALESCE(item.files, '[]'::jsonb))), 0)::int AS attachment_count
+          FROM study_note_items item
+          WHERE item.note_id = note.id
+            AND COALESCE(item.is_deleted, FALSE) = FALSE
+        ) items ON TRUE
         ${whereSql}
         ORDER BY
           (note.marketplace_requested = TRUE AND note.marketplace_approved = FALSE) DESC,
           note.updated_at DESC,
           note.id DESC
-        LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+        LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}
       `,
-      [...params, limit, offset]
+      dataParams
     ),
-    db.query<{ count: number }>(
+    dbQuery.query<{ count: number }>(
       `
         SELECT COUNT(*)::int AS count
         FROM study_notes note
         INNER JOIN institution_profiles institution ON institution.id = note.institution_id
-        LEFT JOIN subjects subject ON subject.id = note.subject_id
-        LEFT JOIN syllabi syllabus ON syllabus.id = note.syllabus_id
-        LEFT JOIN institution_programs program ON program.id = note.program_id
+        LEFT JOIN institution_programs program ON program.id = note.target_program_id OR (note.target_type = 'PROGRAM' AND program.id = note.target_id)
         ${whereSql}
       `,
-      params
+      whereParams
+    ),
+    dbQuery.query<{
+      total: number;
+      active: number;
+      blocked: number;
+      questions: number;
+    }>(
+      `
+        SELECT
+          COUNT(DISTINCT note.id)::int AS total,
+          COUNT(DISTINCT note.id) FILTER (WHERE note.is_active = TRUE AND note.blocked_by_platform = FALSE)::int AS active,
+          COUNT(DISTINCT note.id) FILTER (WHERE note.blocked_by_platform = TRUE)::int AS blocked,
+          COUNT(item.id)::int AS questions
+        FROM study_notes note
+        LEFT JOIN study_note_items item ON item.note_id = note.id AND COALESCE(item.is_deleted, FALSE) = FALSE
+        ${whereSql}
+      `,
+      whereParams
     ),
   ]);
 
   return {
-    data: dataResult.rows,
-    total: Number(countResult.rows[0]?.count ?? 0),
+    data: dataRes.rows,
+    total: Number(countRes.rows[0]?.count ?? 0),
+    stats: statsRes.rows[0] ?? { total: 0, active: 0, blocked: 0, questions: 0 },
   };
 }
 
-async function validateNoteInput(db: Queryable, user: PermissionUser, input: NoteInput) {
-  assertCanAccessInstitution(user, input.institution_id);
+export async function getNoteById(
+  dbQuery: Queryable,
+  noteId: number
+): Promise<NoteTemplateRow | null> {
+  await ensureNotesSchema(dbQuery);
+  const result = await dbQuery.query<NoteTemplateRow>(
+    `
+      SELECT
+        note.id,
+        note.title,
+        note.description,
+        note.subject_id,
+        note.subject_name,
+        note.syllabus_data,
+        note.ai_question_format,
+        note.is_public,
+        note.is_paid,
+        note.price::float8 AS price,
+        note.marketplace_requested,
+        note.marketplace_requested_at,
+        note.marketplace_requested_by,
+        req_user.full_name AS marketplace_requested_by_name,
+        note.marketplace_approved,
+        note.marketplace_approved_at,
+        note.marketplace_approved_by,
+        app_user.full_name AS marketplace_approved_by_name,
+        note.source_note_id,
+        note.source_institution_id,
+        src_inst.name AS source_institution_name,
+        note.parent_template_id,
+        note.is_active,
+        note.institution_id,
+        institution.name AS institution_name,
+        note.target_type,
+        note.target_id,
+        note.target_program_id,
+        note.blocked_by_platform,
+        note.blocked_at,
+        note.block_reason,
+        note.created_by,
+        creator.full_name AS created_by_name,
+        note.created_at,
+        note.updated_at
+      FROM study_notes note
+      INNER JOIN institution_profiles institution ON institution.id = note.institution_id
+      LEFT JOIN users creator ON creator.id = note.created_by
+      LEFT JOIN users req_user ON req_user.id = note.marketplace_requested_by
+      LEFT JOIN users app_user ON app_user.id = note.marketplace_approved_by
+      LEFT JOIN institution_profiles src_inst ON src_inst.id = note.source_institution_id
+      WHERE note.id = $1
+        AND COALESCE(note.is_deleted, FALSE) = FALSE
+      LIMIT 1
+    `,
+    [noteId]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
 
-  if (input.program_id) {
-    const result = await db.query(
-      `
-        SELECT 1
-        FROM institution_programs
-        WHERE id = $1
-          AND institution_id = $2
-          AND is_active = TRUE
-          AND COALESCE(is_deleted, FALSE) = FALSE
-        UNION ALL
-        SELECT 1
-        FROM master_courses
-        WHERE id = $1
-          AND is_active = TRUE
-          AND COALESCE(is_deleted, FALSE) = FALSE
-        LIMIT 1
-      `,
-      [input.program_id, input.institution_id]
-    );
-    if (!result.rowCount) throw new Error("Selected class or course is not available");
-  }
+  const questionsRes = await dbQuery.query<{
+    id: number;
+    question_text: string;
+    question_type: NoteTemplateQuestion["question_type"];
+    answer_text: string | null;
+    correct_answer: string | null;
+    display_order: number;
+    options: unknown;
+    files: unknown;
+    answer_files: unknown;
+  }>(
+    `
+      SELECT
+        id,
+        question_text,
+        question_type,
+        answer_text,
+        correct_answer,
+        display_order,
+        options,
+        files,
+        answer_files
+      FROM study_note_items
+      WHERE note_id = $1
+        AND COALESCE(is_deleted, FALSE) = FALSE
+      ORDER BY display_order ASC, id ASC
+    `,
+    [noteId]
+  );
 
-  if (input.section_id) {
-    if (!input.program_id) throw new Error("Class / Program is required for section notes");
-    const result = await db.query(
-      `SELECT 1 FROM program_sections WHERE program_id = $1 AND section_id = $2 LIMIT 1`,
-      [input.program_id, input.section_id]
-    );
-    if (!result.rowCount) throw new Error("Selected section is not in this class");
-  }
+  const questions: NoteTemplateQuestion[] = questionsRes.rows.map((q) => ({
+    id: q.id,
+    question_text: q.question_text,
+    question_type: q.question_type,
+    answer_text: q.answer_text ?? "",
+    correct_answer: q.correct_answer ?? undefined,
+    display_order: q.display_order,
+    options: Array.isArray(q.options) ? (q.options as NoteTemplateQuestion["options"]) : [],
+    files: Array.isArray(q.files) ? (q.files as NoteTemplateQuestion["files"]) : [],
+    answer_files: Array.isArray(q.answer_files) ? (q.answer_files as NoteTemplateQuestion["files"]) : [],
+  }));
 
-  if (input.syllabus_id) {
-    const result = await db.query<{ subject_id: number }>(
-      `
-        SELECT subject_id
-        FROM syllabi
-        WHERE id = $1
-          AND COALESCE(is_active, TRUE) = TRUE
-          AND (is_template = TRUE OR institution_id = $2)
-        LIMIT 1
-      `,
-      [input.syllabus_id, input.institution_id]
-    );
-    const syllabus = result.rows[0];
-    if (!syllabus) throw new Error("Selected syllabus is not available for this institution");
-    if (input.subject_id && input.subject_id !== syllabus.subject_id) {
-      throw new Error("Subject must match the selected syllabus");
-    }
-  }
-
-  if (input.syllabus_node_id && input.syllabus_id) {
-    const nodeRes = await db.query(
-      `SELECT 1 FROM syllabus_nodes WHERE id = $1 AND syllabus_id = $2 AND COALESCE(is_active, TRUE) = TRUE LIMIT 1`,
-      [input.syllabus_node_id, input.syllabus_id]
-    );
-    if (!nodeRes.rowCount) throw new Error("Selected syllabus unit or chapter is invalid");
-  }
+  return {
+    ...row,
+    questions,
+    question_count: questions.length,
+    item_count: questions.length,
+  };
 }
 
-export async function createNote(db: Queryable, user: PermissionUser, input: NoteInput) {
-  await ensureNotesSchema(db);
-  await validateNoteInput(db, user, input);
-  const requested = Boolean(input.marketplace_requested);
-  const isPaid = Boolean(input.is_paid || (Number(input.price) > 0));
-  const price = isPaid ? Math.max(0, Number(input.price) || 0) : 0;
-  const title = (input.title ?? "").trim();
-  const result = await db.query<{ id: number }>(
+export async function createNote(
+  dbQuery: Queryable,
+  user: PermissionUser,
+  payload: ReturnType<typeof import("@/lib/notes/note-template-payload").parseNoteMetadataPayload>
+) {
+  await ensureNotesSchema(dbQuery);
+  const isPlatformAdmin = isPlatformAdminUser(user);
+  const isPublic = isPlatformAdmin ? (payload.isPublic !== false) : payload.isPublic;
+  const marketplaceApproved = isPlatformAdmin;
+  const result = await dbQuery.query<{ id: number }>(
     `
       INSERT INTO study_notes (
-        institution_id, academic_year_id, subject_id, syllabus_id, syllabus_node_id, program_id, section_id,
-        title, is_active, is_paid, price, marketplace_requested, marketplace_requested_at, marketplace_requested_by,
-        marketplace_approved, is_public, created_by, updated_by
+        title, description, subject_id, subject_name, syllabus_data,
+        institution_id, target_type, target_id, target_program_id,
+        ai_question_format, is_public, is_active, is_paid, price,
+        marketplace_requested, marketplace_approved, marketplace_approved_at, marketplace_approved_by,
+        created_by, updated_by
       )
       VALUES (
-        $1,
-        (SELECT default_academic_year_id FROM institution_profiles WHERE id = $1),
-        $2,
-        $3,
-        $4,
-        $5,
-        $6,
-        $11,
-        $7,
-        $9,
-        $10,
-        $8,
-        CASE WHEN $8 THEN CURRENT_TIMESTAMP ELSE NULL::timestamp END,
-        CASE WHEN $8 THEN $12::integer ELSE NULL::integer END,
-        FALSE,
-        FALSE,
-        $12,
-        $12
+        $1, $2, $3, $4, $5::jsonb,
+        $6, $7, $8, $9,
+        $10::jsonb, $11, $12, $13, $14,
+        $15, $16, CASE WHEN $16 THEN CURRENT_TIMESTAMP ELSE NULL END, CASE WHEN $16 THEN $17 ELSE NULL END,
+        $17, $17
       )
       RETURNING id
     `,
     [
-      input.institution_id,
-      input.subject_id ?? null,
-      input.syllabus_id ?? null,
-      input.syllabus_node_id ?? null,
-      input.program_id ?? null,
-      input.section_id ?? null,
-      input.is_active ?? false,
-      requested,
-      isPaid,
-      price,
-      title,
+      payload.title,
+      payload.description,
+      payload.subjectId,
+      payload.subjectName,
+      JSON.stringify(payload.syllabusData || []),
+      payload.institutionId,
+      payload.targetType,
+      payload.targetId,
+      payload.targetProgramId,
+      JSON.stringify(payload.aiQuestionFormat),
+      isPublic,
+      payload.isActive,
+      payload.isPaid,
+      payload.price,
+      isPublic,
+      marketplaceApproved,
       user.id,
     ]
   );
   return result.rows[0].id;
 }
 
-export async function updateNote(db: Queryable, user: PermissionUser, noteId: number, input: NoteInput) {
-  await ensureNotesSchema(db);
-  await assertCanManageNote(db, user, noteId);
-  await validateNoteInput(db, user, input);
-  const requested = Boolean(input.marketplace_requested);
-  const isPaid = Boolean(input.is_paid || (Number(input.price) > 0));
-  const price = isPaid ? Math.max(0, Number(input.price) || 0) : 0;
-  const title = (input.title ?? "").trim();
-  await db.query(
+export async function updateNote(
+  dbQuery: Queryable,
+  user: PermissionUser,
+  noteId: number,
+  payload: ReturnType<typeof import("@/lib/notes/note-template-payload").parseNoteMetadataPayload>
+) {
+  await ensureNotesSchema(dbQuery);
+  await dbQuery.query(
     `
       UPDATE study_notes
-      SET institution_id = $2,
-          academic_year_id = (SELECT default_academic_year_id FROM institution_profiles WHERE id = $2),
-          subject_id = $3,
-          syllabus_id = $4,
-          syllabus_node_id = $12,
-          program_id = $5,
-          section_id = $6,
-          title = $13,
-          is_active = $7,
-          is_paid = $10,
-          price = $11,
-          marketplace_requested = $8,
-          marketplace_requested_at = CASE WHEN $8 THEN COALESCE(marketplace_requested_at, CURRENT_TIMESTAMP) ELSE NULL END,
-          marketplace_requested_by = CASE WHEN $8 THEN COALESCE(marketplace_requested_by, $9::integer) ELSE NULL::integer END,
-          marketplace_approved = CASE WHEN $8 THEN marketplace_approved ELSE FALSE END,
-          marketplace_approved_at = CASE WHEN $8 THEN marketplace_approved_at ELSE NULL END,
-          marketplace_approved_by = CASE WHEN $8 THEN marketplace_approved_by ELSE NULL END,
-          is_public = CASE WHEN $8 THEN is_public ELSE FALSE END,
-          updated_by = $9,
-          updated_at = CURRENT_TIMESTAMP
+      SET
+        title = $2,
+        description = $3,
+        subject_id = $4,
+        subject_name = $5,
+        syllabus_data = $6::jsonb,
+        institution_id = $7,
+        target_type = $8,
+        target_id = $9,
+        target_program_id = $10,
+        ai_question_format = $11::jsonb,
+        is_public = $12,
+        is_active = $13,
+        is_paid = $14,
+        price = $15,
+        updated_by = $16,
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
         AND COALESCE(is_deleted, FALSE) = FALSE
     `,
     [
       noteId,
-      input.institution_id,
-      input.subject_id ?? null,
-      input.syllabus_id ?? null,
-      input.program_id ?? null,
-      input.section_id ?? null,
-      input.is_active ?? true,
-      requested,
+      payload.title,
+      payload.description,
+      payload.subjectId,
+      payload.subjectName,
+      JSON.stringify(payload.syllabusData || []),
+      payload.institutionId,
+      payload.targetType,
+      payload.targetId,
+      payload.targetProgramId,
+      JSON.stringify(payload.aiQuestionFormat),
+      payload.isPublic,
+      payload.isActive,
+      payload.isPaid,
+      payload.price,
       user.id,
-      isPaid,
-      price,
-      input.syllabus_node_id ?? null,
-      title,
     ]
   );
 }
 
-async function assertCanManageNote(db: Queryable, user: PermissionUser, noteId: number) {
-  const result = await db.query<{ institution_id: number; created_by: number | null }>(
-    `SELECT institution_id, created_by FROM study_notes WHERE id = $1 AND COALESCE(is_deleted, FALSE) = FALSE LIMIT 1`,
-    [noteId]
-  );
-  const note = result.rows[0];
-  if (!note) throw new Error("Note not found");
-  assertCanAccessInstitution(user, note.institution_id);
-  if (note.created_by !== user.id) throw new Error("You can only edit notes you created");
-  return note;
-}
-
-export async function listNoteItems(
-  db: Queryable,
+export async function deleteNotes(
+  dbQuery: Queryable,
   user: PermissionUser,
-  noteId: number,
-  studentEnrollmentScope?: StudentNoteEnrollmentScope | null
+  ids: number[]
 ) {
-  await ensureNotesSchema(db);
-  if (!isPlatformUser(user) && !isStudentUser(user)) {
-    const allowedInstitutionIds = getAllowedInstitutionIds(user) ?? [];
-    const access = await db.query(
-      `
-        SELECT 1
-        FROM study_notes note
-        WHERE note.id = $1
-          AND COALESCE(note.is_deleted, FALSE) = FALSE
-          AND (
-            note.institution_id = ANY($2::int[])
-            OR (note.marketplace_approved = TRUE AND note.is_public = TRUE AND note.is_active = TRUE)
-          )
-        LIMIT 1
-      `,
-      [noteId, allowedInstitutionIds]
-    );
-    if (!access.rowCount) throw new Error("Note not found");
-  }
-  if (isStudentUser(user)) {
-    const enrollments = studentEnrollmentScope
-      ? [studentEnrollmentScope]
-      : await getStudentEnrollmentScope(db, user.id);
-    if (!enrollments.length) throw new Error("Note not found");
-    const institutionIds = enrollments.map((item) => item.institution_id);
-    const programIds = enrollments.map((item) => item.program_id).filter(Boolean);
-    const sectionIds = enrollments.map((item) => item.section_id).filter(Boolean);
-    const access = await db.query(
-      `
-        SELECT 1
-        FROM study_notes note
-        WHERE note.id = $1
-          AND note.is_active = TRUE
-          AND COALESCE(note.is_deleted, FALSE) = FALSE
-          AND note.institution_id = ANY($2::int[])
-          AND (note.program_id IS NULL OR note.program_id = ANY($3::int[]))
-          AND (note.section_id IS NULL OR note.section_id = ANY($4::int[]))
-        LIMIT 1
-      `,
-      [noteId, institutionIds, programIds, sectionIds]
-    );
-    if (!access.rowCount) throw new Error("Note not found");
-  }
-  const result = await db.query<StudyNoteItemRow>(
-    `
-      SELECT
-        item.id,
-        item.note_id,
-        item.syllabus_node_id,
-        node.title AS node_title,
-        node.node_type,
-        item.title,
-        item.body,
-        item.attachment_url,
-        item.attachment_name,
-        COALESCE(item.attachments, '[]'::jsonb) AS attachments,
-        item.is_active,
-        item.sort_order,
-        item.created_at,
-        item.updated_at
-      FROM study_note_items item
-      INNER JOIN study_notes note ON note.id = item.note_id
-      LEFT JOIN syllabus_nodes node ON node.id = item.syllabus_node_id
-      WHERE item.note_id = $1
-        AND COALESCE(item.is_deleted, FALSE) = FALSE
-        AND COALESCE(note.is_deleted, FALSE) = FALSE
-      ORDER BY item.sort_order ASC, item.id ASC
-    `,
-    [noteId]
-  );
-  return result.rows;
-}
-
-async function validateNoteItemInput(db: Queryable, user: PermissionUser, input: NoteItemInput) {
-  const note = await assertCanManageNote(db, user, input.note_id);
-  if (input.syllabus_node_id) {
-    const result = await db.query(
-      `
-        SELECT 1
-        FROM study_notes note
-        INNER JOIN syllabus_nodes node ON node.syllabus_id = note.syllabus_id
-        WHERE note.id = $1
-          AND node.id = $2
-          AND (note.institution_id = $3 OR note.institution_id IS NULL)
-          AND COALESCE(node.is_active, TRUE) = TRUE
-        LIMIT 1
-      `,
-      [input.note_id, input.syllabus_node_id, note.institution_id]
-    );
-    if (!result.rowCount) throw new Error("Selected syllabus node is invalid");
-  }
-}
-
-export async function createNoteItem(db: Queryable, user: PermissionUser, input: NoteItemInput) {
-  await ensureNotesSchema(db);
-  await validateNoteItemInput(db, user, input);
-  const attachmentsJson = JSON.stringify(input.attachments || []);
-  const result = await db.query<{ id: number }>(
-    `
-      INSERT INTO study_note_items (
-        note_id, syllabus_node_id, title, body, attachment_url, attachment_name, attachments, is_active, created_by, updated_by, sort_order
-      )
-      VALUES (
-        $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $9,
-        COALESCE((SELECT MAX(sort_order) + 1 FROM study_note_items WHERE note_id = $1), 1)
-      )
-      RETURNING id
-    `,
-    [
-      input.note_id,
-      input.syllabus_node_id ?? null,
-      input.title,
-      input.body,
-      input.attachment_url ?? null,
-      input.attachment_name ?? null,
-      attachmentsJson,
-      input.is_active ?? true,
-      user.id,
-    ]
-  );
-  await db.query(`UPDATE study_notes SET updated_at = CURRENT_TIMESTAMP, updated_by = $2 WHERE id = $1`, [input.note_id, user.id]);
-  return result.rows[0].id;
-}
-
-export async function updateNoteItem(db: Queryable, user: PermissionUser, itemId: number, input: NoteItemInput) {
-  await ensureNotesSchema(db);
-  await validateNoteItemInput(db, user, input);
-  const attachmentsJson = JSON.stringify(input.attachments || []);
-  await db.query(
-    `
-      UPDATE study_note_items
-      SET syllabus_node_id = $3,
-          title = $4,
-          body = $5,
-          attachment_url = $6,
-          attachment_name = $7,
-          attachments = $8::jsonb,
-          is_active = $9,
-          updated_by = $10,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-        AND note_id = $2
-        AND COALESCE(is_deleted, FALSE) = FALSE
-    `,
-    [
-      itemId,
-      input.note_id,
-      input.syllabus_node_id ?? null,
-      input.title,
-      input.body,
-      input.attachment_url ?? null,
-      input.attachment_name ?? null,
-      attachmentsJson,
-      input.is_active ?? true,
-      user.id,
-    ]
-  );
-  await db.query(`UPDATE study_notes SET updated_at = CURRENT_TIMESTAMP, updated_by = $2 WHERE id = $1`, [input.note_id, user.id]);
-}
-
-export async function deleteNoteItems(db: Queryable, user: PermissionUser, noteId: number, ids: number[]) {
-  await ensureNotesSchema(db);
-  if (!ids.length) throw new Error("Select at least one note item");
-  await assertCanManageNote(db, user, noteId);
-  await db.query(
-    `
-      UPDATE study_note_items
-      SET is_deleted = TRUE,
-          deleted_at = CURRENT_TIMESTAMP,
-          deleted_by = $3,
-          updated_by = $3,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE note_id = $1
-        AND id = ANY($2::int[])
-    `,
-    [noteId, ids, user.id]
-  );
-  await db.query(`UPDATE study_notes SET updated_at = CURRENT_TIMESTAMP, updated_by = $2 WHERE id = $1`, [noteId, user.id]);
-}
-
-export async function approveNoteMarketplace(db: Queryable, user: PermissionUser, noteId: number) {
-  await ensureNotesSchema(db);
-  if (!hasPermission(user, "content.notes.edit")) throw new Error("You don't have permission to approve notes");
-  await db.query(
+  await ensureNotesSchema(dbQuery);
+  if (!ids.length) throw new Error("Select at least one note to delete");
+  await dbQuery.query(
     `
       UPDATE study_notes
-      SET marketplace_approved = TRUE,
-          marketplace_approved_at = CURRENT_TIMESTAMP,
-          marketplace_approved_by = $2,
-          is_public = TRUE,
-          updated_by = $2,
-          updated_at = CURRENT_TIMESTAMP
+      SET
+        is_deleted = TRUE,
+        deleted_at = CURRENT_TIMESTAMP,
+        deleted_by = $2
+      WHERE id = ANY($1::int[])
+    `,
+    [ids, user.id]
+  );
+}
+
+export async function approveNoteMarketplace(
+  dbQuery: Queryable,
+  user: PermissionUser,
+  noteId: number
+) {
+  await ensureNotesSchema(dbQuery);
+  if (!isPlatformAdminUser(user)) throw new Error("Forbidden: Admin access required");
+  await dbQuery.query(
+    `
+      UPDATE study_notes
+      SET
+        marketplace_approved = TRUE,
+        marketplace_approved_at = CURRENT_TIMESTAMP,
+        marketplace_approved_by = $2,
+        is_public = TRUE,
+        updated_by = $2,
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
         AND marketplace_requested = TRUE
         AND COALESCE(is_deleted, FALSE) = FALSE
@@ -857,18 +624,22 @@ export async function approveNoteMarketplace(db: Queryable, user: PermissionUser
   );
 }
 
-export async function removeNoteFromMarketplace(db: Queryable, user: PermissionUser, noteId: number) {
-  await ensureNotesSchema(db);
-  if (!hasPermission(user, "content.notes.edit")) throw new Error("You don't have permission to review notes");
-  await db.query(
+export async function removeNoteFromMarketplace(
+  dbQuery: Queryable,
+  user: PermissionUser,
+  noteId: number
+) {
+  await ensureNotesSchema(dbQuery);
+  await dbQuery.query(
     `
       UPDATE study_notes
-      SET marketplace_approved = FALSE,
-          marketplace_approved_at = NULL,
-          marketplace_approved_by = NULL,
-          is_public = FALSE,
-          updated_by = $2,
-          updated_at = CURRENT_TIMESTAMP
+      SET
+        marketplace_approved = FALSE,
+        marketplace_approved_at = NULL,
+        marketplace_approved_by = NULL,
+        is_public = FALSE,
+        updated_by = $2,
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
         AND COALESCE(is_deleted, FALSE) = FALSE
     `,
@@ -876,287 +647,78 @@ export async function removeNoteFromMarketplace(db: Queryable, user: PermissionU
   );
 }
 
-export async function inheritMarketplaceNote(db: Queryable, user: PermissionUser, noteId: number, institutionId: number) {
-  await ensureNotesSchema(db);
-  assertCanAccessInstitution(user, institutionId);
-  const academicYearId = await resolveInstitutionDefaultAcademicYearId(db, institutionId);
-  const source = await db.query<StudyNoteRow>(
+export async function inheritMarketplaceNote(
+  dbQuery: Queryable,
+  user: PermissionUser,
+  sourceNoteId: number,
+  targetInstitutionId: number
+) {
+  await ensureNotesSchema(dbQuery);
+  const sourceRes = await dbQuery.query<NoteTemplateRow>(
     `
-      ${noteSelectSql()}
-      WHERE note.id = $1
-        AND note.marketplace_approved = TRUE
-        AND note.is_public = TRUE
-        AND COALESCE(note.is_deleted, FALSE) = FALSE
-      LIMIT 1
-    `,
-    [noteId]
-  );
-  const row = source.rows[0];
-  if (!row) throw new Error("This note is not available in marketplace");
-
-  const existing = await db.query<{ id: number }>(
-    `
-      SELECT id
+      SELECT *
       FROM study_notes
-      WHERE source_note_id = $1
-        AND institution_id = $2
-        AND academic_year_id = $3
+      WHERE id = $1
+        AND (marketplace_approved = TRUE OR is_public = TRUE)
+        AND COALESCE(blocked_by_platform, FALSE) = FALSE
         AND COALESCE(is_deleted, FALSE) = FALSE
-      ORDER BY updated_at DESC, id DESC
       LIMIT 1
     `,
-    [row.id, institutionId, academicYearId]
+    [sourceNoteId]
   );
-  if (existing.rows[0]) {
-    const targetId = existing.rows[0].id;
-    await db.query(
-      `
-        UPDATE study_notes
-        SET subject_id = $2,
-            syllabus_id = $3,
-            program_id = NULL,
-            section_id = NULL,
-            is_active = FALSE,
-            source_institution_id = $4,
-            updated_by = $5,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-      `,
-      [targetId, row.subject_id, row.syllabus_id, row.institution_id, user.id]
-    );
-    await db.query(`DELETE FROM study_note_items WHERE note_id = $1`, [targetId]);
-    await db.query(
-      `
-        INSERT INTO study_note_items (note_id, syllabus_node_id, title, body, is_active, created_by, updated_by, sort_order)
-        SELECT $2, syllabus_node_id, title, body, is_active, $3, $3, sort_order
-        FROM study_note_items
-        WHERE note_id = $1
-          AND COALESCE(is_deleted, FALSE) = FALSE
-        ORDER BY sort_order ASC, id ASC
-      `,
-      [noteId, targetId, user.id]
-    );
-    return targetId;
-  }
+  const source = sourceRes.rows[0];
+  if (!source) throw new Error("Marketplace note not found or not approved");
 
-  const result = await db.query<{ id: number }>(
+  const inserted = await dbQuery.query<{ id: number }>(
     `
       INSERT INTO study_notes (
-        institution_id, academic_year_id, subject_id, syllabus_id, program_id, section_id,
-        is_active, source_note_id, source_institution_id, created_by, updated_by
+        title, description, subject_id, subject_name, syllabus_data,
+        institution_id, target_type, target_id, target_program_id,
+        ai_question_format, is_public, is_active, is_paid, price,
+        source_note_id, source_institution_id, parent_template_id,
+        created_by, updated_by
       )
-      VALUES ($1,$2,$3,$4,NULL,NULL,FALSE,$5,$6,$7,$7)
+      VALUES (
+        $1, $2, $3, $4, $5::jsonb,
+        $6, 'INSTITUTION', $6, NULL,
+        $7::jsonb, FALSE, TRUE, FALSE, 0,
+        $8, $9, $8,
+        $10, $10
+      )
       RETURNING id
     `,
     [
-      institutionId,
-      academicYearId,
-      row.subject_id,
-      row.syllabus_id,
-      row.id,
-      row.institution_id,
+      source.title,
+      source.description,
+      source.subject_id,
+      source.subject_name,
+      JSON.stringify(source.syllabus_data || []),
+      targetInstitutionId,
+      JSON.stringify(source.ai_question_format || {}),
+      source.id,
+      source.institution_id,
       user.id,
     ]
   );
-  const targetId = result.rows[0].id;
-  await db.query(
+  const newNoteId = inserted.rows[0].id;
+
+  // Copy questions
+  await dbQuery.query(
     `
-      INSERT INTO study_note_items (note_id, syllabus_node_id, title, body, is_active, created_by, updated_by, sort_order)
-      SELECT $2, syllabus_node_id, title, body, is_active, $3, $3, sort_order
-      FROM study_note_items
-      WHERE note_id = $1
-        AND COALESCE(is_deleted, FALSE) = FALSE
-      ORDER BY sort_order ASC, id ASC
-    `,
-    [noteId, targetId, user.id]
-  );
-  return targetId;
-}
-
-export async function deleteNotes(db: Queryable, user: PermissionUser, ids: number[]) {
-  await ensureNotesSchema(db);
-  if (!ids.length) throw new Error("Select at least one note");
-  const allowedInstitutionIds = getAllowedInstitutionIds(user);
-  const params: unknown[] = [ids, user.id];
-  const scoped = allowedInstitutionIds ? "AND institution_id = ANY($3::int[])" : "";
-  if (allowedInstitutionIds) params.push(allowedInstitutionIds);
-  await db.query(
-    `
-      UPDATE study_notes
-      SET is_deleted = TRUE,
-          deleted_at = CURRENT_TIMESTAMP,
-          deleted_by = $2,
-          is_public = FALSE,
-          marketplace_approved = FALSE
-      WHERE id = ANY($1::int[])
-        AND created_by = $2
-        ${scoped}
-    `,
-    params
-  );
-}
-
-export async function listNoteInstitutions(db: Queryable, user: PermissionUser, search = "", limit = 15, offset = 0) {
-  const allowedInstitutionIds = getAllowedInstitutionIds(user);
-  const params: unknown[] = [];
-  const where = ["ip.is_active = TRUE", "COALESCE(ip.is_deleted, FALSE) = FALSE"];
-  if (allowedInstitutionIds) {
-    params.push(allowedInstitutionIds);
-    where.push(`ip.id = ANY($${params.length}::int[])`);
-  }
-  if (search.trim()) {
-    params.push(`%${search.trim()}%`);
-    where.push(`(ip.name ILIKE $${params.length} OR ip.slug ILIKE $${params.length})`);
-  }
-  const whereSql = joinWhere(where);
-  const [data, count] = await Promise.all([
-    db.query<{ id: number; name: string }>(
-      `SELECT ip.id, COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) AS name FROM institution_profiles ip ${whereSql} ORDER BY name LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-      [...params, limit, offset]
-    ),
-    db.query<{ count: number }>(`SELECT COUNT(*)::int AS count FROM institution_profiles ip ${whereSql}`, params),
-  ]);
-  return { data: data.rows, total: Number(count.rows[0]?.count ?? 0) };
-}
-
-export async function listNotePrograms(db: Queryable, user: PermissionUser, institutionId: number, search = "", limit = 15, offset = 0) {
-  assertCanAccessInstitution(user, institutionId);
-  const params: unknown[] = [institutionId];
-  const where = ["program.institution_id = $1", "program.is_active = TRUE", "COALESCE(program.is_deleted, FALSE) = FALSE"];
-  if (search.trim()) {
-    params.push(`%${search.trim()}%`);
-    where.push(`program.title ILIKE $${params.length}`);
-  }
-  const whereSql = joinWhere(where);
-  const [data, count] = await Promise.all([
-    db.query<{ id: number; title: string }>(
-      `SELECT program.id, program.title FROM institution_programs program ${whereSql} ORDER BY program.title LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-      [...params, limit, offset]
-    ),
-    db.query<{ count: number }>(`SELECT COUNT(*)::int AS count FROM institution_programs program ${whereSql}`, params),
-  ]);
-  return { data: data.rows, total: Number(count.rows[0]?.count ?? 0) };
-}
-
-export async function listNoteSections(db: Queryable, user: PermissionUser, programId: number, search = "", limit = 15, offset = 0) {
-  const program = await db.query<{ institution_id: number }>(`SELECT institution_id FROM institution_programs WHERE id = $1 LIMIT 1`, [programId]);
-  const institutionId = program.rows[0]?.institution_id;
-  if (!institutionId) throw new Error("Class / Program not found");
-  assertCanAccessInstitution(user, institutionId);
-  const params: unknown[] = [programId];
-  const where = ["ps.program_id = $1", "section.is_active = TRUE", "COALESCE(section.is_deleted, FALSE) = FALSE"];
-  if (search.trim()) {
-    params.push(`%${search.trim()}%`);
-    where.push(`section.name ILIKE $${params.length}`);
-  }
-  const whereSql = joinWhere(where);
-  const [data, count] = await Promise.all([
-    db.query<{ id: number; name: string }>(
-      `SELECT section.id, section.name FROM program_sections ps INNER JOIN sections section ON section.id = ps.section_id ${whereSql} ORDER BY section.name LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-      [...params, limit, offset]
-    ),
-    db.query<{ count: number }>(
-      `SELECT COUNT(*)::int AS count FROM program_sections ps INNER JOIN sections section ON section.id = ps.section_id ${whereSql}`,
-      params
-    ),
-  ]);
-  return { data: data.rows, total: Number(count.rows[0]?.count ?? 0) };
-}
-
-export async function listNoteSyllabi(
-  db: Queryable,
-  user: PermissionUser,
-  institutionId: number,
-  search = "",
-  limit = 15,
-  offset = 0,
-  programId?: number | null
-) {
-  assertCanAccessInstitution(user, institutionId);
-  const params: unknown[] = [institutionId];
-  const where = [
-    "COALESCE(s.is_active, TRUE) = TRUE",
-    "(s.institution_id = $1 OR s.is_template = TRUE)",
-  ];
-  if (programId) {
-    params.push(programId);
-    where.push(`(
-      s.subject_id IN (
-        SELECT subject_id FROM master_course_subjects WHERE course_id = $${params.length}
-        UNION
-        SELECT subject_id FROM program_subjects WHERE program_id = $${params.length}
+      INSERT INTO study_note_items (
+        note_id, question_text, question_type, answer_text, correct_answer,
+        options, files, answer_files, display_order, is_active, is_deleted
       )
-      OR s.is_template = TRUE
-    )`);
-  }
-  if (search.trim()) {
-    params.push(`%${search.trim()}%`);
-    where.push(`(s.title ILIKE $${params.length} OR subject.name ILIKE $${params.length})`);
-  }
-  const whereSql = joinWhere(where);
-  const [data, count] = await Promise.all([
-    db.query<{ id: number; title: string; subject_id: number; subject_name: string }>(
-      `
-        SELECT s.id, s.title, s.subject_id, subject.name AS subject_name
-        FROM syllabi s
-        INNER JOIN subjects subject ON subject.id = s.subject_id
-        ${whereSql}
-        ORDER BY s.is_template ASC, s.title ASC
-        LIMIT $${params.length + 1} OFFSET $${params.length + 2}
-      `,
-      [...params, limit, offset]
-    ),
-    db.query<{ count: number }>(
-      `
-        SELECT COUNT(*)::int AS count
-        FROM syllabi s
-        INNER JOIN subjects subject ON subject.id = s.subject_id
-        ${whereSql}
-      `,
-      params
-    ),
-  ]);
-  return { data: data.rows, total: Number(count.rows[0]?.count ?? 0) };
-}
-
-export async function listNoteSyllabusNodes(
-  db: Queryable,
-  user: PermissionUser,
-  syllabusId: number,
-  search = "",
-  limit = 50,
-  offset = 0
-) {
-  const syllabus = await db.query<{ institution_id: number | null; is_template: boolean }>(
-    `SELECT institution_id, is_template FROM syllabi WHERE id = $1 LIMIT 1`,
-    [syllabusId]
+      SELECT
+        $1, question_text, question_type, answer_text, correct_answer,
+        options, files, answer_files, display_order, TRUE, FALSE
+      FROM study_note_items
+      WHERE note_id = $2
+        AND COALESCE(is_deleted, FALSE) = FALSE
+      ORDER BY display_order ASC, id ASC
+    `,
+    [newNoteId, source.id]
   );
-  const owner = syllabus.rows[0];
-  if (!owner) throw new Error("Syllabus not found");
-  if (owner.institution_id) assertCanAccessInstitution(user, owner.institution_id);
 
-  const params: unknown[] = [syllabusId];
-  const where = ["node.syllabus_id = $1", "COALESCE(node.is_active, TRUE) = TRUE"];
-  if (search.trim()) {
-    params.push(`%${search.trim()}%`);
-    where.push(`(node.title ILIKE $${params.length} OR node.node_type ILIKE $${params.length})`);
-  }
-  const whereSql = joinWhere(where);
-  const [data, count] = await Promise.all([
-    db.query<{ id: number; title: string; node_type: string; parent_id: number | null; sort_order: number }>(
-      `
-        SELECT node.id, node.title, node.node_type, node.parent_id, node.sort_order
-        FROM syllabus_nodes node
-        ${whereSql}
-        ORDER BY node.parent_id NULLS FIRST, node.sort_order ASC, node.id ASC
-        LIMIT $${params.length + 1} OFFSET $${params.length + 2}
-      `,
-      [...params, limit, offset]
-    ),
-    db.query<{ count: number }>(
-      `SELECT COUNT(*)::int AS count FROM syllabus_nodes node ${whereSql}`,
-      params
-    ),
-  ]);
-  return { data: data.rows, total: Number(count.rows[0]?.count ?? 0) };
+  return newNoteId;
 }

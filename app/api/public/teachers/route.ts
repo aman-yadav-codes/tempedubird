@@ -184,7 +184,7 @@ export async function GET(req: Request) {
           COALESCE(d.name, 'Faculty Specialist') AS designation,
           COALESCE(ip1.name, ip2.name, 'Educational Institution') AS institution_name,
           COALESCE(ip1.id, ip2.id) AS institution_id,
-          COALESCE(ip1.city, ip2.city, 'India') AS location,
+          COALESCE(loc1.name, loc2.name, 'India') AS location,
           up.qualification,
           up.experience_years,
           up.bio,
@@ -202,7 +202,9 @@ export async function GET(req: Request) {
         LEFT JOIN institution_memberships im ON im.user_id = u.id AND COALESCE(im.is_deleted, FALSE) = FALSE
         LEFT JOIN roles r_im ON r_im.id = im.role_id
         LEFT JOIN institution_profiles ip1 ON ip1.id = im.institution_id
+        LEFT JOIN locations loc1 ON loc1.id = ip1.location_id
         LEFT JOIN institution_profiles ip2 ON ip2.id = up.under_institution_id
+        LEFT JOIN locations loc2 ON loc2.id = ip2.location_id
         WHERE ${whereClause}
         ORDER BY u.id DESC
         LIMIT 100

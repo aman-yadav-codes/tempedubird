@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   CircleAlert,
@@ -8,7 +8,6 @@ import {
   Loader2,
   Plus,
   Save,
-  Star,
   Sparkles,
   X,
 } from "lucide-react";
@@ -32,7 +31,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -168,18 +166,6 @@ export function AssignmentQuestionEditor({
     return () => window.cancelAnimationFrame(frame);
   }, [pendingScrollQuestionId, questions]);
 
-  const questionMarks = useMemo(
-    () =>
-      Number(
-        questions
-          .reduce((sum, question) => sum + (Number(question.marks) || 0), 0)
-          .toFixed(2)
-      ),
-    [questions]
-  );
-  const expectedMarks = Number(template.total_marks) || 0;
-  const marksMatch = expectedMarks > 0 && expectedMarks === questionMarks;
-
   function updateQuestion(
     id: string,
     updater: (question: EditorQuestion) => EditorQuestion
@@ -214,21 +200,12 @@ export function AssignmentQuestionEditor({
   function validate() {
     const nextErrors: string[] = [];
     let firstInvalidQuestionId: string | null = null;
-    if (!marksMatch) {
-      nextErrors.push(
-        `Total marks (${expectedMarks.toFixed(2)}) must equal all question marks (${questionMarks.toFixed(2)}).`
-      );
-    }
     if (questions.length === 0) nextErrors.push("Add at least one question.");
 
     questions.forEach((question, index) => {
       let questionInvalid = false;
       if (!question.question_text.trim()) {
         nextErrors.push(`Question ${index + 1}: question text is required.`);
-        questionInvalid = true;
-      }
-      if (!Number.isFinite(Number(question.marks)) || Number(question.marks) <= 0) {
-        nextErrors.push(`Question ${index + 1}: marks must be greater than zero.`);
         questionInvalid = true;
       }
       if (question.files.length > 5) {
@@ -403,12 +380,12 @@ export function AssignmentQuestionEditor({
                 <List className="size-5 shrink-0 text-primary" />
                 <span className="truncate">Questions for {template.title}</span>
               </DialogTitle>
-              <DialogDescription className="mt-1">
-                Add questions totaling exactly {expectedMarks.toFixed(2)} marks.
+              <DialogDescription className="sr-only">
+                Questions for {template.title}
               </DialogDescription>
             </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              {template.ai_question_format?.enabled && (
+            {template.ai_question_format?.enabled && (
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -423,21 +400,8 @@ export function AssignmentQuestionEditor({
                   )}
                   Generate via AI
                 </Button>
-              )}
-              <Badge variant="outline">
-                Questions: {questions.length}
-              </Badge>
-              <Badge
-                variant="outline"
-                className={cn(
-                  marksMatch
-                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                    : "border-destructive/40 bg-destructive/10 text-destructive"
-                )}
-              >
-                Marks: {questionMarks.toFixed(2)} / {expectedMarks.toFixed(2)}
-              </Badge>
-            </div>
+              </div>
+            )}
           </div>
         </DialogHeader>
 
@@ -445,14 +409,6 @@ export function AssignmentQuestionEditor({
           ref={scrollAreaRef}
           className="min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]"
         >
-          <section className="border-b bg-muted/20 px-6 py-4">
-            <p className={cn(
-              "text-sm font-medium",
-              marksMatch ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
-            )}>
-              Questions total: {questionMarks.toFixed(2)} / {expectedMarks.toFixed(2)}
-            </p>
-          </section>
 
           {errors.length > 0 && (
             <div
@@ -508,9 +464,6 @@ export function AssignmentQuestionEditor({
                       <span className="min-w-0 flex-1 truncate font-medium">
                         {question.question_text || `Question ${questionIndex + 1}`}
                       </span>
-                      <span className="text-xs text-muted-foreground">
-                        {Number(question.marks || 0).toFixed(2)} marks
-                      </span>
                       <ChevronDown
                         className={cn(
                           "size-4 text-muted-foreground transition-transform",
@@ -554,49 +507,29 @@ export function AssignmentQuestionEditor({
                         className="min-h-24"
                       />
                     </div>
-                    <div className="grid gap-4 sm:grid-cols-[1fr_140px]">
-                      <div className="space-y-2">
-                        <Label className="flex items-center gap-2">
-                          <List className="size-4 text-muted-foreground" />
-                          Question Type
-                        </Label>
-                        <Select
-                          value={question.question_type}
-                          onValueChange={(value) =>
-                            changeQuestionType(
-                              question.client_id,
-                              value as AssignmentQuestionType
-                            )
-                          }
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="true_false">True / False</SelectItem>
-                            <SelectItem value="objective">Objective</SelectItem>
-                            <SelectItem value="subjective">Subjective</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="flex items-center gap-2">
-                          <Star className="size-4 text-muted-foreground" />
-                          Marks
-                        </Label>
-                        <Input
-                          type="number"
-                          min="0.01"
-                          step="0.01"
-                          value={question.marks}
-                          onChange={(event) =>
-                            updateQuestion(question.client_id, (current) => ({
-                              ...current,
-                              marks: Number(event.target.value),
-                            }))
-                          }
-                        />
-                      </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <List className="size-4 text-muted-foreground" />
+                        Question Type
+                      </Label>
+                      <Select
+                        value={question.question_type}
+                        onValueChange={(value) =>
+                          changeQuestionType(
+                            question.client_id,
+                            value as AssignmentQuestionType
+                          )
+                        }
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="true_false">True / False</SelectItem>
+                          <SelectItem value="objective">Objective</SelectItem>
+                          <SelectItem value="subjective">Subjective</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     {question.question_type !== "subjective" && (

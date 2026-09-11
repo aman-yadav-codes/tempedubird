@@ -533,7 +533,8 @@ export default function SettingsPage() {
   }, [authHeader, isPlatformAdmin]);
 
   const refreshCronTab = useCallback(async () => {
-    await Promise.all([fetchJobs(), fetchWorkerSettings()]);
+    await fetchJobs();
+    await fetchWorkerSettings();
   }, [fetchJobs, fetchWorkerSettings]);
 
   const refreshSocketTab = useCallback(async () => {

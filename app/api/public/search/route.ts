@@ -184,28 +184,61 @@ export async function GET(req: NextRequest) {
     // 4. Search Practice & Exams
     const practicePromise = (async () => {
       try {
-        const res = await db.query(
-          `SELECT
-            t.id,
-            t.title,
-            t.category,
-            t.subject,
-            COALESCE(ip.name, 'Institute') AS institution_name
-          FROM practice_tests t
-          LEFT JOIN institution_profiles ip ON ip.id = t.institution_id
-          WHERE t.title ILIKE $1 OR COALESCE(t.subject, '') ILIKE $1 OR COALESCE(t.category, '') ILIKE $1
-            OR t.title ILIKE $2 OR COALESCE(t.subject, '') ILIKE $2 OR COALESCE(t.category, '') ILIKE $2
-          ORDER BY t.id DESC
-          LIMIT 6`,
-          [likeQuery, rawLikeQuery]
-        );
-        return res.rows.map((r: any) => ({
+        const [testsRes, examsRes] = await Promise.all([
+          db.query(
+            `SELECT
+              t.id,
+              t.title,
+              t.category,
+              t.subject,
+              COALESCE(ip.name, 'Institute') AS institution_name
+            FROM practice_tests t
+            LEFT JOIN institution_profiles ip ON ip.id = t.institution_id
+            WHERE t.title ILIKE $1 OR COALESCE(t.subject, '') ILIKE $1 OR COALESCE(t.category, '') ILIKE $1
+              OR t.title ILIKE $2 OR COALESCE(t.subject, '') ILIKE $2 OR COALESCE(t.category, '') ILIKE $2
+            ORDER BY t.id DESC
+            LIMIT 4`,
+            [likeQuery, rawLikeQuery]
+          ).catch(() => ({ rows: [] })),
+
+          db.query(
+            `SELECT
+              t.id,
+              t.title,
+              COALESCE(t.exam_category, 'Competitive Exam') AS category,
+              COALESCE(t.conducting_body, ip.name, 'Examination Board') AS institution_name
+            FROM practice_exam_templates t
+            LEFT JOIN institution_profiles ip ON ip.id = t.source_institution_id
+            WHERE COALESCE(t.is_active, TRUE) = TRUE
+              AND COALESCE(t.is_deleted, FALSE) = FALSE
+              AND (COALESCE(t.is_government_exam, FALSE) = TRUE OR COALESCE(t.is_public, FALSE) = TRUE)
+              AND (
+                t.title ILIKE $1 OR COALESCE(t.exam_category, '') ILIKE $1 OR COALESCE(t.conducting_body, '') ILIKE $1
+                OR t.title ILIKE $2 OR COALESCE(t.exam_category, '') ILIKE $2 OR COALESCE(t.conducting_body, '') ILIKE $2
+              )
+            ORDER BY t.id DESC
+            LIMIT 4`,
+            [likeQuery, rawLikeQuery]
+          ).catch(() => ({ rows: [] })),
+        ]);
+
+        const testItems = testsRes.rows.map((r: any) => ({
           id: r.id,
           title: r.title,
           subtitle: [r.subject, r.category, r.institution_name].filter(Boolean).join(" • "),
           href: `/practice?search=${encodeURIComponent(r.title)}`,
           type: "practice",
         }));
+
+        const examItems = examsRes.rows.map((r: any) => ({
+          id: r.id,
+          title: r.title,
+          subtitle: [r.category, r.institution_name].filter(Boolean).join(" • "),
+          href: `/exams/${r.id}`,
+          type: "exam",
+        }));
+
+        return [...examItems, ...testItems].slice(0, 6);
       } catch (err) {
         console.error("Practice search query error:", err);
         return [];
@@ -218,17 +251,17 @@ export async function GET(req: NextRequest) {
         const res = await db.query(
           `SELECT
             n.id,
-            COALESCE(syl.title, sub.name, 'Lecture Notes') AS title,
+            COALESCE(n.title, sub.name, 'Lecture Notes') AS title,
             COALESCE(sub.name, 'General Subject') AS subject,
             COALESCE(ip.name, 'Institution') AS institution_name
           FROM study_notes n
           LEFT JOIN institution_profiles ip ON ip.id = n.institution_id
           LEFT JOIN subjects sub ON sub.id = n.subject_id
-          LEFT JOIN syllabi syl ON syl.id = n.syllabus_id
+          
           WHERE COALESCE(n.is_deleted, FALSE) = FALSE
             AND (
-              COALESCE(sub.name, '') ILIKE $1 OR COALESCE(syl.title, '') ILIKE $1 OR COALESCE(ip.name, '') ILIKE $1
-              OR COALESCE(sub.name, '') ILIKE $2 OR COALESCE(syl.title, '') ILIKE $2
+              COALESCE(sub.name, '') ILIKE $1  OR COALESCE(ip.name, '') ILIKE $1
+              OR COALESCE(sub.name, '') ILIKE $2 
             )
           ORDER BY n.id DESC
           LIMIT 6`,

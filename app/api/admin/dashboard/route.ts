@@ -149,18 +149,20 @@ async function getInstitutionDashboardDetails(institutionIds: number[]) {
        LEFT JOIN (
          SELECT institution_id, COUNT(DISTINCT student_id)::int as count
          FROM student_enrollments
-         WHERE status = 'active' AND COALESCE(is_deleted, FALSE) = FALSE
+         WHERE status = 'active' AND is_deleted = FALSE
+           AND institution_id = ANY($1::int[])
          GROUP BY institution_id
        ) st_count ON st_count.institution_id = ip.id
        LEFT JOIN (
          SELECT institution_id, COUNT(*)::int as count
          FROM institution_programs
-         WHERE is_active = TRUE AND COALESCE(is_deleted, FALSE) = FALSE
+         WHERE is_active = TRUE AND is_deleted = FALSE
+           AND institution_id = ANY($1::int[])
          GROUP BY institution_id
        ) prog_count ON prog_count.institution_id = ip.id
        WHERE ip.id = ANY($1::int[])
          AND ip.is_active = TRUE
-         AND COALESCE(ip.is_deleted, FALSE) = FALSE
+         AND is_deleted = FALSE
        ORDER BY ip.id ASC`,
       [institutionIds]
     ).catch(() => ({ rows: [] })),
@@ -226,17 +228,18 @@ async function getInstitutionDashboardDetails(institutionIds: number[]) {
       `SELECT p.id, p.title, p.code, p.institution_id,
               COALESCE(st_count.count, 0)::int as student_count
        FROM institution_programs p
-       LEFT JOIN (
-         SELECT program_id, COUNT(DISTINCT student_id)::int as count
-         FROM student_enrollments
-         WHERE status = 'active' AND COALESCE(is_deleted, FALSE) = FALSE
-         GROUP BY program_id
-       ) st_count ON st_count.program_id = p.id
-       WHERE p.institution_id = ANY($1::int[])
-         AND p.is_active = TRUE
-         AND COALESCE(p.is_deleted, FALSE) = FALSE
-       ORDER BY p.id DESC
-       LIMIT 6`,
+        LEFT JOIN (
+          SELECT program_id, COUNT(DISTINCT student_id)::int as count
+          FROM student_enrollments
+          WHERE status = 'active' AND is_deleted = FALSE
+            AND institution_id = ANY($1::int[])
+          GROUP BY program_id
+        ) st_count ON st_count.program_id = p.id
+        WHERE p.institution_id = ANY($1::int[])
+          AND p.is_active = TRUE
+          AND is_deleted = FALSE
+        ORDER BY p.id DESC
+        LIMIT 6`,
       [institutionIds]
     ).catch(() => ({ rows: [] })),
 
@@ -274,13 +277,8 @@ async function getInstitutionDashboardDetails(institutionIds: number[]) {
        FROM student_documents sd
        INNER JOIN student_profiles sp ON sp.id = sd.student_id
        INNER JOIN users u ON u.id = sp.user_id
-       WHERE EXISTS (
-         SELECT 1 FROM student_enrollments se
-         WHERE se.student_id = sp.id
-           AND se.institution_id = ANY($1::int[])
-           AND COALESCE(se.is_deleted, FALSE) = FALSE
-       )
-         AND COALESCE(sd.is_verified, FALSE) = FALSE
+       INNER JOIN student_enrollments se ON se.student_id = sp.id AND se.institution_id = ANY($1::int[]) AND COALESCE(se.is_deleted, FALSE) = FALSE
+       WHERE COALESCE(sd.is_verified, FALSE) = FALSE
          AND COALESCE(sd.is_deleted, FALSE) = FALSE
        ORDER BY sd.id DESC
        LIMIT 6`,
@@ -302,7 +300,7 @@ async function getInstitutionDashboardDetails(institutionIds: number[]) {
               vs.created_at
        FROM visitor_sessions vs
        LEFT JOIN institution_programs prog ON prog.id = vs.program_id
-       WHERE (vs.institution_id = ANY($1::int[]) OR vs.institution_id IS NULL)
+       WHERE vs.institution_id = ANY($1::int[])
          AND LOWER(COALESCE(vs.pipeline_stage, vs.lead_status, 'new')) IN ('new', 'new enquiry', 'contacted', 'pending')
        ORDER BY vs.id DESC
        LIMIT 6`,
@@ -593,7 +591,6 @@ export async function GET(req: Request) {
     const childStudentId = Number.isInteger(requestedChildId) && requestedChildId > 0
       ? requestedChildId
       : null;
-    await ensureAssignmentTemplateSchema();
     const allowedInstitutionIds = getAllowedInstitutionIds(currentUser) ?? [];
     const notificationService = new NotificationService(db);
     const studentEnrollment = isStudent(currentUser)

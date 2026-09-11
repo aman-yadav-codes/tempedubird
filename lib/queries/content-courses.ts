@@ -17,7 +17,22 @@ function toSlug(text: string): string {
     .replace(/-+/g, "-");
 }
 
-export async function ensureMasterCoursesTable(db: Pool) {
+let masterCoursesSchemaReady: Promise<void> | null = null;
+
+export async function ensureMasterCoursesTable(db: Pool): Promise<void> {
+  if (masterCoursesSchemaReady) return masterCoursesSchemaReady;
+  masterCoursesSchemaReady = (async () => {
+    try {
+      await ensureCertificationProvidersTable(db);
+      await ensureSubjectsSchemaAndDeduplicate(db);
+    } catch (e) {
+      console.error("Error ensuring dependencies:", e);
+    }
+  })();
+  return masterCoursesSchemaReady;
+}
+
+export async function initMasterCoursesTableDirect(db: Pool) {
   await ensureCertificationProvidersTable(db);
   await ensureSubjectsSchemaAndDeduplicate(db);
 
@@ -398,7 +413,7 @@ export async function createMasterCourse(
             cleanSubjName,
             effectiveSlug,
             item.code?.trim() || null,
-            item.term_type || "semester",
+            item.term_type || (data.durationUnit === "years_annual" ? "year" : (data.durationUnit === "months" || data.durationUnit === "weeks" || data.durationUnit === "days" ? "full_course" : "semester")),
             item.term_number || 1,
             item.term_name?.trim() || null,
           ]
@@ -416,7 +431,7 @@ export async function createMasterCourse(
         [
           courseId,
           sid,
-          item.term_type || "semester",
+          item.term_type || (data.durationUnit === "years_annual" ? "year" : (data.durationUnit === "months" || data.durationUnit === "weeks" || data.durationUnit === "days" ? "full_course" : "semester")),
           item.term_number || 1,
           item.term_name?.trim() || null,
         ]
@@ -562,7 +577,7 @@ export async function updateMasterCourse(
             cleanSubjName,
             effectiveSlug,
             item.code?.trim() || null,
-            item.term_type || "semester",
+            item.term_type || (data.durationUnit === "years_annual" ? "year" : (data.durationUnit === "months" || data.durationUnit === "weeks" || data.durationUnit === "days" ? "full_course" : "semester")),
             item.term_number || 1,
             item.term_name?.trim() || null,
           ]
@@ -580,7 +595,7 @@ export async function updateMasterCourse(
         [
           id,
           sid,
-          item.term_type || "semester",
+          item.term_type || (data.durationUnit === "years_annual" ? "year" : (data.durationUnit === "months" || data.durationUnit === "weeks" || data.durationUnit === "days" ? "full_course" : "semester")),
           item.term_number || 1,
           item.term_name?.trim() || null,
         ]

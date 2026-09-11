@@ -1405,7 +1405,32 @@ export async function listInstitutionPrograms(
           )
           FROM program_fee_components pfc
           WHERE pfc.program_id = ip.id
-        ) AS fee_components
+        ) AS fee_components,
+        COALESCE((
+          SELECT COUNT(DISTINCT COALESCE(NULLIF(TRIM(ps.batch_name), ''), NULLIF(TRIM(ps.section_name), ''), CONCAT('sec_', ps.section_id)))::int
+          FROM program_sections ps
+          WHERE ps.program_id = ip.id
+            AND (ps.batch_name IS NOT NULL OR ps.seats_available IS NOT NULL OR ps.price IS NOT NULL)
+        ), 0) AS batches_count,
+        COALESCE((
+          SELECT json_agg(
+            json_build_object(
+              'batch_name', grouped.b_name,
+              'sections_count', grouped.sec_cnt,
+              'sections', grouped.sec_names
+            )
+          )
+          FROM (
+            SELECT 
+              COALESCE(NULLIF(TRIM(ps.batch_name), ''), NULLIF(TRIM(ps.section_name), ''), 'Batch') AS b_name,
+              COUNT(DISTINCT ps.section_id)::int AS sec_cnt,
+              string_agg(DISTINCT COALESCE(NULLIF(TRIM(ps.section_name), ''), CONCAT('Section ', ps.section_id)), ', ') AS sec_names
+            FROM program_sections ps
+            WHERE ps.program_id = ip.id
+              AND (ps.batch_name IS NOT NULL OR ps.seats_available IS NOT NULL OR ps.price IS NOT NULL)
+            GROUP BY COALESCE(NULLIF(TRIM(ps.batch_name), ''), NULLIF(TRIM(ps.section_name), ''), 'Batch')
+          ) grouped
+        ), '[]'::json) AS batches_summary
       FROM institution_programs ip
       LEFT JOIN program_types pt ON pt.id = ip.program_type_id
       INNER JOIN institution_profiles inst ON inst.id = ip.institution_id

@@ -282,23 +282,28 @@ export function StaffDocumentGeneratorClient({
     [defaultRefPrefix, isPlatformAdmin, mapStaffToDefaultFields, user]
   );
 
-  // Load available templates and staff members
-  const loadTemplatesAndStaff = useCallback(async () => {
+  // Load available templates on demand
+  const loadTemplates = useCallback(async () => {
+    if (!isReady || !authHeaders) return;
+    try {
+      const res = await fetch(`${apiEndpoint}?view=templates&doc_type=${docType}`, { headers: authHeaders });
+      const tData = await res.json();
+      if (res.ok && Array.isArray(tData.data)) {
+        setTemplates(tData.data);
+      }
+    } catch (err: unknown) {
+      console.error("Failed to load templates:", err);
+    }
+  }, [apiEndpoint, authHeaders, docType, isReady]);
+
+  // Load staff options on demand
+  const loadStaffOptions = useCallback(async () => {
     if (!isReady || !authHeaders) return;
     try {
       const instParam = !isPlatformAdmin && activeInstitution?.id ? `&institutionId=${activeInstitution.id}` : "";
-      const [tRes, sRes] = await Promise.all([
-        fetch(`${apiEndpoint}?view=templates&doc_type=${docType}`, { headers: authHeaders }),
-        fetch(`${apiEndpoint}?view=staff-options${instParam}`, { headers: authHeaders }),
-      ]);
-
-      const tData = await tRes.json();
-      const sData = await sRes.json();
-
-      if (tRes.ok && Array.isArray(tData.data)) {
-        setTemplates(tData.data);
-      }
-      if (sRes.ok && Array.isArray(sData.data)) {
+      const res = await fetch(`${apiEndpoint}?view=staff-options${instParam}`, { headers: authHeaders });
+      const sData = await res.json();
+      if (res.ok && Array.isArray(sData.data)) {
         setStaffList(sData.data);
         if (sData.data.length > 0 && !selectedStaffId) {
           const first = sData.data[0];
@@ -307,17 +312,13 @@ export function StaffDocumentGeneratorClient({
         }
       }
     } catch (err: unknown) {
-      console.error("Failed to load templates or staff:", err);
+      console.error("Failed to load staff options:", err);
     }
-  }, [activeInstitution?.id, apiEndpoint, applyStaffDetails, authHeaders, docType, isPlatformAdmin, isReady, selectedStaffId]);
+  }, [activeInstitution?.id, apiEndpoint, applyStaffDetails, authHeaders, isPlatformAdmin, isReady, selectedStaffId]);
 
   useEffect(() => {
     loadLetters();
   }, [loadLetters]);
-
-  useEffect(() => {
-    loadTemplatesAndStaff();
-  }, [loadTemplatesAndStaff]);
 
   // Handle staff selection and auto-fill
   const handleStaffSelect = (staffIdStr: string) => {
@@ -331,11 +332,14 @@ export function StaffDocumentGeneratorClient({
   const handleSelectTemplate = (template: DocTemplate) => {
     setSelectedTemplate(template);
     setStep(2);
-
-    const targetStaff = (selectedStaffId && staffList.find((s) => String(s.id) === selectedStaffId)) || staffList[0];
-    if (targetStaff) {
-      setSelectedStaffId(String(targetStaff.id));
-      applyStaffDetails(targetStaff);
+    if (staffList.length === 0) {
+      void loadStaffOptions();
+    } else {
+      const targetStaff = (selectedStaffId && staffList.find((s) => String(s.id) === selectedStaffId)) || staffList[0];
+      if (targetStaff) {
+        setSelectedStaffId(String(targetStaff.id));
+        applyStaffDetails(targetStaff);
+      }
     }
   };
 
@@ -546,7 +550,7 @@ export function StaffDocumentGeneratorClient({
             size="sm"
             onClick={() => {
               loadLetters();
-              if (canManageAllDocuments) loadTemplatesAndStaff();
+              if (canManageAllDocuments) loadTemplates();
             }}
           >
             Refresh
@@ -559,7 +563,7 @@ export function StaffDocumentGeneratorClient({
               <Button
                 size="sm"
                 onClick={() => {
-                  loadTemplatesAndStaff();
+                  loadTemplates();
                   setStep(1);
                   setGenerateOpen(true);
                 }}
@@ -665,7 +669,7 @@ export function StaffDocumentGeneratorClient({
                 <Button
                   size="sm"
                   onClick={() => {
-                    loadTemplatesAndStaff();
+                    loadTemplates();
                     setStep(1);
                     setGenerateOpen(true);
                   }}

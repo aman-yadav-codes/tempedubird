@@ -1183,19 +1183,7 @@ export default function SalesClientsPage() {
                     />
                   </div>
 
-                  {/* Status Selection */}
-                  <div className="space-y-1 pt-1">
-                    <Label className="text-xs font-semibold">Account Status</Label>
-                    <Select value={formStatus} onValueChange={(val: any) => setFormStatus(val)}>
-                      <SelectTrigger className="text-xs h-9">
-                        <SelectValue placeholder="Select Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active" className="text-xs">Active (Available for sales & engagements)</SelectItem>
-                        <SelectItem value="inactive" className="text-xs">Inactive (Archived)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+
                 </div>
               )}
 

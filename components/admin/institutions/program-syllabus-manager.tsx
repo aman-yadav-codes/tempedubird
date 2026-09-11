@@ -64,21 +64,27 @@ export interface EditableSyllabusTopic {
 }
 
 interface ProgramSyllabusManagerProps {
+  programId?: number | string;
+  courseId?: number | string;
   subjectIds: string[];
   subjectOptions: { id: number; value: string; label: string }[];
   categoryName?: string;
   authHeader: Record<string, string>;
   syllabusNodes: EditableSyllabusTopic[];
   onSyllabusNodesChange: (nodes: EditableSyllabusTopic[]) => void;
+  onSaveSyllabus?: () => Promise<void>;
 }
 
 export function ProgramSyllabusManager({
+  programId,
+  courseId,
   subjectIds,
   subjectOptions,
   categoryName,
   authHeader,
   syllabusNodes,
   onSyllabusNodesChange,
+  onSaveSyllabus,
 }: ProgramSyllabusManagerProps) {
   const [loading, setLoading] = useState(false);
   const [templateSource, setTemplateSource] = useState<string | null>(null);
@@ -169,7 +175,6 @@ export function ProgramSyllabusManager({
     async (searchTerm = "") => {
       setMarketplaceLoading(true);
       try {
-        const cleanClass = getCleanClassName(categoryName);
         const query = searchTerm.trim();
         const searchParam = query ? `&search=${encodeURIComponent(query)}` : "";
         const res = await fetch(
@@ -199,11 +204,117 @@ export function ProgramSyllabusManager({
         setMarketplaceLoading(false);
       }
     },
-    [authHeader, categoryName, getCleanClassName]
+    [authHeader]
   );
 
-  // Auto-fetch syllabus configured by platform admin for this program & subject basis
+  // Auto-fetch master syllabus configured by platform admin for this program & subjects
   const autoFetchedRef = useRef(false);
+
+  const fetchMasterSyllabusForProgram = useCallback(async (forceReload = false) => {
+    if (subjectOptions.length === 0) return;
+    setLoading(true);
+
+    try {
+      // 1. If programId is provided, query the dedicated program syllabus endpoint
+      if (programId) {
+        const res = await fetch(`/api/admin/institutions/programs/${programId}/syllabus`, {
+          headers: authHeader,
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const masterNodes: EditableSyllabusTopic[] = json.data || [];
+          if (masterNodes.length > 0) {
+            if (forceReload || syllabusNodes.length === 0) {
+              onSyllabusNodesChange(masterNodes);
+            } else {
+              // Merge missing subjects only
+              const existingSubjectIds = new Set(
+                syllabusNodes.map((n) => String(n.subject_id)).filter(Boolean)
+              );
+              const existingSubjectNames = new Set(
+                syllabusNodes.map((n) => (n.subject_name || "").toLowerCase().trim()).filter(Boolean)
+              );
+              const newNodesToAdd = masterNodes.filter((mn) => {
+                const mnSubjId = String(mn.subject_id || "");
+                const mnSubjName = (mn.subject_name || "").toLowerCase().trim();
+                return !existingSubjectIds.has(mnSubjId) && !existingSubjectNames.has(mnSubjName);
+              });
+              if (newNodesToAdd.length > 0) {
+                onSyllabusNodesChange([...syllabusNodes, ...newNodesToAdd]);
+              }
+            }
+            setTemplateSource("Master Platform Syllabus");
+            return;
+          }
+        }
+      }
+
+      // 2. Fallback: Query master syllabi by course title / subject names
+      const res = await fetch(`/api/admin/master-data/syllabi?limit=150`, {
+        headers: authHeader,
+      });
+      if (!res.ok) return;
+      const json = await res.json();
+      const templates = json.data || [];
+
+      let fetchedNodes: EditableSyllabusTopic[] = [];
+
+      for (const subj of subjectOptions) {
+        const subjIdStr = String(subj.id || subj.value);
+        const subjNameLower = subj.label.toLowerCase().trim();
+
+        if (!forceReload) {
+          const alreadyHasNodes = syllabusNodes.some((n) => {
+            const nSubjId = String(n.subject_id || "");
+            const nSubjName = (n.subject_name || "").toLowerCase().trim();
+            return nSubjId === subjIdStr || nSubjName === subjNameLower;
+          });
+          if (alreadyHasNodes) continue;
+        }
+
+        // Match by subject_id or subject_name from master syllabi
+        const matchedTpl = templates.find((t: any) => {
+          const tSubjId = String(t.subject_id || "");
+          const tSubjName = (t.subject_name || t.title || "").toLowerCase().trim();
+          return (
+            tSubjId === subjIdStr ||
+            tSubjName === subjNameLower ||
+            tSubjName.includes(subjNameLower) ||
+            subjNameLower.includes(tSubjName)
+          );
+        });
+
+        if (matchedTpl) {
+          const treeRes = await fetch(`/api/admin/master-data/syllabi/${matchedTpl.id}/tree`, {
+            headers: authHeader,
+          });
+          if (treeRes.ok) {
+            const treeJson = await treeRes.json();
+            const nodes = treeJson.data || [];
+            if (nodes.length > 0) {
+              const mapped = nodes.map((n: any) =>
+                mapApiNodeToEditable(n, subj.id || subj.value, subj.label, `tpl-${matchedTpl.id}`, 0)
+              );
+              fetchedNodes = [...fetchedNodes, ...mapped];
+            }
+          }
+        }
+      }
+
+      if (fetchedNodes.length > 0) {
+        if (forceReload) {
+          onSyllabusNodesChange(fetchedNodes);
+        } else {
+          onSyllabusNodesChange([...syllabusNodes, ...fetchedNodes]);
+        }
+        setTemplateSource("Master Platform Syllabus");
+      }
+    } catch (err) {
+      console.error("Auto-fetch master syllabus error:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [programId, subjectOptions, syllabusNodes, authHeader, onSyllabusNodesChange]);
 
   useEffect(() => {
     if (subjectOptions.length === 0 || autoFetchedRef.current) return;
@@ -219,69 +330,11 @@ export function ProgramSyllabusManager({
       (s) => !existingSubjectIds.has(String(s.id)) && !existingSubjectNames.has(s.label.toLowerCase().trim())
     );
 
-    if (!hasMissing && syllabusNodes.length > 0) return;
-
-    autoFetchedRef.current = true;
-    setLoading(true);
-
-    (async () => {
-      try {
-        const res = await fetch(`/api/admin/master-data/syllabi?limit=150`, {
-          headers: authHeader,
-        });
-        if (!res.ok) return;
-        const json = await res.json();
-        const templates = json.data || [];
-
-        let fetchedNodes: EditableSyllabusTopic[] = [];
-
-        for (const subj of subjectOptions) {
-          const subjIdStr = String(subj.id || subj.value);
-          const subjNameLower = subj.label.toLowerCase().trim();
-
-          const alreadyHasNodes = syllabusNodes.some((n) => {
-            const nSubjId = String(n.subject_id || "");
-            const nSubjName = (n.subject_name || "").toLowerCase().trim();
-            return nSubjId === subjIdStr || nSubjName === subjNameLower;
-          });
-
-          if (alreadyHasNodes) continue;
-
-          // Match by subject_id or subject_name from master syllabi
-          const matchedTpl = templates.find((t: any) => {
-            const tSubjId = String(t.subject_id || "");
-            const tSubjName = (t.subject_name || t.title || "").toLowerCase().trim();
-            return tSubjId === subjIdStr || tSubjName === subjNameLower || tSubjName.includes(subjNameLower) || subjNameLower.includes(tSubjName);
-          });
-
-          if (matchedTpl) {
-            const treeRes = await fetch(`/api/admin/master-data/syllabi/${matchedTpl.id}/tree`, {
-              headers: authHeader,
-            });
-            if (treeRes.ok) {
-              const treeJson = await treeRes.json();
-              const nodes = treeJson.data || [];
-              if (nodes.length > 0) {
-                const mapped = nodes.map((n: any) =>
-                  mapApiNodeToEditable(n, subj.id || subj.value, subj.label, `tpl-${matchedTpl.id}`, 0)
-                );
-                fetchedNodes = [...fetchedNodes, ...mapped];
-              }
-            }
-          }
-        }
-
-        if (fetchedNodes.length > 0) {
-          onSyllabusNodesChange([...syllabusNodes, ...fetchedNodes]);
-          setTemplateSource("Platform Master Syllabus");
-        }
-      } catch (err) {
-        console.error("Auto-fetch master syllabus error:", err);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [subjectOptions, syllabusNodes, authHeader, onSyllabusNodesChange]);
+    if (hasMissing || syllabusNodes.length === 0) {
+      autoFetchedRef.current = true;
+      fetchMasterSyllabusForProgram(false);
+    }
+  }, [subjectOptions, syllabusNodes, fetchMasterSyllabusForProgram]);
 
   const handleOpenMarketplaceModal = () => {
     setMarketplaceModalOpen(true);
@@ -897,7 +950,7 @@ export function ProgramSyllabusManager({
       {subjectOptions.length > 0 ? (
         <div className="p-3 rounded-2xl bg-muted/20 border border-border/80 space-y-2.5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                 <GraduationCap className="h-3.5 w-3.5 text-primary" />
                 Curriculum Subjects:
@@ -910,6 +963,21 @@ export function ProgramSyllabusManager({
                   <CheckCircle2 className="h-3 w-3 mr-1" /> {templateSource}
                 </Badge>
               )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fetchMasterSyllabusForProgram(true)}
+                disabled={loading}
+                className="h-7 text-[11px] font-bold gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
+                title="Reload master syllabus added by platform admin"
+              >
+                {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                Reload Master Data
+              </Button>
             </div>
           </div>
 
@@ -1255,6 +1323,28 @@ export function ProgramSyllabusManager({
               <p className="text-xs text-muted-foreground max-w-md mx-auto">
                 No master syllabus has been configured by the platform admin for <strong>{activeSubject?.label || "this subject"}</strong> yet.
               </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => fetchMasterSyllabusForProgram(true)}
+                disabled={loading}
+                className="text-xs font-bold bg-primary text-primary-foreground h-8 gap-1.5 shadow-sm"
+              >
+                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                Load Master Syllabus
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleOpenAddModule}
+                className="text-xs font-semibold h-8 gap-1.5"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Custom Unit
+              </Button>
             </div>
           </div>
         )}

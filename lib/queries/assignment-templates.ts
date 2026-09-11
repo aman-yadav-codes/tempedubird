@@ -11,6 +11,9 @@ export function ensureAssignmentTemplateSchema() {
     schemaReady = db
       .query(`
         ALTER TABLE assignment_templates
+          ADD COLUMN IF NOT EXISTS subject_id VARCHAR(100),
+          ADD COLUMN IF NOT EXISTS subject_name VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS syllabus_data JSONB DEFAULT '[]'::jsonb,
           ADD COLUMN IF NOT EXISTS blocked_by_platform BOOLEAN DEFAULT FALSE NOT NULL,
           ADD COLUMN IF NOT EXISTS blocked_by INTEGER,
           ADD COLUMN IF NOT EXISTS blocked_at TIMESTAMP,
@@ -89,10 +92,15 @@ export function ensureAssignmentTemplateSchema() {
           ON student_assignments(assignment_id, student_id, enrollment_id);
 
         ALTER TABLE assignment_targets
-          ADD COLUMN IF NOT EXISTS program_id INTEGER;
+          ADD COLUMN IF NOT EXISTS program_id INTEGER,
+          ADD COLUMN IF NOT EXISTS batch_name VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS target_name VARCHAR(255);
 
         CREATE INDEX IF NOT EXISTS idx_assignment_targets_program
           ON assignment_targets(program_id);
+
+        CREATE INDEX IF NOT EXISTS idx_assignment_targets_batch
+          ON assignment_targets(batch_name);
 
         DO $$
         BEGIN
@@ -146,43 +154,7 @@ export function ensureAssignmentTemplateSchema() {
         END
         $$;
 
-        CREATE TABLE IF NOT EXISTS assignment_syllabus_nodes (
-          id SERIAL PRIMARY KEY,
-          assignment_id INTEGER NOT NULL,
-          syllabus_node_id INTEGER NOT NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-          CONSTRAINT uq_assignment_syllabus_node UNIQUE (assignment_id, syllabus_node_id)
-        );
 
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1 FROM pg_constraint WHERE conname = 'fk_asn_assignment'
-          ) THEN
-            ALTER TABLE assignment_syllabus_nodes
-              ADD CONSTRAINT fk_asn_assignment
-              FOREIGN KEY (assignment_id)
-              REFERENCES assignments(id)
-              ON DELETE CASCADE;
-          END IF;
-
-          IF NOT EXISTS (
-            SELECT 1 FROM pg_constraint WHERE conname = 'fk_asn_syllabus_node'
-          ) THEN
-            ALTER TABLE assignment_syllabus_nodes
-              ADD CONSTRAINT fk_asn_syllabus_node
-              FOREIGN KEY (syllabus_node_id)
-              REFERENCES syllabus_nodes(id)
-              ON DELETE CASCADE;
-          END IF;
-        END
-        $$;
-
-        CREATE INDEX IF NOT EXISTS idx_asn_assignment
-          ON assignment_syllabus_nodes(assignment_id);
-
-        CREATE INDEX IF NOT EXISTS idx_asn_node
-          ON assignment_syllabus_nodes(syllabus_node_id);
       `)
       .then(() => undefined)
       .catch((error) => {
@@ -198,21 +170,8 @@ export async function replaceAssignmentSyllabusNodes(
   assignmentId: number,
   nodeIds: number[]
 ) {
-  await client.query(`DELETE FROM assignment_syllabus_nodes WHERE assignment_id = $1`, [
-    assignmentId,
-  ]);
-
-  if (nodeIds.length === 0) return;
-
-  await client.query(
-    `
-      INSERT INTO assignment_syllabus_nodes (assignment_id, syllabus_node_id)
-      SELECT $1, node_id
-      FROM unnest($2::int[]) AS selected(node_id)
-      ON CONFLICT DO NOTHING
-    `,
-    [assignmentId, nodeIds]
-  );
+  // No-op: syllabus tables removed
+  return;
 }
 
 export async function replaceAssignmentTemplateQuestions(

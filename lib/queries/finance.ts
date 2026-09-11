@@ -3112,10 +3112,23 @@ export type FinancePaymentMethodInput = {
 
 export async function listFinancePaymentMethods(db: Queryable, options: { scope_type: FinanceScope; institution_id: number | null }): Promise<FinancePaymentMethodRow[]> {
   await ensureFinanceIncomeSchema(db);
-  const where = options.scope_type === "platform" ? "scope_type = 'platform'" : "scope_type = 'institution' AND institution_id = $1";
-  const params = options.scope_type === "platform" ? [] : [options.institution_id];
+  let where = "1=1";
+  const params: any[] = [];
+  if (options.institution_id) {
+    where = "(fpm.institution_id = $1 OR fpm.scope_type = 'platform' OR fpm.institution_id IS NULL)";
+    params.push(options.institution_id);
+  } else if (options.scope_type === "institution") {
+    where = "fpm.scope_type = 'institution'";
+  } else {
+    where = "1=1";
+  }
+
   const res = await db.query<FinancePaymentMethodRow>(
-    `SELECT * FROM finance_payment_methods WHERE ${where} ORDER BY is_default DESC, is_active DESC, id DESC`,
+    `SELECT fpm.*, ip.name as institution_name
+     FROM finance_payment_methods fpm
+     LEFT JOIN institution_profiles ip ON ip.id = fpm.institution_id
+     WHERE ${where}
+     ORDER BY fpm.is_default DESC, fpm.is_active DESC, fpm.id DESC`,
     params
   );
   return res.rows;

@@ -14,6 +14,44 @@ import {
 } from "@/lib/auth/active-institution";
 import { useAuthStore } from "@/store";
 
+let cachedOptionsKey: string | null = null;
+let cachedOptions: ActiveInstitutionSummary[] | null = null;
+let cachedOptionsPromise: Promise<ActiveInstitutionSummary[]> | null = null;
+
+async function getCachedInstitutionOptions(accessToken: string, isPlatformAdmin: boolean, userId?: number | null): Promise<ActiveInstitutionSummary[]> {
+  const key = `${userId ?? "anon"}_${isPlatformAdmin ? "platform" : "inst"}`;
+  if (cachedOptionsKey === key && cachedOptions && cachedOptions.length > 0) return cachedOptions;
+  if (cachedOptionsPromise) return cachedOptionsPromise;
+
+  const url = isPlatformAdmin
+    ? "/api/admin/institutions/options"
+    : "/api/admin/institutions/options?scope=mine";
+
+  cachedOptionsPromise = fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+    .then(async (res) => {
+      if (!res.ok) return [];
+      const json = (await res.json()) as { institutions?: Array<{ id: number; name: string; type_name?: string }> };
+      const rows: ActiveInstitutionSummary[] = (json.institutions ?? []).map((inst) => ({
+        id: inst.id,
+        name: inst.name,
+        roleName: isPlatformAdmin ? "Platform Admin" : "Institution Admin",
+        boardId: null,
+        boardName: null,
+      }));
+      cachedOptionsKey = key;
+      cachedOptions = rows;
+      return rows;
+    })
+    .catch(() => [])
+    .finally(() => {
+      cachedOptionsPromise = null;
+    });
+
+  return cachedOptionsPromise;
+}
+
 export function useActiveInstitution() {
   const user = useAuthStore((state) => state.user);
   const [activeInstitutionId, setActiveInstitutionStateId] = useState<number | null>(() =>
@@ -27,35 +65,25 @@ export function useActiveInstitution() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const isPlatformAdmin = Boolean(user?.role_codes?.includes("platform_admin") || user?.is_super_admin);
   const isInstitutionAdmin = Boolean(user?.role_codes?.includes("institution_admin") || (user as any)?.role === "institution_admin");
+  const userInstitutionOptions = useMemo(() => getUserInstitutionOptions(user), [user]);
 
   useEffect(() => {
     if ((!isInstitutionAdmin && !isPlatformAdmin) || !accessToken) return;
+    const key = `${user?.id ?? "anon"}_${isPlatformAdmin ? "platform" : "inst"}`;
+    if (cachedOptionsKey === key && cachedOptions && cachedOptions.length > 0) {
+      setFetchedOptions(cachedOptions);
+      return;
+    }
     let cancelled = false;
-    fetch("/api/admin/institutions/options", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      cache: "no-store",
-    })
-      .then(async (res) => {
-        if (!res.ok || cancelled) return;
-        const json = (await res.json()) as { institutions?: Array<{ id: number; name: string; type_name?: string }> };
-        const rows: ActiveInstitutionSummary[] = (json.institutions ?? []).map((inst) => ({
-          id: inst.id,
-          name: inst.name,
-          roleName: isPlatformAdmin ? "Platform Admin" : "Institution Admin",
-          boardId: null,
-          boardName: null,
-        }));
-        if (rows.length > 0 && !cancelled) {
-          setFetchedOptions(rows);
-        }
-      })
-      .catch(() => {});
+    getCachedInstitutionOptions(accessToken, isPlatformAdmin, user?.id).then((rows) => {
+      if (rows.length > 0 && !cancelled) {
+        setFetchedOptions(rows);
+      }
+    });
     return () => {
       cancelled = true;
     };
-  }, [accessToken, isInstitutionAdmin, isPlatformAdmin]);
-
-  const userInstitutionOptions = useMemo(() => getUserInstitutionOptions(user), [user]);
+  }, [accessToken, isInstitutionAdmin, isPlatformAdmin, user?.id]);
 
   const institutions = useMemo(() => {
     const unique = new Map<number, ActiveInstitutionSummary>();
@@ -67,19 +95,19 @@ export function useActiveInstitution() {
         unique.set(inst.id, inst);
       }
     }
-    if (storedSummary && !unique.has(storedSummary.id)) {
+    if (storedSummary && isPlatformAdmin && !unique.has(storedSummary.id)) {
       unique.set(storedSummary.id, storedSummary);
     }
     return Array.from(unique.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [userInstitutionOptions, fetchedOptions, storedSummary]);
+  }, [userInstitutionOptions, fetchedOptions, storedSummary, isPlatformAdmin]);
 
   const activeInstitution = useMemo(() => {
     if (activeInstitutionId) {
       const match = institutions.find((institution) => institution.id === activeInstitutionId);
       if (match) return match;
-      if (storedSummary && storedSummary.id === activeInstitutionId) return storedSummary;
+      if (storedSummary && storedSummary.id === activeInstitutionId && (isPlatformAdmin || institutions.some((i) => i.id === storedSummary.id))) return storedSummary;
     }
-    if (storedSummary && !isPlatformAdmin) return storedSummary;
+    if (storedSummary && !isPlatformAdmin && institutions.some((i) => i.id === storedSummary.id)) return storedSummary;
     if (isPlatformAdmin) return null;
     if (institutions.length > 0) return institutions[0];
     return null;

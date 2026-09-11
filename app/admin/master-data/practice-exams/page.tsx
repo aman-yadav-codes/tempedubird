@@ -80,6 +80,19 @@ function StatCard({ label, value }: { label: string; value: number }) {
   );
 }
 
+function getSyllabusSummary(syllabusData: unknown) {
+  if (!Array.isArray(syllabusData) || syllabusData.length === 0) return null;
+  const units: string[] = [];
+  for (const unit of syllabusData) {
+    if (!unit) continue;
+    const uTitle = unit.title || unit.name || (unit.unit_number ? `Unit ${unit.unit_number}` : null);
+    if (uTitle && !units.includes(uTitle)) {
+      units.push(uTitle);
+    }
+  }
+  return units.length > 0 ? units : null;
+}
+
 export default function PracticeExamsPage() {
   const { isReady } = useAdminGuard();
   const { accessToken, user } = useAuthStore();
@@ -111,6 +124,7 @@ export default function PracticeExamsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionRowId, setActionRowId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PracticeExamRow | null>(null);
+  const [purchaseTarget, setPurchaseTarget] = useState<PracticeExamRow | null>(null);
 
   const authHeaders = useCallback(
     () => ({ Authorization: `Bearer ${accessToken}` }),
@@ -457,42 +471,22 @@ export default function PracticeExamsPage() {
         header: "Practice Exam",
         cell: ({ row }) => {
           const practiceExam = row.original;
-          const inheritedLabel = marketplaceMode && practiceExam.inherited_by_institution_name
-            ? "Already inherited"
-            : practiceExamView === "my" && practiceExam.parent_template_id
-              ? `Inherited from ${
-                  practiceExam.parent_is_public
-                    ? "Marketplace"
-                    : practiceExam.parent_institution_name ?? "Institution"
-                }`
-              : practiceExamView === "my" && practiceExam.is_public
-                ? "Approved for marketplace"
-              : null;
-          const inheritedSource = marketplaceMode && practiceExam.inherited_by_institution_name
-            ? practiceExam.inherited_by_institution_name
-            : null;
-
           return (
             <button
               type="button"
               className="min-w-[300px] cursor-pointer text-left"
               onClick={() => void openDetail(practiceExam)}
             >
-              <span className="block font-semibold">{practiceExam.title}</span>
-              <span className="block text-xs text-muted-foreground">
-                {practiceExam.target_label ?? "No target"}
-              </span>
-              {(inheritedLabel || inheritedSource) && (
-                <span className="mt-1 flex min-w-0">
-                  {inheritedLabel && (
-                    <Badge variant="outline" className={`max-w-full ${inheritedBadgeClass}`}>
-                      <span className="truncate">
-                        {inheritedLabel}
-                        {inheritedSource ? ` Under ${inheritedSource}` : ""}
-                      </span>
-                    </Badge>
-                  )}
-                </span>
+              <div className="flex items-center gap-2">
+                <span className="block font-semibold">{practiceExam.title}</span>
+                {practiceExam.is_public && (
+                  <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300 text-[10px]">
+                    Marketplace
+                  </Badge>
+                )}
+              </div>
+              {practiceExam.description && (
+                <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{practiceExam.description}</p>
               )}
               {practiceExam.blocked_by_platform && (
                 <span className="mt-1 inline-flex items-center gap-1 text-xs text-destructive">
@@ -500,45 +494,50 @@ export default function PracticeExamsPage() {
                   Blocked by Platform Admin
                 </span>
               )}
-              {practiceExam.marketplace_requested &&
-                !practiceExam.is_public &&
-                !practiceExam.blocked_by_platform && (
-                <span className="mt-1 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-                  {isPlatformAdmin ? "Action required" : "Marketplace approval pending"}
-                </span>
-              )}
-              {!inheritedLabel && practiceExam.is_public && (
-                <span className="mt-1 inline-flex items-center rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-700 dark:text-sky-300">
-                  Marketplace
-                </span>
-              )}
             </button>
           );
         },
       },
       {
-        accessorKey: "version",
-        header: "Version",
-        cell: ({ row }) => <Badge variant="outline">v{row.original.version}</Badge>,
+        accessorKey: "subject_name",
+        header: "Subject",
+        cell: ({ row }) => (
+          <span className="text-xs font-medium">{row.original.subject_name || "General"}</span>
+        ),
       },
       {
-        accessorKey: "is_active",
-        header: "Status",
-        cell: ({ row }) =>
-          row.original.blocked_by_platform ? (
-            <Badge variant="destructive">Blocked</Badge>
-          ) : (
-            <Badge
-              className={
-                row.original.is_active
-                  ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
-                  : ""
-              }
-              variant={row.original.is_active ? "secondary" : "outline"}
-            >
-              {row.original.is_active ? "Active" : "Disabled"}
+        accessorKey: "syllabus_data",
+        header: "Syllabus",
+        cell: ({ row }) => {
+          const units = getSyllabusSummary(row.original.syllabus_data);
+          if (!units || units.length === 0) {
+            return <span className="text-xs text-muted-foreground">-</span>;
+          }
+          return (
+            <div className="flex flex-wrap gap-1 max-w-[220px]">
+              {units.slice(0, 2).map((u, i) => (
+                <Badge key={i} variant="secondary" className="text-[10px] font-normal">
+                  {u}
+                </Badge>
+              ))}
+              {units.length > 2 && (
+                <span className="text-[10px] text-muted-foreground font-medium">+{units.length - 2} more</span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "question_count",
+        header: "Questions",
+        cell: ({ row }) => {
+          const count = row.original.question_count ?? 0;
+          return (
+            <Badge variant="outline" className="bg-muted/40 font-mono text-xs">
+              {count} {count === 1 ? "question" : "questions"}
             </Badge>
-          ),
+          );
+        },
       },
       {
         id: "pricing",
@@ -564,19 +563,19 @@ export default function PracticeExamsPage() {
           const practiceExam = row.original;
           const isRowActionLoading = actionRowId === practiceExam.id;
           const canEdit =
-            !isPlatformAdmin &&
-            !marketplaceMode &&
-            !practiceExam.blocked_by_platform &&
-            hasPermission(user, "content.practice_exams.edit", {
-              institutionId: practiceExam.source_institution_id,
-            });
+            isPlatformAdmin ||
+            (!marketplaceMode &&
+              !practiceExam.blocked_by_platform &&
+              hasPermission(user, "content.practice_exams.edit", {
+                institutionId: practiceExam.source_institution_id,
+              }));
           const canDelete =
-            !isPlatformAdmin &&
-            !marketplaceMode &&
-            !practiceExam.blocked_by_platform &&
-            hasPermission(user, "content.practice_exams.delete", {
-              institutionId: practiceExam.source_institution_id,
-            });
+            isPlatformAdmin ||
+            (!marketplaceMode &&
+              !practiceExam.blocked_by_platform &&
+              hasPermission(user, "content.practice_exams.delete", {
+                institutionId: practiceExam.source_institution_id,
+              }));
           return (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -601,29 +600,33 @@ export default function PracticeExamsPage() {
                   <Eye className="size-4" />
                   View sheet
                 </DropdownMenuItem>
+                {(!practiceExam.blocked_by_platform || isPlatformAdmin) &&
+                  (isPlatformAdmin || canEdit) && (
+                    <DropdownMenuItem
+                      className="whitespace-nowrap"
+                      onClick={() => openQuestionEditor(practiceExam)}
+                    >
+                      <Plus className="size-4" />
+                      {(practiceExam.question_count ?? 0) > 0 ? "Manage Questions" : "Add Questions"}
+                    </DropdownMenuItem>
+                  )}
                 {isPlatformAdmin ? (
                   <>
+                    <DropdownMenuItem
+                      className="whitespace-nowrap"
+                      onClick={() => void openEdit(practiceExam)}
+                    >
+                      <Pencil className="size-4" />
+                      Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-destructive whitespace-nowrap"
+                      onClick={() => setDeleteTarget(practiceExam)}
+                    >
+                      <Trash2 className="size-4" />
+                      Delete
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    {practiceExam.marketplace_requested &&
-                      !practiceExam.is_public &&
-                      !practiceExam.blocked_by_platform && (
-                        <DropdownMenuItem
-                          className="whitespace-nowrap"
-                          onClick={() => void approveMarketplace(practiceExam)}
-                        >
-                          <Plus className="size-4" />
-                          Show in public
-                        </DropdownMenuItem>
-                      )}
-                    {practiceExam.is_public && (
-                      <DropdownMenuItem
-                        className="whitespace-nowrap"
-                        onClick={() => void removeFromMarketplace(practiceExam)}
-                      >
-                        <Ban className="size-4" />
-                        Remove from marketplace
-                      </DropdownMenuItem>
-                    )}
                     <DropdownMenuItem
                       className="whitespace-nowrap"
                       onClick={() => {
@@ -648,6 +651,15 @@ export default function PracticeExamsPage() {
                           Already inherited
                         </Badge>
                       </DropdownMenuItem>
+                    ) : practiceExam.is_paid && Number(practiceExam.price) > 0 ? (
+                      <DropdownMenuItem
+                        className="whitespace-nowrap font-medium text-emerald-600"
+                        disabled={actionLoading}
+                        onClick={() => setPurchaseTarget(practiceExam)}
+                      >
+                        <Plus className="size-4" />
+                        Buy & Inherit (₹{practiceExam.price})
+                      </DropdownMenuItem>
                     ) : (
                       <DropdownMenuItem
                         className="whitespace-nowrap"
@@ -655,7 +667,7 @@ export default function PracticeExamsPage() {
                         onClick={() => void inheritPracticeExams([practiceExam])}
                       >
                         <Plus className="size-4" />
-                        Inherit
+                        Inherit Free
                       </DropdownMenuItem>
                     )}
                   </>
@@ -706,6 +718,7 @@ export default function PracticeExamsPage() {
     isAlreadyInherited,
     openDetail,
     openEdit,
+    openQuestionEditor,
     practiceExamView,
     user,
   ]);
@@ -840,21 +853,19 @@ export default function PracticeExamsPage() {
         }
       />
 
-      {!isPlatformAdmin && (
-        <PracticeExamEditor
-          open={editorOpen}
-          onOpenChange={(open) => {
-            setEditorOpen(open);
-            if (!open) setEditing(null);
-          }}
-          accessToken={accessToken}
-          template={editing}
-          fetchInstitutions={fetchInstitutions}
-          onSaved={() => void fetchRows()}
-        />
-      )}
+      <PracticeExamEditor
+        open={editorOpen}
+        onOpenChange={(open) => {
+          setEditorOpen(open);
+          if (!open) setEditing(null);
+        }}
+        accessToken={accessToken}
+        template={editing}
+        fetchInstitutions={fetchInstitutions}
+        onSaved={() => void fetchRows()}
+      />
 
-      {!isPlatformAdmin && questionTemplate && (
+      {questionTemplate && (
         <PracticeExamQuestionEditor
           open={questionEditorOpen}
           onOpenChange={(open) => {
@@ -889,11 +900,57 @@ export default function PracticeExamsPage() {
           maxSize={1040}
           resizeStorageKey="practice-exam-detail-sheet-width"
         >
-          <SheetHeader className="border-b px-6 py-5">
-            <SheetTitle>{active?.title ?? "Practice Exam"}</SheetTitle>
-            <SheetDescription>
-              {active?.institution_name ?? "Practice Exam questions and details"}
-            </SheetDescription>
+          <SheetHeader className="border-b px-6 py-4 pr-12 flex flex-row items-center justify-between space-y-0">
+            <div>
+              <SheetTitle className="text-xl">{active?.title ?? "Practice Exam"}</SheetTitle>
+              <SheetDescription className="text-xs">
+                {active?.subject_name || "General"} • {active?.question_count ?? active?.questions?.length ?? 0} questions
+              </SheetDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              {(isPlatformAdmin || (practiceExamView === "my" && !active?.blocked_by_platform)) && active && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={() => {
+                    void openEdit(active);
+                  }}
+                >
+                  <Pencil className="size-3.5" />
+                  Edit Details
+                </Button>
+              )}
+            </div>
+            {!isPlatformAdmin && practiceExamView === "marketplace" && active && (
+              <div>
+                {isAlreadyInherited(active) ? (
+                  <Badge variant="outline" className="border-emerald-500/80 bg-emerald-500/10 text-emerald-600 font-medium">
+                    Already Inherited
+                  </Badge>
+                ) : active.is_paid && Number(active.price) > 0 ? (
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                    disabled={actionLoading}
+                    onClick={() => setPurchaseTarget(active)}
+                  >
+                    <Plus className="size-4" />
+                    Pay ₹{active.price} & Inherit
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                    disabled={actionLoading}
+                    onClick={() => void inheritPracticeExams([active])}
+                  >
+                    <Plus className="size-4" />
+                    Inherit Free
+                  </Button>
+                )}
+              </div>
+            )}
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto p-6">
             {detailLoading ? (
@@ -937,27 +994,6 @@ export default function PracticeExamsPage() {
                       </Button>
                     </div>
                   )}
-                {isPlatformAdmin && active.is_public && !active.blocked_by_platform && (
-                  <div className="flex flex-col gap-3 rounded-md border border-sky-500/40 bg-sky-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="font-semibold text-sky-700 dark:text-sky-300">
-                        Visible in marketplace
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        You can remove this practice exam from the public marketplace anytime.
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={actionLoading}
-                      onClick={() => void removeFromMarketplace(active)}
-                    >
-                      {actionLoading && <Loader2 className="size-4 animate-spin" />}
-                      Remove from marketplace
-                    </Button>
-                  </div>
-                )}
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="rounded-md border p-4">
                     <p className="text-xs text-muted-foreground">Total Marks</p>
@@ -972,20 +1008,8 @@ export default function PracticeExamsPage() {
                     </p>
                   </div>
                   <div className="rounded-md border p-4">
-                    <p className="text-xs text-muted-foreground">Version</p>
-                    <p className="mt-1 text-xl font-semibold">v{active.version}</p>
-                  </div>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-md border p-4">
-                    <p className="text-xs text-muted-foreground">Target</p>
-                    <p className="mt-1 font-semibold">
-                      {active.target_label ?? "No target"}
-                    </p>
-                  </div>
-                  <div className="rounded-md border p-4">
                     <p className="text-xs text-muted-foreground">Duration</p>
-                    <p className="mt-1 font-semibold">
+                    <p className="mt-1 text-xl font-semibold">
                       {active.duration_minutes ?? 0} min
                     </p>
                   </div>
@@ -1002,36 +1026,51 @@ export default function PracticeExamsPage() {
                   <div>
                     <h2 className="font-semibold">Syllabus Mapping</h2>
                     <p className="text-sm text-muted-foreground">
-                      Curriculum nodes linked to this practice exam.
+                      Curriculum topics and syllabus units linked to this practice exam.
                     </p>
                   </div>
-                  {(active.syllabus_nodes?.length ?? 0) > 0 ? (
-                    <div className="rounded-md border">
-                      <div className="border-b px-4 py-3">
-                        <p className="text-sm text-muted-foreground">Subject</p>
-                        <p className="font-semibold">
-                          {active.syllabus_nodes?.[0]?.subject_name ?? "Mapped syllabus"}
-                        </p>
-                      </div>
-                      <div className="divide-y">
-                        {active.syllabus_nodes?.map((node) => (
-                          <div key={node.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                            <div>
-                              <p className="font-medium">{node.title}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {node.syllabus_title}
-                              </p>
+                  {active.subject_name && (
+                    <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-3.5 py-2 text-primary font-medium text-sm">
+                      <span className="text-xs text-muted-foreground">Subject:</span>
+                      <span className="font-bold">{active.subject_name}</span>
+                    </div>
+                  )}
+                  {Array.isArray(active.syllabus_data) && active.syllabus_data.length > 0 ? (
+                    <div className="space-y-2 rounded-lg border p-3 bg-muted/20">
+                      {active.syllabus_data.map((unit: any, uIdx: number) => (
+                        <div key={unit.id ?? uIdx} className="rounded-md border bg-card p-3">
+                          <p className="font-semibold text-sm flex items-center gap-2">
+                            <span className="flex size-5 items-center justify-center rounded bg-primary/10 text-primary text-xs font-bold">
+                              {unit.unit_number ?? uIdx + 1}
+                            </span>
+                            {unit.title}
+                          </p>
+                          {Array.isArray(unit.chapters) && unit.chapters.length > 0 && (
+                            <div className="mt-2 ml-7 pl-3 border-l space-y-2">
+                              {unit.chapters.map((chapter: any, cIdx: number) => (
+                                <div key={chapter.id ?? cIdx} className="space-y-1">
+                                  <p className="text-xs font-medium text-foreground">
+                                    • {chapter.title}
+                                  </p>
+                                  {Array.isArray(chapter.lessons) && chapter.lessons.length > 0 && (
+                                    <div className="ml-4 space-y-0.5">
+                                      {chapter.lessons.map((lesson: any, lIdx: number) => (
+                                        <p key={lesson.id ?? lIdx} className="text-[11px] text-muted-foreground">
+                                          - {lesson.title}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
                             </div>
-                            <Badge variant="outline" className="capitalize">
-                              {node.node_type}
-                            </Badge>
-                          </div>
-                        ))}
-                      </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   ) : (
-                    <div className="rounded-md border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-                      No syllabus nodes mapped.
+                    <div className="rounded-md border border-dashed px-4 py-6 text-center text-xs text-muted-foreground">
+                      No specific syllabus units mapped to this practice exam.
                     </div>
                   )}
                 </section>
@@ -1043,11 +1082,11 @@ export default function PracticeExamsPage() {
                         Add questions after the practice exam details have been saved.
                       </p>
                     </div>
-                    {!isPlatformAdmin &&
-                      !active.blocked_by_platform &&
-                      hasPermission(user, "content.practice_exams.edit", {
-                        institutionId: active.source_institution_id,
-                      }) && (
+                    {(!active.blocked_by_platform || isPlatformAdmin) &&
+                      (isPlatformAdmin ||
+                        hasPermission(user, "content.practice_exams.edit", {
+                          institutionId: active.source_institution_id,
+                        })) && (
                         <Button
                           type="button"
                           onClick={() => openQuestionEditor(active)}
@@ -1061,7 +1100,23 @@ export default function PracticeExamsPage() {
                   </div>
                   {(active.questions?.length ?? 0) === 0 && (
                     <div className="rounded-md border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-                      No questions have been added yet.
+                      <p>No questions have been added yet.</p>
+                      {(!active.blocked_by_platform || isPlatformAdmin) &&
+                        (isPlatformAdmin ||
+                          hasPermission(user, "content.practice_exams.edit", {
+                            institutionId: active.source_institution_id,
+                          })) && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="mt-3 gap-1.5"
+                            onClick={() => openQuestionEditor(active)}
+                          >
+                            <Plus className="size-4" />
+                            Add Questions
+                          </Button>
+                        )}
                     </div>
                   )}
                   {(active.questions ?? []).map((question, index) => (
@@ -1167,29 +1222,55 @@ export default function PracticeExamsPage() {
         </DialogContent>
       </Dialog>
 
-      <PracticeExamEditor
-        open={editorOpen}
-        onOpenChange={setEditorOpen}
-        accessToken={accessToken}
-        template={editing}
-        fetchInstitutions={fetchInstitutions}
-        onSaved={(_id) => {
-          void fetchRows();
-        }}
-      />
-
-      {questionTemplate && (
-        <PracticeExamQuestionEditor
-          open={questionEditorOpen}
-          onOpenChange={setQuestionEditorOpen}
-          accessToken={accessToken}
-          template={questionTemplate}
-          onSaved={() => {
-            void fetchRows();
-            if (active) void openDetail(active);
-          }}
-        />
-      )}
+      <Dialog open={Boolean(purchaseTarget)} onOpenChange={(open) => !open && setPurchaseTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Purchase & Inherit Practice Exam</DialogTitle>
+            <DialogDescription>
+              This practice exam is a premium marketplace resource. Confirm purchase to inherit it into your institution library.
+            </DialogDescription>
+          </DialogHeader>
+          {purchaseTarget && (
+            <div className="space-y-4 py-2">
+              <div className="rounded-lg border p-4 bg-muted/30 space-y-2">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-semibold text-foreground">{purchaseTarget.title}</p>
+                    <p className="text-xs text-muted-foreground">{purchaseTarget.subject_name || "General"}</p>
+                  </div>
+                  <Badge variant="outline" className="border-rose-500/40 bg-rose-500/10 text-rose-600 font-bold text-sm">
+                    ₹{Number(purchaseTarget.price) || 0}
+                  </Badge>
+                </div>
+                {purchaseTarget.description && (
+                  <p className="text-xs text-muted-foreground line-clamp-2">{purchaseTarget.description}</p>
+                )}
+              </div>
+              <div className="rounded-md bg-amber-500/10 border border-amber-500/20 p-3 text-xs text-amber-800 dark:text-amber-300">
+                Note: This payment of ₹{Number(purchaseTarget.price) || 0} will grant your institution full access to this practice exam and its questions.
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPurchaseTarget(null)} disabled={actionLoading}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+              disabled={actionLoading}
+              onClick={async () => {
+                if (!purchaseTarget) return;
+                const target = purchaseTarget;
+                setPurchaseTarget(null);
+                await inheritPracticeExams([target]);
+              }}
+            >
+              {actionLoading && <Loader2 className="size-4 animate-spin" />}
+              Pay ₹{Number(purchaseTarget?.price) || 0} & Inherit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

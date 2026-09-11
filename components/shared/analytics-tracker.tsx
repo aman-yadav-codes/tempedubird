@@ -33,9 +33,30 @@ export async function sendAnalyticsEvent(data: {
   if (typeof window === "undefined") return;
 
   try {
-    const anonymous_id = getOrCreateAnonymousId();
-    const user = useAuthStore.getState().user;
     const page_url = data.page_url || window.location.href;
+    const pathname = window.location.pathname;
+
+    // Do not track admin panels, institution admin panels, or admin login portals
+    if (
+      pathname.startsWith("/admin") ||
+      pathname.startsWith("/instituteadmin") ||
+      pathname.startsWith("/platformadmin") ||
+      pathname.startsWith("/institution/login")
+    ) {
+      return;
+    }
+
+    const user = useAuthStore.getState().user;
+    const isAdmin = Boolean(
+      user?.is_super_admin ||
+      user?.role_codes?.some((r) => ["platform_admin", "institution_admin", "admin", "super_admin"].includes(r)) ||
+      user?.primary_role === "platform_admin" ||
+      user?.primary_role === "institution_admin"
+    );
+
+    if (isAdmin) return;
+
+    const anonymous_id = getOrCreateAnonymousId();
     const referrer = document.referrer || "";
 
     // Extract potential search keywords from URL or referrer if not directly provided
@@ -82,7 +103,7 @@ export async function sendAnalyticsEvent(data: {
         keepalive: true,
       }).catch(() => {});
     }
-  } catch (err) {
+  } catch {
     // Non-critical background telemetry
   }
 }
@@ -93,9 +114,23 @@ export function AnalyticsTracker() {
   const { user } = useAuthStore();
   const lastTrackedUrlRef = useRef<string>("");
 
+  const isAdmin = Boolean(
+    user?.is_super_admin ||
+    user?.role_codes?.some((r) => ["platform_admin", "institution_admin", "admin", "super_admin"].includes(r)) ||
+    user?.primary_role === "platform_admin" ||
+    user?.primary_role === "institution_admin"
+  );
+
+  const isAdminRoute = Boolean(
+    pathname?.startsWith("/admin") ||
+    pathname?.startsWith("/instituteadmin") ||
+    pathname?.startsWith("/platformadmin") ||
+    pathname?.startsWith("/institution/login")
+  );
+
   // 1. Track Page View & URL-based Searches on navigation
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || isAdmin || isAdminRoute) return;
 
     const fullUrl = window.location.href;
     if (lastTrackedUrlRef.current === fullUrl) return;
@@ -120,11 +155,11 @@ export function AnalyticsTracker() {
         keywords: queryTerm.trim(),
       });
     }
-  }, [pathname, searchParams]);
+  }, [pathname, searchParams, isAdmin, isAdminRoute]);
 
   // 2. Global Smart Click Tracking (Buttons, Tabs, Interactive CTAs)
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || isAdmin || isAdminRoute) return;
 
     const handleDocumentClick = (e: MouseEvent) => {
       try {
@@ -141,7 +176,6 @@ export function AnalyticsTracker() {
 
         if (!buttonName) return;
 
-        // Throttle rapid clicks
         sendAnalyticsEvent({
           event_type: "click",
           button_name: buttonName,
@@ -155,7 +189,7 @@ export function AnalyticsTracker() {
     return () => {
       document.removeEventListener("click", handleDocumentClick);
     };
-  }, []);
+  }, [isAdmin, isAdminRoute]);
 
   return null;
 }

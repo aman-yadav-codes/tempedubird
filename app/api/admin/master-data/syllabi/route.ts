@@ -1,74 +1,98 @@
 import { NextResponse } from "next/server";
-
-import { requireAdmin } from "@/lib/auth/auth";
+import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
-import { getPageCount, getPagination } from "@/lib/queries/pagination";
-import { createSyllabus, listSyllabi } from "@/lib/queries/syllabi";
 
-function getErrorMessage(err: unknown) {
-  return err instanceof Error ? err.message : "Something went wrong";
-}
-
-function asPositiveInteger(value: string | null) {
-  const number = Number(value);
-  return Number.isInteger(number) && number > 0 ? number : null;
-}
-
+// GET: List master course syllabi for marketplace & templates
 export async function GET(req: Request) {
   try {
-    const user = await requireAdmin(req);
+    const currentUser = await getAuthenticatedUser(req);
+    if (!currentUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const url = new URL(req.url);
-    const { limit, offset } = getPagination(
-      url.searchParams.get("page"),
-      url.searchParams.get("limit")
+    const search = url.searchParams.get("search")?.trim().toLowerCase() || "";
+    const subjectId = url.searchParams.get("subjectId")?.trim() || "";
+    const courseId = url.searchParams.get("courseId")?.trim() || "";
+    const limit = Number(url.searchParams.get("limit") || "100");
+
+    let query = `
+      SELECT 
+        css.id,
+        css.course_id,
+        mc.name AS course_name,
+        mc.code AS course_code,
+        css.subject_id,
+        css.subject_name,
+        css.subject_code,
+        css.term_name,
+        css.term_number,
+        css.units,
+        css.created_at,
+        css.updated_at
+      FROM course_subject_syllabi css
+      LEFT JOIN master_courses mc ON mc.id = css.course_id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+
+    if (subjectId) {
+      params.push(subjectId);
+      query += ` AND (css.subject_id = $${params.length} OR css.subject_name ILIKE $${params.length})`;
+    }
+
+    if (courseId) {
+      params.push(Number(courseId));
+      query += ` AND css.course_id = $${params.length}`;
+    }
+
+    if (search) {
+      params.push(`%${search}%`);
+      query += ` AND (
+        LOWER(css.subject_name) LIKE $${params.length} 
+        OR LOWER(COALESCE(mc.name, '')) LIKE $${params.length}
+        OR LOWER(COALESCE(css.term_name, '')) LIKE $${params.length}
+      )`;
+    }
+
+    query += ` ORDER BY css.id DESC LIMIT $${params.length + 1}`;
+    params.push(limit);
+
+    const res = await db.query(query, params);
+    
+    const formatted = res.rows.map((r: any) => {
+      const units = Array.isArray(r.units) ? r.units : [];
+      let totalTopics = 0;
+      let totalHours = 0;
+      units.forEach((u: any) => {
+        (u.chapters || []).forEach((c: any) => {
+          totalHours += Number(c.estimated_hours) || 0;
+          totalTopics += (c.lessons || c.topics || []).length || 1;
+        });
+      });
+
+      return {
+        id: r.id,
+        title: `${r.course_name ? `${r.course_name} — ` : ""}${r.subject_name} (${r.term_name || "Standard"})`,
+        category_name: r.course_name || "Standard Curriculum",
+        subject_id: r.subject_id,
+        subject_name: r.subject_name,
+        term_name: r.term_name,
+        course_id: r.course_id,
+        modules_count: units.length,
+        total_topics: totalTopics,
+        total_hours: totalHours,
+        units,
+        updated_at: r.updated_at,
+      };
+    });
+
+    return NextResponse.json({ data: formatted });
+  } catch (err: any) {
+    console.error("GET /api/admin/master-data/syllabi error:", err);
+    return NextResponse.json(
+      { error: err.message || "Failed to fetch master syllabi" },
+      { status: 500 }
     );
-
-    const { data, total } = await listSyllabi(db, user, {
-      search: url.searchParams.get("search") ?? "",
-      limit,
-      offset,
-      subjectId: asPositiveInteger(url.searchParams.get("subjectId")),
-      institutionId: asPositiveInteger(url.searchParams.get("institutionId")),
-      activeInstitutionId: asPositiveInteger(url.searchParams.get("activeInstitutionId")),
-      templatesOnly: url.searchParams.get("templatesOnly") === "true",
-      view: url.searchParams.get("view") === "my" ? "my" : "marketplace",
-    });
-
-    return NextResponse.json({ data, total, pageCount: getPageCount(total, limit) });
-  } catch (err) {
-    const message = getErrorMessage(err);
-    const status = message === "Forbidden: Admin access required" ? 403 : 400;
-    return NextResponse.json({ error: message }, { status });
-  }
-}
-
-export async function POST(req: Request) {
-  try {
-    const user = await requireAdmin(req);
-    const body = await req.json();
-    const subjectId = Number(body.subject_id);
-
-    if (!Number.isInteger(subjectId) || subjectId <= 0) {
-      return NextResponse.json({ error: "Subject is required" }, { status: 422 });
-    }
-    if (!body.title || typeof body.title !== "string") {
-      return NextResponse.json({ error: "Title is required" }, { status: 422 });
-    }
-
-    const syllabus = await createSyllabus(db, user, {
-      subject_id: subjectId,
-      institution_id: body.institution_id ? Number(body.institution_id) : null,
-      title: body.title.trim(),
-      description: typeof body.description === "string" ? body.description.trim() : null,
-      version: body.version ? Number(body.version) : 1,
-      is_template: Boolean(body.is_template),
-      is_active: typeof body.is_active === "boolean" ? body.is_active : true,
-    });
-
-    return NextResponse.json({ data: syllabus }, { status: 201 });
-  } catch (err) {
-    const message = getErrorMessage(err);
-    const status = message === "Forbidden: Admin access required" ? 403 : 400;
-    return NextResponse.json({ error: message }, { status });
   }
 }

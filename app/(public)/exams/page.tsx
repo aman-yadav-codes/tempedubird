@@ -34,6 +34,7 @@ type EntranceExam = {
   eligibility: string;
   application_fee: number;
   website_url: string;
+  apply_url?: string;
   description: string;
   institution_name: string;
   rating?: number;
@@ -209,36 +210,42 @@ export default function ExamsPublicPage() {
 
                           {/* Actions */}
                           <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/50">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFeedbackTarget({
-                                  type: "exam",
-                                  id: e.id,
-                                  title: e.exam_name,
-                                  subtitle: `${e.category} • Official Entrance Exam`,
-                                  avg_rating: e.rating || 4.8,
-                                  review_count: e.reviews_count || 12,
-                                });
-                                setFeedbackOpen(true);
-                              }}
-                              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-amber-300 bg-amber-50/70 text-xs font-bold text-amber-800 transition hover:bg-amber-100 cursor-pointer"
+                            <Button
+                              asChild
+                              variant="outline"
+                              size="sm"
+                              className="h-9 w-full text-xs font-bold gap-1 border-primary/30 text-primary hover:bg-primary/5"
                             >
-                              <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
-                              <span>Reviews & Q&A</span>
-                            </button>
+                              <Link href={`/exams/${e.id}`}>
+                                <span>Details &amp; Syllabus</span>
+                              </Link>
+                            </Button>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEnquiryExam(e);
-                                setEnquiryOpen(true);
-                              }}
-                              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-primary text-xs font-bold text-primary-foreground transition hover:bg-primary/90 cursor-pointer shadow-xs"
-                            >
-                              <Send className="h-3.5 w-3.5" />
-                              <span>Enquiry</span>
-                            </button>
+                            {e.apply_url || e.website_url ? (
+                              <Button
+                                asChild
+                                size="sm"
+                                className="h-9 w-full text-xs font-bold gap-1.5 bg-primary text-primary-foreground shadow-xs"
+                              >
+                                <a href={e.apply_url || e.website_url} target="_blank" rel="noopener noreferrer">
+                                  <span>Apply Now</span>
+                                  <ExternalLink className="size-3" />
+                                </a>
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => {
+                                  setEnquiryExam(e);
+                                  setEnquiryOpen(true);
+                                }}
+                                className="h-9 w-full text-xs font-bold gap-1.5 bg-primary text-primary-foreground shadow-xs cursor-pointer"
+                              >
+                                <Send className="h-3.5 w-3.5" />
+                                <span>Enquiry</span>
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </Card>

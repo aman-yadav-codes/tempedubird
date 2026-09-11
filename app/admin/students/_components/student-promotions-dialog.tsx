@@ -89,25 +89,25 @@ export function StudentPromotionsDialog({
   const [academicYears, setAcademicYears] = useState<OptionItem[]>([]);
   const [programs, setPrograms] = useState<OptionItem[]>([]);
   const [sections, setSections] = useState<OptionItem[]>([]);
+  const [loadingAcademicYears, setLoadingAcademicYears] = useState(false);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
+  const [loadingSections, setLoadingSections] = useState(false);
 
   const fetchPromotions = useCallback(async () => {
     if (!student?.id || !accessToken) return;
     setLoading(true);
     try {
-      const [promoRes, enrollRes] = await Promise.all([
-        fetch(`/api/admin/students/${student.id}/promotions`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }),
-        fetch(`/api/admin/students/${student.id}/enrollments`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }),
-      ]);
-
+      const promoRes = await fetch(`/api/admin/students/${student.id}/promotions`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
       const promoJson = await promoRes.json();
       if (promoRes.ok) {
         setPromotions(promoJson.data || []);
       }
 
+      const enrollRes = await fetch(`/api/admin/students/${student.id}/enrollments`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
       const enrollJson = await enrollRes.json();
       if (enrollRes.ok && Array.isArray(enrollJson.data) && enrollJson.data.length > 0) {
         const activeEnr = enrollJson.data.find((e: any) => e.is_current) || enrollJson.data[0];
@@ -120,50 +120,62 @@ export function StudentPromotionsDialog({
     }
   }, [student?.id, accessToken]);
 
-  const fetchOptions = useCallback(async () => {
-    if (!institutionId || !accessToken) return;
+  const fetchAcademicYears = useCallback(async () => {
+    if (!institutionId || !accessToken || loadingAcademicYears) return;
+    setLoadingAcademicYears(true);
     try {
-      const [ayRes, progRes] = await Promise.all([
-        fetch(`/api/admin/institutions/academic-years?institutionId=${institutionId}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }),
-        fetch(`/api/admin/institutions/programs?institutionId=${institutionId}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }),
-      ]);
-
-      if (ayRes.ok) {
-        const ayJson = await ayRes.json();
-        setAcademicYears(ayJson.data || []);
-      }
-      if (progRes.ok) {
-        const progJson = await progRes.json();
-        setPrograms(progJson.data || []);
+      const res = await fetch(`/api/admin/institutions/academic-years?institutionId=${institutionId}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setAcademicYears(json.data || []);
       }
     } catch (err) {
-      console.error("Error loading options:", err);
+      console.error("Error loading academic years:", err);
+    } finally {
+      setLoadingAcademicYears(false);
     }
-  }, [institutionId, accessToken]);
+  }, [institutionId, accessToken, loadingAcademicYears]);
 
-  // Fetch sections when program changes
-  useEffect(() => {
-    if (!destProgramId || !accessToken) {
-      setSections([]);
-      return;
+  const fetchPrograms = useCallback(async () => {
+    if (!institutionId || !accessToken || loadingPrograms) return;
+    setLoadingPrograms(true);
+    try {
+      const res = await fetch(`/api/admin/institutions/programs?institutionId=${institutionId}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setPrograms(json.data || []);
+      }
+    } catch (err) {
+      console.error("Error loading programs:", err);
+    } finally {
+      setLoadingPrograms(false);
     }
-    fetch(`/api/admin/institutions/programs/${destProgramId}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.data?.sections) {
-          setSections(json.data.sections);
-        } else {
-          setSections([]);
-        }
-      })
-      .catch(() => setSections([]));
-  }, [destProgramId, accessToken]);
+  }, [institutionId, accessToken, loadingPrograms]);
+
+  const fetchSections = useCallback(async (progId: string) => {
+    if (!progId || !accessToken || loadingSections) return;
+    setLoadingSections(true);
+    try {
+      const res = await fetch(`/api/admin/institutions/programs/${progId}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const json = await res.json();
+      if (json.data?.sections) {
+        setSections(json.data.sections);
+      } else {
+        setSections([]);
+      }
+    } catch (err) {
+      console.error("Error loading sections:", err);
+      setSections([]);
+    } finally {
+      setLoadingSections(false);
+    }
+  }, [accessToken, loadingSections]);
 
   // Helper to find the current program ID
   const getCurrentProgramId = useCallback(() => {
@@ -180,6 +192,7 @@ export function StudentPromotionsDialog({
       const sameProgId = getCurrentProgramId();
       if (sameProgId) {
         setDestProgramId(sameProgId);
+        void fetchSections(sameProgId);
       }
       if (currentEnrollment?.section_id) {
         setDestSectionId(String(currentEnrollment.section_id));
@@ -193,14 +206,14 @@ export function StudentPromotionsDialog({
       const sameProgId = getCurrentProgramId();
       if (sameProgId && destProgramId !== sameProgId) {
         setDestProgramId(sameProgId);
+        void fetchSections(sameProgId);
       }
     }
-  }, [outcome, getCurrentProgramId, destProgramId]);
+  }, [outcome, getCurrentProgramId, destProgramId, fetchSections]);
 
   useEffect(() => {
     if (open && student) {
       fetchPromotions();
-      fetchOptions();
       setShowAddForm(false);
       setOutcome("promoted");
       setDestAcademicYearId("");
@@ -208,8 +221,11 @@ export function StudentPromotionsDialog({
       setDestSectionId("");
       setNotes("");
       setRollNumber(student.roll_number || "");
+      setAcademicYears([]);
+      setPrograms([]);
+      setSections([]);
     }
-  }, [open, student, fetchPromotions, fetchOptions]);
+  }, [open, student, fetchPromotions]);
 
   const handleSavePromotion = async () => {
     if (!institutionId || !student?.id || !accessToken) return;
@@ -374,16 +390,30 @@ export function StudentPromotionsDialog({
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
                         <Label className="text-xs">Destination Academic Session *</Label>
-                        <Select value={destAcademicYearId} onValueChange={setDestAcademicYearId}>
+                        <Select
+                          value={destAcademicYearId}
+                          onValueChange={setDestAcademicYearId}
+                          onOpenChange={(isOpen) => {
+                            if (isOpen && academicYears.length === 0) {
+                              void fetchAcademicYears();
+                            }
+                          }}
+                        >
                           <SelectTrigger className="h-9 text-sm">
-                            <SelectValue placeholder="Select session" />
+                            <SelectValue placeholder={loadingAcademicYears ? "Loading sessions..." : "Select session"} />
                           </SelectTrigger>
                           <SelectContent>
-                            {academicYears.map((ay) => (
-                              <SelectItem key={ay.id} value={String(ay.id)}>
-                                {ay.name || ay.title}
-                              </SelectItem>
-                            ))}
+                            {loadingAcademicYears ? (
+                              <div className="flex items-center justify-center p-2 text-xs text-muted-foreground">
+                                <Loader2 className="size-3.5 animate-spin mr-1.5" /> Loading sessions...
+                              </div>
+                            ) : (
+                              academicYears.map((ay) => (
+                                <SelectItem key={ay.id} value={String(ay.id)}>
+                                  {ay.name || ay.title}
+                                </SelectItem>
+                              ))
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
@@ -402,16 +432,34 @@ export function StudentPromotionsDialog({
                             </p>
                           </div>
                         ) : (
-                          <Select value={destProgramId} onValueChange={setDestProgramId}>
+                          <Select
+                            value={destProgramId}
+                            onValueChange={(val) => {
+                              setDestProgramId(val);
+                              setDestSectionId("");
+                              void fetchSections(val);
+                            }}
+                            onOpenChange={(isOpen) => {
+                              if (isOpen && programs.length === 0) {
+                                void fetchPrograms();
+                              }
+                            }}
+                          >
                             <SelectTrigger className="h-9 text-sm">
-                              <SelectValue placeholder="Select program" />
+                              <SelectValue placeholder={loadingPrograms ? "Loading classes..." : "Select program"} />
                             </SelectTrigger>
                             <SelectContent>
-                              {programs.map((pr) => (
-                                <SelectItem key={pr.id} value={String(pr.id)}>
-                                  {pr.title || pr.name}
-                                </SelectItem>
-                              ))}
+                              {loadingPrograms ? (
+                                <div className="flex items-center justify-center p-2 text-xs text-muted-foreground">
+                                  <Loader2 className="size-3.5 animate-spin mr-1.5" /> Loading classes...
+                                </div>
+                              ) : (
+                                programs.map((pr) => (
+                                  <SelectItem key={pr.id} value={String(pr.id)}>
+                                    {pr.title || pr.name}
+                                  </SelectItem>
+                                ))
+                              )}
                             </SelectContent>
                           </Select>
                         )}
@@ -421,16 +469,39 @@ export function StudentPromotionsDialog({
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
                         <Label className="text-xs">Destination Section</Label>
-                        <Select value={destSectionId} onValueChange={setDestSectionId}>
+                        <Select
+                          value={destSectionId}
+                          onValueChange={setDestSectionId}
+                          onOpenChange={(isOpen) => {
+                            if (isOpen && sections.length === 0 && destProgramId) {
+                              void fetchSections(destProgramId);
+                            }
+                          }}
+                          disabled={!destProgramId}
+                        >
                           <SelectTrigger className="h-9 text-sm">
-                            <SelectValue placeholder="Select section" />
+                            <SelectValue
+                              placeholder={
+                                loadingSections
+                                  ? "Loading sections..."
+                                  : destProgramId
+                                  ? "Select section"
+                                  : "Select class first"
+                              }
+                            />
                           </SelectTrigger>
                           <SelectContent>
-                            {sections.map((sec) => (
-                              <SelectItem key={sec.id} value={String(sec.id)}>
-                                {sec.name}
-                              </SelectItem>
-                            ))}
+                            {loadingSections ? (
+                              <div className="flex items-center justify-center p-2 text-xs text-muted-foreground">
+                                <Loader2 className="size-3.5 animate-spin mr-1.5" /> Loading sections...
+                              </div>
+                            ) : (
+                              sections.map((sec) => (
+                                <SelectItem key={sec.id} value={String(sec.id)}>
+                                  {sec.name}
+                                </SelectItem>
+                              ))
+                            )}
                           </SelectContent>
                         </Select>
                       </div>

@@ -516,73 +516,9 @@ export function isAdminPathVisibleForRole(
       return isTeacherUser(user) || Boolean(user?.role_codes?.includes("driver"));
     }
     if (normalized === "/admin/institution/my-letters") {
-      return !isTeacherUser(user) && Boolean(user?.role_codes?.includes("driver"));
+      return isTeacherUser(user) || Boolean(user?.role_codes?.includes("driver"));
     }
-    return isStudentUser(user) || isParentUser(user);
-  }
-
-  if (normalized === "/admin/guardians" || normalized === "/admin/students/guardians" || normalized === "/student/guardians") {
     return true;
-  }
-
-  if (normalized === "/admin/staff" || normalized.startsWith("/admin/staff/")) {
-    if (isStudentUser(user) || isParentUser(user)) {
-      return false;
-    }
-    if (
-      normalized === "/admin/staff/my-data" ||
-      normalized === "/admin/staff/attendance" ||
-      normalized === "/admin/staff/queries" ||
-      normalized === "/admin/staff/salary" ||
-      normalized === "/admin/staff/salary-slips" ||
-      normalized === "/admin/staff/offer-letters" ||
-      normalized === "/admin/staff/letters"
-    ) {
-      return true;
-    }
-    if (normalized === "/admin/staff/performance") {
-      return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || isTeacherUser(user) || !isStudentUser(user);
-    }
-    if (normalized === "/admin/staff") {
-      return true;
-    }
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
-  }
-
-  if (normalized === "/admin/master-data" || normalized.startsWith("/admin/master-data")) {
-    return isPlatformAdminUser(user);
-  }
-
-  if (normalized === "/admin/finance/allowance") {
-    return (
-      isPlatformAdminUser(user) ||
-      isInstitutionAdminUser(user) ||
-      isTeacherUser(user) ||
-      Boolean(user?.role_codes?.includes("driver")) ||
-      hasPermission(user, "finance.platform.allowance.view") ||
-      hasPermission(user, "finance.allowance.view")
-    );
-  }
-
-  if (normalized === "/admin/finance" || normalized.startsWith("/admin/finance/")) {
-    return (
-      isPlatformAdminUser(user) ||
-      isInstitutionAdminUser(user) ||
-      isTeacherUser(user) ||
-      Boolean(user?.permissions?.some((permission) => permission.startsWith("finance.platform.")))
-    );
-  }
-
-  if (normalized === "/admin/inventory" || normalized.startsWith("/admin/inventory/")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, "admin.inventory.view") || hasPermission(user, "admin.inventory");
-  }
-
-  if (normalized === "/admin/vendors" || normalized.startsWith("/admin/vendors/")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, "admin.vendors.view") || hasPermission(user, "admin.vendors");
-  }
-
-  if (normalized === "/admin/team" || normalized.startsWith("/admin/team/")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, "admin.team.view") || hasPermission(user, "admin.team");
   }
 
   if (normalized === "/admin/operations" || normalized.startsWith("/admin/operations/")) {
@@ -599,6 +535,34 @@ export function isAdminPathVisibleForRole(
   if (normalized === "/admin/generate" || normalized.startsWith("/admin/generate/")) {
     return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, "admin.generate.view") || hasPermission(user, "admin.generate");
   }
+
+  if (
+    normalized === "/admin/master-data/institute-calendar" ||
+    normalized.startsWith("/admin/master-data/institute-calendar") ||
+    normalized === "/admin/master-data/timetable-setup" ||
+    normalized.startsWith("/admin/master-data/timetable-setup") ||
+    normalized === "/admin/master-data/attendance-setup" ||
+    normalized.startsWith("/admin/master-data/attendance-setup")
+  ) {
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+  }
+
+  if (
+    normalized === "/admin/master-data/institute-calendar" ||
+    normalized.startsWith("/admin/master-data/institute-calendar") ||
+    normalized === "/admin/master-data/timetable-setup" ||
+    normalized.startsWith("/admin/master-data/timetable-setup") ||
+    normalized === "/admin/master-data/attendance-setup" ||
+    normalized.startsWith("/admin/master-data/attendance-setup")
+  ) {
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+  }
+
+  if (normalized === "/admin/master-data" || normalized.startsWith("/admin/master-data")) {
+    return isPlatformAdminUser(user);
+  }
+
+  if (normalized === "/admin/classroom/my-timetable") return true;
 
   if (!isPlatformAdminUser(user)) return true;
 
@@ -1059,6 +1023,7 @@ export function getRequestPermission(method: string, url: string) {
       return permissionForAction(staffPermissionModules[0], verb);
     }
   }
+  if (pathname.includes("/api/admin/affiliates")) return permissionForAction("users.allusers", verb);
   if (pathname.includes("/api/admin/users")) return permissionForAction("users.allusers", verb);
   if (pathname.includes("/api/admin/student-records")) return permissionForAction("managestudents.allstudents", verb);
   if (pathname.includes("/api/admin/students/fee-management")) return permissionForAction("managestudents.fee_management", verb);
@@ -1343,6 +1308,17 @@ export function hasAdminPagePermission(
       hasPermission(user, "parent.dashboard.view") ||
       hasPermission(user, "teacher.dashboard.view")
     );
+  }
+
+  if (
+    normalized === "/admin/master-data/institute-calendar" ||
+    normalized.startsWith("/admin/master-data/institute-calendar") ||
+    normalized === "/admin/master-data/timetable-setup" ||
+    normalized.startsWith("/admin/master-data/timetable-setup") ||
+    normalized === "/admin/master-data/attendance-setup" ||
+    normalized.startsWith("/admin/master-data/attendance-setup")
+  ) {
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
   }
 
   if (normalized === "/admin/master-data" || normalized.startsWith("/admin/master-data")) {

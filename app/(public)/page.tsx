@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import { headers } from "next/headers";
 import type { Metadata } from "next";
 import { HomeLandingContainer } from "@/components/home/home-landing-container";
-import { PlatformAdminLanding } from "@/components/home/platform-admin-landing";
 import { getInstitutionTenantByHost } from "@/lib/tenancy/institution-domain";
 import { db } from "@/lib/db/db";
 import { resolvePageMetadata } from "@/lib/seo/metadata";
@@ -40,9 +39,7 @@ export default async function HomePage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen">
-          <PlatformAdminLanding />
-        </div>
+        <div className="min-h-screen bg-background animate-pulse" />
       }
     >
       <HomeLandingContainer initialIsInstitutionEdition={isInstitutionMode} />

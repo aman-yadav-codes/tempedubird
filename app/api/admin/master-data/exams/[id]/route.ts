@@ -98,19 +98,7 @@ async function getTemplate(id: number, academicYearId: number | null = null) {
         at.exam_mode,
         CASE
           WHEN es.id IS NOT NULL THEN
-            es.title || '-' || COALESCE(
-              (
-                SELECT sub.name
-                FROM practice_exam_syllabus_nodes asn
-                INNER JOIN syllabus_nodes sn ON sn.id = asn.syllabus_node_id
-                INNER JOIN syllabi sy ON sy.id = sn.syllabus_id
-                INNER JOIN subjects sub ON sub.id = sy.subject_id
-                WHERE asn.practice_exam_id = assn.id
-                ORDER BY sub.name
-                LIMIT 1
-              ),
-              'Subject'
-            ) || COALESCE(' (' || COALESCE(target_scope_program.title, target_program.title) || ')', '')
+            es.title || COALESCE(' (' || COALESCE(target_scope_program.title, target_program.title) || ')', '')
           ELSE at.title
         END AS title,
         COALESCE(es.result_date, at.result_date) AS result_date,
@@ -136,43 +124,14 @@ async function getTemplate(id: number, academicYearId: number | null = null) {
           WHEN target.target_type = 'STUDENT' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || COALESCE(' > ' || COALESCE(target_scope_program.title, target_scope_master_course.name), '') || ' > ' || target_user.full_name
           ELSE NULL
         END AS target_label,
-        COALESCE(
-          (
-            SELECT json_agg(asn.syllabus_node_id ORDER BY asn.id)
-            FROM practice_exam_syllabus_nodes asn
-            WHERE asn.practice_exam_id = assn.id
-          ),
-          '[]'::json
-        ) AS syllabus_node_ids,
-        COALESCE(
-          (
-            SELECT json_agg(
-              json_build_object(
-                'id', sn.id,
-                'title', sn.title,
-                'node_type', sn.node_type,
-                'subject_id', sub.id,
-                'subject_name', sub.name,
-                'syllabus_id', s.id,
-                'syllabus_title', s.title
-              )
-              ORDER BY sub.name, s.title, sn.sort_order, sn.id
-            )
-            FROM practice_exam_syllabus_nodes asn
-            INNER JOIN syllabus_nodes sn ON sn.id = asn.syllabus_node_id
-            INNER JOIN syllabi s ON s.id = sn.syllabus_id
-            INNER JOIN subjects sub ON sub.id = s.subject_id
-            WHERE asn.practice_exam_id = assn.id
-          ),
-          '[]'::json
-        ) AS syllabus_nodes
+        '[]'::json AS syllabus_node_ids,
+        '[]'::json AS syllabus_nodes
       FROM practice_exam_templates at
       LEFT JOIN exam_series es
         ON es.id = at.exam_series_id
        AND COALESCE(es.is_deleted, FALSE) = FALSE
-      INNER JOIN institution_profiles ip
+      LEFT JOIN institution_profiles ip
         ON ip.id = at.source_institution_id
-       AND ip.is_active = TRUE
        AND COALESCE(ip.is_deleted, FALSE) = FALSE
       LEFT JOIN users creator ON creator.id = at.created_by
       LEFT JOIN users updater ON updater.id = at.updated_by
@@ -393,12 +352,7 @@ export async function PATCH(req: Request, context: Context) {
   try {
     const currentUser = await requireAdmin(req);
     await ensureExamSchema();
-    if (isPlatformAdminUser(currentUser)) {
-      return NextResponse.json(
-        { error: "Platform Admin can block exams but cannot edit their content" },
-        { status: 403 }
-      );
-    }
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const { id: value } = await context.params;
     const id = parseId(value);
     const existing = await getTemplate(id);
@@ -408,25 +362,31 @@ export async function PATCH(req: Request, context: Context) {
     if (!canAccessConfidentialExam(currentUser, existing)) {
       return NextResponse.json({ error: "Only the exam creator or an administrator can access this exam before release" }, { status: 403 });
     }
-    if (existing.blocked_by_platform) {
+    if (existing.blocked_by_platform && !isPlatformAdmin) {
       return NextResponse.json(
         { error: "This exam is blocked by Platform Admin and cannot be edited" },
         { status: 423 }
       );
     }
     const institutionId = Number(existing.source_institution_id);
-    if (
-      !hasPermission(currentUser, "content.exams.edit", { institutionId })
-    ) {
-      return NextResponse.json(
-        { error: "You don't have permission to edit this exam" },
-        { status: 403 }
-      );
+    if (isPlatformAdmin) {
+      if (!hasPermission(currentUser, "content.exam_reviews.view") && !hasPermission(currentUser, "content.exams.edit")) {
+        return NextResponse.json(
+          { error: "You don't have permission to edit exams" },
+          { status: 403 }
+        );
+      }
+    } else {
+      if (
+        !hasPermission(currentUser, "content.exams.edit", { institutionId })
+      ) {
+        return NextResponse.json(
+          { error: "You don't have permission to edit this exam" },
+          { status: 403 }
+        );
+      }
     }
     const payload = parseExamMetadataPayload(await req.json());
-    if (payload.institutionId !== institutionId) {
-      throw new Error("Exam institution cannot be changed");
-    }
     await applySeriesResultControls(payload, existing.exam_series_id);
     await validateExamTarget(
       payload.institutionId,
@@ -502,6 +462,8 @@ export async function PATCH(req: Request, context: Context) {
     const client = await db.connect();
     try {
       await client.query("BEGIN");
+      const isPublic = isPlatformAdmin ? (payload.isPublic || payload.isGovernmentExam) : existing.is_public;
+      const marketplaceApproved = isPlatformAdmin ? (payload.isPublic || payload.isGovernmentExam) : existing.marketplace_approved;
       const versionResult = await client.query<{ version: number }>(
         `
           UPDATE practice_exam_templates
@@ -516,13 +478,13 @@ export async function PATCH(req: Request, context: Context) {
               exam_mode = $10,
               result_date = $11,
               instant_result = $12,
-              is_public = FALSE,
+              is_public = $29,
               marketplace_requested = $13,
               marketplace_requested_at = CASE WHEN $13 THEN COALESCE(marketplace_requested_at, CURRENT_TIMESTAMP) ELSE NULL END,
               marketplace_requested_by = CASE WHEN $13 THEN COALESCE(marketplace_requested_by, $15::integer) ELSE NULL::integer END,
-              marketplace_approved = FALSE,
-              marketplace_approved_at = NULL,
-              marketplace_approved_by = NULL,
+              marketplace_approved = $30,
+              marketplace_approved_at = CASE WHEN $30 THEN COALESCE(marketplace_approved_at, CURRENT_TIMESTAMP) ELSE NULL END,
+              marketplace_approved_by = CASE WHEN $30 THEN COALESCE(marketplace_approved_by, $15::integer) ELSE NULL::integer END,
               is_active = $14,
               is_paid = $16,
               price = $17,
@@ -572,6 +534,8 @@ export async function PATCH(req: Request, context: Context) {
           payload.eligibilityCriteria,
           payload.applicationFee,
           payload.isGovernmentExam,
+          isPublic,
+          marketplaceApproved,
         ]
       );
       const nextVersion = Number(versionResult.rows[0]?.version ?? 1);

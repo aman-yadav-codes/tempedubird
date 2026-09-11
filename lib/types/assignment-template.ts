@@ -38,6 +38,9 @@ export type AssignmentSyllabusNode = {
 };
 
 export type AssignmentTemplateRow = {
+  subject_id?: string | null;
+  subject_name?: string | null;
+  syllabus_data?: any[];
   id: number;
   title: string;
   description: string | null;
@@ -49,6 +52,8 @@ export type AssignmentTemplateRow = {
     subjective: number;
   } | null;
   is_public: boolean;
+  is_paid?: boolean | null;
+  price?: number | string | null;
   marketplace_requested: boolean;
   marketplace_requested_at: string | null;
   marketplace_requested_by: number | null;
@@ -76,6 +81,8 @@ export type AssignmentTemplateRow = {
   blocked_by_name: string | null;
   blocked_at: string | null;
   block_reason: string | null;
+  assigned_count?: number;
+  assigned_student_count?: number;
   assigned_assignment_id?: number | null;
   issue_date?: string | null;
   submission_date?: string | null;

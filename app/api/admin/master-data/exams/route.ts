@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { parseExamMetadataPayload } from "@/lib/exams/exam-payload";
 import { requireAdmin } from "@/lib/auth/auth";
 import {
@@ -10,6 +13,7 @@ import { hasPermission, isInstitutionAdminUser, isPlatformAdminUser, isTeacherUs
 import { db } from "@/lib/db/db";
 import {
   ensureExamSchema,
+  replaceExamQuestionsFromTemplate,
   replaceExamSyllabusNodes,
 } from "@/lib/queries/exams";
 import { notifyStudentsForContentTarget } from "@/lib/notifications/student-content-events";
@@ -575,19 +579,7 @@ export async function GET(req: Request) {
             at.exam_series_id,
             CASE
               WHEN es.id IS NOT NULL THEN
-                es.title || '-' || COALESCE(
-                  (
-                    SELECT sub.name
-                    FROM practice_exam_syllabus_nodes asn
-                    INNER JOIN syllabus_nodes sn ON sn.id = asn.syllabus_node_id
-                    INNER JOIN syllabi sy ON sy.id = sn.syllabus_id
-                    INNER JOIN subjects sub ON sub.id = sy.subject_id
-                    WHERE asn.practice_exam_id = assn.id
-                    ORDER BY sub.name
-                    LIMIT 1
-                  ),
-                  'Subject'
-                ) || COALESCE(' (' || COALESCE(target_scope_program.title, target_program.title) || ')', '')
+                es.title || COALESCE(' (' || COALESCE(target_scope_program.title, target_program.title) || ')', '')
               ELSE at.title
             END AS title,
             at.description,
@@ -637,36 +629,8 @@ export async function GET(req: Request) {
               WHEN target.target_type = 'STUDENT' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || COALESCE(' > ' || target_scope_program.title, '') || ' > ' || target_user.full_name
               ELSE NULL
             END AS target_label,
-            COALESCE(
-              (
-                SELECT json_agg(asn.syllabus_node_id ORDER BY asn.id)
-                FROM practice_exam_syllabus_nodes asn
-                WHERE asn.practice_exam_id = assn.id
-              ),
-              '[]'::json
-            ) AS syllabus_node_ids,
-            COALESCE(
-              (
-                SELECT json_agg(
-                  json_build_object(
-                    'id', sn.id,
-                    'title', sn.title,
-                    'node_type', sn.node_type,
-                    'subject_id', sub.id,
-                    'subject_name', sub.name,
-                    'syllabus_id', s.id,
-                    'syllabus_title', s.title
-                  )
-                  ORDER BY sub.name, s.title, sn.sort_order, sn.id
-                )
-                FROM practice_exam_syllabus_nodes asn
-                INNER JOIN syllabus_nodes sn ON sn.id = asn.syllabus_node_id
-                INNER JOIN syllabi s ON s.id = sn.syllabus_id
-                INNER JOIN subjects sub ON sub.id = s.subject_id
-                WHERE asn.practice_exam_id = assn.id
-              ),
-              '[]'::json
-            ) AS syllabus_nodes,
+            '[]'::json AS syllabus_node_ids,
+            '[]'::json AS syllabus_nodes,
             COUNT(DISTINCT q.id)::int AS question_count,
             COUNT(DISTINCT qf.id)::int AS attachment_count
           FROM practice_exam_templates at
@@ -732,7 +696,8 @@ export async function GET(req: Request) {
         ? []
         : permissionInstitutionIds(currentUser, "content.exams.view");
     const scopeAllInstitutions = isPlatformAdmin && !requestedInstitutionId;
-    {
+    const isGovView = isPlatformAdmin || url.searchParams.get("view") === "government" || url.searchParams.get("is_government") === "true";
+    if (!isPlatformAdmin && view !== "marketplace" && !isGovView) {
       const params: unknown[] = [limit, offset, search, `%${search}%`, institutionIds, view, isPlatformAdmin, scopedAcademicYearId];
       const seriesResult = await db.query<{
         data: unknown[];
@@ -796,6 +761,13 @@ export async function GET(req: Request) {
                   AND COALESCE(scoped_child.is_deleted, FALSE) = FALSE
               )
             )
+          ),
+          page_ids AS (
+            SELECT f.id
+            FROM filtered f
+            INNER JOIN exam_series es ON es.id = f.id
+            ORDER BY es.updated_at DESC, es.id DESC
+            LIMIT $1 OFFSET $2
           ),
           page_rows AS (
             SELECT
@@ -886,8 +858,8 @@ export async function GET(req: Request) {
               COUNT(DISTINCT question.id)::int AS question_count,
               COUNT(DISTINCT child.id) FILTER (WHERE child.is_active = TRUE AND child.blocked_by_platform = FALSE)::int AS active_count,
               COUNT(DISTINCT child.id) FILTER (WHERE child.blocked_by_platform = TRUE)::int AS blocked_count
-            FROM filtered f
-            INNER JOIN exam_series es ON es.id = f.id
+            FROM page_ids p
+            INNER JOIN exam_series es ON es.id = p.id
             INNER JOIN institution_profiles ip ON ip.id = es.source_institution_id
             LEFT JOIN users creator ON creator.id = es.created_by
             LEFT JOIN users updater ON updater.id = es.updated_by
@@ -918,7 +890,6 @@ export async function GET(req: Request) {
             GROUP BY es.id, ip.id, creator.id, updater.id, target_program.id,
                      target_scope_program.id, target_section.id, target_user.id
             ORDER BY es.updated_at DESC, es.id DESC
-            LIMIT $1 OFFSET $2
           )
           SELECT
             COALESCE((SELECT json_agg(page_rows) FROM page_rows), '[]'::json) AS data,
@@ -946,7 +917,7 @@ export async function GET(req: Request) {
         capabilities: {
           canCreate: !isPlatformAdmin && hasPermission(currentUser, "content.exams.create"),
           canBlock: isPlatformAdmin,
-          canInherit: !isPlatformAdmin && view === "marketplace",
+          canInherit: false,
         },
       });
     }
@@ -962,8 +933,9 @@ export async function GET(req: Request) {
         WITH filtered AS MATERIALIZED (
           SELECT at.id
           FROM practice_exam_templates at
-          INNER JOIN institution_profiles ip ON ip.id = at.source_institution_id
+          LEFT JOIN institution_profiles ip ON ip.id = at.source_institution_id
           WHERE ($3 = '' OR at.title ILIKE $4 OR COALESCE(at.description, '') ILIKE $4
+            OR COALESCE(at.conducting_body, '') ILIKE $4 OR COALESCE(at.exam_category, '') ILIKE $4
             OR COALESCE(ip.name, ip.slug, '') ILIKE $4)
             AND COALESCE(at.exam_kind, 'practice') = 'exam'
             AND (
@@ -973,17 +945,21 @@ export async function GET(req: Request) {
               OR ($10::boolean AND at.source_institution_id = ANY($6::int[]))
             )
             AND (
-              (
-                $7::text = 'marketplace'
-                AND at.is_public = TRUE
-                AND at.is_active = TRUE
-                AND at.blocked_by_platform = FALSE
-                AND NOT (at.source_institution_id = ANY($6::int[]))
-              )
-              OR (
-                $7::text <> 'marketplace'
-                AND ($5::boolean OR at.source_institution_id = ANY($6::int[]))
-              )
+              CASE
+                WHEN $9::boolean THEN at.is_government_exam = TRUE
+                WHEN $7::text = 'marketplace' THEN (
+                  at.is_public = TRUE
+                  AND at.is_active = TRUE
+                  AND at.blocked_by_platform = FALSE
+                  AND NOT (at.source_institution_id = ANY($6::int[]))
+                )
+                ELSE (
+                  $5::boolean
+                  OR at.source_institution_id = ANY($6::int[])
+                  OR at.is_government_exam = TRUE
+                  OR at.is_public = TRUE
+                )
+              END
             )
             AND (
               $7::text = 'marketplace'
@@ -998,27 +974,27 @@ export async function GET(req: Request) {
               )
             )
             AND COALESCE(at.is_deleted, FALSE) = FALSE
-            AND COALESCE(ip.is_deleted, FALSE) = FALSE
-            AND ip.is_active = TRUE
+            AND (at.is_government_exam = TRUE OR ip.id IS NULL OR (COALESCE(ip.is_deleted, FALSE) = FALSE AND ip.is_active = TRUE))
+        ),
+        page_ids AS (
+          SELECT f.id
+          FROM filtered f
+          INNER JOIN practice_exam_templates at ON at.id = f.id
+          LEFT JOIN exam_series es
+            ON es.id = at.exam_series_id
+           AND COALESCE(es.is_deleted, FALSE) = FALSE
+          ORDER BY
+            ((COALESCE(at.marketplace_requested, FALSE) OR COALESCE(es.marketplace_requested, FALSE)) AND at.is_public = FALSE AND at.blocked_by_platform = FALSE) DESC,
+            at.updated_at DESC,
+            at.id DESC
+          LIMIT $1::int OFFSET $2::int
         ),
         page_rows AS (
           SELECT
             at.id,
             CASE
               WHEN es.id IS NOT NULL THEN
-                es.title || '-' || COALESCE(
-                  (
-                    SELECT sub.name
-                    FROM practice_exam_syllabus_nodes asn
-                    INNER JOIN syllabus_nodes sn ON sn.id = asn.syllabus_node_id
-                    INNER JOIN syllabi sy ON sy.id = sn.syllabus_id
-                    INNER JOIN subjects sub ON sub.id = sy.subject_id
-                    WHERE asn.practice_exam_id = assn.id
-                    ORDER BY sub.name
-                    LIMIT 1
-                  ),
-                  'Subject'
-                ) || COALESCE(' (' || COALESCE(target_scope_program.title, target_program.title) || ')', '')
+                es.title || COALESCE(' (' || COALESCE(target_scope_program.title, target_program.title) || ')', '')
               ELSE at.title
             END AS title,
             at.description,
@@ -1044,7 +1020,7 @@ export async function GET(req: Request) {
             at.is_active,
             at.version,
             at.source_institution_id,
-            COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) AS institution_name,
+            COALESCE(ip.name, ip.slug, 'Platform Examination Authority') AS institution_name,
             at.created_by,
             creator.full_name AS created_by_name,
             updater.full_name AS updated_by_name,
@@ -1077,47 +1053,18 @@ export async function GET(req: Request) {
               WHEN target.target_type = 'STUDENT' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || COALESCE(' > ' || COALESCE(target_scope_program.title, target_scope_master_course.name), '') || ' > ' || target_user.full_name
               ELSE NULL
             END AS target_label,
-            COALESCE(
-              (
-                SELECT json_agg(asn.syllabus_node_id ORDER BY asn.id)
-                FROM practice_exam_syllabus_nodes asn
-                WHERE asn.practice_exam_id = assn.id
-              ),
-              '[]'::json
-            ) AS syllabus_node_ids,
-            COALESCE(
-              (
-                SELECT json_agg(
-                  json_build_object(
-                    'id', sn.id,
-                    'title', sn.title,
-                    'node_type', sn.node_type,
-                    'subject_id', sub.id,
-                    'subject_name', sub.name,
-                    'syllabus_id', s.id,
-                    'syllabus_title', s.title
-                  )
-                  ORDER BY sub.name, s.title, sn.sort_order, sn.id
-                )
-                FROM practice_exam_syllabus_nodes asn
-                INNER JOIN syllabus_nodes sn ON sn.id = asn.syllabus_node_id
-                INNER JOIN syllabi s ON s.id = sn.syllabus_id
-                INNER JOIN subjects sub ON sub.id = s.subject_id
-                WHERE asn.practice_exam_id = assn.id
-              ),
-              '[]'::json
-            ) AS syllabus_nodes,
+            '[]'::json AS syllabus_node_ids,
+            '[]'::json AS syllabus_nodes,
             COUNT(DISTINCT q.id)::int AS question_count,
             COUNT(DISTINCT qf.id)::int AS attachment_count
-          FROM filtered f
-          INNER JOIN practice_exam_templates at ON at.id = f.id
+          FROM page_ids p
+          INNER JOIN practice_exam_templates at ON at.id = p.id
           LEFT JOIN exam_series es
             ON es.id = at.exam_series_id
            AND COALESCE(es.is_deleted, FALSE) = FALSE
-          INNER JOIN institution_profiles ip
+          LEFT JOIN institution_profiles ip
             ON ip.id = at.source_institution_id
            AND COALESCE(ip.is_deleted, FALSE) = FALSE
-           AND ip.is_active = TRUE
           LEFT JOIN users creator ON creator.id = at.created_by
           LEFT JOIN users updater ON updater.id = at.updated_by
           LEFT JOIN users blocker ON blocker.id = at.blocked_by
@@ -1151,7 +1098,6 @@ export async function GET(req: Request) {
             ((COALESCE(at.marketplace_requested, FALSE) OR COALESCE(es.marketplace_requested, FALSE)) AND at.is_public = FALSE AND at.blocked_by_platform = FALSE) DESC,
             at.updated_at DESC,
             at.id DESC
-          LIMIT $1 OFFSET $2
         )
         SELECT
           COALESCE((SELECT json_agg(page_rows) FROM page_rows), '[]'::json) AS data,
@@ -1184,7 +1130,7 @@ export async function GET(req: Request) {
         institutionIds,
         view,
         currentUser.id,
-        isPlatformAdmin,
+        isGovView,
         isInstitutionAdminUser(currentUser),
         scopedAcademicYearId,
       ]
@@ -1330,6 +1276,35 @@ export async function POST(req: Request) {
     const client = await db.connect();
     try {
       await client.query("BEGIN");
+      if (!isPlatformAdmin && !payload.examSeriesId) {
+        const seriesSlug = await buildSeriesSlug(payload.institutionId, payload.title);
+        const seriesRes = await client.query<{ id: number }>(
+          `
+            INSERT INTO exam_series
+              (source_institution_id, title, slug, description, from_date, to_date,
+               target_type, target_id, target_program_id, result_date, instant_result,
+               is_active, created_by, updated_by)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
+            RETURNING id
+          `,
+          [
+            payload.institutionId,
+            payload.title,
+            seriesSlug,
+            payload.description,
+            payload.examDate,
+            payload.examDate,
+            payload.targetType,
+            payload.targetId,
+            payload.targetProgramId,
+            payload.resultDate,
+            payload.instantResult,
+            payload.isActive,
+            currentUser.id,
+          ]
+        );
+        payload.examSeriesId = seriesRes.rows[0].id;
+      }
       const isPublic = isPlatformAdmin ? payload.isPublic : false;
       const marketplaceApproved = isPlatformAdmin && payload.isPublic;
       const result = await client.query<{ id: number }>(
@@ -1430,6 +1405,74 @@ export async function POST(req: Request) {
           payload.targetProgramId,
         ]
       );
+      if (payload.practiceExamTemplateId) {
+        const insertedQuestions = await client.query<{ id: number; display_order: number }>(
+          `
+            INSERT INTO practice_exam_template_questions
+              (template_id, question_text, question_type, marks, explanation, display_order)
+            SELECT $2, question_text, question_type, marks, explanation, display_order
+            FROM practice_exam_template_questions
+            WHERE template_id = $1
+            ORDER BY display_order, id
+            RETURNING id, display_order
+          `,
+          [payload.practiceExamTemplateId, templateId]
+        );
+
+        if (insertedQuestions.rows.length > 0) {
+          await client.query(
+            `
+              WITH question_map AS (
+                SELECT aq.id AS new_question_id, atq.id AS old_question_id
+                FROM practice_exam_template_questions aq
+                INNER JOIN practice_exam_template_questions atq
+                  ON atq.template_id = $1
+                 AND atq.display_order = aq.display_order
+                WHERE aq.template_id = $2
+              )
+              INSERT INTO practice_exam_template_question_options
+                (question_id, option_text, is_correct, display_order)
+              SELECT
+                question_map.new_question_id,
+                atqo.option_text,
+                atqo.is_correct,
+                atqo.display_order
+              FROM practice_exam_template_question_options atqo
+              INNER JOIN question_map
+                ON question_map.old_question_id = atqo.question_id
+              ORDER BY question_map.new_question_id, atqo.display_order, atqo.id
+            `,
+            [payload.practiceExamTemplateId, templateId]
+          );
+
+          await client.query(
+            `
+              WITH question_map AS (
+                SELECT aq.id AS new_question_id, atq.id AS old_question_id
+                FROM practice_exam_template_questions aq
+                INNER JOIN practice_exam_template_questions atq
+                  ON atq.template_id = $1
+                 AND atq.display_order = aq.display_order
+                WHERE aq.template_id = $2
+              )
+              INSERT INTO practice_exam_template_question_files
+                (question_id, file_url, sort_order)
+              SELECT
+                question_map.new_question_id,
+                atqf.file_url,
+                COALESCE(atqf.sort_order, 0)
+              FROM practice_exam_template_question_files atqf
+              INNER JOIN question_map
+                ON question_map.old_question_id = atqf.question_id
+              ORDER BY question_map.new_question_id, atqf.sort_order, atqf.id
+            `,
+            [payload.practiceExamTemplateId, templateId]
+          );
+        }
+
+        await replaceExamQuestionsFromTemplate(client, exam.rows[0].id, templateId);
+      }
+
       await replaceExamSyllabusNodes(
         client,
         exam.rows[0].id,

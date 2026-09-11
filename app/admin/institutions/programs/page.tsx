@@ -483,26 +483,25 @@ export default function ProgramsAdminPage() {
 
     // ---------- Master Courses Catalog & Adoption State ----------
     const [selectCoursesModalOpen, setSelectCoursesModalOpen] = useState(false);
-    const [masterCatalogList, setMasterCatalogList] = useState<any[]>([]);
+    const [masterCatalogRawList, setMasterCatalogRawList] = useState<any[]>([]);
     const [masterCatalogLoading, setMasterCatalogLoading] = useState(false);
     const [masterCatalogSearch, setMasterCatalogSearch] = useState("");
     const [selectedMasterCourseIds, setSelectedMasterCourseIds] = useState<string[]>([]);
     const [adoptingCourses, setAdoptingCourses] = useState(false);
     const [catalogCategoryFilter, setCatalogCategoryFilter] = useState("all");
 
-    const fetchMasterCatalog = useCallback(async (searchQuery = "") => {
+    const fetchMasterCatalog = useCallback(async () => {
         setMasterCatalogLoading(true);
         try {
             const effInstId = getEffectiveInstitutionId();
             const params = new URLSearchParams();
             if (effInstId) params.set("institutionId", String(effInstId));
-            if (searchQuery.trim()) params.set("search", searchQuery.trim());
             const res = await fetch(`/api/admin/institutions/programs/master-catalog?${params.toString()}`, {
                 headers: authHeader,
             });
             const json = await res.json();
             if (res.ok) {
-                setMasterCatalogList(json.data || []);
+                setMasterCatalogRawList(json.data || []);
             } else {
                 toast.error(json.error || "Failed to load master courses catalog");
             }
@@ -516,9 +515,66 @@ export default function ProgramsAdminPage() {
     const openSelectCoursesModal = () => {
         setSelectedMasterCourseIds([]);
         setCatalogCategoryFilter("all");
+        setMasterCatalogSearch("");
         setSelectCoursesModalOpen(true);
-        fetchMasterCatalog(masterCatalogSearch);
+        if (masterCatalogRawList.length === 0) {
+            fetchMasterCatalog();
+        }
     };
+
+    const filteredMasterCatalog = useMemo(() => {
+        let list = masterCatalogRawList;
+        const q = masterCatalogSearch.toLowerCase().trim();
+        const cleanQ = q.replace(/\./g, "").trim();
+
+        if (catalogCategoryFilter !== "all") {
+            list = list.filter((c) => {
+                const cat = (c.category_name || "").toLowerCase();
+                const prog = (c.program_type_name || "").toLowerCase();
+                const title = (c.title || "").toLowerCase();
+                if (catalogCategoryFilter === "degree") {
+                    return prog.includes("degree") || cat.includes("higher education") || cat.includes("commerce") || cat.includes("engineering") || cat.includes("pure sciences") || cat.includes("humanities");
+                }
+                if (catalogCategoryFilter === "school") {
+                    return cat.includes("school") || cat.includes("secondary") || title.includes("class");
+                }
+                if (catalogCategoryFilter === "competitive") {
+                    return cat.includes("competitive") || cat.includes("entrance") || cat.includes("government") || title.includes("neet") || title.includes("jee") || title.includes("upsc");
+                }
+                if (catalogCategoryFilter === "skills") {
+                    return cat.includes("skill") || cat.includes("professional") || title.includes("bootcamp") || title.includes("full stack") || title.includes("python");
+                }
+                if (catalogCategoryFilter === "diploma") {
+                    return prog.includes("diploma") || prog.includes("certificate") || title.includes("adca") || title.includes("dca") || title.includes("diploma");
+                }
+                return true;
+            });
+        }
+
+        if (q) {
+            list = list.filter((c) => {
+                const t = (c.title || "").toLowerCase();
+                const cleanT = t.replace(/\./g, "");
+                const code = (c.code || "").toLowerCase();
+                const cleanCode = code.replace(/\./g, "");
+                const cat = (c.category_name || "").toLowerCase();
+                const progType = (c.program_type_name || "").toLowerCase();
+                const subs = Array.isArray(c.subjects) ? c.subjects.map((s: string) => String(s).toLowerCase()) : [];
+
+                return (
+                    t.includes(q) ||
+                    cleanT.includes(cleanQ) ||
+                    code.includes(q) ||
+                    cleanCode.includes(cleanQ) ||
+                    cat.includes(q) ||
+                    progType.includes(q) ||
+                    subs.some((s) => s.includes(q) || s.replace(/\./g, "").includes(cleanQ))
+                );
+            });
+        }
+
+        return list;
+    }, [masterCatalogRawList, masterCatalogSearch, catalogCategoryFilter]);
 
     const handleToggleSelectCourse = (courseId: string) => {
         setSelectedMasterCourseIds((prev) =>
@@ -533,7 +589,7 @@ export default function ProgramsAdminPage() {
             return;
         }
 
-        const coursesToAdopt = directCourses || masterCatalogList.filter((c) => selectedMasterCourseIds.includes(c.id));
+        const coursesToAdopt = directCourses || masterCatalogRawList.filter((c) => selectedMasterCourseIds.includes(c.id));
         if (coursesToAdopt.length === 0) {
             toast.error("Please select at least one course / program");
             return;
@@ -667,7 +723,7 @@ export default function ProgramsAdminPage() {
     });
     const [loadingBatches, setLoadingBatches] = useState(false);
     const [savingBatch, setSavingBatch] = useState(false);
-    const [batchActiveTab, setBatchActiveTab] = useState<"details" | "fee" | "list">("details");
+    const [batchActiveTab, setBatchActiveTab] = useState<"details" | "fee" | "timing">("details");
 
     const initialBatchFormData = {
         batchName: "",
@@ -675,6 +731,12 @@ export default function ProgramsAdminPage() {
         newCustomSection: "",
         seatsAvailable: "",
         teachingMethod: "Classroom",
+        languageId: "",
+        languageName: "",
+        startTime: "09:00",
+        endTime: "14:30",
+        classFrequency: "Mon - Fri (Daily)",
+        academicTerm: "Universal / Full Course",
         attendanceSetupId: "",
         attendanceSetupTitle: "Daily Attendance (Full Day)",
     };
@@ -781,23 +843,100 @@ export default function ProgramsAdminPage() {
         setBatchFeeOptions(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
     };
 
+    const [selectedBatchKey, setSelectedBatchKey] = useState<string>("new");
+
     const handleClearBatchForm = () => {
         setBatchForm(initialBatchFormData);
         setBatchFeeOptions([createDefaultBatchFeeOption("Course Tuition Fee", "one-time", batchMeta.programInfo)]);
     };
 
+    const handleSelectBatch = (batch: any) => {
+        if (!batch) {
+            setSelectedBatchKey("new");
+            handleClearBatchForm();
+            return;
+        }
+        const bKey = batch.batch_name || batch.name || `sec_${batch.section_id || batch.id}`;
+        setSelectedBatchKey(bKey);
+        const secList = batch.sections && batch.sections.length > 0
+            ? batch.sections
+            : batch.section_name ? [batch.section_name] : ["Section A"];
+
+        setBatchForm({
+            batchName: batch.batch_name || batch.name || "",
+            selectedSections: secList,
+            newCustomSection: "",
+            seatsAvailable: batch.seats_available != null ? String(batch.seats_available) : "",
+            teachingMethod: batch.teaching_method || "Classroom",
+            languageId: batch.language_id ? String(batch.language_id) : "",
+            languageName: batch.language_name || batch.language_title || "",
+            startTime: batch.start_time || "09:00",
+            endTime: batch.end_time || "14:30",
+            classFrequency: batch.class_frequency || "Mon - Fri (Daily)",
+            academicTerm: batch.academic_term || "Universal / Full Course",
+            attendanceSetupId: batch.attendance_setup_id ? String(batch.attendance_setup_id) : "",
+            attendanceSetupTitle: batch.attendance_setup_title || "Daily Attendance (Full Day)",
+        });
+
+        if (batch.fee_options && Array.isArray(batch.fee_options) && batch.fee_options.length > 0) {
+            setBatchFeeOptions(batch.fee_options);
+        } else if (Number(batch.price) > 0 || Number(batch.fee_amount) > 0) {
+            setBatchFeeOptions([
+                {
+                    id: `batch-fee-${batch.id || Date.now()}`,
+                    fee_type: "Course Tuition Fee",
+                    custom_title: "",
+                    unit: "one-time",
+                    amount: String(batch.price || batch.fee_amount || "25000"),
+                    installments_count: String(batch.installments_count || 1),
+                    has_discount: Number(batch.discount_percent || 0) > 0,
+                    discount_type: "percentage",
+                    discount_value: String(batch.discount_percent || ""),
+                }
+            ]);
+        }
+    };
+
     const fetchProgramBatches = useCallback(async (programId: number) => {
         setLoadingBatches(true);
         try {
-            const res = await fetch(`/api/admin/institutions/programs/${programId}/batches`, {
-                headers: authHeader,
-            });
-            const json = await res.json();
-            if (res.ok) {
-                setProgramBatches(json.data || []);
+            const [batchRes, setupsRes] = await Promise.all([
+                fetch(`/api/admin/institutions/programs/${programId}/batches`, { headers: authHeader }),
+                fetch(`/api/admin/master-data/attendance-setup?target_type=STUDENTS&limit=100`, { headers: authHeader }).catch(() => null)
+            ]);
+            let json: any = {};
+            try {
+                json = await batchRes.json();
+            } catch {
+                json = {};
+            }
+
+            if (batchRes.ok) {
+                const batchList = json.data || [];
+                setProgramBatches(batchList);
+
+                let combinedSetups: any[] = json.meta?.attendanceSetups || [];
+                if (setupsRes && setupsRes.ok) {
+                    try {
+                        const setupsJson = await setupsRes.json();
+                        if (Array.isArray(setupsJson.data) && setupsJson.data.length > 0) {
+                            const existingIds = new Set(combinedSetups.map((s: any) => String(s.id)));
+                            setupsJson.data.forEach((s: any) => {
+                                if (!existingIds.has(String(s.id))) {
+                                    combinedSetups.push(s);
+                                    existingIds.add(String(s.id));
+                                }
+                            });
+                        }
+                    } catch {}
+                }
+
                 if (json.meta) {
-                    setBatchMeta(json.meta);
-                    const setups = json.meta.attendanceSetups || [];
+                    setBatchMeta({
+                        ...json.meta,
+                        attendanceSetups: combinedSetups,
+                    });
+                    const setups = combinedSetups;
                     const defaultSetup = setups.find((s: any) => s.is_default) || setups[0];
                     if (defaultSetup) {
                         setBatchForm((prev) => ({
@@ -807,11 +946,17 @@ export default function ProgramsAdminPage() {
                         }));
                     }
                 }
+                if (batchList.length > 0) {
+                    handleSelectBatch(batchList[0]);
+                } else {
+                    handleSelectBatch(null);
+                }
             } else {
-                toast.error(json.error || "Failed to load batches");
+                toast.error(json.error || `Failed to load batches (status ${batchRes.status})`);
             }
-        } catch {
-            toast.error("Network error while loading batches");
+        } catch (err: any) {
+            console.error("fetchProgramBatches error:", err);
+            toast.error(err?.message || "Failed to load batches");
         } finally {
             setLoadingBatches(false);
         }
@@ -826,6 +971,7 @@ export default function ProgramsAdminPage() {
     const openBatchModal = (program: InstitutionProgram) => {
         setBatchTargetProgram(program);
         setBatchForm(initialBatchFormData);
+        setSelectedBatchKey("new");
         const progInfo = {
             duration_value: program.duration_value,
             duration_unit: program.duration_unit,
@@ -867,6 +1013,12 @@ export default function ProgramsAdminPage() {
                     attendanceSetupTitle: batchForm.attendanceSetupTitle || undefined,
                     seatsAvailable: batchForm.seatsAvailable ? Number(batchForm.seatsAvailable) : undefined,
                     teachingMethod: batchForm.teachingMethod.trim(),
+                    startTime: batchForm.startTime || undefined,
+                    endTime: batchForm.endTime || undefined,
+                    classFrequency: batchForm.classFrequency || undefined,
+                    academicTerm: batchForm.academicTerm || undefined,
+                    languageId: batchForm.languageId ? Number(batchForm.languageId) : undefined,
+                    languageName: batchForm.languageName || undefined,
                     price: computedPrice,
                     discountPercent: computedDiscount,
                     installmentsCount: computedInstallments,
@@ -875,33 +1027,40 @@ export default function ProgramsAdminPage() {
             });
             const json = await res.json();
             if (res.ok) {
-                toast.success(json.message || "Batch created successfully");
+                toast.success(json.message || "Batch saved successfully");
                 clearBatchDraft();
-                handleClearBatchForm();
                 if (batchTargetProgram) {
                     await fetchProgramBatches(batchTargetProgram.id);
                 }
-                setBatchActiveTab("list");
+                await fetchItems();
+                setBatchModalOpen(false);
             } else {
-                toast.error(json.error || "Failed to create batch");
+                toast.error(json.error || "Failed to save batch");
             }
         } catch {
-            toast.error("Failed to add batch");
+            toast.error("Failed to save batch");
         } finally {
             setSavingBatch(false);
         }
     };
 
-    const handleRemoveBatch = async (sectionId: number) => {
+    const handleRemoveBatch = async (batchOrSectionId: any) => {
         if (!batchTargetProgram) return;
         try {
-            const res = await fetch(`/api/admin/institutions/programs/${batchTargetProgram.id}/batches?sectionId=${sectionId}`, {
+            const batchName = typeof batchOrSectionId === "object" ? batchOrSectionId?.batch_name : null;
+            const sectionId = typeof batchOrSectionId === "object" ? (batchOrSectionId?.section_id || batchOrSectionId?.id) : batchOrSectionId;
+            const query = batchName
+                ? `batchName=${encodeURIComponent(batchName)}`
+                : `sectionId=${sectionId}`;
+
+            const res = await fetch(`/api/admin/institutions/programs/${batchTargetProgram.id}/batches?${query}`, {
                 method: "DELETE",
                 headers: authHeader,
             });
             if (res.ok) {
                 toast.success("Batch removed from program");
                 await fetchProgramBatches(batchTargetProgram.id);
+                await fetchItems();
             } else {
                 const json = await res.json();
                 toast.error(json.error || "Failed to remove batch");
@@ -919,6 +1078,8 @@ export default function ProgramsAdminPage() {
     const [syllabusSubjectIds, setSyllabusSubjectIds] = useState<string[]>([]);
     const [loadingSyllabusDetail, setLoadingSyllabusDetail] = useState(false);
 
+    const [savingStandaloneSyllabus, setSavingStandaloneSyllabus] = useState(false);
+
     const openSyllabusModal = async (program: InstitutionProgram) => {
         setSyllabusTargetProgram(program);
         setSyllabusModalOpen(true);
@@ -929,22 +1090,66 @@ export default function ProgramsAdminPage() {
                 headers: authHeader,
             });
             const json = await res.json();
+            let subjectOptionsList: { id: number; value: string; label: string }[] = [];
             if (res.ok && json.data) {
                 const full = json.data;
                 const subjectIds: number[] = full.subject_ids || [];
                 const subjectNames: string[] = full.subject_names || [];
-                const options = subjectIds.map((id, idx) => ({
+                subjectOptionsList = subjectIds.map((id, idx) => ({
                     id,
                     value: String(id),
                     label: subjectNames[idx] || `Subject #${id}`,
                 }));
-                setSyllabusSubjectOptions(options);
+                setSyllabusSubjectOptions(subjectOptionsList);
                 setSyllabusSubjectIds(subjectIds.map(String));
+            }
+
+            // Directly fetch master syllabus for this program from database
+            const sylRes = await fetch(`/api/admin/institutions/programs/${program.id}/syllabus`, {
+                headers: authHeader,
+            });
+            if (sylRes.ok) {
+                const sylJson = await sylRes.json();
+                if (Array.isArray(sylJson.data) && sylJson.data.length > 0) {
+                    setStandaloneSyllabusNodes(sylJson.data);
+                }
             }
         } catch {
             toast.error("Failed to load program subjects for syllabus");
         } finally {
             setLoadingSyllabusDetail(false);
+        }
+    };
+
+    const handleSaveStandaloneSyllabus = async () => {
+        if (!syllabusTargetProgram) return;
+        setSavingStandaloneSyllabus(true);
+        try {
+            for (const subj of syllabusSubjectOptions) {
+                const subjNodes = standaloneSyllabusNodes.filter((n) => {
+                    const nId = String(n.subject_id || "");
+                    const nName = (n.subject_name || "").toLowerCase().trim();
+                    return nId === String(subj.id) || nId === String(subj.value) || nName === subj.label.toLowerCase().trim();
+                });
+
+                if (subjNodes.length > 0) {
+                    await fetch(`/api/admin/institutions/programs/${syllabusTargetProgram.id}/syllabus`, {
+                        method: "POST",
+                        headers: { ...authHeader, "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            subjectId: subj.id || subj.value,
+                            subjectName: subj.label,
+                            syllabusNodes: subjNodes,
+                        }),
+                    });
+                }
+            }
+            toast.success("Curriculum and syllabus saved successfully!");
+            setSyllabusModalOpen(false);
+        } catch {
+            toast.error("Failed to save syllabus");
+        } finally {
+            setSavingStandaloneSyllabus(false);
         }
     };
 
@@ -995,12 +1200,12 @@ export default function ProgramsAdminPage() {
 
     useEffect(() => {
         if (!accessToken || !useSidebarInstitution || !activeInstitutionId) {
-            const timeout = window.setTimeout(() => setActiveInstitutionProfile(null), 0);
-            return () => window.clearTimeout(timeout);
+            setActiveInstitutionProfile(null);
+            return;
         }
 
         let cancelled = false;
-        const timeout = window.setTimeout(async () => {
+        (async () => {
             try {
                 const params = new URLSearchParams({
                     institutionId: String(activeInstitutionId),
@@ -1016,18 +1221,16 @@ export default function ProgramsAdminPage() {
             } catch {
                 if (!cancelled) setActiveInstitutionProfile(null);
             }
-        }, 0);
+        })();
 
         return () => {
             cancelled = true;
-            window.clearTimeout(timeout);
         };
     }, [accessToken, activeInstitutionId, useSidebarInstitution]);
 
     useEffect(() => {
         if (!dialogOpen || editing) return;
-        const timeout = window.setTimeout(applyActiveInstitutionToForm, 0);
-        return () => window.clearTimeout(timeout);
+        applyActiveInstitutionToForm();
     }, [applyActiveInstitutionToForm, dialogOpen, editing]);
 
     useEffect(() => {
@@ -2065,18 +2268,32 @@ export default function ProgramsAdminPage() {
             cell: ({ row }) => <div className="font-medium text-foreground">{row.getValue("title")}</div>,
         },
         {
-            accessorKey: "program_type_name",
-            header: "Program Type",
-            cell: ({ row }) => <div className="text-sm text-muted-foreground truncate">{row.original.program_type_name}</div>,
-        },
-        {
-            accessorKey: "slug",
-            header: "Institution",
-            cell: ({ row }) => (
-                <div className="text-sm text-muted-foreground truncate max-w-37.5">
-                    {row.original.institution_name || "-"}
-                </div>
-            ),
+            id: "batches",
+            header: "Batches",
+            cell: ({ row }) => {
+                const item = row.original;
+                const batchCount = Number(item.batches_count ?? (item as any).batchesCount ?? 0);
+                return (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openBatchModal(item)}
+                        className={`h-7 px-3 text-xs font-bold gap-1.5 transition-all cursor-pointer rounded-lg shadow-2xs ${
+                            batchCount > 0
+                                ? "bg-primary/10 text-primary border-primary/30 hover:bg-primary/20 hover:border-primary"
+                                : "border-dashed text-muted-foreground hover:text-primary hover:border-primary/50"
+                        }`}
+                    >
+                        <Users className="h-3.5 w-3.5" />
+                        <span>
+                            {batchCount > 0
+                                ? `${batchCount} Batch${batchCount !== 1 ? "es" : ""}`
+                                : "0 Batches (+ Add)"}
+                        </span>
+                    </Button>
+                );
+            },
         },
         {
             id: "status",
@@ -2128,13 +2345,12 @@ export default function ProgramsAdminPage() {
                                     setViewOpen(true);
                                     setViewDetailLoading(true);
                                     try {
-                                        const [detailRes, mediaRes] = await Promise.all([
-                                            fetch(`/api/admin/institutions/programs/${item.id}`, { headers: authHeader }),
-                                            fetch(`/api/admin/institutions/program-media?programId=${item.id}`, { headers: authHeader }),
-                                        ]);
+                                        const detailRes = await fetch(`/api/admin/institutions/programs/${item.id}`, { headers: authHeader });
                                         const detailJson = await detailRes.json();
-                                        const mediaJson = await mediaRes.json();
                                         setViewDetail(detailJson.data || null);
+
+                                        const mediaRes = await fetch(`/api/admin/institutions/program-media?programId=${item.id}`, { headers: authHeader });
+                                        const mediaJson = await mediaRes.json();
                                         setViewMediaList(mediaJson.data || []);
                                     } catch {
                                         // keep basic item data
@@ -2778,6 +2994,7 @@ export default function ProgramsAdminPage() {
                         {/* -------- STEP 1: SYLLABUS -------- */}
                         {activeStep === 1 && (
                             <ProgramSyllabusManager
+                                programId={editing?.id || undefined}
                                 subjectIds={selectedSubjectIds}
                                 subjectOptions={selectedSubjectOptions}
                                 categoryName={categoryLabel || title}
@@ -3808,29 +4025,52 @@ export default function ProgramsAdminPage() {
                     </DialogHeader>
 
                     {/* Search & Filter Bar */}
-                    <div className="py-2 space-y-3">
+                    <div className="py-2 space-y-2.5">
                         <div className="flex items-center gap-2">
                             <div className="relative flex-1">
                                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                                 <Input
                                     value={masterCatalogSearch}
-                                    onChange={(e) => {
-                                        setMasterCatalogSearch(e.target.value);
-                                        fetchMasterCatalog(e.target.value);
-                                    }}
-                                    placeholder="Search by course name, code, stream, or subjects..."
+                                    onChange={(e) => setMasterCatalogSearch(e.target.value)}
+                                    placeholder="Search by course name, code, stream, or subjects (e.g. B.Sc, NEET, Computer Science)..."
                                     className="pl-9 text-xs h-9"
                                 />
                             </div>
                             <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => fetchMasterCatalog(masterCatalogSearch)}
+                                onClick={() => fetchMasterCatalog()}
                                 disabled={masterCatalogLoading}
                                 className="h-9 text-xs gap-1"
                             >
                                 <RefreshCw className={cn("w-3.5 h-3.5", masterCatalogLoading && "animate-spin")} /> Refresh
                             </Button>
+                        </div>
+
+                        {/* Category Filter Chips */}
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                            {[
+                                { key: "all", label: "All Courses" },
+                                { key: "degree", label: "Degrees & Higher Ed" },
+                                { key: "school", label: "School (Class 6-12)" },
+                                { key: "competitive", label: "Competitive Exams" },
+                                { key: "skills", label: "IT & Skills" },
+                                { key: "diploma", label: "Diplomas & Certs" },
+                            ].map((tab) => (
+                                <button
+                                    key={tab.key}
+                                    type="button"
+                                    onClick={() => setCatalogCategoryFilter(tab.key)}
+                                    className={cn(
+                                        "px-2.5 py-1 rounded-full font-medium text-[11px] whitespace-nowrap transition-all border",
+                                        catalogCategoryFilter === tab.key
+                                            ? "bg-primary text-primary-foreground border-primary shadow-2xs font-semibold"
+                                            : "bg-muted/40 text-muted-foreground hover:bg-muted border-border/50"
+                                    )}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
@@ -3841,7 +4081,7 @@ export default function ProgramsAdminPage() {
                                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
                                 <span className="text-xs font-semibold">Loading platform master catalog...</span>
                             </div>
-                        ) : masterCatalogList.length === 0 ? (
+                        ) : filteredMasterCatalog.length === 0 ? (
                             <div className="text-center py-16 border rounded-2xl bg-muted/10 space-y-2">
                                 <BookOpen className="w-10 h-10 text-muted-foreground/40 mx-auto" />
                                 <h4 className="text-sm font-bold">No Courses Found</h4>
@@ -3849,7 +4089,7 @@ export default function ProgramsAdminPage() {
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                                {masterCatalogList.map((course) => {
+                                {filteredMasterCatalog.map((course) => {
                                     const isSelected = selectedMasterCourseIds.includes(course.id);
                                     const isAdded = course.is_already_added;
 
@@ -4018,43 +4258,106 @@ export default function ProgramsAdminPage() {
                                     </DialogDescription>
                                 </div>
                             </div>
-                            <Badge variant="outline" className="hidden sm:inline-flex text-xs px-2.5 py-1 bg-primary/5 text-primary border-primary/20">
-                                {programBatches.length} {programBatches.length === 1 ? "Batch" : "Batches"} Configured
-                            </Badge>
                         </div>
                     </DialogHeader>
 
+                    {/* Created Batches Quick Selector Pill Bar */}
+                    <div className="flex items-center gap-2 overflow-x-auto py-2 border-b border-border/60 scrollbar-thin">
+                        <span className="text-[11px] font-extrabold uppercase text-muted-foreground shrink-0 flex items-center gap-1.5 mr-1">
+                            <Users className="h-3.5 w-3.5 text-primary" /> Created Batches ({programBatches.length}):
+                        </span>
+
+                        {loadingBatches ? (
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground py-0.5">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                <span>Loading created batches...</span>
+                            </div>
+                        ) : (
+                            <>
+                                {programBatches.map((batch) => {
+                                    const bKey = batch.batch_name || batch.name || `sec_${batch.section_id || batch.id}`;
+                                    const isSelected = selectedBatchKey === bKey;
+                                    const secCount = (batch.sections || []).length || 1;
+                                    return (
+                                        <button
+                                            key={bKey}
+                                            type="button"
+                                            onClick={() => handleSelectBatch(batch)}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
+                                                isSelected
+                                                    ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                                                    : "bg-background hover:bg-muted/70 text-foreground border-border/80 hover:border-primary/40"
+                                            }`}
+                                        >
+                                            <span>{batch.batch_name || batch.name}</span>
+                                            <Badge
+                                                variant="secondary"
+                                                className={`text-[10px] px-1.5 py-0 font-semibold ${
+                                                    isSelected ? "bg-primary-foreground/20 text-primary-foreground border-transparent" : "bg-muted text-muted-foreground"
+                                                }`}
+                                            >
+                                                {secCount} Sec
+                                            </Badge>
+                                        </button>
+                                    );
+                                })}
+
+                                <button
+                                    type="button"
+                                    onClick={() => handleSelectBatch(null)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                                        selectedBatchKey === "new"
+                                            ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                                            : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20"
+                                    }`}
+                                >
+                                    <Plus className="h-3.5 w-3.5" />
+                                    <span>+ Add New Batch</span>
+                                </button>
+                            </>
+                        )}
+                    </div>
+
                     {/* Tabs Navigation */}
-                    <Tabs value={batchActiveTab} onValueChange={(v) => setBatchActiveTab(v as "details" | "fee" | "list")} className="flex flex-col flex-1 overflow-hidden pt-2">
-                        <TabsList className="grid grid-cols-3 max-w-md shrink-0 mb-3 bg-muted/60">
-                            <TabsTrigger value="details" className="text-xs font-semibold gap-1.5">
+                    <Tabs value={batchActiveTab} onValueChange={(v) => setBatchActiveTab(v as "details" | "fee" | "timing")} className="flex flex-col flex-1 overflow-hidden pt-2">
+                        <TabsList className="grid grid-cols-3 max-w-lg shrink-0 mb-3 bg-muted/60 p-1 rounded-xl">
+                            <TabsTrigger value="details" className="text-xs font-semibold gap-1.5 data-[state=active]:font-bold">
                                 <Users className="w-3.5 h-3.5" /> 1. Batch Details
                             </TabsTrigger>
-                            <TabsTrigger value="fee" className="text-xs font-semibold gap-1.5">
-                                <Wallet className="w-3.5 h-3.5" /> 2. Fee Structure ({batchFeeOptions.length})
+                            <TabsTrigger value="fee" className="text-xs font-semibold gap-1.5 data-[state=active]:font-bold">
+                                <Wallet className="w-3.5 h-3.5" /> 2. Fee Structure
                             </TabsTrigger>
-                            <TabsTrigger value="list" className="text-xs font-semibold gap-1.5">
-                                <Layers className="w-3.5 h-3.5" /> Active Batches ({programBatches.length})
+                            <TabsTrigger value="timing" className="text-xs font-semibold gap-1.5 data-[state=active]:font-bold">
+                                <Clock className="w-3.5 h-3.5" /> 3. Timing & Schedule
                             </TabsTrigger>
                         </TabsList>
 
                         {/* TAB 1: BATCH BASIC DETAILS */}
                         <TabsContent value="details" className="flex-1 overflow-y-auto pr-1 space-y-4 data-[state=active]:flex data-[state=active]:flex-col">
-                            <form onSubmit={handleAddBatch} className="space-y-4">
+                            <div className="space-y-4">
                                 <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.02] dark:bg-emerald-500/[0.04] p-4 space-y-3.5">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-sm">
                                             <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                                            <h4>Batch Basic Details</h4>
+                                            <h4>{selectedBatchKey !== "new" ? `Editing Batch: ${batchForm.batchName || "Selected Batch"}` : "Batch Basic Details"}</h4>
                                         </div>
-                                        {batchMeta.programInfo?.duration_value && (
-                                            <Badge variant="outline" className="text-[10px] font-semibold bg-primary/5 text-primary border-primary/20">
-                                                Duration: {batchMeta.programInfo.duration_value} {batchMeta.programInfo.duration_unit || "Years"}
-                                            </Badge>
+                                        {selectedBatchKey !== "new" && (
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => {
+                                                    const currentBatch = programBatches.find(b => (b.batch_name || b.name || `sec_${b.section_id || b.id}`) === selectedBatchKey);
+                                                    if (currentBatch) handleRemoveBatch(currentBatch);
+                                                }}
+                                                className="h-7 text-xs text-destructive hover:bg-destructive/10 px-2 font-semibold"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete Batch
+                                            </Button>
                                         )}
                                     </div>
 
-                                    {/* 1. Batch Name & Multi-Section Selection */}
+                                    {/* 1. Batch Name & Seats */}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         {/* Batch Name */}
                                         <div className="space-y-1.5">
@@ -4197,8 +4500,30 @@ export default function ProgramsAdminPage() {
                                         )}
                                     </div>
 
-                                    {/* 3. Teaching Method & Attendance Setup */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                    {/* 3. Academic Term, Teaching Method & Instruction Language */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                                        {/* Academic Term */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-foreground">
+                                                Academic Term / Year
+                                            </Label>
+                                            <Select
+                                                value={batchForm.academicTerm}
+                                                onValueChange={(val) => setBatchForm(prev => ({ ...prev, academicTerm: val }))}
+                                            >
+                                                <SelectTrigger className="text-xs h-9 bg-background font-medium">
+                                                    <SelectValue placeholder="Select Term / Year" />
+                                                </SelectTrigger>
+                                                <SelectContent className="max-h-60">
+                                                    {derivedAcademicTerms.map((t) => (
+                                                        <SelectItem key={t.key} value={t.label} className="text-xs">
+                                                            {t.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
                                         {/* Teaching Method */}
                                         <div className="space-y-1.5">
                                             <Label className="text-xs font-semibold text-foreground">
@@ -4220,59 +4545,46 @@ export default function ProgramsAdminPage() {
                                             </Select>
                                         </div>
 
-                                        {/* Attendance Setup Dropdown */}
+                                        {/* Instruction Language */}
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                                                <span className="flex items-center gap-1">
-                                                    <Clock className="h-3.5 w-3.5 text-primary" />
-                                                    Attendance Setup
-                                                </span>
+                                            <Label className="text-xs font-semibold text-foreground">
+                                                Instruction Language
                                             </Label>
                                             <Select
-                                                value={batchForm.attendanceSetupId || batchForm.attendanceSetupTitle}
+                                                value={batchForm.languageId || batchForm.languageName}
                                                 onValueChange={(val) => {
-                                                    const setups = batchMeta.attendanceSetups || [];
-                                                    const matched = setups.find((s: any) => String(s.id) === val || s.title === val);
+                                                    const langs = batchMeta.languages || [];
+                                                    const matched = langs.find((l: any) => String(l.id) === val || l.name === val);
                                                     if (matched) {
-                                                        setBatchForm((prev) => ({
+                                                        setBatchForm(prev => ({
                                                             ...prev,
-                                                            attendanceSetupId: String(matched.id),
-                                                            attendanceSetupTitle: matched.title,
+                                                            languageId: String(matched.id),
+                                                            languageName: matched.name,
                                                         }));
                                                     } else {
-                                                        setBatchForm((prev) => ({
+                                                        setBatchForm(prev => ({
                                                             ...prev,
-                                                            attendanceSetupId: "",
-                                                            attendanceSetupTitle: val,
+                                                            languageId: "",
+                                                            languageName: val,
                                                         }));
                                                     }
                                                 }}
                                             >
-                                                <SelectTrigger className="text-xs h-9 bg-background font-medium">
-                                                    <SelectValue placeholder="Select Attendance Setup" />
+                                                <SelectTrigger className="text-xs h-9 bg-background">
+                                                    <SelectValue placeholder="Select Language" />
                                                 </SelectTrigger>
                                                 <SelectContent className="max-h-60">
-                                                    {(batchMeta.attendanceSetups || []).length > 0 ? (
-                                                        batchMeta.attendanceSetups.map((s: any) => (
-                                                            <SelectItem key={s.id} value={String(s.id)} className="text-xs">
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="font-semibold text-foreground">{s.title}</span>
-                                                                    <span className="text-[10px] text-muted-foreground">
-                                                                        ({s.attendance_mode === "PERIOD_WISE" ? "Period-Wise" : s.attendance_mode === "BIOMETRIC" ? "Biometric" : "Full Day"}
-                                                                        {s.start_time ? ` • ${s.start_time} - ${s.end_time}` : ""})
-                                                                    </span>
-                                                                    {s.is_default && (
-                                                                        <span className="text-[9px] px-1 py-0.2 rounded bg-primary/10 text-primary font-bold">Default</span>
-                                                                    )}
-                                                                </div>
+                                                    {(batchMeta.languages || []).length > 0 ? (
+                                                        batchMeta.languages.map((l: any) => (
+                                                            <SelectItem key={l.id} value={String(l.id)} className="text-xs">
+                                                                {l.name}
                                                             </SelectItem>
                                                         ))
                                                     ) : (
                                                         <>
-                                                            <SelectItem value="Daily Attendance (Full Day)">Daily Attendance (Full Day)</SelectItem>
-                                                            <SelectItem value="Period-Wise Lecture Attendance">Period-Wise Lecture Attendance</SelectItem>
-                                                            <SelectItem value="Regular Academic Shift (08:00 - 14:30)">Regular Academic Shift (08:00 - 14:30)</SelectItem>
-                                                            <SelectItem value="Biometric Attendance (In / Out)">Biometric Attendance (In / Out)</SelectItem>
+                                                            <SelectItem value="English">English</SelectItem>
+                                                            <SelectItem value="Hindi">Hindi</SelectItem>
+                                                            <SelectItem value="Bilingual">Bilingual (English + Hindi)</SelectItem>
                                                         </>
                                                     )}
                                                 </SelectContent>
@@ -4302,23 +4614,14 @@ export default function ProgramsAdminPage() {
                                     <div className="flex items-center gap-2">
                                         <Button
                                             type="button"
-                                            variant="secondary"
                                             onClick={() => setBatchActiveTab("fee")}
-                                            className="h-9 px-4 text-xs font-bold gap-1.5"
-                                        >
-                                            Configure Fee Structure <ArrowRight className="w-3.5 h-3.5" />
-                                        </Button>
-                                        <Button
-                                            type="submit"
-                                            disabled={savingBatch || !batchForm.batchName.trim() || batchForm.selectedSections.length === 0}
                                             className="h-9 px-5 text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
                                         >
-                                            {savingBatch ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                                            Save Batch ({batchForm.selectedSections.length} Section{batchForm.selectedSections.length > 1 ? "s" : ""})
+                                            Next: Fee Structure <ArrowRight className="w-3.5 h-3.5" />
                                         </Button>
                                     </div>
                                 </div>
-                            </form>
+                            </div>
                         </TabsContent>
 
                         {/* TAB 2: FEE STRUCTURE / PAYMENT PLANS */}
@@ -4466,6 +4769,7 @@ export default function ProgramsAdminPage() {
                                                 "quarter": "Quarterly Installment",
                                                 "half-year": "Half-Yearly Installment",
                                                 "year": "Yearly Installment",
+                                                "semester": "Semester Installment",
                                                 "week": "Weekly Installment",
                                             };
 
@@ -4634,7 +4938,7 @@ export default function ProgramsAdminPage() {
                                         onClick={() => setBatchActiveTab("details")}
                                         className="h-9 px-4 text-xs font-semibold gap-1.5"
                                     >
-                                        <ArrowLeft className="w-3.5 h-3.5" /> Back to Batch Details
+                                        <ArrowLeft className="w-3.5 h-3.5" /> Back: Batch Details
                                     </Button>
                                     <ProgressiveSaveIndicator status={batchSaveStatus} />
                                 </div>
@@ -4654,153 +4958,222 @@ export default function ProgramsAdminPage() {
                                     </Button>
                                     <Button
                                         type="button"
-                                        onClick={handleAddBatch}
-                                        disabled={savingBatch || !batchForm.batchName.trim()}
+                                        onClick={() => setBatchActiveTab("timing")}
                                         className="h-9 px-5 text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
                                     >
-                                        {savingBatch ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                                        Save Batch
+                                        Next: Timing & Schedule <ArrowRight className="w-3.5 h-3.5" />
                                     </Button>
                                 </div>
                             </div>
                         </TabsContent>
 
-                        {/* TAB 3: ACTIVE BATCHES LIST */}
-                        <TabsContent value="list" className="flex-1 overflow-y-auto pr-1 space-y-3 data-[state=active]:flex data-[state=active]:flex-col">
-                            {loadingBatches ? (
-                                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground text-xs space-y-2">
-                                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                                    <span>Loading program batches...</span>
-                                </div>
-                            ) : programBatches.length === 0 ? (
-                                <div className="p-8 rounded-xl border border-dashed text-center flex flex-col items-center justify-center space-y-2 text-muted-foreground">
-                                    <Users className="w-8 h-8 text-muted-foreground/40" />
-                                    <p className="text-xs font-semibold">No batches configured for this program yet.</p>
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => setBatchActiveTab("details")}
-                                        className="text-xs font-bold mt-2"
-                                    >
-                                        <Plus className="w-3.5 h-3.5 mr-1" /> Add Your First Batch
-                                    </Button>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {programBatches.map((batch) => {
-                                        const finalPrice = Number(batch.price) > 0
-                                            ? Math.max(0, Math.round(Number(batch.price) * (1 - (Number(batch.discount_percent) || 0) / 100)))
-                                            : null;
-                                        return (
-                                            <div
-                                                key={batch.id || batch.section_id}
-                                                className="p-3.5 rounded-xl border bg-card hover:border-primary/40 transition-all shadow-xs flex flex-col justify-between gap-3"
+                        {/* TAB 3: TIMING & SCHEDULE */}
+                        <TabsContent value="timing" className="flex-1 overflow-y-auto pr-1 space-y-4 data-[state=active]:flex data-[state=active]:flex-col">
+                            <div className="space-y-4">
+                                <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.02] dark:bg-blue-500/[0.04] p-4 space-y-3.5">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold text-sm">
+                                            <div className="w-2 h-2 rounded-full bg-blue-500" />
+                                            <h4>Class Timings & Attendance Policy</h4>
+                                        </div>
+                                    </div>
+
+                                    {/* 1. Daily Class Hours */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                <Clock className="w-3.5 h-3.5 text-primary" /> Class Start Time
+                                            </Label>
+                                            <Input
+                                                type="time"
+                                                value={batchForm.startTime}
+                                                onChange={(e) => setBatchForm(prev => ({ ...prev, startTime: e.target.value }))}
+                                                className="text-xs h-9 bg-background"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                <Clock className="w-3.5 h-3.5 text-primary" /> Class End Time
+                                            </Label>
+                                            <Input
+                                                type="time"
+                                                value={batchForm.endTime}
+                                                onChange={(e) => setBatchForm(prev => ({ ...prev, endTime: e.target.value }))}
+                                                className="text-xs h-9 bg-background"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* 2. Frequency & Attendance Setup */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        {/* Class Frequency */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                <Calendar className="w-3.5 h-3.5 text-primary" /> Class Frequency / Days
+                                            </Label>
+                                            <Select
+                                                value={batchForm.classFrequency}
+                                                onValueChange={(val) => setBatchForm(prev => ({ ...prev, classFrequency: val }))}
                                             >
-                                                <div className="space-y-2">
-                                                    {/* Header: Name + Status */}
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0">
-                                                                <Users className="w-4 h-4" />
-                                                            </div>
-                                                            <div>
-                                                                <h5 className="font-bold text-sm text-foreground leading-tight">
-                                                                    {batch.batch_name || batch.name}
-                                                                </h5>
-                                                                <span className="text-[11px] text-muted-foreground">
-                                                                    {batch.enrolled_students_count ?? 0} enrolled students
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                        <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
-                                                            Active
-                                                        </Badge>
-                                                    </div>
+                                                <SelectTrigger className="text-xs h-9 bg-background">
+                                                    <SelectValue placeholder="Select Frequency" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Mon - Fri (Daily)">Mon - Fri (Daily Regular)</SelectItem>
+                                                    <SelectItem value="Mon - Sat (6 Days/Week)">Mon - Sat (6 Days/Week)</SelectItem>
+                                                    <SelectItem value="Mon / Wed / Fri (Alternate Days)">Mon / Wed / Fri (Alternate Days)</SelectItem>
+                                                    <SelectItem value="Tue / Thu / Sat (Alternate Days)">Tue / Thu / Sat (Alternate Days)</SelectItem>
+                                                    <SelectItem value="Saturday & Sunday (Weekend Batch)">Saturday & Sunday (Weekend Batch)</SelectItem>
+                                                    <SelectItem value="Sunday Only">Sunday Only</SelectItem>
+                                                    <SelectItem value="Custom / Flexible Schedule">Custom / Flexible Schedule</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
 
-                                                    {/* Badges Grid */}
-                                                    <div className="flex flex-wrap gap-1.5 pt-1">
-                                                        {batch.academic_term && (
-                                                            <Badge variant="secondary" className="text-[10px] font-bold bg-primary/10 text-primary border-primary/20 flex items-center gap-1">
-                                                                <Calendar className="h-3 w-3" />
-                                                                {batch.academic_term}
-                                                            </Badge>
-                                                        )}
-                                                        {batch.section_name && (
-                                                            <Badge variant="secondary" className="text-[10px] font-medium">
-                                                                Section: {batch.section_name}
-                                                            </Badge>
-                                                        )}
-                                                        {batch.attendance_setup_title && (
-                                                            <Badge variant="secondary" className="text-[10px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20 flex items-center gap-1">
-                                                                <Clock className="h-3 w-3" />
-                                                                {batch.attendance_setup_title}
-                                                            </Badge>
-                                                        )}
-                                                        {(batch.language_title || batch.language_name) && (
-                                                            <Badge variant="secondary" className="text-[10px] font-medium bg-blue-500/10 text-blue-600 border-blue-500/20">
-                                                                {batch.language_title || batch.language_name}
-                                                            </Badge>
-                                                        )}
-                                                        {batch.seats_available != null && (
-                                                            <Badge variant="secondary" className="text-[10px] font-medium bg-purple-500/10 text-purple-600 border-purple-500/20">
-                                                                {batch.seats_available} Seats
-                                                            </Badge>
-                                                        )}
-                                                        {batch.teaching_method && (
-                                                            <Badge variant="secondary" className="text-[10px] font-medium bg-indigo-500/10 text-indigo-600 border-indigo-500/20">
-                                                                {batch.teaching_method}
-                                                            </Badge>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Fee and Module Details */}
-                                                    {Number(batch.price) > 0 && (
-                                                        <div className="text-xs pt-1 space-y-1 bg-muted/30 p-2 rounded-lg border border-border/50">
-                                                            <div className="flex items-center justify-between text-xs">
-                                                                <span className="text-muted-foreground">Tuition Fee:</span>
-                                                                <div className="flex items-center gap-1.5">
-                                                                    {Number(batch.discount_percent) > 0 && (
-                                                                        <span className="line-through text-muted-foreground text-[11px]">
-                                                                            ₹{Number(batch.price).toLocaleString()}
-                                                                        </span>
-                                                                    )}
-                                                                    <span className="font-bold text-foreground">
-                                                                        ₹{finalPrice?.toLocaleString()}
+                                        {/* Attendance Setup */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                <Users className="w-3.5 h-3.5 text-primary" /> Attendance Setup & Policy
+                                            </Label>
+                                            <Select
+                                                value={
+                                                    (batchMeta.attendanceSetups || []).find(
+                                                        (s: any) =>
+                                                            (batchForm.attendanceSetupId && String(s.id) === String(batchForm.attendanceSetupId)) ||
+                                                            (batchForm.attendanceSetupTitle && s.title === batchForm.attendanceSetupTitle)
+                                                    )?.id ? String(
+                                                        (batchMeta.attendanceSetups || []).find(
+                                                            (s: any) =>
+                                                                (batchForm.attendanceSetupId && String(s.id) === String(batchForm.attendanceSetupId)) ||
+                                                                (batchForm.attendanceSetupTitle && s.title === batchForm.attendanceSetupTitle)
+                                                        ).id
+                                                    ) : (batchForm.attendanceSetupId || batchForm.attendanceSetupTitle || "")
+                                                }
+                                                onValueChange={(val) => {
+                                                    const setups = batchMeta.attendanceSetups || [];
+                                                    const matched = setups.find((s: any) => String(s.id) === val || s.title === val);
+                                                    if (matched) {
+                                                        setBatchForm((prev) => ({
+                                                            ...prev,
+                                                            attendanceSetupId: String(matched.id),
+                                                            attendanceSetupTitle: matched.title,
+                                                        }));
+                                                    } else {
+                                                        setBatchForm((prev) => ({
+                                                            ...prev,
+                                                            attendanceSetupId: "",
+                                                            attendanceSetupTitle: val,
+                                                        }));
+                                                    }
+                                                }}
+                                            >
+                                                <SelectTrigger className="text-xs h-9 bg-background font-medium">
+                                                    <SelectValue placeholder="Select Attendance Setup" />
+                                                </SelectTrigger>
+                                                <SelectContent className="max-h-60">
+                                                    {(batchMeta.attendanceSetups || []).length > 0 ? (
+                                                        batchMeta.attendanceSetups.map((s: any) => (
+                                                            <SelectItem key={s.id} value={String(s.id)} className="text-xs">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="font-semibold text-foreground">{s.title}</span>
+                                                                    <span className="text-[10px] text-muted-foreground">
+                                                                        ({s.attendance_mode === "PERIOD_WISE" ? "Period-Wise" : s.attendance_mode === "BIOMETRIC" ? "Biometric" : "Full Day"}
+                                                                        {s.start_time ? ` • ${s.start_time} - ${s.end_time}` : ""})
                                                                     </span>
-                                                                    {Number(batch.discount_percent) > 0 && (
-                                                                        <span className="text-[10px] text-emerald-600 font-bold bg-emerald-500/10 px-1 rounded">
-                                                                            {batch.discount_percent}% off
-                                                                        </span>
+                                                                    {s.is_default && (
+                                                                        <span className="text-[9px] px-1 py-0.2 rounded bg-primary/10 text-primary font-bold">Default</span>
                                                                     )}
                                                                 </div>
-                                                            </div>
-                                                            {Number(batch.installments_count) > 1 && (
-                                                                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                                                                    <span>Installments:</span>
-                                                                    <span>{batch.installments_count} parts</span>
-                                                                </div>
-                                                            )}
-                                                        </div>
+                                                            </SelectItem>
+                                                        ))
+                                                    ) : (
+                                                        <>
+                                                            <SelectItem value="Daily Attendance (Full Day)">Daily Attendance (Full Day)</SelectItem>
+                                                            <SelectItem value="Period-Wise Lecture Attendance">Period-Wise Lecture Attendance</SelectItem>
+                                                            <SelectItem value="Regular Academic Shift (08:00 - 14:30)">Regular Academic Shift (08:00 - 14:30)</SelectItem>
+                                                            <SelectItem value="Biometric Attendance (In / Out)">Biometric Attendance (In / Out)</SelectItem>
+                                                        </>
                                                     )}
-                                                </div>
-
-                                                {/* Footer Action */}
-                                                <div className="flex items-center justify-end pt-1 border-t border-border/40">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={() => handleRemoveBatch(batch.section_id || batch.id)}
-                                                        className="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive px-2"
-                                                    >
-                                                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove Batch
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
                                 </div>
-                            )}
+
+                                {/* Summary Review Box */}
+                                <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5 space-y-2">
+                                    <div className="flex items-center justify-between pb-1 border-b border-border/40">
+                                        <span className="text-xs font-bold text-foreground">Batch Configuration Summary</span>
+                                        <Badge variant="outline" className="text-[10px] font-bold text-primary bg-primary/10 border-primary/20">
+                                            Ready to Save
+                                        </Badge>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                        <div>
+                                            <span className="text-[10px] text-muted-foreground block">Batch Name:</span>
+                                            <span className="font-semibold text-foreground">{batchForm.batchName || "—"}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] text-muted-foreground block">Sections:</span>
+                                            <span className="font-semibold text-foreground">
+                                                {batchForm.selectedSections.length > 0 ? batchForm.selectedSections.join(", ") : "None"}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] text-muted-foreground block">Timing:</span>
+                                            <span className="font-semibold text-foreground">
+                                                {batchForm.startTime} - {batchForm.endTime}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] text-muted-foreground block">Fee Plans:</span>
+                                            <span className="font-semibold text-primary">
+                                                {batchFeeOptions.length} Option{batchFeeOptions.length !== 1 ? "s" : ""}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Timing Tab Action Bar */}
+                                <div className="flex items-center justify-between pt-3 border-t">
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setBatchActiveTab("fee")}
+                                            className="h-9 px-4 text-xs font-semibold gap-1.5"
+                                        >
+                                            <ArrowLeft className="w-3.5 h-3.5" /> Back: Fee Structure
+                                        </Button>
+                                        <ProgressiveSaveIndicator status={batchSaveStatus} />
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => {
+                                                handleClearBatchForm();
+                                                clearBatchDraft();
+                                            }}
+                                            disabled={savingBatch}
+                                            className="h-9 px-4 text-xs font-semibold gap-1.5"
+                                        >
+                                            <RotateCcw className="w-3.5 h-3.5" /> Clear
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            onClick={handleAddBatch}
+                                            disabled={savingBatch || !batchForm.batchName.trim() || batchForm.selectedSections.length === 0}
+                                            className="h-9 px-6 text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
+                                        >
+                                            {savingBatch ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                            Save Batch Configuration ({batchForm.selectedSections.length} Section{batchForm.selectedSections.length > 1 ? "s" : ""})
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
                         </TabsContent>
                     </Tabs>
                 </DialogContent>
@@ -4829,6 +5202,7 @@ export default function ProgramsAdminPage() {
                             </div>
                         ) : (
                             <ProgramSyllabusManager
+                                programId={syllabusTargetProgram?.id}
                                 subjectIds={syllabusSubjectIds}
                                 subjectOptions={syllabusSubjectOptions}
                                 categoryName={syllabusTargetProgram?.title || "Program"}
@@ -4850,12 +5224,11 @@ export default function ProgramsAdminPage() {
                         </Button>
                         <Button
                             type="button"
-                            onClick={() => {
-                                toast.success("Syllabus updated successfully!");
-                                setSyllabusModalOpen(false);
-                            }}
-                            className="text-xs h-9 font-bold bg-primary text-primary-foreground"
+                            onClick={handleSaveStandaloneSyllabus}
+                            disabled={savingStandaloneSyllabus}
+                            className="text-xs h-9 font-bold bg-primary text-primary-foreground gap-1.5"
                         >
+                            {savingStandaloneSyllabus ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                             Save Syllabus
                         </Button>
                     </div>

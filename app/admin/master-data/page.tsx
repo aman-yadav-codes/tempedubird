@@ -78,28 +78,12 @@ const MASTER_DATA_MODULES = [
     color: "from-amber-500/10 to-orange-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400",
   },
   {
-    title: "Subjects",
-    url: "/admin/content/subjects",
-    icon: GraduationCap,
-    description: "Course subjects mapped to categories and examination boards with syllabus structures.",
-    badge: "Curriculum",
-    color: "from-emerald-500/10 to-teal-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400",
-  },
-  {
     title: "Courses & Programs",
     url: "/admin/content/courses",
     icon: BookCheck,
     description: "Standardized programs, degrees, diplomas, and competitive exam tracks.",
     badge: "Catalog",
     color: "from-teal-500/10 to-emerald-500/10 border-teal-500/20 text-teal-600 dark:text-teal-400",
-  },
-  {
-    title: "Syllabus",
-    url: "/admin/content/syllabus",
-    icon: BookOpen,
-    description: "Structured syllabus templates, units, chapters, topics, and learning outcomes.",
-    badge: "Syllabus",
-    color: "from-fuchsia-500/10 to-pink-500/10 border-fuchsia-500/20 text-fuchsia-600 dark:text-fuchsia-400",
   },
   {
     title: "Assignments",

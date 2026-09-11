@@ -310,17 +310,19 @@ export default function CardTemplatesPage() {
 
   useEffect(() => {
     if (!isReady) return;
-    const timeout = window.setTimeout(() => void fetchTemplates(), 0);
-    return () => window.clearTimeout(timeout);
-  }, [fetchTemplates, isReady]);
-
-  useEffect(() => {
-    if (!isReady) return;
-    const timeout = window.setTimeout(() => {
-      void fetchCategories().catch((err) => toast.error(readError(err)));
-    }, 0);
-    return () => window.clearTimeout(timeout);
-  }, [fetchCategories, isReady]);
+    let isCancelled = false;
+    const loadInitial = async () => {
+      await fetchTemplates();
+      if (!isCancelled) {
+        void fetchCategories().catch((err) => toast.error(readError(err)));
+      }
+    };
+    const timeout = window.setTimeout(() => void loadInitial(), 0);
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [fetchCategories, fetchTemplates, isReady]);
 
   const updateTemplates = useCallback(
     async (

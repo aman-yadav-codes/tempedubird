@@ -2,14 +2,14 @@
 
 import { DataTable } from "@/components/ui/data-table"
 import { buildUserColumns, User } from "./columns"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAuthStore } from "@/store"
 import { getApiErrorMessage, readJsonResponse } from "@/lib/auth/client-permission-errors"
 import { hasPermission } from "@/lib/auth/permissions"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { PaginationState } from "@tanstack/react-table"
 import { AddUserDialog, RoleOption } from "./add-user-dialog"
 import { UserProfileSheet } from "./user-profile-sheet"
@@ -24,7 +24,8 @@ import {
 } from "./_components/user-filters-drawer"
 import { usePersistedState } from "@/hooks/use-persisted-state"
 import { SalaryAccountDialog } from "./_components/salary-account-dialog"
-import { AffiliatesView } from "./_components/affiliates-view"
+import Link from "next/link"
+import { toRoleRoutePath } from "@/lib/auth/role-routes"
 import { Share2, Users as UsersIcon } from "lucide-react"
 import { DebouncedSearchInput } from "@/components/shared/debounced-search-input"
 import {
@@ -42,10 +43,17 @@ function getErrorMessage(err: unknown) {
   return err instanceof Error ? err.message : "Something went wrong"
 }
 
-export default function UsersPage() {
+function UsersPageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const tabParam = searchParams.get("tab")
   const { accessToken, clearAuth, user: currentUser } = useAuthStore()
-  const [activeMainTab, setActiveMainTab] = useState<"users" | "affiliates">("users")
+
+  useEffect(() => {
+    if (tabParam === "affiliates") {
+      router.replace(toRoleRoutePath("/admin/users/affiliates", currentUser))
+    }
+  }, [tabParam, router, currentUser])
   const [users, setUsers] = useState<User[]>([])
   const [roles, setRoles] = useState<RoleOption[]>([])
   const [viewingUser, setViewingUser] = useState<AdminUserDetails | null>(null)
@@ -480,53 +488,42 @@ export default function UsersPage() {
     <div className="space-y-6 w-full max-w-full">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Users & Affiliates</h1>
-          <p className="text-muted-foreground text-xs md:text-sm">Manage platform users, roles, and affiliate referral network.</p>
+          <h1 className="text-2xl font-bold tracking-tight">
+            All Users
+          </h1>
+          <p className="text-muted-foreground text-xs md:text-sm">
+            Manage platform users, roles, and account access.
+          </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200">
+          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/60">
             <Button
-              type="button"
               variant="ghost"
               size="sm"
-              onClick={() => setActiveMainTab("users")}
-              className={`rounded-lg text-xs font-bold gap-1.5 cursor-pointer h-8 px-3 ${
-                activeMainTab === "users"
-                  ? "bg-white text-slate-900 shadow-xs hover:bg-white"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-              }`}
+              className="rounded-lg text-xs font-bold gap-1.5 cursor-pointer h-8 px-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs hover:bg-white dark:hover:bg-slate-900"
             >
-              <UsersIcon className="h-3.5 w-3.5" />
+              <UsersIcon className="h-3.5 w-3.5 text-[#D91B1B]" />
               All Users
             </Button>
             <Button
-              type="button"
+              asChild
               variant="ghost"
               size="sm"
-              onClick={() => setActiveMainTab("affiliates")}
-              className={`rounded-lg text-xs font-bold gap-1.5 cursor-pointer h-8 px-3 ${
-                activeMainTab === "affiliates"
-                  ? "bg-white text-slate-900 shadow-xs hover:bg-white"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-              }`}
+              className="rounded-lg text-xs font-bold gap-1.5 cursor-pointer h-8 px-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/60"
             >
-              <Share2 className="h-3.5 w-3.5 text-[#D91B1B]" />
-              Affiliates
+              <Link href={toRoleRoutePath("/admin/users/affiliates", currentUser)}>
+                <Share2 className="h-3.5 w-3.5" />
+                Affiliate Records
+              </Link>
             </Button>
           </div>
-          {activeMainTab === "users" && (
-            <AddUserDialog
-              roles={roles}
-              accessToken={accessToken}
-              onSaved={handleUserCreated}
-            />
-          )}
+          <AddUserDialog
+            roles={roles}
+            accessToken={accessToken}
+            onSaved={handleUserCreated}
+          />
         </div>
       </div>
-
-      {activeMainTab === "affiliates" ? (
-        <AffiliatesView />
-      ) : (
 
       <DataTable 
         columns={userColumns} 
@@ -602,7 +599,6 @@ export default function UsersPage() {
             : undefined
         }
       />
-      )}
 
       <UserProfileSheet
         user={viewingUser}
@@ -722,5 +718,26 @@ export default function UsersPage() {
         onSaved={fetchUsers}
       />
     </div>
+  );
+}
+
+export default function UsersPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Skeleton className="h-8 w-32 mb-2" />
+              <Skeleton className="h-4 w-64" />
+            </div>
+            <Skeleton className="h-10 w-28 rounded-lg" />
+          </div>
+          <Skeleton className="h-[400px] w-full rounded-md" />
+        </div>
+      }
+    >
+      <UsersPageContent />
+    </Suspense>
   );
 }

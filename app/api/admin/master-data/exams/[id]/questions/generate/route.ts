@@ -260,12 +260,7 @@ export async function POST(req: Request, context: Context) {
   try {
     const currentUser = await requireAdmin(req);
     await ensureExamSchema();
-    if (isPlatformAdminUser(currentUser)) {
-      return NextResponse.json(
-        { error: "Platform Admin cannot generate exam questions" },
-        { status: 403 }
-      );
-    }
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const { id: value } = await context.params;
     const id = parseId(value);
     const templateResult = await db.query<{
@@ -293,8 +288,9 @@ export async function POST(req: Request, context: Context) {
     );
     const exam = templateResult.rows[0];
     if (!exam) throw new Error("Exam not found");
-    if (exam.blocked_by_platform) throw new Error("This exam is blocked by Platform Admin");
+    if (!isPlatformAdmin && exam.blocked_by_platform) throw new Error("This exam is blocked by Platform Admin");
     if (
+      !isPlatformAdmin &&
       !hasPermission(currentUser, "content.exams.edit", {
         institutionId: exam.source_institution_id,
       })
@@ -325,26 +321,6 @@ export async function POST(req: Request, context: Context) {
     const provider = await getActiveAiProviderForInstitution(db, exam.source_institution_id, false);
     if (!provider?.token?.trim()) throw new Error("Configure API key first");
 
-    const syllabusResult = await db.query<{ label: string }>(
-      `
-        SELECT CONCAT_WS(' / ', s.title, sn.title) AS label
-        FROM practice_exams exam
-        INNER JOIN practice_exam_syllabus_nodes pesn ON pesn.practice_exam_id = exam.id
-        INNER JOIN syllabus_nodes sn ON sn.id = pesn.syllabus_node_id
-        LEFT JOIN syllabi s ON s.id = sn.syllabus_id
-        WHERE exam.template_id = $1
-          AND COALESCE(exam.exam_kind, 'practice') = 'exam'
-          AND COALESCE(exam.is_deleted, FALSE) = FALSE
-        ORDER BY s.title NULLS LAST, sn.sort_order, sn.title
-        LIMIT 30
-      `,
-      [id]
-    );
-    const syllabus = syllabusResult.rows.map((row) => row.label).filter(Boolean);
-    if (syllabus.length === 0) {
-      throw new Error("Map at least one syllabus node before generating questions with AI");
-    }
-
     const marks = distributeMarks(Number(exam.total_marks), requestedTypes);
     const result = await generateRawQuestions({
       provider,
@@ -354,7 +330,7 @@ export async function POST(req: Request, context: Context) {
       durationMinutes: exam.duration_minutes,
       instantResult: exam.instant_result,
       counts,
-      syllabus,
+      syllabus: [],
     });
     const rawQuestions = result.questions;
     if (rawQuestions.length < requestedTypes.length) {

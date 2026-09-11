@@ -365,7 +365,7 @@ export function DataTable<TData, TValue>({
             </div>
           ))
         ) : table.getRowModel().rows?.length ? (
-          table.getRowModel().rows.map((row) => {
+          table.getRowModel().rows.map((row, rowIndex) => {
             const cells = row.getVisibleCells()
             const selectCell = cells.find((c) => c.column.id === "select")
             const actionCell = cells.find((c) => c.column.id === "actions")
@@ -375,7 +375,7 @@ export function DataTable<TData, TValue>({
 
             return (
               <div
-                key={`mobile-card-${row.id}`}
+                key={`mobile-card-${row.id}-${rowIndex}`}
                 data-state={row.getIsSelected() && "selected"}
                 tabIndex={onRowClick ? 0 : undefined}
                 role={onRowClick ? "button" : undefined}
@@ -503,9 +503,9 @@ export function DataTable<TData, TValue>({
                   </TableRow>
                 ))
               ) : table.getRowModel().rows?.length ? (
-                table.getRowModel().rows.map((row) => (
+                table.getRowModel().rows.map((row, rowIndex) => (
                   <TableRow
-                    key={row.id}
+                    key={`table-row-${row.id}-${rowIndex}`}
                     data-state={row.getIsSelected() && "selected"}
                     tabIndex={onRowClick ? 0 : undefined}
                     role={onRowClick ? "button" : undefined}

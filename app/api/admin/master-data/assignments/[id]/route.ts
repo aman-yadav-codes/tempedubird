@@ -53,7 +53,7 @@ async function getTemplate(id: number, academicYearId: number | null = null) {
         target.target_type,
         target.target_id,
         target.program_id AS target_program_id,
-        COALESCE(target_scope_program.title, target_scope_master_course.name) AS target_program_label,
+        COALESCE(target_scope_program.title, target_scope_master_course.name, target_program.title, target_master_course.name) AS target_program_label,
         CASE
           WHEN target.target_type = 'INSTITUTION' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > Whole institution'
           WHEN target.target_type = 'PROGRAM' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > ' || COALESCE(target_program.title, target_master_course.name, 'Course')
@@ -61,36 +61,11 @@ async function getTemplate(id: number, academicYearId: number | null = null) {
           WHEN target.target_type = 'STUDENT' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || COALESCE(' > ' || COALESCE(target_scope_program.title, target_scope_master_course.name), '') || ' > ' || target_user.full_name
           ELSE NULL
         END AS target_label,
-        COALESCE(
-          (
-            SELECT json_agg(asn.syllabus_node_id ORDER BY asn.id)
-            FROM assignment_syllabus_nodes asn
-            WHERE asn.assignment_id = assn.id
-          ),
-          '[]'::json
-        ) AS syllabus_node_ids,
-        COALESCE(
-          (
-            SELECT json_agg(
-              json_build_object(
-                'id', sn.id,
-                'title', sn.title,
-                'node_type', sn.node_type,
-                'subject_id', sub.id,
-                'subject_name', sub.name,
-                'syllabus_id', s.id,
-                'syllabus_title', s.title
-              )
-              ORDER BY sub.name, s.title, sn.sort_order, sn.id
-            )
-            FROM assignment_syllabus_nodes asn
-            INNER JOIN syllabus_nodes sn ON sn.id = asn.syllabus_node_id
-            INNER JOIN syllabi s ON s.id = sn.syllabus_id
-            INNER JOIN subjects sub ON sub.id = s.subject_id
-            WHERE asn.assignment_id = assn.id
-          ),
-          '[]'::json
-        ) AS syllabus_nodes
+        at.subject_id,
+        at.subject_name,
+        COALESCE(at.syllabus_data, '[]'::jsonb) AS syllabus_data,
+        '[]'::json AS syllabus_node_ids,
+        COALESCE(at.syllabus_data, '[]'::jsonb) AS syllabus_nodes
       FROM assignment_templates at
       INNER JOIN institution_profiles ip
         ON ip.id = at.source_institution_id
@@ -107,11 +82,14 @@ async function getTemplate(id: number, academicYearId: number | null = null) {
        AND ($2::int IS NULL OR assn.academic_year_id = $2)
       LEFT JOIN assignment_targets target ON target.assignment_id = assn.id
       LEFT JOIN institution_programs target_program
-        ON target_program.id = target.target_id AND target.target_type = 'PROGRAM'
+        ON target_program.id = target.target_id
+       AND target_program.institution_id = at.source_institution_id
+       AND target.target_type = 'PROGRAM'
       LEFT JOIN master_courses target_master_course
         ON target_master_course.id = target.target_id AND target.target_type = 'PROGRAM'
       LEFT JOIN institution_programs target_scope_program
         ON target_scope_program.id = target.program_id
+       AND target_scope_program.institution_id = at.source_institution_id
       LEFT JOIN master_courses target_scope_master_course
         ON target_scope_master_course.id = target.program_id
       LEFT JOIN sections target_section
@@ -285,19 +263,14 @@ export async function PATCH(req: Request, context: Context) {
   try {
     const currentUser = await requireAdmin(req);
     await ensureAssignmentTemplateSchema();
-    if (isPlatformAdminUser(currentUser)) {
-      return NextResponse.json(
-        { error: "Platform Admin can block assignments but cannot edit their content" },
-        { status: 403 }
-      );
-    }
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const { id: value } = await context.params;
     const id = parseId(value);
     const existing = await getTemplate(id);
     if (!existing) {
       return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
     }
-    if (existing.blocked_by_platform) {
+    if (existing.blocked_by_platform && !isPlatformAdmin) {
       return NextResponse.json(
         { error: "This assignment is blocked by Platform Admin and cannot be edited" },
         { status: 423 }
@@ -305,6 +278,7 @@ export async function PATCH(req: Request, context: Context) {
     }
     const institutionId = Number(existing.source_institution_id);
     if (
+      !isPlatformAdmin &&
       !hasPermission(currentUser, "content.assignments.edit", { institutionId })
     ) {
       return NextResponse.json(
@@ -347,6 +321,9 @@ export async function PATCH(req: Request, context: Context) {
               is_active = $7,
               is_paid = $9,
               price = $10,
+              subject_id = $11,
+              subject_name = $12,
+              syllabus_data = $13::jsonb,
               version = version + 1,
               updated_by = $8,
               updated_at = CURRENT_TIMESTAMP
@@ -363,9 +340,16 @@ export async function PATCH(req: Request, context: Context) {
           currentUser.id,
           payload.isPaid,
           payload.price,
+          payload.subjectId,
+          payload.subjectName,
+          JSON.stringify(payload.syllabusData ?? []),
         ]
       );
       let assignmentId = Number(existing.assigned_assignment_id);
+      const issueDate = payload.issueDate ?? new Date().toISOString().slice(0, 10);
+      const submissionDate =
+        payload.submissionDate ??
+        new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       if (Number.isInteger(assignmentId) && assignmentId > 0) {
         await client.query(
           `
@@ -384,8 +368,8 @@ export async function PATCH(req: Request, context: Context) {
             assignmentId,
             payload.title,
             payload.description,
-            payload.issueDate,
-            payload.submissionDate,
+            issueDate,
+            submissionDate,
             payload.totalMarks,
             payload.isActive ? "active" : "draft",
             currentUser.id,
@@ -405,8 +389,8 @@ export async function PATCH(req: Request, context: Context) {
             id,
             payload.title,
             payload.description,
-            payload.issueDate,
-            payload.submissionDate,
+            issueDate,
+            submissionDate,
             payload.totalMarks,
             payload.isActive ? "active" : "draft",
             currentUser.id,
@@ -468,19 +452,14 @@ export async function DELETE(req: Request, context: Context) {
   try {
     const currentUser = await requireAdmin(req);
     await ensureAssignmentTemplateSchema();
-    if (isPlatformAdminUser(currentUser)) {
-      return NextResponse.json(
-        { error: "Platform Admin cannot delete institution assignments" },
-        { status: 403 }
-      );
-    }
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const { id: value } = await context.params;
     const id = parseId(value);
     const existing = await getTemplate(id);
     if (!existing) {
       return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
     }
-    if (existing.blocked_by_platform) {
+    if (existing.blocked_by_platform && !isPlatformAdmin) {
       return NextResponse.json(
         { error: "Blocked assignments cannot be deleted" },
         { status: 423 }
@@ -488,6 +467,7 @@ export async function DELETE(req: Request, context: Context) {
     }
     const institutionId = Number(existing.source_institution_id);
     if (
+      !isPlatformAdmin &&
       !hasPermission(currentUser, "content.assignments.delete", { institutionId })
     ) {
       return NextResponse.json(

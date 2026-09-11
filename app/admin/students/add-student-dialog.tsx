@@ -731,14 +731,9 @@ export function AddStudentDialog({
   const loadLatestStudentRecords = useCallback(async () => {
     if (!accessToken || !user?.id) return null;
     try {
-      const [recordsRes, userRes] = await Promise.all([
-        fetch(`/api/admin/student-records/${user.id}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }),
-        fetch(`/api/admin/users/detail?id=${user.id}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }).catch(() => null),
-      ]);
+      const userRes = await fetch(`/api/admin/users/detail?id=${user.id}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }).catch(() => null);
 
       if (userRes && userRes.ok) {
         const userJson = await userRes.json();
@@ -748,6 +743,10 @@ export function AddStudentDialog({
           setForm(loadedForm);
         }
       }
+
+      const recordsRes = await fetch(`/api/admin/student-records/${user.id}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
 
       const json = await recordsRes.json();
       if (!recordsRes.ok) throw new Error(json.error ?? "Failed to load student records");

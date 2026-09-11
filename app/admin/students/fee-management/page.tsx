@@ -3009,28 +3009,31 @@ export default function FeeManagementPage() {
   ]);
 
   useEffect(() => {
+    if (activeTab !== "fees") return;
     const timeout = window.setTimeout(() => {
       fetchStudents();
     }, 0);
 
     return () => window.clearTimeout(timeout);
-  }, [fetchStudents]);
+  }, [activeTab, fetchStudents]);
 
   useEffect(() => {
+    if (activeTab !== "requests") return;
     const timeout = window.setTimeout(() => {
       void fetchPaymentRequests();
     }, 0);
 
     return () => window.clearTimeout(timeout);
-  }, [fetchPaymentRequests]);
+  }, [activeTab, fetchPaymentRequests]);
 
   useEffect(() => {
+    if (activeTab !== "transactions") return;
     const timeout = window.setTimeout(() => {
       void fetchTransactions();
     }, 0);
 
     return () => window.clearTimeout(timeout);
-  }, [fetchTransactions]);
+  }, [activeTab, fetchTransactions]);
 
   const updateFilters = useCallback((nextFilters: StudentFilters) => {
     setFilters(nextFilters);

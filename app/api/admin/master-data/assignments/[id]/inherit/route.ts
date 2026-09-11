@@ -345,7 +345,6 @@ export async function POST(req: Request, context: Context) {
           ]
         );
         await client.query(`DELETE FROM assignment_targets WHERE assignment_id = $1`, [targetAssignmentId]);
-        await client.query(`DELETE FROM assignment_syllabus_nodes WHERE assignment_id = $1`, [targetAssignmentId]);
         await client.query(
           `
             DELETE FROM assignment_template_question_options
@@ -375,18 +374,6 @@ export async function POST(req: Request, context: Context) {
           `,
           [targetAssignmentId, target.targetType, target.targetId, target.targetProgramId]
         );
-        if (sourceRow.assigned_assignment_id) {
-          await client.query(
-            `
-              INSERT INTO assignment_syllabus_nodes (assignment_id, syllabus_node_id)
-              SELECT $2, syllabus_node_id
-              FROM assignment_syllabus_nodes
-              WHERE assignment_id = $1
-              ON CONFLICT DO NOTHING
-            `,
-            [sourceRow.assigned_assignment_id, targetAssignmentId]
-          );
-        }
         await copyTemplateQuestions(client, sourceTemplateId, targetTemplateId);
         await replaceAssignmentQuestionsFromTemplate(client, targetAssignmentId, targetTemplateId);
 
@@ -468,19 +455,6 @@ export async function POST(req: Request, context: Context) {
           target.targetProgramId,
         ]
       );
-
-      if (sourceRow.assigned_assignment_id) {
-        await client.query(
-          `
-            INSERT INTO assignment_syllabus_nodes (assignment_id, syllabus_node_id)
-            SELECT $2, syllabus_node_id
-            FROM assignment_syllabus_nodes
-            WHERE assignment_id = $1
-            ON CONFLICT DO NOTHING
-          `,
-          [sourceRow.assigned_assignment_id, targetAssignmentId]
-        );
-      }
 
       await copyTemplateQuestions(client, sourceTemplateId, targetTemplateId);
       await replaceAssignmentQuestionsFromTemplate(

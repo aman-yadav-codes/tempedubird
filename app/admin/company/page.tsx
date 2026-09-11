@@ -299,15 +299,11 @@ export default function AdminCompanyPage() {
     }
   }, [authHeader]);
 
-  // Fetch all company pages and FAQs
-  const fetchAllData = useCallback(async () => {
+  // Fetch pages data
+  const fetchPagesData = useCallback(async () => {
     setLoadingPages(true);
     try {
-      const [pagesRes, faqsRes] = await Promise.all([
-        fetch("/api/admin/company/pages", { headers: authHeader }),
-        fetch("/api/admin/company/faqs", { headers: authHeader }),
-      ]);
-
+      const pagesRes = await fetch("/api/admin/company/pages", { headers: authHeader });
       if (pagesRes.ok) {
         const pagesJson = await pagesRes.json();
         const map: Record<string, CompanyPageData> = {};
@@ -316,29 +312,44 @@ export default function AdminCompanyPage() {
         });
         setPagesData(map);
       }
-
-      if (faqsRes.ok) {
-        const faqsJson = await faqsRes.json();
-        setFaqs(faqsJson.data || []);
-      }
-
-      void fetchHostels();
-      void fetchLibraries();
-      void fetchBranches();
-      void fetchPaymentMethods();
     } catch (err) {
-      console.error("Failed to load company data:", err);
+      console.error("Failed to load company pages:", err);
       toast.error("Failed to load company pages data.");
     } finally {
       setLoadingPages(false);
     }
-  }, [authHeader, fetchHostels, fetchLibraries, fetchBranches, fetchPaymentMethods]);
+  }, [authHeader]);
 
-  useEffect(() => {
-    if (isReady && canAccessCompany) {
-      fetchAllData();
+  // Fetch FAQs data
+  const fetchFaqsData = useCallback(async () => {
+    try {
+      const faqsRes = await fetch("/api/admin/company/faqs", { headers: authHeader });
+      if (faqsRes.ok) {
+        const faqsJson = await faqsRes.json();
+        setFaqs(faqsJson.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to load FAQs:", err);
     }
-  }, [isReady, canAccessCompany, fetchAllData]);
+  }, [authHeader]);
+
+  // Fetch data on-demand based on active tab
+  useEffect(() => {
+    if (!isReady || !canAccessCompany) return;
+    if (activeTab === "hostels") {
+      void fetchHostels();
+    } else if (activeTab === "libraries") {
+      void fetchLibraries();
+    } else if (activeTab === "branches") {
+      void fetchBranches();
+    } else if (activeTab === "payment-methods") {
+      void fetchPaymentMethods();
+    } else if (activeTab === "faqs") {
+      void fetchFaqsData();
+    } else {
+      void fetchPagesData();
+    }
+  }, [isReady, canAccessCompany, activeTab, fetchHostels, fetchLibraries, fetchBranches, fetchPaymentMethods, fetchFaqsData, fetchPagesData]);
 
   // Handle Page Form Field Changes
   const handlePageChange = (slug: string, field: string, value: any) => {
@@ -467,7 +478,7 @@ export default function AdminCompanyPage() {
 
       toast.success(isEdit ? "FAQ updated" : "FAQ created");
       setFaqDialogOpen(false);
-      fetchAllData();
+      void fetchFaqsData();
     } catch (err: any) {
       toast.error(err.message || "Error saving FAQ");
     } finally {

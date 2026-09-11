@@ -1,34 +1,29 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import {
+  Ban,
+  BookOpen,
   CheckCircle2,
-  Download,
-  ExternalLink,
+  CreditCard,
   Eye,
+  FileCheck2,
   FileText,
+  HelpCircle,
   Loader2,
   MoreHorizontal,
-  Paperclip,
   Pencil,
   Plus,
   RefreshCw,
-  StickyNote,
-  Store,
+  Sparkles,
   Trash2,
-  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import type { SerializedEditorState } from "lexical";
-import { AsyncSearchPopover } from "@/components/shared/async-search-popover";
-import { MarketplaceSellOption } from "@/components/admin/marketplace-sell-option";
-import { useProgressiveSave } from "@/hooks/use-progressive-save";
-import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
-import { ContentPricingOption } from "@/components/shared/content-pricing-option";
+import { NoteQuestionEditor } from "@/components/notes/note-question-editor";
+import { NoteTemplateEditor } from "@/components/notes/note-template-editor";
+import type { NoteInstitutionOption } from "@/components/notes/note-template-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -60,150 +55,17 @@ import {
 } from "@/components/ui/sheet";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { useAdminGuard } from "@/hooks/use-admin-guard";
-import { isPlatformAdminUser } from "@/lib/auth/permissions";
+import { hasPermission, isPlatformAdminUser } from "@/lib/auth/permissions";
+import type { NoteTemplateRow } from "@/lib/types/notes";
 import { useAuthStore } from "@/store";
+import { cn } from "@/lib/utils";
 
-const RichTextEditor = dynamic(
-  () => import("@/components/editor/rich-text-editor").then((mod) => mod.RichTextEditor),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex h-full min-h-[420px] items-center justify-center rounded-md border bg-background/50">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
-          Loading editor...
-        </div>
-      </div>
-    ),
-  }
-);
+type Stats = { total: number; active: number; blocked: number; questions: number };
+type NotesView = "my" | "marketplace";
 
-type NotesView = "my" | "requests" | "marketplace";
-type Option = { id: number; name?: string; title?: string; label?: string };
-type SyllabusOption = { id: number; title: string; subject_id: number; subject_name: string };
-type NodeOption = { id: number; title: string; node_type: string; parent_id?: number | null; sort_order?: number };
-
-type NoteAttachment = {
-  url: string;
-  name?: string;
-  type?: string;
-  size?: number;
-};
-
-type NoteRow = {
-  id: number;
-  title?: string | null;
-  institution_id: number;
-  institution_name?: string | null;
-  subject_id?: number | null;
-  subject_name?: string | null;
-  syllabus_id?: number | null;
-  syllabus_title?: string | null;
-  syllabus_node_id?: number | null;
-  syllabus_node_title?: string | null;
-  program_id?: number | null;
-  program_title?: string | null;
-  section_id?: number | null;
-  section_name?: string | null;
-  is_active: boolean;
-  is_paid?: boolean;
-  price?: number;
-  item_count: number;
-  is_public: boolean;
-  marketplace_requested: boolean;
-  marketplace_approved: boolean;
-  marketplace_requested_by_name?: string | null;
-  marketplace_approved_by_name?: string | null;
-  source_note_id?: number | null;
-  source_institution_id?: number | null;
-  source_institution_name?: string | null;
-  has_inherited_note?: boolean;
-  created_by?: number | null;
-  created_by_name?: string | null;
-  updated_at: string;
-};
-
-type NoteItem = {
-  id: number;
-  note_id: number;
-  syllabus_node_id?: number | null;
-  node_title?: string | null;
-  node_type?: string | null;
-  title: string;
-  body: string;
-  attachment_url?: string | null;
-  attachment_name?: string | null;
-  attachments?: NoteAttachment[];
-  is_active: boolean;
-  sort_order: number;
-  updated_at: string;
-};
-
-type NoteForm = {
-  id?: number;
-  title: string;
-  institution_id: string;
-  institution_label: string;
-  syllabus_id: string;
-  syllabus_label: string;
-  syllabus_node_id: string;
-  syllabus_node_label: string;
-  subject_id: string;
-  program_id: string;
-  program_label: string;
-  section_id: string;
-  section_label: string;
-  is_active: boolean;
-  is_paid: boolean;
-  price: number | string;
-  marketplace_requested: boolean;
-};
-
-type ItemForm = {
-  id?: number;
-  note_id: string;
-  syllabus_node_id: string;
-  syllabus_node_label: string;
-  title: string;
-  body: string;
-  attachments: NoteAttachment[];
-  attachmentInputUrl: string;
-  attachmentInputName: string;
-  editorState: SerializedEditorState | null;
-  is_active: boolean;
-};
-
-const blankForm: NoteForm = {
-  title: "",
-  institution_id: "",
-  institution_label: "",
-  syllabus_id: "",
-  syllabus_label: "",
-  syllabus_node_id: "",
-  syllabus_node_label: "",
-  subject_id: "",
-  program_id: "",
-  program_label: "",
-  section_id: "",
-  section_label: "",
-  is_active: true,
-  is_paid: false,
-  price: 0,
-  marketplace_requested: false,
-};
-
-const blankItemForm: ItemForm = {
-  note_id: "",
-  syllabus_node_id: "",
-  syllabus_node_label: "",
-  title: "",
-  body: "",
-  attachments: [],
-  attachmentInputUrl: "",
-  attachmentInputName: "",
-  editorState: null,
-  is_active: true,
-};
+const emptyStats: Stats = { total: 0, active: 0, blocked: 0, questions: 0 };
+const inheritedBadgeClass =
+  "border-emerald-500/70 bg-transparent px-1.5 py-0 text-[10px] font-medium text-emerald-400";
 
 async function readJson(res: Response) {
   const text = await res.text();
@@ -215,983 +77,505 @@ async function readJson(res: Response) {
   }
 }
 
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Something went wrong";
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border bg-card px-5 py-4 shadow-sm">
+      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</p>
+      <p className="mt-2 text-2xl font-bold">{value}</p>
+    </div>
+  );
 }
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function optionLabel(option: Option) {
-  return option.name || option.title || option.label || `#${option.id}`;
-}
-
-function nodeLabel(node: NodeOption) {
-  const type = node.node_type.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
-  return `${node.title} (${type}${node.sort_order ? ` - ${node.sort_order}` : ""})`;
-}
-
-function parseEditorState(value: string): SerializedEditorState | null {
-  try {
-    const parsed = JSON.parse(value);
-    if (parsed && typeof parsed === "object" && "root" in parsed) {
-      return parsed as SerializedEditorState;
+function getSyllabusSummary(syllabusData: unknown) {
+  if (!Array.isArray(syllabusData) || syllabusData.length === 0) return null;
+  const units: string[] = [];
+  for (const unit of syllabusData) {
+    if (!unit) continue;
+    const uTitle = unit.title || unit.name || (unit.unit_number ? `Unit ${unit.unit_number}` : null);
+    if (uTitle && !units.includes(uTitle)) {
+      units.push(uTitle);
     }
-  } catch {
-    return null;
   }
-  return null;
+  return units.length > 0 ? units : null;
 }
 
-function textFromLexicalNode(node: unknown): string {
-  if (!node || typeof node !== "object") return "";
-  const record = node as Record<string, unknown>;
-  const ownText = typeof record.text === "string" ? record.text : "";
-  const children = Array.isArray(record.children)
-    ? record.children.map(textFromLexicalNode).filter(Boolean).join(" ")
-    : "";
-  return [ownText, children].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
-}
-
-function textStyleFromFormat(format: unknown) {
-  const flags = typeof format === "number" ? format : 0;
-  return {
-    fontWeight: flags & 1 ? 700 : undefined,
-    fontStyle: flags & 2 ? "italic" : undefined,
-    textDecoration: [
-      flags & 8 ? "underline" : "",
-      flags & 4 ? "line-through" : "",
-    ].filter(Boolean).join(" ") || undefined,
-  };
-}
-
-function renderInlineNode(node: unknown, key: string): ReactNode {
-  if (!node || typeof node !== "object") return null;
-  const record = node as Record<string, unknown>;
-  const type = String(record.type ?? "");
-  if (type === "image" && typeof record.src === "string") {
-    return (
-      <span key={key} className="my-3 block overflow-hidden rounded-md border bg-muted/20">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={record.src}
-          alt={typeof record.altText === "string" ? record.altText : "Note image"}
-          className="max-h-[460px] w-full object-contain"
-        />
-      </span>
-    );
-  }
-  if (type === "link" && typeof record.url === "string") {
-    const children = Array.isArray(record.children)
-      ? record.children.map((child, index) => renderInlineNode(child, `${key}-${index}`))
-      : record.url;
-    return (
-      <a
-        key={key}
-        href={record.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="font-medium text-primary underline underline-offset-4"
-      >
-        {children}
-      </a>
-    );
-  }
-  if (typeof record.text === "string") {
-    return (
-      <span key={key} style={textStyleFromFormat(record.format)}>
-        {record.text}
-      </span>
-    );
-  }
-  if (Array.isArray(record.children)) {
-    return record.children.map((child, index) => renderInlineNode(child, `${key}-${index}`));
-  }
-  return null;
-}
-
-function blockChildren(node: Record<string, unknown>, keyPrefix: string) {
-  return Array.isArray(node.children)
-    ? node.children.map((child, index) => renderInlineNode(child, `${keyPrefix}-${index}`))
-    : null;
-}
-
-function renderTableCellContent(node: Record<string, unknown>, keyPrefix: string): ReactNode {
-  if (!Array.isArray(node.children)) return null;
-  return node.children.map((child, index) => {
-    const childRecord = child && typeof child === "object" ? child as Record<string, unknown> : {};
-    const childType = String(childRecord.type ?? "");
-    if (childType === "paragraph") {
-      return (
-        <p key={`${keyPrefix}-${index}`} className="min-h-5 leading-6">
-          {blockChildren(childRecord, `${keyPrefix}-${index}`)}
-        </p>
-      );
-    }
-    return renderEditorBlock(child, index);
-  });
-}
-
-function renderEditorBlock(node: unknown, index: number): ReactNode {
-  if (!node || typeof node !== "object") return null;
-  const record = node as Record<string, unknown>;
-  const type = String(record.type ?? "");
-  const tag = String(record.tag ?? "");
-  const key = `${type}-${index}`;
-  const children = blockChildren(record, key);
-
-  if (type === "heading" || ["h1", "h2", "h3"].includes(tag)) {
-    if (tag === "h1") {
-      return <h1 key={key} className="text-2xl font-bold leading-tight text-foreground">{children}</h1>;
-    }
-    if (tag === "h2") {
-      return <h2 key={key} className="text-xl font-semibold leading-snug text-foreground">{children}</h2>;
-    }
-    return <h3 key={key} className="text-lg font-semibold leading-snug text-foreground">{children}</h3>;
-  }
-
-  if (type === "quote") {
-    return (
-      <blockquote key={key} className="border-l-4 border-primary/50 pl-4 text-muted-foreground">
-        {children}
-      </blockquote>
-    );
-  }
-
-  if (type === "table") {
-    const rows = Array.isArray(record.children) ? record.children : [];
-    return (
-      <div key={key} className="overflow-x-auto rounded-md border">
-        <table className="w-full min-w-[520px] border-collapse text-sm">
-          <tbody>
-            {rows.map((row, rowIndex) => {
-              const rowRecord = row && typeof row === "object" ? row as Record<string, unknown> : {};
-              const cells = Array.isArray(rowRecord.children) ? rowRecord.children : [];
-              return (
-                <tr key={`${key}-row-${rowIndex}`} className="border-b last:border-b-0">
-                  {cells.map((cell, cellIndex) => {
-                    const cellRecord = cell && typeof cell === "object" ? cell as Record<string, unknown> : {};
-                    const isHeader = Number(cellRecord.headerState ?? 0) > 0;
-                    const CellTag = isHeader ? "th" : "td";
-                    return (
-                      <CellTag
-                        key={`${key}-cell-${rowIndex}-${cellIndex}`}
-                        colSpan={Number(cellRecord.colSpan ?? 1)}
-                        rowSpan={Number(cellRecord.rowSpan ?? 1)}
-                        className="border-r px-4 py-3 text-left align-top last:border-r-0"
-                      >
-                        <div className={isHeader ? "font-semibold text-foreground" : "text-foreground"}>
-                          {renderTableCellContent(cellRecord, `${key}-cell-${rowIndex}-${cellIndex}`)}
-                        </div>
-                      </CellTag>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
-
-  if (type === "layout-container") {
-    const layoutChildren = Array.isArray(record.children) ? record.children : [];
-    const templateColumns =
-      typeof record.templateColumns === "string" && record.templateColumns.trim()
-        ? record.templateColumns
-        : `repeat(${Math.max(layoutChildren.length, 1)}, minmax(0, 1fr))`;
-
-    return (
-      <div
-        key={key}
-        className="grid gap-4 rounded-md border bg-muted/10 p-3"
-        style={{ gridTemplateColumns: templateColumns }}
-      >
-        {layoutChildren.map((child, childIndex) => renderEditorBlock(child, childIndex))}
-      </div>
-    );
-  }
-
-  if (type === "layout-item") {
-    const itemChildren = Array.isArray(record.children) ? record.children : [];
-    return (
-      <div key={key} className="min-w-0 space-y-3 rounded-md border bg-background/50 p-3">
-        {itemChildren.map((child, childIndex) => renderEditorBlock(child, childIndex))}
-      </div>
-    );
-  }
-
-  if (type === "list") {
-    const listChildren = Array.isArray(record.children)
-      ? record.children.map((child, childIndex) => {
-          const childRecord = child && typeof child === "object" ? child as Record<string, unknown> : {};
-          return <li key={`${key}-${childIndex}`}>{blockChildren(childRecord, `${key}-${childIndex}`)}</li>;
-        })
-      : null;
-    return tag === "ol" || record.listType === "number"
-      ? <ol key={key} className="list-decimal space-y-1 pl-6 text-foreground">{listChildren}</ol>
-      : <ul key={key} className="list-disc space-y-1 pl-6 text-foreground">{listChildren}</ul>;
-  }
-
-  if (type === "code") {
-    return <pre key={key} className="overflow-x-auto rounded-md bg-muted p-3 text-xs text-foreground">{textFromLexicalNode(record)}</pre>;
-  }
-
-  return <p key={key} className="text-base leading-7 text-foreground">{children}</p>;
-}
-
-function NoteBodyRenderer({ value }: { value: string }) {
-  const state = parseEditorState(value);
-  if (state && Array.isArray((state.root as Record<string, unknown>).children)) {
-    const children = (state.root as Record<string, unknown>).children as unknown[];
-    return (
-      <div className="space-y-4">
-        {children.map(renderEditorBlock)}
-      </div>
-    );
-  }
-
-  if (/^\s*</.test(value)) {
-    return (
-      <div
-        className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground"
-        dangerouslySetInnerHTML={{ __html: value }}
-      />
-    );
-  }
-
-  return <p className="whitespace-pre-wrap text-base leading-7 text-foreground">{value}</p>;
-}
-
-type CloudinaryAsset = {
-  publicId: string;
-  resourceType: string;
-};
-
-function parseCloudinaryTitle(value: unknown): CloudinaryAsset | null {
-  if (typeof value !== "string" || !value.trim().startsWith("{")) return null;
-  try {
-    const parsed = JSON.parse(value);
-    if (typeof parsed?.publicId !== "string") return null;
-    return {
-      publicId: parsed.publicId,
-      resourceType: typeof parsed.resourceType === "string" ? parsed.resourceType : "raw",
-    };
-  } catch {
-    return null;
-  }
-}
-
-function cloudinaryAssetFromUrl(value: unknown): CloudinaryAsset | null {
-  if (typeof value !== "string" || !value.includes("res.cloudinary.com")) return null;
-  try {
-    const url = new URL(value);
-    const parts = url.pathname.split("/").filter(Boolean);
-    const uploadIndex = parts.findIndex((part) => part === "upload");
-    const resourceType = parts[0] || "image";
-    if (uploadIndex < 0) return null;
-    const publicParts = parts.slice(uploadIndex + 1).filter((part) => !/^v\d+$/.test(part));
-    const publicId = publicParts.join("/").replace(/\.[^.]+$/, "");
-    return publicId ? { publicId, resourceType } : null;
-  } catch {
-    return null;
-  }
-}
-
-function extractEditorAssets(value: string): CloudinaryAsset[] {
-  const state = parseEditorState(value);
-  if (!state) return [];
-  const found = new Map<string, CloudinaryAsset>();
-
-  const visit = (node: unknown) => {
-    if (!node || typeof node !== "object") return;
-    const record = node as Record<string, unknown>;
-    const explicit =
-      typeof record.publicId === "string"
-        ? {
-            publicId: record.publicId,
-            resourceType: typeof record.resourceType === "string" ? record.resourceType : "image",
-          }
-        : parseCloudinaryTitle(record.title) ?? cloudinaryAssetFromUrl(record.url) ?? cloudinaryAssetFromUrl(record.src);
-    if (explicit?.publicId) {
-      found.set(`${explicit.resourceType}:${explicit.publicId}`, explicit);
-    }
-    if (Array.isArray(record.children)) {
-      record.children.forEach(visit);
-    }
-  };
-
-  visit(state.root);
-  return Array.from(found.values());
-}
-
-async function deleteEditorAsset(asset: CloudinaryAsset, authHeader: Record<string, string>) {
-  await fetch("/api/admin/uploads/documents/delete", {
-    method: "POST",
-    headers: { ...authHeader, "Content-Type": "application/json" },
-    body: JSON.stringify({ publicId: asset.publicId, resourceType: asset.resourceType }),
-  });
-}
-
-async function cleanupRemovedEditorAssets(previousValue: string, nextValue: string, authHeader: Record<string, string>) {
-  const nextKeys = new Set(extractEditorAssets(nextValue).map((asset) => `${asset.resourceType}:${asset.publicId}`));
-  const removed = extractEditorAssets(previousValue).filter((asset) => !nextKeys.has(`${asset.resourceType}:${asset.publicId}`));
-  if (!removed.length) return;
-  await Promise.allSettled(removed.map((asset) => deleteEditorAsset(asset, authHeader)));
-}
-
-function noteBodyText(value: string) {
-  const state = parseEditorState(value);
-  if (!state) return value.trim();
-  return textFromLexicalNode(state.root).trim();
-}
-
-function noteTitle(row: NoteRow) {
-  return row.title || row.syllabus_title || row.subject_name || row.program_title || "Class Notes";
-}
-
-function noteSubtitle(row: NoteRow) {
-  return [row.program_title, row.section_name || "All sections", row.institution_name]
-    .filter(Boolean)
-    .join(" - ");
-}
-
-function noteItemScopeLabel(item: NoteItem) {
-  if (!item.node_title) return "Whole syllabus note";
-  const type = item.node_type
-    ? item.node_type.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase())
-    : "Syllabus node";
-  return `${type}: ${item.node_title}`;
-}
-
-function formFromRow(row: NoteRow): NoteForm {
-  return {
-    id: row.id,
-    title: row.title || "",
-    institution_id: String(row.institution_id),
-    institution_label: row.institution_name || `Institution #${row.institution_id}`,
-    syllabus_id: row.syllabus_id ? String(row.syllabus_id) : "",
-    syllabus_label: row.syllabus_title || "",
-    syllabus_node_id: row.syllabus_node_id ? String(row.syllabus_node_id) : "",
-    syllabus_node_label: row.syllabus_node_title || "",
-    subject_id: row.subject_id ? String(row.subject_id) : "",
-    program_id: row.program_id ? String(row.program_id) : "",
-    program_label: row.program_title || "",
-    section_id: row.section_id ? String(row.section_id) : "",
-    section_label: row.section_name || "",
-    is_active: row.is_active,
-    is_paid: Boolean(row.is_paid || (Number(row.price) > 0)),
-    price: Number(row.price) || 0,
-    marketplace_requested: row.marketplace_requested,
-  };
-}
-
-function itemFormFromRow(row: NoteItem): ItemForm {
-  const editorState = parseEditorState(row.body);
-  const attachments: NoteAttachment[] = Array.isArray(row.attachments) && row.attachments.length
-    ? row.attachments
-    : row.attachment_url
-      ? [{ url: row.attachment_url, name: row.attachment_name || "Attachment" }]
-      : [];
-
-  return {
-    id: row.id,
-    note_id: String(row.note_id),
-    syllabus_node_id: row.syllabus_node_id ? String(row.syllabus_node_id) : "",
-    syllabus_node_label: row.node_title ? `${row.node_title}${row.node_type ? ` (${row.node_type})` : ""}` : "",
-    title: row.title,
-    body: row.body,
-    attachments,
-    attachmentInputUrl: "",
-    attachmentInputName: "",
-    editorState,
-    is_active: row.is_active,
-  };
-}
-
-export default function MasterDataNotesPage() {
+export default function NotesPage() {
   const { isReady } = useAdminGuard();
   const { accessToken, user } = useAuthStore();
-  const { activeInstitution } = useActiveInstitution();
+  const { activeInstitutionId } = useActiveInstitution();
   const isPlatformAdmin = isPlatformAdminUser(user);
-  const activeInstitutionId = activeInstitution?.id ?? null;
-  const activeInstitutionName = activeInstitution?.name ?? "";
-  const [notesView, setNotesView] = useState<NotesView>("my");
-  const [rows, setRows] = useState<NoteRow[]>([]);
+
+  const [rows, setRows] = useState<NoteTemplateRow[]>([]);
+  const [stats, setStats] = useState<Stats>(emptyStats);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [uploadingFile, setUploadingFile] = useState(false);
-  const [search, setSearch] = useState("");
   const [pageCount, setPageCount] = useState(-1);
-  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState<NoteForm>(blankForm);
-
-  const { saveStatus: noteSaveStatus, clearDraft: clearNoteDraft } = useProgressiveSave({
-    formKey: `master_note:${form.id || "new"}`,
-    formState: form,
-    enabled: dialogOpen,
+  const [totalRows, setTotalRows] = useState(0);
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 10,
   });
-  const [active, setActive] = useState<NoteRow | null>(null);
-  const [items, setItems] = useState<NoteItem[]>([]);
-  const [itemsLoading, setItemsLoading] = useState(false);
-  const [itemDialogOpen, setItemDialogOpen] = useState(false);
-  const [itemForm, setItemForm] = useState<ItemForm>(blankItemForm);
-  const [deleteTargets, setDeleteTargets] = useState<NoteRow[]>([]);
-  const [marketplaceActionId, setMarketplaceActionId] = useState<number | null>(null);
-  const [noteEditorLeftSize, setNoteEditorLeftSize] = useState(34);
-  const noteEditorSplitRef = useRef<HTMLDivElement | null>(null);
-  const itemEditorStateRef = useRef<SerializedEditorState | null>(null);
-  const itemBodyRef = useRef("");
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [notesView, setNotesView] = useState<NotesView>("my");
 
-  const authHeader = useMemo(() => ({ Authorization: `Bearer ${accessToken}` }), [accessToken]);
-  const currentUserId = user?.id ?? null;
-  const canModifyNote = useCallback((row: NoteRow | null | undefined) => {
-    if (isPlatformAdmin) return true;
-    return Boolean(row && currentUserId && row.created_by === currentUserId);
-  }, [currentUserId, isPlatformAdmin]);
+  // Editors and Modals
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editing, setEditing] = useState<NoteTemplateRow | null>(null);
+  const [questionEditorOpen, setQuestionEditorOpen] = useState(false);
+  const [questionTarget, setQuestionTarget] = useState<NoteTemplateRow | null>(null);
 
-  const startNoteEditorResize = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    const container = noteEditorSplitRef.current;
-    if (!container) return;
+  // View Sheet
+  const [viewSheetOpen, setViewSheetOpen] = useState(false);
+  const [viewingNote, setViewingNote] = useState<NoteTemplateRow | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
 
-    event.preventDefault();
-    const rect = container.getBoundingClientRect();
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
+  // Delete Dialog
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-    const resize = (clientX: number) => {
-      const nextSize = ((clientX - rect.left) / rect.width) * 100;
-      setNoteEditorLeftSize(Math.min(45, Math.max(24, nextSize)));
-    };
+  // Inherit Marketplace Note Dialog
+  const [inheritOpen, setInheritOpen] = useState(false);
+  const [inheritTarget, setInheritTarget] = useState<NoteTemplateRow | null>(null);
+  const [inheritInstitutionId, setInheritInstitutionId] = useState("");
+  const [inheriting, setInheriting] = useState(false);
 
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      resize(moveEvent.clientX);
-    };
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
-    const stopResize = () => {
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", stopResize);
-      window.removeEventListener("pointercancel", stopResize);
-      window.removeEventListener("blur", stopResize);
-    };
+  const fetchInstitutions = useCallback(
+    async (query: string, page: number) => {
+      if (!accessToken) return { data: [], hasMore: false };
+      const res = await fetch(
+        `/api/admin/institutions?search=${encodeURIComponent(query)}&page=${page}&limit=20`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      const json = await readJson(res);
+      const data = ((json.data ?? []) as Array<{ id: number; name?: string; slug?: string }>).map((i) => ({
+        id: i.id,
+        name: i.name || i.slug || `Institution ${i.id}`,
+      }));
+      return { data, hasMore: (json.page ?? 1) < (json.pageCount ?? 1) };
+    },
+    [accessToken]
+  );
 
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    resize(event.clientX);
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", stopResize, { once: true });
-    window.addEventListener("pointercancel", stopResize, { once: true });
-    window.addEventListener("blur", stopResize, { once: true });
-  }, []);
-  const effectiveInstitutionId = isPlatformAdmin ? (form.institution_id || "1") : activeInstitutionId ? String(activeInstitutionId) : "";
-  const canEditActive = canModifyNote(active);
-
-  const loadRows = useCallback(async () => {
+  const fetchNotes = useCallback(async () => {
     if (!accessToken) return;
     setLoading(true);
     try {
       const params = new URLSearchParams({
         page: String(pagination.pageIndex + 1),
         limit: String(pagination.pageSize),
-        search,
+        search: debouncedSearch,
         view: notesView,
       });
-      if (notesView === "my" && !isPlatformAdmin && activeInstitutionId) {
+
+      if (activeInstitutionId) {
         params.set("institutionId", String(activeInstitutionId));
       }
-      if (notesView === "marketplace" && !isPlatformAdmin && activeInstitutionId) {
-        params.set("institutionId", String(activeInstitutionId));
-      }
-      const res = await fetch(`/api/admin/master-data/notes?${params.toString()}`, { headers: authHeader });
+
+      const res = await fetch(`/api/admin/master-data/notes?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
       const json = await readJson(res);
-      if (!res.ok) throw new Error(json.error ?? "Failed to load notes");
-      setRows((json.data ?? []) as NoteRow[]);
-      setPageCount(Number(json.pageCount ?? -1));
-    } catch (error) {
-      toast.error(getErrorMessage(error));
+      if (!res.ok) throw new Error(json.error ?? "Failed to fetch notes");
+
+      setRows(json.data ?? []);
+      setTotalRows(json.total ?? 0);
+      setPageCount(json.pageCount ?? 1);
+      if (json.stats) setStats(json.stats);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to fetch notes");
     } finally {
       setLoading(false);
     }
-  }, [accessToken, activeInstitutionId, authHeader, isPlatformAdmin, notesView, pagination.pageIndex, pagination.pageSize, search]);
-
-  const loadItems = useCallback(async (noteId: number) => {
-    if (!accessToken) return;
-    setItemsLoading(true);
-    try {
-      const params = new URLSearchParams({ action: "items", noteId: String(noteId), limit: "100" });
-      const res = await fetch(`/api/admin/master-data/notes?${params.toString()}`, { headers: authHeader });
-      const json = await readJson(res);
-      if (!res.ok) throw new Error(json.error ?? "Failed to load note entries");
-      setItems((json.data ?? []) as NoteItem[]);
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setItemsLoading(false);
-    }
-  }, [accessToken, authHeader]);
+  }, [accessToken, pagination, debouncedSearch, notesView, activeInstitutionId]);
 
   useEffect(() => {
     if (!isReady) return;
-    const timeout = window.setTimeout(() => void loadRows(), 250);
-    return () => window.clearTimeout(timeout);
-  }, [isReady, loadRows]);
+    void fetchNotes();
+  }, [isReady, fetchNotes]);
 
-  const fetchLookup = useCallback(async <T,>(action: string, query: string, page: number, extra?: Record<string, string>) => {
-    if (action === "programs" && isPlatformAdmin) {
-      const params = new URLSearchParams({ search: query, page: String(page), limit: "15" });
-      const res = await fetch(`/api/admin/content/courses?${params.toString()}`, { headers: authHeader });
-      const json = await readJson(res);
-      if (!res.ok) throw new Error(json.error ?? "Failed to load master courses");
-      const list = ((json.data ?? []) as Array<{ id: number; name?: string; title?: string }>).map((c) => ({
-        id: c.id,
-        title: c.name || c.title || `Course #${c.id}`,
-      }));
-      return { data: list as unknown as T[], hasMore: page < Number(json.pageCount ?? 0) };
-    }
-
-    const params = new URLSearchParams({ action, search: query, page: String(page), limit: "15", ...(extra ?? {}) });
-    const res = await fetch(`/api/admin/master-data/notes?${params.toString()}`, { headers: authHeader });
-    const json = await readJson(res);
-    if (!res.ok) throw new Error(json.error ?? "Failed to load options");
-    return { data: (json.data ?? []) as T[], hasMore: page < Number(json.pageCount ?? 0) };
-  }, [authHeader, isPlatformAdmin]);
-
-  const openCreate = () => {
-    setForm({
-      ...blankForm,
-      institution_id: !isPlatformAdmin && activeInstitutionId ? String(activeInstitutionId) : isPlatformAdmin ? (activeInstitutionId ? String(activeInstitutionId) : "1") : "",
-      institution_label: !isPlatformAdmin ? activeInstitutionName : "",
-    });
-    setDialogOpen(true);
-  };
-
-  const openSheet = useCallback((row: NoteRow) => {
-    setActive(row);
-    setItems([]);
-    void loadItems(row.id);
-  }, [loadItems]);
-
-  const openItemCreate = () => {
-    if (!active) return;
-    itemEditorStateRef.current = null;
-    itemBodyRef.current = "";
-    setItemForm({ ...blankItemForm, note_id: String(active.id) });
-    setItemDialogOpen(true);
-  };
-
-  const openItemEdit = (item: NoteItem) => {
-    const nextForm = itemFormFromRow(item);
-    itemEditorStateRef.current = nextForm.editorState;
-    itemBodyRef.current = nextForm.body;
-    setItemForm(nextForm);
-    setItemDialogOpen(true);
-  };
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setUploadingFile(true);
+  const openViewSheet = async (note: NoteTemplateRow) => {
+    setViewSheetOpen(true);
+    setViewLoading(true);
+    setViewingNote(note);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const isImage = file.type.startsWith("image/");
-      const endpoint = isImage ? "/api/admin/uploads/image" : "/api/admin/uploads/documents";
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: authHeader,
-        body: formData,
+      const res = await fetch(`/api/admin/master-data/notes/${note.id}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       const json = await readJson(res);
-      if (!res.ok) throw new Error(json.error ?? "Upload failed");
-      const url = json.url || json.data?.url || "";
-      if (!url) throw new Error("No URL returned from upload");
-      const newAttachment: NoteAttachment = {
-        url,
-        name: file.name,
-        type: file.type,
-        size: file.size,
-      };
-      setItemForm((curr) => ({
-        ...curr,
-        attachments: [...curr.attachments, newAttachment],
-      }));
-      toast.success("Attachment uploaded successfully");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setUploadingFile(false);
-      event.target.value = "";
-    }
-  };
-
-  async function saveNote() {
-    if (!form.title.trim()) {
-      toast.error("Title of notes is required");
-      return;
-    }
-    const institutionId = isPlatformAdmin ? (form.institution_id || "1") : activeInstitutionId ? String(activeInstitutionId) : "";
-    if (!institutionId) {
-      toast.error("Institution is required");
-      return;
-    }
-    if (!form.program_id) {
-      toast.error("Course / Program is required");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const res = await fetch("/api/admin/master-data/notes", {
-        method: form.id ? "PATCH" : "POST",
-        headers: { ...authHeader, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: form.id,
-          title: form.title.trim(),
-          institution_id: Number(institutionId),
-          subject_id: form.subject_id ? Number(form.subject_id) : null,
-          syllabus_id: form.syllabus_id ? Number(form.syllabus_id) : null,
-          syllabus_node_id: form.syllabus_node_id ? Number(form.syllabus_node_id) : null,
-          program_id: Number(form.program_id),
-          section_id: form.section_id ? Number(form.section_id) : null,
-          is_active: form.is_active,
-          is_paid: form.is_paid,
-          price: form.is_paid ? (Number(form.price) || 0) : 0,
-          marketplace_requested: form.marketplace_requested,
-        }),
-      });
-      const json = await readJson(res);
-      if (!res.ok) throw new Error(json.error ?? "Failed to save note");
-      toast.success(form.id ? "Note details updated" : "Note created successfully");
-      setDialogOpen(false);
-      setForm(blankForm);
-      await loadRows();
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function saveNoteItem() {
-    if (!itemForm.note_id) return;
-    const serializedBody = itemEditorStateRef.current
-      ? JSON.stringify(itemEditorStateRef.current)
-      : itemBodyRef.current.trim();
-    if (!itemForm.title.trim() || !noteBodyText(serializedBody)) {
-      toast.error("Question and answer / notes content are required");
-      return;
-    }
-    setSaving(true);
-    try {
-      const res = await fetch("/api/admin/master-data/notes", {
-        method: itemForm.id ? "PATCH" : "POST",
-        headers: { ...authHeader, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: itemForm.id ? "updateItem" : "createItem",
-          id: itemForm.id,
-          note_id: Number(itemForm.note_id),
-          syllabus_node_id: itemForm.syllabus_node_id ? Number(itemForm.syllabus_node_id) : null,
-          title: itemForm.title.trim(),
-          body: serializedBody,
-          attachment_url: itemForm.attachments[0]?.url || null,
-          attachment_name: itemForm.attachments[0]?.name || null,
-          attachments: itemForm.attachments,
-          is_active: itemForm.is_active,
-        }),
-      });
-      const json = await readJson(res);
-      if (!res.ok) throw new Error(json.error ?? "Failed to save note entry");
-      if (itemForm.id) {
-        await cleanupRemovedEditorAssets(itemForm.body, serializedBody, authHeader);
+      if (res.ok && json.data) {
+        setViewingNote(json.data);
       }
-      toast.success(itemForm.id ? "Note entry updated" : "Note entry added");
-      setItemDialogOpen(false);
-      itemEditorStateRef.current = null;
-      itemBodyRef.current = "";
-      setItemForm(blankItemForm);
-      await loadItems(Number(itemForm.note_id));
-      await loadRows();
-    } catch (error) {
-      toast.error(getErrorMessage(error));
+    } catch {
+      // fallback to preview row
     } finally {
-      setSaving(false);
+      setViewLoading(false);
     }
-  }
+  };
 
-  async function deleteNotes() {
-    if (!deleteTargets.length) return;
-    setSaving(true);
+  const openQuestionEditor = async (note: NoteTemplateRow) => {
     try {
-      const res = await fetch("/api/admin/master-data/notes", {
+      const res = await fetch(`/api/admin/master-data/notes/${note.id}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const json = await readJson(res);
+      if (res.ok && json.data) {
+        setQuestionTarget(json.data);
+      } else {
+        setQuestionTarget(note);
+      }
+    } catch {
+      setQuestionTarget(note);
+    }
+    setQuestionEditorOpen(true);
+  };
+
+  const deleteSelected = async () => {
+    if (!accessToken || !selectedIds.length) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/master-data/notes`, {
         method: "DELETE",
-        headers: { ...authHeader, "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: deleteTargets.map((item) => item.id) }),
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ids: selectedIds }),
       });
       const json = await readJson(res);
       if (!res.ok) throw new Error(json.error ?? "Failed to delete notes");
-      toast.success(`${deleteTargets.length} note${deleteTargets.length === 1 ? "" : "s"} deleted`);
-      setDeleteTargets([]);
-      await loadRows();
-    } catch (error) {
-      toast.error(getErrorMessage(error));
+      toast.success("Notes deleted successfully");
+      setSelectedIds([]);
+      setDeleteConfirmOpen(false);
+      void fetchNotes();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete notes");
     } finally {
-      setSaving(false);
+      setIsDeleting(false);
     }
-  }
+  };
 
-  async function deleteItem(item: NoteItem) {
-    setSaving(true);
-    try {
-      const res = await fetch("/api/admin/master-data/notes", {
-        method: "DELETE",
-        headers: { ...authHeader, "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "deleteItems", note_id: item.note_id, ids: [item.id] }),
-      });
-      const json = await readJson(res);
-      if (!res.ok) throw new Error(json.error ?? "Failed to delete note entry");
-      await cleanupRemovedEditorAssets(item.body, "", authHeader);
-      toast.success("Note entry deleted");
-      await loadItems(item.note_id);
-      await loadRows();
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const updateMarketplace = useCallback(async (row: NoteRow, action: "approveMarketplace" | "removeFromMarketplace" | "inheritMarketplace") => {
-    setSaving(true);
-    setMarketplaceActionId(row.id);
-    try {
-      const res = await fetch("/api/admin/master-data/notes", {
-        method: action === "inheritMarketplace" ? "POST" : "PATCH",
-        headers: { ...authHeader, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action,
-          id: row.id,
-          institution_id: activeInstitutionId,
-        }),
-      });
-      const json = await readJson(res);
-      if (!res.ok) throw new Error(json.error ?? "Failed to update marketplace");
-      toast.success(
-        action === "approveMarketplace"
-          ? "Notes are now visible in marketplace"
-          : action === "removeFromMarketplace"
-            ? "Notes removed from marketplace"
-            : "Marketplace notes copied"
-      );
-      await loadRows();
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setSaving(false);
-      setMarketplaceActionId(null);
-    }
-  }, [activeInstitutionId, authHeader, loadRows]);
-
-  const columns = useMemo<ColumnDef<NoteRow>[]>(() => [
-    {
-      id: "select",
-      header: ({ table }) => (
-        <Checkbox
-          checked={table.getIsAllPageRowsSelected() ? true : table.getIsSomePageRowsSelected() ? "indeterminate" : false}
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(Boolean(value))}
-          aria-label="Select all notes"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(Boolean(value))}
-          aria-label="Select note"
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
+  const isAlreadyInherited = useCallback(
+    (row: NoteTemplateRow) => {
+      return !isPlatformAdmin && notesView === "marketplace" && Boolean(row.inherited_by_institution_name);
     },
-    {
-      accessorKey: "syllabus_title",
-      header: "Notes",
-      cell: ({ row }) => {
-        const note = row.original;
-        const marketplaceMode = notesView === "marketplace" && !isPlatformAdmin;
-        return (
-          <div className="min-w-0">
-            <p className="truncate font-medium">{noteTitle(note)}</p>
-            <p className="truncate text-xs text-muted-foreground">{noteSubtitle(note)}</p>
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              {marketplaceMode && note.has_inherited_note && (
-                <Badge variant="outline" className="border-emerald-500/80 text-emerald-400">
-                  Already inherited
-                </Badge>
+    [isPlatformAdmin, notesView]
+  );
+
+  const startInheritNote = (note: NoteTemplateRow) => {
+    const effectiveInstId =
+      activeInstitutionId ??
+      (user?.memberships?.[0]?.institution_id ? Number(user.memberships[0].institution_id) : null) ??
+      ((user as any)?.institution_id ? Number((user as any).institution_id) : null);
+
+    if (!isPlatformAdmin && !effectiveInstId) {
+      toast.error("Select an institution from the sidebar first");
+      return;
+    }
+
+    setInheritTarget(note);
+    if (!isPlatformAdmin && effectiveInstId) {
+      setInheritInstitutionId(String(effectiveInstId));
+    }
+    setInheritOpen(true);
+  };
+
+  const directInheritFreeNote = async (note: NoteTemplateRow) => {
+    const effectiveInstId =
+      activeInstitutionId ??
+      (user?.memberships?.[0]?.institution_id ? Number(user.memberships[0].institution_id) : null) ??
+      ((user as any)?.institution_id ? Number((user as any).institution_id) : null);
+
+    if (!effectiveInstId) {
+      toast.error("Select an institution from the sidebar first");
+      return;
+    }
+
+    setInheriting(true);
+    try {
+      const res = await fetch(`/api/admin/master-data/notes/${note.id}/inherit`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ institution_id: effectiveInstId }),
+      });
+      const json = await readJson(res);
+      if (!res.ok) throw new Error(json.error ?? "Failed to inherit note");
+      toast.success("Note inherited into My Notes successfully");
+      setNotesView("my");
+      setPagination((p) => ({ ...p, pageIndex: 0 }));
+      void fetchNotes();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to inherit note");
+    } finally {
+      setInheriting(false);
+    }
+  };
+
+  const executeInherit = async () => {
+    if (!accessToken || !inheritTarget) return;
+    const targetInst = isPlatformAdmin
+      ? Number(inheritInstitutionId)
+      : activeInstitutionId
+      ? Number(activeInstitutionId)
+      : Number(inheritInstitutionId);
+
+    if (!targetInst) {
+      toast.error("Please specify a valid institution");
+      return;
+    }
+    setInheriting(true);
+    try {
+      const res = await fetch(`/api/admin/master-data/notes/${inheritTarget.id}/inherit`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ institution_id: targetInst }),
+      });
+      const json = await readJson(res);
+      if (!res.ok) throw new Error(json.error ?? "Failed to inherit note");
+      toast.success(
+        inheritTarget.is_paid && inheritTarget.price > 0
+          ? `Purchased and inherited "${inheritTarget.title}" (₹${inheritTarget.price})`
+          : `Inherited "${inheritTarget.title}" into My Notes`
+      );
+      setInheritOpen(false);
+      setInheritTarget(null);
+      setNotesView("my");
+      setPagination((p) => ({ ...p, pageIndex: 0 }));
+      void fetchNotes();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to inherit note");
+    } finally {
+      setInheriting(false);
+    }
+  };
+
+  const columns = useMemo<ColumnDef<NoteTemplateRow>[]>(
+    () => [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <Checkbox
+            checked={table.getIsAllPageRowsSelected()}
+            onCheckedChange={(val) => table.toggleAllPageRowsSelected(Boolean(val))}
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(val) => row.toggleSelected(Boolean(val))}
+          />
+        ),
+        enableSorting: false,
+        enableHiding: false,
+      },
+      {
+        accessorKey: "title",
+        header: "Note Title",
+        cell: ({ row }) => {
+          const item = row.original;
+          return (
+            <button
+              type="button"
+              className="min-w-[280px] cursor-pointer text-left py-1"
+              onClick={() => void openViewSheet(item)}
+            >
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-sm text-foreground hover:underline">{item.title}</span>
+                {item.is_public && (
+                  <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300 text-[10px]">
+                    Marketplace
+                  </Badge>
+                )}
+              </div>
+              {item.description && (
+                <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{item.description}</p>
               )}
-              {!marketplaceMode && note.source_note_id && (
-                <Badge variant="outline" className="border-emerald-500/80 text-emerald-400">
-                  Inherited
+            </button>
+          );
+        },
+      },
+      {
+        accessorKey: "subject_name",
+        header: "Subject",
+        cell: ({ row }) => (
+          <span className="text-xs font-medium">{row.original.subject_name || "General"}</span>
+        ),
+      },
+      {
+        accessorKey: "syllabus_data",
+        header: "Syllabus",
+        cell: ({ row }) => {
+          const units = getSyllabusSummary(row.original.syllabus_data);
+          if (!units || units.length === 0) {
+            return <span className="text-xs text-muted-foreground">-</span>;
+          }
+          return (
+            <div className="flex flex-wrap gap-1 max-w-[220px]">
+              {units.slice(0, 2).map((u, i) => (
+                <Badge key={i} variant="secondary" className="text-[10px] font-normal">
+                  {u}
                 </Badge>
+              ))}
+              {units.length > 2 && (
+                <span className="text-[10px] text-muted-foreground font-medium">+{units.length - 2} more</span>
               )}
             </div>
-          </div>
-        );
+          );
+        },
       },
-    },
-    {
-      accessorKey: "item_count",
-      header: "Entries",
-      cell: ({ row }) => row.original.item_count,
-    },
-    {
-      accessorKey: "institution_name",
-      header: "Institution",
-      cell: ({ row }) => row.original.institution_name || "-",
-    },
-    {
-      accessorKey: "is_active",
-      header: "Status",
-      cell: ({ row }) => (
-        <div className="flex flex-wrap gap-2">
-          {row.original.is_active ? (
-            <Badge className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-950 dark:text-green-300">
-              Active
+      {
+        accessorKey: "question_count",
+        header: "Q&A Entries",
+        cell: ({ row }) => {
+          const count = row.original.question_count ?? row.original.item_count ?? 0;
+          return (
+            <Badge variant="outline" className="bg-muted/40 font-mono text-xs">
+              {count} {count === 1 ? "entry" : "entries"}
+            </Badge>
+          );
+        },
+      },
+      {
+        id: "pricing",
+        header: "Pricing",
+        cell: ({ row }) => {
+          const item = row.original;
+          const isPaid = Boolean(item.is_paid || Number(item.price) > 0);
+          const price = Number(item.price) || 0;
+          return isPaid ? (
+            <Badge variant="outline" className="border-rose-500/30 bg-rose-500/10 text-rose-600 font-bold text-xs">
+              ₹{price}
             </Badge>
           ) : (
-            <Badge variant="outline">Inactive</Badge>
-          )}
-          {row.original.marketplace_requested && !row.original.marketplace_approved && (
-            <Badge variant="outline" className="border-amber-500/60 text-amber-300">
-              {isPlatformAdmin ? "Review" : "Pending"}
+            <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 font-bold text-xs">
+              Free
             </Badge>
-          )}
-        </div>
-      ),
-    },
-    {
-      id: "pricing",
-      header: "Pricing",
-      cell: ({ row }) => {
-        const isPaid = Boolean(row.original.is_paid || (Number(row.original.price) > 0));
-        const price = Number(row.original.price) || 0;
-        return isPaid ? (
-          <Badge variant="outline" className="border-rose-500/30 bg-rose-500/10 text-rose-600 font-bold text-xs">
-            ₹{price}
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 font-bold text-xs">
-            Free
-          </Badge>
-        );
+          );
+        },
       },
-    },
-    {
-      accessorKey: "updated_at",
-      header: "Updated",
-      cell: ({ row }) => formatDate(row.original.updated_at),
-    },
-    {
-      id: "actions",
-      header: "",
-      cell: ({ row }) => {
-        const note = row.original;
-        const marketplaceMode = notesView === "marketplace" && !isPlatformAdmin;
-        const isMarketplaceActionLoading = marketplaceActionId === note.id;
-        const canModifyRow = canModifyNote(note);
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" disabled={isMarketplaceActionLoading}>
-                {isMarketplaceActionLoading ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <MoreHorizontal className="size-4" />
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem className="whitespace-nowrap" onClick={() => openSheet(note)}>
-                <Eye className="size-4" />
-                View details
-              </DropdownMenuItem>
-              {canModifyRow && (
-                <DropdownMenuItem className="whitespace-nowrap" onClick={() => { setForm(formFromRow(note)); setDialogOpen(true); }}>
-                  <Pencil className="size-4" />
-                  Edit basic details
-                </DropdownMenuItem>
-              )}
-              {isPlatformAdmin && note.marketplace_requested && !note.marketplace_approved && (
-                <DropdownMenuItem className="whitespace-nowrap" onClick={() => void updateMarketplace(note, "approveMarketplace")}>
-                  <CheckCircle2 className="size-4" />
-                  Approve marketplace
-                </DropdownMenuItem>
-              )}
-              {isPlatformAdmin && note.marketplace_approved && (
-                <DropdownMenuItem className="whitespace-nowrap" onClick={() => void updateMarketplace(note, "removeFromMarketplace")}>
-                  <Store className="size-4" />
-                  Remove from marketplace
-                </DropdownMenuItem>
-              )}
-              {marketplaceMode && (
-                note.has_inherited_note ? (
-                  <DropdownMenuItem className="whitespace-nowrap" disabled>
-                    <Badge variant="outline" className="border-emerald-500/80 text-emerald-400">
-                      Already inherited
-                    </Badge>
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem className="whitespace-nowrap" onClick={() => void updateMarketplace(note, "inheritMarketplace")}>
-                    <Plus className="size-4" />
-                    Add to My Notes
-                  </DropdownMenuItem>
-                )
-              )}
-              {canModifyRow && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="whitespace-nowrap text-destructive" onClick={() => setDeleteTargets([note])}>
-                    <Trash2 className="size-4" />
-                    Delete
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        );
-      },
-    },
-  ], [canModifyNote, isPlatformAdmin, marketplaceActionId, notesView, openSheet, updateMarketplace]);
+      {
+        id: "actions",
+        header: "Actions",
+        cell: ({ row }) => {
+          const item = row.original;
+          const alreadyInherited = isAlreadyInherited(item);
+          const isPaid = Boolean(item.is_paid || Number(item.price) > 0);
 
-  if (!isReady) return null;
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="size-8">
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => void openViewSheet(item)} className="gap-2">
+                  <Eye className="size-4 text-muted-foreground" />
+                  View Note
+                </DropdownMenuItem>
+
+                {notesView === "marketplace" && !isPlatformAdmin ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    {alreadyInherited ? (
+                      <DropdownMenuItem disabled className="gap-2">
+                        <Badge variant="outline" className={inheritedBadgeClass}>
+                          Already inherited
+                        </Badge>
+                      </DropdownMenuItem>
+                    ) : isPaid ? (
+                      <DropdownMenuItem
+                        onClick={() => startInheritNote(item)}
+                        className="gap-2 text-rose-600 font-semibold"
+                      >
+                        <CreditCard className="size-4" />
+                        Buy & Inherit (₹{item.price})
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem
+                        onClick={() => void directInheritFreeNote(item)}
+                        className="gap-2 text-emerald-600 font-semibold"
+                      >
+                        <BookOpen className="size-4" />
+                        Inherit Free
+                      </DropdownMenuItem>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <DropdownMenuItem
+                      onClick={() => void openQuestionEditor(item)}
+                      className="gap-2"
+                    >
+                      <Plus className="size-4 text-primary" />
+                      Manage Q&A Entries
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setEditing(item);
+                        setEditorOpen(true);
+                      }}
+                      className="gap-2"
+                    >
+                      <Pencil className="size-4 text-muted-foreground" />
+                      Edit Details
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setSelectedIds([item.id]);
+                        setDeleteConfirmOpen(true);
+                      }}
+                      className="gap-2 text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="size-4" />
+                      Delete Note
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        },
+      },
+    ],
+    [isAlreadyInherited, notesView, isPlatformAdmin]
+  );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Notes</h1>
-          <p className="text-sm text-muted-foreground">Create class notes from syllabus units, chapters, and topics.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Notes & Handouts</h1>
+          <p className="text-sm text-muted-foreground">
+            {isPlatformAdmin
+              ? "Manage master notes library, review marketplace submissions, and create handouts."
+              : "Create institution study notes or inherit pre-made notes from the marketplace."}
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => void loadRows()} disabled={loading}>
-            {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-            Refresh
-          </Button>
+        <div className="flex items-center gap-2">
           <Button
             onClick={() => {
               if (notesView !== "my") {
                 setNotesView("my");
               }
-              openCreate();
+              setEditing(null);
+              setEditorOpen(true);
             }}
+            className="gap-1.5"
           >
             <Plus className="size-4" />
             Add Note
@@ -1199,633 +583,433 @@ export default function MasterDataNotesPage() {
         </div>
       </div>
 
-      {!isPlatformAdmin && (
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant={notesView === "my" ? "default" : "outline"}
-            onClick={() => {
-              setNotesView("my");
-              setPagination((current) => ({ ...current, pageIndex: 0 }));
-            }}
-          >
-            My Notes
-          </Button>
-          <Button
-            variant={notesView === "marketplace" ? "default" : "outline"}
-            onClick={() => {
-              setNotesView("marketplace");
-              setPagination((current) => ({ ...current, pageIndex: 0 }));
-            }}
-          >
-            Marketplace
-          </Button>
-        </div>
-      )}
+      {/* Tabs */}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant={notesView === "my" ? "default" : "outline"}
+          onClick={() => {
+            setNotesView("my");
+            setPagination((p) => ({ ...p, pageIndex: 0 }));
+          }}
+        >
+          My Notes
+        </Button>
+        <Button
+          type="button"
+          variant={notesView === "marketplace" ? "default" : "outline"}
+          onClick={() => {
+            setNotesView("marketplace");
+            setPagination((p) => ({ ...p, pageIndex: 0 }));
+          }}
+        >
+          Marketplace
+        </Button>
+      </div>
 
+      {/* Stat Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Total Notes" value={stats.total} />
+        <StatCard label="Active Notes" value={stats.active} />
+        <StatCard label="Q&A Entries" value={stats.questions} />
+        <StatCard label="Blocked" value={stats.blocked} />
+      </div>
+
+      {/* Main Table Card */}
       <DataTable
         columns={columns}
         data={rows}
-        loading={loading}
-        manualPagination
         pageCount={pageCount}
         pagination={pagination}
         onPaginationChange={setPagination}
-        enableRowSelection={notesView === "my"}
-        getRowId={(row) => String(row.id)}
-        onRowClick={openSheet}
-        emptyText={
-          notesView === "marketplace"
-            ? "No marketplace notes found."
-            : notesView === "requests"
-              ? "No note requests found."
-              : "No notes found."
-        }
+        loading={loading}
+        emptyText={notesView === "marketplace" ? "No notes found in marketplace." : "No notes found in your library."}
+        onRowClick={(row) => void openViewSheet(row)}
         toolbarLeft={
           <Input
             value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPagination((current) => ({ ...current, pageIndex: 0 }));
-            }}
-            placeholder="Search notes, syllabus, class..."
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search notes, subjects, classes..."
             className="w-full sm:w-80"
           />
         }
-        selectedActions={(selectedRows, resetSelection) => (
+        toolbarRight={
+          <Button type="button" variant="ghost" size="icon" onClick={() => void fetchNotes()}>
+            <RefreshCw className={cn("size-4", loading && "animate-spin")} />
+            <span className="sr-only">Refresh notes</span>
+          </Button>
+        }
+        selectedActions={(selectedRows) => (
           <Button
             variant="destructive"
             size="sm"
             onClick={() => {
-              setDeleteTargets(selectedRows);
-              resetSelection();
+              setSelectedIds(selectedRows.map((r) => r.id));
+              setDeleteConfirmOpen(true);
             }}
+            className="gap-1.5"
           >
-            <Trash2 className="size-4" />
-            Delete
+            <Trash2 className="size-3.5" />
+            Delete selected ({selectedRows.length})
           </Button>
         )}
       />
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[92vh] overflow-y-auto max-w-4xl sm:!max-w-4xl w-full">
-          <DialogHeader>
-            <DialogTitle>{form.id ? "Edit Note Details" : "Add Note Details"}</DialogTitle>
-            <DialogDescription>
-              Provide note title, select course/program, syllabus, and optional unit/chapter before adding Q&A entries.
-            </DialogDescription>
-          </DialogHeader>
+      {/* Note Template Wizard Modal */}
+      <NoteTemplateEditor
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+        accessToken={accessToken}
+        template={editing}
+        fetchInstitutions={fetchInstitutions}
+        onSaved={(_noteId) => {
+          void fetchNotes();
+        }}
+      />
 
-          <div className="grid gap-4 py-2 sm:grid-cols-2">
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="note-main-title">Title of Notes *</Label>
-              <Input
-                id="note-main-title"
-                value={form.title}
-                onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-                placeholder="e.g. Complete Mechanics & Laws of Motion Notes"
-              />
-            </div>
+      {/* Q&A Editor Modal */}
+      {questionTarget && (
+        <NoteQuestionEditor
+          open={questionEditorOpen}
+          onOpenChange={setQuestionEditorOpen}
+          accessToken={accessToken}
+          template={questionTarget}
+          onSaved={async () => {
+            await fetchNotes();
+            if (viewingNote?.id === questionTarget.id) {
+              await openViewSheet(questionTarget);
+            }
+          }}
+        />
+      )}
 
-            {isPlatformAdmin ? (
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Institution *</Label>
-                <AsyncSearchPopover<Option>
-                  value={form.institution_id}
-                  selectedLabel={form.institution_label}
-                  placeholder="Select institution..."
-                  searchPlaceholder="Search institutions..."
-                  fetcher={(query, page) => fetchLookup<Option>("institutions", query, page)}
-                  getValue={(item) => String(item.id)}
-                  getLabel={optionLabel}
-                  onChange={(value) => setForm((current) => ({ ...current, institution_id: value, institution_label: value ? current.institution_label : "", syllabus_id: "", syllabus_label: "", syllabus_node_id: "", syllabus_node_label: "", subject_id: "", program_id: "", program_label: "", section_id: "", section_label: "" }))}
-                  onSelectItem={(item) => setForm((current) => ({ ...current, institution_id: String(item.id), institution_label: optionLabel(item), syllabus_id: "", syllabus_label: "", syllabus_node_id: "", syllabus_node_label: "", subject_id: "", program_id: "", program_label: "", section_id: "", section_label: "" }))}
-                />
-              </div>
-            ) : (
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Institution</Label>
-                <Input value={activeInstitutionName} readOnly className="bg-muted/50" />
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label>{isPlatformAdmin ? "Course / Program *" : "Class / Program *"}</Label>
-              <AsyncSearchPopover<Option>
-                value={form.program_id}
-                selectedLabel={form.program_label}
-                placeholder={isPlatformAdmin ? "Select master course / program..." : "Select class..."}
-                searchPlaceholder="Search courses / programs..."
-                disabled={!effectiveInstitutionId}
-                fetcher={(query, page) => fetchLookup<Option>("programs", query, page, { institutionId: effectiveInstitutionId })}
-                getValue={(item) => String(item.id)}
-                getLabel={optionLabel}
-                onChange={(value) => setForm((current) => ({ ...current, program_id: value, program_label: value ? current.program_label : "", syllabus_id: "", syllabus_label: "", syllabus_node_id: "", syllabus_node_label: "", section_id: "", section_label: "" }))}
-                onSelectItem={(item) => setForm((current) => ({ ...current, program_id: String(item.id), program_label: optionLabel(item), syllabus_id: "", syllabus_label: "", syllabus_node_id: "", syllabus_node_label: "", section_id: "", section_label: "" }))}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Section</Label>
-              <AsyncSearchPopover<Option>
-                value={form.section_id}
-                selectedLabel={form.section_label}
-                placeholder="All sections"
-                searchPlaceholder="Search sections..."
-                disabled={!form.program_id || isPlatformAdmin}
-                showDefaultOption
-                defaultOptionLabel="All sections"
-                defaultOptionValue=""
-                fetcher={(query, page) => fetchLookup<Option>("sections", query, page, { programId: form.program_id })}
-                getValue={(item) => String(item.id)}
-                getLabel={optionLabel}
-                onChange={(value) => setForm((current) => ({ ...current, section_id: value, section_label: value ? current.section_label : "" }))}
-                onSelectItem={(item) => setForm((current) => ({ ...current, section_id: String(item.id), section_label: optionLabel(item) }))}
-              />
-            </div>
-
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Syllabus</Label>
-              <AsyncSearchPopover<SyllabusOption>
-                value={form.syllabus_id}
-                selectedLabel={form.syllabus_label}
-                placeholder={form.program_id ? "Select syllabus for this course..." : "Select syllabus..."}
-                searchPlaceholder="Search syllabus..."
-                disabled={!effectiveInstitutionId}
-                fetcher={(query, page) => fetchLookup<SyllabusOption>("syllabi", query, page, { institutionId: effectiveInstitutionId, programId: form.program_id })}
-                getValue={(item) => String(item.id)}
-                getLabel={(item) => item.title}
-                renderItem={(item) => (
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{item.title}</p>
-                    <p className="truncate text-xs text-muted-foreground">{item.subject_name}</p>
+      {/* Note View Sheet */}
+      <Sheet open={viewSheetOpen} onOpenChange={setViewSheetOpen}>
+        <SheetContent className="flex w-full flex-col gap-0 overflow-hidden p-0" defaultSize={720} resizable minSize={420} maxSize={1040}>
+          <SheetHeader className="border-b px-6 py-5 pr-12 text-left">
+            <div className="flex items-center justify-between gap-4">
+              <SheetTitle className="text-xl">{viewingNote?.title ?? "Note Details"}</SheetTitle>
+              <div className="flex items-center gap-2">
+                {(isPlatformAdmin || notesView === "my") && viewingNote && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditing(viewingNote);
+                      setEditorOpen(true);
+                    }}
+                    className="gap-1.5"
+                  >
+                    <Pencil className="size-3.5" />
+                    Edit Note
+                  </Button>
+                )}
+                {notesView === "marketplace" && viewingNote && !isPlatformAdmin && (
+                  <div>
+                    {isAlreadyInherited(viewingNote) ? (
+                      <Badge variant="outline" className={inheritedBadgeClass}>
+                        Already inherited
+                      </Badge>
+                    ) : viewingNote.is_paid && viewingNote.price > 0 ? (
+                      <Button
+                        size="sm"
+                        onClick={() => startInheritNote(viewingNote)}
+                        disabled={inheriting}
+                        className="gap-1.5 bg-rose-600 hover:bg-rose-700 text-white"
+                      >
+                        <CreditCard className="size-4" />
+                        Pay ₹{viewingNote.price} & Inherit
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => void directInheritFreeNote(viewingNote)}
+                        disabled={inheriting}
+                        className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      >
+                        <BookOpen className="size-4" />
+                        Inherit Free
+                      </Button>
+                    )}
                   </div>
                 )}
-                onChange={(value) => setForm((current) => ({ ...current, syllabus_id: value, syllabus_label: value ? current.syllabus_label : "", syllabus_node_id: "", syllabus_node_label: "", subject_id: "" }))}
-                onSelectItem={(item) => setForm((current) => ({ ...current, syllabus_id: String(item.id), syllabus_label: item.title, syllabus_node_id: "", syllabus_node_label: "", subject_id: String(item.subject_id) }))}
-              />
+              </div>
             </div>
-
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Syllabus Unit / Chapter (Optional)</Label>
-              <AsyncSearchPopover<NodeOption>
-                value={form.syllabus_node_id}
-                selectedLabel={form.syllabus_node_label}
-                placeholder="Overall syllabus note"
-                searchPlaceholder="Search units or chapters..."
-                disabled={!form.syllabus_id}
-                showDefaultOption
-                defaultOptionLabel="Overall syllabus note"
-                defaultOptionValue=""
-                fetcher={(query, page) => fetchLookup<NodeOption>("nodes", query, page, { syllabusId: form.syllabus_id })}
-                getValue={(item) => String(item.id)}
-                getLabel={nodeLabel}
-                onChange={(value) => setForm((current) => ({ ...current, syllabus_node_id: value, syllabus_node_label: value ? current.syllabus_node_label : "" }))}
-                onSelectItem={(item) => setForm((current) => ({ ...current, syllabus_node_id: String(item.id), syllabus_node_label: nodeLabel(item) }))}
-              />
-            </div>
-
-            <div className="sm:col-span-2">
-              <ContentPricingOption
-                isPaid={form.is_paid}
-                onIsPaidChange={(val) => setForm((curr) => ({ ...curr, is_paid: val }))}
-                price={form.price}
-                onPriceChange={(val) => setForm((curr) => ({ ...curr, price: val }))}
-                label="Notes Access Pricing"
-                description="Choose if students access these notes for Free or if a fee is charged."
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-5 pt-2 sm:col-span-2">
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={form.marketplace_requested}
-                  onCheckedChange={(checked) => setForm((current) => ({ ...current, marketplace_requested: Boolean(checked) }))}
-                />
-                Request marketplace review
-              </label>
-
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={form.is_active}
-                  onCheckedChange={(checked) => setForm((current) => ({ ...current, is_active: Boolean(checked) }))}
-                />
-                Active
-              </label>
-            </div>
-          </div>
-
-          <DialogFooter className="flex items-center justify-between sm:justify-between w-full">
-            <ProgressiveSaveIndicator status={noteSaveStatus} />
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setDialogOpen(false);
-                  clearNoteDraft();
-                }}
-                disabled={saving}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  void saveNote();
-                  clearNoteDraft();
-                }}
-                disabled={saving}
-              >
-                {saving && <Loader2 className="size-4 animate-spin" />}
-                {form.id ? "Save Details" : "Create Note"}
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Sheet open={Boolean(active)} onOpenChange={(open) => !open && setActive(null)}>
-        <SheetContent className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
-          <SheetHeader className="border-b px-6 py-5 pr-14 text-left">
-            <SheetTitle className="flex items-center gap-2 text-xl">
-              <StickyNote className="size-5 text-primary" />
-              {active ? noteTitle(active) : "Notes"}
-            </SheetTitle>
-            <SheetDescription className="mt-2 text-base leading-6">
-              {active ? noteSubtitle(active) : ""}
+            <SheetDescription>
+              {viewingNote?.subject_name ? `Subject: ${viewingNote.subject_name}` : "General Notes"}
             </SheetDescription>
           </SheetHeader>
 
-          <div className="border-b px-6 py-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-wrap gap-2">
-                {active?.subject_name && <Badge variant="outline">{active.subject_name}</Badge>}
-                {active?.is_active ? (
-                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-950 dark:text-green-300">
-                    Active
-                  </Badge>
-                ) : (
-                  <Badge variant="outline">Inactive</Badge>
-                )}
-                {active?.marketplace_requested && !active.marketplace_approved && (
-                  <Badge variant="outline" className="border-amber-500/60 text-amber-300">
-                    Marketplace pending
-                  </Badge>
-                )}
-                {active?.source_note_id && (
-                  <Badge variant="outline" className="border-emerald-500/80 text-emerald-400">
-                    Inherited
-                  </Badge>
-                )}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {viewLoading ? (
+              <div className="flex h-48 items-center justify-center gap-2 text-muted-foreground text-sm">
+                <Loader2 className="size-4 animate-spin" />
+                Loading note details...
               </div>
-              {canEditActive && (
-                <Button onClick={openItemCreate}>
-                  <Plus className="size-4" />
-                  Add Q&A Note Entry
-                </Button>
-              )}
-            </div>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-            {itemsLoading ? (
-              <div className="flex min-h-48 flex-col items-center justify-center rounded-md border border-dashed text-center text-sm text-muted-foreground">
-                <StickyNote className="mb-3 size-8 text-muted-foreground" />
-                <div className="flex items-center gap-2">
-                  <Loader2 className="size-4 animate-spin" />
-                  Loading note entries...
+            ) : !viewingNote ? (
+              <p className="text-sm text-muted-foreground">No details found.</p>
+            ) : (
+              <div className="space-y-6">
+                {/* Metric Summary */}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-md border p-4">
+                    <p className="text-xs text-muted-foreground">Subject</p>
+                    <p className="mt-1 text-base font-semibold">{viewingNote.subject_name || "General"}</p>
+                  </div>
+                  <div className="rounded-md border p-4">
+                    <p className="text-xs text-muted-foreground">Q&A Entries</p>
+                    <p className="mt-1 text-xl font-semibold">
+                      {viewingNote.questions?.length ?? viewingNote.question_count ?? 0}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ) : items.length ? (
-              <div className="space-y-4">
-                {items.map((item, index) => {
-                  const itemAttachments: NoteAttachment[] = Array.isArray(item.attachments) && item.attachments.length
-                    ? item.attachments
-                    : item.attachment_url
-                      ? [{ url: item.attachment_url, name: item.attachment_name || "Attachment" }]
-                      : [];
 
-                  return (
-                    <div key={item.id} className="rounded-xl border bg-card p-5 shadow-sm space-y-3.5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 space-y-1.5">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="secondary" className="font-mono text-xs font-semibold">
-                              Q{index + 1}
-                            </Badge>
-                            {item.node_title && (
-                              <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20">
-                                {noteItemScopeLabel(item)}
-                              </Badge>
-                            )}
-                          </div>
-                          <h3 className="text-base font-semibold text-foreground leading-snug">
-                            {item.title}
-                          </h3>
-                        </div>
-                        {canEditActive && (
-                          <div className="flex gap-1 shrink-0">
-                            <Button variant="ghost" size="icon-sm" onClick={() => openItemEdit(item)}>
-                              <Pencil className="size-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon-sm" onClick={() => void deleteItem(item)}>
-                              <Trash2 className="size-4 text-destructive" />
-                            </Button>
-                          </div>
-                        )}
-                      </div>
+                {viewingNote.description && (
+                  <div>
+                    <h2 className="font-semibold text-sm">Description</h2>
+                    <p className="mt-1.5 text-sm text-muted-foreground whitespace-pre-line">{viewingNote.description}</p>
+                  </div>
+                )}
 
-                      {/* Formatted Answer */}
-                      <div className="rounded-lg border bg-muted/20 p-4">
-                        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
-                          <FileText className="size-3.5 text-primary" />
-                          Answer / Notes Content
+                {/* Syllabus Mapping */}
+                <section className="space-y-3">
+                  <div>
+                    <h2 className="font-semibold">Syllabus Mapping</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Curriculum topics and syllabus units linked to this note.
+                    </p>
+                  </div>
+                  {viewingNote.subject_name && (
+                    <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-3.5 py-2 text-primary font-medium text-sm">
+                      <span className="text-xs text-muted-foreground">Subject:</span>
+                      <span className="font-bold">{viewingNote.subject_name}</span>
+                    </div>
+                  )}
+                  {Array.isArray(viewingNote.syllabus_data) && viewingNote.syllabus_data.length > 0 ? (
+                    <div className="space-y-2 rounded-lg border p-3 bg-muted/20">
+                      {viewingNote.syllabus_data.map((unit: any, uIdx: number) => (
+                        <div key={unit.id ?? uIdx} className="rounded-md border bg-card p-3">
+                          <p className="font-semibold text-sm flex items-center gap-2">
+                            <span className="flex size-5 items-center justify-center rounded bg-primary/10 text-primary text-xs font-bold">
+                              {unit.unit_number ?? uIdx + 1}
+                            </span>
+                            {unit.title}
+                          </p>
+                          {Array.isArray(unit.chapters) && unit.chapters.length > 0 && (
+                            <div className="mt-2 ml-7 pl-3 border-l space-y-2">
+                              {unit.chapters.map((chapter: any, cIdx: number) => (
+                                <div key={chapter.id ?? cIdx} className="space-y-1">
+                                  <p className="text-xs font-medium text-foreground">
+                                    • {chapter.title}
+                                  </p>
+                                  {Array.isArray(chapter.lessons) && chapter.lessons.length > 0 && (
+                                    <div className="ml-4 space-y-0.5">
+                                      {chapter.lessons.map((lesson: any, lIdx: number) => (
+                                        <p key={lesson.id ?? lIdx} className="text-[11px] text-muted-foreground">
+                                          - {lesson.title}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        <NoteBodyRenderer value={item.body} />
-                      </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-dashed px-4 py-6 text-center text-xs text-muted-foreground">
+                      No specific syllabus units mapped to this note.
+                    </div>
+                  )}
+                </section>
 
-                      {/* Attachments */}
-                      {itemAttachments.length > 0 && (
-                        <div className="space-y-1.5 pt-1">
-                          <div className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                            <Paperclip className="size-3.5 text-primary" />
-                            Attachments ({itemAttachments.length})
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {itemAttachments.map((att, attIdx) => (
-                              <a
-                                key={attIdx}
-                                href={att.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
-                              >
-                                <Paperclip className="size-3" />
-                                <span className="truncate max-w-[200px]">{att.name || `Attachment ${attIdx + 1}`}</span>
-                                <ExternalLink className="size-3 opacity-60" />
-                              </a>
-                            ))}
-                          </div>
-                        </div>
+                {/* Questions / Q&A entries */}
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="font-semibold">Q&A Entries</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Questions and detailed explanations for this note.
+                      </p>
+                    </div>
+                    {(isPlatformAdmin || notesView === "my") && (
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          void openQuestionEditor(viewingNote);
+                        }}
+                        className="gap-1.5"
+                      >
+                        <Plus className="size-4" />
+                        Manage Q&As
+                      </Button>
+                    )}
+                  </div>
+
+                  {!viewingNote.questions || viewingNote.questions.length === 0 ? (
+                    <div className="rounded-md border border-dashed p-8 text-center text-muted-foreground text-sm">
+                      <p>No Q&A entries added yet.</p>
+                      {(isPlatformAdmin || notesView === "my") && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="mt-3 gap-1.5"
+                          onClick={() => void openQuestionEditor(viewingNote)}
+                        >
+                          <Plus className="size-4" />
+                          Add Q&A Entries
+                        </Button>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="flex min-h-48 flex-col items-center justify-center rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-                <StickyNote className="mb-3 size-8 text-muted-foreground" />
-                No Q&A note entries added yet. Click &quot;Add Q&A Note Entry&quot; to begin.
+                  ) : (
+                    <div className="space-y-3">
+                      {viewingNote.questions.map((q, idx) => (
+                        <div key={q.id ?? idx} className="rounded-lg border bg-card p-4 space-y-3 shadow-xs">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="flex size-6 items-center justify-center rounded-full border border-primary/30 bg-primary/10 text-xs font-semibold text-primary">
+                                {idx + 1}
+                              </span>
+                              <Badge variant="outline" className="text-[10px] capitalize">
+                                {q.question_type.replace("_", " ")}
+                              </Badge>
+                            </div>
+                          </div>
+
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{q.question_text}</p>
+                          </div>
+
+                          {/* Options if Objective / True-False */}
+                          {q.options && q.options.length > 0 && (
+                            <div className="space-y-1.5 pl-2 border-l-2 border-primary/30">
+                              {q.options.map((opt, oIdx) => (
+                                <div
+                                  key={opt.id ?? oIdx}
+                                  className={cn(
+                                    "flex items-center gap-2 rounded px-2 py-1 text-xs",
+                                    opt.is_correct
+                                      ? "bg-emerald-500/10 text-emerald-700 font-semibold dark:text-emerald-300"
+                                      : "text-muted-foreground"
+                                  )}
+                                >
+                                  {opt.is_correct && <CheckCircle2 className="size-3.5 text-emerald-600" />}
+                                  <span>{opt.text}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Answer / Solution Explanation */}
+                          {q.answer_text && (
+                            <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-1">
+                              <p className="flex items-center gap-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                                <FileCheck2 className="size-3.5 text-emerald-600" />
+                                Solution / Explanation:
+                              </p>
+                              <p className="text-xs text-foreground whitespace-pre-line">{q.answer_text}</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
               </div>
             )}
           </div>
         </SheetContent>
       </Sheet>
 
-      <Dialog open={itemDialogOpen} onOpenChange={setItemDialogOpen}>
-        <DialogContent
-          className="flex h-[88dvh] max-h-[900px] w-[96vw] max-w-[1400px] flex-col gap-0 overflow-hidden rounded-lg border bg-background p-0 shadow-2xl sm:max-w-[1400px]"
-          onPointerDownOutside={(event) => event.preventDefault()}
-        >
-          <DialogHeader className="shrink-0 border-b px-5 py-4 pr-14">
-            <DialogTitle className="flex items-center gap-2">
-              <StickyNote className="size-4 text-primary" />
-              {itemForm.id ? "Edit Q&A Note Entry" : "Add Q&A Note Entry"}
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              Add Question, Syllabus Unit, and Attachments on the left and write formatted Answer on the editor canvas.
+      {/* Delete Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {selectedIds.length} selected note(s)? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
-
-          <div ref={noteEditorSplitRef} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-            <div
-              className="flex h-full min-h-0 min-w-0 shrink-0 grow-0 flex-col overflow-hidden bg-background"
-              style={{ flexBasis: `${noteEditorLeftSize}%` }}
-            >
-              <div className="shrink-0 border-b px-5 py-5">
-                <h3 className="font-semibold">Question & Details</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Select syllabus unit/chapter, provide the Question or Topic heading, and add attachments.
-                </p>
-              </div>
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
-                <div className="space-y-2">
-                  <Label>Unit / Chapter / Topic</Label>
-                  <AsyncSearchPopover<NodeOption>
-                    value={itemForm.syllabus_node_id}
-                    selectedLabel={itemForm.syllabus_node_label}
-                    placeholder="Overall syllabus note"
-                    searchPlaceholder="Search units or chapters..."
-                    disabled={!active?.syllabus_id}
-                    showDefaultOption
-                    defaultOptionLabel="Overall syllabus note"
-                    defaultOptionValue=""
-                    fetcher={(query, page) => fetchLookup<NodeOption>("nodes", query, page, { syllabusId: active?.syllabus_id ? String(active.syllabus_id) : "" })}
-                    getValue={(item) => String(item.id)}
-                    getLabel={nodeLabel}
-                    onChange={(value) => setItemForm((current) => ({ ...current, syllabus_node_id: value, syllabus_node_label: value ? current.syllabus_node_label : "" }))}
-                    onSelectItem={(item) => setItemForm((current) => ({ ...current, syllabus_node_id: String(item.id), syllabus_node_label: nodeLabel(item) }))}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="note-question-title">Question / Heading *</Label>
-                  <Input
-                    id="note-question-title"
-                    value={itemForm.title}
-                    onChange={(event) => setItemForm((current) => ({ ...current, title: event.target.value }))}
-                    placeholder="e.g. State and prove Archimedes' Principle with diagram?"
-                  />
-                </div>
-
-                {/* Attachments Section */}
-                <div className="space-y-2.5 rounded-lg border bg-muted/20 p-3.5">
-                  <div className="flex items-center justify-between">
-                    <Label className="flex items-center gap-1.5 font-medium text-xs">
-                      <Paperclip className="size-3.5 text-primary" />
-                      Attachments ({itemForm.attachments.length})
-                    </Label>
-                    <label className="cursor-pointer">
-                      <input
-                        type="file"
-                        className="sr-only"
-                        onChange={handleFileUpload}
-                        disabled={uploadingFile}
-                      />
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                        {uploadingFile ? <Loader2 className="size-3 animate-spin" /> : <Upload className="size-3" />}
-                        Upload File
-                      </span>
-                    </label>
-                  </div>
-
-                  {/* Add URL attachment */}
-                  <div className="space-y-1.5 pt-1">
-                    <Input
-                      placeholder="Attachment title (e.g. Formula Sheet PDF)"
-                      value={itemForm.attachmentInputName}
-                      onChange={(e) => setItemForm((c) => ({ ...c, attachmentInputName: e.target.value }))}
-                      className="h-8 text-xs"
-                    />
-                    <div className="flex gap-1.5">
-                      <Input
-                        placeholder="Attachment URL (https://...)"
-                        value={itemForm.attachmentInputUrl}
-                        onChange={(e) => setItemForm((c) => ({ ...c, attachmentInputUrl: e.target.value }))}
-                        className="h-8 text-xs"
-                      />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="xs"
-                        className="h-8 shrink-0 text-xs"
-                        onClick={() => {
-                          if (!itemForm.attachmentInputUrl.trim()) {
-                            toast.error("Enter attachment URL");
-                            return;
-                          }
-                          const newAtt: NoteAttachment = {
-                            url: itemForm.attachmentInputUrl.trim(),
-                            name: itemForm.attachmentInputName.trim() || "Attachment",
-                            type: "link",
-                          };
-                          setItemForm((c) => ({
-                            ...c,
-                            attachments: [...c.attachments, newAtt],
-                            attachmentInputUrl: "",
-                            attachmentInputName: "",
-                          }));
-                        }}
-                      >
-                        <Plus className="size-3 mr-1" /> Add
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Attachment List */}
-                  {itemForm.attachments.length > 0 && (
-                    <div className="space-y-1.5 pt-1">
-                      {itemForm.attachments.map((att, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between gap-2 rounded border bg-background px-2.5 py-1.5 text-xs"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <FileText className="size-3.5 shrink-0 text-primary" />
-                            <a
-                              href={att.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="truncate font-medium text-primary hover:underline"
-                            >
-                              {att.name || att.url}
-                            </a>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-xs"
-                            className="size-6 text-muted-foreground hover:text-destructive shrink-0"
-                            onClick={() =>
-                              setItemForm((c) => ({
-                                ...c,
-                                attachments: c.attachments.filter((_, i) => i !== idx),
-                              }))
-                            }
-                          >
-                            <Trash2 className="size-3" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <label className="flex items-center gap-2 pt-2 text-sm">
-                  <Checkbox
-                    checked={itemForm.is_active}
-                    onCheckedChange={(checked) => setItemForm((current) => ({ ...current, is_active: Boolean(checked) }))}
-                  />
-                  Active
-                </label>
-              </div>
-              <DialogFooter className="shrink-0 border-t px-5 py-4">
-                <Button variant="outline" onClick={() => setItemDialogOpen(false)} disabled={saving}>
-                  Cancel
-                </Button>
-                <Button onClick={() => void saveNoteItem()} disabled={saving}>
-                  {saving && <Loader2 className="size-4 animate-spin" />}
-                  {itemForm.id ? "Save Q&A Entry" : "Add Q&A Entry"}
-                </Button>
-              </DialogFooter>
-            </div>
-
-            <div
-              aria-label="Resize notes editor panels"
-              role="separator"
-              tabIndex={0}
-              className="group relative z-30 flex w-px shrink-0 cursor-col-resize items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-3 after:-translate-x-1/2"
-              onPointerDown={startNoteEditorResize}
-              onKeyDown={(event) => {
-                if (event.key === "ArrowLeft") {
-                  event.preventDefault();
-                  setNoteEditorLeftSize((current) => Math.max(24, current - 2));
-                }
-                if (event.key === "ArrowRight") {
-                  event.preventDefault();
-                  setNoteEditorLeftSize((current) => Math.min(45, current + 2));
-                }
-              }}
-            >
-              <div className="z-10 flex h-8 w-2 items-center justify-center rounded-full border bg-background shadow-sm transition-colors group-hover:border-primary/60">
-                <span className="h-4 w-0.5 rounded-full bg-muted-foreground/60" />
-              </div>
-            </div>
-
-            <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-              <div className="shrink-0 border-b px-5 py-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="font-semibold">Answer / Explanation Canvas</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Write formatted explanations, steps, formulas, tables, and notes content.
-                    </p>
-                  </div>
-                  <div className="hidden text-xs text-muted-foreground md:block">
-                    Press <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px]">/</kbd> for commands
-                  </div>
-                </div>
-              </div>
-              <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-                <RichTextEditor
-                  key={itemForm.id ?? `new-${itemForm.note_id}`}
-                  defaultValue={itemForm.editorState ?? undefined}
-                  onChange={(state) => {
-                    itemEditorStateRef.current = state;
-                    itemBodyRef.current = JSON.stringify(state);
-                  }}
-                  placeholder="Type the answer or notes content here... (Press / for commands)"
-                  maxLength={50000}
-                  alwaysEditable
-                  className="h-full min-h-0"
-                />
-              </div>
-            </div>
-          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)} disabled={isDeleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void deleteSelected()} disabled={isDeleting}>
+              {isDeleting ? <Loader2 className="size-4 animate-spin" /> : "Delete"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={deleteTargets.length > 0} onOpenChange={(open) => !open && setDeleteTargets([])}>
-        <DialogContent>
+      {/* Inherit / Purchase Marketplace Note Dialog */}
+      <Dialog open={inheritOpen} onOpenChange={setInheritOpen}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Delete note{deleteTargets.length === 1 ? "" : "s"}?</DialogTitle>
+            <DialogTitle>
+              {inheritTarget?.is_paid && inheritTarget.price > 0
+                ? "Purchase & Inherit Note"
+                : "Inherit Marketplace Note"}
+            </DialogTitle>
             <DialogDescription>
-              This will remove the selected note set and its note entries from student visibility.
+              Inherit <strong>{inheritTarget?.title}</strong> with all its Q&A entries and syllabus mappings into your institution&apos;s library.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTargets([])} disabled={saving}>Cancel</Button>
-            <Button variant="destructive" onClick={() => void deleteNotes()} disabled={saving}>
-              {saving && <Loader2 className="size-4 animate-spin" />}
-              Delete
+
+          {inheritTarget && (
+            <div className="rounded-lg border p-4 bg-muted/20 space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Subject:</span>
+                <span className="font-semibold">{inheritTarget.subject_name || "General"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Q&A Entries:</span>
+                <span className="font-semibold">{inheritTarget.question_count ?? inheritTarget.item_count ?? 0}</span>
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t">
+                <span className="font-medium">Price:</span>
+                {inheritTarget.is_paid && inheritTarget.price > 0 ? (
+                  <Badge variant="outline" className="border-rose-500/50 bg-rose-500/10 text-rose-600 font-bold text-sm">
+                    ₹{inheritTarget.price}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="border-emerald-500/50 bg-emerald-500/10 text-emerald-600 font-bold text-sm">
+                    Free
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
+
+          {isPlatformAdmin && (
+            <div className="space-y-2 py-2">
+              <Label>Target Institution ID</Label>
+              <Input
+                placeholder="Enter Target Institution ID"
+                value={inheritInstitutionId}
+                onChange={(e) => setInheritInstitutionId(e.target.value)}
+              />
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setInheritOpen(false)} disabled={inheriting}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void executeInherit()}
+              disabled={inheriting}
+              className={inheritTarget?.is_paid && inheritTarget.price > 0 ? "bg-rose-600 hover:bg-rose-700" : ""}
+            >
+              {inheriting ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : inheritTarget?.is_paid && inheritTarget.price > 0 ? (
+                `Pay ₹${inheritTarget.price} & Inherit`
+              ) : (
+                "Inherit to My Notes"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1833,3 +1017,4 @@ export default function MasterDataNotesPage() {
     </div>
   );
 }
+

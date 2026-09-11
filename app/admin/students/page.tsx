@@ -23,18 +23,16 @@ import {
 import { useAuthStore } from "@/store";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { useActiveAcademicYearId } from "@/hooks/use-active-academic-year-id";
+import { getApiErrorMessage, readJsonResponse } from "@/lib/auth/client-permission-errors";
 import { hasPermission } from "@/lib/auth/permissions";
-import {
-  getApiErrorMessage,
-  readJsonResponse,
-} from "@/lib/auth/client-permission-errors";
 import type { AdminUserDetails } from "@/lib/queries/user";
+import { AddStudentDialog, type RoleOption, type StudentRecordsResponse } from "./add-student-dialog";
 import { UserProfileSheet } from "@/app/admin/users/user-profile-sheet";
-import {
-  AddStudentDialog,
-  type RoleOption,
-  type StudentRecordsResponse,
-} from "./add-student-dialog";
+import { BulkPromotionDialog } from "./_components/bulk-promotion-dialog";
+import { StudentGuardiansDialog } from "./_components/student-guardians-dialog";
+import { StudentPromotionsDialog } from "./_components/student-promotions-dialog";
+import { StudentPasswordDialog } from "./_components/student-password-dialog";
+import { StudentAssignClassDialog } from "./_components/student-assign-class-dialog";
 import { buildStudentColumns, type Student } from "./columns";
 import { usePersistedState } from "@/hooks/use-persisted-state";
 import {
@@ -43,11 +41,6 @@ import {
   StudentFiltersDrawer,
   type StudentFilters,
 } from "./_components/student-filters-drawer";
-import { BulkPromotionDialog } from "./_components/bulk-promotion-dialog";
-import { StudentGuardiansDialog } from "./_components/student-guardians-dialog";
-import { StudentPromotionsDialog } from "./_components/student-promotions-dialog";
-import { StudentPasswordDialog } from "./_components/student-password-dialog";
-import { StudentAssignClassDialog } from "./_components/student-assign-class-dialog";
 
 type StudentDetailsWithRecords = AdminUserDetails & {
   student_records?: StudentRecordsResponse | null;

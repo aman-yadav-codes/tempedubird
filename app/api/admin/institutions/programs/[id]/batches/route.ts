@@ -155,6 +155,46 @@ export async function GET(
       `,
       [programId]
     );
+    const rows = res.rows;
+
+    // Group rows by batch_name so a batch with multiple sections appears as 1 unified batch
+    const batchMap = new Map<string, any>();
+
+    for (const r of rows) {
+      // If batch_name is null/empty and has no configuration, skip orphan stub row
+      if (!r.batch_name && !r.seats_available && !r.price && Number(r.enrolled_students_count || 0) === 0) {
+        continue;
+      }
+
+      const rawBatchName = (r.batch_name || "").trim();
+      const secName = r.section_name || r.original_section_name || `Section ${r.section_id}`;
+      const batchKey = rawBatchName
+        ? `batch_${rawBatchName.toLowerCase()}`
+        : `sec_${r.section_id}`;
+
+      if (!batchMap.has(batchKey)) {
+        batchMap.set(batchKey, {
+          ...r,
+          id: r.section_id,
+          batch_name: rawBatchName || secName,
+          name: rawBatchName || secName,
+          section_ids: [r.section_id],
+          sections: [secName],
+          section_name: secName,
+          enrolled_students_count: Number(r.enrolled_students_count || 0),
+        });
+      } else {
+        const existing = batchMap.get(batchKey);
+        if (!existing.section_ids.includes(r.section_id)) {
+          existing.section_ids.push(r.section_id);
+          existing.sections.push(secName);
+        }
+        existing.section_name = existing.sections.join(", ");
+        existing.enrolled_students_count += Number(r.enrolled_students_count || 0);
+      }
+    }
+
+    const groupedBatches = Array.from(batchMap.values());
 
     // Fetch program & course duration details
     let programInfo: any = null;
@@ -235,54 +275,66 @@ export async function GET(
 
       const setupsRes = await db.query(
         `
-        SELECT id, title, target_type, attendance_mode, who_can_mark, start_time, end_time, is_default
+        SELECT id, title, target_type, attendance_mode, who_can_mark, start_time, end_time, is_default, min_attendance_percentage
         FROM institution_attendance_setups
         WHERE (UPPER(target_type) = 'STUDENTS' OR target_type IS NULL OR target_type = '')
-          AND (institution_id IS NULL OR institution_id = (SELECT institution_id FROM institution_programs WHERE id = $1))
           AND COALESCE(is_active, TRUE) = TRUE
-        ORDER BY is_default DESC, title ASC
+          AND (
+            institution_id = (SELECT institution_id FROM institution_programs WHERE id = $1)
+            OR institution_id IS NULL
+          )
+        ORDER BY is_default DESC, id ASC
         `,
         [programId]
       );
       attendanceSetups = setupsRes.rows;
 
-      // If no student-specific setups found, query all active setups for this institution
       if (attendanceSetups.length === 0) {
-        const allSetupsRes = await db.query(
-          `
-          SELECT id, title, target_type, attendance_mode, who_can_mark, start_time, end_time, is_default
-          FROM institution_attendance_setups
-          WHERE (institution_id IS NULL OR institution_id = (SELECT institution_id FROM institution_programs WHERE id = $1))
-            AND COALESCE(is_active, TRUE) = TRUE
-          ORDER BY is_default DESC, title ASC
-          `,
-          [programId]
+        const allStudentSetups = await db.query(
+          `SELECT id, title, target_type, attendance_mode, who_can_mark, start_time, end_time, is_default, min_attendance_percentage
+           FROM institution_attendance_setups
+           WHERE (UPPER(target_type) = 'STUDENTS' OR target_type IS NULL OR target_type = '')
+             AND COALESCE(is_active, TRUE) = TRUE
+           ORDER BY is_default DESC, id ASC`
         );
-        attendanceSetups = allSetupsRes.rows;
+        attendanceSetups = allStudentSetups.rows;
       }
-    } catch {
-      // Table may not exist yet in some environments
+    } catch (e) {
+      console.warn("Could not query institution_attendance_setups:", e);
+      attendanceSetups = [];
     }
 
-    // Default attendance setups if database returned empty
     if (attendanceSetups.length === 0) {
       attendanceSetups = [
-        { id: "full_day", title: "Daily Attendance (Full Day)", target_type: "STUDENTS", attendance_mode: "FULL_DAY", start_time: "08:00", end_time: "14:30", is_default: true },
-        { id: "period_wise", title: "Period-Wise Lecture Attendance", target_type: "STUDENTS", attendance_mode: "PERIOD_WISE", start_time: "09:00", end_time: "16:00", is_default: false },
-        { id: "shift_regular", title: "Regular Academic Shift (08:00 - 14:30)", target_type: "STUDENTS", attendance_mode: "FULL_DAY", start_time: "08:00", end_time: "14:30", is_default: false },
-        { id: "biometric", title: "Biometric Attendance (In / Out)", target_type: "STUDENTS", attendance_mode: "BIOMETRIC", start_time: "08:30", end_time: "15:00", is_default: false },
+        { id: 1, title: "Daily Attendance (Full Day)", target_type: "STUDENTS", attendance_mode: "FULL_DAY", start_time: "08:00", end_time: "14:30", is_default: true },
+        { id: 2, title: "Period-Wise Lecture Attendance", target_type: "STUDENTS", attendance_mode: "PERIOD_WISE", start_time: "09:00", end_time: "16:00", is_default: false },
+        { id: 3, title: "Regular Academic Shift (08:00 - 14:30)", target_type: "STUDENTS", attendance_mode: "FULL_DAY", start_time: "08:00", end_time: "14:30", is_default: false },
+        { id: 4, title: "Biometric Attendance (In / Out)", target_type: "STUDENTS", attendance_mode: "BIOMETRIC", start_time: "08:30", end_time: "15:00", is_default: false },
+        { id: 5, title: "Subject-Wise / Practical Lab Attendance", target_type: "STUDENTS", attendance_mode: "PERIOD_WISE", start_time: "09:00", end_time: "17:00", is_default: false },
       ];
     }
 
     // Fetch available sections
-    const sectionsRes = await db.query(
-      `SELECT id, name, slug FROM sections WHERE COALESCE(is_deleted, FALSE) = FALSE ORDER BY name ASC`
-    );
+    let sectionsList: any[] = [];
+    try {
+      const sectionsRes = await db.query(
+        `SELECT id, name, slug FROM sections WHERE COALESCE(is_deleted, FALSE) = FALSE ORDER BY name ASC`
+      );
+      sectionsList = sectionsRes.rows;
+    } catch {
+      sectionsList = [];
+    }
 
     // Fetch available languages
-    const languagesRes = await db.query(
-      `SELECT id, name, slug FROM languages WHERE COALESCE(is_deleted, FALSE) = FALSE ORDER BY name ASC`
-    );
+    let languagesList: any[] = [];
+    try {
+      const languagesRes = await db.query(
+        `SELECT id, name, slug FROM languages WHERE COALESCE(is_deleted, FALSE) = FALSE ORDER BY name ASC`
+      );
+      languagesList = languagesRes.rows;
+    } catch {
+      languagesList = [];
+    }
 
     // Fetch program subjects/modules
     let subjects: any[] = [];
@@ -303,13 +355,13 @@ export async function GET(
     }
 
     return NextResponse.json({
-      data: res.rows,
+      data: groupedBatches,
       meta: {
         programInfo,
         courseTerms,
         attendanceSetups,
-        sections: sectionsRes.rows,
-        languages: languagesRes.rows,
+        sections: sectionsList,
+        languages: languagesList,
         subjects,
       },
     });
@@ -556,15 +608,23 @@ export async function DELETE(
 
     const url = new URL(req.url);
     const sectionId = url.searchParams.get("sectionId");
+    const batchName = url.searchParams.get("batchName")?.trim();
 
-    if (!sectionId) {
-      return NextResponse.json({ error: "sectionId is required" }, { status: 400 });
+    if (!sectionId && !batchName) {
+      return NextResponse.json({ error: "batchName or sectionId is required" }, { status: 400 });
     }
 
-    await db.query(
-      `DELETE FROM program_sections WHERE program_id = $1 AND (section_id = $2 OR batch_name = $3)`,
-      [programId, isNaN(Number(sectionId)) ? 0 : Number(sectionId), sectionId]
-    );
+    if (batchName) {
+      await db.query(
+        `DELETE FROM program_sections WHERE program_id = $1 AND LOWER(TRIM(batch_name)) = LOWER(TRIM($2))`,
+        [programId, batchName]
+      );
+    } else {
+      await db.query(
+        `DELETE FROM program_sections WHERE program_id = $1 AND (section_id = $2 OR batch_name = $3)`,
+        [programId, isNaN(Number(sectionId)) ? 0 : Number(sectionId), sectionId]
+      );
+    }
 
     return NextResponse.json({ message: "Batch unlinked successfully" });
   } catch (error: any) {

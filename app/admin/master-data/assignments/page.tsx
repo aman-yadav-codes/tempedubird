@@ -4,17 +4,26 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import {
   Ban,
+  BookMarked,
+  BookOpen,
+  Calendar,
   Eye,
+  GraduationCap,
   Loader2,
   MoreHorizontal,
   Pencil,
   Plus,
   RefreshCw,
+  Send,
   ShieldAlert,
   Trash2,
+  Users,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { AssignAssignmentDialog } from "@/components/assignments/assign-assignment-dialog";
+import { AssignedRecordsDialog } from "@/components/assignments/assigned-records-dialog";
 import { AssignmentQuestionEditor } from "@/components/assignments/assignment-question-editor";
 import { AssignmentTemplateEditor } from "@/components/assignments/assignment-template-editor";
 import type { AssignmentInstitutionOption } from "@/components/assignments/assignment-template-editor";
@@ -38,6 +47,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -80,6 +96,54 @@ function StatCard({ label, value }: { label: string; value: number }) {
   );
 }
 
+function getSyllabusSummary(syllabusData: unknown) {
+  if (!Array.isArray(syllabusData) || syllabusData.length === 0) return null;
+  const units: string[] = [];
+  const chapters: string[] = [];
+
+  for (const unit of syllabusData) {
+    if (!unit) continue;
+    const uTitle =
+      unit.title || unit.name || (unit.unit_number ? `Unit ${unit.unit_number}` : null);
+    if (uTitle && !units.includes(uTitle)) {
+      units.push(uTitle);
+    }
+    if (Array.isArray(unit.chapters)) {
+      for (const ch of unit.chapters) {
+        if (!ch) continue;
+        const cTitle =
+          ch.title || ch.name || (ch.chapter_number ? `Chapter ${ch.chapter_number}` : null);
+        if (cTitle && !chapters.includes(cTitle)) {
+          chapters.push(cTitle);
+        }
+      }
+    }
+  }
+
+  if (units.length === 0 && chapters.length === 0) return null;
+  return { units, chapters };
+}
+
+function formatAssignmentTarget(assignment: AssignmentTemplateRow) {
+  if (assignment.target_program_label) {
+    if (assignment.target_type === "SECTION") {
+      const parts = assignment.target_label?.split(" > ") ?? [];
+      const sectionName = parts.length > 2 ? parts[2] : parts[1];
+      return sectionName ? `${assignment.target_program_label} > ${sectionName}` : assignment.target_program_label;
+    }
+    if (assignment.target_type === "STUDENT") {
+      const parts = assignment.target_label?.split(" > ") ?? [];
+      const studentName = parts.length > 2 ? parts[2] : parts[1];
+      return studentName ? `${assignment.target_program_label} > ${studentName}` : assignment.target_program_label;
+    }
+    return assignment.target_program_label;
+  }
+  if (assignment.target_label?.includes(" > ")) {
+    return assignment.target_label.split(" > ").slice(1).join(" > ");
+  }
+  return assignment.target_label ?? "Whole Course / Program";
+}
+
 export default function AssignmentsPage() {
   const { isReady } = useAdminGuard();
   const { accessToken, user } = useAuthStore();
@@ -97,6 +161,12 @@ export default function AssignmentsPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [assignmentView, setAssignmentView] = useState<AssignmentView>("my");
+  const [filterProgramId, setFilterProgramId] = useState("");
+  const [filterSubject, setFilterSubject] = useState("");
+  const [filterSyllabus, setFilterSyllabus] = useState("");
+  const [debouncedSyllabus, setDebouncedSyllabus] = useState("");
+  const [programsList, setProgramsList] = useState<Array<{ id: number; title: string; name?: string }>>([]);
+  const [subjectsList, setSubjectsList] = useState<string[]>([]);
   const [canCreate, setCanCreate] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<AssignmentTemplateRow | null>(null);
@@ -106,11 +176,17 @@ export default function AssignmentsPage() {
   const [questionEditorOpen, setQuestionEditorOpen] = useState(false);
   const [questionTemplate, setQuestionTemplate] =
     useState<AssignmentTemplateRow | null>(null);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [assignTarget, setAssignTarget] = useState<AssignmentTemplateRow | null>(null);
+  const [assignedRecordsOpen, setAssignedRecordsOpen] = useState(false);
+  const [assignedRecordsTarget, setAssignedRecordsTarget] =
+    useState<AssignmentTemplateRow | null>(null);
   const [blockTarget, setBlockTarget] = useState<AssignmentTemplateRow | null>(null);
   const [blockReason, setBlockReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [actionRowId, setActionRowId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AssignmentTemplateRow | null>(null);
+  const [purchaseTarget, setPurchaseTarget] = useState<AssignmentTemplateRow | null>(null);
 
   const authHeaders = useCallback(
     () => ({ Authorization: `Bearer ${accessToken}` }),
@@ -121,6 +197,83 @@ export default function AssignmentsPage() {
     const timeout = window.setTimeout(() => setDebouncedSearch(search), 300);
     return () => window.clearTimeout(timeout);
   }, [search]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedSyllabus(filterSyllabus), 300);
+    return () => window.clearTimeout(timeout);
+  }, [filterSyllabus]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    async function loadPrograms() {
+      try {
+        const endpoint = isPlatformAdmin
+          ? "/api/admin/content/courses?limit=100"
+          : `/api/admin/institutions/programs?limit=100${activeInstitutionId ? `&institutionId=${activeInstitutionId}` : ""}`;
+        const res = await fetch(endpoint, { headers: authHeaders() });
+        const json = await readJson(res);
+        if (!cancelled && res.ok) {
+          const list = (json.data ?? []).map((p: any) => ({
+            id: p.id,
+            title: p.title || p.name,
+          }));
+          setProgramsList(list);
+        }
+      } catch (err) {
+        console.error("Failed to load programs for filter:", err);
+      }
+    }
+    void loadPrograms();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, activeInstitutionId, authHeaders, isPlatformAdmin]);
+
+  useEffect(() => {
+    if (!accessToken || !filterProgramId) {
+      setSubjectsList([]);
+      return;
+    }
+    let cancelled = false;
+    async function loadSubjects() {
+      try {
+        const res = await fetch(`/api/admin/institutions/programs/${filterProgramId}`, {
+          headers: authHeaders(),
+        });
+        const json = await readJson(res);
+        if (!cancelled && res.ok && json.data?.curriculum_structure?.subjects) {
+          const names = (json.data.curriculum_structure.subjects as any[])
+            .map((s) => s.name)
+            .filter(Boolean);
+          setSubjectsList(Array.from(new Set(names)));
+        }
+      } catch (err) {
+        console.error("Failed to load subjects for program filter:", err);
+      }
+    }
+    void loadSubjects();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, filterProgramId, authHeaders]);
+
+  const availableSubjects = useMemo(() => {
+    if (subjectsList.length > 0) return subjectsList;
+    const set = new Set<string>();
+    rows.forEach((r) => {
+      if (r.subject_name) set.add(r.subject_name);
+    });
+    return Array.from(set).sort();
+  }, [subjectsList, rows]);
+
+  const hasActiveFilters = Boolean(filterProgramId || filterSubject || filterSyllabus);
+  const clearFilters = useCallback(() => {
+    setFilterProgramId("");
+    setFilterSubject("");
+    setFilterSyllabus("");
+    setPagination((current) => ({ ...current, pageIndex: 0 }));
+  }, []);
 
   const fetchRows = useCallback(async () => {
     if (!accessToken) return;
@@ -134,6 +287,15 @@ export default function AssignmentsPage() {
       });
       if (!isPlatformAdmin && activeInstitutionId) {
         params.set("institutionId", String(activeInstitutionId));
+      }
+      if (filterProgramId) {
+        params.set("programId", filterProgramId);
+      }
+      if (filterSubject) {
+        params.set("subject", filterSubject);
+      }
+      if (debouncedSyllabus) {
+        params.set("syllabus", debouncedSyllabus);
       }
       const res = await fetch(
         `/api/admin/master-data/assignments?${params.toString()}`,
@@ -157,6 +319,9 @@ export default function AssignmentsPage() {
     authHeaders,
     assignmentView,
     debouncedSearch,
+    filterProgramId,
+    filterSubject,
+    debouncedSyllabus,
     isPlatformAdmin,
     pagination.pageIndex,
     pagination.pageSize,
@@ -453,83 +618,135 @@ export default function AssignmentsPage() {
         enableHiding: false,
       },
       {
-        accessorKey: "title",
-        header: "Assignment",
+        accessorKey: "subject_name",
+        header: "Subject / Course",
         cell: ({ row }) => {
           const assignment = row.original;
-          const inheritedLabel = marketplaceMode && assignment.inherited_by_institution_name
-            ? "Already inherited"
-            : assignmentView === "my" && assignment.parent_template_id
-              ? `Inherited from ${
-                  assignment.parent_is_public
-                    ? "Marketplace"
-                    : assignment.parent_institution_name ?? "Institution"
-                }`
-              : assignmentView === "my" && assignment.is_public
-                ? "Approved for marketplace"
-              : null;
+          const displaySubject = assignment.subject_name || "General Subject";
+          const displayProgram = assignment.target_program_label || "";
           return (
             <button
               type="button"
-              className="min-w-[300px] cursor-pointer text-left"
+              className="min-w-[220px] cursor-pointer text-left py-1"
               onClick={() => void openDetail(assignment)}
             >
-              <span className="block font-semibold">{assignment.title}</span>
-              <span className="block text-xs text-muted-foreground">
-                {assignment.target_label ?? "No target"}
-              </span>
-              {inheritedLabel && (
-                <span className="mt-1 flex min-w-0">
-                  <Badge variant="outline" className={`max-w-full ${inheritedBadgeClass}`}>
-                    <span className="truncate">{inheritedLabel}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-sm text-foreground hover:underline">
+                  {displaySubject}
+                </span>
+                {assignment.is_public && (
+                  <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300 text-[10px]">
+                    Marketplace
                   </Badge>
-                </span>
-              )}
-              {assignment.blocked_by_platform && (
-                <span className="mt-1 inline-flex items-center gap-1 text-xs text-destructive">
-                  <ShieldAlert className="size-3" />
-                  Blocked by Platform Admin
-                </span>
-              )}
-              {assignment.marketplace_requested &&
-                !assignment.is_public &&
-                !assignment.blocked_by_platform && (
-                  <span className="mt-1 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-                    {isPlatformAdmin ? "Action required" : "Marketplace approval pending"}
-                  </span>
                 )}
-              {!inheritedLabel && assignment.is_public && (
-                <span className="mt-1 inline-flex items-center rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-700 dark:text-sky-300">
-                  Marketplace
-                </span>
+              </div>
+              {displayProgram && (
+                <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                  {displayProgram}
+                </p>
+              )}
+              {assignment.description && (
+                <p className="text-[11px] text-muted-foreground/80 line-clamp-1 mt-0.5">
+                  {assignment.description}
+                </p>
               )}
             </button>
           );
         },
       },
+      ...(!isPlatformAdmin
+        ? [
+            {
+              id: "assigned",
+              header: "Assigned",
+              cell: ({ row }: { row: { original: AssignmentTemplateRow } }) => {
+                const assignment = row.original;
+                const studentCount = assignment.assigned_student_count ?? 0;
+                const assignCount = assignment.assigned_count ?? (assignment.assigned_assignment_id ? 1 : 0);
+                const hasAssigned = studentCount > 0 || assignCount > 0;
+
+                if (!hasAssigned) {
+                  return (
+                    <div className="flex items-center gap-1.5 py-1">
+                      {!marketplaceMode && !assignment.blocked_by_platform ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs text-muted-foreground hover:text-primary hover:bg-primary/10 gap-1.5 font-medium px-2 rounded-md"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAssignTarget(assignment);
+                            setAssignDialogOpen(true);
+                          }}
+                        >
+                          <Send className="size-3 text-primary" />
+                          <span>Assign</span>
+                        </Button>
+                      ) : (
+                        <Badge variant="outline" className="border-dashed text-[11px] text-muted-foreground font-normal py-0.5">
+                          Not assigned
+                        </Badge>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="flex items-center gap-1.5 py-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-xs font-semibold gap-1.5 px-2.5 rounded-md cursor-pointer transition-colors shadow-none"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAssignedRecordsTarget(assignment);
+                        setAssignedRecordsOpen(true);
+                      }}
+                    >
+                      <Users className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>Assigned({studentCount > 0 ? studentCount : assignCount})</span>
+                    </Button>
+                  </div>
+                );
+              },
+            } as ColumnDef<AssignmentTemplateRow>,
+          ]
+        : []),
       {
-        accessorKey: "version",
-        header: "Version",
-        cell: ({ row }) => <Badge variant="outline">v{row.original.version}</Badge>,
+        accessorKey: "syllabus_data",
+        header: "Syllabus",
+        cell: ({ row }) => {
+          const summary = getSyllabusSummary(row.original.syllabus_data);
+          if (!summary || (summary.units.length === 0 && summary.chapters.length === 0)) {
+            return <span className="text-xs text-muted-foreground">-</span>;
+          }
+          return (
+            <div className="flex flex-wrap gap-1 max-w-[220px]">
+              {summary.units.slice(0, 2).map((u, i) => (
+                <Badge key={i} variant="secondary" className="text-[10px] font-normal">
+                  {u}
+                </Badge>
+              ))}
+              {summary.units.length > 2 && (
+                <span className="text-[10px] text-muted-foreground font-medium">+{summary.units.length - 2} more</span>
+              )}
+            </div>
+          );
+        },
       },
       {
-        accessorKey: "is_active",
-        header: "Status",
-        cell: ({ row }) =>
-          row.original.blocked_by_platform ? (
-            <Badge variant="destructive">Blocked</Badge>
-          ) : (
-            <Badge
-              className={
-                row.original.is_active
-                  ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
-                  : ""
-              }
-              variant={row.original.is_active ? "secondary" : "outline"}
-            >
-              {row.original.is_active ? "Active" : "Disabled"}
+        accessorKey: "question_count",
+        header: "Questions",
+        cell: ({ row }) => {
+          const count = row.original.question_count ?? 0;
+          return (
+            <Badge variant="outline" className="bg-muted/40 font-mono text-xs">
+              {count} {count === 1 ? "question" : "questions"}
             </Badge>
-          ),
+          );
+        },
       },
       {
         id: "pricing",
@@ -555,19 +772,19 @@ export default function AssignmentsPage() {
           const assignment = row.original;
           const isRowActionLoading = actionRowId === assignment.id;
           const canEdit =
-            !isPlatformAdmin &&
-            !marketplaceMode &&
-            !assignment.blocked_by_platform &&
-            hasPermission(user, "content.assignments.edit", {
-              institutionId: assignment.source_institution_id,
-            });
+            isPlatformAdmin ||
+            (!marketplaceMode &&
+              !assignment.blocked_by_platform &&
+              hasPermission(user, "content.assignments.edit", {
+                institutionId: assignment.source_institution_id,
+              }));
           const canDelete =
-            !isPlatformAdmin &&
-            !marketplaceMode &&
-            !assignment.blocked_by_platform &&
-            hasPermission(user, "content.assignments.delete", {
-              institutionId: assignment.source_institution_id,
-            });
+            isPlatformAdmin ||
+            (!marketplaceMode &&
+              !assignment.blocked_by_platform &&
+              hasPermission(user, "content.assignments.delete", {
+                institutionId: assignment.source_institution_id,
+              }));
           return (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -585,15 +802,50 @@ export default function AssignmentsPage() {
                 className="w-max min-w-[var(--radix-dropdown-menu-trigger-width)]"
               >
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                {!marketplaceMode && !isPlatformAdmin && !assignment.blocked_by_platform && (
+                  <DropdownMenuItem
+                    className="whitespace-nowrap font-bold text-primary focus:text-primary focus:bg-primary/10 cursor-pointer"
+                    onClick={() => {
+                      setAssignTarget(assignment);
+                      setAssignDialogOpen(true);
+                    }}
+                  >
+                    <Send className="size-4 text-primary" />
+                    Assign Now
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
-                  className="whitespace-nowrap"
+                  className="whitespace-nowrap cursor-pointer"
                   onClick={() => void openDetail(assignment)}
                 >
                   <Eye className="size-4" />
                   View sheet
                 </DropdownMenuItem>
+                {!marketplaceMode && (isPlatformAdmin || !assignment.blocked_by_platform) && (
+                  <DropdownMenuItem
+                    className="whitespace-nowrap"
+                    onClick={() => openQuestionEditor(assignment)}
+                  >
+                    <Plus className="size-4" />
+                    {(assignment.question_count ?? 0) > 0 ? "Manage Questions" : "Add Questions"}
+                  </DropdownMenuItem>
+                )}
                 {isPlatformAdmin ? (
                   <>
+                    <DropdownMenuItem
+                      className="whitespace-nowrap"
+                      onClick={() => void openEdit(assignment)}
+                    >
+                      <Pencil className="size-4" />
+                      Edit Details
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="whitespace-nowrap text-destructive"
+                      onClick={() => setDeleteTarget(assignment)}
+                    >
+                      <Trash2 className="size-4" />
+                      Delete
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     {assignment.marketplace_requested &&
                       !assignment.is_public &&
@@ -637,6 +889,15 @@ export default function AssignmentsPage() {
                       <DropdownMenuItem className="whitespace-nowrap" disabled>
                         Already inherited
                       </DropdownMenuItem>
+                    ) : assignment.is_paid && Number(assignment.price) > 0 ? (
+                      <DropdownMenuItem
+                        className="whitespace-nowrap font-medium text-emerald-600"
+                        disabled={actionLoading}
+                        onClick={() => setPurchaseTarget(assignment)}
+                      >
+                        <Plus className="size-4" />
+                        Buy & Inherit (₹{assignment.price})
+                      </DropdownMenuItem>
                     ) : (
                       <DropdownMenuItem
                         className="whitespace-nowrap"
@@ -644,7 +905,7 @@ export default function AssignmentsPage() {
                         onClick={() => void inheritAssignments([assignment])}
                       >
                         <Plus className="size-4" />
-                        Inherit
+                        Inherit Free
                       </DropdownMenuItem>
                     )}
                   </>
@@ -728,30 +989,124 @@ export default function AssignmentsPage() {
         </Button>
       </div>
 
-      {!isPlatformAdmin && (
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant={assignmentView === "my" ? "default" : "outline"}
-            onClick={() => {
-              setAssignmentView("my");
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 flex-wrap">
+        {!isPlatformAdmin ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant={assignmentView === "my" ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setAssignmentView("my");
+                setPagination((current) => ({ ...current, pageIndex: 0 }));
+              }}
+            >
+              My Assignments
+            </Button>
+            <Button
+              type="button"
+              variant={assignmentView === "marketplace" ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setAssignmentView("marketplace");
+                setPagination((current) => ({ ...current, pageIndex: 0 }));
+              }}
+            >
+              Marketplace
+            </Button>
+          </div>
+        ) : (
+          <div />
+        )}
+
+        {/* Filter Toolbar: Class/Program, Subject, Syllabus */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Class / Program Filter */}
+          <Select
+            value={filterProgramId || "all"}
+            onValueChange={(val) => {
+              setFilterProgramId(val === "all" ? "" : val);
+              setFilterSubject("");
               setPagination((current) => ({ ...current, pageIndex: 0 }));
             }}
           >
-            My Assignments
-          </Button>
-          <Button
-            type="button"
-            variant={assignmentView === "marketplace" ? "default" : "outline"}
-            onClick={() => {
-              setAssignmentView("marketplace");
+            <SelectTrigger className="h-9 w-[180px] sm:w-[210px] text-xs">
+              <GraduationCap className="size-3.5 mr-1.5 text-muted-foreground" />
+              <SelectValue placeholder="All Courses / Classes" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Courses / Classes</SelectItem>
+              {programsList.map((p) => (
+                <SelectItem key={String(p.id)} value={String(p.id)}>
+                  {p.title || p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Subject Filter */}
+          <Select
+            value={filterSubject || "all"}
+            onValueChange={(val) => {
+              setFilterSubject(val === "all" ? "" : val);
               setPagination((current) => ({ ...current, pageIndex: 0 }));
             }}
           >
-            Marketplace
-          </Button>
+            <SelectTrigger className="h-9 w-[150px] sm:w-[180px] text-xs">
+              <BookMarked className="size-3.5 mr-1.5 text-muted-foreground" />
+              <SelectValue placeholder="All Subjects" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Subjects</SelectItem>
+              {availableSubjects.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Syllabus Topic Filter */}
+          <div className="relative">
+            <Input
+              value={filterSyllabus}
+              onChange={(e) => {
+                setFilterSyllabus(e.target.value);
+                setPagination((current) => ({ ...current, pageIndex: 0 }));
+              }}
+              placeholder="Filter syllabus topic..."
+              className="h-9 w-[160px] sm:w-[190px] text-xs pl-8 pr-7"
+            />
+            <BookOpen className="size-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+            {filterSyllabus && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterSyllabus("");
+                  setPagination((current) => ({ ...current, pageIndex: 0 }));
+                }}
+                className="absolute right-2 top-2.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Reset Filters */}
+          {hasActiveFilters && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="h-9 text-xs text-muted-foreground hover:text-destructive gap-1 px-2.5"
+            >
+              <X className="size-3.5" />
+              Reset
+            </Button>
+          )}
         </div>
-      )}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total Assignments" value={stats.total} />
@@ -771,7 +1126,7 @@ export default function AssignmentsPage() {
         pagination={pagination}
         onPaginationChange={setPagination}
         getRowId={(row) => String(row.id)}
-        selectionResetKey={`${assignmentView}:${debouncedSearch}:${pagination.pageSize}:${activeInstitutionId ?? ""}`}
+        selectionResetKey={`${assignmentView}:${debouncedSearch}:${filterProgramId}:${filterSubject}:${debouncedSyllabus}:${pagination.pageSize}:${activeInstitutionId ?? ""}`}
         enableRowSelection={(row) =>
           !isPlatformAdmin &&
           (assignmentView === "my" || canInheritAssignment(row.original))
@@ -828,21 +1183,19 @@ export default function AssignmentsPage() {
         }}
       />
 
-      {!isPlatformAdmin && (
-        <AssignmentTemplateEditor
-          open={editorOpen}
-          onOpenChange={(open) => {
-            setEditorOpen(open);
-            if (!open) setEditing(null);
-          }}
-          accessToken={accessToken}
-          template={editing}
-          fetchInstitutions={fetchInstitutions}
-          onSaved={() => void fetchRows()}
-        />
-      )}
+      <AssignmentTemplateEditor
+        open={editorOpen}
+        onOpenChange={(open) => {
+          setEditorOpen(open);
+          if (!open) setEditing(null);
+        }}
+        accessToken={accessToken}
+        template={editing}
+        fetchInstitutions={fetchInstitutions}
+        onSaved={() => void fetchRows()}
+      />
 
-      {!isPlatformAdmin && questionTemplate && (
+      {questionTemplate && (
         <AssignmentQuestionEditor
           open={questionEditorOpen}
           onOpenChange={(open) => {
@@ -877,11 +1230,71 @@ export default function AssignmentsPage() {
           maxSize={1040}
           resizeStorageKey="assignment-detail-sheet-width"
         >
-          <SheetHeader className="border-b px-6 py-5">
-            <SheetTitle>{active?.title ?? "Assignment"}</SheetTitle>
-            <SheetDescription>
-              {active?.institution_name ?? "Assignment questions and details"}
-            </SheetDescription>
+          <SheetHeader className="border-b px-6 py-4 pr-12 flex flex-row items-center justify-between space-y-0">
+            <div>
+              <SheetTitle>{active?.title ?? "Assignment"}</SheetTitle>
+              <SheetDescription className="text-xs">
+                {active?.subject_name || "General"} • {active?.question_count ?? active?.questions?.length ?? 0} questions
+              </SheetDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              {(isPlatformAdmin || (assignmentView === "my" && !active?.blocked_by_platform)) && active && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={() => {
+                    setEditing(active);
+                    setEditorOpen(true);
+                  }}
+                >
+                  <Pencil className="size-3.5" />
+                  Edit Details
+                </Button>
+              )}
+              {!isPlatformAdmin && assignmentView === "my" && active && !active.blocked_by_platform && (
+                <Button
+                  size="sm"
+                  className="bg-primary text-primary-foreground font-bold gap-1.5 shadow-sm"
+                  onClick={() => {
+                    setAssignTarget(active);
+                    setAssignDialogOpen(true);
+                  }}
+                >
+                  <Send className="size-3.5" />
+                  Assign Now
+                </Button>
+              )}
+            </div>
+            {!isPlatformAdmin && assignmentView === "marketplace" && active && (
+              <div>
+                {isAlreadyInherited(active) ? (
+                  <Badge variant="outline" className="border-emerald-500/80 bg-emerald-500/10 text-emerald-600 font-medium">
+                    Already Inherited
+                  </Badge>
+                ) : active.is_paid && Number(active.price) > 0 ? (
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                    disabled={actionLoading}
+                    onClick={() => setPurchaseTarget(active)}
+                  >
+                    <Plus className="size-4" />
+                    Pay ₹{active.price} & Inherit
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                    disabled={actionLoading}
+                    onClick={() => void inheritAssignments([active])}
+                  >
+                    <Plus className="size-4" />
+                    Inherit Free
+                  </Button>
+                )}
+              </div>
+            )}
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto p-6">
             {detailLoading ? (
@@ -946,7 +1359,7 @@ export default function AssignmentsPage() {
                     </Button>
                   </div>
                 )}
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-md border p-4">
                     <p className="text-xs text-muted-foreground">Total Marks</p>
                     <p className="mt-1 text-xl font-semibold">
@@ -957,42 +1370,6 @@ export default function AssignmentsPage() {
                     <p className="text-xs text-muted-foreground">Questions</p>
                     <p className="mt-1 text-xl font-semibold">
                       {active.questions?.length ?? active.question_count}
-                    </p>
-                  </div>
-                  <div className="rounded-md border p-4">
-                    <p className="text-xs text-muted-foreground">Version</p>
-                    <p className="mt-1 text-xl font-semibold">v{active.version}</p>
-                  </div>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-md border p-4">
-                    <p className="text-xs text-muted-foreground">Target</p>
-                    <p className="mt-1 font-semibold">
-                      {active.target_label ?? "No target"}
-                    </p>
-                  </div>
-                  <div className="rounded-md border p-4">
-                    <p className="text-xs text-muted-foreground">Issue Date</p>
-                    <p className="mt-1 font-semibold">
-                      {active.issue_date
-                        ? new Date(active.issue_date).toLocaleDateString("en-IN", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })
-                        : "-"}
-                    </p>
-                  </div>
-                  <div className="rounded-md border p-4">
-                    <p className="text-xs text-muted-foreground">Submission Date</p>
-                    <p className="mt-1 font-semibold">
-                      {active.submission_date
-                        ? new Date(active.submission_date).toLocaleDateString("en-IN", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })
-                        : "-"}
                     </p>
                   </div>
                 </div>
@@ -1008,36 +1385,51 @@ export default function AssignmentsPage() {
                   <div>
                     <h2 className="font-semibold">Syllabus Mapping</h2>
                     <p className="text-sm text-muted-foreground">
-                      Curriculum nodes linked to this assignment.
+                      Curriculum topics and syllabus units linked to this assignment.
                     </p>
                   </div>
-                  {(active.syllabus_nodes?.length ?? 0) > 0 ? (
-                    <div className="rounded-md border">
-                      <div className="border-b px-4 py-3">
-                        <p className="text-sm text-muted-foreground">Subject</p>
-                        <p className="font-semibold">
-                          {active.syllabus_nodes?.[0]?.subject_name ?? "Mapped syllabus"}
-                        </p>
-                      </div>
-                      <div className="divide-y">
-                        {active.syllabus_nodes?.map((node) => (
-                          <div key={node.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                            <div>
-                              <p className="font-medium">{node.title}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {node.syllabus_title}
-                              </p>
+                  {active.subject_name && (
+                    <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-3.5 py-2 text-primary font-medium text-sm">
+                      <span className="text-xs text-muted-foreground">Subject:</span>
+                      <span className="font-bold">{active.subject_name}</span>
+                    </div>
+                  )}
+                  {Array.isArray(active.syllabus_data) && active.syllabus_data.length > 0 ? (
+                    <div className="space-y-2 rounded-lg border p-3 bg-muted/20">
+                      {active.syllabus_data.map((unit: any, uIdx: number) => (
+                        <div key={unit.id ?? uIdx} className="rounded-md border bg-card p-3">
+                          <p className="font-semibold text-sm flex items-center gap-2">
+                            <span className="flex size-5 items-center justify-center rounded bg-primary/10 text-primary text-xs font-bold">
+                              {unit.unit_number ?? uIdx + 1}
+                            </span>
+                            {unit.title}
+                          </p>
+                          {Array.isArray(unit.chapters) && unit.chapters.length > 0 && (
+                            <div className="mt-2 ml-7 pl-3 border-l space-y-2">
+                              {unit.chapters.map((chapter: any, cIdx: number) => (
+                                <div key={chapter.id ?? cIdx} className="space-y-1">
+                                  <p className="text-xs font-medium text-foreground">
+                                    • {chapter.title}
+                                  </p>
+                                  {Array.isArray(chapter.lessons) && chapter.lessons.length > 0 && (
+                                    <div className="ml-4 space-y-0.5">
+                                      {chapter.lessons.map((lesson: any, lIdx: number) => (
+                                        <p key={lesson.id ?? lIdx} className="text-[11px] text-muted-foreground">
+                                          - {lesson.title}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
                             </div>
-                            <Badge variant="outline" className="capitalize">
-                              {node.node_type}
-                            </Badge>
-                          </div>
-                        ))}
-                      </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   ) : (
-                    <div className="rounded-md border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-                      No syllabus nodes mapped.
+                    <div className="rounded-md border border-dashed px-4 py-6 text-center text-xs text-muted-foreground">
+                      No specific syllabus units mapped to this assignment.
                     </div>
                   )}
                 </section>
@@ -1049,11 +1441,11 @@ export default function AssignmentsPage() {
                         Add questions after the assignment details have been saved.
                       </p>
                     </div>
-                    {!isPlatformAdmin &&
-                      !active.blocked_by_platform &&
-                      hasPermission(user, "content.assignments.edit", {
-                        institutionId: active.source_institution_id,
-                      }) && (
+                    {(!active.blocked_by_platform || isPlatformAdmin) &&
+                      (isPlatformAdmin ||
+                        hasPermission(user, "content.assignments.edit", {
+                          institutionId: active.source_institution_id,
+                        })) && (
                         <Button
                           type="button"
                           onClick={() => openQuestionEditor(active)}
@@ -1173,29 +1565,77 @@ export default function AssignmentsPage() {
         </DialogContent>
       </Dialog>
 
-      <AssignmentTemplateEditor
-        open={editorOpen}
-        onOpenChange={setEditorOpen}
-        accessToken={accessToken}
-        template={editing}
-        fetchInstitutions={fetchInstitutions}
-        onSaved={(_id) => {
-          void fetchRows();
-        }}
+      <Dialog open={Boolean(purchaseTarget)} onOpenChange={(open) => !open && setPurchaseTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Purchase & Inherit Assignment</DialogTitle>
+            <DialogDescription>
+              This assignment is a premium marketplace resource. Confirm purchase to inherit it into your institution library.
+            </DialogDescription>
+          </DialogHeader>
+          {purchaseTarget && (
+            <div className="space-y-4 py-2">
+              <div className="rounded-lg border p-4 bg-muted/30 space-y-2">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-semibold text-foreground">{purchaseTarget.title}</p>
+                    <p className="text-xs text-muted-foreground">{purchaseTarget.subject_name || "General"}</p>
+                  </div>
+                  <Badge variant="outline" className="border-rose-500/40 bg-rose-500/10 text-rose-600 font-bold text-sm">
+                    ₹{Number(purchaseTarget.price) || 0}
+                  </Badge>
+                </div>
+                {purchaseTarget.description && (
+                  <p className="text-xs text-muted-foreground line-clamp-2">{purchaseTarget.description}</p>
+                )}
+              </div>
+              <div className="rounded-md bg-amber-500/10 border border-amber-500/20 p-3 text-xs text-amber-800 dark:text-amber-300">
+                Note: This payment of ₹{Number(purchaseTarget.price) || 0} will grant your institution full access to this assignment and its questions.
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPurchaseTarget(null)} disabled={actionLoading}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+              disabled={actionLoading}
+              onClick={async () => {
+                if (!purchaseTarget) return;
+                const target = purchaseTarget;
+                setPurchaseTarget(null);
+                await inheritAssignments([target]);
+              }}
+            >
+              {actionLoading && <Loader2 className="size-4 animate-spin" />}
+              Pay ₹{Number(purchaseTarget?.price) || 0} & Inherit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AssignAssignmentDialog
+        open={assignDialogOpen}
+        onOpenChange={setAssignDialogOpen}
+        assignment={assignTarget}
+        activeInstitutionId={activeInstitutionId}
+        onAssigned={() => void fetchRows()}
       />
 
-      {questionTemplate && (
-        <AssignmentQuestionEditor
-          open={questionEditorOpen}
-          onOpenChange={setQuestionEditorOpen}
-          accessToken={accessToken}
-          template={questionTemplate}
-          onSaved={() => {
-            void fetchRows();
-            if (active) void openDetail(active);
-          }}
-        />
-      )}
+      <AssignedRecordsDialog
+        open={assignedRecordsOpen}
+        onOpenChange={setAssignedRecordsOpen}
+        assignmentId={assignedRecordsTarget?.id ?? null}
+        assignmentTitle={assignedRecordsTarget?.title}
+        activeInstitutionId={activeInstitutionId}
+        onOpenAssignDialog={() => {
+          if (assignedRecordsTarget) {
+            setAssignTarget(assignedRecordsTarget);
+            setAssignDialogOpen(true);
+          }
+        }}
+      />
     </div>
   );
 }

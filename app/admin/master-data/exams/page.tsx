@@ -191,11 +191,16 @@ export default function ExamsPage() {
   const [publishTarget, setPublishTarget] = useState<ExamRow | null>(null);
   const [actionRowId, setActionRowId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ExamRow | null>(null);
+  const [purchaseTarget, setPurchaseTarget] = useState<ExamRow | ExamSeriesRow | null>(null);
   const [govDialogOpen, setGovDialogOpen] = useState(false);
   const [editingGovExam, setEditingGovExam] = useState<ExamRow | null>(null);
 
   const authHeaders = useCallback(
-    () => ({ Authorization: `Bearer ${accessToken}` }),
+    () => ({
+      Authorization: `Bearer ${accessToken}`,
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache",
+    }),
     [accessToken]
   );
 
@@ -219,7 +224,10 @@ export default function ExamsPage() {
       }
       const res = await fetch(
         `/api/admin/master-data/exams?${params.toString()}`,
-        { headers: authHeaders() }
+        {
+          headers: authHeaders(),
+          cache: "no-store",
+        }
       );
       const json = await readJson(res);
       if (!res.ok) throw new Error(json.error ?? "Failed to fetch exams");
@@ -870,7 +878,7 @@ export default function ExamsPage() {
 
   const columns = useMemo<ColumnDef<ExamRow | ExamSeriesRow>[]>(() => {
     const marketplaceMode = examView === "marketplace" && !isPlatformAdmin;
-    {
+    if (!isPlatformAdmin && examView !== "marketplace") {
       const seriesColumns: ColumnDef<ExamRow | ExamSeriesRow>[] = [
         {
           id: "select",
@@ -1062,14 +1070,6 @@ export default function ExamsPage() {
                       Edit
                     </DropdownMenuItem>
                   )}
-                  {canAddSubject && (
-                    <DropdownMenuItem
-                      onClick={() => void openSeriesManager(series)}
-                    >
-                      <Pencil className="size-4" />
-                      Manage
-                    </DropdownMenuItem>
-                  )}
                   {marketplaceMode && (
                     isAlreadyInheritedSeries(series) ? (
                       <DropdownMenuItem disabled>
@@ -1077,13 +1077,22 @@ export default function ExamsPage() {
                           Already inherited
                         </Badge>
                       </DropdownMenuItem>
+                    ) : (series as any).is_paid && Number((series as any).price) > 0 ? (
+                      <DropdownMenuItem
+                        className="font-medium text-emerald-600"
+                        disabled={actionLoading}
+                        onClick={() => setPurchaseTarget(series)}
+                      >
+                        <Plus className="size-4" />
+                        Buy & Inherit (₹{(series as any).price})
+                      </DropdownMenuItem>
                     ) : (
                       <DropdownMenuItem
                         disabled={actionLoading}
                         onClick={() => void inheritSeriesRows([series])}
                       >
                         <Plus className="size-4" />
-                        Inherit all subjects
+                        Inherit all subjects (Free)
                       </DropdownMenuItem>
                     )
                   )}
@@ -1096,6 +1105,30 @@ export default function ExamsPage() {
       return seriesColumns;
     }
     const columns: ColumnDef<ExamRow | ExamSeriesRow>[] = [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <Checkbox
+            checked={
+              table.getIsAllPageRowsSelected() ||
+              (table.getIsSomePageRowsSelected() ? "indeterminate" : false)
+            }
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(Boolean(value))}
+            aria-label="Select all exams"
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={row.getIsSelected()}
+            disabled={!row.getCanSelect()}
+            onCheckedChange={(value) => row.toggleSelected(Boolean(value))}
+            aria-label="Select exam"
+          />
+        ),
+        enableSorting: false,
+        enableHiding: false,
+        size: 32,
+      },
       {
         accessorKey: "title",
         header: "Exam",
@@ -1364,14 +1397,29 @@ export default function ExamsPage() {
                 ) : marketplaceMode ? (
                   <>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      className="whitespace-nowrap"
-                      disabled={actionLoading}
-                      onClick={() => void inheritExam(exam)}
-                    >
-                      <Plus className="size-4" />
-                      Inherit
-                    </DropdownMenuItem>
+                    {Boolean(exam.inherited_by_institution_name) ? (
+                      <DropdownMenuItem className="whitespace-nowrap" disabled>
+                        Already inherited
+                      </DropdownMenuItem>
+                    ) : (exam as any).is_paid && Number((exam as any).price) > 0 ? (
+                      <DropdownMenuItem
+                        className="whitespace-nowrap font-medium text-emerald-600"
+                        disabled={actionLoading}
+                        onClick={() => setPurchaseTarget(exam)}
+                      >
+                        <Plus className="size-4" />
+                        Buy & Inherit (₹{(exam as any).price})
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem
+                        className="whitespace-nowrap"
+                        disabled={actionLoading}
+                        onClick={() => void inheritExam(exam)}
+                      >
+                        <Plus className="size-4" />
+                        Inherit Free
+                      </DropdownMenuItem>
+                    )}
                   </>
                 ) : exam.blocked_by_platform ? (
                   <DropdownMenuItem disabled>
@@ -1460,50 +1508,29 @@ export default function ExamsPage() {
               className="gap-2 font-bold shadow-xs cursor-pointer"
             >
               <Landmark className="size-4" />
-              Publish Government Exam
+              Public Examination for Selection
             </Button>
           )}
-          <Button
-            onClick={() => {
-              if (examView !== "my") {
-                setExamView("my");
-              }
-              setEditing(null);
-              setActiveSeries(null);
-              setEditorOpen(true);
-            }}
-            className="gap-1.5 font-bold shadow-xs cursor-pointer"
-          >
-            <Plus className="size-4" />
-            Add Exam
-          </Button>
+          {!isPlatformAdmin && (
+            <Button
+              onClick={() => {
+                if (examView !== "my") {
+                  setExamView("my");
+                }
+                setEditing(null);
+                setActiveSeries(null);
+                setEditorOpen(true);
+              }}
+              className="gap-1.5 font-bold shadow-xs cursor-pointer"
+            >
+              <Plus className="size-4" />
+              Add Exam
+            </Button>
+          )}
         </div>
       </div>
 
-      {!isPlatformAdmin && (
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant={examView === "my" ? "default" : "outline"}
-            onClick={() => {
-              setExamView("my");
-              setPagination((current) => ({ ...current, pageIndex: 0 }));
-            }}
-          >
-            My Exams
-          </Button>
-          <Button
-            type="button"
-            variant={examView === "marketplace" ? "default" : "outline"}
-            onClick={() => {
-              setExamView("marketplace");
-              setPagination((current) => ({ ...current, pageIndex: 0 }));
-            }}
-          >
-            Marketplace
-          </Button>
-        </div>
-      )}
+
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total Exams" value={stats.total} />
@@ -1525,13 +1552,14 @@ export default function ExamsPage() {
         getRowId={(row) => `${isPlatformAdmin ? "exam" : "series"}-${row.id}`}
         selectionResetKey={`${examView}:${debouncedSearch}:${pagination.pageSize}:${activeInstitutionId ?? ""}`}
         enableRowSelection={(row) => {
-          const series = row.original as ExamSeriesRow;
-          if (isPlatformAdmin) return Boolean(series.marketplace_requested);
-          return examView === "my" || canInheritSeries(series);
+          const item = row.original as any;
+          if (isPlatformAdmin) return Boolean(item.marketplace_requested);
+          return examView === "my" || canInheritSeries(item);
         }}
         onRowClick={(row) => {
           if (isPlatformAdmin) {
-            void openSeriesDetail(row as ExamSeriesRow);
+            setEditingGovExam(row as ExamRow);
+            setGovDialogOpen(true);
           } else {
             void openSeriesDetail(row as ExamSeriesRow);
           }
@@ -1846,22 +1874,6 @@ export default function ExamsPage() {
                   </div>
                 )}
               </div>
-              <div className="flex flex-wrap items-center gap-5">
-                <label className="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={seriesIsPublic}
-                    onCheckedChange={(value) => setSeriesIsPublic(Boolean(value))}
-                  />
-                  Request marketplace review
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={seriesActive}
-                    onCheckedChange={(value) => setSeriesActive(Boolean(value))}
-                  />
-                  Active
-                </label>
-              </div>
             </div>
             <DialogFooter>
               <Button
@@ -1928,20 +1940,110 @@ export default function ExamsPage() {
                 : "Exam questions and details"}
                 </SheetDescription>
               </div>
-              {isPlatformAdmin && activeSeries?.marketplace_requested && (
-                <Button
-                  type="button"
-                  className="shrink-0 whitespace-nowrap"
-                  disabled={actionLoading}
-                  onClick={() => void approveMarketplaceSeries(activeSeries)}
-                >
-                  {actionLoading && actionRowId === activeSeries.id ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Plus className="size-4" />
-                  )}
-                  Show in public
-                </Button>
+              <div className="flex items-center gap-2">
+                {isPlatformAdmin && active && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 shrink-0"
+                    onClick={() => {
+                      if (active.is_government_exam) {
+                        setEditingGovExam(active);
+                        setGovDialogOpen(true);
+                      } else {
+                        void openEdit(active);
+                      }
+                    }}
+                  >
+                    <Pencil className="size-3.5" />
+                    {active.is_government_exam ? "Edit Exam Information" : "Edit Exam"}
+                  </Button>
+                )}
+                {!isPlatformAdmin && examView === "my" && active && !active.blocked_by_platform && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 shrink-0"
+                    onClick={() => {
+                      void openEdit(active);
+                    }}
+                  >
+                    <Pencil className="size-3.5" />
+                    Edit Exam
+                  </Button>
+                )}
+                {isPlatformAdmin && activeSeries?.marketplace_requested && (
+                  <Button
+                    type="button"
+                    className="shrink-0 whitespace-nowrap"
+                    disabled={actionLoading}
+                    onClick={() => void approveMarketplaceSeries(activeSeries)}
+                  >
+                    {actionLoading && actionRowId === activeSeries.id ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Plus className="size-4" />
+                    )}
+                    Show in public
+                  </Button>
+                )}
+              </div>
+              {!isPlatformAdmin && examView === "marketplace" && (
+                <div className="shrink-0">
+                  {activeSeries ? (
+                    isAlreadyInheritedSeries(activeSeries) ? (
+                      <Badge variant="outline" className="border-emerald-500/80 bg-emerald-500/10 text-emerald-600 font-medium">
+                        Already Inherited
+                      </Badge>
+                    ) : (activeSeries as any).is_paid && Number((activeSeries as any).price) > 0 ? (
+                      <Button
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                        disabled={actionLoading}
+                        onClick={() => setPurchaseTarget(activeSeries)}
+                      >
+                        <Plus className="size-4" />
+                        Pay ₹{(activeSeries as any).price} & Inherit
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                        disabled={actionLoading}
+                        onClick={() => void inheritSeriesRows([activeSeries])}
+                      >
+                        <Plus className="size-4" />
+                        Inherit all subjects (Free)
+                      </Button>
+                    )
+                  ) : active ? (
+                    Boolean(active.inherited_by_institution_name) ? (
+                      <Badge variant="outline" className="border-emerald-500/80 bg-emerald-500/10 text-emerald-600 font-medium">
+                        Already Inherited
+                      </Badge>
+                    ) : (active as any).is_paid && Number((active as any).price) > 0 ? (
+                      <Button
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                        disabled={actionLoading}
+                        onClick={() => setPurchaseTarget(active)}
+                      >
+                        <Plus className="size-4" />
+                        Pay ₹{(active as any).price} & Inherit
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                        disabled={actionLoading}
+                        onClick={() => void inheritExam(active)}
+                      >
+                        <Plus className="size-4" />
+                        Inherit Free
+                      </Button>
+                    )
+                  ) : null}
+                </div>
               )}
             </div>
           </SheetHeader>
@@ -2022,17 +2124,19 @@ export default function ExamsPage() {
                           <div className="grid gap-3 p-4 md:grid-cols-2">
                             {exams.map((exam) => {
                               const canManageSubject =
-                                examView === "my" &&
-                                !exam.blocked_by_platform &&
-                                hasPermission(user, "content.exams.edit", {
-                                  institutionId: exam.source_institution_id,
-                                });
+                                isPlatformAdmin ||
+                                (examView === "my" &&
+                                  !exam.blocked_by_platform &&
+                                  hasPermission(user, "content.exams.edit", {
+                                    institutionId: exam.source_institution_id,
+                                  }));
                               const canDeleteSubject =
-                                examView === "my" &&
-                                !exam.blocked_by_platform &&
-                                hasPermission(user, "content.exams.delete", {
-                                  institutionId: exam.source_institution_id,
-                                });
+                                isPlatformAdmin ||
+                                (examView === "my" &&
+                                  !exam.blocked_by_platform &&
+                                  hasPermission(user, "content.exams.delete", {
+                                    institutionId: exam.source_institution_id,
+                                  }));
                               return (
                               <div
                                 key={exam.id}
@@ -2299,11 +2403,11 @@ export default function ExamsPage() {
                         Add questions after the exam details have been saved.
                       </p>
                     </div>
-                    {!isPlatformAdmin &&
-                      !active.blocked_by_platform &&
-                      hasPermission(user, "content.exams.edit", {
-                        institutionId: active.source_institution_id,
-                      }) && (
+                    {(isPlatformAdmin ||
+                      (!active.blocked_by_platform &&
+                        hasPermission(user, "content.exams.edit", {
+                          institutionId: active.source_institution_id,
+                        }))) && (
                         <Button
                           type="button"
                           onClick={() => openQuestionEditor(active)}
@@ -2455,52 +2559,71 @@ export default function ExamsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <ExamEditor
-        open={editorOpen}
-        onOpenChange={setEditorOpen}
-        accessToken={accessToken}
-        template={editing}
-        existingSubjects={seriesSubjects}
-        existingSubjectsLoading={seriesManagerLoading}
-        seriesId={activeSeries?.id ?? null}
-        seriesTitle={activeSeries?.title ?? null}
-        seriesFromDate={activeSeries?.from_date ?? null}
-        seriesToDate={activeSeries?.to_date ?? null}
-        seriesTargetType={activeSeries?.target_type ?? null}
-        seriesTargetId={activeSeries?.target_id ?? null}
-        seriesTargetProgramId={activeSeries?.target_program_id ?? null}
-        seriesTargetLabel={activeSeries?.target_label ?? null}
-        seriesResultDate={activeSeries?.result_date ?? null}
-        seriesInstantResult={activeSeries?.instant_result}
-        seriesIsPublic={Boolean(activeSeries?.marketplace_approved || activeSeries?.marketplace_requested)}
-        seriesIsActive={activeSeries?.is_active}
-        fetchInstitutions={fetchInstitutions}
-        onSaved={(_id) => {
-          void fetchRows();
-        }}
-      />
-
-      {questionTemplate && (
-        <ExamQuestionEditor
-          open={questionEditorOpen}
-          onOpenChange={setQuestionEditorOpen}
-          accessToken={accessToken}
-          template={questionTemplate}
-          onSaved={() => {
-            void fetchRows();
-            if (active) void openDetail(active);
-          }}
-        />
-      )}
+      <Dialog open={Boolean(purchaseTarget)} onOpenChange={(open) => !open && setPurchaseTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Purchase & Inherit Exam</DialogTitle>
+            <DialogDescription>
+              This exam is a premium marketplace resource. Confirm purchase to inherit it into your institution library.
+            </DialogDescription>
+          </DialogHeader>
+          {purchaseTarget && (
+            <div className="space-y-4 py-2">
+              <div className="rounded-lg border p-4 bg-muted/30 space-y-2">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-semibold text-foreground">{purchaseTarget.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(purchaseTarget as any).institution_name ?? "Platform Resource"}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="border-rose-500/40 bg-rose-500/10 text-rose-600 font-bold text-sm">
+                    ₹{Number((purchaseTarget as any).price) || 0}
+                  </Badge>
+                </div>
+                {purchaseTarget.description && (
+                  <p className="text-xs text-muted-foreground line-clamp-2">{purchaseTarget.description}</p>
+                )}
+              </div>
+              <div className="rounded-md bg-amber-500/10 border border-amber-500/20 p-3 text-xs text-amber-800 dark:text-amber-300">
+                Note: This payment of ₹{Number((purchaseTarget as any).price) || 0} will grant your institution full access to this exam and its subject papers.
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPurchaseTarget(null)} disabled={actionLoading}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+              disabled={actionLoading}
+              onClick={async () => {
+                if (!purchaseTarget) return;
+                const target = purchaseTarget;
+                setPurchaseTarget(null);
+                if ((target as any).subject_count !== undefined || ((target as any).from_date && !(target as any).duration_minutes)) {
+                  await inheritSeriesRows([target as ExamSeriesRow]);
+                } else {
+                  await inheritExam(target as ExamRow);
+                }
+              }}
+            >
+              {actionLoading && <Loader2 className="size-4 animate-spin" />}
+              Pay ₹{Number((purchaseTarget as any)?.price) || 0} & Inherit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <PlatformGovernmentExamDialog
         open={govDialogOpen}
-        onOpenChange={setGovDialogOpen}
+        onOpenChange={(open) => {
+          setGovDialogOpen(open);
+          if (!open) setEditingGovExam(null);
+        }}
         exam={editingGovExam}
         accessToken={accessToken}
-        onSuccess={() => {
-          void fetchRows();
-        }}
+        onSuccess={() => fetchRows()}
       />
     </div>
   );

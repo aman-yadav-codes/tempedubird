@@ -204,12 +204,7 @@ export async function POST(req: Request, context: Context) {
   try {
     const currentUser = await requireAdmin(req);
     await ensurePracticeExamSchema();
-    if (isPlatformAdminUser(currentUser)) {
-      return NextResponse.json(
-        { error: "Platform Admin cannot generate practice exam questions" },
-        { status: 403 }
-      );
-    }
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
 
     const { id: value } = await context.params;
     const id = parseId(value);
@@ -242,13 +237,14 @@ export async function POST(req: Request, context: Context) {
     if (!practiceExam) {
       return NextResponse.json({ error: "Practice Exam not found" }, { status: 404 });
     }
-    if (practiceExam.blocked_by_platform) {
+    if (!isPlatformAdmin && practiceExam.blocked_by_platform) {
       return NextResponse.json(
         { error: "This practice exam is blocked by Platform Admin" },
         { status: 423 }
       );
     }
     if (
+      !isPlatformAdmin &&
       !hasPermission(currentUser, "content.practice_exams.edit", {
         institutionId: practiceExam.source_institution_id,
       })
@@ -281,25 +277,6 @@ export async function POST(req: Request, context: Context) {
     );
     if (!provider?.token?.trim()) throw new Error("Configure API key first");
 
-    const syllabusRes = await db.query<{ label: string }>(
-      `
-        SELECT CONCAT_WS(' / ', s.title, sn.title) AS label
-        FROM practice_exams exam
-        INNER JOIN practice_exam_syllabus_nodes pesn ON pesn.practice_exam_id = exam.id
-        INNER JOIN syllabus_nodes sn ON sn.id = pesn.syllabus_node_id
-        LEFT JOIN syllabi s ON s.id = sn.syllabus_id
-        WHERE exam.template_id = $1
-          AND COALESCE(exam.is_deleted, FALSE) = FALSE
-        ORDER BY s.title NULLS LAST, sn.sort_order, sn.title
-        LIMIT 20
-      `,
-      [id]
-    );
-    const syllabusLabels = syllabusRes.rows.map((row) => row.label).filter(Boolean);
-    if (syllabusLabels.length === 0) {
-      throw new Error("Map at least one syllabus node before generating questions with AI");
-    }
-
     const marks = distributeMarks(Number(practiceExam.total_marks), requestedTypes);
     const result = await generateJsonWithProvider({
       provider,
@@ -309,7 +286,7 @@ export async function POST(req: Request, context: Context) {
         totalMarks: Number(practiceExam.total_marks),
         durationMinutes: practiceExam.duration_minutes,
         counts,
-        syllabus: syllabusLabels,
+        syllabus: [],
       }),
     });
 

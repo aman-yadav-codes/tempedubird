@@ -48,6 +48,7 @@ export async function GET(req: Request) {
           AND (
             ip.title ILIKE $2
             OR s.name ILIKE $2
+            OR COALESCE(ps.batch_name, '') ILIKE $2
             OR ay.name ILIKE $2
             OR u.full_name ILIKE $2
             OR u.email ILIKE $2
@@ -62,6 +63,7 @@ export async function GET(req: Request) {
           id: number;
           program_id: number;
           program_name: string;
+          batch_name: string;
           section_id: number;
           section_name: string;
           academic_year_id: number;
@@ -75,6 +77,7 @@ export async function GET(req: Request) {
               psct.id,
               psct.program_id,
               ip.title AS program_name,
+              COALESCE(ps.batch_name, ps.section_name, s.name, 'Default Batch') AS batch_name,
               psct.section_id,
               s.name AS section_name,
               psct.academic_year_id,
@@ -85,11 +88,12 @@ export async function GET(req: Request) {
             FROM program_section_class_teachers psct
             INNER JOIN institution_programs ip ON ip.id = psct.program_id
             INNER JOIN sections s ON s.id = psct.section_id
+            LEFT JOIN program_sections ps ON ps.program_id = psct.program_id AND ps.section_id = psct.section_id
             INNER JOIN academic_years ay ON ay.id = psct.academic_year_id
             INNER JOIN users u ON u.id = psct.teacher_id
             WHERE ip.institution_id = $1
               ${searchClause}
-            ORDER BY ip.title ASC, s.name ASC, ay.start_date DESC, ay.name DESC
+            ORDER BY ip.title ASC, COALESCE(ps.batch_name, '') ASC, s.name ASC, ay.start_date DESC, ay.name DESC
             LIMIT $${limitIndex}
             OFFSET $${offsetIndex}
           `,
@@ -101,6 +105,7 @@ export async function GET(req: Request) {
             FROM program_section_class_teachers psct
             INNER JOIN institution_programs ip ON ip.id = psct.program_id
             INNER JOIN sections s ON s.id = psct.section_id
+            LEFT JOIN program_sections ps ON ps.program_id = psct.program_id AND ps.section_id = psct.section_id
             INNER JOIN academic_years ay ON ay.id = psct.academic_year_id
             INNER JOIN users u ON u.id = psct.teacher_id
             WHERE ip.institution_id = $1

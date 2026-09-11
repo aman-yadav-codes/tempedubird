@@ -107,18 +107,27 @@ export async function processAffiliateReferral(
   const cleanCode = params.referralCode.trim();
   if (!cleanCode) return null;
 
-  // Find referrer user by phone or affiliate_code
+  const digitsOnly = cleanCode.replace(/\D/g, "");
+  const last10Digits = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : (digitsOnly || cleanCode);
+
+  // Find referrer user by phone or affiliate_code (supports formatted phone, country code +91, and custom affiliate codes)
   const referrerRes = await db.query<{ id: number; full_name: string; phone: string }>(
     `
       SELECT u.id, u.full_name, u.phone
       FROM users u
       LEFT JOIN affiliates a ON a.user_id = u.id
-      WHERE (u.phone = $1 OR a.affiliate_code = $1)
-        AND u.id != $2
+      WHERE (
+        u.phone = $1
+        OR a.affiliate_code = $1
+        OR a.affiliate_code ILIKE $1
+        OR RIGHT(REGEXP_REPLACE(COALESCE(u.phone, ''), '\\D', '', 'g'), 10) = $2
+        OR RIGHT(REGEXP_REPLACE(COALESCE(a.affiliate_code, ''), '\\D', '', 'g'), 10) = $2
+      )
+        AND u.id != $3
         AND COALESCE(u.is_deleted, FALSE) = FALSE
       LIMIT 1
     `,
-    [cleanCode, params.newUserId]
+    [cleanCode, last10Digits, params.newUserId]
   );
 
   const referrer = referrerRes.rows[0];
@@ -187,7 +196,7 @@ export async function getUserAffiliateDashboard(db: Queryable, userId: number) {
         ar.status,
         ar.reward_amount,
         ar.joined_at,
-        u.full_name AS referred_name,
+        COALESCE(u.full_name, 'Registered User') AS referred_name,
         u.email AS referred_email,
         u.phone AS referred_phone,
         u.avatar_url AS referred_avatar,
@@ -196,7 +205,7 @@ export async function getUserAffiliateDashboard(db: Queryable, userId: number) {
           'Member'
         ) AS referred_role
       FROM affiliate_referrals ar
-      JOIN users u ON u.id = ar.referred_user_id
+      LEFT JOIN users u ON u.id = ar.referred_user_id
       WHERE ar.referrer_user_id = $1
       ORDER BY ar.joined_at DESC
       LIMIT 100

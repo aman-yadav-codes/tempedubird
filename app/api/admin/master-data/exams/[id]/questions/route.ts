@@ -31,12 +31,7 @@ export async function PUT(req: Request, context: Context) {
   try {
     const currentUser = await requireAdmin(req);
     await ensureExamSchema();
-    if (isPlatformAdminUser(currentUser)) {
-      return NextResponse.json(
-        { error: "Platform Admin cannot manage exam questions" },
-        { status: 403 }
-      );
-    }
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const { id: value } = await context.params;
     const id = parseId(value);
     const result = await db.query<{
@@ -71,19 +66,21 @@ export async function PUT(req: Request, context: Context) {
     }
     const releaseAt = new Date(`${String(exam.exam_date).slice(0, 10)}T${String(exam.exam_time).slice(0, 8)}+05:30`).getTime();
     if (
+      !isPlatformAdmin &&
       !isInstitutionAdminUser(currentUser) &&
       exam.created_by !== currentUser.id &&
       releaseAt > Date.now()
     ) {
       return NextResponse.json({ error: "Only the exam creator or an administrator can manage questions before release" }, { status: 403 });
     }
-    if (exam.blocked_by_platform) {
+    if (!isPlatformAdmin && exam.blocked_by_platform) {
       return NextResponse.json(
         { error: "This exam is blocked by Platform Admin" },
         { status: 423 }
       );
     }
     if (
+      !isPlatformAdmin &&
       !hasPermission(currentUser, "content.exams.edit", {
         institutionId: exam.source_institution_id,
       })

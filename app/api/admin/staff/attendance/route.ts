@@ -13,6 +13,10 @@ import type { PermissionUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
 import { ensureSystemNotificationTemplates } from "@/lib/queries/notifications";
 import { NotificationService } from "@/services/notificationService";
+import {
+  applyPenaltyRules,
+  computeMinutesLate,
+} from "@/lib/penalties/applyPenaltyRules";
 
 type StaffAttendanceStatus = "PRESENT" | "ABSENT" | "LEAVE" | "LATE" | "HALF_DAY";
 type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -672,6 +676,34 @@ export async function PUT(req: Request) {
             [institutionId, staffUserId, fromDate, toDate, remarks, currentUser.id]
           );
         }
+      }
+
+      // ── Auto-Penalty: Late Attendance ────────────────────────────────────
+      // Runs outside the DB transaction so a rule engine failure never
+      // rolls back the attendance save.
+      if (status === "LATE" && row.checkInTime) {
+        computeMinutesLate(row.checkInTime, institutionId)
+          .then(async (minutesLate) => {
+            if (minutesLate <= 0) return;
+            // Look up staff name for the ledger
+            const nameRes = await db
+              .query(`SELECT full_name FROM users WHERE id = $1`, [staffUserId])
+              .catch(() => ({ rows: [] as any[] }));
+            await applyPenaltyRules({
+              ruleType: "attendance_late",
+              institutionId,
+              employeeId: staffUserId,
+              employeeName: nameRes.rows[0]?.full_name ?? undefined,
+              overdueValue: minutesLate,
+              overdueUnit: "minutes",
+              context: `Late attendance on ${date} (check-in: ${row.checkInTime})`,
+              createdBy: currentUser.id,
+              createdByName: currentUser.full_name,
+            });
+          })
+          .catch((e: Error) =>
+            console.error("[attendance] late-penalty hook error:", e.message)
+          );
       }
     }
     await client.query("COMMIT");

@@ -92,18 +92,21 @@ function LinkedinIcon() {
   );
 }
 
+let cachedSocialLinks: SocialLinksMap | null = null;
+let cachedPlatformContact: { email?: string; phone?: string; address?: string } | null = null;
+
 export function PublicFooter() {
   const pathname = usePathname();
   const { user } = useAuthStore();
   const { activeInstitution, activeInstitutionId } = useActiveInstitution();
   const [mounted, setMounted] = useState(false);
-  const [socialLinks, setSocialLinks] = useState<SocialLinksMap | null>(null);
+  const [socialLinks, setSocialLinks] = useState<SocialLinksMap | null>(() => cachedSocialLinks);
   const [institutionInfo, setInstitutionInfo] = useState<any>(null);
   const [platformContact, setPlatformContact] = useState<{
     email?: string;
     phone?: string;
     address?: string;
-  }>({});
+  }>(() => cachedPlatformContact || {});
 
   const defaultEnvInstId = process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
     ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
@@ -112,27 +115,34 @@ export function PublicFooter() {
   useEffect(() => {
     setMounted(true);
 
-    fetch("/api/public/company/pages/social-links")
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.data?.metadata) {
-          setSocialLinks(json.data.metadata);
-        }
-      })
-      .catch(() => undefined);
+    if (!cachedSocialLinks) {
+      fetch("/api/public/company/pages/social-links")
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.data?.metadata) {
+            cachedSocialLinks = json.data.metadata;
+            setSocialLinks(json.data.metadata);
+          }
+        })
+        .catch(() => undefined);
+    }
 
-    fetch("/api/public/company/pages/contact-us")
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.data?.metadata) {
-          setPlatformContact({
-            email: json.data.metadata.email,
-            phone: json.data.metadata.phone,
-            address: json.data.metadata.address,
-          });
-        }
-      })
-      .catch(() => undefined);
+    if (!cachedPlatformContact) {
+      fetch("/api/public/company/pages/contact-us")
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.data?.metadata) {
+            const contactData = {
+              email: json.data.metadata.email,
+              phone: json.data.metadata.phone,
+              address: json.data.metadata.address,
+            };
+            cachedPlatformContact = contactData;
+            setPlatformContact(contactData);
+          }
+        })
+        .catch(() => undefined);
+    }
   }, []);
 
   const isPlatformAdmin = Boolean(

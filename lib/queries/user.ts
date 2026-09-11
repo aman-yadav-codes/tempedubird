@@ -25,6 +25,30 @@ let institutionUserPermissionsSchemaReady: Promise<void> | null = null;
 let userDocumentsSchemaReady: Promise<void> | null = null;
 let staffSalaryStructureSchemaReady: Promise<void> | null = null;
 
+function safeDateOrNull(val: unknown): Date | null {
+  if (!val) return null;
+  if (val instanceof Date && !isNaN(val.getTime())) return val;
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (!trimmed) return null;
+    const isoParts = trimmed.split("-").map(Number);
+    if (isoParts.length === 3 && isoParts.every((n) => !isNaN(n))) {
+      const d = new Date(isoParts[0], isoParts[1] - 1, isoParts[2]);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    const slashParts = trimmed.split("/").map(Number);
+    if (slashParts.length === 3 && slashParts.every((n) => !isNaN(n))) {
+      if (slashParts[2] > 1000) {
+        const d = new Date(slashParts[2], slashParts[1] - 1, slashParts[0]);
+        if (!isNaN(d.getTime())) return d;
+      }
+    }
+    const parsed = new Date(trimmed);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
 async function ensureUserProfileCompleteSchema(db: Queryable) {
   if (!userProfileCompleteSchemaReady) {
     userProfileCompleteSchemaReady = (async () => {
@@ -573,6 +597,7 @@ export const getUsersPaginatedQuery = async (
     includeCurrentUser?: boolean;
     includePlatformAdmins?: boolean;
     staffScope?: "all" | "institution_staff" | "teacher_driver" | null;
+    isPlatformAdminViewer?: boolean;
   } = {}
 ) => {
   await ensureUserProfileCompleteSchema(db);
@@ -640,6 +665,43 @@ export const getUsersPaginatedQuery = async (
       filterParams.push(institutionIds);
       filtersWhere.push(userInstitutionOrPlatformAdminExists(`scoped_user_institutions.institution_id = ANY($${filterParams.length}::int[])`));
     }
+  } else if (filters.isPlatformAdminViewer && !filters.institutionId) {
+    filterParams.push(currentUserId);
+    const viewerParamIndex = filterParams.length;
+    filtersWhere.push(`(
+      (
+        -- Platform admin or platform-scoped role
+        EXISTS (
+          SELECT 1 FROM user_roles pur
+          JOIN roles pr ON pr.id = pur.role_id
+          LEFT JOIN scope_types pst ON pst.id = pr.scope_id
+          WHERE pur.user_id = u.id AND (pr.code IN ('platform_admin', 'super_admin', 'accountant', 'platform_staff') OR pst.code = 'platform')
+        )
+        -- Staff added by current platform admin or any platform admin
+        OR u.created_by = $${viewerParamIndex}
+        OR u.created_by IN (
+          SELECT pur.user_id FROM user_roles pur
+          JOIN roles pr ON pr.id = pur.role_id
+          WHERE pr.code = 'platform_admin'
+        )
+        -- Staff of EduBird platform organization
+        OR EXISTS (
+          SELECT 1 FROM institution_memberships eim
+          JOIN institution_profiles eip ON eip.id = eim.institution_id
+          WHERE eim.user_id = u.id AND (LOWER(eip.name) = 'edubird' OR eip.slug = 'edubird')
+        )
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM user_roles sur
+        JOIN roles sr ON sr.id = sur.role_id
+        WHERE sur.user_id = u.id AND LOWER(sr.code) IN ('student', 'guardian', 'parent')
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM institution_memberships sim
+        JOIN roles sr ON sr.id = sim.role_id
+        WHERE sim.user_id = u.id AND LOWER(sr.code) IN ('student', 'guardian', 'parent')
+      )
+    )`);
   }
 
   if (filters.institutionId) {
@@ -819,6 +881,8 @@ export const getUsersPaginatedQuery = async (
         )
       `);
     } else {
+      filterParams.push(currentUserId);
+      const creatorParamIndex = filterParams.length;
       filtersWhere.push(`
         (
           (
@@ -848,25 +912,7 @@ export const getUsersPaginatedQuery = async (
             )
           )
           AND (
-            u.created_by = 1
-            OR EXISTS (
-              SELECT 1
-              FROM user_roles cr_ur
-              JOIN roles cr_r ON cr_r.id = cr_ur.role_id
-              WHERE cr_ur.user_id = u.created_by
-                AND cr_r.code IN ('platform_admin', 'super_admin')
-            )
-            OR (
-              u.created_by IS NULL
-              AND EXISTS (
-                SELECT 1
-                FROM user_roles global_ur
-                JOIN roles global_r ON global_r.id = global_ur.role_id
-                LEFT JOIN scope_types global_st ON global_st.id = global_r.scope_id
-                WHERE global_ur.user_id = u.id
-                  AND (global_st.code = 'platform' OR global_r.code IN ('platform_admin', 'super_admin'))
-              )
-            )
+            u.created_by = $${creatorParamIndex}
           )
         )
       `);
@@ -897,6 +943,8 @@ export const getUsersPaginatedQuery = async (
         )
       `);
     } else {
+      filterParams.push(currentUserId);
+      const creatorParamIndex = filterParams.length;
       filtersWhere.push(`
         (
           (
@@ -926,25 +974,7 @@ export const getUsersPaginatedQuery = async (
             )
           )
           AND (
-            u.created_by = 1
-            OR EXISTS (
-              SELECT 1
-              FROM user_roles cr_ur
-              JOIN roles cr_r ON cr_r.id = cr_ur.role_id
-              WHERE cr_ur.user_id = u.created_by
-                AND cr_r.code IN ('platform_admin', 'super_admin')
-            )
-            OR (
-              u.created_by IS NULL
-              AND EXISTS (
-                SELECT 1
-                FROM user_roles global_ur
-                JOIN roles global_r ON global_r.id = global_ur.role_id
-                LEFT JOIN scope_types global_st ON global_st.id = global_r.scope_id
-                WHERE global_ur.user_id = u.id
-                  AND (global_st.code = 'platform' OR global_r.code IN ('platform_admin', 'super_admin'))
-              )
-            )
+            u.created_by = $${creatorParamIndex}
           )
         )
       `);
@@ -1859,8 +1889,8 @@ export const createAdminUserWithDetails = async (
         data.profile.is_teacher ? data.profile.teacher_type ?? null : null,
         data.profile.under_institution_id ?? null,
         data.profile.designation_id ?? null,
-        data.profile.joining_date ? new Date(data.profile.joining_date) : null,
-        data.profile.date_of_birth ? new Date(data.profile.date_of_birth) : null,
+        safeDateOrNull(data.profile.joining_date),
+        safeDateOrNull(data.profile.date_of_birth),
         data.profile.shift_timing ?? null,
         (data.profile as any).employment_status || "ACTIVE",
         (data as any).salary_account?.payment_mode ?? (data.profile as any)?.payment_mode ?? null,
@@ -2600,8 +2630,8 @@ export const updateAdminUserWithDetails = async (
         data.profile.is_teacher ? data.profile.teacher_type ?? null : null,
         data.profile.under_institution_id ?? null,
         data.profile.designation_id ?? null,
-        data.profile.joining_date ? new Date(data.profile.joining_date) : null,
-        data.profile.date_of_birth ? new Date(data.profile.date_of_birth) : null,
+        safeDateOrNull(data.profile.joining_date),
+        safeDateOrNull(data.profile.date_of_birth),
         data.profile.shift_timing ?? null,
         (data.profile as any).employment_status || "ACTIVE",
         (data as any).salary_account?.payment_mode ?? (data.profile as any)?.payment_mode ?? null,

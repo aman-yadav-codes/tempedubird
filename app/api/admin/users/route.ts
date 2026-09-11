@@ -314,8 +314,6 @@ export async function GET(req: Request) {
       status === "active" ? true :
         status === "inactive" ? false :
           null;
-    const includeCurrentUser = url.searchParams.get("includeCurrentUser") === "true";
-    const includePlatformAdmins = url.searchParams.get("includePlatformAdmins") === "true";
     const rawStaffScope = url.searchParams.get("staffScope");
     const staffScope =
       rawStaffScope === "teacher_driver"
@@ -330,6 +328,14 @@ export async function GET(req: Request) {
     if (institutionId && !canAccessInstitution(currentUser, institutionId)) {
       return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
     }
+
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
+    const includeCurrentUser = url.searchParams.has("includeCurrentUser")
+      ? url.searchParams.get("includeCurrentUser") === "true"
+      : isPlatformAdmin;
+    const includePlatformAdmins = url.searchParams.has("includePlatformAdmins")
+      ? url.searchParams.get("includePlatformAdmins") === "true"
+      : isPlatformAdmin;
 
     const { users, totalCount } = await getUsersPaginatedQuery(
       db,
@@ -347,6 +353,7 @@ export async function GET(req: Request) {
         includeCurrentUser,
         includePlatformAdmins,
         staffScope,
+        isPlatformAdminViewer: isPlatformAdmin,
       }
     );
 
@@ -374,6 +381,23 @@ export async function POST(req: Request) {
     const staffRole = url.searchParams.get("staffRole")?.trim() || null;
     const currentUser = await getAuthenticatedUser(req);
     const body = await req.json();
+
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
+    if (isPlatformAdmin) {
+      const hasInstitution =
+        Boolean(body.profile?.under_institution_id) ||
+        (Array.isArray(body.profile?.institution_ids) && body.profile.institution_ids.length > 0);
+
+      if (!hasInstitution) {
+        const edubird = await getOrCreateEduBirdInstitution(db);
+        if (edubird?.id) {
+          body.profile = body.profile || {};
+          body.profile.under_institution_id = edubird.id;
+          body.profile.institution_ids = [edubird.id];
+          body.profile.under_institution_name = edubird.name || "EduBird";
+        }
+      }
+    }
 
     const parsed = adminCreateUserSchema.safeParse(body);
     if (!parsed.success) {
@@ -444,7 +468,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: roleAssignmentError }, { status: 403 });
     }
 
-    const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const profileRoleError = getProfileRoleError(parsed.data, roleMeta?.code, isPlatformAdmin);
     if (profileRoleError) {
       return NextResponse.json({ error: profileRoleError }, { status: 422 });

@@ -76,6 +76,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Category is required" }, { status: 400 });
     }
 
+    // Immediate DB Check for duplicate course name
+    const existingCourse = await db.query(
+      `SELECT id, name FROM master_courses WHERE LOWER(TRIM(name)) = LOWER(TRIM($1)) AND is_deleted = FALSE LIMIT 1`,
+      [name.trim()]
+    );
+    if (existingCourse.rows.length > 0) {
+      return NextResponse.json(
+        { error: `A course with the name "${name.trim()}" already exists. Course names must be unique.` },
+        { status: 409 }
+      );
+    }
+
+    // Validate and deduplicate custom subjects
+    const rawSubjects = Array.isArray(body.customSubjects)
+      ? body.customSubjects
+      : Array.isArray(body.subjects)
+      ? body.subjects
+      : [];
+    const seenSubjectNames = new Set<string>();
+    const uniqueSubjects: any[] = [];
+    for (const sub of rawSubjects) {
+      const cleanName = (sub.name || "").trim().toLowerCase();
+      if (cleanName && !seenSubjectNames.has(cleanName)) {
+        seenSubjectNames.add(cleanName);
+        uniqueSubjects.push(sub);
+      }
+    }
+
     const created = await createMasterCourse(db, {
       name: name.trim(),
       slug: slug?.trim(),
@@ -92,12 +120,8 @@ export async function POST(req: Request) {
       description: description?.trim() || null,
       thumbnail_url: (thumbnailUrl || thumbnail_url)?.trim() || null,
       icon_url: (iconUrl || icon_url)?.trim() || null,
-      subjectIds: Array.isArray(subjectIds) ? subjectIds.map(Number) : [],
-      customSubjects: Array.isArray(body.customSubjects)
-        ? body.customSubjects
-        : Array.isArray(body.subjects)
-        ? body.subjects
-        : undefined,
+      subjectIds: Array.isArray(subjectIds) ? Array.from(new Set(subjectIds.map(Number))) : [],
+      customSubjects: uniqueSubjects.length > 0 ? uniqueSubjects : undefined,
       isActive: isActive !== undefined ? Boolean(isActive) : true,
     });
 

@@ -31,12 +31,7 @@ export async function PUT(req: Request, context: Context) {
   try {
     const currentUser = await requireAdmin(req);
     await ensurePracticeExamSchema();
-    if (isPlatformAdminUser(currentUser)) {
-      return NextResponse.json(
-        { error: "Platform Admin cannot manage practice exam questions" },
-        { status: 403 }
-      );
-    }
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const { id: value } = await context.params;
     const id = parseId(value);
     const result = await db.query<{
@@ -56,13 +51,14 @@ export async function PUT(req: Request, context: Context) {
     if (!practiceExam) {
       return NextResponse.json({ error: "Practice Exam not found" }, { status: 404 });
     }
-    if (practiceExam.blocked_by_platform) {
+    if (!isPlatformAdmin && practiceExam.blocked_by_platform) {
       return NextResponse.json(
         { error: "This practice exam is blocked by Platform Admin" },
         { status: 423 }
       );
     }
     if (
+      !isPlatformAdmin &&
       !hasPermission(currentUser, "content.practice_exams.edit", {
         institutionId: practiceExam.source_institution_id,
       })

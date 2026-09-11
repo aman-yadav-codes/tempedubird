@@ -19,8 +19,9 @@ function parsePositiveNumber(value: unknown, label: string) {
 
 function parseDate(value: unknown, label: string) {
   const text = String(value ?? "").trim();
+  if (!text) return null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    throw new Error(`${label} is required`);
+    return null;
   }
   return text;
 }
@@ -97,16 +98,27 @@ export function parseAssignmentMetadataPayload(body: Record<string, unknown>) {
       : targetType === "SECTION" || targetType === "STUDENT"
         ? parsePositiveInt(body.target_program_id ?? body.program_id, "Class / Program")
         : null;
-  const issueDate = parseDate(body.issue_date, "Issue date");
-  const submissionDate = parseDate(body.submission_date, "Submission date");
-  if (new Date(submissionDate) < new Date(issueDate)) {
+  const issueDate = parseDate(body.issue_date, "Issue date") ?? new Date().toISOString().slice(0, 10);
+  const submissionDate = parseDate(body.submission_date, "Submission date") ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  if (issueDate && submissionDate && new Date(submissionDate) < new Date(issueDate)) {
     throw new Error("Submission date cannot be before issue date");
   }
+
+  const subjectId = body.subject_id ? String(body.subject_id).trim() : null;
+  const subjectName = body.subject_name ? String(body.subject_name).trim() : null;
+  const syllabusData = Array.isArray(body.syllabus_data)
+    ? body.syllabus_data
+    : Array.isArray(body.syllabus_nodes)
+      ? body.syllabus_nodes
+      : [];
 
   return {
     title,
     description,
     totalMarks,
+    subjectId,
+    subjectName,
+    syllabusData,
     institutionId,
     targetType,
     targetId,
@@ -131,14 +143,21 @@ export function parseAssignmentQuestionsPayload(
     throw new Error("Add at least one question");
   }
 
+  const count = rawQuestions.length;
+  const defaultMark =
+    totalMarks > 0 && count > 0
+      ? Number((totalMarks / count).toFixed(2))
+      : 1;
+
   const questions = rawQuestions.map((rawQuestion, questionIndex) => {
     const question = rawQuestion as Record<string, unknown>;
     const questionText = String(question.question_text ?? "").trim();
     const questionType = String(question.question_type ?? "") as AssignmentQuestionType;
-    const marks = parsePositiveNumber(
-      question.marks,
-      `Question ${questionIndex + 1} marks`
-    );
+    const rawMarks = Number(question.marks);
+    const marks =
+      Number.isFinite(rawMarks) && rawMarks > 0
+        ? Number(rawMarks.toFixed(2))
+        : defaultMark;
     const rawFiles = Array.isArray(question.files) ? question.files : [];
 
     if (!questionText) {
@@ -222,13 +241,16 @@ export function parseAssignmentQuestionsPayload(
     };
   });
 
-  const questionMarks = Number(
-    questions.reduce((sum, question) => sum + question.marks, 0).toFixed(2)
-  );
-  if (questionMarks !== Number(totalMarks.toFixed(2))) {
-    throw new Error(
-      `Total marks must equal question marks (${questionMarks.toFixed(2)})`
+  if (totalMarks > 0 && questions.length > 0) {
+    const sumMarks = Number(
+      questions.reduce((sum, question) => sum + question.marks, 0).toFixed(2)
     );
+    const diff = Number((Number(totalMarks.toFixed(2)) - sumMarks).toFixed(2));
+    if (diff !== 0) {
+      questions[questions.length - 1].marks = Number(
+        (questions[questions.length - 1].marks + diff).toFixed(2)
+      );
+    }
   }
 
   return questions;

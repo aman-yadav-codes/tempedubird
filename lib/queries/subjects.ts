@@ -6,7 +6,21 @@ import {
   UpdateSubjectData,
 } from "@/lib/types/subject";
 
-export async function ensureSubjectsSchemaAndDeduplicate(db: Pool) {
+let subjectsSchemaReady: Promise<void> | null = null;
+
+export async function ensureSubjectsSchemaAndDeduplicate(db: Pool): Promise<void> {
+  if (subjectsSchemaReady) return subjectsSchemaReady;
+  subjectsSchemaReady = (async () => {
+    try {
+      await initSubjectsSchemaDirect(db);
+    } catch (e) {
+      console.error("Error ensuring subjects schema:", e);
+    }
+  })();
+  return subjectsSchemaReady;
+}
+
+export async function initSubjectsSchemaDirect(db: Pool) {
   try {
     // 1. Create or update subjects table structure
     await db.query(`

@@ -38,6 +38,14 @@ function getInstitutionAdminInstitutionId(user: ReturnType<typeof useAuthStore.g
   )?.institution_id ?? null;
 }
 
+let cachedSubscription: {
+  institutionId: number;
+  time: number;
+  state: SubscriptionState;
+} | null = null;
+
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
 export function InstitutionSubscriptionGate() {
   const pathname = usePathname();
   const router = useRouter();
@@ -48,7 +56,7 @@ export function InstitutionSubscriptionGate() {
   const canonicalPathname = toCanonicalAdminPath(pathname);
   const isSubscriptionPage = canonicalPathname === "/admin/settings/subscription";
   const institutionId = getInstitutionAdminInstitutionId(user);
-  const shouldCheck = Boolean(
+  const isInstAdmin = Boolean(
     accessToken &&
       institutionId &&
       isInstitutionAdminUser(user) &&
@@ -56,33 +64,75 @@ export function InstitutionSubscriptionGate() {
   );
   const authHeader = useMemo(() => (accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), [accessToken]);
 
-  const loadSubscription = useCallback(async () => {
-    if (!shouldCheck || !institutionId) {
-      setState(null);
+  const checkSubscriptionIfDue = useCallback(async () => {
+    if (!isInstAdmin || !institutionId || isSubscriptionPage) {
       return;
     }
 
-    setLoading(true);
+    // Read stored plan info from localStorage
     try {
+      const storageKey = `edubird_sub_meta_${institutionId}`;
+      const raw = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
+      if (!raw) {
+        // If no plan is recorded/activated yet, do not block or call subscription API on dashboard open
+        return;
+      }
+
+      const meta = JSON.parse(raw) as {
+        hasPlan?: boolean;
+        expiresAt?: string | null;
+        lastChecked?: number;
+      };
+
+      // If no plan is active, no need to check
+      if (!meta.hasPlan) return;
+
+      const now = Date.now();
+      const lastChecked = meta.lastChecked || 0;
+      const isExpired = meta.expiresAt ? new Date(meta.expiresAt).getTime() < now : false;
+      const isDueFor30DayCheck = now - lastChecked > THIRTY_DAYS_MS;
+
+      // Only check if 30 days have elapsed or plan has passed its recorded expiration date
+      if (!isDueFor30DayCheck && !isExpired) {
+        return;
+      }
+
+      setLoading(true);
       const response = await fetch(`/api/admin/settings/subscription?institutionId=${institutionId}`, {
         headers: authHeader,
       });
       const json = await readJsonResponse<SubscriptionResponse>(response);
-      if (!response.ok) throw new Error(json.error ?? "Failed to load subscription");
-      setState({ is_valid: true, subscription: json.data ?? null });
+      if (response.ok && json.data) {
+        const expiresAt = json.data.expires_at || null;
+        localStorage.setItem(
+          storageKey,
+          JSON.stringify({
+            hasPlan: Boolean(json.data.package_name),
+            expiresAt,
+            lastChecked: Date.now(),
+          })
+        );
+        const expired = expiresAt ? new Date(expiresAt).getTime() < Date.now() : false;
+        if (expired) {
+          setState({ is_valid: false, subscription: json.data });
+        } else {
+          setState({ is_valid: true, subscription: json.data });
+        }
+      }
     } catch {
-      setState({ is_valid: false, subscription: null });
+      // Do not block dashboard on background check failure
     } finally {
       setLoading(false);
     }
-  }, [authHeader, institutionId, shouldCheck]);
+  }, [authHeader, institutionId, isInstAdmin, isSubscriptionPage]);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => void loadSubscription(), 0);
-    return () => window.clearTimeout(timeout);
-  }, [loadSubscription]);
+    // Check subscription only if due, deferred without blocking dashboard initialization
+    const timer = window.setTimeout(() => void checkSubscriptionIfDue(), 1000);
+    return () => window.clearTimeout(timer);
+  }, [checkSubscriptionIfDue]);
 
-  if (!shouldCheck || isSubscriptionPage || loading || state?.is_valid !== false) {
+  if (!isInstAdmin || isSubscriptionPage || loading || state?.is_valid !== false) {
     return null;
   }
 

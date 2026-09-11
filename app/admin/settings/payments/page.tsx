@@ -119,12 +119,11 @@ export default function PaymentSettingsPage() {
       const params = new URLSearchParams();
       if (targetInstitutionId) params.set("institutionId", String(targetInstitutionId));
       const query = params.toString() ? `?${params.toString()}` : "";
-      const [res, categoryRes] = await Promise.all([
-        fetch(`/api/admin/settings/payments${query}`, { headers: authHeader }),
-        fetch(`/api/admin/settings/payment-categories${query}`, { headers: authHeader }),
-      ]);
+      const res = await fetch(`/api/admin/settings/payments${query}`, { headers: authHeader });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to load payment settings");
+
+      const categoryRes = await fetch(`/api/admin/settings/payment-categories${query}`, { headers: authHeader });
       const categoryJson = await categoryRes.json();
       if (!categoryRes.ok) throw new Error(categoryJson.error || "Failed to load finance categories");
 

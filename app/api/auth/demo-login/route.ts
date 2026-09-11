@@ -210,11 +210,16 @@ export async function POST(req: Request) {
     }
 
     if (demoConfig.role_code === "student") {
-      const spRes = await db.query<{ id: number }>(
-        `SELECT id FROM student_profiles WHERE user_id = $1 LIMIT 1`,
+      const spRes = await db.query<{ id: number; enrollment_id?: number | null }>(
+        `SELECT sp.id, se.id AS enrollment_id
+         FROM student_profiles sp
+         LEFT JOIN student_enrollments se ON se.student_id = sp.id AND se.institution_id = 1 AND se.status = 'active'
+         WHERE sp.user_id = $1 LIMIT 1`,
         [userId]
       );
       let sId = spRes.rows[0]?.id;
+      let hasEnrollment = Boolean(spRes.rows[0]?.enrollment_id);
+
       if (!sId) {
         const newSp = await db.query<{ id: number }>(
           `INSERT INTO student_profiles (user_id, admission_number) VALUES ($1, 'MS-STU-001') RETURNING id`,
@@ -222,43 +227,16 @@ export async function POST(req: Request) {
         );
         sId = newSp.rows[0]?.id;
       }
-      if (sId) {
+      if (sId && !hasEnrollment) {
         let progRes = await db.query<{ id: number }>(
-          `SELECT id FROM institution_programs WHERE institution_id = 1 LIMIT 1`
+          `SELECT id FROM institution_programs WHERE institution_id = 1 AND is_active = TRUE AND is_deleted = FALSE LIMIT 1`
         );
-        let progId = progRes.rows[0]?.id;
-        if (!progId) {
-          const ptRes = await db.query<{ id: number }>(`
-            SELECT id FROM program_types WHERE is_deleted = FALSE ORDER BY id ASC LIMIT 1
-          `);
-          let programTypeId = ptRes.rows[0]?.id;
-          if (!programTypeId) {
-            const newPt = await db.query<{ id: number }>(`
-              INSERT INTO program_types (name, slug, is_active)
-              VALUES ('Coaching & Preparation', 'coaching-preparation', TRUE)
-              RETURNING id
-            `);
-            programTypeId = newPt.rows[0].id;
-          }
-
-          const newP = await db.query<{ id: number }>(
-            `INSERT INTO institution_programs (institution_id, program_type_id, title, slug, duration_value, duration_unit, fee_amount, is_active)
-             VALUES (1, $1, 'NEET Intensive Classroom Program', 'neet-intensive-classroom-program', 1, 'Year', 45000, TRUE)
-             RETURNING id`,
-            [programTypeId]
-          );
-          progId = newP.rows[0]?.id;
-        }
-
-        await db.query(`DELETE FROM student_enrollments WHERE student_id = $1 AND institution_id <> 1`, [sId]);
-        const checkEnr = await db.query(`SELECT id FROM student_enrollments WHERE student_id = $1 AND institution_id = 1 LIMIT 1`, [sId]);
-        if (checkEnr.rows.length === 0) {
-          await db.query(`
-            INSERT INTO student_enrollments (student_id, institution_id, program_id, academic_year_id, class_category_id, status, admission_date, created_at, updated_at)
-            VALUES ($1, 1, $2, 1, 1, 'active', CURRENT_DATE, NOW(), NOW())
-            ON CONFLICT DO NOTHING
-          `, [sId, progId || 1]);
-        }
+        const progId = progRes.rows[0]?.id || 1;
+        await db.query(`
+          INSERT INTO student_enrollments (student_id, institution_id, program_id, academic_year_id, class_category_id, status, admission_date, created_at, updated_at)
+          VALUES ($1, 1, $2, 1, 1, 'active', CURRENT_DATE, NOW(), NOW())
+          ON CONFLICT DO NOTHING
+        `, [sId, progId]);
       }
     }
 

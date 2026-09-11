@@ -101,7 +101,7 @@ export async function GET(req: Request) {
             COALESCE(te.teacher_id, pst.teacher_id) AS teacher_id,
             u.full_name AS teacher_name
           FROM timetable_entries te
-          INNER JOIN subjects s ON s.id = te.subject_id
+          LEFT JOIN subjects s ON s.id = te.subject_id
           LEFT JOIN program_subject_teachers pst
             ON pst.program_id = te.program_id
            AND pst.section_id = te.section_id

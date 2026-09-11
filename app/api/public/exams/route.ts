@@ -9,50 +9,134 @@ export async function GET(req: NextRequest) {
     const institutionId = searchParams.get("institutionId") ? Number(searchParams.get("institutionId")) : null;
     const search = searchParams.get("search")?.trim() || "";
     const examType = searchParams.get("examType")?.trim() || ""; // 'government' | 'competitive' | 'institutional'
+    const category = searchParams.get("category")?.trim() || "";
 
     const whereConditions: string[] = [];
     const params: unknown[] = [];
 
     if (institutionId && Number.isInteger(institutionId) && institutionId > 0) {
       params.push(institutionId);
-      whereConditions.push(`(e.institution_id = $${params.length} OR e.institution_id IS NULL)`);
+      whereConditions.push(`(t.source_institution_id = $${params.length} OR t.source_institution_id IS NULL OR t.source_institution_id = 1)`);
     }
 
     if (examType && examType !== "all") {
       params.push(examType);
-      whereConditions.push(`(e.exam_type = $${params.length} OR (e.category ILIKE $${params.length}))`);
+      whereConditions.push(`(
+        CASE
+          WHEN COALESCE(t.is_government_exam, FALSE) THEN 'government'
+          WHEN COALESCE(t.is_public, FALSE) THEN 'competitive'
+          ELSE 'institutional'
+        END = $${params.length} OR COALESCE(t.exam_category, '') ILIKE $${params.length}
+      )`);
+    }
+
+    if (category && category !== "all") {
+      params.push(`%${category}%`);
+      whereConditions.push(`COALESCE(t.exam_category, '') ILIKE $${params.length}`);
     }
 
     if (search) {
       params.push(`%${search}%`);
-      whereConditions.push(`(e.exam_name ILIKE $${params.length} OR e.category ILIKE $${params.length} OR e.eligibility ILIKE $${params.length} OR COALESCE(e.exam_type, '') ILIKE $${params.length})`);
+      whereConditions.push(`(
+        t.title ILIKE $${params.length} 
+        OR COALESCE(t.exam_category, '') ILIKE $${params.length} 
+        OR COALESCE(t.conducting_body, '') ILIKE $${params.length}
+        OR COALESCE(t.eligibility_criteria, '') ILIKE $${params.length}
+        OR COALESCE(t.description, '') ILIKE $${params.length}
+      )`);
     }
 
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(" AND ")}` : "";
+    const whereClause = whereConditions.length > 0 ? `AND ${whereConditions.join(" AND ")}` : "";
 
-    const examsRes = await db.query(`
+    const templatesRes = await db.query(`
       SELECT
-        e.id,
-        e.institution_id,
-        e.exam_name,
-        COALESCE(e.exam_type, 'institutional') AS exam_type,
-        e.category,
-        e.exam_date,
-        e.eligibility,
-        e.application_fee,
-        e.website_url,
-        e.description,
-        e.created_at,
-        COALESCE(ip.name, ip.slug, 'Central Platform') AS institution_name
-      FROM entrance_exams e
-      LEFT JOIN institution_profiles ip ON ip.id = e.institution_id
-      ${whereClause}
-      ORDER BY e.id DESC
+        t.id,
+        t.source_institution_id AS institution_id,
+        t.title AS exam_name,
+        CASE
+          WHEN COALESCE(t.is_government_exam, FALSE) THEN 'government'
+          WHEN COALESCE(t.is_public, FALSE) THEN 'competitive'
+          ELSE 'institutional'
+        END AS exam_type,
+        COALESCE(t.exam_category, 'General Competitive') AS category,
+        TO_CHAR(t.exam_date, 'YYYY-MM-DD') AS exam_date,
+        t.exam_time::text AS exam_time,
+        COALESCE(t.exam_mode, 'online') AS exam_mode,
+        COALESCE(t.total_marks, 200) AS total_marks,
+        COALESCE(t.duration_minutes, 120) AS duration_minutes,
+        COALESCE(t.eligibility_criteria, 'Open to all eligible candidates.') AS eligibility,
+        COALESCE(t.application_fee, 0)::numeric AS application_fee,
+        COALESCE(t.official_website_url, t.apply_url, '') AS website_url,
+        COALESCE(t.apply_url, '') AS apply_url,
+        COALESCE(t.notification_pdf_url, '') AS notification_pdf_url,
+        TO_CHAR(t.application_start_date, 'YYYY-MM-DD') AS application_start_date,
+        TO_CHAR(t.application_end_date, 'YYYY-MM-DD') AS application_end_date,
+        TO_CHAR(t.admit_card_date, 'YYYY-MM-DD') AS admit_card_date,
+        TO_CHAR(t.result_date, 'YYYY-MM-DD') AS result_date,
+        COALESCE(t.description, 'Official examination with syllabus-mapped assessment and merit list.') AS description,
+        t.created_at,
+        COALESCE(t.conducting_body, ip.name, ip.slug, 'Central Examination Authority') AS institution_name,
+        COALESCE(t.is_government_exam, FALSE) AS is_government_exam
+      FROM practice_exam_templates t
+      LEFT JOIN institution_profiles ip ON ip.id = t.source_institution_id
+      WHERE COALESCE(t.is_active, TRUE) = TRUE
+        AND COALESCE(t.is_deleted, FALSE) = FALSE
+        AND (COALESCE(t.is_government_exam, FALSE) = TRUE OR COALESCE(t.is_public, FALSE) = TRUE OR COALESCE(t.marketplace_approved, FALSE) = TRUE)
+        ${whereClause}
+      ORDER BY t.id DESC
     `, params);
+
+    // Also fallback / union entrance_exams table if exists
+    let entranceRows: any[] = [];
+    try {
+      const eRes = await db.query(`
+        SELECT
+          e.id,
+          e.institution_id,
+          e.exam_name,
+          COALESCE(e.exam_type, 'competitive') AS exam_type,
+          e.category,
+          e.exam_date,
+          e.eligibility,
+          COALESCE(e.application_fee, 0)::numeric AS application_fee,
+          e.website_url,
+          e.description,
+          e.created_at,
+          COALESCE(ip.name, ip.slug, 'Central Platform') AS institution_name,
+          (e.exam_type = 'government') AS is_government_exam
+        FROM entrance_exams e
+        LEFT JOIN institution_profiles ip ON ip.id = e.institution_id
+        ORDER BY e.id DESC
+      `);
+      entranceRows = eRes.rows;
+    } catch {
+      entranceRows = [];
+    }
+
+    // Merge and deduplicate by exam_name
+    const seenNames = new Set<string>();
+    const allExams: any[] = [];
+
+    for (const row of templatesRes.rows) {
+      const key = (row.exam_name || "").toLowerCase().trim();
+      if (!seenNames.has(key)) {
+        seenNames.add(key);
+        allExams.push(row);
+      }
+    }
+
+    for (const row of entranceRows) {
+      const key = (row.exam_name || "").toLowerCase().trim();
+      if (!seenNames.has(key)) {
+        seenNames.add(key);
+        allExams.push(row);
+      }
+    }
 
     return NextResponse.json({
       success: true,
-      exams: examsRes.rows,
+      exams: allExams,
+      total: allExams.length,
     });
   } catch (err: any) {
     console.error("GET /api/public/exams error:", err);

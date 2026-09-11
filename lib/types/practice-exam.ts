@@ -47,8 +47,11 @@ export type PracticeExamRow = {
     enabled?: boolean;
     true_false: number;
     objective: number;
+    subjective?: number;
   } | null;
   is_public: boolean;
+  is_paid?: boolean | null;
+  price?: number | string | null;
   marketplace_requested: boolean;
   marketplace_requested_at: string | null;
   marketplace_requested_by: number | null;
@@ -78,6 +81,9 @@ export type PracticeExamRow = {
   block_reason: string | null;
   assigned_practice_exam_id?: number | null;
   duration_minutes?: number | null;
+  subject_id?: string | null;
+  subject_name?: string | null;
+  syllabus_data?: unknown;
   target_type?: "INSTITUTION" | "PROGRAM" | "SECTION" | "STUDENT" | null;
   target_id?: number | null;
   target_program_id?: number | null;
@@ -87,6 +93,3 @@ export type PracticeExamRow = {
   syllabus_nodes?: PracticeExamSyllabusNode[];
   questions?: PracticeExamQuestion[];
 };
-
-
-

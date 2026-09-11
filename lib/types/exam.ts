@@ -60,6 +60,9 @@ export type ExamRow = {
   marketplace_approved_by: number | null;
   marketplace_approved_by_name: string | null;
   parent_template_id: number | null;
+  inherited_by_institution_name?: string | null;
+  is_paid?: boolean | null;
+  price?: number | string | null;
   is_active: boolean;
   version: number;
   source_institution_id: number | null;

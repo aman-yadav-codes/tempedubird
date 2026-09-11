@@ -38,9 +38,20 @@ type ProgramOption = {
   title: string;
 };
 
+type BatchOption = {
+  id?: number;
+  batch_name: string;
+  name: string;
+  section_ids?: number[];
+  sections?: string[];
+  section_name?: string;
+  enrolled_students_count?: number;
+};
+
 type SectionOption = {
   id: number;
   name: string;
+  batch_name?: string;
 };
 
 type InstitutionOption = {
@@ -84,6 +95,9 @@ export function StudentAssignClassDialog({
   const [institutions, setInstitutions] = useState<InstitutionOption[]>([]);
   const [academicYears, setAcademicYears] = useState<AcademicYearOption[]>([]);
   const [programs, setPrograms] = useState<ProgramOption[]>([]);
+  const [batches, setBatches] = useState<BatchOption[]>([]);
+  const [selectedBatchName, setSelectedBatchName] = useState<string>("ALL");
+  const [allSections, setAllSections] = useState<SectionOption[]>([]);
   const [sections, setSections] = useState<SectionOption[]>([]);
   const [enrollments, setEnrollments] = useState<EnrollmentRecord[]>([]);
 
@@ -104,6 +118,7 @@ export function StudentAssignClassDialog({
     selectedInstitutionId,
     selectedAcademicYearId,
     selectedProgramId,
+    selectedBatchName,
     selectedSectionId,
     rollNumber,
     status,
@@ -111,7 +126,7 @@ export function StudentAssignClassDialog({
     remarks,
   };
   const enrollmentFormKey = `enrollment:${student?.id ?? "new"}`;
-  const { saveStatus, handleBlur } = useProgressiveSave({
+  const { saveStatus } = useProgressiveSave({
     formKey: enrollmentFormKey,
     formState: enrollmentFormState,
     enabled: open,
@@ -120,27 +135,128 @@ export function StudentAssignClassDialog({
   const activeEnrollmentRef = useRef<EnrollmentRecord | null>(null);
 
   const [loadingInstitutions, setLoadingInstitutions] = useState(false);
-  const [loadingOptions, setLoadingOptions] = useState(false);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
+  const [loadingAcademicYears, setLoadingAcademicYears] = useState(false);
   const [loadingSections, setLoadingSections] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Reset & Sync when dialog opens or student changes
-  useEffect(() => {
-    if (!open) {
-      activeEnrollmentRef.current = null;
-      return;
+  // Load Institutions on demand
+  const loadInstitutions = useCallback(async () => {
+    if (!accessToken || loadingInstitutions) return;
+    setLoadingInstitutions(true);
+    try {
+      const res = await fetch(`/api/admin/institutions/profiles?page=1&limit=50`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const json = await readJsonResponse<{ data?: any[] }>(res);
+      if (Array.isArray(json.data) && json.data.length > 0) {
+        const list = json.data.map((inst: any) => ({
+          id: inst.id,
+          name: inst.name,
+        }));
+        setInstitutions(list);
+      }
+    } catch (err) {
+      console.error("Failed to load institutions:", err);
+    } finally {
+      setLoadingInstitutions(false);
     }
+  }, [accessToken, loadingInstitutions]);
 
-    if (institutionId) {
-      setSelectedInstitutionId(String(institutionId));
+  // Load Academic Years on demand
+  const loadAcademicYears = useCallback(async (instId?: string) => {
+    const targetInstId = instId || selectedInstitutionId || (institutionId ? String(institutionId) : "");
+    if (!accessToken || !targetInstId || loadingAcademicYears) return;
+    setLoadingAcademicYears(true);
+    try {
+      const res = await fetch(`/api/admin/institutions/academic-years?institutionId=${targetInstId}&limit=100`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const json = await readJsonResponse<{ data?: AcademicYearOption[] }>(res);
+      if (Array.isArray(json.data)) {
+        setAcademicYears(json.data);
+      }
+    } catch (err) {
+      console.error("Failed to load academic years:", err);
+    } finally {
+      setLoadingAcademicYears(false);
     }
-  }, [open, institutionId]);
+  }, [accessToken, selectedInstitutionId, institutionId, loadingAcademicYears]);
 
-  // Fetch student's existing enrollments and pre-fill form fields
+  // Load Programs on demand
+  const loadPrograms = useCallback(async (instId?: string) => {
+    const targetInstId = instId || selectedInstitutionId || (institutionId ? String(institutionId) : "");
+    if (!accessToken || !targetInstId || loadingPrograms) return;
+    setLoadingPrograms(true);
+    try {
+      const res = await fetch(`/api/admin/institutions/programs?institutionId=${targetInstId}&limit=100`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const json = await readJsonResponse<{ data?: any[] }>(res);
+      if (Array.isArray(json.data)) {
+        const list = json.data.map((p: any) => ({ id: p.id, title: p.title || p.name }));
+        setPrograms(list);
+      }
+    } catch (err) {
+      console.error("Failed to load programs:", err);
+    } finally {
+      setLoadingPrograms(false);
+    }
+  }, [accessToken, selectedInstitutionId, institutionId, loadingPrograms]);
+
+  // Load Batches & Sections on demand
+  const loadBatchesAndSections = useCallback(async (progId?: string) => {
+    const targetProgId = progId || selectedProgramId;
+    if (!accessToken || !targetProgId || loadingSections) return;
+    setLoadingSections(true);
+    try {
+      const batchRes = await fetch(`/api/admin/institutions/programs/${targetProgId}/batches`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const batchJson = await readJsonResponse<any>(batchRes);
+      const rawBatches: BatchOption[] = Array.isArray(batchJson?.data) ? batchJson.data : [];
+      setBatches(rawBatches);
+
+      const secList: SectionOption[] = [];
+      if (rawBatches.length > 0) {
+        for (const b of rawBatches) {
+          const bName = b.batch_name || b.name || "Default Batch";
+          if (b.section_ids && b.section_ids.length > 0) {
+            b.section_ids.forEach((sId: number, idx: number) => {
+              const sName = b.sections?.[idx] || `Section ${sId}`;
+              if (!secList.some((existing) => existing.id === sId)) {
+                secList.push({
+                  id: sId,
+                  name: sName,
+                  batch_name: bName,
+                });
+              }
+            });
+          } else if (b.id) {
+            if (!secList.some((existing) => existing.id === b.id)) {
+              secList.push({
+                id: b.id,
+                name: b.section_name || b.name || `Section ${b.id}`,
+                batch_name: bName,
+              });
+            }
+          }
+        }
+      }
+
+      setAllSections(secList);
+      setSections(secList);
+    } catch (err) {
+      console.error("Error loading batches & sections:", err);
+    } finally {
+      setLoadingSections(false);
+    }
+  }, [accessToken, selectedProgramId, loadingSections]);
+
+  // Fetch student's existing enrollments (only 1 request on dialog open)
   const fetchStudentEnrollments = useCallback(async () => {
     if (!student?.id || !accessToken) return;
 
-    // Clear stale session draft so DB data takes precedence
     try {
       if (typeof window !== "undefined") {
         window.sessionStorage.removeItem(`progressive_draft:enrollment:${student.id}`);
@@ -164,12 +280,22 @@ export function StudentAssignClassDialog({
           }
           if (activeEnr.program_id) {
             setSelectedProgramId(String(activeEnr.program_id));
+            if (activeEnr.program_name) {
+              setPrograms([{ id: activeEnr.program_id, title: activeEnr.program_name }]);
+            }
           }
           if (activeEnr.section_id) {
             setSelectedSectionId(String(activeEnr.section_id));
+            if (activeEnr.section_name) {
+              setSections([{ id: activeEnr.section_id, name: activeEnr.section_name }]);
+              setAllSections([{ id: activeEnr.section_id, name: activeEnr.section_name }]);
+            }
           }
           if (activeEnr.academic_year_id) {
             setSelectedAcademicYearId(String(activeEnr.academic_year_id));
+            if (activeEnr.academic_year_name) {
+              setAcademicYears([{ id: activeEnr.academic_year_id, name: activeEnr.academic_year_name }]);
+            }
           }
           if (activeEnr.roll_number) {
             setRollNumber(activeEnr.roll_number);
@@ -211,143 +337,39 @@ export function StudentAssignClassDialog({
     }
   }, [accessToken, student?.id]);
 
-  // Load Institutions list added by/available to admin
+  // Sync when dialog opens
   useEffect(() => {
-    if (!open || !accessToken) return;
-
-    async function loadInstitutions() {
-      setLoadingInstitutions(true);
-      try {
-        const res = await fetch(`/api/admin/institutions/profiles?page=1&limit=50`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        const json = await readJsonResponse<{ data?: any[] }>(res);
-        if (Array.isArray(json.data) && json.data.length > 0) {
-          const list = json.data.map((inst: any) => ({
-            id: inst.id,
-            name: inst.name,
-          }));
-          setInstitutions(list);
-          setSelectedInstitutionId((current) => {
-            const targetInstId = activeEnrollmentRef.current?.institution_id
-              ? String(activeEnrollmentRef.current.institution_id)
-              : "";
-            if (targetInstId && list.some((inst: any) => String(inst.id) === targetInstId)) {
-              return targetInstId;
-            }
-            if (current && list.some((inst: any) => String(inst.id) === current)) return current;
-            if (institutionId) return String(institutionId);
-            return String(list[0].id);
-          });
-        }
-      } catch (err) {
-        console.error("Failed to load institutions:", err);
-      } finally {
-        setLoadingInstitutions(false);
-      }
+    if (!open) {
+      activeEnrollmentRef.current = null;
+      return;
     }
 
-    void loadInstitutions();
+    if (institutionId) {
+      setSelectedInstitutionId(String(institutionId));
+    }
+
     void fetchStudentEnrollments();
-  }, [open, accessToken, institutionId, fetchStudentEnrollments]);
+  }, [open, institutionId, fetchStudentEnrollments]);
 
-  // Load Academic Years and Programs for selected institution
-  useEffect(() => {
-    const targetInstId = selectedInstitutionId || (institutionId ? String(institutionId) : "");
-    if (!open || !accessToken || !targetInstId) {
-      setPrograms([]);
-      setAcademicYears([]);
-      return;
-    }
-
-    async function loadOptions() {
-      setLoadingOptions(true);
-      try {
-        const [ayRes, progRes] = await Promise.all([
-          fetch(`/api/admin/institutions/academic-years?institutionId=${targetInstId}&limit=100`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }),
-          fetch(`/api/admin/institutions/programs?institutionId=${targetInstId}&limit=100`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }),
-        ]);
-
-        const ayJson = await readJsonResponse<{ data?: AcademicYearOption[] }>(ayRes);
-        const progJson = await readJsonResponse<{ data?: any[] }>(progRes);
-
-        if (Array.isArray(ayJson.data)) {
-          setAcademicYears(ayJson.data);
-          const targetAyId = activeEnrollmentRef.current?.academic_year_id
-            ? String(activeEnrollmentRef.current.academic_year_id)
-            : "";
-          setSelectedAcademicYearId((curr) => {
-            if (targetAyId && ayJson.data.some((a) => String(a.id) === targetAyId)) return targetAyId;
-            if (curr && ayJson.data.some((a) => String(a.id) === curr)) return curr;
-            return ayJson.data.length > 0 ? String(ayJson.data[0].id) : "";
-          });
+  const handleBatchChange = (batchName: string) => {
+    setSelectedBatchName(batchName);
+    if (batchName === "ALL") {
+      setSections(allSections);
+      if (allSections.length > 0 && !allSections.some((s) => String(s.id) === selectedSectionId)) {
+        setSelectedSectionId(String(allSections[0].id));
+      }
+    } else {
+      const filtered = allSections.filter((s) => (s.batch_name || "Default Batch") === batchName);
+      setSections(filtered);
+      if (filtered.length > 0) {
+        if (!filtered.some((s) => String(s.id) === selectedSectionId)) {
+          setSelectedSectionId(String(filtered[0].id));
         }
-
-        if (Array.isArray(progJson.data)) {
-          const list = progJson.data.map((p: any) => ({ id: p.id, title: p.title || p.name }));
-          setPrograms(list);
-          const targetProgramId = activeEnrollmentRef.current?.program_id
-            ? String(activeEnrollmentRef.current.program_id)
-            : "";
-          setSelectedProgramId((curr) => {
-            if (targetProgramId && list.some((p) => String(p.id) === targetProgramId)) return targetProgramId;
-            if (curr && list.some((p) => String(p.id) === curr)) return curr;
-            return list.length > 0 ? String(list[0].id) : "";
-          });
-        }
-      } catch (err) {
-        console.error("Failed to load class options:", err);
-      } finally {
-        setLoadingOptions(false);
+      } else {
+        setSelectedSectionId("");
       }
     }
-
-    void loadOptions();
-  }, [open, accessToken, selectedInstitutionId, institutionId]);
-
-  // Load sections when program changes
-  useEffect(() => {
-    if (!selectedProgramId || !accessToken) {
-      setSections([]);
-      return;
-    }
-
-    async function loadSections() {
-      setLoadingSections(true);
-      try {
-        const res = await fetch(`/api/admin/institutions/programs/${selectedProgramId}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        const json = await readJsonResponse<any>(res);
-        if (!res.ok) throw new Error(json.error ?? "Failed to load sections");
-        const data = json.data ?? {};
-        const nextSections: SectionOption[] = ((data.section_ids ?? []) as number[]).map((sectionId: number, index: number) => ({
-          id: sectionId,
-          name: data.section_names?.[index] ?? `Section ${sectionId}`,
-        }));
-        setSections(nextSections);
-        const targetSectionId = activeEnrollmentRef.current?.section_id
-          ? String(activeEnrollmentRef.current.section_id)
-          : "";
-        setSelectedSectionId((curr) => {
-          if (targetSectionId && nextSections.some((s) => String(s.id) === targetSectionId)) return targetSectionId;
-          if (curr && nextSections.some((s) => String(s.id) === curr)) return curr;
-          return nextSections.length > 0 ? String(nextSections[0].id) : "";
-        });
-      } catch (err) {
-        console.error("Error loading sections:", err);
-        setSections([]);
-      } finally {
-        setLoadingSections(false);
-      }
-    }
-
-    void loadSections();
-  }, [selectedProgramId, accessToken]);
+  };
 
   const handleSaveEnrollment = async () => {
     const targetInstId = selectedInstitutionId || (institutionId ? String(institutionId) : "");
@@ -390,6 +412,7 @@ export function StudentAssignClassDialog({
 
       toast.success(`Assigned class to ${student.full_name} successfully!`);
       setSelectedProgramId("");
+      setSelectedBatchName("ALL");
       setSelectedSectionId("");
       setRollNumber("");
       setRemarks("");
@@ -418,7 +441,7 @@ export function StudentAssignClassDialog({
                   Assign Program & Class
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                  Assigning class, section, session, and roll number for <span className="font-semibold text-foreground">{student?.full_name}</span>
+                  Assigning class, batch, section, session, and roll number for <span className="font-semibold text-foreground">{student?.full_name}</span>
                 </DialogDescription>
               </div>
             </div>
@@ -460,143 +483,225 @@ export function StudentAssignClassDialog({
 
           {/* Form fields */}
           <div className="rounded-xl border bg-card p-5 space-y-5 shadow-xs">
-            <div className="flex items-center justify-between border-b pb-3">
-              <div>
-                <h4 className="font-semibold text-sm text-foreground">Program & Class Enrollment</h4>
-                <p className="text-xs text-muted-foreground">Select institution, class, section, session, and roll number details</p>
-              </div>
-            </div>
-
-            {loadingInstitutions ? (
-              <div className="flex items-center justify-center py-10">
-                <Loader2 className="size-6 animate-spin text-primary" />
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Institution / School */}
-                <div className="sm:col-span-2 space-y-1.5">
-                  <Label htmlFor="assign-institution" className="text-xs font-semibold">Institution / School *</Label>
-                  <Select
-                    value={selectedInstitutionId}
-                    onValueChange={(val) => setSelectedInstitutionId(val)}
-                  >
-                    <SelectTrigger id="assign-institution" className="w-full h-10 text-sm">
-                      <SelectValue placeholder="Select institution / school..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {institutions.map((inst) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Institution / School */}
+              <div className="sm:col-span-2 space-y-1.5">
+                <Label htmlFor="assign-institution" className="text-xs font-semibold">Institution / School *</Label>
+                <Select
+                  value={selectedInstitutionId}
+                  onValueChange={(val) => {
+                    setSelectedInstitutionId(val);
+                    setSelectedProgramId("");
+                    setSelectedBatchName("ALL");
+                    setSelectedSectionId("");
+                    setSelectedAcademicYearId("");
+                    setPrograms([]);
+                    setBatches([]);
+                    setAllSections([]);
+                    setSections([]);
+                    setAcademicYears([]);
+                  }}
+                  onOpenChange={(isOpen) => {
+                    if (isOpen && institutions.length === 0) {
+                      void loadInstitutions();
+                    }
+                  }}
+                >
+                  <SelectTrigger id="assign-institution" className="w-full h-10 text-sm">
+                    <SelectValue placeholder={loadingInstitutions ? "Loading institutions..." : "Select institution / school..."} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {loadingInstitutions ? (
+                      <div className="flex items-center justify-center p-3 text-xs text-muted-foreground">
+                        <Loader2 className="size-4 animate-spin mr-2" /> Loading institutions...
+                      </div>
+                    ) : (
+                      institutions.map((inst) => (
                         <SelectItem key={inst.id} value={String(inst.id)}>
                           {inst.name}
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                {/* Program / Class */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="assign-program" className="text-xs font-semibold">Program / Class *</Label>
-                  <Select
-                    value={selectedProgramId}
-                    onValueChange={setSelectedProgramId}
-                    disabled={!selectedInstitutionId || loadingOptions}
-                  >
-                    <SelectTrigger id="assign-program" className="w-full h-10 text-sm">
-                      <SelectValue
-                        placeholder={
-                          loadingOptions
-                            ? "Loading classes..."
-                            : selectedInstitutionId
-                            ? "Select program / class..."
-                            : "Select institution first"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {programs.map((p) => (
+              {/* Program / Class */}
+              <div className="space-y-1.5">
+                <Label htmlFor="assign-program" className="text-xs font-semibold">Program / Class *</Label>
+                <Select
+                  value={selectedProgramId}
+                  onValueChange={(val) => {
+                    setSelectedProgramId(val);
+                    setSelectedBatchName("ALL");
+                    setSelectedSectionId("");
+                    setBatches([]);
+                    setAllSections([]);
+                    setSections([]);
+                    void loadBatchesAndSections(val);
+                  }}
+                  onOpenChange={(isOpen) => {
+                    if (isOpen && programs.length <= 1) {
+                      void loadPrograms(selectedInstitutionId);
+                    }
+                  }}
+                  disabled={!selectedInstitutionId}
+                >
+                  <SelectTrigger id="assign-program" className="w-full h-10 text-sm">
+                    <SelectValue
+                      placeholder={
+                        loadingPrograms
+                          ? "Loading classes..."
+                          : selectedInstitutionId
+                          ? "Select program / class..."
+                          : "Select institution first"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {loadingPrograms ? (
+                      <div className="flex items-center justify-center p-3 text-xs text-muted-foreground">
+                        <Loader2 className="size-4 animate-spin mr-2" /> Loading classes...
+                      </div>
+                    ) : (
+                      programs.map((p) => (
                         <SelectItem key={p.id} value={String(p.id)}>
                           {p.title}
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                {/* Section */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="assign-section" className="text-xs font-semibold">Section</Label>
-                  <Select
-                    value={selectedSectionId}
-                    onValueChange={setSelectedSectionId}
-                    disabled={!selectedProgramId || loadingSections}
-                  >
-                    <SelectTrigger id="assign-section" className="w-full h-10 text-sm">
-                      <SelectValue
-                        placeholder={
-                          loadingSections
-                            ? "Loading sections..."
-                            : selectedProgramId
-                            ? "Select section"
-                            : "Select program first"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sections.map((s) => (
-                        <SelectItem key={s.id} value={String(s.id)}>
-                          {s.name}
+              {/* Batch */}
+              <div className="space-y-1.5">
+                <Label htmlFor="assign-batch" className="text-xs font-semibold">Batch</Label>
+                <Select
+                  value={selectedBatchName}
+                  onValueChange={handleBatchChange}
+                  onOpenChange={(isOpen) => {
+                    if (isOpen && batches.length === 0 && selectedProgramId) {
+                      void loadBatchesAndSections(selectedProgramId);
+                    }
+                  }}
+                  disabled={!selectedProgramId || loadingSections}
+                >
+                  <SelectTrigger id="assign-batch" className="w-full h-10 text-sm">
+                    <SelectValue
+                      placeholder={
+                        loadingSections
+                          ? "Loading batches..."
+                          : selectedProgramId
+                          ? "Select batch..."
+                          : "Select program first"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Batches ({batches.length || allSections.length})</SelectItem>
+                    {batches.map((batch, idx) => {
+                      const bName = batch.batch_name || batch.name || `Batch ${idx + 1}`;
+                      return (
+                        <SelectItem key={`${bName}-${idx}`} value={bName}>
+                          {bName} {batch.enrolled_students_count ? `(${batch.enrolled_students_count} std)` : ""}
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                {/* Academic Year / Session */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="assign-ay" className="text-xs font-semibold">Academic Year / Session *</Label>
-                  <Select
-                    value={selectedAcademicYearId}
-                    onValueChange={setSelectedAcademicYearId}
-                    disabled={!selectedInstitutionId || loadingOptions}
-                  >
-                    <SelectTrigger id="assign-ay" className="w-full h-10 text-sm">
-                      <SelectValue placeholder="Select academic year" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {academicYears.map((ay) => (
+              {/* Section */}
+              <div className="space-y-1.5">
+                <Label htmlFor="assign-section" className="text-xs font-semibold">Section</Label>
+                <Select
+                  value={selectedSectionId}
+                  onValueChange={setSelectedSectionId}
+                  onOpenChange={(isOpen) => {
+                    if (isOpen && allSections.length === 0 && selectedProgramId) {
+                      void loadBatchesAndSections(selectedProgramId);
+                    }
+                  }}
+                  disabled={!selectedProgramId || loadingSections}
+                >
+                  <SelectTrigger id="assign-section" className="w-full h-10 text-sm">
+                    <SelectValue
+                      placeholder={
+                        loadingSections
+                          ? "Loading sections..."
+                          : selectedProgramId
+                          ? "Select section..."
+                          : "Select program first"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sections.map((s) => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {s.name} {s.batch_name && selectedBatchName === "ALL" ? `(${s.batch_name})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Academic Year / Session */}
+              <div className="space-y-1.5">
+                <Label htmlFor="assign-ay" className="text-xs font-semibold">Academic Year / Session *</Label>
+                <Select
+                  value={selectedAcademicYearId}
+                  onValueChange={setSelectedAcademicYearId}
+                  onOpenChange={(isOpen) => {
+                    if (isOpen && academicYears.length <= 1) {
+                      void loadAcademicYears(selectedInstitutionId);
+                    }
+                  }}
+                  disabled={!selectedInstitutionId}
+                >
+                  <SelectTrigger id="assign-ay" className="w-full h-10 text-sm">
+                    <SelectValue placeholder={loadingAcademicYears ? "Loading sessions..." : "Select academic year"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {loadingAcademicYears ? (
+                      <div className="flex items-center justify-center p-3 text-xs text-muted-foreground">
+                        <Loader2 className="size-4 animate-spin mr-2" /> Loading sessions...
+                      </div>
+                    ) : (
+                      academicYears.map((ay) => (
                         <SelectItem key={ay.id} value={String(ay.id)}>
                           {ay.name}
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Roll Number */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="assign-roll" className="text-xs font-semibold">Roll Number</Label>
-                  <Input
-                    id="assign-roll"
-                    value={rollNumber}
-                    onChange={(e) => setRollNumber(e.target.value)}
-                    placeholder="Enter roll number"
-                    className="w-full h-10 text-sm"
-                  />
-                </div>
-
-                {/* Enrollment Remarks */}
-                <div className="sm:col-span-2 space-y-1.5">
-                  <Label htmlFor="assign-remarks" className="text-xs font-semibold">Enrollment Remarks</Label>
-                  <Textarea
-                    id="assign-remarks"
-                    value={remarks}
-                    onChange={(e) => setRemarks(e.target.value)}
-                    placeholder="Optional enrollment notes or remarks..."
-                    className="min-h-20 text-sm"
-                  />
-                </div>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
+
+              {/* Roll Number */}
+              <div className="sm:col-span-2 space-y-1.5">
+                <Label htmlFor="assign-roll" className="text-xs font-semibold">Roll Number</Label>
+                <Input
+                  id="assign-roll"
+                  value={rollNumber}
+                  onChange={(e) => setRollNumber(e.target.value)}
+                  placeholder="Enter roll number"
+                  className="w-full h-10 text-sm"
+                />
+              </div>
+
+              {/* Enrollment Remarks */}
+              <div className="sm:col-span-2 space-y-1.5">
+                <Label htmlFor="assign-remarks" className="text-xs font-semibold">Enrollment Remarks</Label>
+                <Textarea
+                  id="assign-remarks"
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  placeholder="Optional enrollment notes or remarks..."
+                  className="min-h-20 text-sm"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -607,7 +712,7 @@ export function StudentAssignClassDialog({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveEnrollment} disabled={saving || loadingOptions}>
+            <Button onClick={handleSaveEnrollment} disabled={saving}>
               {saving ? <Loader2 className="size-4 animate-spin mr-1.5" /> : null}
               Save Enrollment
             </Button>

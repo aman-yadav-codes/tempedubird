@@ -18,13 +18,26 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "res.cloudinary.com",
-      },  {
+      },
+      {
         protocol: "https",
         hostname: "cdn.pixabay.com",
-      },{
+      },
+      {
         protocol: "https",
         hostname: "www.w3schools.com",
       },
+    ],
+  },
+  experimental: {
+    optimizePackageImports: [
+      "lucide-react",
+      "date-fns",
+      "lodash",
+      "radix-ui",
+      "@tanstack/react-table",
+      "@lexical/react",
+      "@xyflow/react",
     ],
   },
 };

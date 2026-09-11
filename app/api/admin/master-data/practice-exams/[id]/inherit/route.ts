@@ -343,7 +343,6 @@ export async function POST(req: Request, context: Context) {
           ]
         );
         await client.query(`DELETE FROM practice_exam_targets WHERE practice_exam_id = $1`, [targetPracticeExamId]);
-        await client.query(`DELETE FROM practice_exam_syllabus_nodes WHERE practice_exam_id = $1`, [targetPracticeExamId]);
         await client.query(
           `
             DELETE FROM practice_exam_template_question_options
@@ -373,18 +372,6 @@ export async function POST(req: Request, context: Context) {
           `,
           [targetPracticeExamId, target.targetType, target.targetId, target.targetProgramId]
         );
-        if (sourceRow.assigned_practice_exam_id) {
-          await client.query(
-            `
-              INSERT INTO practice_exam_syllabus_nodes (practice_exam_id, syllabus_node_id)
-              SELECT $2, syllabus_node_id
-              FROM practice_exam_syllabus_nodes
-              WHERE practice_exam_id = $1
-              ON CONFLICT DO NOTHING
-            `,
-            [sourceRow.assigned_practice_exam_id, targetPracticeExamId]
-          );
-        }
         await copyTemplateQuestions(client, sourceTemplateId, targetTemplateId);
         await replacePracticeExamQuestionsFromTemplate(client, targetPracticeExamId, targetTemplateId);
 
@@ -465,19 +452,6 @@ export async function POST(req: Request, context: Context) {
           target.targetProgramId,
         ]
       );
-
-      if (sourceRow.assigned_practice_exam_id) {
-        await client.query(
-          `
-            INSERT INTO practice_exam_syllabus_nodes (practice_exam_id, syllabus_node_id)
-            SELECT $2, syllabus_node_id
-            FROM practice_exam_syllabus_nodes
-            WHERE practice_exam_id = $1
-            ON CONFLICT DO NOTHING
-          `,
-          [sourceRow.assigned_practice_exam_id, targetPracticeExamId]
-        );
-      }
 
       await copyTemplateQuestions(client, sourceTemplateId, targetTemplateId);
       await replacePracticeExamQuestionsFromTemplate(

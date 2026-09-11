@@ -1,9 +1,21 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { PlatformAdminLanding } from "@/components/home/platform-admin-landing";
-import { InstitutionalAdminLanding } from "@/components/home/institutional-admin-landing";
-import { useActiveInstitution } from "@/hooks/use-active-institution";
+
+const PlatformAdminLanding = dynamic(
+  () => import("@/components/home/platform-admin-landing").then((mod) => mod.PlatformAdminLanding),
+  {
+    loading: () => <div className="min-h-screen bg-background animate-pulse" />,
+  }
+);
+
+const InstitutionalAdminLanding = dynamic(
+  () => import("@/components/home/institutional-admin-landing").then((mod) => mod.InstitutionalAdminLanding),
+  {
+    loading: () => <div className="min-h-screen bg-background animate-pulse" />,
+  }
+);
 
 type HomeLandingContainerProps = {
   initialIsInstitutionEdition?: boolean;

@@ -28,6 +28,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { readJsonResponse } from "@/lib/api/read-json-response";
+import { usePageSeo } from "@/hooks/use-page-seo";
+import { useAuthStore } from "@/store";
 
 const TOKEN_KEY = "visitor_tracking_token";
 const UTM_KEY = "visitor_tracking_utm";
@@ -54,6 +56,15 @@ function getStoredUtm() {
 }
 
 function rememberUtm() {
+    if (typeof window !== "undefined") {
+        const urlParams = new URLSearchParams(window.location.search);
+        const refParam = urlParams.get("ref") || urlParams.get("referral") || urlParams.get("affiliate") || urlParams.get("code");
+        if (refParam) {
+            try {
+                localStorage.setItem("edubird_referral_code", refParam.trim());
+            } catch {}
+        }
+    }
     if (!localStorage.getItem("visitor_first_page_url")) {
         localStorage.setItem("visitor_first_page_url", currentUrl());
     }
@@ -72,11 +83,10 @@ function rememberUtm() {
     }
 }
 
-import { usePageSeo } from "@/hooks/use-page-seo";
-
 export function LeadTrackerProvider({ children }: { children: React.ReactNode }) {
     usePageSeo();
     const pathname = usePathname();
+    const { user, isAuthenticated } = useAuthStore();
     const [settings, setSettings] = useState<TrackerSettings | null>(null);
     const [open, setOpen] = useState(false);
     const [triggerType, setTriggerType] = useState<TrackerTrigger>("enquiry");
@@ -86,7 +96,16 @@ export function LeadTrackerProvider({ children }: { children: React.ReactNode })
     const [phone, setPhone] = useState("");
     const lastTrackedUrlRef = useRef("");
 
+    const isAdmin = Boolean(
+        isAuthenticated &&
+        user &&
+        (user.role_codes?.includes("platform_admin") ||
+         user.role_codes?.includes("institution_admin") ||
+         user.is_super_admin)
+    );
+
     const track = useCallback(async (type: string, updateOnly = false) => {
+        if (isAdmin) return;
         const token = localStorage.getItem(TOKEN_KEY);
         if (!token || settings?.tracking_enabled === false) return;
 
@@ -102,35 +121,37 @@ export function LeadTrackerProvider({ children }: { children: React.ReactNode })
                 updateOnly,
             }),
         }).catch(() => undefined);
-    }, [settings?.tracking_enabled]);
+    }, [isAdmin, settings?.tracking_enabled]);
 
     useEffect(() => {
+        if (isAdmin) return;
         rememberUtm();
         fetch("/api/tracker/settings")
             .then((res) => readJsonResponse<{ data?: TrackerSettings }>(res))
             .then((json) => setSettings(json.data || null))
             .catch(() => setSettings({ tracking_enabled: true, tracker_update_interval_minutes: 60 }));
-    }, []);
+    }, [isAdmin]);
 
     useEffect(() => {
-        if (!settings?.tracking_enabled) return;
+        if (isAdmin || !settings?.tracking_enabled) return;
         const url = currentUrl();
         const token = localStorage.getItem(TOKEN_KEY);
         if (!token || lastTrackedUrlRef.current === url) return;
         lastTrackedUrlRef.current = url;
         track("page_view");
-    }, [pathname, settings?.tracking_enabled, track]);
+    }, [isAdmin, pathname, settings?.tracking_enabled, track]);
 
     useEffect(() => {
-        if (!settings?.tracking_enabled) return;
+        if (isAdmin || !settings?.tracking_enabled) return;
         const minutes = Math.max(1, settings.tracker_update_interval_minutes || 60);
         const interval = window.setInterval(() => {
             track("page_view", true);
         }, minutes * 60 * 1000);
         return () => window.clearInterval(interval);
-    }, [settings, track]);
+    }, [isAdmin, settings, track]);
 
     useEffect(() => {
+        if (isAdmin) return;
         const onClick = (event: MouseEvent) => {
             const target = event.target instanceof Element ? event.target : null;
             const dialogTrigger = target?.closest<HTMLElement>("[data-tracker-trigger]");
@@ -149,7 +170,7 @@ export function LeadTrackerProvider({ children }: { children: React.ReactNode })
 
         document.addEventListener("click", onClick);
         return () => document.removeEventListener("click", onClick);
-    }, [track]);
+    }, [isAdmin, track]);
 
     async function submitLead() {
         setSubmitting(true);
@@ -224,93 +245,89 @@ export function LeadTrackerProvider({ children }: { children: React.ReactNode })
                                                 <Building2 className="size-7 text-primary xl:size-8" />
                                             </div>
                                             <div>
-                                                <p className="text-lg font-bold text-white xl:text-xl">50,000+ students guided</p>
-                                                <p className="text-sm text-white/65">Simple, trusted support for course selection and enrollment.</p>
+                                                <p className="text-sm font-semibold text-white">Find the Best Institute</p>
+                                                <p className="text-xs text-white/70">Compare programs, facilities & ratings</p>
                                             </div>
                                         </div>
+                                    </div>
 
-
+                                    <div className="flex items-center gap-3 text-sm text-white/80">
+                                        <Clock className="size-4 text-primary" />
+                                        <span>Quick response within 2 business hours</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="flex min-h-0 items-start justify-center overflow-y-auto px-5 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-8">
-                            <div className="w-full max-w-md space-y-5 pb-2 lg:space-y-6 lg:pb-4">
-                                <DialogHeader className="items-center text-center">
-                                    <div className="grid size-14 place-items-center rounded-2xl border border-primary/30 bg-primary/10 sm:size-16">
-                                        <MessageSquareText className="size-7 text-primary sm:size-8" />
-                                    </div>
-                                    <DialogTitle className="text-2xl font-bold leading-tight sm:text-3xl">
-                                        Request <span className="text-primary">Course Guidance</span>
-                                    </DialogTitle>
-                                    <DialogDescription className="max-w-sm text-base leading-7">
-                                        Fill in your details and our team will get back to you shortly.
-                                    </DialogDescription>
-                                </DialogHeader>
+                        <div className="flex min-h-0 flex-col justify-between p-4 sm:p-5 lg:p-6">
+                            <DialogHeader className="space-y-1 text-left">
+                                <DialogTitle className="text-xl font-bold sm:text-2xl">
+                                    Talk to an Admission Counselor
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-muted-foreground sm:text-sm">
+                                    Share your contact details to get personalized recommendations and fee structure.
+                                </DialogDescription>
+                            </DialogHeader>
 
-                                <div className="space-y-4 lg:space-y-4.5">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="lead-full-name">Full Name</Label>
-                                        <div className="relative">
-                                            <User className={cn(fieldIconClass, "absolute left-4 top-1/2 -translate-y-1/2")} />
-                                            <Input
-                                                id="lead-full-name"
-                                                value={fullName}
-                                                onChange={(e) => setFullName(e.target.value)}
-                                                placeholder="Enter your full name"
-                                                className="h-12 rounded-xl pl-12 text-base lg:h-14"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="lead-email">Email Address</Label>
-                                        <div className="relative">
-                                            <Mail className={cn(fieldIconClass, "absolute left-4 top-1/2 -translate-y-1/2")} />
-                                            <Input
-                                                id="lead-email"
-                                                value={email}
-                                                onChange={(e) => setEmail(e.target.value)}
-                                                placeholder="Enter your email address"
-                                                type="email"
-                                                className="h-12 rounded-xl pl-12 text-base lg:h-14"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="lead-phone">Phone Number</Label>
-                                        <div className="relative">
-                                            <Phone className={cn(fieldIconClass, "absolute left-4 top-1/2 -translate-y-1/2")} />
-                                            <Input
-                                                id="lead-phone"
-                                                value={phone}
-                                                onChange={(e) => setPhone(e.target.value)}
-                                                placeholder="Enter your phone number"
-                                                className="h-12 rounded-xl pl-12 text-base lg:h-14"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                                        <ShieldCheck className="size-4" />
-                                        Your information is secure and will not be shared
-                                    </div>
-
-                                    <Button
-                                        className="h-12 w-full rounded-xl text-base font-bold shadow-lg shadow-primary/20 lg:h-14"
-                                        onClick={submitLead}
-                                        disabled={submitting}
-                                    >
-                                        {submitting ? "Submitting..." : "Get Free Consultation"}
-                                        <ArrowRight className="ml-2 size-5" />
-                                    </Button>
-
-                                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                                        <Clock className="size-4" />
-                                        Usually responds within <span className="font-semibold text-primary">24 hours</span>
+                            <form
+                                onSubmit={(e) => {
+                                    e.preventDefault();
+                                    void submitLead();
+                                }}
+                                className="space-y-3 py-2"
+                            >
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="lead-name">Your Name</Label>
+                                    <div className="relative">
+                                        <User className={cn(fieldIconClass, "absolute left-3 top-2.5")} />
+                                        <Input
+                                            id="lead-name"
+                                            value={fullName}
+                                            onChange={(e) => setFullName(e.target.value)}
+                                            placeholder="Enter your full name"
+                                            className="pl-10"
+                                            required
+                                        />
                                     </div>
                                 </div>
-                            </div>
+
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="lead-email">Email Address</Label>
+                                    <div className="relative">
+                                        <Mail className={cn(fieldIconClass, "absolute left-3 top-2.5")} />
+                                        <Input
+                                            id="lead-email"
+                                            type="email"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            placeholder="your.email@example.com"
+                                            className="pl-10"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="lead-phone">Phone Number</Label>
+                                    <div className="relative">
+                                        <Phone className={cn(fieldIconClass, "absolute left-3 top-2.5")} />
+                                        <Input
+                                            id="lead-phone"
+                                            type="tel"
+                                            value={phone}
+                                            onChange={(e) => setPhone(e.target.value)}
+                                            placeholder="Enter 10-digit mobile number"
+                                            className="pl-10"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                <Button type="submit" disabled={submitting} className="w-full">
+                                    {submitting ? "Submitting..." : "Get Free Counseling"}
+                                    <ArrowRight className="ml-2 size-4" />
+                                </Button>
+                            </form>
                         </div>
                     </div>
                 </DialogContent>

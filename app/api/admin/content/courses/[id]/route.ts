@@ -43,6 +43,39 @@ export async function PATCH(
       await toggleMasterCourseActive(db, courseId, body.isActive);
     }
 
+    if (body.name && typeof body.name === "string" && body.name.trim()) {
+      const existingCourse = await db.query(
+        `SELECT id, name FROM master_courses WHERE LOWER(TRIM(name)) = LOWER(TRIM($1)) AND id != $2 AND is_deleted = FALSE LIMIT 1`,
+        [body.name.trim(), courseId]
+      );
+      if (existingCourse.rows.length > 0) {
+        return NextResponse.json(
+          { error: `A course with the name "${body.name.trim()}" already exists. Course names must be unique.` },
+          { status: 409 }
+        );
+      }
+    }
+
+    // Deduplicate customSubjects
+    const rawSubjects = Array.isArray(body.customSubjects)
+      ? body.customSubjects
+      : Array.isArray(body.subjects)
+      ? body.subjects
+      : undefined;
+    
+    let uniqueSubjects: any[] | undefined = undefined;
+    if (rawSubjects) {
+      const seenNames = new Set<string>();
+      uniqueSubjects = [];
+      for (const sub of rawSubjects) {
+        const cleanName = (sub.name || "").trim().toLowerCase();
+        if (cleanName && !seenNames.has(cleanName)) {
+          seenNames.add(cleanName);
+          uniqueSubjects.push(sub);
+        }
+      }
+    }
+
     const updated = await updateMasterCourse(db, courseId, {
       name: body.name,
       slug: body.slug,
@@ -59,12 +92,8 @@ export async function PATCH(
       description: body.description,
       thumbnail_url: body.thumbnailUrl !== undefined ? body.thumbnailUrl : body.thumbnail_url,
       icon_url: body.iconUrl !== undefined ? body.iconUrl : body.icon_url,
-      subjectIds: Array.isArray(body.subjectIds) ? body.subjectIds.map(Number) : undefined,
-      customSubjects: Array.isArray(body.customSubjects)
-        ? body.customSubjects
-        : Array.isArray(body.subjects)
-        ? body.subjects
-        : undefined,
+      subjectIds: Array.isArray(body.subjectIds) ? Array.from(new Set(body.subjectIds.map(Number))) : undefined,
+      customSubjects: uniqueSubjects,
       isActive: body.isActive ?? body.is_active,
     });
 

@@ -21,6 +21,12 @@ import {
   Bell,
   Check,
   UserCheck,
+  Building2,
+  BookOpen,
+  UsersRound,
+  Layers,
+  ShieldCheck,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
@@ -40,6 +46,8 @@ import {
 } from "@/components/ui/dialog";
 import { useProgressiveSave } from "@/hooks/use-progressive-save";
 import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
+import { AsyncSearchPopover } from "@/components/shared/async-search-popover";
+import { isPlatformAdminUser } from "@/lib/auth/permissions";
 import {
   Select,
   SelectContent,
@@ -62,8 +70,15 @@ type AttendanceSetup = {
   id: number;
   institution_id?: number | null;
   title: string;
+  scope_type?: "INSTITUTION" | "PROGRAM" | "STAFF" | "STUDENTS" | string;
+  program_id?: number | string | null;
+  program_title?: string | null;
+  batch_id?: number | string | null;
+  batch_name?: string | null;
+  applicable_role_ids?: Array<number | string>;
+  applicable_role_names?: string[];
   target_type: "STUDENTS" | "STAFF" | "ALL";
-  attendance_mode: "FULL_DAY" | "PERIOD_WISE" | "BIOMETRIC" | "QR_CODE";
+  attendance_mode: "FULL_DAY" | "HALF_DAY" | "PERIOD_WISE" | "BIOMETRIC" | "QR_CODE" | string;
   who_can_mark?: string | null;
   start_time: string;
   end_time: string;
@@ -87,13 +102,40 @@ type Stats = {
   dummy_setups: number;
 };
 
+type ProgramOption = {
+  id: number;
+  title: string;
+};
+
+type RoleOption = {
+  id: number;
+  name: string;
+  code: string;
+  scope_code?: string;
+};
+
+type BatchOption = {
+  id: number;
+  section_id?: number;
+  name?: string;
+  batch_name?: string;
+  section_name?: string;
+};
+
 const ALL_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const initialForm = {
   title: "",
-  target_type: "STUDENTS" as "STUDENTS" | "STAFF" | "ALL",
-  attendance_mode: "FULL_DAY" as "FULL_DAY" | "PERIOD_WISE" | "BIOMETRIC" | "QR_CODE",
-  who_can_mark: "TEACHER",
+  scope_type: "STAFF" as "STAFF" | "STUDENTS",
+  program_id: "" as string | number,
+  program_title: "",
+  batch_id: "" as string | number,
+  batch_name: "",
+  applicable_role_ids: [] as Array<number | string>,
+  applicable_role_names: [] as string[],
+  target_type: "STAFF" as "STUDENTS" | "STAFF" | "ALL",
+  attendance_mode: "FULL_DAY" as "FULL_DAY" | "HALF_DAY" | "PERIOD_WISE" | "BIOMETRIC" | "QR_CODE" | string,
+  who_can_mark: "BOTH",
   start_time: "08:00",
   end_time: "14:30",
   grace_period_mins: 15,
@@ -134,7 +176,7 @@ const getMarkingAuthorityDescription = (who: string, target: string) => {
 };
 
 export default function AttendanceSetupPage() {
-  const { accessToken } = useAuthStore();
+  const { accessToken, user } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [setups, setSetups] = useState<AttendanceSetup[]>([]);
   const [stats, setStats] = useState<Stats>({
@@ -147,6 +189,13 @@ export default function AttendanceSetupPage() {
 
   const [search, setSearch] = useState("");
   const [filterTarget, setFilterTarget] = useState<string>("ALL");
+
+  // Roles & Batches state
+  const [availableRoles, setAvailableRoles] = useState<RoleOption[]>([]);
+  const [loadingRoles, setLoadingRoles] = useState(false);
+  const [roleSearch, setRoleSearch] = useState("");
+  const [batches, setBatches] = useState<BatchOption[]>([]);
+  const [loadingBatches, setLoadingBatches] = useState(false);
 
   // Dialog State
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -163,6 +212,108 @@ export default function AttendanceSetupPage() {
   // Delete State
   const [deleteTarget, setDeleteTarget] = useState<AttendanceSetup | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const isPlatformAdmin = isPlatformAdminUser(user);
+  const effectiveInstitutionId = (user as any)?.institution_id || user?.memberships?.[0]?.institution_id || null;
+
+  const fetchRoles = useCallback(async () => {
+    if (!accessToken) return;
+    setLoadingRoles(true);
+    try {
+      const res = await fetch("/api/admin/access/options?type=roles&limit=100", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const json = await res.json();
+      if (res.ok && Array.isArray(json.data)) {
+        const filtered = json.data.filter((r: RoleOption) => {
+          const code = (r.code || "").toLowerCase();
+          return !["student", "parent", "guardian", "vendor"].includes(code);
+        });
+        setAvailableRoles(filtered);
+      }
+    } catch (err) {
+      console.error("Failed to load roles", err);
+    } finally {
+      setLoadingRoles(false);
+    }
+  }, [accessToken]);
+
+  const fetchBatches = useCallback(async (programId: string | number) => {
+    if (!programId || !accessToken) {
+      setBatches([]);
+      return;
+    }
+    setLoadingBatches(true);
+    try {
+      const res = await fetch(`/api/admin/institutions/programs/${programId}/batches`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const json = await res.json();
+      if (res.ok && Array.isArray(json.data)) {
+        setBatches(json.data);
+      } else {
+        setBatches([]);
+      }
+    } catch (err) {
+      console.error("Failed to load batches", err);
+      setBatches([]);
+    } finally {
+      setLoadingBatches(false);
+    }
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (form.program_id) {
+      fetchBatches(form.program_id);
+    } else {
+      setBatches([]);
+    }
+  }, [form.program_id, fetchBatches]);
+
+  const fetchPrograms = useCallback(
+    async (query: string, page = 1) => {
+      if (!accessToken) return { data: [], hasMore: false };
+      const params = new URLSearchParams({
+        search: query,
+        page: String(page),
+        limit: "30",
+      });
+
+      if (isPlatformAdmin) {
+        const res = await fetch(`/api/admin/content/courses?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const json = await res.json();
+        if (!res.ok) return { data: [], hasMore: false };
+        return {
+          data: ((json.data ?? []) as Array<{ id: number; name?: string; title?: string }>).map((item) => ({
+            id: item.id,
+            title: item.name || item.title || `Course #${item.id}`,
+          })),
+          hasMore: false,
+        };
+      }
+
+      if (effectiveInstitutionId) {
+        params.set("institutionId", String(effectiveInstitutionId));
+      }
+      const res = await fetch(`/api/admin/institutions/programs?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const json = await res.json();
+      if (!res.ok) return { data: [], hasMore: false };
+      return {
+        data: ((json.data ?? []) as Array<{ id: number; name?: string; title?: string; program_name?: string }>).map(
+          (item) => ({
+            id: item.id,
+            title: item.name || item.title || item.program_name || `Program #${item.id}`,
+          })
+        ),
+        hasMore: false,
+      };
+    },
+    [accessToken, isPlatformAdmin, effectiveInstitutionId]
+  );
 
   const fetchSetups = useCallback(async () => {
     if (!accessToken) return;
@@ -197,21 +348,47 @@ export default function AttendanceSetupPage() {
 
   useEffect(() => {
     fetchSetups();
-  }, [fetchSetups]);
+    fetchRoles();
+  }, [fetchSetups, fetchRoles]);
 
   const handleOpenAdd = () => {
     setEditingSetup(null);
     setForm(initialForm);
+    setBatches([]);
+    setRoleSearch("");
     setDialogOpen(true);
   };
 
   const handleOpenEdit = (item: AttendanceSetup) => {
     setEditingSetup(item);
+    const isStaff = item.target_type === "STAFF" || item.scope_type === "STAFF";
+    const roleIds = Array.isArray(item.applicable_role_ids) ? item.applicable_role_ids : [];
+    const roleNames = Array.isArray(item.applicable_role_names) ? item.applicable_role_names : [];
+    setRoleSearch("");
+
+    let validatedMode = item.attendance_mode;
+    if (isStaff) {
+      if (validatedMode !== "FULL_DAY" && validatedMode !== "HALF_DAY") {
+        validatedMode = "FULL_DAY";
+      }
+    } else {
+      if (validatedMode !== "FULL_DAY" && validatedMode !== "PERIOD_WISE") {
+        validatedMode = "FULL_DAY";
+      }
+    }
+
     setForm({
       title: item.title,
-      target_type: item.target_type,
-      attendance_mode: item.attendance_mode,
-      who_can_mark: item.who_can_mark || (item.target_type === "STAFF" ? "BOTH" : item.target_type === "STUDENTS" ? "TEACHER" : "INSTITUTION_ADMIN"),
+      scope_type: isStaff ? "STAFF" : "STUDENTS",
+      program_id: item.program_id ? String(item.program_id) : "",
+      program_title: item.program_title || "",
+      batch_id: item.batch_id ? String(item.batch_id) : "",
+      batch_name: item.batch_name || "",
+      applicable_role_ids: roleIds,
+      applicable_role_names: roleNames,
+      target_type: isStaff ? "STAFF" : "STUDENTS",
+      attendance_mode: validatedMode,
+      who_can_mark: item.who_can_mark || (isStaff ? "BOTH" : "TEACHER"),
       start_time: item.start_time || "08:00",
       end_time: item.end_time || "14:30",
       grace_period_mins: item.grace_period_mins || 15,
@@ -229,12 +406,33 @@ export default function AttendanceSetupPage() {
       return;
     }
 
+    if (form.scope_type === "STUDENTS" && !form.program_id) {
+      toast.error("Please select a Class / Course for student attendance setup.");
+      return;
+    }
+
+    if (form.scope_type === "STAFF" && (!form.applicable_role_ids || form.applicable_role_ids.length === 0)) {
+      toast.error("Please select at least one role from Roles & Permissions.");
+      return;
+    }
+
     setSaving(true);
     try {
       const isEdit = Boolean(editingSetup?.id);
       const url = "/api/admin/master-data/attendance-setup";
       const method = isEdit ? "PUT" : "POST";
-      const payload = isEdit ? { ...form, id: editingSetup?.id } : form;
+      const payload = {
+        ...form,
+        id: editingSetup?.id,
+        target_type: form.scope_type === "STAFF" ? "STAFF" : "STUDENTS",
+        scope_type: form.scope_type,
+        program_id: form.scope_type === "STUDENTS" && form.program_id ? Number(form.program_id) : null,
+        program_title: form.scope_type === "STUDENTS" ? form.program_title : null,
+        batch_id: form.scope_type === "STUDENTS" && form.batch_id ? Number(form.batch_id) : null,
+        batch_name: form.scope_type === "STUDENTS" ? form.batch_name : null,
+        applicable_role_ids: form.scope_type === "STAFF" ? form.applicable_role_ids : [],
+        applicable_role_names: form.scope_type === "STAFF" ? form.applicable_role_names : [],
+      };
 
       const res = await fetch(url, {
         method,
@@ -250,6 +448,7 @@ export default function AttendanceSetupPage() {
 
       toast.success(isEdit ? "Attendance setup modified!" : "New attendance setup created!");
       setDialogOpen(false);
+      clearDraft();
       fetchSetups();
     } catch (err: any) {
       toast.error(err.message || "Failed to save setup");
@@ -300,11 +499,11 @@ export default function AttendanceSetupPage() {
             Attendance Setup & Shifts
           </h1>
           <p className="mt-1 text-xs text-muted-foreground max-w-2xl">
-            Configure default working hours, grace periods, biometric & period-wise shifts, and automatic attendance policies for students and staff.
+            Configure school-wide or course-specific working hours, grace periods, biometric & period-wise shifts, and automatic attendance policies.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={handleOpenAdd} className="h-9 gap-1.5 font-bold text-xs">
+          <Button onClick={handleOpenAdd} className="h-9 gap-1.5 font-bold text-xs shadow-xs">
             <Plus className="size-4" />
             Create Attendance Setup
           </Button>
@@ -314,16 +513,16 @@ export default function AttendanceSetupPage() {
       {/* Notice info banner for dummy pre-configured setups */}
       <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10 text-primary">
+          <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
             <Sparkles className="size-5" />
           </div>
           <div>
             <h4 className="text-xs font-bold text-foreground flex items-center gap-2">
-              Default Sample Setup Included
+              School-Wide & Program-Specific Shifts Supported
               <Badge variant="outline" className="text-[10px] bg-background">Ready to Use</Badge>
             </h4>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Standard attendance shifts (Academic, Faculty, Period-wise) are pre-loaded. You can modify any timing/policy, delete them, or add your custom shifts.
+              Set general timings for the entire institution or customize distinct shifts for specific degree programs (e.g. B.Sc Animation, BCA, Evening batches).
             </p>
           </div>
         </div>
@@ -346,7 +545,7 @@ export default function AttendanceSetupPage() {
             <GraduationCap className="size-4 text-indigo-500" />
           </div>
           <p className="mt-2 text-2xl font-bold">{stats.student_setups}</p>
-          <p className="text-[10px] text-muted-foreground mt-1">Academic batches</p>
+          <p className="text-[10px] text-muted-foreground mt-1">Academic batches & programs</p>
         </Card>
 
         <Card className="p-4 border bg-card">
@@ -375,7 +574,7 @@ export default function AttendanceSetupPage() {
         <div className="relative w-full sm:w-80">
           <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
           <Input
-            placeholder="Search shift or setup name..."
+            placeholder="Search shift or program name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 h-9 text-xs"
@@ -439,6 +638,7 @@ export default function AttendanceSetupPage() {
           {setups.map((setup) => {
             const isStudent = setup.target_type === "STUDENTS";
             const isStaff = setup.target_type === "STAFF";
+            const isProgramScoped = setup.scope_type === "PROGRAM" || Boolean(setup.program_id);
 
             return (
               <Card
@@ -462,8 +662,54 @@ export default function AttendanceSetupPage() {
                         {setup.target_type}
                       </Badge>
 
+                      {isStudent ? (
+                        <>
+                          <Badge variant="outline" className="text-[10px] border-indigo-500/40 text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 font-medium flex items-center gap-1">
+                            <GraduationCap className="size-3" />
+                            {setup.program_title || "Class Specific"}
+                          </Badge>
+                          {setup.batch_name ? (
+                            <Badge variant="outline" className="text-[10px] border-purple-500/40 text-purple-600 dark:text-purple-400 bg-purple-500/10 font-medium flex items-center gap-1">
+                              <Layers className="size-3" />
+                              {setup.batch_name}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] border-slate-500/30 text-slate-500 bg-slate-500/5 font-medium">
+                              All Batches
+                            </Badge>
+                          )}
+                        </>
+                      ) : (
+                        Array.isArray(setup.applicable_role_names) && setup.applicable_role_names.length > 0 ? (
+                          setup.applicable_role_names.length <= 2 ? (
+                            setup.applicable_role_names.map((rn) => (
+                              <Badge key={rn} variant="outline" className="text-[10px] border-teal-500/40 text-teal-600 dark:text-teal-400 bg-teal-500/10 font-medium flex items-center gap-1">
+                                <ShieldCheck className="size-3" />
+                                {rn}
+                              </Badge>
+                            ))
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] border-teal-500/40 text-teal-600 dark:text-teal-400 bg-teal-500/10 font-medium flex items-center gap-1" title={setup.applicable_role_names.join(", ")}>
+                              <ShieldCheck className="size-3" />
+                              {setup.applicable_role_names[0]} +{setup.applicable_role_names.length - 1} roles
+                            </Badge>
+                          )
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] border-slate-500/30 text-slate-600 dark:text-slate-300 bg-slate-500/5 font-medium flex items-center gap-1">
+                            <Building2 className="size-3" />
+                            All Staff
+                          </Badge>
+                        )
+                      )}
+
                       <Badge variant="outline" className="text-[10px]">
-                        {setup.attendance_mode.replace("_", " ")}
+                        {setup.attendance_mode === "FULL_DAY"
+                          ? "Full Day"
+                          : setup.attendance_mode === "HALF_DAY"
+                          ? "Half Day"
+                          : setup.attendance_mode === "PERIOD_WISE"
+                          ? "Period Wise"
+                          : setup.attendance_mode.replace("_", " ")}
                       </Badge>
 
                       {setup.is_default && (
@@ -593,54 +839,357 @@ export default function AttendanceSetupPage() {
 
       {/* Add/Edit Modal Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ClipboardCheck className="size-5 text-primary" />
               {editingSetup ? "Modify Attendance Setup" : "Create Attendance Setup"}
             </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Define the applicability scope, shift schedule, timings and attendance marking policies.
+            </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSave} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="setup-title" className="text-xs font-bold">
-                Setup Name / Policy Title *
+          <form onSubmit={handleSave} className="space-y-4 pt-1">
+            {/* 1. Scope Selection (Staff vs Student) */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-foreground">
+                Attendance Scope / Applicability *
               </Label>
-              <Input
-                id="setup-title"
-                placeholder="e.g. Standard Academic Shift, Morning Faculty, Evening Coaching"
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                className="h-9 text-xs"
-                required
-              />
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm((prev) => ({
+                      ...prev,
+                      scope_type: "STAFF",
+                      target_type: "STAFF",
+                      attendance_mode: prev.attendance_mode === "HALF_DAY" ? "HALF_DAY" : "FULL_DAY",
+                      program_id: "",
+                      program_title: "",
+                      batch_id: "",
+                      batch_name: "",
+                      who_can_mark: prev.who_can_mark === "TEACHER" ? "BOTH" : prev.who_can_mark,
+                      title: prev.title.toLowerCase().includes("shift") ? prev.title : prev.title ? prev.title : "Staff Attendance Shift",
+                    }));
+                  }}
+                  className={`flex flex-col items-start p-3 rounded-lg border text-left transition-all ${
+                    form.scope_type === "STAFF"
+                      ? "border-primary bg-primary/10 ring-1 ring-primary shadow-xs"
+                      : "border-border hover:bg-muted/50 bg-background"
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 font-bold text-xs text-foreground">
+                    <UsersRound className={`size-4 ${form.scope_type === "STAFF" ? "text-primary" : "text-muted-foreground"}`} />
+                    Staff
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">
+                    Select multiple roles from Roles & Permissions for staff shift
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm((prev) => ({
+                      ...prev,
+                      scope_type: "STUDENTS",
+                      target_type: "STUDENTS",
+                      attendance_mode: prev.attendance_mode === "PERIOD_WISE" ? "PERIOD_WISE" : "FULL_DAY",
+                      applicable_role_ids: [],
+                      applicable_role_names: [],
+                      who_can_mark: prev.who_can_mark === "BOTH" ? "TEACHER" : prev.who_can_mark,
+                      title: prev.title.toLowerCase().includes("shift") ? prev.title : prev.title ? prev.title : "Student Class Shift",
+                    }));
+                  }}
+                  className={`flex flex-col items-start p-3 rounded-lg border text-left transition-all ${
+                    form.scope_type === "STUDENTS"
+                      ? "border-primary bg-primary/10 ring-1 ring-primary shadow-xs"
+                      : "border-border hover:bg-muted/50 bg-background"
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 font-bold text-xs text-foreground">
+                    <GraduationCap className={`size-4 ${form.scope_type === "STUDENTS" ? "text-primary" : "text-muted-foreground"}`} />
+                    Student
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">
+                    Select class and batch for student attendance shift
+                  </p>
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            {/* If Student: Class & Batch Select */}
+            {form.scope_type === "STUDENTS" && (
+              <div className="space-y-3 p-3.5 rounded-lg border border-primary/20 bg-primary/5 animate-in fade-in-50 duration-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Class / Course Selector */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <BookOpen className="size-3.5 text-primary" />
+                        Select Class / Course *
+                      </Label>
+                      <span className="text-[10px] text-muted-foreground font-medium">Required</span>
+                    </div>
+                    <AsyncSearchPopover<ProgramOption>
+                      value={form.program_id ? String(form.program_id) : ""}
+                      selectedLabel={form.program_title}
+                      onChange={(value) => {
+                        setForm((prev) => ({
+                          ...prev,
+                          program_id: value,
+                          batch_id: "",
+                          batch_name: "",
+                        }));
+                      }}
+                      onSelectItem={(item) => {
+                        setForm((prev) => {
+                          const newTitle =
+                            !prev.title.trim() || prev.title.toLowerCase().includes("shift") || prev.title === prev.program_title
+                              ? `${item.title} Shift`
+                              : prev.title;
+                          return {
+                            ...prev,
+                            program_id: item.id,
+                            program_title: item.title,
+                            batch_id: "",
+                            batch_name: "",
+                            title: newTitle,
+                          };
+                        });
+                      }}
+                      fetcher={fetchPrograms}
+                      getValue={(item) => String(item.id)}
+                      getLabel={(item) => item.title}
+                      placeholder="Search & choose class or degree program..."
+                      searchPlaceholder="Type to search classes / courses..."
+                      emptyText="No classes found"
+                    />
+                  </div>
+
+                  {/* Batch Selector */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <Layers className="size-3.5 text-primary" />
+                        Select Batch
+                      </Label>
+                      <span className="text-[10px] text-muted-foreground font-medium">
+                        {form.program_id ? (loadingBatches ? "Loading..." : `${batches.length} found`) : "Choose class first"}
+                      </span>
+                    </div>
+                    <Select
+                      disabled={!form.program_id || loadingBatches}
+                      value={form.batch_id ? String(form.batch_id) : "all"}
+                      onValueChange={(val) => {
+                        if (val === "all") {
+                          setForm((prev) => ({
+                            ...prev,
+                            batch_id: "",
+                            batch_name: "All Batches",
+                          }));
+                        } else {
+                          const selectedBatch = batches.find((b) => String(b.section_id || b.id) === val);
+                          const bName = selectedBatch?.batch_name || selectedBatch?.section_name || selectedBatch?.name || `Batch #${val}`;
+                          setForm((prev) => ({
+                            ...prev,
+                            batch_id: val,
+                            batch_name: bName,
+                            title: prev.program_title ? `${prev.program_title} (${bName}) Shift` : prev.title,
+                          }));
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-9 text-xs bg-background">
+                        <SelectValue placeholder={!form.program_id ? "Select Class first" : "All Batches"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">
+                          <span className="font-semibold text-primary">All Batches in this Class</span>
+                        </SelectItem>
+                        {batches.map((b) => {
+                          const val = String(b.section_id || b.id);
+                          const label = b.batch_name
+                            ? `${b.batch_name}${b.section_name ? ` (${b.section_name})` : ""}`
+                            : b.section_name || b.name || `Batch #${val}`;
+                          return (
+                            <SelectItem key={val} value={val}>
+                              {label}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* If Staff: Multiple Roles from Roles & Permissions */}
+            {form.scope_type === "STAFF" && (
+              <div className="space-y-2.5 p-3.5 rounded-lg border border-primary/20 bg-primary/5 animate-in fade-in-50 duration-200">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <ShieldCheck className="size-3.5 text-primary" />
+                    Select Multiple Roles from Roles & Permissions *
+                  </Label>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-[10px] px-2 text-primary font-bold hover:bg-primary/10"
+                      onClick={() => {
+                        const allIds = availableRoles.map((r) => r.id);
+                        const allNames = availableRoles.map((r) => r.name);
+                        setForm((prev) => ({
+                          ...prev,
+                          applicable_role_ids: allIds,
+                          applicable_role_names: allNames,
+                        }));
+                      }}
+                    >
+                      Select All
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-[10px] px-2 text-muted-foreground hover:text-destructive"
+                      onClick={() => {
+                        setForm((prev) => ({
+                          ...prev,
+                          applicable_role_ids: [],
+                          applicable_role_names: [],
+                        }));
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Selected Role Badges */}
+                {form.applicable_role_names.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {form.applicable_role_names.map((name, idx) => {
+                      const roleId = form.applicable_role_ids[idx];
+                      return (
+                        <Badge
+                          key={String(roleId || name)}
+                          variant="secondary"
+                          className="text-[11px] py-0.5 px-2 bg-background border border-primary/30 flex items-center gap-1 font-medium"
+                        >
+                          <span>{name}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newIds = form.applicable_role_ids.filter((_, i) => i !== idx);
+                              const newNames = form.applicable_role_names.filter((_, i) => i !== idx);
+                              setForm((prev) => ({
+                                ...prev,
+                                applicable_role_ids: newIds,
+                                applicable_role_names: newNames,
+                              }));
+                            }}
+                            className="hover:text-destructive text-muted-foreground p-0.5"
+                          >
+                            <X className="size-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Search input for roles */}
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Search roles from Roles & Permissions..."
+                    value={roleSearch}
+                    onChange={(e) => setRoleSearch(e.target.value)}
+                    className="h-8 pl-8 text-xs bg-background"
+                  />
+                </div>
+
+                {/* Roles Checkbox List */}
+                <div className="max-h-40 overflow-y-auto rounded-md border bg-background p-1.5 space-y-0.5 divide-y divide-border/30">
+                  {loadingRoles ? (
+                    <div className="flex items-center justify-center p-4 text-xs text-muted-foreground">
+                      <Loader2 className="size-4 animate-spin mr-2 text-primary" /> Loading Roles & Permissions...
+                    </div>
+                  ) : availableRoles.filter((r) => !roleSearch || r.name.toLowerCase().includes(roleSearch.toLowerCase()) || r.code.toLowerCase().includes(roleSearch.toLowerCase())).length === 0 ? (
+                    <p className="text-xs text-muted-foreground p-3 text-center">No matching roles found</p>
+                  ) : (
+                    availableRoles
+                      .filter((r) => !roleSearch || r.name.toLowerCase().includes(roleSearch.toLowerCase()) || r.code.toLowerCase().includes(roleSearch.toLowerCase()))
+                      .map((role) => {
+                        const isSelected = form.applicable_role_ids.some((id) => Number(id) === role.id);
+                        return (
+                          <label
+                            key={role.id}
+                            className="flex items-center gap-2.5 p-1.5 hover:bg-muted/50 rounded cursor-pointer transition-colors text-xs"
+                          >
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setForm((prev) => {
+                                    const newIds = [...prev.applicable_role_ids, role.id];
+                                    const newNames = [...prev.applicable_role_names, role.name];
+                                    return {
+                                      ...prev,
+                                      applicable_role_ids: newIds,
+                                      applicable_role_names: newNames,
+                                      title: prev.title && !prev.title.toLowerCase().includes("shift") ? prev.title : `${newNames.slice(0, 2).join(", ")}${newNames.length > 2 ? ` +${newNames.length - 2} more` : ""} Shift`,
+                                    };
+                                  });
+                                } else {
+                                  setForm((prev) => {
+                                    const index = prev.applicable_role_ids.findIndex((id) => Number(id) === role.id);
+                                    if (index === -1) return prev;
+                                    const newIds = prev.applicable_role_ids.filter((_, i) => i !== index);
+                                    const newNames = prev.applicable_role_names.filter((_, i) => i !== index);
+                                    return {
+                                      ...prev,
+                                      applicable_role_ids: newIds,
+                                      applicable_role_names: newNames,
+                                    };
+                                  });
+                                }
+                              }}
+                            />
+                            <span className="font-semibold text-foreground flex-1">{role.name}</span>
+                            <Badge variant="outline" className="text-[10px] text-muted-foreground uppercase">
+                              {role.code}
+                            </Badge>
+                          </label>
+                        );
+                      })
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold">Target Audience</Label>
-                <Select
-                  value={form.target_type}
-                  onValueChange={(val: any) => {
-                    let defaultWho = "INSTITUTION_ADMIN";
-                    if (val === "STAFF") defaultWho = "BOTH";
-                    else if (val === "STUDENTS") defaultWho = "TEACHER";
-                    setForm({ ...form, target_type: val, who_can_mark: defaultWho });
-                  }}
-                >
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select target" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="STUDENTS">Students (Academic)</SelectItem>
-                    <SelectItem value="STAFF">Staff & Faculty</SelectItem>
-                    <SelectItem value="ALL">All Members</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="setup-title" className="text-xs font-bold">
+                  Setup Name / Policy Title *
+                </Label>
+                <Input
+                  id="setup-title"
+                  placeholder={form.scope_type === "STUDENTS" ? "e.g. Class 10 Morning Shift" : "e.g. Teaching Staff & Faculty Shift"}
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  className="h-9 text-xs"
+                  required
+                />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold">Attendance Mode</Label>
+                <Label className="text-xs font-bold">Attendance Mode *</Label>
                 <Select
                   value={form.attendance_mode}
                   onValueChange={(val: any) => setForm({ ...form, attendance_mode: val })}
@@ -649,10 +1198,17 @@ export default function AttendanceSetupPage() {
                     <SelectValue placeholder="Select mode" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="FULL_DAY">Daily Full Day</SelectItem>
-                    <SelectItem value="PERIOD_WISE">Period-Wise / Lecture</SelectItem>
-                    <SelectItem value="BIOMETRIC">Biometric / RFID Card</SelectItem>
-                    <SelectItem value="QR_CODE">QR Code / Geo-Fencing</SelectItem>
+                    {form.scope_type === "STAFF" ? (
+                      <>
+                        <SelectItem value="FULL_DAY">Full Day</SelectItem>
+                        <SelectItem value="HALF_DAY">Half Day</SelectItem>
+                      </>
+                    ) : (
+                      <>
+                        <SelectItem value="FULL_DAY">Full Day</SelectItem>
+                        <SelectItem value="PERIOD_WISE">Period Wise</SelectItem>
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -801,8 +1357,6 @@ export default function AttendanceSetupPage() {
                 })}
               </div>
             </div>
-
-
 
             <DialogFooter className="flex items-center justify-between sm:justify-between w-full pt-2">
               <ProgressiveSaveIndicator status={saveStatus} />

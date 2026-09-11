@@ -41,7 +41,7 @@ export async function GET(
         INNER JOIN student_enrollments se ON se.student_id = sp.id
         LEFT JOIN academic_years ay ON ay.id = se.academic_year_id
         LEFT JOIN institution_programs p ON p.id = se.program_id
-        LEFT JOIN class_categories cc ON cc.id = se.class_category_id
+        LEFT JOIN categories cc ON cc.id = se.class_category_id
         LEFT JOIN program_sections sec ON sec.id = se.section_id
         WHERE sp.user_id = $1
           AND COALESCE(se.is_deleted, FALSE) = FALSE

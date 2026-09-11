@@ -369,6 +369,11 @@ export async function GET(req: Request) {
     const view = url.searchParams.get("view") === "marketplace" ? "marketplace" : "my";
     const academicYearId = Number(url.searchParams.get("academicYearId"));
     const scopedAcademicYearId = Number.isInteger(academicYearId) && academicYearId > 0 ? academicYearId : null;
+    const programId = Number(url.searchParams.get("programId"));
+    const scopedProgramId = Number.isInteger(programId) && programId > 0 ? programId : null;
+    const subjectFilter = url.searchParams.get("subject")?.trim() || null;
+    const syllabusFilter = url.searchParams.get("syllabus")?.trim() || null;
+
     const requestedInstitutionId = getRequestedInstitutionId(url.searchParams);
     const institutionIds = requestedInstitutionId
       ? getScopedInstitutionIds(currentUser, requestedInstitutionId) ?? []
@@ -390,11 +395,22 @@ export async function GET(req: Request) {
           FROM assignment_templates at
           INNER JOIN institution_profiles ip ON ip.id = at.source_institution_id
           WHERE ($3 = '' OR at.title ILIKE $4 OR COALESCE(at.description, '') ILIKE $4
+            OR COALESCE(at.subject_name, '') ILIKE $4
+            OR COALESCE(at.syllabus_data::text, '') ILIKE $4
             OR COALESCE(ip.name, ip.slug, '') ILIKE $4)
             AND (
               (
                 $7::text = 'marketplace'
-                AND (at.is_public = TRUE OR at.marketplace_approved = TRUE)
+                AND (
+                  at.is_public = TRUE
+                  OR at.marketplace_approved = TRUE
+                  OR EXISTS (
+                    SELECT 1 FROM users u
+                    LEFT JOIN user_roles ur ON ur.user_id = u.id
+                    LEFT JOIN roles r ON r.id = ur.role_id
+                    WHERE u.id = at.created_by AND (r.code = 'platform_admin' OR r.code = 'platform_superadmin')
+                  )
+                )
                 AND at.is_active = TRUE
                 AND at.blocked_by_platform = FALSE
               )
@@ -413,6 +429,26 @@ export async function GET(req: Request) {
                   AND scoped_assignment.academic_year_id = $8
                   AND COALESCE(scoped_assignment.is_deleted, FALSE) = FALSE
               )
+            )
+            AND (
+              $9::int IS NULL
+              OR EXISTS (
+                SELECT 1
+                FROM assignments scoped_assn
+                JOIN assignment_targets scoped_target ON scoped_target.assignment_id = scoped_assn.id
+                WHERE scoped_assn.template_id = at.id
+                  AND (scoped_target.program_id = $9 OR (scoped_target.target_type = 'PROGRAM' AND scoped_target.target_id = $9))
+                  AND COALESCE(scoped_assn.is_deleted, FALSE) = FALSE
+              )
+            )
+            AND (
+              $10::text IS NULL
+              OR at.subject_id = $10
+              OR at.subject_name ILIKE $10
+            )
+            AND (
+              $11::text IS NULL
+              OR at.syllabus_data::text ILIKE ('%' || $11 || '%')
             )
             AND COALESCE(at.is_deleted, FALSE) = FALSE
             AND COALESCE(ip.is_deleted, FALSE) = FALSE
@@ -471,47 +507,41 @@ export async function GET(req: Request) {
             assn.id AS assigned_assignment_id,
             assn.issue_date,
             assn.submission_date,
-            target.target_type,
-            target.target_id,
-            target.program_id AS target_program_id,
-            COALESCE(target_scope_program.title, target_scope_master_course.name) AS target_program_label,
+            assn.target_type,
+            assn.target_id,
+            assn.target_program_id,
+            COALESCE(
+              (
+                SELECT COUNT(DISTINCT sa.student_id)::int
+                FROM assignments a_sub
+                INNER JOIN student_assignments sa ON sa.assignment_id = a_sub.id
+                WHERE a_sub.template_id = at.id
+                  AND COALESCE(a_sub.is_deleted, FALSE) = FALSE
+                  AND ($8::int IS NULL OR a_sub.academic_year_id = $8)
+              ), 0
+            ) AS assigned_student_count,
+            COALESCE(
+              (
+                SELECT COUNT(DISTINCT a_sub.id)::int
+                FROM assignments a_sub
+                WHERE a_sub.template_id = at.id
+                  AND COALESCE(a_sub.is_deleted, FALSE) = FALSE
+                  AND ($8::int IS NULL OR a_sub.academic_year_id = $8)
+              ), 0
+            ) AS assigned_count,
+            COALESCE(target_scope_program.title, target_scope_master_course.name, target_program.title, target_master_course.name) AS target_program_label,
             CASE
-              WHEN target.target_type = 'INSTITUTION' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > Whole institution'
-              WHEN target.target_type = 'PROGRAM' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > ' || COALESCE(target_program.title, target_master_course.name, 'Course')
-              WHEN target.target_type = 'SECTION' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > ' || COALESCE(target_scope_program.title, target_scope_master_course.name, 'Class') || ' > ' || target_section.name
-              WHEN target.target_type = 'STUDENT' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || COALESCE(' > ' || COALESCE(target_scope_program.title, target_scope_master_course.name), '') || ' > ' || target_user.full_name
+              WHEN assn.target_type = 'INSTITUTION' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > Whole institution'
+              WHEN assn.target_type = 'PROGRAM' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > ' || COALESCE(target_program.title, target_master_course.name, 'Course')
+              WHEN assn.target_type = 'SECTION' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || ' > ' || COALESCE(target_scope_program.title, target_scope_master_course.name, 'Class') || ' > ' || target_section.name
+              WHEN assn.target_type = 'STUDENT' THEN COALESCE(ip.name, ip.slug, 'Institution ' || ip.id::text) || COALESCE(' > ' || COALESCE(target_scope_program.title, target_scope_master_course.name), '') || ' > ' || target_user.full_name
               ELSE NULL
             END AS target_label,
-            COALESCE(
-              (
-                SELECT json_agg(asn.syllabus_node_id ORDER BY asn.id)
-                FROM assignment_syllabus_nodes asn
-                WHERE asn.assignment_id = assn.id
-              ),
-              '[]'::json
-            ) AS syllabus_node_ids,
-            COALESCE(
-              (
-                SELECT json_agg(
-                  json_build_object(
-                    'id', sn.id,
-                    'title', sn.title,
-                    'node_type', sn.node_type,
-                    'subject_id', sub.id,
-                    'subject_name', sub.name,
-                    'syllabus_id', s.id,
-                    'syllabus_title', s.title
-                  )
-                  ORDER BY sub.name, s.title, sn.sort_order, sn.id
-                )
-                FROM assignment_syllabus_nodes asn
-                INNER JOIN syllabus_nodes sn ON sn.id = asn.syllabus_node_id
-                INNER JOIN syllabi s ON s.id = sn.syllabus_id
-                INNER JOIN subjects sub ON sub.id = s.subject_id
-                WHERE asn.assignment_id = assn.id
-              ),
-              '[]'::json
-            ) AS syllabus_nodes,
+            at.subject_id,
+            at.subject_name,
+            COALESCE(at.syllabus_data, '[]'::jsonb) AS syllabus_data,
+            '[]'::json AS syllabus_node_ids,
+            COALESCE(at.syllabus_data, '[]'::jsonb) AS syllabus_nodes,
             COUNT(DISTINCT q.id)::int AS question_count,
             COUNT(DISTINCT qf.id)::int AS attachment_count
           FROM filtered f
@@ -527,29 +557,52 @@ export async function GET(req: Request) {
           LEFT JOIN users approver ON approver.id = at.marketplace_approved_by
           LEFT JOIN assignment_templates parent_at ON parent_at.id = at.parent_template_id
           LEFT JOIN institution_profiles parent_ip ON parent_ip.id = parent_at.source_institution_id
-          LEFT JOIN assignments assn
-            ON assn.template_id = at.id
-           AND COALESCE(assn.is_deleted, FALSE) = FALSE
-           AND ($8::int IS NULL OR assn.academic_year_id = $8)
-          LEFT JOIN assignment_targets target ON target.assignment_id = assn.id
+          LEFT JOIN LATERAL (
+            SELECT
+              a.id,
+              a.issue_date,
+              a.submission_date,
+              t.target_type,
+              t.target_id,
+              t.program_id AS target_program_id
+            FROM assignments a
+            LEFT JOIN LATERAL (
+              SELECT target_type, target_id, program_id
+              FROM assignment_targets
+              WHERE assignment_id = a.id
+              ORDER BY id ASC
+              LIMIT 1
+            ) t ON TRUE
+            WHERE a.template_id = at.id
+              AND COALESCE(a.is_deleted, FALSE) = FALSE
+              AND ($8::int IS NULL OR a.academic_year_id = $8)
+            ORDER BY a.created_at DESC, a.id DESC
+            LIMIT 1
+          ) assn ON TRUE
           LEFT JOIN institution_programs target_program
-            ON target_program.id = target.target_id AND target.target_type = 'PROGRAM'
+            ON target_program.id = assn.target_id
+           AND target_program.institution_id = at.source_institution_id
+           AND assn.target_type = 'PROGRAM'
           LEFT JOIN master_courses target_master_course
-            ON target_master_course.id = target.target_id AND target.target_type = 'PROGRAM'
+            ON target_master_course.id = assn.target_id AND assn.target_type = 'PROGRAM'
           LEFT JOIN institution_programs target_scope_program
-            ON target_scope_program.id = target.program_id
+            ON target_scope_program.id = assn.target_program_id
+           AND target_scope_program.institution_id = at.source_institution_id
           LEFT JOIN master_courses target_scope_master_course
-            ON target_scope_master_course.id = target.program_id
+            ON target_scope_master_course.id = assn.target_program_id
           LEFT JOIN sections target_section
-            ON target_section.id = target.target_id AND target.target_type = 'SECTION'
+            ON target_section.id = assn.target_id AND assn.target_type = 'SECTION'
           LEFT JOIN student_profiles target_student
-            ON target_student.id = target.target_id AND target.target_type = 'STUDENT'
+            ON target_student.id = assn.target_id AND assn.target_type = 'STUDENT'
           LEFT JOIN users target_user ON target_user.id = target_student.user_id
           LEFT JOIN assignment_template_questions q ON q.template_id = at.id
           LEFT JOIN assignment_template_question_files qf ON qf.question_id = q.id
           GROUP BY at.id, ip.id, parent_at.id, parent_ip.id, creator.id, updater.id, blocker.id,
-                   requester.id, approver.id, assn.id, target.id, target_program.id, target_master_course.id,
-                   target_section.id, target_user.id, target_scope_program.id, target_scope_master_course.id
+                   requester.id, approver.id, assn.id, assn.issue_date, assn.submission_date,
+                   assn.target_type, assn.target_id, assn.target_program_id,
+                   target_scope_program.title, target_scope_master_course.name,
+                   target_program.title, target_master_course.name,
+                   target_section.name, target_user.full_name
           ORDER BY
             (at.marketplace_requested = TRUE AND at.is_public = FALSE AND at.blocked_by_platform = FALSE) DESC,
             at.updated_at DESC,
@@ -587,6 +640,9 @@ export async function GET(req: Request) {
         institutionIds,
         view,
         scopedAcademicYearId,
+        scopedProgramId,
+        subjectFilter,
+        syllabusFilter,
       ]
     );
     const summary = result.rows[0];
@@ -646,8 +702,8 @@ export async function POST(req: Request) {
     const client = await db.connect();
     try {
       await client.query("BEGIN");
-      const isPublic = isPlatformAdmin ? payload.isPublic : false;
-      const marketplaceApproved = isPlatformAdmin && payload.isPublic;
+      const isPublic = isPlatformAdmin ? (payload.isPublic !== false) : false;
+      const marketplaceApproved = isPlatformAdmin;
       const result = await client.query<{ id: number }>(
         `
           INSERT INTO assignment_templates
@@ -655,6 +711,7 @@ export async function POST(req: Request) {
              marketplace_requested, marketplace_requested_at, marketplace_requested_by,
              marketplace_approved, marketplace_approved_at, marketplace_approved_by,
              is_active, is_paid, price, version, source_institution_id,
+             subject_id, subject_name, syllabus_data,
              created_by, updated_by)
           VALUES (
             $1, $2, $3, $4::jsonb, $5,
@@ -662,7 +719,9 @@ export async function POST(req: Request) {
             CASE WHEN $6 THEN $8::integer ELSE NULL::integer END,
             $9, CASE WHEN $9 THEN CURRENT_TIMESTAMP ELSE NULL END,
             CASE WHEN $9 THEN $8::integer ELSE NULL::integer END,
-            $7, $11, $12, 1, $10, $8, $8
+            $7, $11, $12, 1, $10,
+            $13, $14, $15::jsonb,
+            $8, $8
           )
           RETURNING id
         `,
@@ -679,9 +738,16 @@ export async function POST(req: Request) {
           payload.institutionId,
           payload.isPaid,
           payload.price,
+          payload.subjectId,
+          payload.subjectName,
+          JSON.stringify(payload.syllabusData ?? []),
         ]
       );
       const templateId = result.rows[0].id;
+      const issueDate = payload.issueDate ?? new Date().toISOString().slice(0, 10);
+      const submissionDate =
+        payload.submissionDate ??
+        new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const assignment = await client.query<{ id: number }>(
         `
           INSERT INTO assignments
@@ -695,8 +761,8 @@ export async function POST(req: Request) {
           templateId,
           payload.title,
           payload.description,
-          payload.issueDate,
-          payload.submissionDate,
+          issueDate,
+          submissionDate,
           payload.totalMarks,
           payload.isActive ? "active" : "draft",
           currentUser.id,

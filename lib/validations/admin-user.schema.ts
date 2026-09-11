@@ -242,18 +242,6 @@ export const adminCreateUserSchema = z.object({
       message: "Select a teacher type",
     });
   }
-
-  if (
-    data.profile.is_teacher &&
-    data.profile.teacher_type === "institute_teacher" &&
-    !data.profile.under_institution_id
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["profile", "under_institution_id"],
-      message: "Select an institution",
-    });
-  }
 });
 
 export type AdminCreateUserInput = z.infer<typeof adminCreateUserSchema>;
