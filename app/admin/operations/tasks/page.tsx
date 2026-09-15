@@ -179,7 +179,7 @@ export default function OperationsTasksPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const { institutions, activeInstitution, activeInstitutionId } = useActiveInstitution();
   const isPlatformRoute = Boolean(pathname?.startsWith("/platformadmin"));
-  const [orgFilter, setOrgFilter] = useState<string>("all");
+  const [orgFilter, setOrgFilter] = useState<string>(isPlatformRoute ? "none" : "all");
   const effectiveInstId = useMemo(() => {
     if (orgFilter === "all") {
       return isPlatformRoute ? null : activeInstitutionId;
@@ -308,24 +308,24 @@ export default function OperationsTasksPage() {
   }, [accessToken]);
 
   const selectedOrgName = useMemo(() => {
-    if (formInstitutionId === "none") return "Platform Staff";
+    if (isPlatformRoute || formInstitutionId === "none") return "EduBird Organization";
     const found = institutions.find((i) => String(i.id) === formInstitutionId);
     if (found) return found.name;
     if (activeInstitution && String(activeInstitution.id) === formInstitutionId) return activeInstitution.name;
-    return "Selected Organization";
-  }, [formInstitutionId, institutions, activeInstitution]);
+    return "EduBird Organization";
+  }, [formInstitutionId, institutions, activeInstitution, isPlatformRoute]);
 
   const dialogStaffList = useMemo(() => {
     const list = modalOrgStaffList.length > 0
       ? modalOrgStaffList
-      : (formInstitutionId !== "none" ? staffList : []);
+      : staffList;
     const seen = new Set<number>();
     return list.filter((s) => {
       if (!s.id || seen.has(s.id)) return false;
       seen.add(s.id);
       return true;
     });
-  }, [modalOrgStaffList, formInstitutionId, staffList]);
+  }, [modalOrgStaffList, staffList]);
 
   const addClientUrl = useMemo(() => {
     if (pathname?.startsWith("/platformadmin")) return "/platformadmin/sales/clients";
@@ -334,16 +334,17 @@ export default function OperationsTasksPage() {
   }, [pathname]);
 
   const filteredClientList = useMemo(() => {
-    if (!clientSearchQuery.trim()) return clients;
+    const baseList = isPlatformRoute ? clients.filter((c) => !c.institution_id) : clients;
+    if (!clientSearchQuery.trim()) return baseList;
     const q = clientSearchQuery.toLowerCase();
-    return clients.filter((c) => {
+    return baseList.filter((c) => {
       const name = (c.company_name || c.name || "").toLowerCase();
       const type = (c.client_type || "").toLowerCase();
       const contact = (c.contact_person || "").toLowerCase();
       const email = (c.email || "").toLowerCase();
       return name.includes(q) || type.includes(q) || contact.includes(q) || email.includes(q);
     });
-  }, [clients, clientSearchQuery]);
+  }, [clients, clientSearchQuery, isPlatformRoute]);
 
   const filteredStaffList = useMemo(() => {
     if (!staffSearchQuery.trim()) return dialogStaffList;
@@ -482,12 +483,12 @@ export default function OperationsTasksPage() {
       const isStaffContext = isStaffRole || isStaffRoute;
 
       const params = new URLSearchParams();
-      if (orgFilter && orgFilter !== "all") {
+      if (isPlatformRoute) {
+        params.set("institution_id", "none");
+      } else if (orgFilter && orgFilter !== "all") {
         params.set("institution_id", orgFilter);
       } else if (effectiveInstId) {
         params.set("institution_id", String(effectiveInstId));
-      } else if (isPlatformRoute && orgFilter === "all") {
-        params.set("institution_id", "all");
       }
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
       if (selectedStatusTab && selectedStatusTab !== "all") params.set("status", selectedStatusTab);
@@ -558,9 +559,11 @@ export default function OperationsTasksPage() {
   const handleOpenCreateTask = () => {
     setEditingTask(null);
     setFormTitle("");
-    const initialInstId = (orgFilter && orgFilter !== "all" && orgFilter !== "none")
-      ? orgFilter
-      : (activeInstitutionId ? String(activeInstitutionId) : (institutions[0]?.id ? String(institutions[0].id) : "none"));
+    const initialInstId = isPlatformRoute
+      ? "none"
+      : ((orgFilter && orgFilter !== "all" && orgFilter !== "none")
+          ? orgFilter
+          : (activeInstitutionId ? String(activeInstitutionId) : (institutions[0]?.id ? String(institutions[0].id) : "none")));
     setFormInstitutionId(initialInstId);
     void fetchStaffForModal(initialInstId);
     setFormClientId("none");
@@ -584,7 +587,9 @@ export default function OperationsTasksPage() {
   const handleOpenEditTask = (t: OperationTask) => {
     setEditingTask(t);
     setFormTitle(t.title || "");
-    const initialInstId = t.institution_id ? String(t.institution_id) : (activeInstitutionId ? String(activeInstitutionId) : "none");
+    const initialInstId = isPlatformRoute
+      ? "none"
+      : (t.institution_id ? String(t.institution_id) : (activeInstitutionId ? String(activeInstitutionId) : "none"));
     setFormInstitutionId(initialInstId);
     void fetchStaffForModal(initialInstId);
     setFormClientId(t.client_id ? String(t.client_id) : "none");
@@ -644,7 +649,7 @@ export default function OperationsTasksPage() {
         body: JSON.stringify({
           id: editingTask?.id,
           title: formTitle.trim(),
-          institution_id: formInstitutionId !== "none" && formInstitutionId !== "all" ? parseInt(formInstitutionId) : null,
+          institution_id: isPlatformRoute ? null : (formInstitutionId !== "none" && formInstitutionId !== "all" ? parseInt(formInstitutionId) : null),
           client_id: formClientId !== "none" ? formClientId : null,
           client_name: formClientName.trim() || null,
           assigned_employees: selectedStaffObjects,
@@ -690,7 +695,9 @@ export default function OperationsTasksPage() {
 
     try {
       const params = new URLSearchParams();
-      if (task.institution_id) {
+      if (isPlatformRoute) {
+        params.set("institution_id", "none");
+      } else if (task.institution_id) {
         params.set("institution_id", String(task.institution_id));
       }
       const headers: Record<string, string> = {};
@@ -1422,8 +1429,8 @@ export default function OperationsTasksPage() {
           />
         </div>
 
-        {/* Organization Filter (Platform Admin or Multi-Institution) */}
-        {(isPlatformRoute || institutions.length > 1) && (
+        {/* Organization Filter (Multi-Institution only for institute routes; hidden on platform admin since all staff are assigned to EduBird organization) */}
+        {!isPlatformRoute && institutions.length > 1 && (
           <div className="w-full sm:w-48">
             <select
               value={orgFilter}
@@ -1436,7 +1443,6 @@ export default function OperationsTasksPage() {
                   {inst.name}
                 </option>
               ))}
-              {isPlatformRoute && <option value="none">Platform Tasks (No Org)</option>}
             </select>
           </div>
         )}
@@ -1465,7 +1471,7 @@ export default function OperationsTasksPage() {
             className="w-full h-10 text-xs bg-background rounded-xl border border-input px-3 font-medium outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer text-foreground"
           >
             <option value="all">All Clients</option>
-            {clients.map((c) => (
+            {(isPlatformRoute ? clients.filter((c) => !c.institution_id) : clients).map((c) => (
               <option key={c.id} value={String(c.id)}>
                 {c.company_name || c.name}
               </option>
@@ -1932,13 +1938,21 @@ export default function OperationsTasksPage() {
                   <Building2 className="w-3.5 h-3.5 text-primary" />
                   Organization / Institution *
                 </Label>
-                {formInstitutionId !== "none" && (
-                  <span className="text-[10px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                    Staff Dedicated to Organization
-                  </span>
-                )}
+                <span className="text-[10px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                  {isPlatformRoute ? "EduBird Platform" : "Staff Dedicated to Organization"}
+                </span>
               </div>
-              {isPlatformRoute || institutions.length > 1 ? (
+              {isPlatformRoute ? (
+                <div className="flex items-center justify-between h-9 px-3 text-xs rounded-md border border-input bg-background/80 shadow-xs">
+                  <span className="font-semibold text-foreground truncate flex items-center gap-2">
+                    <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
+                    EduBird Organization
+                  </span>
+                  <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30 font-medium">
+                    EduBird Staff Only
+                  </Badge>
+                </div>
+              ) : institutions.length > 1 ? (
                 <select
                   value={formInstitutionId}
                   onChange={(e) => handleFormInstitutionChange(e.target.value)}
@@ -1949,9 +1963,6 @@ export default function OperationsTasksPage() {
                       {inst.name}
                     </option>
                   ))}
-                  {isPlatformRoute && (
-                    <option value="none">Platform Operations (Internal / No Organization)</option>
-                  )}
                 </select>
               ) : (
                 <div className="flex items-center justify-between h-9 px-3 text-xs rounded-md border border-input bg-background/80">

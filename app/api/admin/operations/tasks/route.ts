@@ -121,9 +121,7 @@ export async function GET(req: Request) {
     if (targetInstId) {
       params.push(targetInstId);
       query += ` AND institution_id = $${params.length}`;
-    } else if (requestedInstParam === "none") {
-      query += ` AND institution_id IS NULL`;
-    } else if (requestedInstParam !== "all" && !isPlatform) {
+    } else if (requestedInstParam === "none" || (isPlatform && requestedInstParam !== "all")) {
       query += ` AND institution_id IS NULL`;
     }
 
@@ -219,14 +217,27 @@ export async function GET(req: Request) {
     let tasks = res.rows;
 
     // Fetch list of clients for picker
-    const clientsRes = await db.query(
-      `SELECT id, name, company_name, email, phone, client_type 
-       FROM clients 
-       WHERE status = 'active' 
-         AND ($1::int IS NULL OR institution_id = $1::int OR institution_id IS NULL)
-       ORDER BY name ASC`,
-      [targetInstId]
-    );
+    // In platform admin side, show ONLY clients who have been added by platform admin in sales section (institution_id IS NULL)
+    let clientsRes;
+    if (targetInstId) {
+      clientsRes = await db.query(
+        `SELECT id, name, company_name, email, phone, client_type, institution_id
+         FROM clients
+         WHERE status = 'active'
+           AND institution_id = $1::int
+         ORDER BY COALESCE(company_name, name) ASC`,
+        [targetInstId]
+      );
+    } else {
+      // Platform admin context: only clients added by platform admin in sales section (institution_id IS NULL)
+      clientsRes = await db.query(
+        `SELECT id, name, company_name, email, phone, client_type, institution_id
+         FROM clients
+         WHERE status = 'active'
+           AND institution_id IS NULL
+         ORDER BY COALESCE(company_name, name) ASC`
+      );
+    }
     
     // Fetch list of staff/employees for picker strictly filtered to staff roles (excluding students and parents)
     let staffRes;

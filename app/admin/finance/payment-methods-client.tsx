@@ -136,7 +136,7 @@ export const PAYMENT_GATEWAY_PROVIDERS = [
     keyIdLabel: "Publishable Key",
     keyIdPlaceholder: "e.g. pk_live_xxxxxxxxxxxxxxxxxxxxxxxx",
     secretLabel: "Secret Key",
-    secretPlaceholder: "e.g. your-stripe-secret-key",
+    secretPlaceholder: "e.g. your Stripe secret key",
     webhookLabel: "Webhook Signing Secret (whsec_...)",
     badgeColor: "bg-indigo-600 text-white",
     defaultTitle: "Stripe Payment Gateway",
