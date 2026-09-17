@@ -99,6 +99,7 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "managestudents.allstudents", label: "All Students", description: "students", scope: "institution", page: "/admin/students" },
   { key: "managestudents.fee_management", label: "Fee Management", description: "student fee management", scope: "institution", page: "/admin/students/fee-management" },
   { key: "managestudents.attendance", label: "Attendance", description: "student attendance", scope: "institution", page: "/admin/students/attendance" },
+  { key: "managestudents.performance", label: "Students Performance", description: "student academic & attendance performance tracking", scope: "institution", page: "/admin/students/performance" },
   { key: "managestudents.achievements", label: "Achievements", description: "student achievements", scope: "institution", page: "/admin/students/achievements" },
   { key: "managestudents.assignments", label: "Assignments", description: "student assignments", scope: "institution", page: "/admin/students/assignments" },
   { key: "managestudents.exams", label: "Exams", description: "student exams", scope: "institution", page: "/admin/students/exams" },
@@ -288,6 +289,8 @@ export const LEGACY_PERMISSION_MODULE_MAP: Record<string, string> = {
   "manage_students.all_students": "managestudents.allstudents",
   "manage_students.fee_management": "managestudents.fee_management",
   "manage_students.attendance": "managestudents.attendance",
+  "manage_students.performance": "managestudents.performance",
+  "student_management.performance": "managestudents.performance",
   "manage_students.achievements": "managestudents.achievements",
   "manage_students.assignments": "managestudents.assignments",
   "manage_students.exams": "managestudents.exams",
@@ -497,8 +500,17 @@ export function isAdminPathVisibleForRole(
   pathname: string
 ) {
   const normalized = normalizeAdminPath(pathname);
+  if (normalized === "/admin/my-profile" || normalized.startsWith("/admin/my-profile/")) {
+    return !isStudentUser(user) && !isParentUser(user);
+  }
+  if (normalized === "/admin/account" || normalized.startsWith("/admin/account")) {
+    return !isStudentUser(user) && !isParentUser(user);
+  }
   if (normalized === "/admin/affiliate" || normalized.startsWith("/admin/affiliate")) return true;
   if (normalized === "/admin/classroom" || normalized.startsWith("/admin/classroom/")) {
+    if (normalized === "/admin/classroom/my-timetable" && (isInstitutionAdminUser(user) || isPlatformAdminUser(user))) {
+      return true;
+    }
     return (
       !isInstitutionAdminUser(user) &&
       (isStudentUser(user) || isTeacherUser(user) || isParentUser(user))
@@ -1028,6 +1040,7 @@ export function getRequestPermission(method: string, url: string) {
   if (pathname.includes("/api/admin/student-records")) return permissionForAction("managestudents.allstudents", verb);
   if (pathname.includes("/api/admin/students/fee-management")) return permissionForAction("managestudents.fee_management", verb);
   if (pathname.includes("/api/admin/students/attendance")) return permissionForAction("managestudents.attendance", verb);
+  if (pathname.includes("/api/admin/students/performance")) return permissionForAction("managestudents.performance", verb);
   if (pathname.includes("/api/admin/students/achievements")) return permissionForAction("managestudents.achievements", verb);
   if (pathname.includes("/api/admin/students/assignments")) return permissionForAction("managestudents.assignments", verb);
   if (pathname.includes("/api/admin/students/exams")) return permissionForAction("managestudents.exams", verb);
@@ -1230,6 +1243,15 @@ export function hasAdminPagePermission(
     return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized));
   }
 
+  if (
+    normalized === "/admin/my-profile" ||
+    normalized.startsWith("/admin/my-profile") ||
+    normalized === "/admin/account" ||
+    normalized.startsWith("/admin/account")
+  ) {
+    return !isStudentUser(user) && !isParentUser(user);
+  }
+
   if (normalized === "/admin/staff" || normalized.startsWith("/admin/staff")) {
     if (isStudentUser(user) || isParentUser(user)) {
       return false;
@@ -1327,6 +1349,8 @@ export function hasAdminPagePermission(
 
   if (normalized === "/admin/classroom/my-timetable") {
     return (
+      isInstitutionAdminUser(user) ||
+      isPlatformAdminUser(user) ||
       hasPermission(user, "student.myclassroom.timetable.view") ||
       hasPermission(user, "teacher.myclassroom.timetable.view") ||
       hasPermission(user, "parent.childclassroom.timetable.view")

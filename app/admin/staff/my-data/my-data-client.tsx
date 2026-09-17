@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Bell,
   Calendar,
@@ -157,7 +158,23 @@ type DocumentItem = {
   rendered_html?: string;
   image_url?: string;
   pdf_url?: string;
+  staff_name?: string;
+  full_name?: string;
+  email?: string;
 };
+
+type StaffOption = {
+  id: number;
+  full_name: string;
+  email: string;
+  role_name?: string;
+  role_code?: string;
+  avatar_url?: string;
+};
+
+export interface MyDataClientProps {
+  initialTab?: string;
+}
 
 type SalarySummary = {
   baseSalary: number;
@@ -194,15 +211,59 @@ function formatCurrency(val?: number | string) {
   });
 }
 
-export function MyDataClient() {
+export function MyDataClient({ initialTab }: MyDataClientProps = {}) {
   const { isReady } = useAdminGuard();
+  const searchParams = useSearchParams();
+  const urlTab = searchParams.get("tab");
   const { accessToken, user } = useAuthStore();
   const { activeInstitution } = useActiveInstitution();
   const institutionId = activeInstitution?.id ? String(activeInstitution.id) : "";
 
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState(urlTab || initialTab || "overview");
   const [loading, setLoading] = useState(false);
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+
+  const isPlatformAdmin = Boolean(user?.is_super_admin || user?.role_codes?.includes("platform_admin"));
+  const isInstitutionAdmin = Boolean(user?.role_codes?.includes("institution_admin"));
+  const isAdmin = isPlatformAdmin || isInstitutionAdmin;
+
+  const [staffList, setStaffList] = useState<StaffOption[]>([]);
+  const [selectedStaffId, setSelectedStaffId] = useState<string>("me");
+
+  useEffect(() => {
+    if (urlTab) setActiveTab(urlTab);
+    else if (initialTab) setActiveTab(initialTab);
+  }, [urlTab, initialTab]);
+
+  const authHeaders = useMemo(
+    () => (accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined),
+    [accessToken]
+  );
+
+  // Load staff list for admins so they can inspect any staff member's records
+  useEffect(() => {
+    if (!isAdmin || !authHeaders) return;
+    const fetchStaff = async () => {
+      try {
+        const instParam = institutionId ? `&institution_id=${institutionId}` : "";
+        const res = await fetch(`/api/admin/operations/tasks?limit=100${instParam}`, { headers: authHeaders });
+        if (res.ok) {
+          const j = await res.json();
+          if (Array.isArray(j?.staff)) {
+            setStaffList(j.staff);
+          }
+        }
+      } catch {
+        // fallback
+      }
+    };
+    void fetchStaff();
+  }, [isAdmin, authHeaders, institutionId]);
+
+  const selectedStaffMember = useMemo(() => {
+    if (selectedStaffId === "me" || selectedStaffId === "all") return null;
+    return staffList.find((s) => String(s.id) === selectedStaffId) || null;
+  }, [selectedStaffId, staffList]);
 
   // Module States
   const [notices, setNotices] = useState<NoticeItem[]>([]);
@@ -244,11 +305,6 @@ export function MyDataClient() {
 
   const [previewDoc, setPreviewDoc] = useState<DocumentItem | null>(null);
 
-  const authHeaders = useMemo(
-    () => (accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined),
-    [accessToken]
-  );
-
   // Fetch all employee records
   const loadMyData = useCallback(async () => {
     if (!isReady || !authHeaders) return;
@@ -256,6 +312,9 @@ export function MyDataClient() {
 
     try {
       const instQuery = institutionId ? `&institutionId=${institutionId}` : "";
+      const isSelf = selectedStaffId === "me";
+      const isAll = selectedStaffId === "all";
+      const targetStaffUserId = (!isSelf && !isAll) ? selectedStaffId : null;
 
       // 1. Noticeboard
       const fetchNotices = fetch(`/api/admin/institutions/news?limit=20${instQuery}`, { headers: authHeaders })
@@ -264,19 +323,34 @@ export function MyDataClient() {
         .catch(() => setNotices([]));
 
       // 2. Complaints
-      const fetchComplaints = fetch(`/api/admin/institution/complaints?limit=20${instQuery}`, { headers: authHeaders })
+      const complaintsUrl = selectedStaffMember
+        ? `/api/admin/institution/complaints?search=${encodeURIComponent(selectedStaffMember.full_name || selectedStaffMember.email)}${instQuery}`
+        : isAdmin
+        ? `/api/admin/institution/complaints?view=all&limit=30${instQuery}`
+        : `/api/admin/institution/complaints?limit=20${instQuery}`;
+      const fetchComplaints = fetch(complaintsUrl, { headers: authHeaders })
         .then((r) => (r.ok ? r.json() : { data: [] }))
         .then((j) => setComplaints(Array.isArray(j?.data) ? j.data : Array.isArray(j) ? j : []))
         .catch(() => setComplaints([]));
 
       // 3. Tasks
-      const fetchTasks = fetch(`/api/admin/operations/tasks?scope=me${instQuery}`, { headers: authHeaders })
+      const tasksUrl = isSelf
+        ? `/api/admin/operations/tasks?scope=me${instQuery}`
+        : targetStaffUserId
+        ? `/api/admin/operations/tasks?assignee_id=${targetStaffUserId}${instQuery}`
+        : `/api/admin/operations/tasks?limit=50${instQuery}`;
+      const fetchTasks = fetch(tasksUrl, { headers: authHeaders })
         .then((r) => (r.ok ? r.json() : { tasks: [] }))
         .then((j) => setTasks(Array.isArray(j?.tasks) ? j.tasks : []))
         .catch(() => setTasks([]));
 
       // 4. Performance
-      const fetchPerf = fetch(`/api/admin/staff/performance?mode=self${instQuery}`, { headers: authHeaders })
+      const perfUrl = isSelf
+        ? `/api/admin/staff/performance?mode=self${instQuery}`
+        : targetStaffUserId
+        ? `/api/admin/staff/performance?staffUserId=${targetStaffUserId}${instQuery}`
+        : `/api/admin/staff/performance?timeframe=monthly${instQuery}`;
+      const fetchPerf = fetch(perfUrl, { headers: authHeaders })
         .then((r) => (r.ok ? r.json() : null))
         .then((j) => {
           if (j) {
@@ -293,36 +367,61 @@ export function MyDataClient() {
         .catch(() => {});
 
       // 5. Attendance
-      const fetchAttendance = fetch(`/api/admin/staff/attendance?mode=self&month=${month}${instQuery}`, { headers: authHeaders })
+      const attendanceUrl = isSelf
+        ? `/api/admin/staff/attendance?mode=self&month=${month}${instQuery}`
+        : targetStaffUserId
+        ? `/api/admin/staff/attendance?mode=self&staffUserId=${targetStaffUserId}&month=${month}${instQuery}`
+        : `/api/admin/staff/attendance?action=history&fromDate=${month}-01&toDate=${month}-31${instQuery}`;
+      const fetchAttendance = fetch(attendanceUrl, { headers: authHeaders })
         .then((r) => (r.ok ? r.json() : null))
         .then((j) => {
           if (j) {
-            setAttendanceLogs(j.logs || j.records || []);
+            const rawLogs = j.attendance || j.history || j.logs || j.records || [];
+            setAttendanceLogs(Array.isArray(rawLogs) ? rawLogs : []);
+            const presentCount = Array.isArray(j.attendance) ? j.attendance.filter((a: any) => a.status === 'PRESENT').length : 0;
+            const absentCount = Array.isArray(j.attendance) ? j.attendance.filter((a: any) => a.status === 'ABSENT').length : 0;
+            const lateCount = Array.isArray(j.attendance) ? j.attendance.filter((a: any) => a.status === 'LATE').length : 0;
+            const halfDayCount = Array.isArray(j.attendance) ? j.attendance.filter((a: any) => a.status === 'HALF_DAY').length : 0;
+            const leaveCount = Array.isArray(j.leaves) ? j.leaves.length : 0;
             setAttendanceSummary({
-              presentDays: Number(j.presentDays || j.present_count || 0),
-              absentDays: Number(j.absentDays || j.absent_count || 0),
-              lateDays: Number(j.lateDays || j.late_count || 0),
-              halfDays: Number(j.halfDays || j.half_day_count || 0),
-              leaveDays: Number(j.leaveDays || j.leave_count || 0),
-              workingDays: Number(j.workingDays || j.total_working_days || 0),
+              presentDays: Number(j.presentDays || j.present_count || presentCount),
+              absentDays: Number(j.absentDays || j.absent_count || absentCount),
+              lateDays: Number(j.lateDays || j.late_count || lateCount),
+              halfDays: Number(j.halfDays || j.half_day_count || halfDayCount),
+              leaveDays: Number(j.leaveDays || j.leave_count || leaveCount),
+              workingDays: Number(j.workingDays || j.total_working_days || 26),
             });
           }
         })
         .catch(() => {});
 
       // 6. Queries / Tickets
-      const fetchTickets = fetch(`/api/admin/support/tickets?limit=20${instQuery}`, { headers: authHeaders })
+      const ticketsUrl = selectedStaffMember
+        ? `/api/admin/support/tickets?search=${encodeURIComponent(selectedStaffMember.full_name || selectedStaffMember.email)}${instQuery}`
+        : `/api/admin/support/tickets?limit=30${instQuery}`;
+      const fetchTickets = fetch(ticketsUrl, { headers: authHeaders })
         .then((r) => (r.ok ? r.json() : { tickets: [] }))
         .then((j) => setTickets(Array.isArray(j?.tickets) ? j.tickets : Array.isArray(j?.data) ? j.data : []))
         .catch(() => setTickets([]));
 
-      // 7. Documents (Letters + Salary)
-      const fetchDocs = fetch(`/api/admin/staff/letters?mode=self&limit=30${instQuery}`, { headers: authHeaders })
+      // 7. Documents (Letters)
+      const docsUrl = isSelf
+        ? `/api/admin/staff/letters?mode=self&limit=50${instQuery}`
+        : targetStaffUserId
+        ? `/api/admin/staff/letters?staffUserId=${targetStaffUserId}&limit=50${instQuery}`
+        : `/api/admin/staff/letters?limit=50${instQuery}`;
+      const fetchDocs = fetch(docsUrl, { headers: authHeaders })
         .then((r) => (r.ok ? r.json() : { data: [] }))
         .then((j) => setDocuments(Array.isArray(j?.data) ? j.data : []))
         .catch(() => setDocuments([]));
 
-      const fetchSalary = fetch(`/api/admin/staff/salary?mode=self&month=${month}${instQuery}`, { headers: authHeaders })
+      // 8. Salary
+      const salaryUrl = isSelf
+        ? `/api/admin/staff/salary?mode=self&month=${month}${instQuery}`
+        : targetStaffUserId
+        ? `/api/admin/staff/salary?mode=self&staffUserId=${targetStaffUserId}&month=${month}${instQuery}`
+        : `/api/admin/staff/salary?month=${month}${instQuery}`;
+      const fetchSalary = fetch(salaryUrl, { headers: authHeaders })
         .then((r) => (r.ok ? r.json() : null))
         .then((j) => {
           if (j && Array.isArray(j.salary) && j.salary[0]) {
@@ -334,6 +433,8 @@ export function MyDataClient() {
               payoutStatus: s.payout_status || "UNPAID",
               paidAt: s.paid_at,
             });
+          } else {
+            setSalarySummary(null);
           }
         })
         .catch(() => {});
@@ -353,7 +454,7 @@ export function MyDataClient() {
     } finally {
       setLoading(false);
     }
-  }, [authHeaders, institutionId, isReady, month]);
+  }, [authHeaders, institutionId, isAdmin, isReady, month, selectedStaffId, selectedStaffMember]);
 
   useEffect(() => {
     void loadMyData();
@@ -483,23 +584,56 @@ export function MyDataClient() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md">
-              <User className="size-6" />
+              {isAdmin ? <FileText className="size-6" /> : <User className="size-6" />}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                  My Data
+                  {isAdmin
+                    ? selectedStaffMember
+                      ? `${selectedStaffMember.full_name}'s Records`
+                      : "Staff Documents & Records"
+                    : "My Data"}
                 </h1>
                 <Badge variant="outline" className="text-xs bg-background/80">
-                  {((user as unknown as Record<string, unknown>)?.role_label as string) || user?.primary_role || "Employee Workspace"}
+                  {isAdmin
+                    ? selectedStaffMember
+                      ? selectedStaffMember.role_name || "Staff Member"
+                      : isPlatformAdmin ? "Platform Admin Hub" : "Institution Admin Hub"
+                    : ((user as unknown as Record<string, unknown>)?.role_label as string) || user?.primary_role || "Employee Workspace"}
                 </Badge>
               </div>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Your personal employee portal: notices, complaints, tasks, performance, attendance, queries, and documents.
+                {isAdmin
+                  ? "Inspect official documents, attendance, performance, tasks, complaints, and queries for every staff member."
+                  : "Your personal employee portal: notices, complaints, tasks, performance, attendance, queries, and documents."}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {isAdmin && (
+              <div className="flex items-center gap-2 bg-background/90 px-2 py-1 rounded-xl border border-border shadow-xs">
+                <User className="size-3.5 text-muted-foreground" />
+                <Select value={selectedStaffId} onValueChange={setSelectedStaffId}>
+                  <SelectTrigger className="h-8 text-xs min-w-[220px] border-none bg-transparent shadow-none focus:ring-0">
+                    <SelectValue placeholder="Select Staff Member" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-80">
+                    <SelectItem value="me" className="text-xs font-semibold">
+                      👤 My Own Records ({user?.full_name || "Admin"})
+                    </SelectItem>
+                    <SelectItem value="all" className="text-xs font-semibold">
+                      👥 All Staff Members
+                    </SelectItem>
+                    {staffList.map((s) => (
+                      <SelectItem key={s.id} value={String(s.id)} className="text-xs">
+                        {s.full_name} {s.role_name ? `(${s.role_name})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -623,19 +757,19 @@ export function MyDataClient() {
             </TabsTrigger>
             <TabsTrigger value="performance" className="gap-1.5 text-xs">
               <TrendingUp className="size-3.5" />
-              My Performance
+              {isAdmin ? "Performance" : "My Performance"}
             </TabsTrigger>
             <TabsTrigger value="tasks" className="gap-1.5 text-xs">
               <ListTodo className="size-3.5" />
-              My Tasks ({tasks.length})
+              {isAdmin ? `Tasks (${tasks.length})` : `My Tasks (${tasks.length})`}
             </TabsTrigger>
             <TabsTrigger value="attendance" className="gap-1.5 text-xs">
               <Calendar className="size-3.5" />
-              My Attendance
+              {isAdmin ? "Attendance" : "My Attendance"}
             </TabsTrigger>
             <TabsTrigger value="queries" className="gap-1.5 text-xs">
               <HelpCircle className="size-3.5" />
-              My Queries ({tickets.length})
+              {isAdmin ? `Queries (${tickets.length})` : `My Queries (${tickets.length})`}
             </TabsTrigger>
             <TabsTrigger value="documents" className="gap-1.5 text-xs">
               <FileCheck className="size-3.5" />
@@ -1180,14 +1314,29 @@ export function MyDataClient() {
         {/* ================= DOCUMENTS TAB ================= */}
         <TabsContent value="documents" className="space-y-4">
           <Card className="shadow-xs">
-            <CardHeader className="p-4 sm:p-6 pb-3">
-              <CardTitle className="text-base font-bold flex items-center gap-2">
-                <FileCheck className="size-5 text-teal-500" />
-                My Official Documents
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Official offer letters, salary slips, experience letters, and appreciation certificates issued to you.
-              </CardDescription>
+            <CardHeader className="p-4 sm:p-6 pb-3 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <FileCheck className="size-5 text-teal-500" />
+                  {isAdmin
+                    ? selectedStaffMember
+                      ? `${selectedStaffMember.full_name}'s Official Documents`
+                      : "Staff Official Documents & Records"
+                    : "My Official Documents"}
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  {isAdmin
+                    ? "Official offer letters, salary slips, experience certificates, and cards generated for staff."
+                    : "Official offer letters, salary slips, experience letters, and appreciation certificates issued to you."}
+                </CardDescription>
+              </div>
+              {isAdmin && (
+                <Button asChild size="sm" className="gap-1.5 text-xs font-bold shadow-xs">
+                  <a href="/admin/content/generate-cards">
+                    <Plus className="size-4" /> Issue Document
+                  </a>
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="p-4 sm:p-6 pt-0">
               {documents.length === 0 ? (
@@ -1195,7 +1344,7 @@ export function MyDataClient() {
                   <FileText className="size-10 text-muted-foreground/30 mx-auto mb-2" />
                   <p className="font-semibold text-sm">No documents issued yet</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Official documents generated for you (offer letters, salary slips, experience certificates) will appear here.
+                    Official documents generated for staff members (offer letters, salary slips, experience certificates) will appear here.
                   </p>
                 </div>
               ) : (
@@ -1204,6 +1353,9 @@ export function MyDataClient() {
                     <thead className="border-b border-border text-xs font-semibold text-muted-foreground uppercase bg-muted/30">
                       <tr>
                         <th className="px-4 py-3">Document Title</th>
+                        {isAdmin && (selectedStaffId === "all" || !selectedStaffMember) && (
+                          <th className="px-4 py-3">Staff Member</th>
+                        )}
                         <th className="px-4 py-3">Template / Type</th>
                         <th className="px-4 py-3">Issued Date</th>
                         <th className="px-4 py-3 text-right">Actions</th>
@@ -1215,6 +1367,12 @@ export function MyDataClient() {
                           <td className="px-4 py-3.5 font-semibold text-foreground">
                             {doc.title}
                           </td>
+                          {isAdmin && (selectedStaffId === "all" || !selectedStaffMember) && (
+                            <td className="px-4 py-3.5 text-xs">
+                              <span className="font-medium text-foreground">{doc.staff_name || doc.full_name || "Staff Member"}</span>
+                              {doc.email && <span className="block text-muted-foreground text-[10px]">{doc.email}</span>}
+                            </td>
+                          )}
                           <td className="px-4 py-3.5">
                             <Badge variant="outline" className="text-[10px]">
                               {doc.category_name || doc.template_name || "Official Document"}

@@ -162,13 +162,16 @@ export default function InstitutionComplaintsPage() {
   const activeAcademicYearId = useActiveAcademicYearId();
   const role = ["institution_admin", "teacher", "student", "parent", "driver"]
     .find((code) => user?.role_codes?.includes(code)) || user?.primary_role || ((user as any)?.roles?.[0]?.toLowerCase()) || "student";
+  const isPlatformAdmin = Boolean(user?.is_super_admin || user?.role_codes?.includes("platform_admin"));
+  const isInstitutionAdmin = Boolean(user?.role_codes?.includes("institution_admin") || role === "institution_admin");
+  const isAdmin = isPlatformAdmin || isInstitutionAdmin;
   const permissionModule = MODULES[role];
-  const canCreate = Boolean(role && (role === "student" || role === "parent" || role === "teacher" || role === "institution_admin" || hasPermission(user, `${permissionModule}.create`)));
-  const canReply = Boolean(role && (role === "student" || role === "parent" || role === "teacher" || role === "institution_admin" || hasPermission(user, `${permissionModule}.edit`)));
+  const canCreate = Boolean(isAdmin || role === "student" || role === "parent" || role === "teacher" || hasPermission(user, `${permissionModule}.create`));
+  const canReply = Boolean(isAdmin || role === "student" || role === "parent" || role === "teacher" || hasPermission(user, `${permissionModule}.edit`));
   const targetOptions = TARGETS[role] ?? TARGETS.student;
   const [rows, setRows] = useState<Complaint[]>([]);
   const [search, setSearch] = useState("");
-  const [complaintView, setComplaintView] = useState<"received" | "created">("received");
+  const [complaintView, setComplaintView] = useState<"all" | "received" | "created">("all");
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -638,11 +641,18 @@ export default function InstitutionComplaintsPage() {
     },
     {
       id: "actor",
-      header: complaintView === "created" ? "To" : "From",
+      header: complaintView === "created" ? "To" : complaintView === "all" ? "From / To" : "From",
       cell: ({ row }) => (
-        <Badge variant="outline">
-          {complaintRowActorLabel(row.original, user?.id)}
-        </Badge>
+        complaintView === "all" ? (
+          <div className="space-y-1 text-xs">
+            <div><span className="font-medium text-muted-foreground">From:</span> {row.original.creator_name} ({ROLE_LABELS[row.original.creator_role] ?? row.original.creator_role})</div>
+            <div><span className="font-medium text-muted-foreground">To:</span> {row.original.target_user_name ?? ROLE_LABELS[row.original.target_role] ?? row.original.target_role}</div>
+          </div>
+        ) : (
+          <Badge variant="outline">
+            {complaintRowActorLabel(row.original, user?.id)}
+          </Badge>
+        )
       ),
     },
     {
@@ -691,7 +701,7 @@ export default function InstitutionComplaintsPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Complaints</h1>
-          <p className="text-muted-foreground">Raise and discuss complaints within your institution.</p>
+          <p className="text-muted-foreground">Raise, monitor, and discuss complaints across staff and students.</p>
         </div>
         {canCreate && (
           <Button onClick={() => setCreateOpen(true)} className="gap-2 font-bold shadow-xs">
@@ -702,6 +712,16 @@ export default function InstitutionComplaintsPage() {
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-2">
+          {isAdmin && (
+            <Button
+              type="button"
+              size="sm"
+              variant={complaintView === "all" ? "default" : "outline"}
+              onClick={() => setComplaintView("all")}
+            >
+              All Complaints
+            </Button>
+          )}
           <Button
             type="button"
             size="sm"

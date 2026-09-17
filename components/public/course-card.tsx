@@ -24,6 +24,7 @@ import { Card } from "@/components/ui/card";
 import { buildCourseUrl } from "@/lib/utils/seo-slug";
 import { parseCourseTitle } from "@/app/(public)/courses/course-parser";
 import { UniversalFeedbackDialog } from "@/components/public/universal-feedback-dialog";
+import { FavoriteButton } from "@/components/shared/favorite-button";
 import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
 
 export interface CourseCardProps {
@@ -120,10 +121,21 @@ export function CourseCard(props: CourseCardProps) {
             </div>
 
             {/* Price Tag */}
-            <div className="text-right shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
               <span className="text-lg sm:text-xl font-black text-primary tracking-tight">
                 {price}
               </span>
+              <FavoriteButton
+                entityType="course"
+                entityId={id}
+                title={parsed.programName || title}
+                subtitle={institute}
+                imageUrl={image || iconUrl}
+                targetUrl={courseUrl}
+                price={price}
+                badge={categoryLabel}
+                size="sm"
+              />
             </div>
           </div>
 

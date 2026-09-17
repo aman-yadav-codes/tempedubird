@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAuthenticatedUser } from "@/lib/auth/auth";
-import { hasPermission } from "@/lib/auth/permissions";
+import { hasPermission, isPlatformFullAccess } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
 import { resolveStudentEnrollmentContext } from "@/lib/auth/student-enrollment-context";
 
@@ -130,7 +130,12 @@ export async function GET(req: Request) {
       currentUser.role_codes.includes("parent") &&
       hasPermission(currentUser, "parent.childclassroom.timetable.view");
 
-    if (!canViewStudentTimetable && !canViewTeacherTimetable && !canViewParentRecords) {
+    const isInstAdmin =
+      currentUser.role_codes.includes("institution_admin") ||
+      isPlatformFullAccess(currentUser) ||
+      currentUser.role_codes.includes("platform_admin");
+
+    if (!canViewStudentTimetable && !canViewTeacherTimetable && !canViewParentRecords && !isInstAdmin) {
       throw new Error("Forbidden: Timetable access required");
     }
 

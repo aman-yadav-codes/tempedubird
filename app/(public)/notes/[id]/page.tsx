@@ -52,10 +52,36 @@ export default function NoteDetailPage() {
   const [note, setNote] = useState<NoteDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [readingSeconds, setReadingSeconds] = useState(0);
 
   useEffect(() => {
     fetchNoteDetail();
   }, [rawId]);
+
+  // Track note reading time and report to performance API
+  useEffect(() => {
+    if (!noteIdNum) return;
+    const interval = setInterval(() => {
+      setReadingSeconds((prev) => {
+        const next = prev + 1;
+        // Ping backend every 30 seconds
+        if (next > 0 && next % 30 === 0) {
+          fetch("/api/admin/classroom/performance", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              note_id: noteIdNum,
+              reading_time_seconds: 30,
+              is_completed: next >= 180,
+            }),
+          }).catch(() => {});
+        }
+        return next;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [noteIdNum]);
 
   const fetchNoteDetail = async () => {
     setLoading(true);
@@ -126,6 +152,12 @@ export default function NoteDetailPage() {
                 <span className="flex items-center gap-1 text-xs text-emerald-600 font-bold">
                   <CheckCircle2 className="h-3.5 w-3.5" /> 100% Free PDF Material
                 </span>
+                {readingSeconds > 0 && (
+                  <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 font-medium">
+                    <Clock className="h-3 w-3 mr-1" />
+                    Study Time: {Math.floor(readingSeconds / 60)}m {readingSeconds % 60}s
+                  </Badge>
+                )}
               </div>
 
               <h1 className="text-2xl sm:text-4xl font-black text-foreground tracking-tight leading-tight">

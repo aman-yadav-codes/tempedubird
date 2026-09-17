@@ -450,9 +450,12 @@ async function putStudentRecords(
             blood_group = $4,
             emergency_contact_name = $5,
             emergency_contact_phone = $6,
-            updated_by = $7,
+            awr_number = $7,
+            board_registration_number = $8,
+            sr_number = $9,
+            updated_by = $10,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = $8
+        WHERE id = $11
       `,
       [
         records.profile.admission_number ?? null,
@@ -461,6 +464,9 @@ async function putStudentRecords(
         records.profile.blood_group ?? null,
         emergencyGuardian?.full_name ?? null,
         emergencyGuardian?.phone?.replace(/\D/g, "").slice(-10) || null,
+        records.profile.awr_number ?? null,
+        records.profile.board_registration_number ?? null,
+        records.profile.sr_number ?? null,
         currentUser.id,
         studentProfileId,
       ]

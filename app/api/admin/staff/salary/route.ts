@@ -562,11 +562,13 @@ export async function GET(req: Request) {
     assertCanAccessInstitution(currentUser, institutionId);
 
     if (mode === "self") {
-      await assertStaffMembership(currentUser.id, institutionId).catch(() => {});
+      const requestedStaffUserId = positive(url.searchParams.get("staffUserId"));
+      const targetUserId = (canManageStaffSalary(currentUser, institutionId) && requestedStaffUserId) ? requestedStaffUserId : currentUser.id;
+      await assertStaffMembership(targetUserId, institutionId).catch(() => {});
       const [salary, paidHistory, unpaidSalary] = await Promise.all([
-        listMonthlySalary(institutionId, month, currentUser.id),
-        listPaidHistory(institutionId, month, currentUser.id),
-        listPreviousUnpaidSalary(institutionId, month, currentUser.id),
+        listMonthlySalary(institutionId, month, targetUserId),
+        listPaidHistory(institutionId, month, targetUserId),
+        listPreviousUnpaidSalary(institutionId, month, targetUserId),
       ]);
       return NextResponse.json({ salary, paidHistory, unpaidSalary });
     }

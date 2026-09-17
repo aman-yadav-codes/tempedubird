@@ -359,7 +359,7 @@ async function ensureStudentFeePaymentsTable() {
     DO $$
     BEGIN
       ALTER TABLE student_fee_payments DROP CONSTRAINT IF EXISTS student_fee_payments_payment_method_check;
-      ALTER TABLE student_fee_payments ADD CONSTRAINT student_fee_payments_payment_method_check CHECK (payment_method IN ('upi', 'qr', 'cash', 'net_banking'));
+      ALTER TABLE student_fee_payments ADD CONSTRAINT student_fee_payments_payment_method_check CHECK (payment_method IN ('upi', 'qr', 'cash', 'net_banking', 'cheque', 'bank_transfer', 'pending', 'other'));
     EXCEPTION WHEN OTHERS THEN NULL;
     END $$;
   `);
@@ -381,7 +381,13 @@ async function ensureStudentFeePaymentsTable() {
       ADD COLUMN IF NOT EXISTS rejected_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP NULL,
       ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMP NULL,
-      ADD COLUMN IF NOT EXISTS rejection_reason TEXT NULL
+      ADD COLUMN IF NOT EXISTS rejection_reason TEXT NULL,
+      ADD COLUMN IF NOT EXISTS fee_title TEXT NULL,
+      ADD COLUMN IF NOT EXISTS due_date DATE NULL,
+      ADD COLUMN IF NOT EXISTS late_fee_amount NUMERIC(12, 2) DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS late_fee_setup JSONB DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS concession_type TEXT NULL,
+      ADD COLUMN IF NOT EXISTS concession_notes TEXT NULL
   `);
 
   await db.query(`
@@ -429,6 +435,130 @@ async function getPaymentSettingsForInstitution(institutionId: number | null) {
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const action = url.searchParams.get("action");
+
+  if (action === "form_options") {
+    try {
+      const institutionId = getRequestedInstitutionId(url.searchParams);
+      const currentUser = await requirePermission(
+        req,
+        "managestudents.fee_management.view",
+        institutionId,
+      );
+      if (institutionId && !canAccessInstitution(currentUser, institutionId)) {
+        return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
+      }
+
+      const scopedInstitutionIds = getScopedInstitutionIds(currentUser, institutionId);
+      const params: unknown[] = [];
+      const instFilter =
+        scopedInstitutionIds === null
+          ? ""
+          : scopedInstitutionIds.length === 0
+            ? "AND FALSE"
+            : `AND institution_id = ANY($${params.push(scopedInstitutionIds)}::int[])`;
+
+      const programsResult = await db.query(
+        `
+          SELECT id, title, institution_id, fee_amount, fee_unit, admission_fee
+          FROM institution_programs
+          WHERE COALESCE(is_deleted, FALSE) = FALSE
+            ${instFilter}
+          ORDER BY title ASC
+        `,
+        params,
+      );
+
+      const sectionsResult = await db.query(
+        `
+          SELECT id, name
+          FROM sections
+          WHERE COALESCE(is_deleted, FALSE) = FALSE
+            AND is_active = TRUE
+          ORDER BY name ASC
+        `,
+      );
+
+      const programSectionsResult = await db.query(
+        `
+          SELECT
+            ps.program_id,
+            ps.section_id,
+            COALESCE(NULLIF(TRIM(ps.batch_name), ''), 'Default Batch') AS batch_name,
+            COALESCE(NULLIF(TRIM(ps.section_name), ''), s.name, CONCAT('Section ', ps.section_id)) AS section_name,
+            s.name AS original_section_name
+          FROM program_sections ps
+          LEFT JOIN sections s ON s.id = ps.section_id
+          WHERE COALESCE(ps.is_active, TRUE) = TRUE
+          ORDER BY ps.batch_name ASC, section_name ASC
+        `
+      );
+
+      const studentParams: unknown[] = [];
+      const studentInstFilter =
+        scopedInstitutionIds === null
+          ? ""
+          : scopedInstitutionIds.length === 0
+            ? "AND FALSE"
+            : `AND se.institution_id = ANY($${studentParams.push(scopedInstitutionIds)}::int[])`;
+
+      const studentsResult = await db.query(
+        `
+          SELECT 
+            se.id AS enrollment_id,
+            se.program_id,
+            se.section_id,
+            se.academic_year_id,
+            se.roll_number,
+            se.institution_id,
+            sp.id AS student_profile_id,
+            sp.user_id AS student_user_id,
+            sp.admission_number,
+            sp.awr_number,
+            sp.board_registration_number,
+            sp.sr_number,
+            u.full_name,
+            u.email,
+            up.gender,
+            prog.title AS program_title,
+            COALESCE(NULLIF(TRIM(ps.section_name), ''), sec.name) AS section_name,
+            COALESCE(NULLIF(TRIM(ps.batch_name), ''), 'Default Batch') AS batch_name,
+            ay.name AS academic_year_name
+          FROM student_enrollments se
+          JOIN student_profiles sp ON sp.id = se.student_id
+          JOIN users u ON u.id = sp.user_id
+          LEFT JOIN user_profiles up ON up.user_id = u.id
+          LEFT JOIN institution_programs prog ON prog.id = se.program_id
+          LEFT JOIN sections sec ON sec.id = se.section_id
+          LEFT JOIN program_sections ps ON ps.program_id = se.program_id AND ps.section_id = se.section_id
+          LEFT JOIN academic_years ay ON ay.id = se.academic_year_id
+          WHERE COALESCE(se.is_deleted, FALSE) = FALSE
+            AND u.is_active = TRUE
+            ${studentInstFilter}
+          ORDER BY u.full_name ASC
+        `,
+        studentParams,
+      );
+
+      return NextResponse.json({
+        data: {
+          programs: programsResult.rows,
+          sections: sectionsResult.rows,
+          program_sections: programSectionsResult.rows,
+          students: studentsResult.rows,
+        },
+      });
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      if (message === "Forbidden: Admin access required") {
+        return NextResponse.json({ error: message }, { status: 403 });
+      }
+      if (message === "Unauthorized" || message === "User not found") {
+        return NextResponse.json({ error: message }, { status: 401 });
+      }
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  }
+
   if (action === "payment_requests") {
     try {
       const institutionId = getRequestedInstitutionId(url.searchParams);
@@ -563,6 +693,9 @@ export async function GET(req: Request) {
         filterWhere += ` AND sfp.payment_method = $${params.push(paymentMethod)}`;
       }
 
+      const statusFilter = url.searchParams.get("status"); // "all" | "paid" | "due" | "pending" | "overdue"
+
+      // 1. Fetch payments recorded in student_fee_payments
       const result = await db.query(
         `
           SELECT
@@ -575,16 +708,18 @@ export async function GET(req: Request) {
             sfp.period_indexes,
             sfp.period_labels,
             sfp.payment_method,
-            sfp.subtotal_amount,
-            sfp.discount_percent,
-            sfp.discount_amount,
-            sfp.total_amount,
+            sfp.subtotal_amount::float AS subtotal_amount,
+            sfp.discount_percent::float AS discount_percent,
+            sfp.discount_amount::float AS discount_amount,
+            sfp.total_amount::float AS total_amount,
             sfp.transaction_id,
             sfp.screenshot_url,
             sfp.screenshot_public_id,
             sfp.screenshot_resource_type,
             sfp.remarks,
-            sfp.status,
+            LOWER(COALESCE(sfp.status, 'paid')) AS status,
+            sfp.fee_title,
+            sfp.due_date,
             sfp.received_at,
             sfp.verified_at,
             sfp.created_at,
@@ -620,7 +755,7 @@ export async function GET(req: Request) {
           LEFT JOIN categories category ON category.id = se.class_category_id
           LEFT JOIN sections section ON section.id = se.section_id
           LEFT JOIN users receiver ON receiver.id = COALESCE(sfp.received_by, sfp.verified_by)
-          WHERE LOWER(COALESCE(sfp.status, 'paid')) IN ('paid', 'verified', 'approved')
+          WHERE 1=1
             ${scopedWhere}
             ${filterWhere}
           ORDER BY COALESCE(sfp.received_at, sfp.verified_at, sfp.created_at) DESC, sfp.id DESC
@@ -628,7 +763,260 @@ export async function GET(req: Request) {
         params,
       );
 
-      return NextResponse.json({ data: result.rows });
+      const now = new Date();
+
+      const existingRecords = result.rows.map((row: any) => {
+        const isPaid = ["paid", "verified", "approved"].includes(row.status);
+        const isDue = ["pending", "rejected"].includes(row.status);
+        const isOverdue = Boolean(isDue && row.due_date && new Date(row.due_date) < now);
+        return {
+          ...row,
+          is_due: isDue,
+          is_overdue: isOverdue,
+        };
+      });
+
+      // 2. Fetch active enrollments to compute pending installment dues
+      const enrParams: unknown[] = [];
+      const enrScopedWhere =
+        scopedInstitutionIds === null
+          ? ""
+          : scopedInstitutionIds.length === 0
+            ? "AND FALSE"
+            : `AND se.institution_id = ANY($${enrParams.push(scopedInstitutionIds)}::int[])`;
+
+      let enrFilterWhere = "";
+      if (academicYearId) {
+        enrFilterWhere += ` AND se.academic_year_id = $${enrParams.push(academicYearId)}`;
+      }
+      if (programId) {
+        enrFilterWhere += ` AND se.program_id = $${enrParams.push(programId)}`;
+      }
+      if (sectionId) {
+        enrFilterWhere += ` AND se.section_id = $${enrParams.push(sectionId)}`;
+      }
+
+      const enrollmentsRes = await db.query(
+        `
+          SELECT
+            se.id AS enrollment_id,
+            se.student_id,
+            se.institution_id,
+            se.academic_year_id,
+            se.program_id,
+            se.section_id,
+            se.roll_number,
+            se.admission_date,
+            COALESCE(se.course_fee, 0)::float AS course_fee,
+            COALESCE(se.has_transport, FALSE) AS has_transport,
+            COALESCE(se.transport_fee, 0)::float AS transport_fee,
+            COALESCE(se.total_fee, 0)::float AS total_fee,
+            COALESCE(se.payment_plan, 'quarterly') AS payment_plan,
+            COALESCE(se.payment_plan_title, 'Quarterly Plan') AS payment_plan_title,
+            COALESCE(se.installment_amount, 0)::float AS installment_amount,
+            sp.id AS student_profile_id,
+            sp.user_id AS student_user_id,
+            sp.admission_number,
+            u.full_name AS student_name,
+            u.email AS student_email,
+            u.phone AS student_phone,
+            prog.title AS program_name,
+            prog.fee_amount::float AS program_fee_amount,
+            ps.price::float AS batch_price,
+            ps.fee_amount::float AS batch_fee_amount,
+            COALESCE(NULLIF(TRIM(ps.section_name), ''), sec.name) AS section_name,
+            COALESCE(NULLIF(TRIM(ps.batch_name), ''), 'Default Batch') AS batch_name,
+            inst.name AS institution_name,
+            ay.name AS academic_year_name,
+            cat.name AS class_category_name
+          FROM student_enrollments se
+          INNER JOIN student_profiles sp ON sp.id = se.student_id
+          INNER JOIN users u ON u.id = sp.user_id AND COALESCE(u.is_deleted, FALSE) = FALSE
+          INNER JOIN institution_profiles inst ON inst.id = se.institution_id AND inst.is_active = TRUE
+          LEFT JOIN institution_programs prog ON prog.id = se.program_id AND COALESCE(prog.is_deleted, FALSE) = FALSE
+          LEFT JOIN program_sections ps ON ps.program_id = se.program_id AND ps.section_id = se.section_id
+          LEFT JOIN academic_years ay ON ay.id = se.academic_year_id AND COALESCE(ay.is_deleted, FALSE) = FALSE
+          LEFT JOIN sections sec ON sec.id = se.section_id
+          LEFT JOIN categories cat ON cat.id = se.class_category_id
+          WHERE COALESCE(se.is_deleted, FALSE) = FALSE
+            ${enrScopedWhere}
+            ${enrFilterWhere}
+          ORDER BY u.full_name ASC, se.id DESC
+        `,
+        enrParams,
+      );
+
+      const dueRecords: any[] = [];
+
+      for (const enr of enrollmentsRes.rows) {
+        const effectiveCourseFee = enr.course_fee > 0 ? enr.course_fee : (enr.batch_price || enr.batch_fee_amount || enr.program_fee_amount || 0);
+        const effectiveTransportFee = enr.has_transport ? enr.transport_fee : 0;
+        const effectiveTotalFee = enr.total_fee > 0 ? enr.total_fee : (effectiveCourseFee + effectiveTransportFee);
+
+        if (effectiveTotalFee <= 0) continue;
+
+        // Find existing payments for this enrollment
+        const enrPayments = existingRecords.filter((p: any) => p.enrollment_id === enr.enrollment_id);
+        const clearedPayments = enrPayments.filter((p: any) => ["paid", "verified", "approved"].includes(p.status));
+        let remainingPaid = clearedPayments.reduce((sum: number, p: any) => sum + (Number(p.total_amount) || 0), 0);
+
+        const plan = (enr.payment_plan || "quarterly").toLowerCase();
+        const admDate = enr.admission_date ? new Date(enr.admission_date) : new Date();
+        const baseYear = !isNaN(admDate.getFullYear()) ? admDate.getFullYear() : now.getFullYear();
+        const baseMonth = !isNaN(admDate.getMonth()) ? admDate.getMonth() : now.getMonth();
+
+        let installmentsCount = 4;
+        let frequencyMonths = 3;
+        if (plan === "monthly") {
+          installmentsCount = 12;
+          frequencyMonths = 1;
+        } else if (plan === "semester") {
+          installmentsCount = 2;
+          frequencyMonths = 6;
+        } else if (plan === "yearly" || plan === "one_time") {
+          installmentsCount = 1;
+          frequencyMonths = 12;
+        }
+
+        const courseFeePerInst = Math.round(effectiveCourseFee / installmentsCount);
+        const transportPerInst = Math.round(effectiveTransportFee / installmentsCount);
+        const totalPerInst = courseFeePerInst + transportPerInst;
+
+        for (let i = 0; i < installmentsCount; i++) {
+          const instNumber = i + 1;
+          const dueDate = new Date(baseYear, baseMonth + i * frequencyMonths, 10);
+          const dueDateIso = dueDate.toISOString().split("T")[0];
+
+          let instTitle = `Term ${instNumber} Fee`;
+          if (plan === "quarterly") {
+            instTitle = `${instNumber === 1 ? "1st" : instNumber === 2 ? "2nd" : instNumber === 3 ? "3rd" : "4th"} Quarter Fee (Q${instNumber})`;
+          } else if (plan === "monthly") {
+            const monthName = dueDate.toLocaleString("en-IN", { month: "short" });
+            instTitle = `Month ${instNumber} Fee (${monthName})`;
+          } else if (plan === "semester") {
+            instTitle = `${instNumber === 1 ? "1st" : "2nd"} Semester Fee`;
+          } else if (plan === "yearly") {
+            instTitle = "Annual Academic Fee";
+          } else if (plan === "one_time") {
+            instTitle = "Full Course Lump Sum Fee";
+          }
+
+          let pendingAmt = totalPerInst;
+          if (remainingPaid >= totalPerInst) {
+            remainingPaid -= totalPerInst;
+            continue; // Fully covered by paid payments
+          } else if (remainingPaid > 0) {
+            pendingAmt = totalPerInst - remainingPaid;
+            remainingPaid = 0;
+          }
+
+          // Check if an explicit pending record in student_fee_payments already exists for this enrollment & period
+          const alreadyLoggedPending = enrPayments.some(
+            (p: any) =>
+              p.status === "pending" &&
+              (Array.isArray(p.period_indexes) ? p.period_indexes.includes(instNumber) : false),
+          );
+          if (alreadyLoggedPending) continue;
+
+          const isOverdue = dueDate < now;
+
+          dueRecords.push({
+            id: `due-${enr.enrollment_id}-${instNumber}`,
+            student_user_id: enr.student_user_id,
+            student_profile_id: enr.student_profile_id,
+            enrollment_id: enr.enrollment_id,
+            institution_id: enr.institution_id,
+            academic_year_id: enr.academic_year_id,
+            period_indexes: [instNumber],
+            period_labels: [
+              {
+                index: instNumber,
+                duration_label: instTitle,
+                due_date: dueDateIso,
+              },
+            ],
+            payment_method: "pending",
+            subtotal_amount: totalPerInst,
+            discount_percent: 0,
+            discount_amount: 0,
+            total_amount: pendingAmt,
+            transaction_id: `DUE-${enr.roll_number || enr.enrollment_id}-T${instNumber}`,
+            remarks: `${instTitle} outstanding fee`,
+            status: "pending",
+            due_date: dueDateIso,
+            fee_title: instTitle,
+            received_at: null,
+            verified_at: null,
+            created_at: dueDateIso,
+            student_name: enr.student_name,
+            student_email: enr.student_email,
+            student_phone: enr.student_phone,
+            admission_number: enr.admission_number,
+            roll_number: enr.roll_number,
+            institution_name: enr.institution_name,
+            program_name: enr.program_name,
+            academic_year_name: enr.academic_year_name,
+            class_category_name: enr.class_category_name,
+            section_name: enr.section_name,
+            receiver_name: null,
+            is_due: true,
+            is_overdue: isOverdue,
+          });
+        }
+      }
+
+      let combined = [...existingRecords, ...dueRecords];
+
+      // Calculate global summary metrics
+      let totalCollected = 0;
+      let cashCollected = 0;
+      let upiCollected = 0;
+      let totalDues = 0;
+      let paidCount = 0;
+      let dueCount = 0;
+      let overdueCount = 0;
+
+      for (const item of combined) {
+        const amt = Number(item.total_amount ?? 0) || 0;
+        if (["paid", "verified", "approved"].includes(item.status)) {
+          totalCollected += amt;
+          paidCount++;
+          if ((item.payment_method || "cash").toLowerCase() === "cash") {
+            cashCollected += amt;
+          } else {
+            upiCollected += amt;
+          }
+        } else {
+          totalDues += amt;
+          dueCount++;
+          if (item.is_overdue) {
+            overdueCount++;
+          }
+        }
+      }
+
+      // Apply status filter if provided
+      if (statusFilter === "paid") {
+        combined = combined.filter((r) => ["paid", "verified", "approved"].includes(r.status));
+      } else if (statusFilter === "due" || statusFilter === "pending") {
+        combined = combined.filter((r) => r.status === "pending");
+      } else if (statusFilter === "overdue") {
+        combined = combined.filter((r) => r.is_overdue);
+      }
+
+      return NextResponse.json({
+        data: combined,
+        metrics: {
+          totalCollected,
+          cashCollected,
+          upiCollected,
+          totalDues,
+          paidCount,
+          dueCount,
+          overdueCount,
+          totalCount: existingRecords.length + dueRecords.length,
+        },
+      });
     } catch (err: unknown) {
       const message = getErrorMessage(err);
       if (message === "Forbidden: Admin access required") {
@@ -849,6 +1237,107 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+
+    if (body.action === "add_fee_record" || body.action === "create_fee_record") {
+      const studentUserId = parsePositiveInteger(body.student_user_id);
+      const studentProfileId = parsePositiveInteger(body.student_profile_id);
+      const enrollmentId = parsePositiveInteger(body.enrollment_id);
+      const institutionId = parsePositiveInteger(body.institution_id);
+      const academicYearId = parsePositiveInteger(body.academic_year_id);
+
+      if (!studentUserId || !enrollmentId || !institutionId) {
+        return NextResponse.json(
+          { error: "Student, enrollment, and institution are required." },
+          { status: 400 },
+        );
+      }
+
+      const currentUser = await requirePermission(
+        req,
+        "managestudents.fee_management.create",
+        institutionId,
+      );
+      if (!canAccessInstitution(currentUser, institutionId)) {
+        return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
+      }
+
+      await ensureStudentFeePaymentsTable();
+
+      const feeTitle = typeof body.fee_title === "string" && body.fee_title.trim() ? body.fee_title.trim() : "Course Fee";
+      const dueDate = body.due_date || null;
+      const subtotalAmount = roundMoney(Number(body.subtotal_amount) || 0);
+      const discountPercent = roundMoney(Number(body.discount_percent) || 0);
+      const discountAmount = roundMoney(Number(body.discount_amount) || 0);
+      const lateFeeAmount = roundMoney(Number(body.late_fee_amount) || 0);
+      const lateFeeSetup = body.late_fee_setup && typeof body.late_fee_setup === "object" ? body.late_fee_setup : {};
+      const concessionType = typeof body.concession_type === "string" ? body.concession_type.trim() : null;
+      const concessionNotes = typeof body.concession_notes === "string" ? body.concession_notes.trim() : null;
+      const totalAmount = roundMoney(Number(body.total_amount) || Math.max(subtotalAmount - discountAmount + lateFeeAmount, 0));
+      const status = body.status === "pending" ? "pending" : "paid";
+      const paymentMethod = typeof body.payment_method === "string" && body.payment_method ? body.payment_method.toLowerCase() : (status === "pending" ? "pending" : "cash");
+      const transactionId = typeof body.transaction_id === "string" && body.transaction_id.trim() ? body.transaction_id.trim() : null;
+      const remarks = typeof body.remarks === "string" && body.remarks.trim() ? body.remarks.trim() : null;
+
+      const result = await db.query(
+        `
+          INSERT INTO student_fee_payments (
+            student_user_id,
+            student_profile_id,
+            enrollment_id,
+            institution_id,
+            academic_year_id,
+            fee_title,
+            due_date,
+            subtotal_amount,
+            discount_percent,
+            discount_amount,
+            concession_type,
+            concession_notes,
+            late_fee_amount,
+            late_fee_setup,
+            total_amount,
+            payment_method,
+            transaction_id,
+            remarks,
+            status,
+            received_by,
+            received_at,
+            updated_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, $17, $18, $19, $20, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          RETURNING *
+        `,
+        [
+          studentUserId,
+          studentProfileId,
+          enrollmentId,
+          institutionId,
+          academicYearId,
+          feeTitle,
+          dueDate,
+          subtotalAmount,
+          discountPercent,
+          discountAmount,
+          concessionType,
+          concessionNotes,
+          lateFeeAmount,
+          JSON.stringify(lateFeeSetup),
+          totalAmount,
+          paymentMethod,
+          transactionId,
+          remarks,
+          status,
+          status === "paid" ? currentUser.id : null,
+        ],
+      );
+
+      return NextResponse.json({
+        data: {
+          payment: result.rows[0],
+        },
+      });
+    }
+
     if (body.action === "approve_payment_request") {
       const paymentRequestId = parsePositiveInteger(body.paymentRequestId);
       if (!paymentRequestId) {

@@ -382,6 +382,11 @@ export function StaffProfileList() {
 
   const handleRemoveUser = useCallback(async () => {
     if (!accessToken || !removingUser) return;
+    if (currentUser?.id && removingUser.id === currentUser.id) {
+      toast.error("You cannot remove your own account.");
+      setRemovingUser(null);
+      return;
+    }
     if (!canDeleteStaff) {
       toast.error("You don't have permission to remove staff.");
       setRemovingUser(null);
@@ -419,6 +424,7 @@ export function StaffProfileList() {
     accessToken,
     authHeader,
     canDeleteStaff,
+    currentUser?.id,
     fetchStaff,
     handleAuthError,
     removingUser,
@@ -483,6 +489,7 @@ export function StaffProfileList() {
   const columns = useMemo(
     () =>
       buildUserColumns({
+        currentUserId: currentUser?.id,
         onViewProfile: handleViewProfile,
         onEditUser: handleEditUser,
         onManageSalaryAccount: (user) => {
@@ -495,11 +502,17 @@ export function StaffProfileList() {
         },
         onChangeEmploymentStatus: handleChangeEmploymentStatus,
         onToggleShowInTeam: handleToggleShowInTeam,
-        onRemoveUser: setRemovingUser,
+        onRemoveUser: (user) => {
+          if (currentUser?.id && user.id === currentUser.id) {
+            toast.error("You cannot remove your own account.");
+            return;
+          }
+          setRemovingUser(user);
+        },
         removalLabel: "Remove staff member",
         entityLabel: "Staff member",
       }),
-    [handleChangeEmploymentStatus, handleToggleShowInTeam, handleEditUser, handleViewProfile]
+    [handleChangeEmploymentStatus, handleToggleShowInTeam, handleEditUser, handleViewProfile, currentUser?.id]
   );
 
   if (loading && !hasLoadedStaff) {

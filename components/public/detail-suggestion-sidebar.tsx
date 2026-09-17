@@ -84,7 +84,7 @@ export function DetailSuggestionSidebar({
         // Filter out the current item if ID is provided
         const filtered = list.filter(
           (item: any) => String(item.id) !== String(currentId)
-        ).slice(0, 4);
+        ).slice(0, type === "teachers" ? 5 : 4);
 
         setItems(filtered);
       })
@@ -349,22 +349,31 @@ export function DetailSuggestionSidebar({
                     href={`/teachers/${item.id}`}
                     className="group block p-3 rounded-xl border border-border/70 bg-card hover:bg-muted/40 transition-all hover:border-primary/40 shadow-2xs"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1 mb-1">
-                          <span className="text-[9px] font-bold uppercase text-primary">
-                            {item.designation || "Faculty Member"}
-                          </span>
+                    <div className="flex items-center gap-3">
+                      {item.avatar_url ? (
+                        <img
+                          src={item.avatar_url}
+                          alt={item.full_name}
+                          className="h-11 w-11 rounded-xl object-cover ring-1 ring-border shrink-0"
+                        />
+                      ) : (
+                        <div className="h-11 w-11 rounded-xl bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0">
+                          {item.full_name?.slice(0, 2).toUpperCase()}
                         </div>
+                      )}
+                      <div className="min-w-0 flex-1">
                         <h4 className="font-bold text-xs text-foreground group-hover:text-primary transition-colors line-clamp-1">
                           {item.full_name}
                         </h4>
-                        <p className="text-[11px] text-muted-foreground truncate flex items-center gap-1 mt-0.5">
-                          <Building2 className="h-3 w-3 shrink-0" />
-                          {item.institution_name || "EduBird Academy"}
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {item.designation || item.qualification || "Faculty Member"}
+                        </p>
+                        <p className="text-[10px] text-primary/80 font-medium truncate flex items-center gap-1 mt-0.5">
+                          <Building2 className="h-3 w-3 shrink-0 text-muted-foreground/70" />
+                          <span>{item.institution_name || "EduBird Academy"}</span>
                         </p>
                       </div>
-                      <div className="flex items-center gap-0.5 text-amber-500 font-bold text-xs shrink-0 pt-1">
+                      <div className="flex items-center gap-0.5 text-amber-500 font-bold text-xs shrink-0 self-start pt-1">
                         <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
                         <span>{item.rating ? Number(item.rating).toFixed(1) : "4.9"}</span>
                       </div>

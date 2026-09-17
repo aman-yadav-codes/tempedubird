@@ -12,6 +12,7 @@ import { InstitutePagination } from "./institute-pagination";
 import { InstituteSearchToolbar, type InstituteFilters } from "./institute-search-toolbar";
 import { SharedPublicSidebar } from "@/components/public/shared-public-sidebar";
 import { SharedInterstitialBanner } from "@/components/public/shared-interstitial-banner";
+import { ListingSeoTopBanner, ListingSeoBottomContent } from "@/components/public/listing-seo-banner";
 import { Loader2 } from "lucide-react";
 
 const PAGE_SIZE = 9;
@@ -231,6 +232,13 @@ export function InstitutesDirectory() {
   const filteredInstitutes = useMemo(() => filterInstitutes(dbInstitutes, filters), [dbInstitutes, filters]);
   const pageCount = Math.max(1, dbPageCount || Math.ceil(filteredInstitutes.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
+
+  const searchParamsCity = searchParams?.get("city") || "";
+  const searchParamsArea = searchParams?.get("area") || "";
+  const locationParts = (filters.location && filters.location !== "all") ? filters.location.split(",").map((s: string) => s.trim()) : [];
+  const activeCity = searchParamsCity || (locationParts.length > 1 && locationParts[1].toLowerCase() === "india" ? locationParts[0] : locationParts[locationParts.length - 1]) || (filters.location !== "all" ? filters.location : "");
+  const activeArea = searchParamsArea || (locationParts.length > 1 && locationParts[1].toLowerCase() !== "india" ? locationParts[0] : "");
+  const activeCourse = (filters.course && filters.course !== "all") ? filters.course : (searchParams?.get("course") || "");
   const pagedInstitutes = filteredInstitutes;
 
   useEffect(() => {
@@ -277,6 +285,15 @@ export function InstitutesDirectory() {
           setDirectoryState((current) => ({ ...current, viewMode: nextViewMode }));
         }}
       />
+
+      <div className="mt-6">
+        <ListingSeoTopBanner
+          city={activeCity}
+          area={activeArea}
+          course={activeCourse}
+          listingType="institutes"
+        />
+      </div>
 
       <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px] items-start">
         {/* Main Directory Listings Column */}
@@ -337,6 +354,13 @@ export function InstitutesDirectory() {
           onSelectCategory={(cat) => updateFilter("type", cat)}
         />
       </div>
+
+      <ListingSeoBottomContent
+        city={activeCity}
+        area={activeArea}
+        course={activeCourse}
+        listingType="institutes"
+      />
     </section>
   );
 }

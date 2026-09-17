@@ -663,12 +663,20 @@ export const getUsersPaginatedQuery = async (
       filtersWhere.push("FALSE");
     } else {
       filterParams.push(institutionIds);
-      filtersWhere.push(userInstitutionOrPlatformAdminExists(`scoped_user_institutions.institution_id = ANY($${filterParams.length}::int[])`));
+      const instParamIdx = filterParams.length;
+      filterParams.push(currentUserId);
+      const userParamIdx = filterParams.length;
+      filtersWhere.push(`(
+        u.id = $${userParamIdx}
+        OR ${userInstitutionOrPlatformAdminExists(`scoped_user_institutions.institution_id = ANY($${instParamIdx}::int[])`)}
+      )`);
     }
   } else if (filters.isPlatformAdminViewer && !filters.institutionId) {
     filterParams.push(currentUserId);
     const viewerParamIndex = filterParams.length;
     filtersWhere.push(`(
+      u.id = $${viewerParamIndex}
+      OR
       (
         -- Platform admin or platform-scoped role
         EXISTS (
@@ -707,7 +715,12 @@ export const getUsersPaginatedQuery = async (
   if (filters.institutionId) {
     filterParams.push(filters.institutionId);
     institutionFilterIndex = filterParams.length;
-    filtersWhere.push(userInstitutionOrPlatformAdminExists(`scoped_user_institutions.institution_id = $${institutionFilterIndex}`));
+    filterParams.push(currentUserId);
+    const userParamIdx = filterParams.length;
+    filtersWhere.push(`(
+      u.id = $${userParamIdx}
+      OR ${userInstitutionOrPlatformAdminExists(`scoped_user_institutions.institution_id = $${institutionFilterIndex}`)}
+    )`);
   }
 
   if (filters.roleId) {
@@ -857,8 +870,14 @@ export const getUsersPaginatedQuery = async (
 
   if (filters.staffScope === "all" || filters.staffScope === "institution_staff") {
     if (institutionFilterIndex) {
+      filterParams.push(currentUserId);
+      const currentParamIdx = filterParams.length;
       filtersWhere.push(`
         (
+          (u.id = $${currentParamIdx} AND EXISTS (
+            SELECT 1 FROM user_roles cur_ur JOIN roles cur_r ON cur_r.id = cur_ur.role_id WHERE cur_ur.user_id = u.id AND cur_r.code NOT IN ('student', 'guardian', 'parent')
+          ))
+          OR
           EXISTS (
             SELECT 1
             FROM institution_memberships staff_member
@@ -913,6 +932,12 @@ export const getUsersPaginatedQuery = async (
           )
           AND (
             u.created_by = $${creatorParamIndex}
+            OR u.id = $${creatorParamIndex}
+            OR EXISTS (
+              SELECT 1 FROM user_roles pur
+              JOIN roles pr ON pr.id = pur.role_id
+              WHERE pur.user_id = u.id AND pr.code IN ('platform_admin', 'super_admin', 'accountant', 'platform_staff')
+            )
           )
         )
       `);

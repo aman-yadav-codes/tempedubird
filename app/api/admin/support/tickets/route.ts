@@ -193,28 +193,14 @@ export async function GET(req: Request) {
     const params: unknown[] = [];
     const allowedInstitutionIds = getAllowedInstitutionIds(user);
 
+    const requestedInstId = Number(url.searchParams.get("institutionId") || url.searchParams.get("institution_id"));
+    if (Number.isInteger(requestedInstId) && requestedInstId > 0) {
+      params.push(requestedInstId);
+      where.push(`t.institution_id = $${params.length}`);
+    }
+
     if (isPlatformAdminUser(user)) {
-      params.push(user.id);
-      where.push(`(
-        t.created_by = $${params.length}
-        OR EXISTS (
-          SELECT 1
-          FROM (
-            SELECT ur.role_id
-            FROM user_roles ur
-            WHERE ur.user_id = t.created_by
-            UNION
-            SELECT im.role_id
-            FROM institution_memberships im
-            WHERE im.user_id = t.created_by
-              AND im.institution_id = t.institution_id
-              AND im.is_active = TRUE
-              AND COALESCE(im.is_deleted, FALSE) = FALSE
-          ) creator_roles
-          INNER JOIN roles creator_role ON creator_role.id = creator_roles.role_id
-          WHERE creator_role.code IN ('institution_admin', 'platform_admin')
-        )
-      )`);
+      // Platform admin can see tickets across all institutions and platform staff
     } else if (isInstitutionAdmin(user) && allowedInstitutionIds) {
       params.push(allowedInstitutionIds, user.id);
       where.push(`(t.institution_id = ANY($${params.length - 1}::int[]) OR t.created_by = $${params.length})`);
@@ -225,7 +211,7 @@ export async function GET(req: Request) {
 
     if (search) {
       params.push(`%${search}%`);
-      where.push(`(t.ticket_number ILIKE $${params.length} OR t.subject ILIKE $${params.length} OR t.category ILIKE $${params.length})`);
+      where.push(`(t.ticket_number ILIKE $${params.length} OR t.subject ILIKE $${params.length} OR t.category ILIKE $${params.length} OR creator.full_name ILIKE $${params.length} OR creator.email ILIKE $${params.length})`);
     }
 
     if (Number.isInteger(ticketId) && ticketId > 0) {
@@ -270,6 +256,7 @@ export async function GET(req: Request) {
           SELECT COUNT(*)::int AS count
           FROM support_tickets t
           LEFT JOIN institution_profiles ip ON ip.id = t.institution_id
+          LEFT JOIN users creator ON creator.id = t.created_by
           ${whereSql}
         `,
         params

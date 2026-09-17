@@ -221,9 +221,9 @@ export async function GET(req: Request) {
     let clientsRes;
     if (targetInstId) {
       clientsRes = await db.query(
-        `SELECT id, name, company_name, email, phone, client_type, institution_id
-         FROM clients
-         WHERE status = 'active'
+        `SELECT id, name, company_name, email, phone, client_type, institution_id 
+         FROM clients 
+         WHERE status = 'active' 
            AND institution_id = $1::int
          ORDER BY COALESCE(company_name, name) ASC`,
         [targetInstId]
@@ -231,9 +231,9 @@ export async function GET(req: Request) {
     } else {
       // Platform admin context: only clients added by platform admin in sales section (institution_id IS NULL)
       clientsRes = await db.query(
-        `SELECT id, name, company_name, email, phone, client_type, institution_id
-         FROM clients
-         WHERE status = 'active'
+        `SELECT id, name, company_name, email, phone, client_type, institution_id 
+         FROM clients 
+         WHERE status = 'active' 
            AND institution_id IS NULL
          ORDER BY COALESCE(company_name, name) ASC`
       );
@@ -286,6 +286,7 @@ export async function GET(req: Request) {
         [targetInstId]
       );
     } else {
+      // In platform admin side, show ONLY staff added by platform admin (or platform admins themselves)
       staffRes = await db.query(
         `
           WITH unique_staff AS (
@@ -304,18 +305,37 @@ export async function GET(req: Request) {
             LEFT JOIN designations d ON d.id = up.designation_id
             WHERE COALESCE(u.is_deleted, FALSE) = FALSE
               AND (
-                r.code IN ('platform_admin', 'super_admin')
+                -- 1. Explicit platform admin or platform-scoped staff role
+                r.code IN ('platform_admin', 'super_admin', 'accountant', 'platform_staff')
                 OR st.code = 'platform'
+                -- 2. Staff added by any platform admin (without being assigned to an external institution)
                 OR (
-                  NOT EXISTS (
+                  (
+                    u.created_by IN (
+                      SELECT pur.user_id FROM user_roles pur
+                      JOIN roles pr ON pr.id = pur.role_id
+                      WHERE pr.code IN ('platform_admin', 'super_admin')
+                    )
+                    OR u.created_by = 1
+                  )
+                  AND up.under_institution_id IS NULL
+                  AND NOT EXISTS (
                     SELECT 1 FROM institution_memberships scoped_im 
                     WHERE scoped_im.user_id = u.id AND scoped_im.is_active = TRUE AND COALESCE(scoped_im.is_deleted, FALSE) = FALSE
                   )
-                  AND (up.under_institution_id IS NULL)
-                  AND COALESCE(r.code, '') NOT IN ('student', 'parent', 'guardian', 'teacher', 'driver', 'center_head', 'principal', 'vice_principal', 'academic_coordinator', 'hod')
+                  AND COALESCE(r.code, '') NOT IN ('student', 'parent', 'guardian')
                 )
               )
-            ORDER BY u.id
+              -- Strictly exclude students, parents, and guardians
+              AND NOT EXISTS (
+                SELECT 1 FROM user_roles sur JOIN roles sr ON sr.id = sur.role_id
+                WHERE sur.user_id = u.id AND LOWER(sr.code) IN ('student', 'guardian', 'parent')
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM institution_memberships sim JOIN roles sr ON sr.id = sim.role_id
+                WHERE sim.user_id = u.id AND LOWER(sr.code) IN ('student', 'guardian', 'parent')
+              )
+            ORDER BY u.id, CASE WHEN r.code = 'platform_admin' THEN 1 WHEN r.code = 'accountant' THEN 2 ELSE 3 END
           )
           SELECT * FROM unique_staff ORDER BY name ASC;
         `
@@ -540,8 +560,8 @@ export async function POST(req: Request) {
         title, client_id, client_name, institution_id, price, details,
         assigned_employee_id, assigned_employee_name, assigned_employee_role, assigned_employee_email,
         estimated_hours, logged_hours, deadline, status, urgency, sub_tasks,
-        is_daily_recurring, last_recurring_date, points, penalty_points, assigned_employees, created_by, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW())
+        is_daily_recurring, last_recurring_date, points, penalty_points, assigned_employees, created_by, history, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23::jsonb, NOW(), NOW())
       RETURNING *`,
       [
         title.trim(),
@@ -566,6 +586,18 @@ export async function POST(req: Request) {
         calcPenaltyPoints,
         JSON.stringify(assignedEmployees),
         user?.id || null,
+        JSON.stringify([
+          {
+            id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            action: "created",
+            timestamp: new Date().toISOString(),
+            user_id: user?.id || null,
+            user_name: (user as any)?.full_name || (user as any)?.name || (user as any)?.email || "Creator",
+            user_role: creatorRole || "Admin",
+            details: `Task created with status "${calcStatus}"`,
+            new_status: calcStatus,
+          }
+        ]),
       ]
     );
 
@@ -701,9 +733,109 @@ export async function PUT(req: Request) {
     const todayDateStr = new Date().toISOString().split("T")[0];
 
     // Quick status / urgency / sub_tasks / review update
-    if (title === undefined && (status !== undefined || urgency !== undefined || logged_hours !== undefined || sub_tasks !== undefined || is_daily_recurring !== undefined || points !== undefined || penalty_points !== undefined || review_notes !== undefined || review_image_url !== undefined)) {
+    if (title === undefined && (status !== undefined || urgency !== undefined || logged_hours !== undefined || sub_tasks !== undefined || is_daily_recurring !== undefined || points !== undefined || penalty_points !== undefined || review_notes !== undefined || review_image_url !== undefined || body.start_location !== undefined || body.action !== undefined)) {
       const updates: string[] = ["updated_at = NOW()"];
       const params: any[] = [id];
+
+      const currentUserName = (user as any)?.full_name || (user as any)?.name || (user as any)?.email || "User";
+      const currentUserRole = (user as any)?.role || (user as any)?.role_code || "Staff";
+      const currentUserId = user?.id || null;
+      let taskHistory = Array.isArray(existingTask.history) ? [...existingTask.history] : [];
+
+      if (body.start_location) {
+        params.push(JSON.stringify(body.start_location));
+        updates.push(`start_location = $${params.length}::jsonb`);
+      }
+
+      const hasSubtaskStarting = Array.isArray(sub_tasks) && sub_tasks.some((s: any) => {
+        if (s.status !== "in_progress") return false;
+        const prevSubs = Array.isArray(existingTask.sub_tasks) ? existingTask.sub_tasks : [];
+        const prev = prevSubs.find((es: any) => String(es.id) === String(s.id));
+        return !prev || prev.status !== "in_progress";
+      });
+
+      const hasSubtaskStopping = Array.isArray(sub_tasks) && sub_tasks.some((s: any) => {
+        if (s.status !== "pending") return false;
+        const prevSubs = Array.isArray(existingTask.sub_tasks) ? existingTask.sub_tasks : [];
+        const prev = prevSubs.find((es: any) => String(es.id) === String(s.id));
+        return prev && prev.status === "in_progress";
+      });
+
+      const isStarting = status === "in_progress" || body.action === "start_task" || hasSubtaskStarting;
+      const isStopping = body.action === "stop_task" || (status === "pending" && existingTask.status === "in_progress") || hasSubtaskStopping;
+
+      if (isStarting) {
+        updates.push("started_at = COALESCE(started_at, NOW())");
+        updates.push("stopped_at = NULL");
+        taskHistory.push({
+          id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          action: "started",
+          timestamp: new Date().toISOString(),
+          user_id: currentUserId,
+          user_name: currentUserName,
+          user_role: currentUserRole,
+          old_status: existingTask.status,
+          new_status: status || "in_progress",
+          subtask_id: body.subtask_id || null,
+          subtask_title: body.subtask_title || null,
+          location: body.start_location || null,
+          details: body.subtask_title ? `Deliverable "${body.subtask_title}" started` : "Task started",
+        });
+      } else if (isStopping) {
+        updates.push("stopped_at = NOW()");
+        taskHistory.push({
+          id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          action: "stopped",
+          timestamp: new Date().toISOString(),
+          user_id: currentUserId,
+          user_name: currentUserName,
+          user_role: currentUserRole,
+          old_status: existingTask.status,
+          new_status: "pending",
+          subtask_id: body.subtask_id || null,
+          subtask_title: body.subtask_title || null,
+          details: body.subtask_title ? `Deliverable "${body.subtask_title}" stopped` : "Task stopped",
+        });
+      } else if (status === "completed" && existingTask.status !== "completed") {
+        updates.push("completed_at = NOW()");
+        taskHistory.push({
+          id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          action: "completed",
+          timestamp: new Date().toISOString(),
+          user_id: currentUserId,
+          user_name: currentUserName,
+          user_role: currentUserRole,
+          old_status: existingTask.status,
+          new_status: "completed",
+          subtask_id: body.subtask_id || null,
+          subtask_title: body.subtask_title || null,
+          details: body.subtask_title ? `Deliverable "${body.subtask_title}" completed` : "Task marked as completed",
+        });
+      } else if (status !== undefined && status !== existingTask.status) {
+        taskHistory.push({
+          id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          action: "status_changed",
+          timestamp: new Date().toISOString(),
+          user_id: currentUserId,
+          user_name: currentUserName,
+          user_role: currentUserRole,
+          old_status: existingTask.status,
+          new_status: status,
+          subtask_id: body.subtask_id || null,
+          subtask_title: body.subtask_title || null,
+          details: `Status changed from ${existingTask.status} to ${status}`,
+        });
+      }
+
+      if (status !== undefined && status !== existingTask.status) {
+        updates.push("status_changed_at = NOW()");
+        params.push(currentUserName);
+        updates.push(`status_changed_by = $${params.length}`);
+      }
+
+      // Keep maximum 100 history records per task
+      params.push(JSON.stringify(taskHistory.slice(-100)));
+      updates.push(`history = $${params.length}::jsonb`);
 
       if (review_notes !== undefined) {
         params.push(review_notes ? String(review_notes).trim() : null);
@@ -741,65 +873,14 @@ export async function PUT(req: Request) {
           updates.push(`penalty_points = $${params.length}`);
         }
       }
-      if (status !== undefined) {
-        params.push(status);
-        updates.push(`status = $${params.length}`);
-
-        if (status === "completed" && (existingTask.is_daily_recurring || is_daily_recurring)) {
-          params.push(todayDateStr);
-          updates.push(`last_recurring_date = $${params.length}::date`);
-        }
-
-        // Automatic Points Award / Penalty
-        if (status === "completed" && existingTask.status !== "completed") {
-          const empId = existingTask.assigned_employee_id || (user as any)?.id;
-          if (empId) {
-            void recordPointsTransaction({
-              employeeId: empId,
-              institutionId: existingTask.institution_id,
-              taskId: existingTask.id,
-              pointType: "task_completed",
-              points: Number(existingTask.points || points || 20),
-              reason: `Task completed successfully: "${existingTask.title}"`,
-              awardedBy: user ? (user as any).id : null,
-            });
-          }
-        } else if (status === "cancelled" && existingTask.status !== "cancelled") {
-          const empId = existingTask.assigned_employee_id || (user as any)?.id;
-          if (empId) {
-            void recordPointsTransaction({
-              employeeId: empId,
-              institutionId: existingTask.institution_id,
-              taskId: existingTask.id,
-              pointType: "task_failed",
-              points: -Math.abs(Number(existingTask.penalty_points || penalty_points || 10)),
-              reason: `Penalty for cancelled/unfollowed task: "${existingTask.title}"`,
-              awardedBy: user ? (user as any).id : null,
-            });
-          }
-        } else if (status === "recheck" && existingTask.status !== "recheck") {
-          const empId = existingTask.assigned_employee_id || (user as any)?.id;
-          if (empId) {
-            void recordPointsTransaction({
-              employeeId: empId,
-              institutionId: existingTask.institution_id,
-              taskId: existingTask.id,
-              pointType: "task_failed",
-              points: -Math.abs(Number((existingTask.penalty_points || penalty_points || 10) / 2)),
-              reason: `Deduction for task requiring recheck/revision: "${existingTask.title}"`,
-              awardedBy: user ? (user as any).id : null,
-            });
-          }
-        }
-      }
-      if (urgency !== undefined) {
-        params.push(urgency);
-        updates.push(`urgency = $${params.length}`);
-      }
       if (logged_hours !== undefined) {
         params.push(parseFloat(String(logged_hours)) || 0);
         updates.push(`logged_hours = $${params.length}`);
       }
+
+      let calcStatus: string | null = null;
+      let calcUrgency: string | null = null;
+
       if (sub_tasks !== undefined) {
         let subs = Array.isArray(sub_tasks) ? sub_tasks : [];
         if (!isOwnerOrAdmin) {
@@ -819,10 +900,14 @@ export async function PUT(req: Request) {
           // Enforce: For any subtask that already existed, staff cannot modify title, price, points, penalty, or assignee
           subs = subs.map((s: any) => {
             const ex = existingMap.get(String(s.id));
+            const isThisSubStarting = s.status === "in_progress" && (!ex || ex.status !== "in_progress");
+            const isThisSubStopping = s.status === "pending" && ex && ex.status === "in_progress";
             if (ex) {
               return {
                 ...ex,
                 status: s.status || ex.status,
+                started_at: isThisSubStarting ? new Date().toISOString() : ex.started_at || null,
+                stopped_at: isThisSubStopping ? new Date().toISOString() : isThisSubStarting ? null : ex.stopped_at || null,
               };
             }
             // New subtask added by staff: lock points and penalty to standard defaults
@@ -830,6 +915,19 @@ export async function PUT(req: Request) {
               ...s,
               points: 20,
               penalty_points: 10,
+              started_at: isThisSubStarting ? new Date().toISOString() : null,
+              stopped_at: null,
+            };
+          });
+        } else {
+          subs = subs.map((s: any) => {
+            const ex = Array.isArray(existingTask.sub_tasks) ? existingTask.sub_tasks.find((es: any) => String(es.id) === String(s.id)) : null;
+            const isThisSubStarting = s.status === "in_progress" && (!ex || ex.status !== "in_progress");
+            const isThisSubStopping = s.status === "pending" && ex && ex.status === "in_progress";
+            return {
+              ...s,
+              started_at: isThisSubStarting ? new Date().toISOString() : s.started_at || ex?.started_at || null,
+              stopped_at: isThisSubStopping ? new Date().toISOString() : isThisSubStarting ? null : s.stopped_at || ex?.stopped_at || null,
             };
           });
         }
@@ -849,36 +947,86 @@ export async function PUT(req: Request) {
           params.push(calcHours);
           updates.push(`estimated_hours = $${params.length}`);
 
-          let calcStatus = "pending";
           if (subs.every((s: any) => s.status === "completed" || s.is_completed)) {
             calcStatus = "completed";
           } else if (subs.some((s: any) => s.status === "recheck")) {
             calcStatus = "recheck";
           } else if (subs.some((s: any) => s.status === "in_progress")) {
             calcStatus = "in_progress";
-          } else if (subs.every((s: any) => s.status === "under_review")) {
+          } else if (subs.every((s: any) => s.status === "under_review" || s.status === "completed" || s.is_completed)) {
             calcStatus = "under_review";
             markedUnderReview = true;
           } else if (subs.some((s: any) => s.status === "under_review")) {
-            calcStatus = "in_progress";
+            calcStatus = subs.some((s: any) => s.status === "pending") ? "pending" : "under_review";
             markedUnderReview = true;
-          }
-          params.push(calcStatus);
-          updates.push(`status = $${params.length}`);
-
-          if (calcStatus === "completed" && (existingTask.is_daily_recurring || is_daily_recurring)) {
-            params.push(todayDateStr);
-            updates.push(`last_recurring_date = $${params.length}::date`);
+          } else {
+            calcStatus = "pending";
           }
 
-          let calcUrgency = "medium";
           if (subs.some((s: any) => s.urgency === "urgent")) calcUrgency = "urgent";
           else if (subs.some((s: any) => s.urgency === "high")) calcUrgency = "high";
           else if (subs.some((s: any) => s.urgency === "medium")) calcUrgency = "medium";
           else calcUrgency = "low";
-          params.push(calcUrgency);
-          updates.push(`urgency = $${params.length}`);
         }
+      }
+
+      const effectiveStatus = status !== undefined ? status : calcStatus;
+      if (effectiveStatus !== null && effectiveStatus !== undefined) {
+        params.push(effectiveStatus);
+        updates.push(`status = $${params.length}`);
+
+        if (effectiveStatus === "completed" && (existingTask.is_daily_recurring || is_daily_recurring)) {
+          params.push(todayDateStr);
+          updates.push(`last_recurring_date = $${params.length}::date`);
+        }
+
+        // Automatic Points Award / Penalty
+        if (effectiveStatus === "completed" && existingTask.status !== "completed") {
+          const empId = existingTask.assigned_employee_id || (user as any)?.id;
+          if (empId) {
+            void recordPointsTransaction({
+              employeeId: empId,
+              institutionId: existingTask.institution_id,
+              taskId: existingTask.id,
+              pointType: "task_completed",
+              points: Number(existingTask.points || points || 20),
+              reason: `Task completed successfully: "${existingTask.title}"`,
+              awardedBy: user ? (user as any).id : null,
+            });
+          }
+        } else if (effectiveStatus === "cancelled" && existingTask.status !== "cancelled") {
+          const empId = existingTask.assigned_employee_id || (user as any)?.id;
+          if (empId) {
+            void recordPointsTransaction({
+              employeeId: empId,
+              institutionId: existingTask.institution_id,
+              taskId: existingTask.id,
+              pointType: "task_failed",
+              points: -Math.abs(Number(existingTask.penalty_points || penalty_points || 10)),
+              reason: `Penalty for cancelled/unfollowed task: "${existingTask.title}"`,
+              awardedBy: user ? (user as any).id : null,
+            });
+          }
+        } else if (effectiveStatus === "recheck" && existingTask.status !== "recheck") {
+          const empId = existingTask.assigned_employee_id || (user as any)?.id;
+          if (empId) {
+            void recordPointsTransaction({
+              employeeId: empId,
+              institutionId: existingTask.institution_id,
+              taskId: existingTask.id,
+              pointType: "task_failed",
+              points: -Math.abs(Number((existingTask.penalty_points || penalty_points || 10) / 2)),
+              reason: `Deduction for task requiring recheck/revision: "${existingTask.title}"`,
+              awardedBy: user ? (user as any).id : null,
+            });
+          }
+        }
+      }
+
+      const effectiveUrgency = urgency !== undefined ? urgency : calcUrgency;
+      if (effectiveUrgency !== null && effectiveUrgency !== undefined) {
+        params.push(effectiveUrgency);
+        updates.push(`urgency = $${params.length}`);
       }
 
       const res = await db.query(
@@ -986,8 +1134,9 @@ export async function PUT(req: Request) {
         penalty_points = $18,
         assigned_employees = $19,
         institution_id = $20,
+        history = $21::jsonb,
         updated_at = NOW()
-      WHERE id = $21
+      WHERE id = $22
       RETURNING *`,
       [
         title?.trim(),
@@ -1010,6 +1159,19 @@ export async function PUT(req: Request) {
         calcPenaltyPoints,
         JSON.stringify(assignedEmployees),
         finalInstId,
+        JSON.stringify([
+          ...(Array.isArray(existingTask.history) ? existingTask.history : []),
+          {
+            id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            action: "modified",
+            timestamp: new Date().toISOString(),
+            user_id: user?.id || null,
+            user_name: (user as any)?.full_name || (user as any)?.name || (user as any)?.email || "User",
+            user_role: (user as any)?.role || "Staff",
+            details: "Task definition updated",
+            new_status: status || existingTask.status,
+          }
+        ].slice(-100)),
         id,
       ]
     );

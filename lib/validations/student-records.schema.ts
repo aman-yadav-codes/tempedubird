@@ -66,6 +66,9 @@ export const studentRecordsSchema = z.object({
   profile: z.object({
     admission_number: nullableText(100, (value) => value.toUpperCase()),
     apar_id: nullableText(100, (value) => value.toUpperCase()),
+    awr_number: nullableText(100, (value) => value.toUpperCase()),
+    board_registration_number: nullableText(100, (value) => value.toUpperCase()),
+    sr_number: nullableText(100, (value) => value.toUpperCase()),
     date_of_birth: nullableDate,
     blood_group: nullableText(10, (value) => value.toUpperCase()),
     emergency_contact_name: nullableText(150),

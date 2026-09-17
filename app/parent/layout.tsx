@@ -37,6 +37,7 @@ import {
   ShoppingBag,
   MessageSquareHeart,
   Gift,
+  Heart,
 } from "lucide-react";
 import { useAuthStore } from "@/store";
 import { clearBrowserSessionData } from "@/lib/auth/clear-browser-session";
@@ -184,18 +185,20 @@ export default function ParentLayout({ children }: { children: React.ReactNode }
                 href: "/student/classroom/attendance",
                 icon: School,
                 children: [
+                  { label: "Child's Performance", href: "/student/classroom/performance" },
                   { label: "Attendance", href: "/student/classroom/attendance" },
                   { label: "Assignments", href: "/student/classroom/assignments" },
                   { label: "Notes", href: "/notes" },
                   { label: "Exams & Results", href: "/student/classroom/exams" },
                   { label: "Timetable", href: "/student/classroom/my-timetable" },
-                  { label: "ID Card", href: "/student/classroom/id-card" },
+                  { label: "ID Card & Documents", href: "/student/classroom/id-card" },
                   { label: "Fee Management", href: "/student/classroom/fees" },
                 ],
               },
             ]
           : []),
         { label: "My Enquiries", href: "/parent/enquiries", icon: HelpCircle },
+        { label: "My Favorites", href: "/parent/favorites", icon: Heart },
         { label: "Reviews & Feedback", href: "/parent/reviews", icon: MessageSquareHeart },
         ...(hasLinkedChildren
           ? [

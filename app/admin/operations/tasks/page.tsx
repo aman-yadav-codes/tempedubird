@@ -14,6 +14,7 @@ import {
   IndianRupee,
   Building2,
   CheckCircle2,
+  Zap,
   XCircle,
   TrendingUp,
   RefreshCw,
@@ -44,6 +45,7 @@ import {
   PlusCircle,
   TrendingDown,
   Pencil,
+  History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,6 +73,7 @@ import { useProgressiveSave } from "@/hooks/use-progressive-save";
 import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-indicator";
 import { useAuthStore } from "@/store";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
+import { TaskHistoryDialog } from "./task-history-dialog";
 
 export type TaskStatus = "pending" | "in_progress" | "under_review" | "recheck" | "completed" | "cancelled";
 
@@ -88,6 +91,8 @@ export type SubTask = {
   penalty_points?: number; // Performance Penalty Points
   deadline_date?: string | null;
   deadline_time?: string | null;
+  daily_time?: string | null;
+  is_daily_recurring?: boolean;
   urgency: "low" | "medium" | "high" | "urgent";
   status: TaskStatus;
   notes?: string | null;
@@ -154,11 +159,9 @@ const SUBTASK_URGENCIES = [
 ];
 
 const STATUS_TABS = [
-  { id: "all", label: "All Tasks" },
   { id: "pending", label: "Pending", badgeColor: "bg-slate-100 text-slate-700 border-slate-300" },
   { id: "in_progress", label: "In Progress", badgeColor: "bg-blue-100 text-blue-800 border-blue-300" },
   { id: "under_review", label: "Under Review", badgeColor: "bg-amber-100 text-amber-800 border-amber-300" },
-  { id: "recheck", label: "Needs Recheck", badgeColor: "bg-rose-100 text-rose-800 border-rose-300" },
   { id: "completed", label: "Completed", badgeColor: "bg-emerald-100 text-emerald-800 border-emerald-300" },
   { id: "cancelled", label: "Cancelled", badgeColor: "bg-zinc-100 text-zinc-800 border-zinc-300" },
 ];
@@ -179,6 +182,13 @@ export default function OperationsTasksPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const { institutions, activeInstitution, activeInstitutionId } = useActiveInstitution();
   const isPlatformRoute = Boolean(pathname?.startsWith("/platformadmin"));
+  const isInstitutionAdmin = useMemo(() => {
+    // Platform admin and institution admin share the same simplified UI
+    if (pathname?.startsWith("/instituteadmin") || isPlatformRoute) return true;
+    const codes = (user as any)?.role_codes || [(user as any)?.role || (user as any)?.primary_role || ""];
+    if (codes.some((r: string) => ["platform_admin", "super_admin"].includes(r))) return false;
+    return codes.some((r: string) => ["institution_admin", "school_owner", "college_owner", "university_owner"].includes(r));
+  }, [pathname, isPlatformRoute, user]);
   const [orgFilter, setOrgFilter] = useState<string>(isPlatformRoute ? "none" : "all");
   const effectiveInstId = useMemo(() => {
     if (orgFilter === "all") {
@@ -238,7 +248,7 @@ export default function OperationsTasksPage() {
   }, [modalStaffList, staffList]);
 
   // Selected Status Tab
-  const [selectedStatusTab, setSelectedStatusTab] = useState<string>("all");
+  const [selectedStatusTab, setSelectedStatusTab] = useState<string>("pending");
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -288,7 +298,9 @@ export default function OperationsTasksPage() {
     setLoadingModalOrgStaff(true);
     try {
       const params = new URLSearchParams();
-      if (instId && instId !== "none" && instId !== "all") {
+      if (isPlatformRoute) {
+        params.set("institution_id", "none");
+      } else if (instId && instId !== "none" && instId !== "all") {
         params.set("institution_id", instId);
       } else if (instId === "none") {
         params.set("institution_id", "none");
@@ -305,7 +317,7 @@ export default function OperationsTasksPage() {
     } finally {
       setLoadingModalOrgStaff(false);
     }
-  }, [accessToken]);
+  }, [accessToken, isPlatformRoute]);
 
   const selectedOrgName = useMemo(() => {
     if (isPlatformRoute || formInstitutionId === "none") return "EduBird Organization";
@@ -475,6 +487,9 @@ export default function OperationsTasksPage() {
   const [newSubDeadlineNumber, setNewSubDeadlineNumber] = useState("18:00");
   const [newSubUrgency, setNewSubUrgency] = useState<"low" | "medium" | "high" | "urgent">("medium");
   const [newSubStatus, setNewSubStatus] = useState<"pending" | "in_progress" | "under_review" | "completed" | "cancelled">("pending");
+  const [newSubDailyTime, setNewSubDailyTime] = useState("10:00");
+  const [newSubIsDailyRecurring, setNewSubIsDailyRecurring] = useState<boolean>(false);
+  const [historyModalTask, setHistoryModalTask] = useState<OperationTask | null>(null);
 
   const fetchTasks = useCallback(async () => {
     const seq = ++fetchSeqRef.current;
@@ -551,8 +566,10 @@ export default function OperationsTasksPage() {
     const d = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
     setNewSubDeadlineDate(d.toISOString().split("T")[0]);
     setNewSubDeadlineNumber("18:00");
+    setNewSubDailyTime("10:00");
     setNewSubUrgency("medium");
     setNewSubStatus("pending");
+    setNewSubIsDailyRecurring(Boolean(selectedTaskForSubtasks?.is_daily_recurring));
   };
 
   // Step 1: Open Create Task Modal
@@ -650,8 +667,8 @@ export default function OperationsTasksPage() {
           id: editingTask?.id,
           title: formTitle.trim(),
           institution_id: isPlatformRoute ? null : (formInstitutionId !== "none" && formInstitutionId !== "all" ? parseInt(formInstitutionId) : null),
-          client_id: formClientId !== "none" ? formClientId : null,
-          client_name: formClientName.trim() || null,
+          client_id: isInstitutionAdmin ? null : (formClientId !== "none" ? formClientId : null),
+          client_name: isInstitutionAdmin ? null : (formClientName.trim() || null),
           assigned_employees: selectedStaffObjects,
           assigned_employee_id: primaryStaffId,
           assigned_employee_name: combinedStaffNames,
@@ -735,10 +752,12 @@ export default function OperationsTasksPage() {
       duration_minutes: parsedMins,
       points: Number(newSubPoints) || 20,
       penalty_points: Number(newSubPenaltyPoints) || 10,
-      deadline_date: selectedTaskForSubtasks?.is_daily_recurring ? null : (newSubDeadlineDate || null),
-      deadline_time: selectedTaskForSubtasks?.is_daily_recurring ? null : (newSubDeadlineNumber || "18:00"),
+      deadline_date: newSubIsDailyRecurring ? null : (newSubDeadlineDate || null),
+      deadline_time: newSubIsDailyRecurring ? (newSubDailyTime || "10:00") : (newSubDeadlineNumber || "18:00"),
+      daily_time: newSubIsDailyRecurring ? (newSubDailyTime || "10:00") : null,
       urgency: newSubUrgency,
-      status: newSubStatus,
+      status: "pending",
+      is_daily_recurring: newSubIsDailyRecurring,
     };
 
     const updated = [newSub, ...activeSubTasks];
@@ -813,6 +832,96 @@ export default function OperationsTasksPage() {
     } catch (err: any) {
       toast.error(err?.message || "Failed to sync subtask updates");
     }
+  };
+
+  // Direct remove subtask from card
+  const handleDirectRemoveSubTask = async (task: OperationTask, subId: string) => {
+    if (!confirm("Are you sure you want to remove this deliverable / sub-task?")) return;
+    const currentSubs = Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : [];
+    const updatedSubs = currentSubs.filter((s) => s.id !== subId);
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, sub_tasks: updatedSubs } : t)));
+    await saveSubtasksToServer(task.id, updatedSubs);
+    toast.success("Sub-task removed successfully");
+  };
+
+  // Subtask Edit Dialog States & Handlers
+  const [editSubtaskDialogOpen, setEditSubtaskDialogOpen] = useState(false);
+  const [editingSubtaskTargetTask, setEditingSubtaskTargetTask] = useState<OperationTask | null>(null);
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string>("");
+  const [editSubTitle, setEditSubTitle] = useState("");
+  const [editSubPrice, setEditSubPrice] = useState("");
+  const [editSubAssignedStaffId, setEditSubAssignedStaffId] = useState("none");
+  const [editSubIsDaily, setEditSubIsDaily] = useState(false);
+  const [editSubDurationHours, setEditSubDurationHours] = useState("");
+  const [editSubDurationMinutes, setEditSubDurationMinutes] = useState("");
+  const [editSubDailyTime, setEditSubDailyTime] = useState("");
+  const [editSubDeadlineDate, setEditSubDeadlineDate] = useState("");
+  const [editSubDeadlineTime, setEditSubDeadlineTime] = useState("");
+  const [editSubUrgency, setEditSubUrgency] = useState<"low" | "medium" | "high" | "urgent">("medium");
+  const [editSubPoints, setEditSubPoints] = useState("20");
+  const [editSubPenaltyPoints, setEditSubPenaltyPoints] = useState("10");
+
+  const handleOpenEditSubtask = (task: OperationTask, sub: SubTask) => {
+    setEditingSubtaskTargetTask(task);
+    setEditingSubtaskId(sub.id);
+    setEditSubTitle(sub.title || "");
+    setEditSubPrice(sub.price !== undefined && sub.price !== null ? String(sub.price) : "");
+    setEditSubAssignedStaffId(sub.assigned_employee_id ? String(sub.assigned_employee_id) : "none");
+    setEditSubIsDaily(Boolean((sub as any).is_daily_recurring));
+    setEditSubDurationHours(sub.duration_hours !== undefined && sub.duration_hours !== null ? String(sub.duration_hours) : "");
+    setEditSubDurationMinutes(sub.duration_minutes !== undefined && sub.duration_minutes !== null ? String(sub.duration_minutes) : "");
+    setEditSubDailyTime((sub as any).daily_time || "");
+    setEditSubDeadlineDate(sub.deadline_date || "");
+    setEditSubDeadlineTime(sub.deadline_time || "");
+    setEditSubUrgency(sub.urgency || "medium");
+    setEditSubPoints(sub.points !== undefined && sub.points !== null ? String(sub.points) : "20");
+    setEditSubPenaltyPoints(sub.penalty_points !== undefined && sub.penalty_points !== null ? String(sub.penalty_points) : "10");
+    setEditSubtaskDialogOpen(true);
+  };
+
+  const handleSaveEditedSubtask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSubtaskTargetTask || !editingSubtaskId) return;
+    if (!editSubTitle.trim()) {
+      toast.error("Sub-task name is required");
+      return;
+    }
+
+    const assignedStaff = subtaskAssigneeOptions.find((s) => String(s.id) === editSubAssignedStaffId);
+    const currentSubs = Array.isArray(editingSubtaskTargetTask.sub_tasks) ? [...editingSubtaskTargetTask.sub_tasks] : [];
+    
+    const updatedSubs = currentSubs.map((s) => {
+      if (s.id !== editingSubtaskId) return s;
+      return {
+        ...s,
+        title: editSubTitle.trim(),
+        price: parseFloat(editSubPrice) || 0,
+        is_daily_recurring: editSubIsDaily,
+        duration_hours: parseFloat(editSubDurationHours) || 0,
+        duration_minutes: parseFloat(editSubDurationMinutes) || 0,
+        daily_time: editSubIsDaily ? (editSubDailyTime || "10:00") : null,
+        deadline_date: !editSubIsDaily ? (editSubDeadlineDate || null) : null,
+        deadline_time: !editSubIsDaily ? (editSubDeadlineTime || null) : null,
+        urgency: editSubUrgency,
+        points: parseFloat(editSubPoints) || 20,
+        penalty_points: parseFloat(editSubPenaltyPoints) || 10,
+        assigned_employee_id: assignedStaff ? assignedStaff.id : null,
+        assigned_employee_name: assignedStaff ? assignedStaff.name : null,
+        assigned_employee_role: assignedStaff ? assignedStaff.role : null,
+        assigned_employee_email: assignedStaff ? (assignedStaff as any).email || null : null,
+      };
+    });
+
+    setTasks((prev) =>
+      prev.map((t) => (t.id === editingSubtaskTargetTask.id ? { ...t, sub_tasks: updatedSubs } : t))
+    );
+    if (selectedTaskForSubtasks?.id === editingSubtaskTargetTask.id) {
+      setActiveSubTasks(updatedSubs);
+    }
+
+    setEditSubtaskDialogOpen(false);
+    await saveSubtasksToServer(editingSubtaskTargetTask.id, updatedSubs);
+    toast.success("Sub-task updated successfully!");
   };
 
   // 1-Click direct sub-task status toggle
@@ -1265,7 +1374,8 @@ export default function OperationsTasksPage() {
         </div>
       </div>
 
-      {/* Scope Switcher: All Tasks vs Tasks Assigned to Me */}
+      {/* Scope Switcher: Hidden on Institution Admin side */}
+      {!isInstitutionAdmin && (
       <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-card rounded-2xl border shadow-xs">
         <div className="flex items-center gap-2">
           {!(isStaffRole || pathname?.startsWith("/staff")) ? (
@@ -1324,6 +1434,7 @@ export default function OperationsTasksPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* Metrics Row */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -1464,20 +1575,22 @@ export default function OperationsTasksPage() {
         </div>
 
         {/* Client Filter */}
-        <div className="w-full sm:w-44">
-          <select
-            value={clientFilter}
-            onChange={(e) => setClientFilter(e.target.value)}
-            className="w-full h-10 text-xs bg-background rounded-xl border border-input px-3 font-medium outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer text-foreground"
-          >
-            <option value="all">All Clients</option>
-            {(isPlatformRoute ? clients.filter((c) => !c.institution_id) : clients).map((c) => (
-              <option key={c.id} value={String(c.id)}>
-                {c.company_name || c.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {!isInstitutionAdmin && (
+          <div className="w-full sm:w-44">
+            <select
+              value={clientFilter}
+              onChange={(e) => setClientFilter(e.target.value)}
+              className="w-full h-10 text-xs bg-background rounded-xl border border-input px-3 font-medium outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer text-foreground"
+            >
+              <option value="all">All Clients</option>
+              {(isPlatformRoute ? clients.filter((c) => !c.institution_id) : clients).map((c) => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.company_name || c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Staff / Employee Filter */}
         <div className="w-full sm:w-48">
@@ -1565,7 +1678,8 @@ export default function OperationsTasksPage() {
                 <CardContent className="p-5 space-y-4 text-xs">
                   {/* Top Bar: Badges row, Status & Action Button on right */}
                   <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div className="flex items-center gap-2 flex-wrap">
+                    {!isInstitutionAdmin ? (
+                      <div className="flex items-center gap-2 flex-wrap">
                       {getUrgencyBadge(task.urgency)}
                       <span className="text-[11px] text-muted-foreground font-mono">#{task.id}</span>
                       <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] gap-1 font-semibold">
@@ -1592,11 +1706,17 @@ export default function OperationsTasksPage() {
                         </Badge>
                       )}
                     </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono font-bold text-muted-foreground">#{task.id}</span>
+                      </div>
+                    )}
 
                     <div className="flex items-center gap-2 shrink-0 ml-auto">
-                      {/* Quick Status Dropdown */}
-                      <select
-                        value={task.status}
+                      {/* Quick Status Dropdown - Hidden for institution admin */}
+                      {!isInstitutionAdmin && (
+                        <select
+                          value={task.status}
                         onChange={(e) => handleQuickTaskStatusChange(task.id, e.target.value)}
                         className="h-8 text-xs font-bold w-32 bg-muted/30 rounded-lg border border-input px-2 outline-none focus:ring-1 focus:ring-primary/40 cursor-pointer text-foreground"
                       >
@@ -1606,6 +1726,7 @@ export default function OperationsTasksPage() {
                           </option>
                         ))}
                       </select>
+                      )}
 
                       {/* Adjust Score button — admin only */}
                       {!isStaffRole && (
@@ -1619,6 +1740,16 @@ export default function OperationsTasksPage() {
                           <Trophy className="w-3.5 h-3.5" /> Adjust Score
                         </Button>
                       )}
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setHistoryModalTask(task)}
+                        className="h-8 text-xs font-bold gap-1 text-muted-foreground hover:text-foreground cursor-pointer shadow-2xs"
+                        title="View Task History & Geolocation"
+                      >
+                        <History className="w-3.5 h-3.5 text-primary" /> History
+                      </Button>
 
                       <Button
                         size="sm"
@@ -1637,34 +1768,14 @@ export default function OperationsTasksPage() {
                     </h3>
                   </div>
 
-                  {/* Client & Assigned Staff */}
-                  <div className="space-y-1.5 pt-1">
-                    {task.client_name && (
-                      <div className="flex items-center gap-2 text-xs">
-                        <Building2 className="w-4 h-4 text-primary shrink-0" />
-                        <span className="text-muted-foreground">Client:</span>
-                        <span className="font-bold text-foreground">{task.client_name}</span>
-                      </div>
-                    )}
-
-                    {((task.assigned_employees && task.assigned_employees.length > 0) || task.assigned_employee_name) && (
-                      <div className="flex items-center gap-1.5 flex-wrap text-xs">
-                        <Users className="w-3.5 h-3.5 text-primary shrink-0" />
-                        <span className="text-muted-foreground">Assigned:</span>
-                        {task.assigned_employees && task.assigned_employees.length > 0 ? (
-                          task.assigned_employees.map((emp) => (
-                            <Badge key={emp.id} variant="secondary" className="text-[11px] py-0 px-2 font-medium bg-muted/60 border">
-                              {emp.name} {emp.role ? `(${emp.role})` : ""}
-                            </Badge>
-                          ))
-                        ) : (
-                          <Badge variant="secondary" className="text-[11px] py-0 px-2 font-medium bg-muted/60 border">
-                            {task.assigned_employee_name} {task.assigned_employee_role ? `(${task.assigned_employee_role})` : ""}
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  {/* Client (if not institution admin) */}
+                  {!isInstitutionAdmin && task.client_name && (
+                    <div className="flex items-center gap-2 text-xs pt-1">
+                      <Building2 className="w-4 h-4 text-primary shrink-0" />
+                      <span className="text-muted-foreground">Client:</span>
+                      <span className="font-bold text-foreground">{task.client_name}</span>
+                    </div>
+                  )}
 
                   {task.details && (
                     <p className="text-muted-foreground text-xs leading-relaxed bg-muted/20 p-2.5 rounded-xl border">
@@ -1823,6 +1934,15 @@ export default function OperationsTasksPage() {
                                 <span className="font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded text-[11px] tracking-wider">
                                   {formatPriceDisplay(sub.price)}
                                 </span>
+                                {sub.is_daily_recurring ? (
+                                  <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 text-[9px] gap-1 font-semibold">
+                                    <RefreshCw className="w-2.5 h-2.5" /> Daily Basis
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/30 text-[9px] gap-1 font-semibold">
+                                    <Zap className="w-2.5 h-2.5" /> Once
+                                  </Badge>
+                                )}
                                 <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] gap-1.5 font-semibold">
                                   <span className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-300 font-bold">
                                     <Sparkles className="w-2.5 h-2.5 text-emerald-600" /> Bonus +{sub.points !== undefined && sub.points !== null ? sub.points : 20}
@@ -1839,8 +1959,32 @@ export default function OperationsTasksPage() {
                                 )}
                               </div>
 
-                              <div className="flex items-center gap-2 shrink-0">
+                              <div className="flex items-center gap-1.5 shrink-0">
                                 {getUrgencyBadge(sub.urgency)}
+                                {canEditOrRemove && (
+                                  <div className="flex items-center gap-0.5">
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={() => handleOpenEditSubtask(task, sub)}
+                                      className="h-6 w-6 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md cursor-pointer"
+                                      title="Edit Deliverable / Sub-Task"
+                                    >
+                                      <Edit2 className="w-3 h-3" />
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={() => handleDirectRemoveSubTask(task, sub.id)}
+                                      className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md cursor-pointer"
+                                      title="Remove Deliverable / Sub-Task"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                )}
                               </div>
                             </div>
 
@@ -1862,11 +2006,18 @@ export default function OperationsTasksPage() {
                                   </span>
                                 )}
 
-                                {sub.deadline_date && (
-                                  <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 font-medium">
-                                    <Calendar className="w-3.5 h-3.5" />
-                                    {sub.deadline_date} {sub.deadline_time || ""}
+                                {sub.is_daily_recurring ? (
+                                  <span className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-400 font-medium">
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                    <span>Daily at {sub.daily_time || sub.deadline_time || "10:00"}</span>
                                   </span>
+                                ) : (
+                                  sub.deadline_date && (
+                                    <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 font-medium">
+                                      <Calendar className="w-3.5 h-3.5" />
+                                      {sub.deadline_date} {sub.deadline_time || ""}
+                                    </span>
+                                  )
                                 )}
                               </div>
 
@@ -1925,13 +2076,16 @@ export default function OperationsTasksPage() {
               <span>{editingTask ? "Edit Task / Project" : "Create New Task / Project"}</span>
             </DialogTitle>
             <DialogDescription className="text-xs">
-              First, enter the Task/Project Title, select or enter the Client Name, and add an overview. You can add sub-tasks immediately after!
+              {isInstitutionAdmin
+                ? "First, enter the Task/Project Title and add an overview. You can add sub-tasks immediately after!"
+                : "First, enter the Task/Project Title, select or enter the Client Name, and add an overview. You can add sub-tasks immediately after!"}
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSaveMainTask} className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
             {/* Organization / Institution Selection */}
+            {!isInstitutionAdmin && (
             <div className="space-y-1.5 p-3 rounded-xl border bg-muted/20">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold flex items-center gap-1.5">
@@ -1975,6 +2129,7 @@ export default function OperationsTasksPage() {
                 </div>
               )}
             </div>
+            )}
 
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Task / Project Name *</Label>
@@ -1987,7 +2142,8 @@ export default function OperationsTasksPage() {
               />
             </div>
 
-            {/* Client Selection with Search & Quick Add */}
+            {/* Client Selection with Search & Quick Add - Hidden on Institution Admin Side */}
+            {!isInstitutionAdmin && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold flex items-center gap-1.5">
@@ -2193,8 +2349,10 @@ export default function OperationsTasksPage() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Assign to Staff Members (Multiple Choice) */}
+            {!isInstitutionAdmin && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold flex items-center gap-1.5">
@@ -2369,9 +2527,11 @@ export default function OperationsTasksPage() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Task Cadence / Frequency Selector */}
-            <div className="space-y-2 p-3.5 rounded-xl border bg-muted/20">
+            {!isInstitutionAdmin && (
+              <div className="space-y-2 p-3.5 rounded-xl border bg-muted/20">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-primary" />
@@ -2415,6 +2575,7 @@ export default function OperationsTasksPage() {
                 </button>
               </div>
             </div>
+            )}
 
 
 
@@ -2457,36 +2618,46 @@ export default function OperationsTasksPage() {
                 </DialogTitle>
                 <DialogDescription className="text-xs mt-0.5">
                   Project: <strong className="text-foreground">{selectedTaskForSubtasks?.title}</strong>
-                  {selectedTaskForSubtasks?.client_name && (
+                  {!isInstitutionAdmin && selectedTaskForSubtasks?.client_name && (
                     <span> • Client: <strong className="text-primary">{selectedTaskForSubtasks.client_name}</strong></span>
-                  )}
-                  {isSelectedTaskAssigned && (
-                    <span className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                      <span className="text-[10px] text-muted-foreground font-semibold">Project Assigned Members:</span>
-                      {subtaskAssigneeOptions.map((emp) => (
-                        <span key={emp.id} className="text-[10px] font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full">
-                          {emp.name} {emp.role ? `(${emp.role})` : ""}
-                        </span>
-                      ))}
-                    </span>
                   )}
                 </DialogDescription>
               </div>
 
-              {/* Live Rollup Summary */}
-              <div className="flex items-center gap-3 bg-muted/40 px-3 py-1.5 rounded-xl border text-xs">
-                <div>
-                  <span className="text-[10px] text-muted-foreground block">Total Cost</span>
-                  <span className="font-bold text-foreground font-mono tracking-wider">{formatPriceDisplay(totalSubModalCost)}</span>
+              {/* Live Rollup Summary & Done & Close */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-3 bg-muted/40 px-3 py-1.5 rounded-xl border text-xs">
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block">Total Cost</span>
+                    <span className="font-bold text-foreground font-mono tracking-wider">{formatPriceDisplay(totalSubModalCost)}</span>
+                  </div>
+                  <div className="border-l pl-3">
+                    <span className="text-[10px] text-muted-foreground block">Total Duration</span>
+                    <span className="font-bold text-foreground font-mono">{totalSubModalHoursDisplay}</span>
+                  </div>
+                  <div className="border-l pl-3">
+                    <span className="text-[10px] text-muted-foreground block">Completed</span>
+                    <span className="font-bold text-emerald-600 font-mono">{completedSubModalCount}/{activeSubTasks.length}</span>
+                  </div>
                 </div>
-                <div className="border-l pl-3">
-                  <span className="text-[10px] text-muted-foreground block">Total Duration</span>
-                  <span className="font-bold text-foreground font-mono">{totalSubModalHoursDisplay}</span>
-                </div>
-                <div className="border-l pl-3">
-                  <span className="text-[10px] text-muted-foreground block">Completed</span>
-                  <span className="font-bold text-emerald-600 font-mono">{completedSubModalCount}/{activeSubTasks.length}</span>
-                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => selectedTaskForSubtasks && setHistoryModalTask(selectedTaskForSubtasks)}
+                  className="h-9 px-3 text-xs font-bold gap-1.5 text-muted-foreground hover:text-foreground cursor-pointer shadow-2xs"
+                  title="View Task History & Geolocation"
+                >
+                  <History className="w-3.5 h-3.5 text-primary" /> History
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={() => setSubtaskModalOpen(false)}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-9 px-4 text-xs shadow-sm cursor-pointer"
+                >
+                  Done & Close
+                </Button>
               </div>
             </div>
           </DialogHeader>
@@ -2508,7 +2679,7 @@ export default function OperationsTasksPage() {
                   <Input
                     value={newSubTitle}
                     onChange={(e) => setNewSubTitle(e.target.value)}
-                    placeholder="e.g. Curriculum Design, Lab Environment Setup, Client Demo"
+                    placeholder="e.g. Curriculum Design, Lab Environment Setup, Class Assignment"
                     className="text-xs h-9 bg-background"
                   />
                 </div>
@@ -2565,160 +2736,275 @@ export default function OperationsTasksPage() {
                 </div>
               </div>
 
-              {/* Row 2: Duration (Hours & Minutes), [Deadline Date, Deadline Time if not daily], Urgency, Status */}
-              <div className="grid grid-cols-2 sm:grid-cols-12 gap-3">
-                <div className={`${selectedTaskForSubtasks?.is_daily_recurring ? "sm:col-span-4" : "sm:col-span-3"} space-y-1`}>
-                  <Label className="text-xs font-semibold">Duration</Label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <div className="relative">
-                      <Input
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={newSubDurationHours}
-                        onChange={(e) => setNewSubDurationHours(e.target.value)}
-                        className="text-xs h-9 font-mono bg-background pr-6"
-                      />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground pointer-events-none">
-                        h
-                      </span>
-                    </div>
-                    <div className="relative">
-                      <Input
-                        type="number"
-                        min="0"
-                        max="59"
-                        placeholder="0"
-                        value={newSubDurationMinutes}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === "" || (Number(val) >= 0 && Number(val) <= 59)) {
-                            setNewSubDurationMinutes(val);
-                          }
-                        }}
-                        className="text-xs h-9 font-mono bg-background pr-6"
-                      />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground pointer-events-none">
-                        m
-                      </span>
-                    </div>
-                  </div>
+              {/* Row 2: Task Frequency & Cadence: Daily Basis vs Once */}
+              <div className="space-y-1.5 p-3 rounded-xl border bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-primary" />
+                    Task Frequency & Cadence *
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground font-medium">Daily vs One-Time</span>
                 </div>
-
-                {!selectedTaskForSubtasks?.is_daily_recurring && (
-                  <>
-                    <div className="sm:col-span-3 space-y-1">
-                      <Label className="text-xs font-semibold">Deadline Date</Label>
-                      <Input
-                        type="date"
-                        value={newSubDeadlineDate}
-                        onChange={(e) => setNewSubDeadlineDate(e.target.value)}
-                        className="text-xs h-9 bg-background"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2 space-y-1">
-                      <Label className="text-xs font-semibold">Deadline Time</Label>
-                      <Input
-                        type="time"
-                        value={newSubDeadlineNumber}
-                        onChange={(e) => setNewSubDeadlineNumber(e.target.value)}
-                        className="text-xs h-9 bg-background"
-                      />
-                    </div>
-                  </>
-                )}
-
-                <div className={`${selectedTaskForSubtasks?.is_daily_recurring ? "sm:col-span-4" : "sm:col-span-2"} space-y-1`}>
-                  <Label className="text-xs font-semibold">Urgency Level</Label>
-                  <select
-                    value={newSubUrgency}
-                    onChange={(e) => setNewSubUrgency(e.target.value as any)}
-                    className="w-full h-9 text-xs bg-background rounded-md border border-input px-3 font-medium outline-none focus:ring-1 focus:ring-ring cursor-pointer text-foreground"
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewSubIsDailyRecurring(false)}
+                    className={`flex items-center gap-2.5 p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                      !newSubIsDailyRecurring
+                        ? "bg-background border-primary shadow-xs ring-1 ring-primary/40 text-foreground font-semibold"
+                        : "bg-card/60 hover:bg-background/80 border-border text-muted-foreground"
+                    }`}
                   >
-                    {SUBTASK_URGENCIES.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                    <Zap className="w-4 h-4 text-amber-500 shrink-0" />
+                    <div>
+                      <div className="text-xs font-bold text-foreground">⚡ Once (One-Time)</div>
+                      <div className="text-[10px] text-muted-foreground leading-tight">Standard single deliverable with deadline</div>
+                    </div>
+                  </button>
 
-                <div className={`${selectedTaskForSubtasks?.is_daily_recurring ? "sm:col-span-4" : "sm:col-span-2"} space-y-1`}>
-                  <Label className="text-xs font-semibold">Sub-Task Status</Label>
-                  <select
-                    value={newSubStatus}
-                    onChange={(e) => setNewSubStatus(e.target.value as any)}
-                    className="w-full h-9 text-xs bg-background rounded-md border border-input px-3 font-medium outline-none focus:ring-1 focus:ring-ring cursor-pointer text-foreground"
+                  <button
+                    type="button"
+                    onClick={() => setNewSubIsDailyRecurring(true)}
+                    className={`flex items-center gap-2.5 p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                      newSubIsDailyRecurring
+                        ? "bg-background border-primary shadow-xs ring-1 ring-primary/40 text-foreground font-semibold"
+                        : "bg-card/60 hover:bg-background/80 border-border text-muted-foreground"
+                    }`}
                   >
-                    {allowedStatuses.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
+                    <RefreshCw className="w-4 h-4 text-blue-500 shrink-0" />
+                    <div>
+                      <div className="text-xs font-bold text-foreground">🔁 Daily Basis</div>
+                      <div className="text-[10px] text-muted-foreground leading-tight">Repeats everyday at exact time</div>
+                    </div>
+                  </button>
                 </div>
               </div>
 
-              {/* Row 3: Points (Reward) & Penalty Points */}
-              <div className="grid grid-cols-2 gap-3 p-2.5 rounded-xl border bg-muted/20">
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between gap-1">
-                    <Label className="text-xs font-semibold flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-emerald-600" />
-                      <span>Completion Points (+Reward)</span>
-                    </Label>
-                    {isStaffViewer && (
-                      <span className="text-[10px] text-muted-foreground font-normal">(Admin managed)</span>
-                    )}
+              {/* Row 3: Daily Task Timing, Duration, Urgency & Performance Points */}
+              {newSubIsDailyRecurring ? (
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-3 rounded-xl border bg-muted/10">
+                  <div className="sm:col-span-3 space-y-1">
+                    <Label className="text-xs font-semibold">Duration (Required)</Label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={newSubDurationHours}
+                          onChange={(e) => setNewSubDurationHours(e.target.value)}
+                          className="text-xs h-9 font-mono bg-background pr-6"
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground pointer-events-none">
+                          h
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          min="0"
+                          max="59"
+                          placeholder="0"
+                          value={newSubDurationMinutes}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === "" || (Number(val) >= 0 && Number(val) <= 59)) {
+                              setNewSubDurationMinutes(val);
+                            }
+                          }}
+                          className="text-xs h-9 font-mono bg-background pr-6"
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground pointer-events-none">
+                          m
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="relative">
+
+                  <div className="sm:col-span-3 space-y-1">
+                    <Label className="text-xs font-semibold flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-blue-500" />
+                      <span>Exact Daily Time</span>
+                    </Label>
                     <Input
-                      type="number"
-                      value={newSubPoints}
-                      onChange={(e) => setNewSubPoints(e.target.value)}
-                      disabled={isStaffViewer}
-                      placeholder="20"
-                      className={`text-xs h-8 font-mono bg-background ${isStaffViewer ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
+                      type="time"
+                      value={newSubDailyTime}
+                      onChange={(e) => setNewSubDailyTime(e.target.value)}
+                      className="text-xs h-9 bg-background font-mono"
                     />
-                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-emerald-600">
-                      +PTS
-                    </span>
+                  </div>
+
+                  <div className="sm:col-span-3 space-y-1">
+                    <Label className="text-xs font-semibold">Urgency Level</Label>
+                    <select
+                      value={newSubUrgency}
+                      onChange={(e) => setNewSubUrgency(e.target.value as any)}
+                      className="w-full h-9 text-xs bg-background rounded-md border border-input px-3 font-medium outline-none focus:ring-1 focus:ring-ring cursor-pointer text-foreground"
+                    >
+                      {SUBTASK_URGENCIES.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-3 space-y-1">
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <Label className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-0.5 truncate">
+                        <Sparkles className="w-2.5 h-2.5 shrink-0" />
+                        +Reward PTS
+                      </Label>
+                      <Label className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-0.5 truncate">
+                        <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                        -Penalty PTS
+                      </Label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          value={newSubPoints}
+                          onChange={(e) => setNewSubPoints(e.target.value)}
+                          disabled={isStaffViewer}
+                          placeholder="20"
+                          className={`text-xs h-9 font-mono bg-background pr-7 ${isStaffViewer ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
+                        />
+                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-emerald-600 pointer-events-none">
+                          +PTS
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          value={newSubPenaltyPoints}
+                          onChange={(e) => setNewSubPenaltyPoints(e.target.value)}
+                          disabled={isStaffViewer}
+                          placeholder="10"
+                          className={`text-xs h-9 font-mono bg-background text-rose-600 pr-7 ${isStaffViewer ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
+                        />
+                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-rose-600 pointer-events-none">
+                          -PTS
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between gap-1">
-                    <Label className="text-xs font-semibold flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3 text-rose-600" />
-                      <span>Penalty Points (-Deduction)</span>
-                    </Label>
-                    {isStaffViewer && (
-                      <span className="text-[10px] text-muted-foreground font-normal">(Admin managed)</span>
-                    )}
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-3 rounded-xl border bg-muted/10">
+                  <div className="sm:col-span-3 space-y-1">
+                    <Label className="text-xs font-semibold">Duration of Task</Label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={newSubDurationHours}
+                          onChange={(e) => setNewSubDurationHours(e.target.value)}
+                          className="text-xs h-9 font-mono bg-background pr-6"
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground pointer-events-none">
+                          h
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          min="0"
+                          max="59"
+                          placeholder="0"
+                          value={newSubDurationMinutes}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === "" || (Number(val) >= 0 && Number(val) <= 59)) {
+                              setNewSubDurationMinutes(val);
+                            }
+                          }}
+                          className="text-xs h-9 font-mono bg-background pr-6"
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground pointer-events-none">
+                          m
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="relative">
+
+                  <div className="sm:col-span-2 space-y-1">
+                    <Label className="text-xs font-semibold">Deadline Date</Label>
                     <Input
-                      type="number"
-                      value={newSubPenaltyPoints}
-                      onChange={(e) => setNewSubPenaltyPoints(e.target.value)}
-                      disabled={isStaffViewer}
-                      placeholder="10"
-                      className={`text-xs h-8 font-mono bg-background text-rose-600 ${isStaffViewer ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
+                      type="date"
+                      value={newSubDeadlineDate}
+                      onChange={(e) => setNewSubDeadlineDate(e.target.value)}
+                      className="text-xs h-9 bg-background"
                     />
-                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-rose-600">
-                      -PTS
-                    </span>
                   </div>
-                </div>
-              </div>
 
-              {newSubStatus === "under_review" && (
-                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>
-                    Marking as <strong>Under Review</strong> indicates you have completed this deliverable. Platform & Institution Admins will be notified to inspect and approve.
-                  </span>
+                  <div className="sm:col-span-2 space-y-1">
+                    <Label className="text-xs font-semibold">Deadline Time</Label>
+                    <Input
+                      type="time"
+                      value={newSubDeadlineNumber}
+                      onChange={(e) => setNewSubDeadlineNumber(e.target.value)}
+                      className="text-xs h-9 bg-background"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2 space-y-1">
+                    <Label className="text-xs font-semibold">Urgency Level</Label>
+                    <select
+                      value={newSubUrgency}
+                      onChange={(e) => setNewSubUrgency(e.target.value as any)}
+                      className="w-full h-9 text-xs bg-background rounded-md border border-input px-3 font-medium outline-none focus:ring-1 focus:ring-ring cursor-pointer text-foreground"
+                    >
+                      {SUBTASK_URGENCIES.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-3 space-y-1">
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <Label className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-0.5 truncate">
+                        <Sparkles className="w-2.5 h-2.5 shrink-0" />
+                        +Reward PTS
+                      </Label>
+                      <Label className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-0.5 truncate">
+                        <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                        -Penalty PTS
+                      </Label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          value={newSubPoints}
+                          onChange={(e) => setNewSubPoints(e.target.value)}
+                          disabled={isStaffViewer}
+                          placeholder="20"
+                          className={`text-xs h-9 font-mono bg-background pr-7 ${isStaffViewer ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
+                        />
+                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-emerald-600 pointer-events-none">
+                          +PTS
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          value={newSubPenaltyPoints}
+                          onChange={(e) => setNewSubPenaltyPoints(e.target.value)}
+                          disabled={isStaffViewer}
+                          placeholder="10"
+                          className={`text-xs h-9 font-mono bg-background text-rose-600 pr-7 ${isStaffViewer ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
+                        />
+                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-rose-600 pointer-events-none">
+                          -PTS
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -2758,6 +3044,15 @@ export default function OperationsTasksPage() {
                           <span className="font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded text-xs tracking-wider">
                             {formatPriceDisplay(sub.price)}
                           </span>
+                          {sub.is_daily_recurring ? (
+                            <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 text-[10px] gap-1 font-semibold">
+                              <RefreshCw className="w-2.5 h-2.5" /> Daily Basis
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/30 text-[10px] gap-1 font-semibold">
+                              <Zap className="w-2.5 h-2.5" /> Once
+                            </Badge>
+                          )}
                           <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] gap-1.5 font-semibold">
                             <span className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-300 font-bold">
                               <Sparkles className="w-2.5 h-2.5 text-emerald-600" /> Bonus +{sub.points !== undefined && sub.points !== null ? sub.points : 20}
@@ -2769,18 +3064,31 @@ export default function OperationsTasksPage() {
                           </Badge>
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-1 shrink-0">
                           {getUrgencyBadge(sub.urgency)}
                           {!isStaffViewer && (
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => handleRemoveSubTaskFromList(sub.id)}
-                              className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
+                            <>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => selectedTaskForSubtasks && handleOpenEditSubtask(selectedTaskForSubtasks, sub)}
+                                className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md cursor-pointer"
+                                title="Edit Sub-Task"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => handleRemoveSubTaskFromList(sub.id)}
+                                className="h-7 w-7 text-destructive hover:bg-destructive/10 rounded-md cursor-pointer"
+                                title="Remove Sub-Task"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -2816,18 +3124,18 @@ export default function OperationsTasksPage() {
                             </span>
                           )}
 
-                          {!selectedTaskForSubtasks?.is_daily_recurring && sub.deadline_date && (
-                            <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 font-medium">
-                              <Calendar className="w-3.5 h-3.5" />
-                              {sub.deadline_date} {sub.deadline_time || ""}
-                            </span>
-                          )}
-
-                          {selectedTaskForSubtasks?.is_daily_recurring && (
+                          {sub.is_daily_recurring ? (
                             <span className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-400 font-medium">
                               <RotateCcw className="w-3.5 h-3.5" />
-                              <span>Daily Deliverable</span>
+                              <span>Daily at {sub.daily_time || sub.deadline_time || "10:00"}</span>
                             </span>
+                          ) : (
+                            sub.deadline_date && (
+                              <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 font-medium">
+                                <Calendar className="w-3.5 h-3.5" />
+                                {sub.deadline_date} {sub.deadline_time || ""}
+                              </span>
+                            )
                           )}
                         </div>
 
@@ -2854,12 +3162,6 @@ export default function OperationsTasksPage() {
                   No sub-tasks added to this project yet. Use the form above to add deliverables with cost, assignee, duration, and deadlines.
                 </div>
               )}
-            </div>
-
-            <div className="flex justify-end pt-3 border-t">
-              <Button onClick={() => setSubtaskModalOpen(false)} className="bg-primary font-bold">
-                Done & Close
-              </Button>
             </div>
           </div>
         </DialogContent>
@@ -3312,6 +3614,229 @@ export default function OperationsTasksPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL 3: Edit Deliverable / Sub-Task Dialog */}
+      <Dialog open={editSubtaskDialogOpen} onOpenChange={setEditSubtaskDialogOpen}>
+        <DialogContent className="sm:max-w-2xl w-[95vw] max-h-[92vh] overflow-y-auto p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <Edit2 className="w-4 h-4 text-primary" />
+              <span>Edit Deliverable / Sub-Task</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Modify deliverables, pricing, duration, urgency, and deadlines for:{" "}
+              <strong className="text-foreground">{editingSubtaskTargetTask?.title}</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveEditedSubtask} className="space-y-4 pt-2">
+            {/* Title */}
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Sub-Task Deliverable Name *</Label>
+              <Input
+                value={editSubTitle}
+                onChange={(e) => setEditSubTitle(e.target.value)}
+                placeholder="e.g. Curriculum Design, Lab Environment Setup"
+                className="text-xs h-9"
+                required
+              />
+            </div>
+
+            {/* Price & Assignee */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Task Cost / Price (₹)</Label>
+                <div className="relative">
+                  <IndianRupee className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={editSubPrice}
+                    onChange={(e) => setEditSubPrice(e.target.value)}
+                    className="pl-8 text-xs h-9 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Assign Staff Member</Label>
+                <select
+                  value={editSubAssignedStaffId}
+                  onChange={(e) => setEditSubAssignedStaffId(e.target.value)}
+                  className="w-full h-9 text-xs bg-background rounded-md border border-input px-3 font-medium outline-none cursor-pointer text-foreground"
+                >
+                  <option value="none">Unassigned</option>
+                  {subtaskAssigneeOptions.map((s) => (
+                    <option key={s.id} value={String(s.id)}>
+                      {s.name} ({s.role || "Staff"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Frequency Cadence: Daily vs Once */}
+            <div className="space-y-1.5 p-3 rounded-xl border bg-muted/20">
+              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-primary" />
+                <span>Task Cadence: Daily Recurring vs One-Time</span>
+              </Label>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setEditSubIsDaily(false)}
+                  className={`p-2.5 rounded-lg border text-left transition-all text-xs font-bold flex items-center gap-2 cursor-pointer ${
+                    !editSubIsDaily
+                      ? "bg-background border-primary text-foreground shadow-xs ring-1 ring-primary/40"
+                      : "bg-muted/40 text-muted-foreground hover:bg-background border-border"
+                  }`}
+                >
+                  <Zap className="w-3.5 h-3.5 text-primary" />
+                  <span>⚡ Once (One-Time)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditSubIsDaily(true)}
+                  className={`p-2.5 rounded-lg border text-left transition-all text-xs font-bold flex items-center gap-2 cursor-pointer ${
+                    editSubIsDaily
+                      ? "bg-background border-primary text-foreground shadow-xs ring-1 ring-primary/40"
+                      : "bg-muted/40 text-muted-foreground hover:bg-background border-border"
+                  }`}
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-blue-500" />
+                  <span>🔁 Daily Basis</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Duration & Scheduling */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Duration Required</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={editSubDurationHours}
+                      onChange={(e) => setEditSubDurationHours(e.target.value)}
+                      className="text-xs h-9 font-mono pr-6"
+                    />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground pointer-events-none">
+                      h
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      min="0"
+                      max="59"
+                      placeholder="0"
+                      value={editSubDurationMinutes}
+                      onChange={(e) => setEditSubDurationMinutes(e.target.value)}
+                      className="text-xs h-9 font-mono pr-6"
+                    />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground pointer-events-none">
+                      m
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {editSubIsDaily ? (
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Exact Daily Time</span>
+                  </Label>
+                  <Input
+                    type="time"
+                    value={editSubDailyTime}
+                    onChange={(e) => setEditSubDailyTime(e.target.value)}
+                    className="text-xs h-9 font-mono"
+                  />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">Deadline Date</Label>
+                    <Input
+                      type="date"
+                      value={editSubDeadlineDate}
+                      onChange={(e) => setEditSubDeadlineDate(e.target.value)}
+                      className="text-xs h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">Deadline Time</Label>
+                    <Input
+                      type="time"
+                      value={editSubDeadlineTime}
+                      onChange={(e) => setEditSubDeadlineTime(e.target.value)}
+                      className="text-xs h-9 font-mono"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Urgency & Points */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Urgency Level</Label>
+                <select
+                  value={editSubUrgency}
+                  onChange={(e) => setEditSubUrgency(e.target.value as any)}
+                  className="w-full h-9 text-xs bg-background rounded-md border border-input px-3 font-medium outline-none cursor-pointer text-foreground"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Bonus Points</Label>
+                <Input
+                  type="number"
+                  value={editSubPoints}
+                  onChange={(e) => setEditSubPoints(e.target.value)}
+                  className="text-xs h-9 font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-rose-600 dark:text-rose-400">Penalty Points</Label>
+                <Input
+                  type="number"
+                  value={editSubPenaltyPoints}
+                  onChange={(e) => setEditSubPenaltyPoints(e.target.value)}
+                  className="text-xs h-9 font-mono text-rose-600"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="pt-2 border-t flex items-center justify-between gap-2">
+              <Button type="button" variant="outline" onClick={() => setEditSubtaskDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-primary font-bold">
+                Save Sub-Task Changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Task History & Geolocation Audit Trail Dialog */}
+      <TaskHistoryDialog
+        open={Boolean(historyModalTask)}
+        onOpenChange={(open) => !open && setHistoryModalTask(null)}
+        task={historyModalTask}
+      />
     </div>
   );
 }

@@ -44,6 +44,7 @@ import {
 import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
 import { UniversalFeedbackDialog, type UniversalEntityTarget } from "@/components/public/universal-feedback-dialog";
 import { PortalBannerAd } from "@/components/public/portal-banner-ad";
+import { FavoriteButton } from "@/components/shared/favorite-button";
 
 export default function PublicProductsPage() {
   const [products, setProducts] = useState<any[]>([]);
@@ -390,6 +391,19 @@ export default function PublicProductsPage() {
                               {prod.badge_text}
                             </Badge>
                           )}
+                        </div>
+                        <div className="absolute top-2.5 right-2.5 z-10">
+                          <FavoriteButton
+                            entityType="product"
+                            entityId={prod.id}
+                            title={prod.title}
+                            subtitle={prod.institution_name}
+                            imageUrl={prod.image_url}
+                            targetUrl="/products"
+                            price={prod.price ? `₹${prod.price}` : undefined}
+                            badge={prod.category}
+                            size="sm"
+                          />
                         </div>
                       </div>
 

@@ -4,11 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
+  Bus,
+  Calculator,
   ChevronLeft,
   ChevronRight,
   FileText,
   GraduationCap,
   IdCard,
+  IndianRupee,
   Info,
   Lock,
   Loader2,
@@ -27,6 +30,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -236,6 +240,9 @@ function getDocumentFiles(document: StudentDocumentForm): UploadedDocumentFile[]
 type StudentRecordsForm = {
   admission_number: string;
   apar_id: string;
+  awr_number: string;
+  board_registration_number: string;
+  sr_number: string;
   date_of_birth: string;
   blood_group: string;
   emergency_contact_name: string;
@@ -449,6 +456,9 @@ const promotionOutcomeLabels: Partial<Record<PromotionOutcome, string>> = {
 const blankStudentRecords = (): StudentRecordsForm => ({
   admission_number: "",
   apar_id: "",
+  awr_number: "",
+  board_registration_number: "",
+  sr_number: "",
   date_of_birth: "",
   blood_group: "",
   emergency_contact_name: "",
@@ -472,7 +482,7 @@ const blankStudentRecords = (): StudentRecordsForm => ({
 });
 
 function mapStudentRecordsResponse(data: StudentRecordsResponse) {
-  const profile = data.profile ?? {};
+  const profile = (data.profile ?? {}) as Record<string, unknown>;
   const enrollment = data.enrollment ?? {};
   const loadedDocuments = (data.documents ?? []).map((document) => ({
     id: String(document.id ?? crypto.randomUUID()),
@@ -495,12 +505,15 @@ function mapStudentRecordsResponse(data: StudentRecordsResponse) {
 
   return {
     records: {
-      admission_number: profile.admission_number ?? "",
-      apar_id: profile.apar_id ?? "",
+      admission_number: (profile.admission_number as string) ?? "",
+      apar_id: (profile.apar_id as string) ?? "",
+      awr_number: (profile.awr_number as string) ?? "",
+      board_registration_number: (profile.board_registration_number as string) ?? "",
+      sr_number: (profile.sr_number as string) ?? "",
       date_of_birth: profile.date_of_birth ? String(profile.date_of_birth).slice(0, 10) : "",
-      blood_group: profile.blood_group ?? "",
-      emergency_contact_name: profile.emergency_contact_name ?? "",
-      emergency_contact_phone: profile.emergency_contact_phone ?? "",
+      blood_group: (profile.blood_group as string) ?? "",
+      emergency_contact_name: (profile.emergency_contact_name as string) ?? "",
+      emergency_contact_phone: (profile.emergency_contact_phone as string) ?? "",
       enrollment_institution_id: enrollment.institution_id ? String(enrollment.institution_id) : "",
       enrollment_institution_name: enrollment.institution_name ?? "",
       program_id: enrollment.program_id ? String(enrollment.program_id) : "",
@@ -559,6 +572,7 @@ const studentDetailSteps = [
   { label: "Documents", icon: FileText },
 ] as const;
 
+
 export function AddStudentDialog({
   roles,
   accessToken,
@@ -606,6 +620,8 @@ export function AddStudentDialog({
   const identifierCheckRequestRef = useRef(0);
   const openedUserIdRef = useRef<number | string | null>(null);
   const [tabScrollHints, setTabScrollHints] = useState({ left: false, right: false });
+
+
   const isEdit = mode === "edit";
   const studentFormKey = `student:${isEdit ? user?.id ?? "edit" : "new"}`;
   const { saveStatus, handleBlur } = useProgressiveSave({
@@ -675,6 +691,7 @@ export function AddStudentDialog({
       { label: "Location", icon: MapPin },
       { label: "Background", icon: BriefcaseBusiness },
       { label: "Student", icon: IdCard },
+      { label: "Documents", icon: FileText },
       { label: "Review", icon: CheckCircle2 },
     ],
     []
@@ -686,9 +703,10 @@ export function AddStudentDialog({
   const enrollmentStepIndex = -1;
   const promotionStepIndex = -1;
   const guardiansStepIndex = -1;
-  const documentsStepIndex = 3;
+  const documentsStepIndex = 4;
+  const feeStructureStepIndex = -1;
   const securityStepIndex = -1;
-  const reviewStepIndex = 4;
+  const reviewStepIndex = 5;
   const isLastStep = activeStep >= dialogSteps.length - 1;
   const activePromotionEnrollments = useMemo(
     () => savedEnrollments.filter((enrollment) =>
@@ -2439,6 +2457,9 @@ export function AddStudentDialog({
     profile: {
       admission_number: safeTrim(studentRecords.admission_number).toUpperCase() || null,
       apar_id: safeTrim(studentRecords.apar_id).toUpperCase() || null,
+      awr_number: safeTrim(studentRecords.awr_number).toUpperCase() || null,
+      board_registration_number: safeTrim(studentRecords.board_registration_number).toUpperCase() || null,
+      sr_number: safeTrim(studentRecords.sr_number).toUpperCase() || null,
       date_of_birth: studentRecords.date_of_birth || form.date_of_birth || null,
       blood_group: safeTrim(studentRecords.blood_group).toUpperCase() || null,
       emergency_contact_name: emergencyGuardian ? normalizeNullableText(emergencyGuardian.guardian_name) : null,
@@ -3444,6 +3465,45 @@ export function AddStudentDialog({
                 <FieldError message={errors.apar_id} />
               </div>
               <div className="space-y-1.5">
+                <Label>AWR No.</Label>
+                <Input
+                  value={studentRecords.awr_number}
+                  onChange={(event) =>
+                    setStudentRecords((prev) => ({
+                      ...prev,
+                      awr_number: event.target.value.toUpperCase(),
+                    }))
+                  }
+                  placeholder="e.g. AWR-2026-001"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Board Registration Number</Label>
+                <Input
+                  value={studentRecords.board_registration_number}
+                  onChange={(event) =>
+                    setStudentRecords((prev) => ({
+                      ...prev,
+                      board_registration_number: event.target.value.toUpperCase(),
+                    }))
+                  }
+                  placeholder="e.g. CBSE/REG/2026/001"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>SR Number</Label>
+                <Input
+                  value={studentRecords.sr_number}
+                  onChange={(event) =>
+                    setStudentRecords((prev) => ({
+                      ...prev,
+                      sr_number: event.target.value.toUpperCase(),
+                    }))
+                  }
+                  placeholder="Scholar / Serial Register No."
+                />
+              </div>
+              <div className="space-y-1.5">
                 <Label>Blood Group</Label>
                 <Select
                   value={studentRecords.blood_group || ""}
@@ -3996,133 +4056,351 @@ export function AddStudentDialog({
           )}
 
           {activeStep === documentsStepIndex && (
-            <FormSection
-              title="Documents"
-              action={
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setStudentRecords((prev) => ({
-                    ...prev,
-                    documents: [...prev.documents, { id: crypto.randomUUID(), document_type: "AADHAAR", document_number: "", file_url: "", public_id: "", resource_type: "", files: [], is_verified: false }],
-                  }))}
-                >
-                  <Plus className="size-4" />
-                  Add
-                </Button>
-              }
-            >
-              {studentRecords.documents.length === 0 && (
-                <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                  No documents added.
+            <div className="space-y-6">
+              <div className="rounded-xl border border-border/80 bg-muted/20 p-4">
+                <div className="flex items-center gap-2 font-semibold text-foreground">
+                  <FileText className="size-4 text-primary" />
+                  Student Verification Documents & Certificates
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Upload official student verification documents including Aadhaar Card, Birth Certificate, PAN Card, Character Certificate, and Transfer Certificate. You can also add other custom certificates. Supported formats: JPG, PNG, PDF.
                 </p>
-              )}
-              <div className="space-y-3">
-                {studentRecords.documents.map((document, index) => {
-                  const documentFiles = getDocumentFiles(document);
-
-                  return (
-                  <div key={document.id} className="grid gap-3 rounded-md border p-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label>Document Type</Label>
-                      <Select
-                        value={
-                          STANDARD_DOCUMENT_TYPES.some((d) => d.value === document.document_type)
-                            ? document.document_type
-                            : document.document_type || "AADHAAR"
-                        }
-                        onValueChange={(val) => {
-                          setStudentRecords((prev) => ({
-                            ...prev,
-                            documents: prev.documents.map((item, itemIndex) =>
-                              itemIndex === index
-                                ? { ...item, document_type: val }
-                                : item
-                            ),
-                          }));
-                        }}
-                      >
-                        <SelectTrigger className="bg-background">
-                          <SelectValue placeholder="Select Document Type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {STANDARD_DOCUMENT_TYPES.map((dt) => (
-                            <SelectItem key={dt.value} value={dt.value}>
-                              {dt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Document Number</Label>
-                      <Input
-                        value={document.document_number}
-                        onChange={(event) => setStudentRecords((prev) => ({
-                          ...prev,
-                          documents: prev.documents.map((item, itemIndex) => itemIndex === index ? { ...item, document_number: event.target.value.toUpperCase() } : item),
-                        }))}
-                        placeholder="Uppercase automatically"
-                      />
-                    </div>
-                    <div className="space-y-1.5 sm:col-span-2">
-                      <Label>File</Label>
-                      <DocumentFileUpload
-                        key={`${document.id}-${documentFiles.map((file) => file.publicId || file.url).join("|")}`}
-                        accessToken={accessToken}
-                        files={documentFiles}
-                        onFilesChange={(files) => setStudentRecords((prev) => ({
-                          ...prev,
-                          documents: prev.documents.map((item, itemIndex) =>
-                            itemIndex === index
-                              ? {
-                                ...item,
-                                files,
-                                file_url: files[0]?.url ?? "",
-                                public_id: files[0]?.publicId ?? "",
-                                resource_type: files[0]?.resourceType ?? "",
-                              }
-                              : item
-                          ),
-                        }))}
-                      />
-                    </div>
-                    <div className="flex justify-end sm:col-span-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={async () => {
-                          if (accessToken) {
-                            await Promise.all(
-                              documentFiles
-                                .filter((file) => file.publicId)
-                                .map((file) =>
-                                  fetch("/api/admin/uploads/documents/delete", {
-                                    method: "POST",
-                                    headers: {
-                                      Authorization: `Bearer ${accessToken}`,
-                                      "Content-Type": "application/json",
-                                    },
-                                    body: JSON.stringify({
-                                      publicId: file.publicId,
-                                      resourceType: file.resourceType || "image",
-                                    }),
-                                  }).catch(() => undefined)
-                                )
-                            );
-                          }
-                          setStudentRecords((prev) => ({ ...prev, documents: prev.documents.filter((item) => item.id !== document.id) }));
-                        }}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  </div>
-                )})}
               </div>
-            </FormSection>
+
+              {/* Standard Mandatory & Recommended Document Slots */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold tracking-tight text-foreground">Standard Verification Documents</h4>
+                  <span className="text-xs text-muted-foreground">Fill document number & attach file</span>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {[
+                    {
+                      type: "AADHAAR",
+                      label: "Aadhaar Card",
+                      badge: "Identity Proof",
+                      placeholder: "Enter 12-digit Aadhaar Number",
+                    },
+                    {
+                      type: "BIRTH_CERTIFICATE",
+                      label: "Birth Certificate",
+                      badge: "Age Verification",
+                      placeholder: "Enter Birth Certificate / Reg. Number",
+                    },
+                    {
+                      type: "PAN",
+                      label: "PAN Card",
+                      badge: "Identity / Tax",
+                      placeholder: "Enter 10-character PAN (e.g. ABCDE1234F)",
+                    },
+                    {
+                      type: "CHARACTER_CERTIFICATE",
+                      label: "Character Certificate",
+                      badge: "Conduct Record",
+                      placeholder: "Enter Certificate Issuance Number",
+                    },
+                    {
+                      type: "TC",
+                      label: "Transfer Certificate (TC)",
+                      badge: "School Leaving",
+                      placeholder: "Enter TC / Serial Register Number",
+                    },
+                  ].map((slot) => {
+                    const doc = studentRecords.documents.find((d) => d.document_type === slot.type);
+                    const docFiles = doc ? getDocumentFiles(doc) : [];
+                    const isUploaded = docFiles.length > 0;
+
+                    return (
+                      <div
+                        key={slot.type}
+                        className={cn(
+                          "rounded-xl border p-4 transition-all duration-200 space-y-3",
+                          isUploaded ? "bg-emerald-500/5 border-emerald-500/30" : "bg-card border-border/70 hover:border-border"
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm">{slot.label}</span>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                              {slot.badge}
+                            </Badge>
+                          </div>
+                          {isUploaded ? (
+                            <Badge className="bg-emerald-600 text-white text-[10px] gap-1 px-1.5 py-0 font-medium">
+                              <CheckCircle2 className="size-3" />
+                              Uploaded
+                            </Badge>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">Optional</span>
+                          )}
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Document Number</Label>
+                          <Input
+                            value={doc?.document_number || ""}
+                            onChange={(event) => {
+                              const val = event.target.value.toUpperCase();
+                              setStudentRecords((prev) => {
+                                const exists = prev.documents.some((d) => d.document_type === slot.type);
+                                if (!exists) {
+                                  return {
+                                    ...prev,
+                                    documents: [
+                                      ...prev.documents,
+                                      {
+                                        id: crypto.randomUUID(),
+                                        document_type: slot.type,
+                                        document_number: val,
+                                        file_url: "",
+                                        public_id: "",
+                                        resource_type: "",
+                                        files: [],
+                                        is_verified: false,
+                                      },
+                                    ],
+                                  };
+                                }
+                                return {
+                                  ...prev,
+                                  documents: prev.documents.map((d) =>
+                                    d.document_type === slot.type ? { ...d, document_number: val } : d
+                                  ),
+                                };
+                              });
+                            }}
+                            placeholder={slot.placeholder}
+                            className="bg-background text-xs h-9"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Upload Document File</Label>
+                          <DocumentFileUpload
+                            key={`${slot.type}-${doc?.id || "new"}-${docFiles.map((f) => f.publicId || f.url).join("|")}`}
+                            accessToken={accessToken}
+                            files={docFiles}
+                            onFilesChange={(files) => {
+                              setStudentRecords((prev) => {
+                                const exists = prev.documents.some((d) => d.document_type === slot.type);
+                                if (!exists) {
+                                  return {
+                                    ...prev,
+                                    documents: [
+                                      ...prev.documents,
+                                      {
+                                        id: crypto.randomUUID(),
+                                        document_type: slot.type,
+                                        document_number: "",
+                                        file_url: files[0]?.url ?? "",
+                                        public_id: files[0]?.publicId ?? "",
+                                        resource_type: files[0]?.resourceType ?? "",
+                                        files,
+                                        is_verified: false,
+                                      },
+                                    ],
+                                  };
+                                }
+                                return {
+                                  ...prev,
+                                  documents: prev.documents.map((d) =>
+                                    d.document_type === slot.type
+                                      ? {
+                                          ...d,
+                                          files,
+                                          file_url: files[0]?.url ?? "",
+                                          public_id: files[0]?.publicId ?? "",
+                                          resource_type: files[0]?.resourceType ?? "",
+                                        }
+                                      : d
+                                  ),
+                                };
+                              });
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Additional / Custom Supporting Documents */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-sm font-bold text-foreground">Other Supporting Documents</h4>
+                    <p className="text-xs text-muted-foreground">Migration Certificate, Marksheet, Caste, Income, etc.</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-xs h-8"
+                    onClick={() =>
+                      setStudentRecords((prev) => ({
+                        ...prev,
+                        documents: [
+                          ...prev.documents,
+                          {
+                            id: crypto.randomUUID(),
+                            document_type: "MARKSHEET",
+                            document_number: "",
+                            file_url: "",
+                            public_id: "",
+                            resource_type: "",
+                            files: [],
+                            is_verified: false,
+                          },
+                        ],
+                      }))
+                    }
+                  >
+                    <Plus className="size-3.5" />
+                    Add Other Document
+                  </Button>
+                </div>
+
+                {studentRecords.documents.filter(
+                  (d) => !["AADHAAR", "BIRTH_CERTIFICATE", "PAN", "CHARACTER_CERTIFICATE", "TC"].includes(d.document_type)
+                ).length === 0 ? (
+                  <p className="rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">
+                    No additional documents added. Click &quot;Add Other Document&quot; if you need to upload marksheets, migration certificates, or other files.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {studentRecords.documents
+                      .map((document, originalIndex) => ({ document, originalIndex }))
+                      .filter(
+                        ({ document }) =>
+                          !["AADHAAR", "BIRTH_CERTIFICATE", "PAN", "CHARACTER_CERTIFICATE", "TC"].includes(
+                            document.document_type
+                          )
+                      )
+                      .map(({ document, originalIndex }) => {
+                        const documentFiles = getDocumentFiles(document);
+
+                        return (
+                          <div
+                            key={document.id}
+                            className="grid gap-3 rounded-xl border border-border/80 bg-card p-4 sm:grid-cols-2"
+                          >
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-medium">Document Type</Label>
+                              <Select
+                                value={
+                                  STANDARD_DOCUMENT_TYPES.some((dt) => dt.value === document.document_type)
+                                    ? document.document_type
+                                    : "OTHER"
+                                }
+                                onValueChange={(val) => {
+                                  setStudentRecords((prev) => ({
+                                    ...prev,
+                                    documents: prev.documents.map((item, idx) =>
+                                      idx === originalIndex ? { ...item, document_type: val } : item
+                                    ),
+                                  }));
+                                }}
+                              >
+                                <SelectTrigger className="bg-background text-xs h-9">
+                                  <SelectValue placeholder="Select Document Type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {STANDARD_DOCUMENT_TYPES.map((dt) => (
+                                    <SelectItem key={dt.value} value={dt.value} className="text-xs">
+                                      {dt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-medium">Document / Certificate Number</Label>
+                              <Input
+                                value={document.document_number}
+                                onChange={(event) =>
+                                  setStudentRecords((prev) => ({
+                                    ...prev,
+                                    documents: prev.documents.map((item, idx) =>
+                                      idx === originalIndex
+                                        ? { ...item, document_number: event.target.value.toUpperCase() }
+                                        : item
+                                    ),
+                                  }))
+                                }
+                                placeholder="Certificate / Reg. Number"
+                                className="bg-background text-xs h-9"
+                              />
+                            </div>
+                            <div className="space-y-1.5 sm:col-span-2">
+                              <Label className="text-xs font-medium">Upload File</Label>
+                              <DocumentFileUpload
+                                key={`${document.id}-${documentFiles.map((file) => file.publicId || file.url).join("|")}`}
+                                accessToken={accessToken}
+                                files={documentFiles}
+                                onFilesChange={(files) =>
+                                  setStudentRecords((prev) => ({
+                                    ...prev,
+                                    documents: prev.documents.map((item, idx) =>
+                                      idx === originalIndex
+                                        ? {
+                                            ...item,
+                                            files,
+                                            file_url: files[0]?.url ?? "",
+                                            public_id: files[0]?.publicId ?? "",
+                                            resource_type: files[0]?.resourceType ?? "",
+                                          }
+                                        : item
+                                    ),
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="flex justify-end sm:col-span-2">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs text-destructive hover:bg-destructive/10"
+                                onClick={async () => {
+                                  if (accessToken) {
+                                    await Promise.all(
+                                      documentFiles
+                                        .filter((file) => file.publicId)
+                                        .map((file) =>
+                                          fetch("/api/admin/uploads/documents/delete", {
+                                            method: "POST",
+                                            headers: {
+                                              Authorization: `Bearer ${accessToken}`,
+                                              "Content-Type": "application/json",
+                                            },
+                                            body: JSON.stringify({
+                                              publicId: file.publicId,
+                                              resourceType: file.resourceType || "image",
+                                            }),
+                                          }).catch(() => undefined)
+                                        )
+                                    );
+                                  }
+                                  setStudentRecords((prev) => ({
+                                    ...prev,
+                                    documents: prev.documents.filter((item) => item.id !== document.id),
+                                  }));
+                                }}
+                              >
+                                Remove Document
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            </div>
           )}
+
 
           {activeStep === securityStepIndex && (
             <div className="space-y-4 rounded-md border p-4">
@@ -4341,6 +4619,9 @@ export function AddStudentDialog({
                 <div className="space-y-1 text-muted-foreground">
                   <p>Admission Number: {studentRecords.admission_number || "Not set"}</p>
                   <p>APAR ID: {studentRecords.apar_id || "Not set"}</p>
+                  <p>AWR No.: {studentRecords.awr_number || "Not set"}</p>
+                  <p>Board Reg. Number: {studentRecords.board_registration_number || "Not set"}</p>
+                  <p>SR Number: {studentRecords.sr_number || "Not set"}</p>
                   <p>Date of birth: {studentRecords.date_of_birth || "Not set"}</p>
                   <p>Blood group: {studentRecords.blood_group || "Not set"}</p>
                 </div>
@@ -4398,6 +4679,7 @@ export function AddStudentDialog({
                   </ul>
                 )}
               </ReviewCard>
+
             </div>
           )}
 

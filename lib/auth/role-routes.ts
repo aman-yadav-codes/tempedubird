@@ -75,6 +75,7 @@ const ADMIN_CHILD_SEGMENTS = new Set([
   "marketing",
   "master-data",
   "notifications",
+  "my-profile",
   "profile",
   "reviews",
   "sales",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -35,6 +35,8 @@ import {
   Send,
   Navigation,
   Languages,
+  Home,
+  Library,
 } from "lucide-react";
 import { Star, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
@@ -73,6 +75,50 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
     relatedInstitutes = [],
   } = data;
   const [activeTab, setActiveTab] = useState("overview");
+  const [activeSection, setActiveSection] = useState("overview");
+
+  const scrollToSection = (sectionId: string) => {
+    setActiveSection(sectionId);
+    const element = document.getElementById(`section-${sectionId}`);
+    if (element) {
+      const yOffset = -90;
+      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: "smooth" });
+    }
+  };
+
+  useEffect(() => {
+    const sectionIds = [
+      "overview",
+      "programs",
+      "facilities",
+      "gallery",
+      "faculty",
+      "placements",
+      "cutoffs",
+      "scholarships",
+      "hostels",
+      "libraries",
+      "branches"
+    ];
+
+    const handleScroll = () => {
+      const scrollPosition = window.scrollY + 130;
+      for (let i = sectionIds.length - 1; i >= 0; i--) {
+        const el = document.getElementById(`section-${sectionIds[i]}`);
+        if (el) {
+          const top = el.offsetTop;
+          if (scrollPosition >= top) {
+            setActiveSection(sectionIds[i]);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
   const [enrollModalOpen, setEnrollModalOpen] = useState(false);
   const [selectedEnrollProgram, setSelectedEnrollProgram] = useState<ProgramEnrollmentTarget | null>(null);
   const [enquiryModalOpen, setEnquiryModalOpen] = useState(false);
@@ -237,51 +283,161 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
               </Card>
             </div>
 
-            {/* Navigation Tabs */}
-            <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <div className="overflow-x-auto pb-1 scrollbar-none">
-                <TabsList className="h-12 w-full justify-start rounded-xl bg-card border border-border p-1 gap-1 min-w-max">
-                  <TabsTrigger value="overview" className="rounded-lg font-semibold gap-2">
-                    <Building2 className="h-4 w-4" />
-                    <span>Overview</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="programs" className="rounded-lg font-semibold gap-2">
-                    <BookOpen className="h-4 w-4" />
-                    <span>Programs ({programs.length})</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="facilities" className="rounded-lg font-semibold gap-2">
-                    <School className="h-4 w-4" />
-                    <span>Facilities ({facilities.length})</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="gallery" className="rounded-lg font-semibold gap-2">
-                    <Film className="h-4 w-4" />
-                    <span>Gallery ({galleryImages.length + galleryVideos.length})</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="faculty" className="rounded-lg font-semibold gap-2">
-                    <Users className="h-4 w-4" />
-                    <span>Faculty & Staff ({facultyList.length})</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="placements" className="rounded-lg font-semibold gap-2">
-                    <TrendingUp className="h-4 w-4" />
-                    <span>Placements ({placements.length} Years)</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="cutoffs" className="rounded-lg font-semibold gap-2">
-                    <Percent className="h-4 w-4" />
-                    <span>Cut-Off Marks</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="scholarships" className="rounded-lg font-semibold gap-2">
-                    <Sparkles className="h-4 w-4" />
-                    <span>Scholarships</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="branches" className="rounded-lg font-semibold gap-2">
-                    <MapPin className="h-4 w-4" />
-                    <span>Branches ({branches.length > 0 ? branches.length : 1})</span>
-                  </TabsTrigger>
-                </TabsList>
-              </div>
+            {/* Navigation Smooth Slide Bar */}
+            <div className="sticky top-16 z-30 bg-background/95 backdrop-blur-md py-2.5 -mx-1 px-1 border-b border-border/70 shadow-xs">
+              <div className="overflow-x-auto pb-1 scrollbar-none flex items-center gap-2 min-w-max">
+                <button
+                  type="button"
+                  onClick={() => scrollToSection("overview")}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                    activeSection === "overview"
+                      ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30"
+                      : "bg-card border border-border/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <Building2 className="h-4 w-4" />
+                  <span>Overview</span>
+                </button>
 
-              {/* 1. OVERVIEW TAB */}
-              <TabsContent value="overview" className="mt-6 space-y-6">
+                <button
+                  type="button"
+                  onClick={() => scrollToSection("programs")}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                    activeSection === "programs"
+                      ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30"
+                      : "bg-card border border-border/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <BookOpen className="h-4 w-4" />
+                  <span>Programs ({programs.length + courses.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => scrollToSection("facilities")}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                    activeSection === "facilities"
+                      ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30"
+                      : "bg-card border border-border/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <School className="h-4 w-4" />
+                  <span>Facilities ({facilities.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => scrollToSection("gallery")}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                    activeSection === "gallery"
+                      ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30"
+                      : "bg-card border border-border/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <Film className="h-4 w-4" />
+                  <span>Gallery ({galleryImages.length + galleryVideos.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => scrollToSection("faculty")}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                    activeSection === "faculty"
+                      ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30"
+                      : "bg-card border border-border/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <Users className="h-4 w-4" />
+                  <span>Faculty & Staff ({facultyList.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => scrollToSection("placements")}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                    activeSection === "placements"
+                      ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30"
+                      : "bg-card border border-border/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <TrendingUp className="h-4 w-4" />
+                  <span>Placements ({placements.length} Years)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => scrollToSection("cutoffs")}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                    activeSection === "cutoffs"
+                      ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30"
+                      : "bg-card border border-border/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <Percent className="h-4 w-4" />
+                  <span>Cut-Off Marks</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => scrollToSection("scholarships")}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                    activeSection === "scholarships"
+                      ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30"
+                      : "bg-card border border-border/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  <span>Scholarships</span>
+                </button>
+
+                {hostels.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => scrollToSection("hostels")}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                      activeSection === "hostels"
+                        ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30"
+                        : "bg-card border border-border/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                  >
+                    <Home className="h-4 w-4" />
+                    <span>Hostels ({hostels.length})</span>
+                  </button>
+                )}
+
+                {libraries.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => scrollToSection("libraries")}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                      activeSection === "libraries"
+                        ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30"
+                        : "bg-card border border-border/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                  >
+                    <Library className="h-4 w-4" />
+                    <span>Library</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => scrollToSection("branches")}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                    activeSection === "branches"
+                      ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30"
+                      : "bg-card border border-border/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <MapPin className="h-4 w-4" />
+                  <span>Branches ({branches.length > 0 ? branches.length : 1})</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Continuous Overview Sections Container */}
+            <div className="mt-8 space-y-12">
+<section id="section-overview" className="scroll-mt-28 space-y-6">
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-xl font-bold">About {profile.name}</CardTitle>
@@ -461,10 +617,10 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                     </div>
                   </Card>
                 )}
-              </TabsContent>
+              </section>
 
               {/* 2. PROGRAMS & COURSES TAB */}
-              <TabsContent value="programs" className="mt-6 space-y-6">
+              <section id="section-programs" className="scroll-mt-28 space-y-6 pt-8 border-t border-border/70">
                 <h2 className="text-xl font-bold text-foreground flex items-center justify-between">
                   <span>Degree & Diploma Programs Offered</span>
                   <Badge variant="outline" className="text-xs font-normal">
@@ -664,10 +820,10 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                 ) : courses.length === 0 ? (
                   <Card className="p-8 text-center text-muted-foreground">No academic programs or courses listed yet.</Card>
                 ) : null}
-              </TabsContent>
+              </section>
 
               {/* 3. FACILITIES TAB */}
-              <TabsContent value="facilities" className="mt-6 space-y-4">
+              <section id="section-facilities" className="scroll-mt-28 space-y-4 pt-8 border-t border-border/70">
                 <div className="flex items-center justify-between">
                   <h2 className="text-xl font-bold text-foreground">Campus Infrastructure & Facilities</h2>
                   <Badge variant="outline" className="text-xs font-normal">Ratings & Student Feedback Enabled</Badge>
@@ -733,10 +889,10 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                 ) : (
                   <Card className="p-8 text-center text-muted-foreground">No facilities records listed yet.</Card>
                 )}
-              </TabsContent>
+              </section>
 
               {/* GALLERY TAB (IMAGES & VIDEOS) */}
-              <TabsContent value="gallery" className="mt-6 space-y-6">
+              <section id="section-gallery" className="scroll-mt-28 space-y-6 pt-8 border-t border-border/70">
                 <h2 className="text-xl font-bold text-foreground flex items-center justify-between">
                   <span>Campus Photo & Video Gallery</span>
                   <Badge variant="outline" className="text-xs font-normal">
@@ -806,10 +962,10 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                     <Card className="p-6 text-center text-xs text-muted-foreground">No video links uploaded for this institution yet.</Card>
                   )}
                 </div>
-              </TabsContent>
+              </section>
 
               {/* FACULTY & STAFF TAB */}
-              <TabsContent value="faculty" className="mt-6 space-y-4">
+              <section id="section-faculty" className="scroll-mt-28 space-y-4 pt-8 border-t border-border/70">
                 <h2 className="text-xl font-bold text-foreground flex items-center justify-between">
                   <span>Faculty & Teaching Staff</span>
                   <Badge variant="outline" className="text-xs font-normal">{facultyList.length} Faculty Members</Badge>
@@ -898,10 +1054,10 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                 ) : (
                   <Card className="p-8 text-center text-muted-foreground">No faculty or staff members listed for this institution yet.</Card>
                 )}
-              </TabsContent>
+              </section>
 
               {/* 4. PLACEMENTS TAB */}
-              <TabsContent value="placements" className="mt-6 space-y-6">
+              <section id="section-placements" className="scroll-mt-28 space-y-6 pt-8 border-t border-border/70">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <h2 className="text-xl font-bold text-foreground">3-Year Placement Performance Audit (2024 - 2026)</h2>
                   <Button
@@ -971,10 +1127,10 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                     </table>
                   </div>
                 </Card>
-              </TabsContent>
+              </section>
 
               {/* 5. CUT-OFF MARKS TAB */}
-              <TabsContent value="cutoffs" className="mt-6 space-y-6">
+              <section id="section-cutoffs" className="scroll-mt-28 space-y-6 pt-8 border-t border-border/70">
                 <h2 className="text-xl font-bold text-foreground">3-Year Entrance Examination Cut-off Scores</h2>
 
                 {cutoffs.length > 0 ? (
@@ -1022,10 +1178,10 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                 ) : (
                   <Card className="p-8 text-center text-muted-foreground">No cutoff records found.</Card>
                 )}
-              </TabsContent>
+              </section>
 
               {/* 6. SCHOLARSHIPS TAB */}
-              <TabsContent value="scholarships" className="mt-6 space-y-4">
+              <section id="section-scholarships" className="scroll-mt-28 space-y-4 pt-8 border-t border-border/70">
                 <h2 className="text-xl font-bold text-foreground">Active Scholarship Schemes & Financial Assistance</h2>
 
                 {scholarships.length > 0 ? (
@@ -1063,10 +1219,10 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                 ) : (
                   <Card className="p-8 text-center text-muted-foreground">No scholarship records listed.</Card>
                 )}
-              </TabsContent>
+              </section>
 
               {/* HOSTELS TAB */}
-              <TabsContent value="hostels" className="mt-6 space-y-6">
+              <section id="section-hostels" className="scroll-mt-28 space-y-6 pt-8 border-t border-border/70">
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-xl font-bold flex items-center gap-2">
@@ -1134,10 +1290,10 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                     )}
                   </CardContent>
                 </Card>
-              </TabsContent>
+              </section>
 
               {/* LIBRARIES TAB */}
-              <TabsContent value="libraries" className="mt-6 space-y-6">
+              <section id="section-libraries" className="scroll-mt-28 space-y-6 pt-8 border-t border-border/70">
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-xl font-bold flex items-center gap-2">
@@ -1214,10 +1370,10 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                     )}
                   </CardContent>
                 </Card>
-              </TabsContent>
+              </section>
 
               {/* BRANCHES TAB */}
-              <TabsContent value="branches" className="mt-6 space-y-6">
+              <section id="section-branches" className="scroll-mt-28 space-y-6 pt-8 border-t border-border/70">
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-xl font-bold flex items-center gap-2">
@@ -1351,8 +1507,8 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                     )}
                   </CardContent>
                 </Card>
-              </TabsContent>
-            </Tabs>
+              </section>
+            </div>
           </div>
 
           {/* Right Column: Sticky Contact & Similar Institutes */}
@@ -1362,35 +1518,6 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                 <Phone className="h-5 w-5 text-primary" />
                 Contact Institution
               </h3>
-              <Separator />
-
-              <div className="space-y-3 text-sm">
-                {profile.phone && (
-                  <div className="flex items-center gap-3 text-muted-foreground">
-                    <Phone className="h-4 w-4 shrink-0 text-primary" />
-                    <span className="font-medium text-foreground">{profile.phone}</span>
-                  </div>
-                )}
-                {profile.email && (
-                  <div className="flex items-center gap-3 text-muted-foreground">
-                    <Mail className="h-4 w-4 shrink-0 text-primary" />
-                    <span className="break-all font-medium text-foreground">{profile.email}</span>
-                  </div>
-                )}
-                <div className="flex items-center gap-3 text-muted-foreground">
-                  <MapPin className="h-4 w-4 shrink-0 text-primary" />
-                  <span>{locText}</span>
-                </div>
-                {profile.website && (
-                  <div className="flex items-center gap-3 text-muted-foreground">
-                    <Globe className="h-4 w-4 shrink-0 text-primary" />
-                    <a href={profile.website.startsWith("http") ? profile.website : `https://${profile.website}`} target="_blank" rel="noreferrer" className="text-primary hover:underline font-medium break-all">
-                      {profile.website}
-                    </a>
-                  </div>
-                )}
-              </div>
-
               <Separator />
 
               {/* Action Buttons: WhatsApp, Call Now, Enquiry Now, Download Brochure */}

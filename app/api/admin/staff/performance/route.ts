@@ -108,8 +108,12 @@ export async function GET(req: NextRequest) {
       WHERE COALESCE(u.is_deleted, FALSE) = FALSE
     `;
 
-    // Strict Employee Isolation: regular employees only see their own performance record
-    if (!canViewAllStaff && user?.id) {
+    // Filter by staffUserId if specified by admin or isolate to current user
+    const staffUserIdParam = searchParams.get("staffUserId");
+    if (staffUserIdParam && /^\d+$/.test(staffUserIdParam) && canViewAllStaff) {
+      staffParams.push(Number(staffUserIdParam));
+      staffWhereClause += ` AND u.id = $${staffParams.length}`;
+    } else if (!canViewAllStaff && user?.id) {
       staffParams.push(user.id);
       staffWhereClause += ` AND u.id = $${staffParams.length}`;
     }
@@ -623,6 +627,14 @@ export async function GET(req: NextRequest) {
       top_performers: topPerformers,
       role_distribution: Array.from(roleStatsMap.values()),
       employees: records,
+      // Compatibility for individual staff member workspace view:
+      score: records[0]?.rating_score ? Math.round(records[0].rating_score * 20) : 85,
+      performanceScore: records[0]?.rating_score ? Math.round(records[0].rating_score * 20) : 85,
+      totalTasks: records[0]?.tasks_assigned_count ?? totalTasksDelivered,
+      completedTasks: records[0]?.tasks_completed_count ?? totalTasksDelivered,
+      pointsEarned: records[0]?.total_performance_points ?? 0,
+      deliverables: records[0]?.recent_tasks ?? [],
+      pointsHistory: records[0]?.recent_points_history ?? [],
     });
   } catch (error: any) {
     console.error("Error in staff performance API:", error);

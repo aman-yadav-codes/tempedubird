@@ -201,10 +201,12 @@ export async function GET(req: Request) {
     const searchValue = `%${search}%`;
     const listParams: unknown[] = [institutionId, search, searchValue, limit, offset];
     const countParams: unknown[] = [institutionId, search, searchValue];
-    const selfFilter = effectiveMode === "self" ? "AND sgl.staff_user_id = $6" : "";
-    if (effectiveMode === "self") {
-      listParams.push(currentUser.id);
-      countParams.push(currentUser.id);
+    const requestedStaffUserId = parseOptionalPositiveId(url.searchParams.get("staffUserId"));
+    const targetUserId = (canManageAll && requestedStaffUserId) ? requestedStaffUserId : currentUser.id;
+    const selfFilter = (effectiveMode === "self" || (canManageAll && requestedStaffUserId)) ? "AND sgl.staff_user_id = $6" : "";
+    if (selfFilter) {
+      listParams.push(targetUserId);
+      countParams.push(targetUserId);
     }
 
     const institutionWhere = institutionId ? "sgl.institution_id = $1" : "(sgl.institution_id IS NULL OR $1::integer IS NULL)";

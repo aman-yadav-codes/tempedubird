@@ -215,9 +215,11 @@ function studentEnrollmentLabel(enrollment: StudentRecordsResponse["enrollments"
 export function UserProfileContent({
   user,
   studentRecords = null,
+  hideHeaderSummary = false,
 }: {
   user: AdminUserDetails | null;
   studentRecords?: StudentRecordsResponse | null;
+  hideHeaderSummary?: boolean;
 }) {
   const categoryColorMap = Object.fromEntries(
     (user?.teaching_categories ?? []).map((category, index) => [
@@ -227,6 +229,8 @@ export function UserProfileContent({
   );
 
   if (!user) return null;
+
+  const isStudentOnly = user.roles.length > 0 && user.roles.every((r) => r.toLowerCase() === "student");
 
   const institutions =
     user.institutions.length > 0
@@ -246,7 +250,9 @@ export function UserProfileContent({
 
   return (
           <div className="space-y-6 px-4 pb-6">
-            <div className="flex items-start gap-4 rounded-md border p-4">
+            {!hideHeaderSummary && (
+              <>
+                <div className="flex items-start gap-4 rounded-md border p-4">
               <Avatar size="lg" className="size-14">
                 <AvatarImage src={user.avatar_url ?? undefined} />
                 <AvatarFallback>{initials(user.full_name) || "U"}</AvatarFallback>
@@ -318,9 +324,11 @@ export function UserProfileContent({
                 <span>{user.phone || "-"}</span>
               </div>
             </div>
+          </>
+        )}
 
-            {((user.profile as any)?.joining_date || (user.profile as any)?.date_of_birth || (user.profile as any)?.shift_timing || (user.profile as any)?.employment_status) && (
-              <section className="space-y-2">
+        {!isStudentOnly && ((user.profile as any)?.joining_date || (user.profile as any)?.date_of_birth || (user.profile as any)?.shift_timing || (user.profile as any)?.employment_status) && (
+          <section className="space-y-2">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
                   <Calendar className="size-4 text-primary" />
                   Employment & Schedule

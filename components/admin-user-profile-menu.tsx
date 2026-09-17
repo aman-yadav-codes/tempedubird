@@ -210,79 +210,7 @@ export function AdminUserProfileMenu() {
 
           <DropdownMenuSeparator />
 
-          {/* Account Navigation Group */}
-          <DropdownMenuGroup>
-            <DropdownMenuItem asChild className="cursor-pointer">
-              <Link href={roleHref("/admin/account")}>
-                <BadgeCheck className="mr-2 h-4 w-4 text-emerald-600" />
-                <span>My Profile & Account</span>
-              </Link>
-            </DropdownMenuItem>
-
-            <DropdownMenuItem asChild className="cursor-pointer">
-              <Link href={roleHref("/admin/notifications")}>
-                <Bell className="mr-2 h-4 w-4 text-amber-600" />
-                <span>Notifications</span>
-              </Link>
-            </DropdownMenuItem>
-
-            <DropdownMenuItem asChild className="cursor-pointer">
-              <Link href={roleHref("/admin/settings")}>
-                <Settings className="mr-2 h-4 w-4 text-blue-600" />
-                <span>System Settings</span>
-              </Link>
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-
-          <DropdownMenuSeparator />
-
-          {/* Role Portal Quick Switcher Section */}
-          <DropdownMenuLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-2 py-1 flex items-center gap-1">
-            <Sparkles className="h-3 w-3 text-destructive" />
-            Switch Demo Account
-          </DropdownMenuLabel>
-
           <DropdownMenuGroup className="space-y-0.5">
-            <DropdownMenuItem
-              disabled={Boolean(switchingRole)}
-              onClick={() => handleDemoSwitch("student")}
-              className={`cursor-pointer ${isStudent ? "bg-accent/60 font-bold" : ""}`}
-            >
-              <GraduationCap className="mr-2 h-4 w-4 text-rose-500" />
-              <span className="flex-1 text-xs">Student Portal</span>
-              {isStudent && <Badge variant="outline" className="text-[9px] h-4">Active</Badge>}
-            </DropdownMenuItem>
-
-            <DropdownMenuItem
-              disabled={Boolean(switchingRole)}
-              onClick={() => handleDemoSwitch("guardian")}
-              className={`cursor-pointer ${isParent ? "bg-accent/60 font-bold" : ""}`}
-            >
-              <Users className="mr-2 h-4 w-4 text-amber-500" />
-              <span className="flex-1 text-xs">Guardian Portal</span>
-              {isParent && <Badge variant="outline" className="text-[9px] h-4">Active</Badge>}
-            </DropdownMenuItem>
-
-            <DropdownMenuItem
-              disabled={Boolean(switchingRole)}
-              onClick={() => handleDemoSwitch("professional")}
-              className={`cursor-pointer ${isInstitutionAdmin ? "bg-accent/60 font-bold" : ""}`}
-            >
-              <Briefcase className="mr-2 h-4 w-4 text-blue-500" />
-              <span className="flex-1 text-xs">Professional Portal</span>
-              {isInstitutionAdmin && <Badge variant="outline" className="text-[9px] h-4">Active</Badge>}
-            </DropdownMenuItem>
-
-            <DropdownMenuItem
-              disabled={Boolean(switchingRole)}
-              onClick={() => handleDemoSwitch("platform_admin")}
-              className={`cursor-pointer ${isPlatformAdmin ? "bg-accent/60 font-bold" : ""}`}
-            >
-              <ShieldCheck className="mr-2 h-4 w-4 text-purple-500" />
-              <span className="flex-1 text-xs">Super Admin Portal</span>
-              {isPlatformAdmin && <Badge variant="outline" className="text-[9px] h-4">Active</Badge>}
-            </DropdownMenuItem>
-
             <DropdownMenuItem
               onClick={() => setSwitchAccountOpen(true)}
               className="cursor-pointer font-bold text-primary focus:text-primary focus:bg-primary/10"

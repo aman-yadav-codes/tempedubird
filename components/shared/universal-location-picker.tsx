@@ -23,6 +23,7 @@ interface UniversalLocationPickerProps {
   showCoordinates?: boolean;
   showStructuredFields?: boolean;
   showAddressAndPincode?: boolean;
+  layout?: "auto" | "split" | "stacked";
   className?: string;
 }
 
@@ -33,6 +34,7 @@ export function UniversalLocationPicker({
   showCoordinates = true,
   showStructuredFields = true,
   showAddressAndPincode = false,
+  layout = "auto",
   className = "",
 }: UniversalLocationPickerProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -204,6 +206,13 @@ export function UniversalLocationPicker({
     mapInstanceRef.current = map;
     setMapLoading(false);
 
+    // Call invalidateSize after dialog animation completes
+    setTimeout(() => {
+      try {
+        map.invalidateSize();
+      } catch (e) {}
+    }, 250);
+
     return () => {
       map.remove();
       mapInstanceRef.current = null;
@@ -330,179 +339,186 @@ export function UniversalLocationPicker({
   };
 
   return (
-    <div className={`space-y-3.5 ${className}`}>
-      {/* Header Label */}
-      <div className="flex items-center justify-between">
-        <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-          <MapPin className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-          <span>Address & Map Pin Location</span>
-        </Label>
-        <span className="text-[11px] text-muted-foreground">Select on map or search address</span>
-      </div>
-
-      {/* Map Surface */}
-      {showMap && (
-        <div className="space-y-2">
-          <div className="relative rounded-2xl overflow-hidden border border-border/80 shadow-xs h-64 bg-muted/30">
-            {/* Search Input Floating on Top */}
-            <div
-              className="absolute left-3 right-3 top-3 z-500 sm:left-4 sm:right-auto sm:w-[380px] flex items-center shadow-lg rounded-xl overflow-hidden border bg-white dark:bg-slate-900"
-            >
-              <div className="pl-3 text-muted-foreground">
-                {searching ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                ) : (
-                  <Search className="h-4 w-4 text-muted-foreground" />
-                )}
-              </div>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleSearchLocation(e);
-                  }
-                }}
-                placeholder="Search location, area, landmark..."
-                className="w-full pl-2.5 pr-3 py-2 text-xs bg-transparent text-foreground outline-none font-medium placeholder:text-muted-foreground/70"
-              />
+    <div className={className}>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Column: Map Surface */}
+        {showMap && (
+          <div className={`${showStructuredFields ? "lg:col-span-7" : "lg:col-span-12"} space-y-2.5`}>
+            {/* Header Label */}
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <MapPin className="h-4 w-4 text-rose-600 shrink-0" />
+                <span>Address & Map Pin Location</span>
+              </Label>
+              <span className="text-[11px] text-muted-foreground">Select on map or search address</span>
             </div>
 
-            <div ref={mapContainerRef} className="w-full h-full z-0 cursor-crosshair" />
+            <div className="relative rounded-2xl overflow-hidden border border-border/80 shadow-xs h-[340px] sm:h-[370px] bg-muted/30">
+              {/* Search Input Floating on Top */}
+              <div
+                className="absolute left-3 right-3 top-3 z-500 sm:left-4 sm:right-auto sm:w-[320px] flex items-center shadow-lg rounded-xl overflow-hidden border bg-white dark:bg-slate-900"
+              >
+                <div className="pl-3 text-muted-foreground">
+                  {searching ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  ) : (
+                    <Search className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </div>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleSearchLocation(e);
+                    }
+                  }}
+                  placeholder="Search location, area, landmark..."
+                  className="w-full pl-2.5 pr-3 py-2 text-xs bg-transparent text-foreground outline-none font-medium placeholder:text-muted-foreground/70"
+                />
+              </div>
 
-            {mapLoading && (
-              <div className="absolute inset-0 bg-background/80 backdrop-blur-xs flex items-center justify-center gap-2 z-10">
-                <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                <span className="text-xs font-semibold text-muted-foreground">Loading map view...</span>
+              <div ref={mapContainerRef} className="w-full h-full z-0 cursor-crosshair" />
+
+              {mapLoading && (
+                <div className="absolute inset-0 bg-background/80 backdrop-blur-xs flex items-center justify-center gap-2 z-10">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  <span className="text-xs font-semibold text-muted-foreground">Loading map view...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Location Summary Pill / Information Box */}
+            {value?.latitude && value?.longitude ? (
+              <div className="flex items-center gap-2 p-2.5 rounded-xl border bg-muted/20 text-xs text-foreground">
+                <MapPin className="h-4 w-4 text-rose-600 shrink-0" />
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0 flex-1">
+                  <span className="font-bold text-foreground truncate">
+                    {[value.area, value.city, value.state, value.country].filter(Boolean).join(", ") || "Pinned Location"}
+                  </span>
+                  <span className="text-[11px] font-mono text-muted-foreground">
+                    ({value.latitude}, {value.longitude})
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 p-2.5 rounded-xl border border-dashed text-xs text-muted-foreground bg-muted/10">
+                <MapPin className="h-4 w-4 text-muted-foreground/60 shrink-0" />
+                <span>Pick a location from search or click anywhere on the map.</span>
               </div>
             )}
           </div>
+        )}
 
-          {/* Location Summary Pill / Information Box */}
-          {value?.latitude && value?.longitude ? (
-            <div className="flex items-center gap-2 p-2.5 rounded-xl border bg-muted/20 text-xs text-foreground">
-              <MapPin className="h-4 w-4 text-rose-600 shrink-0" />
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0 flex-1">
-                <span className="font-bold text-foreground truncate">
-                  {[value.area, value.city, value.state, value.country].filter(Boolean).join(", ") || "Pinned Location"}
-                </span>
-                <span className="text-[11px] font-mono text-muted-foreground">
-                  ({value.latitude}, {value.longitude})
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 p-2.5 rounded-xl border border-dashed text-xs text-muted-foreground bg-muted/10">
-              <MapPin className="h-4 w-4 text-muted-foreground/60 shrink-0" />
-              <span>Pick a location from search or click anywhere on the map.</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Standard Structured Address Fields */}
-      {showStructuredFields && (
-        <div className="space-y-3 pt-1">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground font-medium">Country</Label>
-              <Input
-                value={value?.country || ""}
-                onChange={(e) => handleFieldChange("country", e.target.value)}
-                placeholder="e.g. India"
-                className="text-xs h-9"
-              />
+        {/* Right Column: Structured Address Fields */}
+        {showStructuredFields && (
+          <div className={`${showMap ? "lg:col-span-5" : "lg:col-span-12"} space-y-3.5 bg-muted/10 p-4 rounded-2xl border`}>
+            <div className="flex items-center justify-between pb-1 border-b border-border/40">
+              <Label className="text-xs font-bold text-foreground">Location Details</Label>
+              <span className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider">Auto-filled</span>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground font-medium">State</Label>
-              <Input
-                value={value?.state || ""}
-                onChange={(e) => handleFieldChange("state", e.target.value)}
-                placeholder="e.g. Uttar Pradesh, Madhya Pradesh"
-                className="text-xs h-9"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground font-medium">City</Label>
-              <Input
-                value={value?.city || ""}
-                onChange={(e) => handleFieldChange("city", e.target.value)}
-                placeholder="e.g. Varanasi, Indore, Delhi"
-                className="text-xs h-9"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground font-medium">Area / Locality</Label>
-              <Input
-                value={value?.area || ""}
-                onChange={(e) => handleFieldChange("area", e.target.value)}
-                placeholder="e.g. Mahmoorganj, Bhawarkua"
-                className="text-xs h-9"
-              />
-            </div>
-          </div>
-
-          {showAddressAndPincode && (
-            <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground font-medium">Pincode / Postal Code</Label>
+                <Label className="text-xs text-muted-foreground font-medium">Country</Label>
                 <Input
-                  value={value?.pincode || ""}
-                  onChange={(e) => handleFieldChange("pincode", e.target.value)}
-                  placeholder="e.g. 221010, 452001"
-                  className="text-xs h-9 font-mono"
+                  value={value?.country || ""}
+                  onChange={(e) => handleFieldChange("country", e.target.value)}
+                  placeholder="e.g. India"
+                  className="text-xs h-9 bg-background"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground font-medium">Full Street Address & Landmark</Label>
+                <Label className="text-xs text-muted-foreground font-medium">State</Label>
                 <Input
-                  value={value?.address || ""}
-                  onChange={(e) => handleFieldChange("address", e.target.value)}
-                  placeholder="e.g. Building 4B, Near City Library"
-                  className="text-xs h-9"
+                  value={value?.state || ""}
+                  onChange={(e) => handleFieldChange("state", e.target.value)}
+                  placeholder="e.g. Uttar Pradesh"
+                  className="text-xs h-9 bg-background"
                 />
               </div>
             </div>
-          )}
 
-          {showCoordinates && (
-            <div className="grid grid-cols-2 gap-3 pt-0.5">
-              <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground font-mono">Latitude (auto-filled)</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground font-medium">City</Label>
                 <Input
-                  type="number"
-                  step="0.0001"
-                  value={value?.latitude || ""}
-                  onChange={(e) => handleFieldChange("latitude", e.target.value)}
-                  placeholder="e.g. 25.3176"
-                  className="text-xs font-mono h-8 bg-muted/20"
+                  value={value?.city || ""}
+                  onChange={(e) => handleFieldChange("city", e.target.value)}
+                  placeholder="e.g. Varanasi, Indore"
+                  className="text-xs h-9 bg-background"
                 />
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground font-mono">Longitude (auto-filled)</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground font-medium">Area / Locality</Label>
                 <Input
-                  type="number"
-                  step="0.0001"
-                  value={value?.longitude || ""}
-                  onChange={(e) => handleFieldChange("longitude", e.target.value)}
-                  placeholder="e.g. 82.9739"
-                  className="text-xs font-mono h-8 bg-muted/20"
+                  value={value?.area || ""}
+                  onChange={(e) => handleFieldChange("area", e.target.value)}
+                  placeholder="e.g. Bhullanpur, Lanka"
+                  className="text-xs h-9 bg-background"
                 />
               </div>
             </div>
-          )}
-        </div>
-      )}
+
+            {showAddressAndPincode && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground font-medium">Pincode / Postal Code</Label>
+                  <Input
+                    value={value?.pincode || ""}
+                    onChange={(e) => handleFieldChange("pincode", e.target.value)}
+                    placeholder="e.g. 221010"
+                    className="text-xs h-9 font-mono bg-background"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground font-medium">Street Address & Landmark</Label>
+                  <Input
+                    value={value?.address || ""}
+                    onChange={(e) => handleFieldChange("address", e.target.value)}
+                    placeholder="e.g. Near City Library"
+                    className="text-xs h-9 bg-background"
+                  />
+                </div>
+              </div>
+            )}
+
+            {showCoordinates && (
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground font-mono">Latitude (auto-filled)</Label>
+                  <Input
+                    type="number"
+                    step="0.0001"
+                    value={value?.latitude || ""}
+                    onChange={(e) => handleFieldChange("latitude", e.target.value)}
+                    placeholder="e.g. 25.3176"
+                    className="text-xs font-mono h-8 bg-background"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground font-mono">Longitude (auto-filled)</Label>
+                  <Input
+                    type="number"
+                    step="0.0001"
+                    value={value?.longitude || ""}
+                    onChange={(e) => handleFieldChange("longitude", e.target.value)}
+                    placeholder="e.g. 82.9739"
+                    className="text-xs font-mono h-8 bg-background"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

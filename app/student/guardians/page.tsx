@@ -112,6 +112,15 @@ export default function StudentGuardiansPage() {
     setOccupation("");
   };
 
+  const handleRelationshipChange = (value: string) => {
+    setRelationship(value);
+    if (value === "Self" && user) {
+      if (user.full_name) setName(user.full_name);
+      if (user.email && !user.email.endsWith(".local")) setEmail(user.email);
+      if (user.phone) setPhone(user.phone);
+    }
+  };
+
   const handleOpenDialog = () => {
     resetForm();
     setShowAddForm(guardians.length === 0);
@@ -121,7 +130,7 @@ export default function StudentGuardiansPage() {
   const handleAddGuardian = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!name.trim()) {
-      toast.error("Please enter guardian full name");
+      toast.error("Please enter contact full name");
       return;
     }
     if (!email.trim() && !phone.trim()) {
@@ -141,21 +150,21 @@ export default function StudentGuardiansPage() {
           guardian_name: name.trim(),
           guardian_email: email.trim().toLowerCase(),
           guardian_phone: phone.trim() || null,
-          relationship: relationship.trim() || "Parent / Guardian",
+          relationship: relationship.trim() || "Contact",
           is_primary: isPrimary || guardians.length === 0,
           occupation: occupation.trim() || null,
         }),
       });
 
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to save guardian record");
+      if (!res.ok) throw new Error(json.error || "Failed to save contact record");
 
-      toast.success("Guardian record saved successfully!");
+      toast.success("Contact record saved successfully!");
       setShowAddForm(false);
       resetForm();
       fetchGuardians();
     } catch (err: any) {
-      toast.error(err.message || "Failed to add guardian");
+      toast.error(err.message || "Failed to add contact");
     } finally {
       setSaving(false);
     }
@@ -173,17 +182,17 @@ export default function StudentGuardiansPage() {
       });
 
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to update primary guardian");
+      if (!res.ok) throw new Error(json.error || "Failed to update primary contact");
 
-      toast.success("Primary guardian contact updated!");
+      toast.success("Primary contact updated!");
       fetchGuardians();
     } catch (err: any) {
-      toast.error(err.message || "Failed to set primary guardian");
+      toast.error(err.message || "Failed to set primary contact");
     }
   };
 
   const handleDeleteGuardian = async (guardianUserId: number) => {
-    if (!confirm("Are you sure you want to remove this guardian record?")) return;
+    if (!confirm("Are you sure you want to remove this contact record?")) return;
 
     try {
       const headers: Record<string, string> = {};
@@ -195,12 +204,12 @@ export default function StudentGuardiansPage() {
       });
 
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to remove guardian");
+      if (!res.ok) throw new Error(json.error || "Failed to remove contact");
 
-      toast.success("Guardian record removed.");
+      toast.success("Contact record removed.");
       fetchGuardians();
     } catch (err: any) {
-      toast.error(err.message || "Failed to delete guardian");
+      toast.error(err.message || "Failed to delete contact");
     }
   };
 
@@ -211,14 +220,14 @@ export default function StudentGuardiansPage() {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-600 dark:text-rose-400 mb-2">
             <ShieldCheck className="h-3.5 w-3.5" />
-            <span>Student Guardian Management</span>
+            <span>Student Contact Management</span>
           </div>
           <h1 className="text-3xl font-extrabold text-foreground tracking-tight flex items-center gap-2.5">
             <UsersRound className="h-8 w-8 text-rose-600 shrink-0" />
-            My Guardians & Parents
+            My Contacts
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage your parent and guardian contact details. All records are synchronized directly with the Institution Admin database.
+            Manage your parent, self, and emergency contact details. All records are synchronized directly with the Institution Admin database.
           </p>
         </div>
 
@@ -234,16 +243,16 @@ export default function StudentGuardiansPage() {
             className="font-bold gap-2 text-xs h-9 bg-rose-600 hover:bg-rose-700 text-white shadow-sm"
           >
             <UserPlus className="h-4 w-4" />
-            <span>Manage Guardians</span>
+            <span>Manage Contacts</span>
           </Button>
         </div>
       </div>
 
-      {/* GUARDIANS GRID */}
+      {/* CONTACTS GRID */}
       {loading ? (
         <div className="py-20 text-center flex flex-col items-center justify-center gap-3 text-muted-foreground">
           <Loader2 className="h-8 w-8 animate-spin text-rose-600" />
-          <span className="text-sm font-medium">Loading guardian records...</span>
+          <span className="text-sm font-medium">Loading contact records...</span>
         </div>
       ) : guardians.length === 0 ? (
         <Card className="p-12 text-center text-muted-foreground space-y-4 bg-card border-border">
@@ -251,9 +260,9 @@ export default function StudentGuardiansPage() {
             <UsersRound className="h-8 w-8" />
           </div>
           <div className="space-y-1">
-            <h3 className="font-bold text-lg text-foreground">No Guardians Linked Yet</h3>
+            <h3 className="font-bold text-lg text-foreground">No Contacts Linked Yet</h3>
             <p className="text-xs max-w-md mx-auto leading-relaxed">
-              You have not added any parent or guardian records. Click the button below to add your primary parent or guardian.
+              You have not added any contact records. Click the button below to add your primary contact.
             </p>
           </div>
           <Button
@@ -261,14 +270,14 @@ export default function StudentGuardiansPage() {
             className="font-bold text-xs bg-rose-600 hover:bg-rose-700 text-white px-6 mt-2"
           >
             <Plus className="h-4 w-4 mr-1.5" />
-            Add Guardian
+            Add Contact
           </Button>
         </Card>
       ) : (
         <div className="space-y-4">
           <div className="flex items-center justify-between px-1">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-              {guardians.length} {guardians.length === 1 ? "Guardian Linked" : "Guardians Linked"}
+              {guardians.length} {guardians.length === 1 ? "Contact Linked" : "Contacts Linked"}
             </span>
           </div>
 
@@ -283,16 +292,16 @@ export default function StudentGuardiansPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="h-12 w-12 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 font-black text-lg flex items-center justify-center shrink-0 border border-rose-500/20">
-                        {g.guardian_name ? g.guardian_name[0].toUpperCase() : "G"}
+                        {g.guardian_name ? g.guardian_name[0].toUpperCase() : "C"}
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <Badge variant="secondary" className="text-[10px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400">
-                            {g.relationship || "Guardian"}
+                            {g.relationship || "Contact"}
                           </Badge>
                           {g.is_primary && (
                             <Badge className="text-[10px] font-extrabold bg-emerald-600 text-white">
-                              Primary Guardian
+                              Primary Contact
                             </Badge>
                           )}
                         </div>
@@ -436,25 +445,25 @@ export default function StudentGuardiansPage() {
         </div>
       </div>
 
-      {/* MANAGE GUARDIANS DIALOG (EXACT SAME OPTIONS AS INSTITUTION ADMIN) */}
+      {/* MANAGE CONTACTS DIALOG */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg bg-card border-border p-6 shadow-2xl rounded-2xl">
           <DialogHeader className="space-y-1.5 border-b border-border pb-4">
             <DialogTitle className="text-xl font-bold flex items-center gap-2 text-foreground">
               <UsersRound className="h-5 w-5 text-rose-600" />
-              Manage Guardians: {user?.full_name || "My Profile"}
+              Manage Contacts: {user?.full_name || "My Profile"}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Guardians records are stored in the shared student guardians table and linked directly to your student profile.
+              Contact records are stored and linked directly to your student profile.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* List of existing guardians */}
+            {/* List of existing contacts */}
             {guardians.length > 0 && (
               <div className="space-y-2.5">
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                  Existing Guardian Contacts ({guardians.length})
+                  Existing Contacts ({guardians.length})
                 </p>
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                   {guardians.map((g) => (
@@ -470,7 +479,7 @@ export default function StudentGuardiansPage() {
                           </Badge>
                           {g.is_primary && (
                             <Badge className="text-[10px] font-extrabold bg-emerald-600 text-white">
-                              Primary Guardian
+                              Primary Contact
                             </Badge>
                           )}
                         </div>
@@ -492,11 +501,11 @@ export default function StudentGuardiansPage() {
               </div>
             )}
 
-            {/* Add Guardian Form (Exact same fields as Institution Admin) */}
+            {/* Add Contact Form */}
             {showAddForm ? (
               <div className="rounded-xl border border-rose-500/30 p-4 bg-muted/30 space-y-3.5 mt-3">
                 <h4 className="font-bold text-sm text-foreground flex items-center gap-1.5">
-                  <Plus className="h-4 w-4 text-rose-600" /> Add Guardian Details
+                  <Plus className="h-4 w-4 text-rose-600" /> Add Contact Details
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -536,14 +545,15 @@ export default function StudentGuardiansPage() {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold">Relationship</Label>
-                    <Select value={relationship} onValueChange={setRelationship}>
+                    <Select value={relationship} onValueChange={handleRelationshipChange}>
                       <SelectTrigger className="h-9 text-xs bg-background">
                         <SelectValue placeholder="Select relationship" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="Self">Self</SelectItem>
                         <SelectItem value="Father">Father</SelectItem>
                         <SelectItem value="Mother">Mother</SelectItem>
-                        <SelectItem value="Guardian">Legal Guardian</SelectItem>
+                        <SelectItem value="Guardian">Guardian</SelectItem>
                         <SelectItem value="Brother">Brother</SelectItem>
                         <SelectItem value="Sister">Sister</SelectItem>
                         <SelectItem value="Uncle">Uncle</SelectItem>
@@ -573,7 +583,7 @@ export default function StudentGuardiansPage() {
                     className="h-4 w-4 rounded border-border text-rose-600 focus:ring-rose-500 cursor-pointer"
                   />
                   <Label htmlFor="is-primary-student-guardian" className="text-xs cursor-pointer font-medium">
-                    Set as Primary Contact / Guardian
+                    Set as Primary Contact
                   </Label>
                 </div>
 
@@ -590,7 +600,7 @@ export default function StudentGuardiansPage() {
                     className="text-xs h-8 bg-rose-600 hover:bg-rose-700 text-white font-bold gap-1.5"
                   >
                     {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                    Save Guardian Record
+                    Save Contact Record
                   </Button>
                 </div>
               </div>
@@ -604,7 +614,7 @@ export default function StudentGuardiansPage() {
                   setShowAddForm(true);
                 }}
               >
-                <Plus className="mr-1.5 h-4 w-4" /> Add Another Guardian
+                <Plus className="mr-1.5 h-4 w-4" /> Add Another Contact
               </Button>
             )}
           </div>

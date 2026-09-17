@@ -22,8 +22,9 @@ import {
     ChevronRight,
     UserCog,
     UserCheck,
+    Receipt,
     BadgeDollarSign,
-    IndianRupee,
+    Bus, IndianRupee,
     TrendingUp,
     PieChart,
     Image,
@@ -159,6 +160,21 @@ import { toCanonicalAdminPath, toRoleRoutePath } from "@/lib/auth/role-routes";
 const navItems: SidebarItem[] = [
     { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
     {
+        title: "My Profile",
+        url: "/admin/my-profile",
+        icon: UserCheck,
+        children: [
+            { title: "My Account", url: "/admin/account", permissionPath: "/admin/account", icon: UserCog },
+                        { title: "Attendance", url: "/admin/my-profile?tab=attendance", permissionPath: "/admin/my-profile", icon: CalendarDays },
+            { title: "Salary Slip", url: "/admin/my-profile?tab=salary-slip", permissionPath: "/admin/my-profile", icon: Receipt },
+            { title: "My Tasks", url: "/admin/my-profile?tab=tasks", permissionPath: "/admin/my-profile", icon: ClipboardList },
+            { title: "Performance", url: "/admin/my-profile?tab=performance", permissionPath: "/admin/my-profile", icon: TrendingUp },
+            { title: "Queries", url: "/admin/my-profile?tab=queries", permissionPath: "/admin/my-profile", icon: HelpCircle },
+            { title: "Complaints", url: "/admin/my-profile?tab=complaints", permissionPath: "/admin/my-profile", icon: MessageSquareWarning },
+            { title: "Documents", url: "/admin/my-profile?tab=documents", permissionPath: "/admin/my-profile", icon: FileCheck2 },
+        ],
+    },
+    {
         title: "Analytics",
         url: "/admin/analytics",
         icon: BarChart3,
@@ -202,6 +218,7 @@ const navItems: SidebarItem[] = [
             { title: "All Students", url: "/admin/students", icon: GraduationCap },
             { title: "Fee Management", url: "/admin/students/fee-management", icon: CreditCard },
             { title: "Attendance", url: "/admin/students/attendance", icon: ClipboardCheck },
+            { title: "Students Performance", url: "/admin/students/performance", icon: TrendingUp },
         ],
     },
     {
@@ -209,12 +226,12 @@ const navItems: SidebarItem[] = [
         url: "/admin/staff",
         icon: Users,
         children: [
-            { title: "My Data", url: "/admin/staff/my-data", icon: Sparkles },
+            { title: "Documents", url: "/admin/staff/my-data?tab=documents", icon: FileText },
             { title: "Noticeboard", url: "/admin/institutions/news", icon: Bell },
             { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
             { title: "All Staff", url: "/admin/staff", icon: UsersRound },
             { title: "Task Management", url: "/admin/operations/tasks", icon: ClipboardList },
-            { title: "Performance", url: "/admin/staff/performance", icon: TrendingUp },
+            { title: "Staff Performance", url: "/admin/staff/performance", icon: TrendingUp },
             { title: "Attendance", url: "/admin/staff/attendance", icon: ClipboardCheck },
             { title: "Queries", url: "/admin/staff/queries", icon: HelpCircle },
             { title: "Our Jobs", url: "/admin/staff/jobs", icon: Briefcase },
@@ -285,6 +302,7 @@ const navItems: SidebarItem[] = [
             { title: "Financial Performance", url: "/admin/finance/performance", icon: BarChart3 },
             { title: "Payment Methods", url: "/admin/finance/payment-methods", icon: Landmark },
             { title: "Finance Categories", url: "/admin/finance/categories", icon: Tags },
+            { title: "Transportation Fee", url: "/admin/finance/transportation-fee", icon: Bus },
         ],
     },
     {
@@ -300,6 +318,7 @@ const navItems: SidebarItem[] = [
             { title: "Ads Builder", url: "/admin/marketing/ads-builder", icon: Megaphone },
             { title: "New Offers", url: "/admin/marketing/offers", icon: Sparkles },
             { title: "SEO & Meta Tags", url: "/admin/marketing/seo", icon: Globe },
+            { title: "Listing Page SEO", url: "/admin/marketing/listing-seo", icon: MapPin },
         ],
     },
     {
@@ -482,6 +501,20 @@ function getActiveSidebarLeaf(
         }
 
 
+
+        if (item.url.startsWith("/admin/my-profile")) {
+            const itemTab = item.url.includes("tab=")
+                ? item.url.split("tab=")[1]?.split("&")[0]
+                : "my-data";
+            const currentTab = searchTab || searchParam || "my-data";
+            if (
+                normalizeAdminPath(pathname) === "/admin/my-profile" &&
+                itemTab === currentTab
+            ) {
+                matches.push({ key: item.url, pathLength: item.url.length + 10 });
+            }
+            return;
+        }
 
         if (item.url.startsWith("/admin/analytics")) {
             const itemTab = item.url.includes("tab=")
@@ -671,12 +704,27 @@ export function AppSidebar() {
         studentEnrollments.find((enrollment) => enrollment.id === activeStudentEnrollmentId) ??
         studentEnrollments[0] ??
         null;
-    const canPage = useCallback((pathname: string) => (
-        isAdminPathVisibleForRole(user, pathname) &&
-        hasAdminPagePermission(user, pathname)
-    ), [user]);
+    const canPage = useCallback((pathname: string) => {
+        if (pathname === "/admin/account" || pathname.startsWith("/admin/account")) {
+            return !isStudent && !isParent;
+        }
+        if (pathname === "/admin/my-profile" || pathname.startsWith("/admin/my-profile")) {
+            return !isStudent && !isParent;
+        }
+        if (isInstitutionAdmin && pathname === "/admin/classroom/my-timetable") {
+            return true;
+        }
+        return (
+            isAdminPathVisibleForRole(user, pathname) &&
+            hasAdminPagePermission(user, pathname)
+        );
+    }, [user, isStudent, isParent, isInstitutionAdmin]);
     const roleAwareNavItems = useMemo(
         () => navItems.flatMap((item) => {
+            if (item.url === "/admin/my-profile") {
+                if (isStudent || isParent) return [];
+                return [item];
+            }
             if (!isStudent && item.url === "/admin/my-program") {
                 return [];
             }
@@ -686,11 +734,18 @@ export function AppSidebar() {
                 }
                 if (isInstitutionAdmin) {
                     return [{
-                        ...item,
-                        title: "Manage Students",
+                        title: "My Classroom",
+                        url: "/admin/students",
+                        icon: School,
                         children: [
-                            ...(item.children || []),
-                            { title: "Academic Sessions", url: "/admin/institutions/academic-years", icon: CalendarDays },
+                            { title: "All Students", url: "/admin/students", icon: UsersRound },
+                            { title: "Attendance", url: "/admin/students/attendance", icon: ClipboardCheck },
+                            { title: "Assignments", url: "/admin/content/assignments", icon: ClipboardList },
+                            { title: "Practice Exams", url: "/admin/content/practice-exams", icon: BookCheck },
+                            { title: "Exams", url: "/admin/content/exams", icon: FileText },
+                            { title: "Lecture Notes", url: "/admin/content/notes", icon: StickyNote },
+                            { title: "My Timetable", url: "/admin/classroom/my-timetable", icon: CalendarDays },
+                            { title: "Growth Chart", url: "/admin/content/growth-chart", icon: TrendingUp },
                         ],
                     }];
                 }
@@ -714,7 +769,7 @@ export function AppSidebar() {
                             { title: "My Data", url: "/admin/staff/my-data", icon: Sparkles },
                             { title: "My Attendance", url: "/admin/institution/my-attendance", icon: ClipboardCheck },
                             { title: "My Tasks", url: "/admin/operations/tasks?scope=me", icon: ClipboardList },
-                            { title: "Performance", url: "/admin/staff/performance", icon: TrendingUp },
+                            { title: "Staff Performance", url: "/admin/staff/performance", icon: TrendingUp },
                             { title: "My Salary", url: "/admin/institution/my-salary", icon: IndianRupee },
                             { title: "Noticeboard", url: "/admin/institutions/news", icon: Bell },
                             { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
@@ -781,6 +836,19 @@ export function AppSidebar() {
                             { title: "Purchase & Sell Requests", url: "/admin/finance/requests", icon: ArrowLeftRight },
                             { title: "Allowance", url: "/admin/finance/allowance", icon: BadgeDollarSign },
                         ],
+                    }];
+                }
+                if (isInstitutionAdmin) {
+                    const children = item.children.filter((child) => child.title !== "Fee Management");
+                    children.push({
+                        title: "Fee Management",
+                        url: "/admin/finance/fee-management",
+                        permissionPath: "/admin/students/fee-management",
+                        icon: CreditCard,
+                    });
+                    return [{
+                        ...item,
+                        children,
                     }];
                 }
                 return [item];

@@ -4,11 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import {
+  AlertCircle,
   ArrowUpDown,
   CalendarDays,
   CalendarCheck,
   Check,
   CheckCircle2,
+  Clock,
   Copy,
   CreditCard,
   FileText,
@@ -21,6 +23,7 @@ import {
   Mail,
   MapPin,
   Phone,
+  Plus,
   QrCode,
   Receipt,
   RefreshCw,
@@ -97,6 +100,7 @@ import { formatIndianDate } from "@/lib/format-time";
 import type { DocumentTemplateRow } from "@/lib/types/document-template";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store";
+import { AddFeeRecordDialog, type InitialFeeCollectData } from "./_components/add-fee-record-dialog";
 import {
   getDefaultStudentFilters,
   isStudentFilters,
@@ -226,7 +230,7 @@ type PaymentRequest = {
 };
 
 type FeeTransaction = {
-  id: number;
+  id: number | string;
   student_user_id: number;
   student_profile_id: number;
   enrollment_id: number;
@@ -245,6 +249,10 @@ type FeeTransaction = {
   screenshot_resource_type: string | null;
   remarks: string | null;
   status: string | null;
+  fee_title?: string | null;
+  due_date?: string | null;
+  is_due?: boolean;
+  is_overdue?: boolean;
   received_at: string | null;
   verified_at: string | null;
   created_at: string | null;
@@ -607,14 +615,18 @@ function FeeTransactionDetailSurface({
   open,
   isMobile,
   onOpenChange,
+  onCollectDue,
 }: {
   transaction: FeeTransaction | null;
   open: boolean;
   isMobile: boolean;
   onOpenChange: (open: boolean) => void;
+  onCollectDue?: (transaction: FeeTransaction) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const labels = transaction ? parsePaymentRequestPeriodLabels(transaction.period_labels) : [];
+  const isDue = Boolean(transaction?.is_due || transaction?.status === "pending");
+  const isOverdue = Boolean(transaction?.is_overdue);
 
   const handleCopyTransactionId = () => {
     if (!transaction?.transaction_id) return;
@@ -631,22 +643,53 @@ function FeeTransactionDetailSurface({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
-              <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-xs font-bold">
-                <CheckCircle2 className="size-3.5 mr-1" />
-                Payment Paid
-              </Badge>
+              {isDue ? (
+                isOverdue ? (
+                  <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 text-xs font-bold">
+                    <AlertCircle className="size-3.5 mr-1" />
+                    Overdue Fee
+                  </Badge>
+                ) : (
+                  <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-xs font-bold">
+                    <Clock className="size-3.5 mr-1" />
+                    Fee Due
+                  </Badge>
+                )
+              ) : (
+                <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-xs font-bold">
+                  <CheckCircle2 className="size-3.5 mr-1" />
+                  Payment Paid
+                </Badge>
+              )}
               <span className="text-xs font-mono font-bold text-muted-foreground">
-                REC-{transaction.id}
+                {isDue ? `DUE-${transaction.id}` : `REC-${transaction.id}`}
               </span>
             </div>
             <h3 className="text-xl font-bold text-foreground">{transaction.student_name ?? "Student"}</h3>
             <p className="text-xs text-muted-foreground">{transaction.student_email ?? "-"}</p>
           </div>
-          <div className="rounded-xl border bg-primary/5 border-primary/20 px-4 py-3 text-right">
-            <p className="text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">Total Paid</p>
-            <p className="text-2xl font-black text-primary">{formatAmount(transaction.total_amount)}</p>
+          <div className={cn("rounded-xl border px-4 py-3 text-right", isDue ? (isOverdue ? "bg-rose-500/10 border-rose-500/20" : "bg-amber-500/10 border-amber-500/20") : "bg-primary/5 border-primary/20")}>
+            <p className="text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">
+              {isDue ? "Outstanding Due" : "Total Paid"}
+            </p>
+            <p className={cn("text-2xl font-black", isDue ? (isOverdue ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400") : "text-primary")}>
+              {formatAmount(transaction.total_amount)}
+            </p>
           </div>
         </div>
+
+        {isDue && onCollectDue && (
+          <div className="mt-4 pt-3 border-t">
+            <Button
+              type="button"
+              className="w-full gap-2 bg-[#D91B1B] hover:bg-[#b91515] text-white font-bold shadow-sm"
+              onClick={() => onCollectDue(transaction)}
+            >
+              <CreditCard className="size-4" />
+              Collect Fee Now ({formatAmount(transaction.total_amount)})
+            </Button>
+          </div>
+        )}
 
         <div className="mt-4 grid gap-3 text-xs sm:grid-cols-2 pt-3 border-t border-border/50">
           <DetailField label="Course" value={[
@@ -660,8 +703,8 @@ function FeeTransactionDetailSurface({
             transaction.roll_number ? `Roll: #${transaction.roll_number}` : null,
           ].filter(Boolean).join(" · ") || "-"} />
           <DetailField label="Student Phone" value={transaction.student_phone || "-"} />
-          <DetailField label="Payment Method" value={formatLabelValue(transaction.payment_method)} />
-          <DetailField label="Transaction Ref" value={
+          <DetailField label={isDue ? "Fee Type / Plan" : "Payment Method"} value={isDue ? "Scheduled Fee Due" : formatLabelValue(transaction.payment_method)} />
+          <DetailField label="Transaction / Due Ref" value={
             <div className="flex items-center gap-1.5">
               <span className="font-mono text-xs break-all">{transaction.transaction_id || `FEE-${transaction.id}`}</span>
               {transaction.transaction_id && (
@@ -671,8 +714,8 @@ function FeeTransactionDetailSurface({
               )}
             </div>
           } />
-          <DetailField label="Payment Date" value={formatDate(transaction.received_at || transaction.created_at)} />
-          <DetailField label="Received By" value={transaction.receiver_name || "Institution Admin"} />
+          <DetailField label={isDue ? "Due Date" : "Payment Date"} value={formatDate(isDue ? (transaction.due_date || transaction.created_at) : (transaction.received_at || transaction.created_at))} />
+          <DetailField label={isDue ? "Payment Status" : "Received By"} value={isDue ? (isOverdue ? "Overdue (Unpaid)" : "Pending Collection") : (transaction.receiver_name || "Institution Admin")} />
         </div>
       </section>
 
@@ -691,8 +734,10 @@ function FeeTransactionDetailSurface({
             </div>
           )}
           <div className="flex items-center justify-between pt-2 border-t font-bold text-sm text-foreground">
-            <span>Net Paid Amount:</span>
-            <span className="text-primary text-base font-black">{formatAmount(transaction.total_amount)}</span>
+            <span>{isDue ? "Net Due Amount:" : "Net Paid Amount:"}</span>
+            <span className={cn("text-base font-black", isDue ? (isOverdue ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400") : "text-primary")}>
+              {formatAmount(transaction.total_amount)}
+            </span>
           </div>
         </div>
       </section>
@@ -1596,18 +1641,7 @@ function buildFeeStudentColumns(): ColumnDef<FeeStudent>[] {
         <span className="text-muted-foreground">{row.getValue("email")}</span>
       ),
     },
-    {
-      accessorKey: "institutions",
-      header: "Institution",
-      cell: ({ row }) => {
-        const institutions = row.getValue("institutions") as string[];
-        return (
-          <span className="text-muted-foreground">
-            {institutions?.length ? institutions.join(", ") : "-"}
-          </span>
-        );
-      },
-    },
+
     {
       accessorKey: "is_active",
       header: ({ column }) => (
@@ -2647,7 +2681,10 @@ export default function FeeManagementPage() {
   const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [transactionSearch, setTransactionSearch] = useState("");
   const [transactionMethod, setTransactionMethod] = useState("all");
+  const [transactionStatus, setTransactionStatus] = useState<"all" | "paid" | "due" | "overdue">("all");
+  const [collectFeeInitialData, setCollectFeeInitialData] = useState<InitialFeeCollectData | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<FeeTransaction | null>(null);
+  const [addFeeRecordOpen, setAddFeeRecordOpen] = useState(false);
   const [filters, setFilters] = usePersistedState<StudentFilters>(
     "admin.students.fee-management.filters",
     getDefaultStudentFilters,
@@ -2882,6 +2919,7 @@ export default function FeeManagementPage() {
           ...transaction,
           search_text: [
             transaction.student_name,
+            transaction.fee_title,
             transaction.student_email,
             transaction.student_phone,
             transaction.admission_number,
@@ -2891,6 +2929,7 @@ export default function FeeManagementPage() {
             transaction.transaction_id,
             transaction.receiver_name,
             transaction.remarks,
+            transaction.status,
           ].filter(Boolean).join(" ").toLowerCase(),
         })),
       );
@@ -3075,40 +3114,69 @@ export default function FeeManagementPage() {
     if (transactionMethod !== "all") {
       list = list.filter((t) => (t.payment_method || "cash").toLowerCase() === transactionMethod.toLowerCase());
     }
+    if (transactionStatus === "paid") {
+      list = list.filter((t) => ["paid", "verified", "approved"].includes((t.status || "").toLowerCase()));
+    } else if (transactionStatus === "due") {
+      list = list.filter((t) => t.is_due || (t.status || "").toLowerCase() === "pending");
+    } else if (transactionStatus === "overdue") {
+      list = list.filter((t) => Boolean(t.is_overdue));
+    }
     const search = transactionSearch.trim().toLowerCase();
     if (!search) return list;
     return list.filter((t) =>
       [
         t.student_name,
+        t.fee_title,
         t.transaction_id,
         t.student_email,
         t.student_phone,
         t.admission_number,
         t.roll_number,
         t.program_name,
+        t.section_name,
         t.receiver_name,
+        t.status,
       ].filter(Boolean).join(" ").toLowerCase().includes(search),
     );
-  }, [transactions, transactionMethod, transactionSearch]);
+  }, [transactions, transactionMethod, transactionStatus, transactionSearch]);
 
   const transactionMetrics = useMemo(() => {
     let totalCollected = 0;
     let cashCollected = 0;
     let upiCollected = 0;
+    let totalDue = 0;
+    let paidCount = 0;
+    let dueCount = 0;
+    let overdueCount = 0;
+
     for (const t of transactions) {
       const amount = Number(t.total_amount ?? 0) || 0;
-      totalCollected += amount;
-      if ((t.payment_method || "cash").toLowerCase() === "cash") {
-        cashCollected += amount;
+      const isPaid = ["paid", "verified", "approved"].includes((t.status || "").toLowerCase());
+      if (isPaid) {
+        totalCollected += amount;
+        paidCount++;
+        if ((t.payment_method || "cash").toLowerCase() === "cash") {
+          cashCollected += amount;
+        } else {
+          upiCollected += amount;
+        }
       } else {
-        upiCollected += amount;
+        totalDue += amount;
+        dueCount++;
+        if (t.is_overdue) {
+          overdueCount++;
+        }
       }
     }
     return {
       totalCollected,
       cashCollected,
       upiCollected,
-      count: transactions.length,
+      totalDue,
+      paidCount,
+      dueCount,
+      overdueCount,
+      totalCount: transactions.length,
     };
   }, [transactions]);
 
@@ -3233,16 +3301,36 @@ export default function FeeManagementPage() {
       },
       {
         id: "periods",
-        header: "Month(s)",
+        header: "Month(s) / Term",
         cell: ({ row }) => {
+          const isDue = row.original.is_due || row.original.status === "pending";
           const labels = parsePaymentRequestPeriodLabels(row.original.period_labels);
+          const title =
+            row.original.fee_title ||
+            (labels.length ? labels[0].duration_label || formatDateRange(labels[0].start_date, labels[0].end_date) : null);
           return (
-            <div className="max-w-60 flex flex-wrap gap-1">
-              {labels.length ? labels.map((period) => (
-                <Badge key={period.index} variant="outline" className="text-[10.5px] bg-muted/40 font-normal">
-                  {period.duration_label || formatDateRange(period.start_date, period.end_date)}
+            <div className="max-w-60">
+              {title ? (
+                <Badge
+                  variant={isDue ? "secondary" : "outline"}
+                  className={cn(
+                    "text-[11px] font-medium",
+                    isDue && "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20",
+                  )}
+                >
+                  {title}
                 </Badge>
-              )) : <span className="text-xs text-muted-foreground">-</span>}
+              ) : labels.length ? (
+                <div className="flex flex-wrap gap-1">
+                  {labels.map((period) => (
+                    <Badge key={period.index} variant="outline" className="text-[10.5px] bg-muted/40 font-normal">
+                      {period.duration_label || formatDateRange(period.start_date, period.end_date)}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-xs text-muted-foreground">-</span>
+              )}
             </div>
           );
         },
@@ -3250,27 +3338,60 @@ export default function FeeManagementPage() {
       {
         accessorKey: "total_amount",
         header: "Amount",
-        cell: ({ row }) => (
-          <div>
-            <div className="font-bold text-sm text-emerald-600 dark:text-emerald-400">
-              {formatAmount(row.original.total_amount)}
-            </div>
-            {Number(row.original.discount_amount ?? 0) > 0 && (
-              <div className="text-[10.5px] text-muted-foreground">
-                Disc: {formatAmount(row.original.discount_amount)} ({Number(row.original.discount_percent ?? 0)}%)
+        cell: ({ row }) => {
+          const isDue = row.original.is_due || row.original.status === "pending";
+          const isOverdue = row.original.is_overdue;
+          return (
+            <div>
+              <div
+                className={cn(
+                  "font-bold text-sm",
+                  isDue
+                    ? isOverdue
+                      ? "text-rose-600 dark:text-rose-400"
+                      : "text-amber-600 dark:text-amber-400"
+                    : "text-emerald-600 dark:text-emerald-400",
+                )}
+              >
+                {formatAmount(row.original.total_amount)}
               </div>
-            )}
-          </div>
-        ),
+              {Number(row.original.discount_amount ?? 0) > 0 && (
+                <div className="text-[10.5px] text-muted-foreground">
+                  Disc: {formatAmount(row.original.discount_amount)} ({Number(row.original.discount_percent ?? 0)}%)
+                </div>
+              )}
+              {isDue && (
+                <div
+                  className={cn(
+                    "text-[10px] font-semibold uppercase tracking-wider",
+                    isOverdue ? "text-rose-500" : "text-amber-500",
+                  )}
+                >
+                  {isOverdue ? "Overdue" : "Outstanding Due"}
+                </div>
+              )}
+            </div>
+          );
+        },
       },
       {
         accessorKey: "payment_method",
         header: "Method",
-        cell: ({ row }) => (
-          <Badge variant="outline" className="capitalize text-[11px] font-semibold">
-            {row.original.payment_method === "qr" ? "QR Code" : row.original.payment_method?.toUpperCase() || "Cash"}
-          </Badge>
-        ),
+        cell: ({ row }) => {
+          const isDue = row.original.is_due || row.original.status === "pending";
+          if (isDue) {
+            return (
+              <Badge variant="outline" className="border-amber-500/30 text-amber-700 dark:text-amber-400 bg-amber-500/10 text-[11px] font-semibold">
+                Due Invoice
+              </Badge>
+            );
+          }
+          return (
+            <Badge variant="outline" className="capitalize text-[11px] font-semibold">
+              {row.original.payment_method === "qr" ? "QR Code" : row.original.payment_method?.toUpperCase() || "Cash"}
+            </Badge>
+          );
+        },
       },
       {
         accessorKey: "transaction_id",
@@ -3283,46 +3404,116 @@ export default function FeeManagementPage() {
       },
       {
         id: "received_by",
-        header: "Collected By / Date",
-        cell: ({ row }) => (
-          <div>
-            <div className="font-medium text-xs">
-              {formatDate(row.original.received_at || row.original.created_at)}
+        header: "Collected / Due Date",
+        cell: ({ row }) => {
+          const isDue = row.original.is_due || row.original.status === "pending";
+          if (isDue) {
+            return (
+              <div>
+                <div className="font-medium text-xs">
+                  {row.original.due_date ? formatIndianDate(row.original.due_date) : "No Due Date"}
+                </div>
+                <div className="text-[11px]">
+                  {row.original.is_overdue ? (
+                    <span className="text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-1">
+                      <AlertCircle className="size-3" /> Overdue
+                    </span>
+                  ) : (
+                    <span className="text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+                      <Clock className="size-3" /> Due Soon
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div>
+              <div className="font-medium text-xs">
+                {formatDate(row.original.received_at || row.original.created_at)}
+              </div>
+              <div className="text-[11px] text-muted-foreground truncate max-w-32">
+                {row.original.receiver_name || "Institution Admin"}
+              </div>
             </div>
-            <div className="text-[11px] text-muted-foreground truncate max-w-32">
-              {row.original.receiver_name || "Institution Admin"}
-            </div>
-          </div>
-        ),
+          );
+        },
       },
       {
         id: "status",
         header: "Status",
-        cell: () => (
-          <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-xs font-semibold">
-            <CheckCircle2 className="size-3 mr-1" />
-            Paid
-          </Badge>
-        ),
+        cell: ({ row }) => {
+          const isDue = row.original.is_due || row.original.status === "pending";
+          if (isDue) {
+            if (row.original.is_overdue) {
+              return (
+                <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 text-xs font-semibold">
+                  <AlertCircle className="size-3 mr-1" />
+                  Overdue
+                </Badge>
+              );
+            }
+            return (
+              <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-xs font-semibold">
+                <Clock className="size-3 mr-1" />
+                Pending Due
+              </Badge>
+            );
+          }
+          return (
+            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-xs font-semibold">
+              <CheckCircle2 className="size-3 mr-1" />
+              Paid
+            </Badge>
+          );
+        },
       },
       {
         id: "actions",
         header: "Action",
-        cell: ({ row }) => (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 text-xs font-semibold text-primary gap-1"
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTransaction(row.original);
-            }}
-          >
-            <Receipt className="size-3.5" />
-            Receipt
-          </Button>
-        ),
+        cell: ({ row }) => {
+          const isDue = row.original.is_due || row.original.status === "pending";
+          if (isDue) {
+            return (
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                className="h-8 text-xs font-semibold bg-[#D91B1B] hover:bg-[#b91515] text-white gap-1 shadow-2xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCollectFeeInitialData({
+                    studentUserId: row.original.student_user_id,
+                    enrollmentId: row.original.enrollment_id,
+                    feeTitle: row.original.fee_title || row.original.program_name || "Course Fee",
+                    amount: Number(row.original.total_amount) || 0,
+                    dueDate: row.original.due_date || undefined,
+                    status: "paid",
+                  });
+                  setAddFeeRecordOpen(true);
+                }}
+              >
+                <CreditCard className="size-3.5" />
+                Collect Fee
+              </Button>
+            );
+          }
+          return (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs font-semibold text-primary gap-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedTransaction(row.original);
+              }}
+            >
+              <Receipt className="size-3.5" />
+              Receipt
+            </Button>
+          );
+        },
       },
     ],
     [],
@@ -3342,11 +3533,21 @@ export default function FeeManagementPage() {
 
   return (
     <div className="w-full max-w-full space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Fee Management</h1>
-        <p className="text-muted-foreground">
-          Manage student fees, payments, and dues from enrolled student records.
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Fee Management</h1>
+          <p className="text-muted-foreground">
+            Manage student fees, payments, and dues from enrolled student records.
+          </p>
+        </div>
+        <Button
+          type="button"
+          onClick={() => setAddFeeRecordOpen(true)}
+          className="gap-2 shrink-0 bg-[#D91B1B] hover:bg-[#b91515] text-white font-semibold shadow-sm"
+        >
+          <Plus className="size-4" />
+          Add Fee Record
+        </Button>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -3380,7 +3581,7 @@ export default function FeeManagementPage() {
           className="gap-2"
         >
           <Receipt className="size-4" />
-          Fee Transactions
+          Fee Transactions & Dues
           {transactions.length > 0 && (
             <Badge variant="secondary" className="ml-0.5 text-xs font-semibold">
               {transactions.length}
@@ -3478,32 +3679,47 @@ export default function FeeManagementPage() {
                   <p className="text-xs font-medium text-muted-foreground">Total Collections</p>
                   <TrendingUp className="size-4 text-emerald-500" />
                 </div>
-                <p className="mt-1.5 text-xl font-bold text-foreground sm:text-2xl">{formatAmount(transactionMetrics.totalCollected)}</p>
-                <p className="text-[11px] text-muted-foreground">{transactionMetrics.count} transactions recorded</p>
+                <p className="mt-1.5 text-xl font-bold text-emerald-600 dark:text-emerald-400 sm:text-2xl">
+                  {formatAmount(transactionMetrics.totalCollected)}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {transactionMetrics.paidCount} verified paid transactions
+                </p>
               </div>
+
+              <div className="rounded-xl border bg-card p-4 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground">Total Outstanding Dues</p>
+                  <AlertCircle className="size-4 text-amber-500" />
+                </div>
+                <p className="mt-1.5 text-xl font-bold text-amber-600 dark:text-amber-400 sm:text-2xl">
+                  {formatAmount(transactionMetrics.totalDue)}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {transactionMetrics.dueCount} pending dues {transactionMetrics.overdueCount > 0 ? `(${transactionMetrics.overdueCount} overdue)` : ""}
+                </p>
+              </div>
+
               <div className="rounded-xl border bg-card p-4 shadow-2xs">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-medium text-muted-foreground">Cash Collections</p>
                   <IndianRupee className="size-4 text-primary" />
                 </div>
-                <p className="mt-1.5 text-xl font-bold text-foreground sm:text-2xl">{formatAmount(transactionMetrics.cashCollected)}</p>
+                <p className="mt-1.5 text-xl font-bold text-foreground sm:text-2xl">
+                  {formatAmount(transactionMetrics.cashCollected)}
+                </p>
                 <p className="text-[11px] text-muted-foreground">Direct counter cash</p>
               </div>
+
               <div className="rounded-xl border bg-card p-4 shadow-2xs">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-medium text-muted-foreground">UPI / Digital</p>
                   <QrCode className="size-4 text-indigo-500" />
                 </div>
-                <p className="mt-1.5 text-xl font-bold text-foreground sm:text-2xl">{formatAmount(transactionMetrics.upiCollected)}</p>
+                <p className="mt-1.5 text-xl font-bold text-foreground sm:text-2xl">
+                  {formatAmount(transactionMetrics.upiCollected)}
+                </p>
                 <p className="text-[11px] text-muted-foreground">UPI, QR & Net Banking</p>
-              </div>
-              <div className="rounded-xl border bg-card p-4 shadow-2xs">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium text-muted-foreground">Total Paid Records</p>
-                  <FileText className="size-4 text-muted-foreground" />
-                </div>
-                <p className="mt-1.5 text-xl font-bold text-foreground sm:text-2xl">{transactionMetrics.count}</p>
-                <p className="text-[11px] text-muted-foreground">Verified transactions</p>
               </div>
             </div>
 
@@ -3515,9 +3731,67 @@ export default function FeeManagementPage() {
                   <DebouncedSearchInput
                     value={transactionSearch}
                     onValueChange={setTransactionSearch}
-                    placeholder="Search student, adm #, roll, ref..."
+                    placeholder="Search student, adm #, roll, title, ref..."
                     className="min-w-0 flex-1 sm:w-72 sm:flex-none"
                   />
+                  <div className="flex flex-wrap items-center gap-1">
+                    <Button
+                      type="button"
+                      variant={transactionStatus === "all" ? "default" : "outline"}
+                      size="sm"
+                      className="h-9 text-xs"
+                      onClick={() => setTransactionStatus("all")}
+                    >
+                      All Fees ({transactionMetrics.totalCount})
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={transactionStatus === "paid" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(
+                        "h-9 text-xs gap-1",
+                        transactionStatus === "paid"
+                          ? "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                          : "text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
+                      )}
+                      onClick={() => setTransactionStatus("paid")}
+                    >
+                      <CheckCircle2 className="size-3.5" />
+                      Paid ({transactionMetrics.paidCount})
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={transactionStatus === "due" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(
+                        "h-9 text-xs gap-1",
+                        transactionStatus === "due"
+                          ? "bg-amber-600 hover:bg-amber-700 text-white font-semibold"
+                          : "text-amber-700 dark:text-amber-400 border-amber-500/30",
+                      )}
+                      onClick={() => setTransactionStatus("due")}
+                    >
+                      <Clock className="size-3.5" />
+                      Pending Due ({transactionMetrics.dueCount})
+                    </Button>
+                    {transactionMetrics.overdueCount > 0 && (
+                      <Button
+                        type="button"
+                        variant={transactionStatus === "overdue" ? "default" : "outline"}
+                        size="sm"
+                        className={cn(
+                          "h-9 text-xs gap-1",
+                          transactionStatus === "overdue"
+                            ? "bg-rose-600 hover:bg-rose-700 text-white font-semibold"
+                            : "text-rose-700 dark:text-rose-400 border-rose-500/30",
+                        )}
+                        onClick={() => setTransactionStatus("overdue")}
+                      >
+                        <AlertCircle className="size-3.5" />
+                        Overdue ({transactionMetrics.overdueCount})
+                      </Button>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1">
                     {(["all", "cash", "upi", "qr"] as const).map((method) => (
                       <Button
@@ -3546,7 +3820,15 @@ export default function FeeManagementPage() {
                 </div>
               }
               loading={transactionsLoading}
-              emptyText="No fee transactions recorded yet."
+              emptyText={
+                transactionStatus === "paid"
+                  ? "No paid fee records found."
+                  : transactionStatus === "due"
+                    ? "No pending fee dues found."
+                    : transactionStatus === "overdue"
+                      ? "No overdue fee records found."
+                      : "No fee records recorded yet."
+              }
               onRowClick={(transaction) => setSelectedTransaction(transaction)}
             />
           </div>
@@ -3558,6 +3840,18 @@ export default function FeeManagementPage() {
         open={Boolean(selectedTransaction)}
         isMobile={isMobile}
         onOpenChange={(open) => !open && setSelectedTransaction(null)}
+        onCollectDue={(trans) => {
+          setSelectedTransaction(null);
+          setCollectFeeInitialData({
+            studentUserId: trans.student_user_id,
+            enrollmentId: trans.enrollment_id,
+            feeTitle: trans.fee_title || trans.program_name || "Course Fee",
+            amount: Number(trans.total_amount) || 0,
+            dueDate: trans.due_date || undefined,
+            status: "paid",
+          });
+          setAddFeeRecordOpen(true);
+        }}
       />
 
       <FeeDetailSheet
@@ -3718,6 +4012,23 @@ export default function FeeManagementPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AddFeeRecordDialog
+        open={addFeeRecordOpen}
+        onOpenChange={(open) => {
+          setAddFeeRecordOpen(open);
+          if (!open) setCollectFeeInitialData(null);
+        }}
+        institutionId={activeInstitution?.id}
+        academicYearId={activeAcademicYearId}
+        accessToken={accessToken}
+        initialData={collectFeeInitialData}
+        onSuccess={() => {
+          setCollectFeeInitialData(null);
+          void fetchStudents();
+          void fetchTransactions();
+        }}
+      />
     </div>
   );
 }

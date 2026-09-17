@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import type { PublicInstitute } from "./institute-data";
 import { buildInstituteUrl } from "@/lib/utils/seo-slug";
 import { UniversalFeedbackDialog } from "@/components/public/universal-feedback-dialog";
+import { FavoriteButton } from "@/components/shared/favorite-button";
 import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
 
 type InstituteCardProps = {
@@ -43,12 +44,24 @@ export function InstituteCard({ institute, viewMode = "grid" }: InstituteCardPro
           <div className="absolute left-0 top-0 flex h-11 w-11 items-center justify-center rounded-br-lg border-b border-r border-primary/30 bg-background/90 text-primary">
             <ShieldCheck className="h-5 w-5" />
           </div>
-          {institute.verified && (
-            <Badge className="absolute right-2 top-2 h-6 max-w-[calc(100%-3.5rem)] bg-green-500 px-2 text-xs font-semibold text-white">
-              <CheckCircle2 className="h-3 w-3" />
-              Verified
-            </Badge>
-          )}
+          <div className="absolute right-2 top-2 z-10 flex items-center gap-1.5">
+            {institute.verified && (
+              <Badge className="h-6 bg-green-500 px-2 text-xs font-semibold text-white">
+                <CheckCircle2 className="h-3 w-3" />
+                Verified
+              </Badge>
+            )}
+            <FavoriteButton
+              entityType="institute"
+              entityId={institute.id}
+              title={institute.name}
+              subtitle={institute.location}
+              imageUrl={institute.image}
+              targetUrl={instUrl}
+              badge={institute.category}
+              size="sm"
+            />
+          </div>
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col px-1 pb-1 pt-4">

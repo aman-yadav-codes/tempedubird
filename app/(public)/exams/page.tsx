@@ -25,6 +25,7 @@ import { SharedPublicSidebar } from "@/components/public/shared-public-sidebar";
 import { SharedInterstitialBanner } from "@/components/public/shared-interstitial-banner";
 import { UniversalFeedbackDialog, type UniversalEntityTarget } from "@/components/public/universal-feedback-dialog";
 import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
+import { FavoriteButton } from "@/components/shared/favorite-button";
 
 type EntranceExam = {
   id: number;
@@ -142,9 +143,21 @@ export default function ExamsPublicPage() {
                               </h3>
                             </div>
 
-                            <Badge className="bg-emerald-600/90 text-white font-bold text-[10px] gap-1 shrink-0 px-2 py-0.5 rounded-lg">
-                              <Calendar className="size-3" /> {e.exam_date || "2026"}
-                            </Badge>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <Badge className="bg-emerald-600/90 text-white font-bold text-[10px] gap-1 shrink-0 px-2 py-0.5 rounded-lg">
+                                <Calendar className="size-3" /> {e.exam_date || "2026"}
+                              </Badge>
+                              <FavoriteButton
+                                entityType="exam"
+                                entityId={e.id}
+                                title={e.exam_name}
+                                subtitle={e.category}
+                                targetUrl={`/exams/${e.id}`}
+                                badge={e.category}
+                                price={e.application_fee ? `₹${Number(e.application_fee).toLocaleString("en-IN")}` : undefined}
+                                size="sm"
+                              />
+                            </div>
                           </div>
 
                           <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">

@@ -7,7 +7,6 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   GraduationCap,
-  BookOpen,
   CheckSquare,
   BookMarked,
   Building2,
@@ -30,13 +29,14 @@ import {
   Sun,
   Users,
   User,
-  Settings,
   Sparkles,
   FileText,
   Briefcase,
   ShoppingBag,
   MessageSquareHeart,
   Gift,
+  Contact,
+  Heart,
 } from "lucide-react";
 import { useAuthStore } from "@/store";
 import { clearBrowserSessionData } from "@/lib/auth/clear-browser-session";
@@ -167,7 +167,6 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
       title: "Platform",
       items: [
         { label: "Dashboard", href: "/student/dashboard", icon: LayoutDashboard },
-        { label: "Affiliate & Earn", href: "/student/affiliate", icon: Gift, badge: "Earn" },
         ...(hasEnrolledCourses
           ? [
               {
@@ -175,13 +174,14 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                 href: "/student/classroom/attendance",
                 icon: School,
                 children: [
+                  { label: "My Performance", href: "/student/classroom/performance" },
                   { label: "Attendance", href: "/student/classroom/attendance" },
                   { label: "Assignments", href: "/student/classroom/assignments" },
                   { label: "Notes", href: "/notes" },
                   { label: "Practice Exams", href: "/student/classroom/practice-exams" },
                   { label: "Exams & Results", href: "/student/classroom/exams" },
                   { label: "My Timetable", href: "/student/classroom/my-timetable" },
-                  { label: "ID Card", href: "/student/classroom/id-card" },
+                  { label: "ID Card & Documents", href: "/student/classroom/id-card" },
                   { label: "My Fee", href: "/student/classroom/fees" },
                   { label: "Calendar", href: "/student/institution/calendar" },
                   { label: "Noticeboard", href: "/student/institutions/news" },
@@ -191,21 +191,6 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
             ]
           : []),
         {
-          label: "Academics & Learning",
-          href: "/practice",
-          icon: BookOpen,
-          children: [
-            { label: "Practice Tests", href: "/practice" },
-            { label: "Lecture Notes", href: "/notes" },
-            { label: "Exams", href: "/exams" },
-            { label: "Explore Courses", href: "/courses" },
-            { label: "Top Institutes", href: "/institutes" },
-            { label: "Expert Faculty", href: "/teachers" },
-            { label: "Academic Store", href: "/products" },
-            { label: "Vendor Services", href: "/admin/vendors" },
-          ],
-        },
-        {
           label: "My Enrollments",
           href: "/student/enrollments",
           icon: GraduationCap,
@@ -213,7 +198,9 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
         },
         { label: "My Subscription", href: "/student/subscription", icon: Sparkles },
         { label: "My Enquiries", href: "/student/enquiries", icon: HelpCircle },
-        { label: "My Guardians", href: "/student/guardians", icon: Users },
+        { label: "My Favorites", href: "/student/favorites", icon: Heart },
+        { label: "My Contact", href: "/student/guardians", icon: Contact },
+        { label: "Affiliate & Earn", href: "/student/affiliate", icon: Gift, badge: "Earn" },
       ],
     },
   ];
@@ -636,16 +623,6 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                       <span className="text-xs font-semibold text-foreground">Profile</span>
                     </div>
                     <span className="text-[10px] text-muted-foreground">Manage your profile</span>
-                  </Link>
-                </DropdownMenuItem>
-
-                <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
-                  <Link href="/student/account?tab=preferences" className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-2.5">
-                      <Settings className="h-4 w-4 text-foreground/80" />
-                      <span className="text-xs font-semibold text-foreground">My Preferences</span>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground">Account settings</span>
                   </Link>
                 </DropdownMenuItem>
 

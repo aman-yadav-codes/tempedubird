@@ -44,19 +44,19 @@ export async function POST(req: Request) {
 
     if (!guardian_name?.trim()) {
       return NextResponse.json(
-        { error: "Guardian name is required" },
+        { error: "Contact name is required" },
         { status: 400 }
       );
     }
 
     if (!guardian_email?.trim() && !guardian_phone?.trim()) {
       return NextResponse.json(
-        { error: "Guardian email or phone number is required" },
+        { error: "Contact email or phone number is required" },
         { status: 400 }
       );
     }
 
-    const email = guardian_email?.trim() || `guardian_${user.id}_${Date.now()}@edubird.com`;
+    const email = guardian_email?.trim() || `contact_${user.id}_${Date.now()}@edubird.com`;
 
     const record = await addStudentGuardian(
       {
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
         guardianName: guardian_name.trim(),
         guardianEmail: email,
         guardianPhone: guardian_phone?.trim() || null,
-        relationship: relationship?.trim() || "Parent / Guardian",
+        relationship: relationship?.trim() || "Contact",
         isPrimary: Boolean(is_primary),
         occupation: occupation?.trim() || null,
       },
@@ -75,14 +75,14 @@ export async function POST(req: Request) {
       {
         success: true,
         data: record,
-        message: "Guardian added successfully",
+        message: "Contact added successfully",
       },
       { status: 201 }
     );
   } catch (err: any) {
     console.error("POST /api/student/guardians error:", err);
     return NextResponse.json(
-      { error: err.message || "Failed to add guardian" },
+      { error: err.message || "Failed to add contact" },
       { status: 500 }
     );
   }

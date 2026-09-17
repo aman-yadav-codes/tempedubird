@@ -287,6 +287,11 @@ function UsersPageContent() {
 
   const handleRemoveUser = useCallback(async () => {
     if (!accessToken || !removingUser) return
+    if (currentUser?.id && removingUser.id === currentUser.id) {
+      toast.error("You cannot remove your own account.")
+      setRemovingUser(null)
+      return
+    }
     if (!canDeleteUsers) {
       toast.error("You don't have permission to delete users.")
       setRemovingUser(null)
@@ -324,7 +329,7 @@ function UsersPageContent() {
     } finally {
       setRemoveLoading(false)
     }
-  }, [accessToken, authHeader, canDeleteUsers, fetchUsers, handleAuthError, removingUser])
+  }, [accessToken, authHeader, canDeleteUsers, currentUser?.id, fetchUsers, handleAuthError, removingUser])
 
   const handleBulkStatus = useCallback(async (
     selectedRows: User[],
@@ -332,6 +337,11 @@ function UsersPageContent() {
     resetSelection: () => void
   ) => {
     if (!accessToken) return
+    const filteredRows = selectedRows.filter((u) => !currentUser?.id || u.id !== currentUser.id)
+    if (filteredRows.length === 0) {
+      toast.error("Cannot modify your own account status.")
+      return
+    }
     if (!canEditUsers) {
       toast.error("You don't have permission to edit users.")
       return
@@ -346,7 +356,7 @@ function UsersPageContent() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          ids: selectedRows.map((user) => user.id),
+          ids: filteredRows.map((user) => user.id),
           isActive,
         }),
       })
@@ -364,7 +374,7 @@ function UsersPageContent() {
       }
 
       toast.success(
-        `${selectedRows.length} user${selectedRows.length === 1 ? "" : "s"} ${isActive ? "activated" : "disabled"}.`
+        `${filteredRows.length} user${filteredRows.length === 1 ? "" : "s"} ${isActive ? "activated" : "disabled"}.`
       )
       resetSelection()
       fetchUsers()
@@ -373,10 +383,16 @@ function UsersPageContent() {
     } finally {
       setBulkLoading(false)
     }
-  }, [accessToken, authHeader, canEditUsers, fetchUsers, handleAuthError])
+  }, [accessToken, authHeader, canEditUsers, currentUser?.id, fetchUsers, handleAuthError])
 
   const handleBulkRemoveUsers = useCallback(async () => {
     if (!accessToken || bulkDeleteTargets.length === 0) return
+    const filteredTargets = bulkDeleteTargets.filter((u) => !currentUser?.id || u.id !== currentUser.id)
+    if (filteredTargets.length === 0) {
+      toast.error("Cannot remove your own account.")
+      setBulkDeleteTargets([])
+      return
+    }
     if (!canDeleteUsers) {
       toast.error("You don't have permission to delete users.")
       setBulkDeleteTargets([])
@@ -392,7 +408,7 @@ function UsersPageContent() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          ids: bulkDeleteTargets.map((user) => user.id),
+          ids: filteredTargets.map((user) => user.id),
         }),
       })
       const json = await readJsonResponse(res)
@@ -410,8 +426,8 @@ function UsersPageContent() {
 
       toast.success(
         json.data?.action === "soft_deleted"
-          ? `${bulkDeleteTargets.length} user${bulkDeleteTargets.length === 1 ? "" : "s"} deleted.`
-          : `${bulkDeleteTargets.length} user${bulkDeleteTargets.length === 1 ? "" : "s"} removed from your institution.`
+          ? `${filteredTargets.length} user${filteredTargets.length === 1 ? "" : "s"} deleted.`
+          : `${filteredTargets.length} user${filteredTargets.length === 1 ? "" : "s"} removed from your institution.`
       )
       setBulkDeleteTargets([])
       bulkResetSelectionRef.current?.()
@@ -421,7 +437,7 @@ function UsersPageContent() {
     } finally {
       setBulkLoading(false)
     }
-  }, [accessToken, authHeader, bulkDeleteTargets, canDeleteUsers, fetchUsers, handleAuthError])
+  }, [accessToken, authHeader, bulkDeleteTargets, canDeleteUsers, currentUser?.id, fetchUsers, handleAuthError])
 
   const handleChangeEmploymentStatus = useCallback(
     async (user: User, status: string) => {
@@ -454,6 +470,7 @@ function UsersPageContent() {
   const userColumns = useMemo(
     () =>
       buildUserColumns({
+        currentUserId: currentUser?.id,
         onViewProfile: handleViewProfile,
         onEditUser: handleEditUser,
         onManageSalaryAccount: (user) => {
@@ -465,10 +482,16 @@ function UsersPageContent() {
           setPasswordUser(user)
           setPasswordDialogOpen(true)
         },
-        onRemoveUser: setRemovingUser,
+        onRemoveUser: (user) => {
+          if (currentUser?.id && user.id === currentUser.id) {
+            toast.error("You cannot remove your own account.")
+            return
+          }
+          setRemovingUser(user)
+        },
         removalLabel,
       }),
-    [handleChangeEmploymentStatus, handleEditUser, handleViewProfile, removalLabel]
+    [handleChangeEmploymentStatus, handleEditUser, handleViewProfile, removalLabel, currentUser?.id]
   )
 
   if (loading && !hasLoadedUsers) {

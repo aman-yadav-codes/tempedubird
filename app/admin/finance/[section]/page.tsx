@@ -1,7 +1,7 @@
 "use client";
 
 import { use } from "react";
-import { ArrowLeftRight, BadgeDollarSign, BarChart3, CalendarDays, CreditCard, FileText, IndianRupee, Landmark, Tags, TrendingUp, UsersRound } from "lucide-react";
+import { ArrowLeftRight, BadgeDollarSign, BarChart3, Bus, CalendarDays, CreditCard, FileText, IndianRupee, Landmark, Tags, TrendingUp, UsersRound } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { AllowanceClient } from "@/app/admin/finance/allowance-client";
@@ -15,8 +15,25 @@ import { PaymentMethodsClient } from "@/app/admin/finance/payment-methods-client
 import { PerformanceClient } from "@/app/admin/finance/performance-client";
 import { RecurringExpensesClient } from "@/app/admin/finance/recurring-expenses-client";
 import { PurchaseSellRequestsClient } from "@/app/admin/finance/purchase-sell-client";
+import { TransportationFeeClient } from "@/app/admin/finance/transportation-fee-client";
+import FeeManagementPage from "@/app/admin/students/fee-management/page";
 
 const FINANCE_SECTIONS = {
+  "fee-management": {
+    title: "Fee Management",
+    description: "Manage student fees, receipts, concessions, and fee collection records.",
+    icon: CreditCard,
+  },
+  "transportation-fee": {
+    title: "Transportation Fee",
+    description: "Configure student transportation charges according to distance (KM) ranges and route zones.",
+    icon: Bus,
+  },
+  transportation: {
+    title: "Transportation Fee",
+    description: "Configure student transportation charges according to distance (KM) ranges and route zones.",
+    icon: Bus,
+  },
   requests: {
     title: "Purchase & Sell Requests",
     description: "Submit purchase & sell requests with multi-tier amount routing and designated approvers.",
@@ -84,6 +101,10 @@ export default function FinanceSectionPage({ params }: FinanceSectionPageProps) 
   const config = FINANCE_SECTIONS[section as FinanceSection];
   const Icon = config.icon;
 
+  if (section === "transportation-fee" || section === "transportation") {
+    return <TransportationFeeClient />;
+  }
+
   if (section === "requests") {
     return <PurchaseSellRequestsClient />;
   }
@@ -122,6 +143,10 @@ export default function FinanceSectionPage({ params }: FinanceSectionPageProps) 
 
   if (section === "categories") {
     return <FinanceCategoriesClient />;
+  }
+
+  if (section === "fee-management") {
+    return <FeeManagementPage />;
   }
 
 

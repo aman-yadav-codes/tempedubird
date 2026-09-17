@@ -154,6 +154,22 @@ async function assertThreadAccess(
   childUserIds: number[] = [],
   academicYearId: number | null = null,
 ) {
+  const isAdmin = isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+  if (isAdmin) {
+    const result = await db.query(
+      `
+        SELECT c.*
+        FROM institution_complaints c
+        WHERE c.id = $1
+          AND (c.institution_id = $2 OR $3 = TRUE)
+          AND ($4::int IS NULL OR c.academic_year_id = $4)
+        LIMIT 1
+      `,
+      [complaintId, institutionId, isPlatformAdminUser(user), academicYearId]
+    );
+    if (!result.rows[0]) throw new Error("Complaint not found");
+    return result.rows[0];
+  }
   const result = await db.query(
     `
       SELECT c.*
@@ -181,6 +197,22 @@ async function assertComplaintRecipientAccess(
   user: CurrentUser,
   academicYearId: number | null = null,
 ) {
+  const isAdmin = isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+  if (isAdmin) {
+    const result = await db.query(
+      `
+        SELECT c.*
+        FROM institution_complaints c
+        WHERE c.id = $1
+          AND (c.institution_id = $2 OR $3 = TRUE)
+          AND ($4::int IS NULL OR c.academic_year_id = $4)
+        LIMIT 1
+      `,
+      [complaintId, institutionId, isPlatformAdminUser(user), academicYearId]
+    );
+    if (!result.rows[0]) throw new Error("Forbidden: Complaint not found");
+    return result.rows[0];
+  }
   const result = await db.query(
     `
       SELECT c.*
@@ -196,7 +228,7 @@ async function assertComplaintRecipientAccess(
     `,
     [complaintId, institutionId, user.id, user.role_codes, academicYearId]
   );
-  if (!result.rows[0]) throw new Error("Forbidden: Only the complaint recipient can update status");
+  if (!result.rows[0]) throw new Error("Forbidden: Only the complaint recipient or an administrator can update status");
   return result.rows[0];
 }
 
@@ -368,37 +400,91 @@ export async function GET(req: Request) {
     const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
     const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit")) || 20));
     const search = url.searchParams.get("search")?.trim() ?? "";
-    const view = url.searchParams.get("view") === "created" ? "created" : "received";
-    const params = [institutionId, user.id, user.role_codes, childUserIds, academicYearId, search, `%${search}%`, limit, (page - 1) * limit];
-    const accessWhere =
-      view === "created"
-        ? "c.created_by = $2"
-        : `(c.target_user_id = $2 OR c.target_user_id = ANY($4::int[]) OR (c.target_user_id IS NULL AND c.target_role = ANY($3::text[])))`;
+    const isAdmin = isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    const rawView = url.searchParams.get("view");
+    const view = rawView === "created" ? "created" : rawView === "received" ? "received" : (isAdmin ? "all" : "received");
+
+    const whereConditions: string[] = [];
+    const queryParams: unknown[] = [];
+
+    // Institution scope filter
+    const requestedInstParam = url.searchParams.get("institutionId");
+    if (requestedInstParam && Number.isInteger(Number(requestedInstParam)) && Number(requestedInstParam) > 0) {
+      queryParams.push(Number(requestedInstParam));
+      whereConditions.push(`c.institution_id = $${queryParams.length}`);
+    } else if (!isPlatformAdminUser(user)) {
+      queryParams.push(institutionId);
+      whereConditions.push(`c.institution_id = $${queryParams.length}`);
+    }
+
+    // Role / View filter
+    if (isAdmin && view === "all") {
+      // Platform / Institution Admin can see all complaints
+    } else if (view === "created") {
+      queryParams.push(user.id);
+      whereConditions.push(`c.created_by = $${queryParams.length}`);
+    } else {
+      queryParams.push(user.id);
+      const userParamIdx = queryParams.length;
+      queryParams.push(childUserIds);
+      const childParamIdx = queryParams.length;
+      queryParams.push(user.role_codes);
+      const roleParamIdx = queryParams.length;
+      whereConditions.push(
+        `(c.target_user_id = $${userParamIdx} OR c.target_user_id = ANY($${childParamIdx}::int[]) OR (c.target_user_id IS NULL AND c.target_role = ANY($${roleParamIdx}::text[])))`
+      );
+    }
+
+    // Academic Year filter
+    if (academicYearId && (!isPlatformAdminUser(user) || requestedInstParam)) {
+      queryParams.push(academicYearId);
+      whereConditions.push(`c.academic_year_id = $${queryParams.length}`);
+    }
+
+    // Search filter
+    if (search) {
+      queryParams.push(`%${search}%`);
+      const searchIdx = queryParams.length;
+      whereConditions.push(
+        `(c.subject ILIKE $${searchIdx} OR c.complaint_number ILIKE $${searchIdx} OR creator.full_name ILIKE $${searchIdx})`
+      );
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(" AND ")}` : "";
+
+    // Paging
+    queryParams.push(limit);
+    const limitIdx = queryParams.length;
+    queryParams.push((page - 1) * limit);
+    const offsetIdx = queryParams.length;
+
+    const studentCondition = childUserIds.length > 0
+      ? `c.target_user_id = ANY(ARRAY[${childUserIds.map((id) => Number(id)).join(",")}]::int[])`
+      : "FALSE";
+
+    const canUpdateStatusCondition = isAdmin
+      ? "TRUE"
+      : `(c.target_user_id = ${Number(user.id)} OR (c.target_user_id IS NULL AND c.target_role = ANY(ARRAY[${user.role_codes.map((r) => `'${r.replace(/'/g, "''")}'`).join(",")}]::text[])))`;
+
     const result = await db.query(
       `
         SELECT c.id, c.complaint_number, c.subject, c.priority, c.creator_role, c.target_role,
                c.status, c.created_at, c.updated_at, c.created_by, c.target_user_id,
                creator.full_name AS creator_name,
                target_user.full_name AS target_user_name,
-               (c.target_user_id = ANY($4::int[])) AS is_student_complaint,
-               (
-                 c.target_user_id = $2
-                 OR (c.target_user_id IS NULL AND c.target_role = ANY($3::text[]))
-               ) AS can_update_status,
+               (${studentCondition}) AS is_student_complaint,
+               (${canUpdateStatusCondition}) AS can_update_status,
                COUNT(*) OVER()::int AS total_count,
                (SELECT message FROM institution_complaint_messages latest
                 WHERE latest.complaint_id = c.id ORDER BY latest.id DESC LIMIT 1) AS last_message
         FROM institution_complaints c
         INNER JOIN users creator ON creator.id = c.created_by
         LEFT JOIN users target_user ON target_user.id = c.target_user_id
-        WHERE c.institution_id = $1
-          AND ${accessWhere}
-          AND ($5::int IS NULL OR c.academic_year_id = $5)
-          AND ($6 = '' OR c.subject ILIKE $7 OR c.complaint_number ILIKE $7 OR creator.full_name ILIKE $7)
+        ${whereClause}
         ORDER BY c.updated_at DESC, c.id DESC
-        LIMIT $8 OFFSET $9
+        LIMIT $${limitIdx} OFFSET $${offsetIdx}
       `,
-      params
+      queryParams
     );
     const total = Number(result.rows[0]?.total_count ?? 0);
     return NextResponse.json({ data: result.rows, total, pageCount: Math.ceil(total / limit), page });
@@ -544,6 +630,7 @@ export async function PATCH(req: Request) {
     }
 
     await assertComplaintRecipientAccess(complaintId, institutionId, user, academicYearId);
+    const isAdmin = isPlatformAdminUser(user) || isInstitutionAdminUser(user);
     const result = await db.query(
       `
         UPDATE institution_complaints
@@ -551,11 +638,11 @@ export async function PATCH(req: Request) {
             closed_at = CASE WHEN $2 = 'closed' THEN NOW() ELSE NULL END,
             updated_at = NOW()
         WHERE id = $1
-          AND institution_id = $3
+          AND (institution_id = $3 OR $5 = TRUE)
           AND ($4::int IS NULL OR academic_year_id = $4)
         RETURNING *
       `,
-      [complaintId, status, institutionId, academicYearId]
+      [complaintId, status, institutionId, academicYearId, isPlatformAdminUser(user)]
     );
     if (!result.rows[0]) throw new Error("Complaint not found");
     return NextResponse.json({ data: result.rows[0] });

@@ -28,6 +28,7 @@ import { buildTeacherUrl } from "@/lib/utils/seo-slug";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { FavoriteButton } from "@/components/shared/favorite-button";
 import { UniversalFeedbackDialog, type UniversalEntityTarget } from "@/components/public/universal-feedback-dialog";
 import { SharedPublicSidebar } from "@/components/public/shared-public-sidebar";
 import { SharedInterstitialBanner } from "@/components/public/shared-interstitial-banner";
@@ -242,9 +243,19 @@ export function TeachersDirectory() {
 
                 return (
                   <React.Fragment key={teacher.id}>
-                    <div
-                      className="rounded-2xl border border-border bg-card p-5 shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between space-y-4 hover:-translate-y-1"
-                    >
+                    <div className="relative rounded-2xl border border-border bg-card p-5 shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between space-y-4 hover:-translate-y-1">
+                      <div className="absolute top-4 right-4 z-10">
+                        <FavoriteButton
+                          entityType="teacher"
+                          entityId={teacher.id}
+                          title={teacher.full_name}
+                          subtitle={`${teacher.designation} • ${teacher.institution_name}`}
+                          imageUrl={teacher.avatar_url}
+                          targetUrl={teacherUrl}
+                          badge={teacher.subjects?.[0]}
+                          size="sm"
+                        />
+                      </div>
                       <div className="space-y-3">
                         {/* Header profile row */}
                         <div className="flex items-start gap-3">

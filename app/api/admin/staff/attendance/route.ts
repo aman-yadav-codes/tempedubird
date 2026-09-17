@@ -482,14 +482,16 @@ export async function GET(req: Request) {
     assertCanAccessInstitution(currentUser, institutionId);
 
     if (mode === "self") {
-      await assertStaffMembership(db, currentUser.id, institutionId).catch(() => {});
+      const requestedStaffUserId = positive(url.searchParams.get("staffUserId"));
+      const targetUserId = (canManageStaffAttendance(currentUser, institutionId) && requestedStaffUserId) ? requestedStaffUserId : currentUser.id;
+      await assertStaffMembership(db, targetUserId, institutionId).catch(() => {});
       if (action === "leaves") {
-        const leaves = await listLeaveRequests(db, institutionId, currentUser.id);
+        const leaves = await listLeaveRequests(db, institutionId, targetUserId);
         return NextResponse.json({ leaves });
       }
       const [attendance, leaves] = await Promise.all([
-        listSelfAttendance(db, institutionId, currentUser.id, month),
-        listLeaveRequests(db, institutionId, currentUser.id),
+        listSelfAttendance(db, institutionId, targetUserId, month),
+        listLeaveRequests(db, institutionId, targetUserId),
       ]);
       return NextResponse.json({ attendance, leaves });
     }

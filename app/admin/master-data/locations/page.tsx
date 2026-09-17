@@ -6,6 +6,7 @@ import { useAuthStore } from "@/store";
 import { toast } from "sonner";
 import { MapPin, Plus, Loader2, Trash2, RefreshCw, Power, PowerOff, Edit, MoreHorizontal } from "lucide-react";
 import { StatsCards } from "@/components/master-data/stats-cards";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UniversalLocationPicker } from "@/components/shared/universal-location-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -617,24 +618,28 @@ export default function LocationsPage() {
                                 Add Location
                             </Button>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-md">
-                            <DialogHeader>
-                                <DialogTitle className="flex items-center gap-2">
-                                    <MapPin className="size-4" />
-                                    {editingLocation ? "Edit Location" : "Add New Location"}
+                        <DialogContent className="max-w-4xl w-[95vw] p-6 sm:p-7 max-h-[92vh] overflow-y-auto">
+                            <DialogHeader className="pb-3 border-b">
+                                <DialogTitle className="flex items-center gap-2.5 text-xl font-bold">
+                                    <div className="p-2 rounded-xl bg-rose-500/10 text-rose-600">
+                                        <MapPin className="size-5 text-rose-600" />
+                                    </div>
+                                    <div>
+                                        <div className="text-foreground">{editingLocation ? "Edit Location" : "Add New Location"}</div>
+                                        <DialogDescription className="text-xs text-muted-foreground font-normal mt-0.5">
+                                            {editingLocation
+                                                ? "Update the location details and map coordinates in the system"
+                                                : "Create and pin a new geographical location in the system"}
+                                        </DialogDescription>
+                                    </div>
                                 </DialogTitle>
-                                <DialogDescription>
-                                    {editingLocation
-                                        ? "Update the location details"
-                                        : "Create a new location in the system"}
-                                </DialogDescription>
                             </DialogHeader>
                             <form
                                 onSubmit={(e) => {
                                     e.preventDefault();
                                     editingLocation ? handleUpdateLocation() : handleAddLocation();
                                 }}
-                                className="flex flex-col gap-4 pt-1"
+                                className="flex flex-col gap-6 pt-3"
                             >
                                 <UniversalLocationPicker
                                     value={{
@@ -659,10 +664,23 @@ export default function LocationsPage() {
                                     showCoordinates={true}
                                 />
 
-                                <Button type="submit" disabled={submitting} className="w-full">
-                                    {submitting && <Loader2 className="mr-2 size-4 animate-spin" />}
-                                    {editingLocation ? "Update Location" : "Save Location"}
-                                </Button>
+                                <div className="flex items-center justify-end gap-3 pt-3 border-t">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => setDialogOpen(false)}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button 
+                                        type="submit" 
+                                        disabled={submitting} 
+                                        className="min-w-[150px] bg-rose-600 hover:bg-rose-700 text-white font-medium shadow-sm"
+                                    >
+                                        {submitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+                                        {editingLocation ? "Update Location" : "Save Location"}
+                                    </Button>
+                                </div>
                             </form>
                         </DialogContent>
                     </Dialog>
@@ -677,31 +695,54 @@ export default function LocationsPage() {
                 data={locations}
                 getRowId={(row) => String(row.id)}
                 toolbarLeft={
-                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
                         <Input
                             placeholder="Search locations..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full sm:w-64 text-xs"
+                            className="w-full sm:w-60 text-xs h-9"
                         />
-                        <Select
+                        <Tabs
                             value={typeFilter}
                             onValueChange={(value) => {
                                 setTypeFilter(value);
                                 setPagination((prev) => ({ ...prev, pageIndex: 0 }));
                             }}
+                            className="w-full sm:w-auto"
                         >
-                            <SelectTrigger className="w-full sm:w-[150px] text-xs">
-                                <SelectValue placeholder="All Types" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Types</SelectItem>
-                                <SelectItem value="country">Country</SelectItem>
-                                <SelectItem value="state">State</SelectItem>
-                                <SelectItem value="city">City</SelectItem>
-                                <SelectItem value="area">Area</SelectItem>
-                            </SelectContent>
-                        </Select>
+                            <TabsList className="bg-muted/70 p-1 h-9 w-full sm:w-auto grid grid-cols-5 sm:flex border border-border/50">
+                                <TabsTrigger 
+                                    value="all" 
+                                    className="text-xs px-3 sm:px-3.5 font-medium data-[state=active]:font-semibold data-[state=active]:bg-background data-[state=active]:shadow-xs"
+                                >
+                                    All
+                                </TabsTrigger>
+                                <TabsTrigger 
+                                    value="state" 
+                                    className="text-xs px-3 sm:px-3.5 font-medium data-[state=active]:font-semibold data-[state=active]:bg-background data-[state=active]:shadow-xs"
+                                >
+                                    State
+                                </TabsTrigger>
+                                <TabsTrigger 
+                                    value="city" 
+                                    className="text-xs px-3 sm:px-3.5 font-medium data-[state=active]:font-semibold data-[state=active]:bg-background data-[state=active]:shadow-xs"
+                                >
+                                    City
+                                </TabsTrigger>
+                                <TabsTrigger 
+                                    value="area" 
+                                    className="text-xs px-3 sm:px-3.5 font-medium data-[state=active]:font-semibold data-[state=active]:bg-background data-[state=active]:shadow-xs"
+                                >
+                                    Area
+                                </TabsTrigger>
+                                <TabsTrigger 
+                                    value="country" 
+                                    className="text-xs px-3 sm:px-3.5 font-medium data-[state=active]:font-semibold data-[state=active]:bg-background data-[state=active]:shadow-xs"
+                                >
+                                    Country
+                                </TabsTrigger>
+                            </TabsList>
+                        </Tabs>
                     </div>
                 }
                 toolbarRight={

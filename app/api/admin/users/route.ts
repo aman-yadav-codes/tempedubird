@@ -332,7 +332,7 @@ export async function GET(req: Request) {
     const isPlatformAdmin = isPlatformAdminUser(currentUser);
     const includeCurrentUser = url.searchParams.has("includeCurrentUser")
       ? url.searchParams.get("includeCurrentUser") === "true"
-      : isPlatformAdmin;
+      : true;
     const includePlatformAdmins = url.searchParams.has("includePlatformAdmins")
       ? url.searchParams.get("includePlatformAdmins") === "true"
       : isPlatformAdmin;

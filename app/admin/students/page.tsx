@@ -33,6 +33,7 @@ import { StudentGuardiansDialog } from "./_components/student-guardians-dialog";
 import { StudentPromotionsDialog } from "./_components/student-promotions-dialog";
 import { StudentPasswordDialog } from "./_components/student-password-dialog";
 import { StudentAssignClassDialog } from "./_components/student-assign-class-dialog";
+import { StudentFeeDetailsDialog } from "./_components/student-fee-details-dialog";
 import { buildStudentColumns, type Student } from "./columns";
 import { usePersistedState } from "@/hooks/use-persisted-state";
 import {
@@ -103,6 +104,8 @@ export default function AllStudentsPage() {
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [assignClassModalStudent, setAssignClassModalStudent] = useState<Student | null>(null);
   const [assignClassModalOpen, setAssignClassModalOpen] = useState(false);
+  const [feeDetailsModalStudent, setFeeDetailsModalStudent] = useState<Student | null>(null);
+  const [feeDetailsModalOpen, setFeeDetailsModalOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -561,6 +564,14 @@ export default function AllStudentsPage() {
           setAssignClassModalStudent(st);
           setAssignClassModalOpen(true);
         },
+        onViewFeeDetails: (st) => {
+          if (st.id < 0) {
+            setCreateOpen(true);
+            return;
+          }
+          setFeeDetailsModalStudent(st);
+          setFeeDetailsModalOpen(true);
+        },
         onManageGuardians: (st) => {
           if (st.id < 0) {
             setCreateOpen(true);
@@ -721,6 +732,16 @@ export default function AllStudentsPage() {
         accessToken={accessToken}
         institutionId={activeInstitution?.id}
         onAssignedSuccess={() => fetchStudents()}
+      />
+
+      <StudentFeeDetailsDialog
+        open={feeDetailsModalOpen}
+        onOpenChange={setFeeDetailsModalOpen}
+        student={feeDetailsModalStudent}
+        accessToken={accessToken}
+        institutionId={activeInstitution?.id}
+        academicYearId={activeAcademicYearId}
+        onFeeUpdated={() => fetchStudents()}
       />
 
       <UserProfileSheet

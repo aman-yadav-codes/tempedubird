@@ -24,6 +24,7 @@ import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
 import { useCategoryAvailability } from "@/hooks/use-category-availability";
 import { UniversalFeedbackDialog, type UniversalEntityTarget } from "@/components/public/universal-feedback-dialog";
 import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
+import { FavoriteButton } from "@/components/shared/favorite-button";
 import { SharedPublicSidebar } from "@/components/public/shared-public-sidebar";
 import { SharedInterstitialBanner } from "@/components/public/shared-interstitial-banner";
 
@@ -156,13 +157,25 @@ export default function NotesPublicPage() {
                               </p>
                             </div>
 
-                            <div className="flex flex-col items-end gap-1 shrink-0">
-                              <Badge variant="secondary" className="text-[10px] font-bold">
-                                PDF Document
-                              </Badge>
-                              <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-extrabold">
-                                {n.price || "Free"}
-                              </Badge>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <div className="flex flex-col items-end gap-1">
+                                <Badge variant="secondary" className="text-[10px] font-bold">
+                                  PDF Document
+                                </Badge>
+                                <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-extrabold">
+                                  {n.price || "Free"}
+                                </Badge>
+                              </div>
+                              <FavoriteButton
+                                entityType="note"
+                                entityId={n.id}
+                                title={n.title}
+                                subtitle={`${n.subject} • ${n.author_name || "Faculty Notes"}`}
+                                targetUrl={`/notes/${n.id}`}
+                                badge={n.subject}
+                                price={n.price || "Free"}
+                                size="sm"
+                              />
                             </div>
                           </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDown, Eye, GraduationCap, KeyRound, Loader2, MoreHorizontal, Pencil, Repeat2, Trash2, UsersRound, PhoneCall } from "lucide-react";
+import { ArrowUpDown, Eye, GraduationCap, KeyRound, Loader2, MoreHorizontal, Pencil, Repeat2, Trash2, UsersRound, PhoneCall, IndianRupee } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -37,6 +37,7 @@ type StudentColumnsOptions = {
   onEditStudent: (student: Student) => void;
   onRemoveStudent: (student: Student) => void;
   onAssignClass?: (student: Student) => void;
+  onViewFeeDetails?: (student: Student) => void;
   onManageGuardians?: (student: Student) => void;
   onManagePromotions?: (student: Student) => void;
   onSetPassword?: (student: Student) => void;
@@ -49,6 +50,7 @@ export function buildStudentColumns({
   onEditStudent,
   onRemoveStudent,
   onAssignClass,
+  onViewFeeDetails,
   onManageGuardians,
   onManagePromotions,
   onSetPassword,
@@ -229,6 +231,12 @@ export function buildStudentColumns({
                 <DropdownMenuItem onSelect={() => onAssignClass(student)} className="cursor-pointer py-2 text-xs font-semibold">
                   <GraduationCap className="mr-2 h-4 w-4 text-primary" />
                   Assign Class
+                </DropdownMenuItem>
+              )}
+              {onViewFeeDetails && (
+                <DropdownMenuItem onSelect={() => onViewFeeDetails(student)} className="cursor-pointer py-2 text-xs font-semibold">
+                  <IndianRupee className="mr-2 h-4 w-4 text-primary" />
+                  Fee Details
                 </DropdownMenuItem>
               )}
               {onManageGuardians && (

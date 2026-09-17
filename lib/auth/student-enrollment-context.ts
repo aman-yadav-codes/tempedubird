@@ -42,7 +42,7 @@ export async function getStudentEnrollmentContexts(db: Queryable, userId: number
        AND COALESCE(enrollment.is_deleted, FALSE) = FALSE
       LEFT JOIN institution_profiles institution
         ON institution.id = enrollment.institution_id
-       AND COALESCEE(institution.is_deleted, FALSE) = FALSE
+       AND COALESCE(institution.is_deleted, FALSE) = FALSE
       LEFT JOIN institution_programs program
         ON program.id = enrollment.program_id
        AND COALESCE(program.is_deleted, FALSE) = FALSE
@@ -91,13 +91,13 @@ export async function getParentChildEnrollmentContexts(
        AND COALESCE(program.is_deleted, FALSE) = FALSE
       LEFT JOIN institution_profiles institution
         ON institution.id = enrollment.institution_id
-       AND COALESCEE(institution.is_deleted, FALSE) = FALSE
+       AND COALESCE(institution.is_deleted, FALSE) = FALSE
       LEFT JOIN sections section ON section.id = enrollment.section_id
       LEFT JOIN academic_years academic_year
         ON academic_year.id = enrollment.academic_year_id
-       AND COALESCEE(academic_year.is_deleted, FALSE) = FALSE
+       AND COALESCE(academic_year.is_deleted, FALSE) = FALSE
       WHERE guardian.guardian_user_id = $1
-       AND COALESCEE(guardian.is_deleted, FALSE) = FALSE
+       AND COALESCE(guardian.is_deleted, FALSE) = FALSE
        AND ($2::int IS NULLOR student.id = $2)
       ORDER BY
         CASE WHEN student.id = $2 THEN 0 ELSE 1 END,
@@ -118,7 +118,7 @@ async function parentCanAccessChild(db: Queryable, parentUserId: number, childSt
         FROM student_guardians guardian
         WHERE guardian.guardian_user_id = $1
           AND guardian.student_id = $2
-          AND COALESCEE(guardian.is_deleted, FALSE) = FALSE
+          AND COALESCE(guardian.is_deleted, FALSE) = FALSE
       ) AS exists
     `,
     [parentUserId, childStudentId]

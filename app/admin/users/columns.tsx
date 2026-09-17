@@ -33,6 +33,7 @@ export type User = {
 }
 
 type UserColumnsOptions = {
+  currentUserId?: number
   onViewProfile: (user: User) => void
   onEditUser: (user: User) => void
   onManageSalaryAccount?: (user: User) => void
@@ -45,6 +46,7 @@ type UserColumnsOptions = {
 }
 
 export function buildUserColumns({
+  currentUserId,
   onViewProfile,
   onEditUser,
   onManageSalaryAccount,
@@ -72,13 +74,20 @@ export function buildUserColumns({
           aria-label="Select all"
         />
       ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
-        />
-      ),
+      cell: ({ row }) => {
+        const isSelf = Boolean(currentUserId && row.original.id === currentUserId);
+        return (
+          <Checkbox
+            checked={row.getIsSelected()}
+            disabled={isSelf}
+            onCheckedChange={(value) => {
+              if (isSelf) return;
+              row.toggleSelected(!!value);
+            }}
+            aria-label={isSelf ? "Current user cannot be selected" : "Select row"}
+          />
+        );
+      },
       enableSorting: false,
       enableHiding: false,
     },
@@ -97,9 +106,15 @@ export function buildUserColumns({
       ),
       cell: ({ row }) => {
         const user = row.original;
+        const isSelf = Boolean(currentUserId && user.id === currentUserId);
         return (
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-medium">{user.full_name}</span>
+            {isSelf && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 font-semibold">
+                You
+              </Badge>
+            )}
             {user.show_in_team && (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-purple-500/10 text-purple-600 border-purple-500/20 font-semibold">
                 Team
@@ -211,6 +226,7 @@ export function buildUserColumns({
       enableHiding: false,
       cell: ({ row }) => {
         const user = row.original
+        const isSelf = Boolean(currentUserId && user.id === currentUserId)
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -276,13 +292,17 @@ export function buildUserColumns({
                       <DropdownMenuItem onClick={() => onChangeEmploymentStatus(user, "RESIGNED")}>
                         📄 Resigned
                       </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="text-destructive font-medium"
-                        onClick={() => onChangeEmploymentStatus(user, "TERMINATED")}
-                      >
-                        🚫 Fired / Terminated
-                      </DropdownMenuItem>
+                      {!isSelf && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive font-medium"
+                            onClick={() => onChangeEmploymentStatus(user, "TERMINATED")}
+                          >
+                            🚫 Fired / Terminated
+                          </DropdownMenuItem>
+                        </>
+                      )}
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
                 </>
@@ -301,13 +321,17 @@ export function buildUserColumns({
                 </>
               )}
 
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive"
-                onClick={() => onRemoveUser(user)}
-              >
-                {removalLabel}
-              </DropdownMenuItem>
+              {!isSelf && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={() => onRemoveUser(user)}
+                  >
+                    {removalLabel}
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )

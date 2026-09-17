@@ -28,6 +28,16 @@ export async function GET(
           ay.name AS academic_year_name,
           se.program_id,
           p.title AS program_name,
+          p.fee_amount AS program_fee_amount,
+          p.fee_unit AS program_fee_unit,
+          p.admission_fee AS program_admission_fee,
+          se.course_fee,
+          se.has_transport,
+          se.transport_fee,
+          se.transport_zone,
+          se.pickup_address,
+          se.course_fee,
+          se.total_fee,
           se.class_category_id,
           cc.name AS class_category_name,
           se.section_id,
@@ -79,6 +89,15 @@ export async function POST(
       status = "active",
       admissionDate,
       remarks,
+      hasTransport = false,
+      transportFee = 0,
+      transportZone = null,
+      pickupAddress = null,
+      courseFee = 0,
+      totalFee = 0,
+      paymentPlan = "quarterly",
+      paymentPlanTitle = "Quarterly Plan",
+      installmentAmount = 0,
     } = body;
 
     if (!institutionId || !programId || !academicYearId) {
@@ -166,9 +185,18 @@ export async function POST(
             status = $4,
             admission_date = $5,
             remarks = $6,
+            has_transport = $7,
+            transport_fee = $8,
+            transport_zone = $9,
+            pickup_address = $10,
+            course_fee = $11,
+            total_fee = $12,
+            payment_plan = $13,
+            payment_plan_title = $14,
+            installment_amount = $15,
             is_current = TRUE,
             updated_at = NOW()
-          WHERE id = $7
+          WHERE id = $16
           RETURNING *
         `,
         [
@@ -178,6 +206,15 @@ export async function POST(
           status || "active",
           admissionDate || new Date().toISOString().split("T")[0],
           remarks?.trim() || null,
+          Boolean(hasTransport),
+          Number(transportFee) || 0,
+          transportZone || null,
+          pickupAddress?.trim() || null,
+          Number(courseFee) || 0,
+          Number(totalFee) || 0,
+          paymentPlan || "quarterly",
+          paymentPlanTitle || "Quarterly Plan",
+          Number(installmentAmount) || 0,
           existingEnroll.rows[0].id,
         ]
       );
@@ -197,9 +234,18 @@ export async function POST(
             status,
             admission_date,
             remarks,
+            has_transport,
+            transport_fee,
+            transport_zone,
+            pickup_address,
+            course_fee,
+            total_fee,
+            payment_plan,
+            payment_plan_title,
+            installment_amount,
             is_current
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, TRUE)
           RETURNING *
         `,
         [
@@ -213,6 +259,15 @@ export async function POST(
           status || "active",
           admissionDate || new Date().toISOString().split("T")[0],
           remarks?.trim() || null,
+          Boolean(hasTransport),
+          Number(transportFee) || 0,
+          transportZone || null,
+          pickupAddress?.trim() || null,
+          Number(courseFee) || 0,
+          Number(totalFee) || 0,
+          paymentPlan || "quarterly",
+          paymentPlanTitle || "Quarterly Plan",
+          Number(installmentAmount) || 0,
         ]
       );
       savedEnrollment = insertRes.rows[0];

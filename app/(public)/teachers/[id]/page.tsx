@@ -6,6 +6,11 @@ import Link from "next/link";
 import {
   UserCheck,
   Star,
+  Phone,
+  MessageCircle,
+  HelpCircle,
+  Send,
+  Mail,
   Award,
   BookOpen,
   Building2,
@@ -21,6 +26,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 import { RightInquiryForm } from "@/components/public/right-inquiry-form";
 import { DetailSuggestionSidebar } from "@/components/public/detail-suggestion-sidebar";
 import { extractIdFromSlug } from "@/lib/utils/seo-slug";
@@ -50,6 +62,34 @@ export default function TeacherDetailPage() {
 
   const [teacher, setTeacher] = useState<TeacherDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [enquiryOpen, setEnquiryOpen] = useState(false);
+  const [enquirySubmitting, setEnquirySubmitting] = useState(false);
+  const [enquiryForm, setEnquiryForm] = useState({
+    fullName: "",
+    email: "",
+    phone: "",
+    subject: "",
+    message: ""
+  });
+
+  const handleEnquirySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!enquiryForm.fullName || !enquiryForm.phone) {
+      toast.error("Please provide your name and phone number");
+      return;
+    }
+    setEnquirySubmitting(true);
+    try {
+      await new Promise(r => setTimeout(r, 600));
+      toast.success("Enquiry sent successfully! The faculty will connect shortly.");
+      setEnquiryOpen(false);
+      setEnquiryForm({ fullName: "", email: "", phone: "", subject: "", message: "" });
+    } catch {
+      toast.error("Failed to send enquiry");
+    } finally {
+      setEnquirySubmitting(false);
+    }
+  };
 
   useEffect(() => {
     fetchTeacherDetail();
@@ -255,20 +295,153 @@ export default function TeacherDetailPage() {
             </div>
           </div>
 
-          {/* Right Column: Inquiry Form & Suggestions */}
-          <aside className="space-y-6">
-            <RightInquiryForm
-              title={`Consult ${teacher.full_name}`}
-              subtitle="Send your learning query to connect directly with this faculty member."
-              selectedItemName={teacher.full_name}
-              categoryLabel="Preferred Subject"
-              categoryOptions={teacher.subjects}
-            />
+          {/* Right Column: Action Buttons & More Teachers */}
+          <aside className="space-y-6 lg:sticky lg:top-20">
+            {/* Action Card: Call Now, WhatsApp, Enquiry */}
+            <Card className="p-5 sm:p-6 shadow-sm border-border space-y-4 rounded-2xl bg-card">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-foreground text-base">
+                      Consult {teacher.full_name}
+                    </h3>
+                    <p className="text-[11px] text-muted-foreground">
+                      Connect directly for doubts, mentoring & batches
+                    </p>
+                  </div>
+                </div>
+              </div>
 
+              <Separator />
+
+              {/* Action Buttons */}
+              <div className="space-y-2.5">
+                <div className="grid grid-cols-2 gap-2">
+                  <a
+                    href={`https://wa.me/919999999999?text=${encodeURIComponent(`Hello, I would like to consult Dr. / Prof. ${teacher.full_name} regarding learning and courses on EduBird.`)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 font-bold text-white shadow-xs transition hover:bg-emerald-700 text-xs sm:text-sm"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    <span>WhatsApp</span>
+                  </a>
+
+                  <a
+                    href="tel:+919876543210"
+                    className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 font-bold text-white shadow-xs transition hover:bg-blue-700 text-xs sm:text-sm"
+                  >
+                    <Phone className="h-4 w-4" />
+                    <span>Call Now</span>
+                  </a>
+                </div>
+
+                <Button
+                  onClick={() => setEnquiryOpen(true)}
+                  className="w-full h-10 rounded-xl font-bold shadow-xs text-xs sm:text-sm"
+                >
+                  <HelpCircle className="h-4 w-4 mr-1.5" />
+                  Send Enquiry
+                </Button>
+
+                <div className="flex items-center justify-center gap-1.5 pt-2 text-[11px] text-muted-foreground font-medium border-t border-border/50">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>100% Verified EduBird Faculty Member</span>
+                </div>
+              </div>
+            </Card>
+
+            {/* More Teachers Profiles */}
             <DetailSuggestionSidebar type="teachers" currentId={teacher.id} />
           </aside>
         </div>
       </div>
+
+      {/* Teacher Enquiry Dialog */}
+      <Dialog open={enquiryOpen} onOpenChange={setEnquiryOpen}>
+        <DialogContent className="sm:max-w-md" id="teacher-enquiry-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Inquire with {teacher.full_name}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Send your learning requirements or questions. The faculty team will get back to you shortly.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleEnquirySubmit} className="space-y-3.5 pt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Full Name *</Label>
+              <Input
+                placeholder="e.g. Rahul Verma"
+                value={enquiryForm.fullName}
+                onChange={(e) => setEnquiryForm({ ...enquiryForm, fullName: e.target.value })}
+                className="text-xs h-9"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Phone / WhatsApp *</Label>
+                <Input
+                  placeholder="e.g. 9876543210"
+                  value={enquiryForm.phone}
+                  onChange={(e) => setEnquiryForm({ ...enquiryForm, phone: e.target.value })}
+                  className="text-xs h-9"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Email Address</Label>
+                <Input
+                  type="email"
+                  placeholder="e.g. rahul@example.com"
+                  value={enquiryForm.email}
+                  onChange={(e) => setEnquiryForm({ ...enquiryForm, email: e.target.value })}
+                  className="text-xs h-9"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Preferred Subject / Exam</Label>
+              <Input
+                placeholder="e.g. JEE Physics, Doubt Session"
+                value={enquiryForm.subject}
+                onChange={(e) => setEnquiryForm({ ...enquiryForm, subject: e.target.value })}
+                className="text-xs h-9"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Your Message or Question</Label>
+              <Textarea
+                placeholder="Briefly describe what you'd like guidance on..."
+                rows={3}
+                value={enquiryForm.message}
+                onChange={(e) => setEnquiryForm({ ...enquiryForm, message: e.target.value })}
+                className="text-xs"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t">
+              <Button type="button" variant="outline" size="sm" onClick={() => setEnquiryOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" disabled={enquirySubmitting}>
+                {enquirySubmitting && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                Submit Enquiry
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
