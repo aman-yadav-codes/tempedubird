@@ -1461,10 +1461,10 @@ export default function SeoManagementPage() {
                     <span className="truncate">https://edubird.net &gt; {formPath.replace(/^\//, "")}</span>
                   </div>
                   <h4 className="text-base font-medium text-[#1a0dab] hover:underline cursor-pointer line-clamp-1">
-                    {resolvedPreview.meta_title || "Sample Page Title"}
+                    {resolvedPreview.title || "Sample Page Title"}
                   </h4>
                   <p className="text-xs text-[#4d5156] line-clamp-2 leading-relaxed">
-                    {resolvedPreview.meta_description || "Sample meta description showing how your educational page will appear in Google and Bing search results."}
+                    {resolvedPreview.description || "Sample meta description showing how your educational page will appear in Google and Bing search results."}
                   </p>
                 </div>
               </div>
