@@ -17,8 +17,13 @@ import {
   applyPenaltyRules,
   computeMinutesLate,
 } from "@/lib/penalties/applyPenaltyRules";
+import {
+  syncTaskAttendanceToDatabase,
+  parseShiftTiming,
+  evaluateComplianceAndDedication,
+} from "@/app/lib/task-attendance-sync";
 
-type StaffAttendanceStatus = "PRESENT" | "ABSENT" | "LEAVE" | "LATE" | "HALF_DAY";
+type StaffAttendanceStatus = "PRESENT" | "ABSENT" | "LEAVE" | "LATE" | "HALF_DAY" | "HOLIDAY";
 type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 type Queryable = Pick<Pool | PoolClient, "query">;
@@ -29,6 +34,7 @@ const ATTENDANCE_STATUSES = new Set<StaffAttendanceStatus>([
   "LEAVE",
   "LATE",
   "HALF_DAY",
+  "HOLIDAY",
 ]);
 
 let staffAttendanceSchemaReady: Promise<void> | null = null;
@@ -135,6 +141,21 @@ async function ensureStaffAttendanceTables(queryable: Queryable) {
       ON staff_leave_requests (institution_id, status, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_staff_leave_requests_staff
       ON staff_leave_requests (staff_user_id, created_at DESC);
+
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS working_hours NUMERIC(6,2) DEFAULT 0;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS task_hours NUMERIC(6,2) DEFAULT 0;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS check_in_count INTEGER DEFAULT 0;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS is_late BOOLEAN DEFAULT FALSE;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS late_minutes INTEGER DEFAULT 0;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS is_early_exit BOOLEAN DEFAULT FALSE;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS early_exit_minutes INTEGER DEFAULT 0;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS attentiveness_score NUMERIC(5,2) DEFAULT 0;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS dedication_tier VARCHAR(50) DEFAULT 'MODERATE';
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS shift_name VARCHAR(100);
+
+    ALTER TABLE staff_attendance DROP CONSTRAINT IF EXISTS staff_attendance_status_check;
+    ALTER TABLE staff_attendance ADD CONSTRAINT staff_attendance_status_check
+      CHECK (status IN ('PRESENT', 'ABSENT', 'LEAVE', 'LATE', 'HALF_DAY', 'HOLIDAY'));
   `);
 }
 
@@ -302,6 +323,16 @@ async function listStaffAttendance(
         sa.status,
         sa.check_in_time,
         sa.check_out_time,
+        COALESCE(sa.working_hours, 0)::numeric AS working_hours,
+        COALESCE(sa.task_hours, 0)::numeric AS task_hours,
+        COALESCE(sa.check_in_count, 0)::integer AS check_in_count,
+        COALESCE(sa.is_late, FALSE) AS is_late,
+        COALESCE(sa.late_minutes, 0)::integer AS late_minutes,
+        COALESCE(sa.is_early_exit, FALSE) AS is_early_exit,
+        COALESCE(sa.early_exit_minutes, 0)::integer AS early_exit_minutes,
+        COALESCE(sa.attentiveness_score, 0)::numeric AS attentiveness_score,
+        COALESCE(sa.dedication_tier, 'MODERATE') AS dedication_tier,
+        COALESCE(sa.shift_name, 'General Shift') AS shift_name,
         COALESCE(sa.remarks, '') AS remarks
       FROM distinct_staff ds
       LEFT JOIN staff_attendance sa
@@ -315,8 +346,27 @@ async function listStaffAttendance(
     [institutionId, date, input.limit, offset]
   );
 
+  const holidayRes = await queryable.query(
+    `SELECT id, title, description,
+            to_char(start_date, 'YYYY-MM-DD') AS start_date,
+            to_char(end_date, 'YYYY-MM-DD') AS end_date
+     FROM institution_calendar_events
+     WHERE (institution_id = $1 OR institution_id IS NULL)
+       AND event_type = 'HOLIDAY'
+       AND COALESCE(is_deleted, FALSE) = FALSE
+       AND $2::date BETWEEN start_date::date AND end_date::date
+     LIMIT 1`,
+    [institutionId, date]
+  ).catch(() => ({ rows: [] as any[] }));
+  const holiday = holidayRes.rows[0] || null;
+
   return {
-    rows: result.rows,
+    rows: result.rows.map((r) => ({
+      ...r,
+      default_status: holiday ? (r.status || "HOLIDAY") : r.status,
+      holiday_title: holiday ? holiday.title : null,
+    })),
+    holiday,
     total: countResult.rows[0]?.total ?? 0,
   };
 }
@@ -361,6 +411,9 @@ async function listLeaveRequests(queryable: Queryable, institutionId: number, st
 }
 
 async function listSelfAttendance(queryable: Queryable, institutionId: number, userId: number, month: string) {
+  // Ensure today's task attendance is synced
+  await syncTaskAttendanceToDatabase(queryable, userId, institutionId).catch(() => null);
+
   const result = await queryable.query(
     `
       SELECT
@@ -368,6 +421,16 @@ async function listSelfAttendance(queryable: Queryable, institutionId: number, u
         status,
         check_in_time,
         check_out_time,
+        COALESCE(working_hours, 0)::numeric AS working_hours,
+        COALESCE(task_hours, 0)::numeric AS task_hours,
+        COALESCE(check_in_count, 0)::integer AS check_in_count,
+        COALESCE(is_late, FALSE) AS is_late,
+        COALESCE(late_minutes, 0)::integer AS late_minutes,
+        COALESCE(is_early_exit, FALSE) AS is_early_exit,
+        COALESCE(early_exit_minutes, 0)::integer AS early_exit_minutes,
+        COALESCE(attentiveness_score, 0)::numeric AS attentiveness_score,
+        COALESCE(dedication_tier, 'MODERATE') AS dedication_tier,
+        COALESCE(shift_name, 'General Shift') AS shift_name,
         COALESCE(remarks, '') AS remarks
       FROM staff_attendance
       WHERE institution_id = $1
@@ -434,6 +497,16 @@ async function listAttendanceHistory(
         sa.status,
         sa.check_in_time,
         sa.check_out_time,
+        COALESCE(sa.working_hours, 0)::numeric AS working_hours,
+        COALESCE(sa.task_hours, 0)::numeric AS task_hours,
+        COALESCE(sa.check_in_count, 0)::integer AS check_in_count,
+        COALESCE(sa.is_late, FALSE) AS is_late,
+        COALESCE(sa.late_minutes, 0)::integer AS late_minutes,
+        COALESCE(sa.is_early_exit, FALSE) AS is_early_exit,
+        COALESCE(sa.early_exit_minutes, 0)::integer AS early_exit_minutes,
+        COALESCE(sa.attentiveness_score, 0)::numeric AS attentiveness_score,
+        COALESCE(sa.dedication_tier, 'MODERATE') AS dedication_tier,
+        COALESCE(sa.shift_name, 'General Shift') AS shift_name,
         COALESCE(sa.remarks, '') AS remarks,
         marker.full_name AS marked_by_name,
         sa.updated_at
@@ -489,11 +562,45 @@ export async function GET(req: Request) {
         const leaves = await listLeaveRequests(db, institutionId, targetUserId);
         return NextResponse.json({ leaves });
       }
-      const [attendance, leaves] = await Promise.all([
+      const [attendance, leaves, userRes, instDefaultRes, holidaysRes] = await Promise.all([
         listSelfAttendance(db, institutionId, targetUserId, month),
         listLeaveRequests(db, institutionId, targetUserId),
+        db.query(`SELECT profile FROM users WHERE id = $1`, [targetUserId]).catch(() => ({ rows: [] as any[] })),
+        db.query(
+          `SELECT title, start_time, end_time, grace_period_mins
+           FROM institution_attendance_setups
+           WHERE (institution_id = $1 OR institution_id IS NULL)
+             AND is_active = TRUE AND target_type = 'STAFF'
+           ORDER BY institution_id NULLS LAST, is_default DESC LIMIT 1`,
+          [institutionId]
+        ).catch(() => ({ rows: [] as any[] })),
+        db.query(
+          `SELECT id, title, description,
+                  to_char(start_date, 'YYYY-MM-DD') AS start_date,
+                  to_char(end_date, 'YYYY-MM-DD') AS end_date
+           FROM institution_calendar_events
+           WHERE (institution_id = $1 OR institution_id IS NULL)
+             AND event_type = 'HOLIDAY'
+             AND COALESCE(is_deleted, FALSE) = FALSE
+             AND (
+               to_char(start_date, 'YYYY-MM') = $2
+               OR to_char(end_date, 'YYYY-MM') = $2
+               OR (start_date::date <= ($2 || '-31')::date AND end_date::date >= ($2 || '-01')::date)
+             )
+           ORDER BY start_date ASC`,
+          [institutionId, month]
+        ).catch(() => ({ rows: [] as any[] })),
       ]);
-      return NextResponse.json({ attendance, leaves });
+      const userProfile = userRes.rows[0]?.profile;
+      const shiftTiming = userProfile?.shift_timing || instDefaultRes.rows[0] || null;
+      const parsedShift = parseShiftTiming(shiftTiming);
+      return NextResponse.json({
+        attendance,
+        leaves,
+        shift_timing: shiftTiming,
+        shift_info: parsedShift,
+        holidays: holidaysRes.rows || [],
+      });
     }
 
     if (!canManageStaffAttendance(currentUser, institutionId)) {
@@ -533,6 +640,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       staff: staffResult.rows,
       leaves,
+      holiday: staffResult.holiday || null,
       pagination: {
         page,
         limit,
@@ -586,6 +694,9 @@ export async function PUT(req: Request) {
             status,
             check_in_time,
             check_out_time,
+            working_hours,
+            task_hours,
+            check_in_count,
             remarks,
             marked_by,
             updated_at
@@ -596,8 +707,19 @@ export async function PUT(req: Request) {
             $3::integer,
             attendance_day::date,
             $6::varchar(20),
-            CASE WHEN $6::text IN ('LEAVE', 'ABSENT') THEN NULL ELSE NULLIF($7::text, '')::time END,
-            CASE WHEN $6::text IN ('LEAVE', 'ABSENT') THEN NULL ELSE NULLIF($8::text, '')::time END,
+            CASE WHEN $6::text IN ('LEAVE', 'ABSENT', 'HOLIDAY') THEN NULL ELSE NULLIF($7::text, '')::time END,
+            CASE WHEN $6::text IN ('LEAVE', 'ABSENT', 'HOLIDAY') THEN NULL ELSE NULLIF($8::text, '')::time END,
+            CASE
+              WHEN $6::text NOT IN ('LEAVE', 'ABSENT', 'HOLIDAY') AND NULLIF($7::text, '') IS NOT NULL AND NULLIF($8::text, '') IS NOT NULL
+              THEN GREATEST(0, ROUND(EXTRACT(EPOCH FROM (NULLIF($8::text, '')::time - NULLIF($7::text, '')::time)) / 3600.0, 2))
+              ELSE 0
+            END,
+            CASE
+              WHEN $6::text NOT IN ('LEAVE', 'ABSENT', 'HOLIDAY') AND NULLIF($7::text, '') IS NOT NULL AND NULLIF($8::text, '') IS NOT NULL
+              THEN GREATEST(0, ROUND(EXTRACT(EPOCH FROM (NULLIF($8::text, '')::time - NULLIF($7::text, '')::time)) / 3600.0, 2))
+              ELSE 0
+            END,
+            CASE WHEN $6::text NOT IN ('LEAVE', 'ABSENT', 'HOLIDAY') AND NULLIF($7::text, '') IS NOT NULL THEN 1 ELSE 0 END,
             NULLIF($9::text, ''),
             $10::integer,
             timezone('Asia/Kolkata', NOW())
@@ -608,6 +730,9 @@ export async function PUT(req: Request) {
             status = EXCLUDED.status,
             check_in_time = EXCLUDED.check_in_time,
             check_out_time = EXCLUDED.check_out_time,
+            working_hours = CASE WHEN EXCLUDED.working_hours > 0 THEN EXCLUDED.working_hours ELSE staff_attendance.working_hours END,
+            task_hours = CASE WHEN EXCLUDED.task_hours > 0 THEN EXCLUDED.task_hours ELSE staff_attendance.task_hours END,
+            check_in_count = CASE WHEN EXCLUDED.check_in_count > 0 THEN EXCLUDED.check_in_count ELSE staff_attendance.check_in_count END,
             remarks = EXCLUDED.remarks,
             marked_by = EXCLUDED.marked_by,
             updated_at = timezone('Asia/Kolkata', NOW())
@@ -804,6 +929,9 @@ export async function POST(req: Request) {
             status,
             check_in_time,
             check_out_time,
+            working_hours,
+            task_hours,
+            check_in_count,
             remarks,
             marked_by,
             updated_at
@@ -814,8 +942,19 @@ export async function POST(req: Request) {
             $3,
             attendance_day::date,
             $6,
-            CASE WHEN $6::text IN ('LEAVE', 'ABSENT') THEN NULL ELSE NULLIF($7, '')::time END,
-            CASE WHEN $6::text IN ('LEAVE', 'ABSENT') THEN NULL ELSE NULLIF($8, '')::time END,
+            CASE WHEN $6::text IN ('LEAVE', 'ABSENT', 'HOLIDAY') THEN NULL ELSE NULLIF($7, '')::time END,
+            CASE WHEN $6::text IN ('LEAVE', 'ABSENT', 'HOLIDAY') THEN NULL ELSE NULLIF($8, '')::time END,
+            CASE
+              WHEN $6::text NOT IN ('LEAVE', 'ABSENT', 'HOLIDAY') AND NULLIF($7, '') IS NOT NULL AND NULLIF($8, '') IS NOT NULL
+              THEN GREATEST(0, ROUND(EXTRACT(EPOCH FROM (NULLIF($8, '')::time - NULLIF($7, '')::time)) / 3600.0, 2))
+              ELSE 0
+            END,
+            CASE
+              WHEN $6::text NOT IN ('LEAVE', 'ABSENT', 'HOLIDAY') AND NULLIF($7, '') IS NOT NULL AND NULLIF($8, '') IS NOT NULL
+              THEN GREATEST(0, ROUND(EXTRACT(EPOCH FROM (NULLIF($8, '')::time - NULLIF($7, '')::time)) / 3600.0, 2))
+              ELSE 0
+            END,
+            CASE WHEN $6::text NOT IN ('LEAVE', 'ABSENT', 'HOLIDAY') AND NULLIF($7, '') IS NOT NULL THEN 1 ELSE 0 END,
             NULLIF($9, ''),
             $3,
             timezone('Asia/Kolkata', NOW())
@@ -826,6 +965,9 @@ export async function POST(req: Request) {
             status = EXCLUDED.status,
             check_in_time = EXCLUDED.check_in_time,
             check_out_time = EXCLUDED.check_out_time,
+            working_hours = CASE WHEN EXCLUDED.working_hours > 0 THEN EXCLUDED.working_hours ELSE staff_attendance.working_hours END,
+            task_hours = CASE WHEN EXCLUDED.task_hours > 0 THEN EXCLUDED.task_hours ELSE staff_attendance.task_hours END,
+            check_in_count = CASE WHEN EXCLUDED.check_in_count > 0 THEN EXCLUDED.check_in_count ELSE staff_attendance.check_in_count END,
             remarks = EXCLUDED.remarks,
             marked_by = EXCLUDED.marked_by,
             updated_at = timezone('Asia/Kolkata', NOW())

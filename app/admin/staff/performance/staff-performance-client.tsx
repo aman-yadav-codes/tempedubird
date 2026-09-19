@@ -88,6 +88,7 @@ type ApiResponse = {
     avg_attendance: number;
     top_performers_count: number;
   };
+  roles_from_permissions?: Array<{ id: number; name: string; code: string }>;
   top_performers: StaffPerformanceRecord[];
   role_distribution: { role: string; staff_count: number; tasks_done: number; revenue: number; cost: number }[];
   employees: StaffPerformanceRecord[];
@@ -109,9 +110,7 @@ export function StaffPerformanceClient() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<StaffPerformanceRecord | null>(null);
-  const [masterDesignations, setMasterDesignations] = useState<Array<{ id: number; name: string }>>([]);
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
-
   // Manual Points Adjustment Modal State
   const [adjustPointsModalOpen, setAdjustPointsModalOpen] = useState(false);
   const [adjustPointsStaff, setAdjustPointsStaff] = useState<StaffPerformanceRecord | null>(null);
@@ -119,25 +118,6 @@ export function StaffPerformanceClient() {
   const [adjustPointsValue, setAdjustPointsValue] = useState("25");
   const [adjustPointsReason, setAdjustPointsReason] = useState("");
   const [adjustingPoints, setAdjustingPoints] = useState(false);
-
-
-
-  // Load designations from master-data table
-  useEffect(() => {
-    if (!accessToken) return;
-    fetch("/api/admin/master-data/designations?limit=100", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-      .then((res) => res.json())
-      .then((resData) => {
-        if (Array.isArray(resData.designations)) {
-          setMasterDesignations(resData.designations);
-        } else if (Array.isArray(resData.data)) {
-          setMasterDesignations(resData.data);
-        }
-      })
-      .catch(() => {});
-  }, [accessToken]);
 
   const fetchData = useCallback(
     async (isManualRefresh = false) => {
@@ -183,20 +163,19 @@ export function StaffPerformanceClient() {
 
   const employees = useMemo(() => data?.employees || [], [data]);
 
-  // Combined roles from designations table and active staff roles
+  // Only show roles which platform admin added from Roles & Permissions
   const availableRoles = useMemo(() => {
+    if (data?.roles_from_permissions && data.roles_from_permissions.length > 0) {
+      return data.roles_from_permissions.map((r) => r.name).filter(Boolean);
+    }
     const rolesSet = new Set<string>();
-    masterDesignations.forEach((d) => {
-      if (d.name) rolesSet.add(d.name);
-    });
     if (data?.employees) {
       data.employees.forEach((e) => {
         if (e.role_name) rolesSet.add(e.role_name);
-        if (e.designation_title) rolesSet.add(e.designation_title);
       });
     }
     return Array.from(rolesSet).filter(Boolean).sort();
-  }, [data, masterDesignations]);
+  }, [data]);
 
   // Search suggestions
   const searchSuggestions = useMemo(() => {
@@ -297,6 +276,12 @@ export function StaffPerformanceClient() {
       "Role",
       "Designation",
       "Institution",
+      "Grade",
+      "Rating (Out of 5)",
+      "Performance Category",
+      "Attendance Score % (35%)",
+      "Task Score % (35%)",
+      "Earnings Score % (30%)",
       "Tasks Completed",
       "On-time Delivery %",
       "Sales Count",
@@ -305,8 +290,7 @@ export function StaffPerformanceClient() {
       "Net Value Generated (₹)",
       "ROI %",
       "Attendance %",
-      "Rating (Out of 5)",
-      "Performance Category",
+      "Evaluation Remarks",
     ];
 
     const rows = employees.map((e) => [
@@ -315,6 +299,12 @@ export function StaffPerformanceClient() {
       `"${e.role_name}"`,
       `"${e.designation_title || "-"}"`,
       `"${e.institution_name || (isPlatformAdmin ? "Platform Admin Staff" : "-")}"`,
+      `"${e.grade || "A"}"`,
+      e.rating_score,
+      `"${e.performance_rating}"`,
+      `${e.attendance_score_pct ?? e.attendance_rate}%`,
+      `${e.task_score_pct ?? e.tasks_on_time_rate}%`,
+      `${e.earnings_score_pct ?? 100}%`,
       e.tasks_completed_count,
       `${e.tasks_on_time_rate}%`,
       e.sales_count,
@@ -323,8 +313,7 @@ export function StaffPerformanceClient() {
       e.net_financial_contribution,
       `${e.roi_percentage}%`,
       `${e.attendance_rate}%`,
-      e.rating_score,
-      `"${e.performance_rating}"`,
+      `"${(e.evaluation_remarks || e.remarks || "-").replace(/"/g, '""')}"`,
     ]);
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
@@ -336,6 +325,31 @@ export function StaffPerformanceClient() {
     link.click();
     document.body.removeChild(link);
     toast.success("Staff performance report downloaded successfully");
+  };
+
+  const getGradeBadge = (grade?: string, score?: number) => {
+    const finalGrade = grade || "A";
+    const scoreVal = typeof score === "number" ? score.toFixed(1) : "5.0";
+
+    let colorClass = "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30";
+    if (finalGrade.startsWith("A")) {
+      colorClass = "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30";
+    } else if (finalGrade.startsWith("B")) {
+      colorClass = "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30";
+    } else if (finalGrade.startsWith("C")) {
+      colorClass = "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30";
+    } else {
+      colorClass = "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30";
+    }
+
+    return (
+      <Badge className={cn("gap-1 text-[10px] font-bold font-mono", colorClass)}>
+        <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+        <span>{scoreVal}★</span>
+        <span className="opacity-40">|</span>
+        <span>{finalGrade}</span>
+      </Badge>
+    );
   };
 
   const getRatingBadge = (rating: StaffPerformanceRecord["performance_rating"]) => {
@@ -694,7 +708,7 @@ export function StaffPerformanceClient() {
         <div className="w-full sm:w-48">
           <Select value={roleFilter} onValueChange={setRoleFilter}>
             <SelectTrigger className="h-10 text-xs bg-background rounded-xl">
-              <SelectValue placeholder="All Roles & Designations" />
+              <SelectValue placeholder="All Roles & Positions" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all" className="text-xs font-semibold">All Roles & Positions</SelectItem>
@@ -751,7 +765,7 @@ export function StaffPerformanceClient() {
                 className="rounded-2xl border bg-card/80 hover:border-primary/50 transition-all shadow-xs space-y-4 p-4 flex flex-col justify-between"
               >
                 <div className="space-y-3">
-                  {/* Top Bar: Avatar, Name, Role, Rating Badge */}
+                  {/* Top Bar: Avatar, Name, Role, Rating Badge & Grade */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3 min-w-0">
                       <Avatar className="w-11 h-11 border-2 border-primary/20 shrink-0">
@@ -773,7 +787,10 @@ export function StaffPerformanceClient() {
                       </div>
                     </div>
 
-                    {getRatingBadge(staff.performance_rating)}
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      {getGradeBadge(staff.grade, staff.rating_score)}
+                      {getRatingBadge(staff.performance_rating)}
+                    </div>
                   </div>
 
                   {/* Institution tag if platform admin */}
@@ -783,6 +800,36 @@ export function StaffPerformanceClient() {
                       <span className="truncate">{staff.institution_name}</span>
                     </div>
                   )}
+
+                  {/* 3-Pillar Matrix Mini Strip (Attendance 35%, Tasks 35%, Earnings 30%) */}
+                  <div className="grid grid-cols-3 gap-1 bg-muted/40 p-2 rounded-xl border text-center text-xs">
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] text-muted-foreground font-semibold flex items-center justify-center gap-0.5">
+                        <Clock className="w-2.5 h-2.5 text-blue-500 shrink-0" /> Att (35%)
+                      </span>
+                      <span className="font-bold font-mono text-blue-600 dark:text-blue-400">
+                        {staff.attendance_score_pct ?? staff.attendance_rate}%
+                      </span>
+                    </div>
+
+                    <div className="space-y-0.5 border-x">
+                      <span className="text-[9px] text-muted-foreground font-semibold flex items-center justify-center gap-0.5">
+                        <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500 shrink-0" /> Task (35%)
+                      </span>
+                      <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                        {staff.task_score_pct ?? staff.tasks_on_time_rate}%
+                      </span>
+                    </div>
+
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] text-muted-foreground font-semibold flex items-center justify-center gap-0.5">
+                        <IndianRupee className="w-2.5 h-2.5 text-amber-500 shrink-0" /> Earn (30%)
+                      </span>
+                      <span className="font-bold font-mono text-amber-600 dark:text-amber-400">
+                        {staff.earnings_score_pct ?? 100}%
+                      </span>
+                    </div>
+                  </div>
 
                   {/* KPI Metrics Strip with Performance Points */}
                   <div className="grid grid-cols-4 gap-1.5 bg-muted/30 p-2.5 rounded-xl border text-center text-xs">
@@ -837,6 +884,13 @@ export function StaffPerformanceClient() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Supervisory Remarks preview if available */}
+                  {(staff.evaluation_remarks || staff.remarks) && (
+                    <div className="text-[10px] text-muted-foreground bg-primary/5 p-2 rounded-lg border border-primary/10 line-clamp-2 italic">
+                      &ldquo;{staff.evaluation_remarks || staff.remarks}&rdquo;
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-2 border-t">
@@ -863,13 +917,14 @@ export function StaffPerformanceClient() {
                 <tr className="border-b bg-muted/40 text-muted-foreground font-bold">
                   <th className="p-3">Staff Member</th>
                   <th className="p-3">Role & Designation</th>
+                  <th className="p-3 text-center">Grade & Score</th>
+                  <th className="p-3 text-center">3 Pillars (Att / Task / Earn)</th>
                   <th className="p-3 text-center">Tasks Done</th>
                   <th className="p-3 text-center">Points XP</th>
                   <th className="p-3 text-right">Total Value</th>
                   <th className="p-3 text-right">Staff Cost</th>
                   <th className="p-3 text-right">Net Value</th>
                   <th className="p-3 text-center">ROI %</th>
-                  <th className="p-3 text-center">Attendance</th>
                   <th className="p-3 text-center">Status</th>
                   <th className="p-3 text-right">Action</th>
                 </tr>
@@ -898,6 +953,18 @@ export function StaffPerformanceClient() {
                         <div className="font-semibold text-foreground">{staff.role_name}</div>
                         <div className="text-[10px] text-muted-foreground">{staff.designation_title || "-"}</div>
                       </td>
+                      <td className="p-3 text-center">
+                        {getGradeBadge(staff.grade, staff.rating_score)}
+                      </td>
+                      <td className="p-3 text-center font-mono">
+                        <div className="inline-flex items-center gap-1.5 text-[10px]">
+                          <span className="text-blue-600 font-semibold">{staff.attendance_score_pct ?? staff.attendance_rate}%</span>
+                          <span className="text-muted-foreground">/</span>
+                          <span className="text-emerald-600 font-semibold">{staff.task_score_pct ?? staff.tasks_on_time_rate}%</span>
+                          <span className="text-muted-foreground">/</span>
+                          <span className="text-amber-600 font-semibold">{staff.earnings_score_pct ?? 100}%</span>
+                        </div>
+                      </td>
                       <td className="p-3 text-center font-bold font-mono">{staff.tasks_completed_count}</td>
                       <td className="p-3 text-center">
                         <Badge
@@ -922,7 +989,6 @@ export function StaffPerformanceClient() {
                         ₹{staff.net_financial_contribution.toLocaleString("en-IN")}
                       </td>
                       <td className="p-3 text-center font-bold font-mono text-primary">{staff.roi_percentage}%</td>
-                      <td className="p-3 text-center font-mono">{staff.attendance_rate}%</td>
                       <td className="p-3 text-center">{getRatingBadge(staff.performance_rating)}</td>
                       <td className="p-3 text-right">
                         <Button
@@ -956,15 +1022,141 @@ export function StaffPerformanceClient() {
                       {selectedStaff.full_name.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <SheetTitle className="text-lg font-bold text-foreground">{selectedStaff.full_name}</SheetTitle>
                     <SheetDescription className="text-xs text-muted-foreground">
                       {selectedStaff.role_name} {selectedStaff.designation_title ? `• ${selectedStaff.designation_title}` : ""}
                     </SheetDescription>
-                    <div className="pt-1">{getRatingBadge(selectedStaff.performance_rating)}</div>
+                    <div className="pt-1.5 flex items-center gap-1.5 flex-wrap">
+                      {getGradeBadge(selectedStaff.grade, selectedStaff.rating_score)}
+                      {getRatingBadge(selectedStaff.performance_rating)}
+                    </div>
                   </div>
                 </div>
               </SheetHeader>
+
+              {/* 3-Pillar Performance Matrix Panel */}
+              <div className="p-4 rounded-2xl border bg-gradient-to-br from-background via-muted/20 to-primary/5 space-y-3.5 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Award className="w-5 h-5 text-primary" />
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                        3-Pillar Performance Matrix
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground">
+                        Attendance (35%) + Tasks (35%) + Earnings/Value (30%)
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-bold font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-lg border border-primary/20">
+                      {selectedStaff.total_score_pct ?? Math.round(((selectedStaff.attendance_score_pct ?? selectedStaff.attendance_rate) * 0.35) + ((selectedStaff.task_score_pct ?? selectedStaff.tasks_on_time_rate) * 0.35) + ((selectedStaff.earnings_score_pct ?? 100) * 0.3))}% Overall
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {/* Pillar 1: Attendance */}
+                  <div className="p-3 rounded-xl bg-background border space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                        <Clock className="w-3.5 h-3.5" /> Attendance
+                      </span>
+                      <Badge variant="outline" className="text-[10px] font-mono font-bold bg-blue-500/10 text-blue-700 border-blue-500/30">
+                        35%
+                      </Badge>
+                    </div>
+                    <div className="text-xl font-bold font-mono text-foreground">
+                      {selectedStaff.attendance_score_pct ?? selectedStaff.attendance_rate}%
+                    </div>
+                    <div className="text-[10px] text-muted-foreground space-y-0.5 font-medium border-t pt-1.5">
+                      <div className="flex justify-between">
+                        <span>Present:</span>
+                        <span className="font-mono font-bold text-foreground">{selectedStaff.present_days} / {selectedStaff.total_working_days} d</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Punctuality:</span>
+                        <span className="font-mono font-bold text-emerald-600">{selectedStaff.punctuality_rate}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Late Penalty:</span>
+                        <span className="font-mono font-bold text-amber-600">{selectedStaff.late_days}d ({selectedStaff.total_late_minutes}m)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pillar 2: Tasks */}
+                  <div className="p-3 rounded-xl bg-background border space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Tasks
+                      </span>
+                      <Badge variant="outline" className="text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-700 border-emerald-500/30">
+                        35%
+                      </Badge>
+                    </div>
+                    <div className="text-xl font-bold font-mono text-foreground">
+                      {selectedStaff.task_score_pct ?? selectedStaff.tasks_on_time_rate}%
+                    </div>
+                    <div className="text-[10px] text-muted-foreground space-y-0.5 font-medium border-t pt-1.5">
+                      <div className="flex justify-between">
+                        <span>Delivered:</span>
+                        <span className="font-mono font-bold text-foreground">{selectedStaff.tasks_completed_count} / {selectedStaff.tasks_assigned_count}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>On-Time:</span>
+                        <span className="font-mono font-bold text-emerald-600">{selectedStaff.tasks_on_time_rate}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Efficiency:</span>
+                        <span className="font-mono font-bold text-primary">{selectedStaff.time_efficiency_pct ?? 100}%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pillar 3: Earnings */}
+                  <div className="p-3 rounded-xl bg-background border space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                        <IndianRupee className="w-3.5 h-3.5" /> Earnings
+                      </span>
+                      <Badge variant="outline" className="text-[10px] font-mono font-bold bg-amber-500/10 text-amber-700 border-amber-500/30">
+                        30%
+                      </Badge>
+                    </div>
+                    <div className="text-xl font-bold font-mono text-foreground">
+                      {selectedStaff.earnings_score_pct ?? 100}%
+                    </div>
+                    <div className="text-[10px] text-muted-foreground space-y-0.5 font-medium border-t pt-1.5">
+                      <div className="flex justify-between">
+                        <span>Payable Salary:</span>
+                        <span className="font-mono font-bold text-foreground">₹{(selectedStaff.payable_salary ?? selectedStaff.base_salary).toLocaleString("en-IN")}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Total Value:</span>
+                        <span className="font-mono font-bold text-emerald-600">₹{(selectedStaff.total_sales_revenue + selectedStaff.tasks_billed_value).toLocaleString("en-IN")}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Realization:</span>
+                        <span className="font-mono font-bold text-primary">{selectedStaff.earnings_realization_rate ?? 100}%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Evaluation Remarks Callout */}
+                {(selectedStaff.evaluation_remarks || selectedStaff.remarks) && (
+                  <div className="p-3 rounded-xl bg-background border text-xs space-y-1">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground block tracking-wider">
+                      Automated Supervisory Evaluation Remarks
+                    </span>
+                    <p className="text-foreground italic leading-relaxed">
+                      &ldquo;{selectedStaff.evaluation_remarks || selectedStaff.remarks}&rdquo;
+                    </p>
+                  </div>
+                )}
+              </div>
 
               {/* KPI Score Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">

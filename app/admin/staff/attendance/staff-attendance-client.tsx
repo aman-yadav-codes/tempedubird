@@ -30,7 +30,7 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store";
 
-type StaffAttendanceStatus = "PRESENT" | "ABSENT" | "LEAVE" | "LATE" | "HALF_DAY";
+type StaffAttendanceStatus = "PRESENT" | "ABSENT" | "LEAVE" | "LATE" | "HALF_DAY" | "HOLIDAY";
 type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
 type Mode = "admin" | "self";
 
@@ -43,9 +43,19 @@ type StaffRow = {
   status: StaffAttendanceStatus | null;
   check_in_time?: string | null;
   check_out_time?: string | null;
+  working_hours?: number | string | null;
+  task_hours?: number | string | null;
+  check_in_count?: number | null;
   remarks: string;
   leave_from_date?: string;
   leave_to_date?: string;
+  is_late?: boolean;
+  late_minutes?: number;
+  is_early_exit?: boolean;
+  early_exit_minutes?: number;
+  attentiveness_score?: number;
+  dedication_tier?: string;
+  shift_name?: string;
 };
 
 type SelfAttendanceRow = {
@@ -53,7 +63,17 @@ type SelfAttendanceRow = {
   status: StaffAttendanceStatus;
   check_in_time?: string | null;
   check_out_time?: string | null;
+  working_hours?: number | string | null;
+  task_hours?: number | string | null;
+  check_in_count?: number | null;
   remarks: string;
+  is_late?: boolean;
+  late_minutes?: number;
+  is_early_exit?: boolean;
+  early_exit_minutes?: number;
+  attentiveness_score?: number;
+  dedication_tier?: string;
+  shift_name?: string;
 };
 
 type HistoryRow = SelfAttendanceRow & {
@@ -83,7 +103,7 @@ type LeaveRow = {
   decided_at?: string | null;
 };
 
-const STATUS_OPTIONS: StaffAttendanceStatus[] = ["PRESENT", "ABSENT", "LEAVE", "LATE", "HALF_DAY"];
+const STATUS_OPTIONS: StaffAttendanceStatus[] = ["PRESENT", "ABSENT", "LEAVE", "LATE", "HALF_DAY", "HOLIDAY"];
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 const UNMARKED_VALUE = "UNMARKED";
 
@@ -93,6 +113,7 @@ const STATUS_META: Record<StaffAttendanceStatus | LeaveStatus, { label: string; 
   LEAVE: { label: "Leave", className: "border-sky-500/40 bg-sky-500/15 text-sky-200" },
   LATE: { label: "Late", className: "border-amber-500/40 bg-amber-500/15 text-amber-200" },
   HALF_DAY: { label: "Half Day", className: "border-violet-500/40 bg-violet-500/15 text-violet-200" },
+  HOLIDAY: { label: "Holiday", className: "border-rose-500/40 bg-rose-500/15 text-rose-400" },
   PENDING: { label: "Pending", className: "border-amber-500/40 bg-amber-500/15 text-amber-200" },
   APPROVED: { label: "Approved", className: "border-emerald-500/40 bg-emerald-500/15 text-emerald-200" },
   REJECTED: { label: "Rejected", className: "border-destructive/50 bg-destructive/15 text-destructive" },
@@ -133,12 +154,60 @@ function formatTime(value?: string | null) {
   return value?.slice(0, 5) || "";
 }
 
+function formatHours(val?: number | string | null) {
+  if (val === undefined || val === null || val === "") return "-";
+  const num = typeof val === "number" ? val : parseFloat(String(val));
+  if (isNaN(num) || num <= 0) return "-";
+  const h = Math.floor(num);
+  const m = Math.round((num - h) * 60);
+  return `${h}h ${m}m`;
+}
+
 function StatusBadge({ status }: { status: StaffAttendanceStatus | LeaveStatus | null }) {
   if (!status) {
     return <Badge variant="outline" className="rounded-md border-border text-muted-foreground">Unmarked</Badge>;
   }
   const meta = STATUS_META[status];
   return <Badge variant="outline" className={cn("border", meta.className)}>{meta.label}</Badge>;
+}
+
+function DedicationBadge({ tier, score }: { tier?: string | null; score?: number | null }) {
+  if (!tier) return <span className="text-xs text-muted-foreground">-</span>;
+  const t = tier.toUpperCase();
+  const scoreStr = score !== undefined && score !== null && Number(score) > 0 ? ` (${Math.round(Number(score))}%)` : "";
+  if (t === "HIGHLY_DEDICATED" || t.includes("HIGHLY")) {
+    return (
+      <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium text-[11px] whitespace-nowrap">
+        🌟 Highly Dedicated{scoreStr}
+      </Badge>
+    );
+  }
+  if (t === "DEDICATED") {
+    return (
+      <Badge variant="outline" className="border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium text-[11px] whitespace-nowrap">
+        🎯 Dedicated{scoreStr}
+      </Badge>
+    );
+  }
+  if (t === "MODERATE") {
+    return (
+      <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium text-[11px] whitespace-nowrap">
+        ⏱️ Moderate{scoreStr}
+      </Badge>
+    );
+  }
+  if (t === "NEEDS_ATTENTION" || t.includes("ATTENTION")) {
+    return (
+      <Badge variant="outline" className="border-rose-500/40 bg-rose-500/10 text-rose-600 dark:text-rose-400 font-medium text-[11px] whitespace-nowrap">
+        ⚠️ Needs Attention{scoreStr}
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="text-xs font-normal">
+      {tier}
+    </Badge>
+  );
 }
 
 function roleLabel(roleCode: string, roleName?: string) {
@@ -245,6 +314,7 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
   const [selfAttendance, setSelfAttendance] = useState<SelfAttendanceRow[]>([]);
   const [historyRows, setHistoryRows] = useState<HistoryRow[]>([]);
   const [leaves, setLeaves] = useState<LeaveRow[]>([]);
+  const [currentHoliday, setCurrentHoliday] = useState<{ id: number; title: string; description?: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -309,10 +379,16 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
       const res = await fetch(`/api/admin/staff/attendance?${params.toString()}`, { headers: authHeaders });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to load staff attendance");
+      if (json.holiday) {
+        setCurrentHoliday(json.holiday);
+      } else {
+        setCurrentHoliday(null);
+      }
       if (Array.isArray(json.staff)) {
-        setStaff(json.staff.map((row: StaffRow) => ({
+        setStaff(json.staff.map((row: StaffRow & { default_status?: any; holiday_title?: string }) => ({
           ...row,
-          status: row.status ?? null,
+          status: row.status ?? (json.holiday ? "HOLIDAY" : null),
+          remarks: row.remarks || (json.holiday && !row.status ? `Company Holiday: ${json.holiday.title}` : ""),
           leave_from_date: date,
           leave_to_date: date,
         })));
@@ -393,7 +469,7 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
   const statusTotals = useMemo(() => {
     return staff.reduce<Record<StaffAttendanceStatus, number>>(
       (totals, row) => row.status ? { ...totals, [row.status]: totals[row.status] + 1 } : totals,
-      { PRESENT: 0, ABSENT: 0, LEAVE: 0, LATE: 0, HALF_DAY: 0 }
+      { PRESENT: 0, ABSENT: 0, LEAVE: 0, LATE: 0, HALF_DAY: 0, HOLIDAY: 0 }
     );
   }, [staff]);
 
@@ -672,6 +748,44 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
               </div>
             </div>
 
+            {currentHoliday && (
+              <div className="mx-4 my-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-rose-900 dark:text-rose-100">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/20 text-lg">
+                    🏖️
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm">Official Company Holiday: {currentHoliday.title}</span>
+                      <Badge variant="outline" className="border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-300 text-[10px] font-semibold">
+                        Company Calendar
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-rose-700 dark:text-rose-300 mt-0.5">
+                      {currentHoliday.description || "Official holiday registered in Company Calendar. Staff members are excused from standard working hours."}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-rose-500/40 bg-rose-500/15 hover:bg-rose-500/25 text-rose-800 dark:text-rose-200 text-xs font-semibold"
+                  onClick={() => {
+                    setStaff((current) =>
+                      current.map((row) => ({
+                        ...row,
+                        status: "HOLIDAY",
+                        remarks: row.remarks || `Company Holiday: ${currentHoliday.title}`,
+                      }))
+                    );
+                    toast.success(`All staff marked as Holiday (${currentHoliday.title})`);
+                  }}
+                >
+                  Mark All as Holiday
+                </Button>
+              </div>
+            )}
+
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1080px] text-sm">
                 <thead className="border-b border-border bg-muted/30 text-left">
@@ -693,12 +807,13 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
                     <th className="px-4 py-3">Role</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Coming & Leaving / Leave Dates</th>
+                    <th className="px-4 py-3">Hours & Dedication</th>
                     <th className="px-4 py-3">Remarks</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
-                    <TableSkeleton columns={6} />
+                    <TableSkeleton columns={7} />
                   ) : staff.length ? staff.map((row) => (
                     <tr key={row.staff_user_id} className="border-b border-border/70">
                       <td className="px-4 py-3">
@@ -724,7 +839,7 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
                           value={row.status ?? UNMARKED_VALUE}
                           onValueChange={(value) => {
                             const nextStatus = value === UNMARKED_VALUE ? null : (value as StaffAttendanceStatus);
-                            const isNoTime = nextStatus === "LEAVE" || nextStatus === "ABSENT" || !nextStatus;
+                            const isNoTime = nextStatus === "LEAVE" || nextStatus === "ABSENT" || nextStatus === "HOLIDAY" || !nextStatus;
                             updateStaffRow(row.staff_user_id, {
                               status: nextStatus,
                               check_in_time: isNoTime ? null : row.check_in_time,
@@ -785,21 +900,54 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
                         ) : (
                           <div className="flex flex-wrap gap-2">
                             <TimePicker
-                              value={row.status === "ABSENT" ? "" : formatTime(row.check_in_time)}
+                              value={row.status === "ABSENT" || row.status === "HOLIDAY" ? "" : formatTime(row.check_in_time)}
                               onChange={(value) => updateStaffRow(row.staff_user_id, { check_in_time: value })}
-                              placeholder={row.status === "ABSENT" ? "Absent" : "Check in"}
+                              placeholder={row.status === "ABSENT" ? "Absent" : row.status === "HOLIDAY" ? "Holiday" : "Check in"}
                               className="w-32"
-                              disabled={!row.status || row.status === "ABSENT"}
+                              disabled={!row.status || row.status === "ABSENT" || row.status === "HOLIDAY"}
                             />
                             <TimePicker
-                              value={row.status === "ABSENT" ? "" : formatTime(row.check_out_time)}
+                              value={row.status === "ABSENT" || row.status === "HOLIDAY" ? "" : formatTime(row.check_out_time)}
                               onChange={(value) => updateStaffRow(row.staff_user_id, { check_out_time: value })}
-                              placeholder={row.status === "ABSENT" ? "Absent" : "Check out"}
+                              placeholder={row.status === "ABSENT" ? "Absent" : row.status === "HOLIDAY" ? "Holiday" : "Check out"}
                               className="w-32"
-                              disabled={!row.status || row.status === "ABSENT"}
+                              disabled={!row.status || row.status === "ABSENT" || row.status === "HOLIDAY"}
                             />
                           </div>
                         )}
+                        {row.status !== "LEAVE" && (row.check_in_time || row.check_out_time) && (
+                          <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
+                            {row.check_in_time ? (
+                              row.is_late ? (
+                                <span className="font-medium text-amber-500">⚠️ Late (+{row.late_minutes}m)</span>
+                              ) : (
+                                <span className="font-medium text-emerald-500">✓ On Time</span>
+                              )
+                            ) : null}
+                            {row.check_out_time ? (
+                              row.is_early_exit ? (
+                                <span className="font-medium text-amber-500">⚠️ Left Early (-{row.early_exit_minutes}m)</span>
+                              ) : (
+                                <span className="font-medium text-emerald-500">✓ Full Shift</span>
+                              )
+                            ) : null}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="space-y-1 text-xs">
+                          <div className="font-medium text-foreground">
+                            {formatHours(row.working_hours)}
+                            {row.task_hours ? (
+                              <span className="ml-1 text-muted-foreground font-normal">(Task: {formatHours(row.task_hours)})</span>
+                            ) : null}
+                          </div>
+                          {row.dedication_tier ? (
+                            <DedicationBadge tier={row.dedication_tier} score={row.attentiveness_score} />
+                          ) : (
+                            <span className="text-muted-foreground text-[11px]">-</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <Input
@@ -811,7 +959,7 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
                       </td>
                     </tr>
                   )) : (
-                    <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">No staff members found for this institution.</td></tr>
+                    <tr><td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">No staff members found for this institution.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -881,13 +1029,17 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Check In</th>
                     <th className="px-4 py-3">Check Out</th>
+                    <th className="px-4 py-3 text-center">Check-ins</th>
+                    <th className="px-4 py-3">Working Hours</th>
+                    <th className="px-4 py-3">Task Hours</th>
+                    <th className="px-4 py-3">Attentive & Dedicated</th>
                     <th className="px-4 py-3">Remarks</th>
                     <th className="px-4 py-3">Marked By</th>
                   </tr>
                 </thead>
                 <tbody>
                   {historyLoading ? (
-                    <TableSkeleton columns={8} />
+                    <TableSkeleton columns={12} />
                   ) : historyRows.length ? historyRows.map((row) => (
                     <tr key={row.id} className="border-b border-border/70">
                       <td className="px-4 py-3">{formatDate(row.attendance_date)}</td>
@@ -901,13 +1053,49 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
                         </Badge>
                       </td>
                       <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
-                      <td className="px-4 py-3">{formatTime(row.check_in_time) || "-"}</td>
-                      <td className="px-4 py-3">{formatTime(row.check_out_time) || "-"}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-mono">{formatTime(row.check_in_time) || "-"}</div>
+                        {row.check_in_time && (
+                          <div className="text-[11px]">
+                            {row.is_late ? (
+                              <span className="font-medium text-amber-500">⚠️ Late (+{row.late_minutes}m)</span>
+                            ) : (
+                              <span className="font-medium text-emerald-500">✓ On Time</span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-mono">{formatTime(row.check_out_time) || "-"}</div>
+                        {row.check_out_time && (
+                          <div className="text-[11px]">
+                            {row.is_early_exit ? (
+                              <span className="font-medium text-amber-500">⚠️ Left Early (-{row.early_exit_minutes}m)</span>
+                            ) : (
+                              <span className="font-medium text-emerald-500">✓ Full Shift</span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center font-mono">
+                        {row.check_in_count && Number(row.check_in_count) > 0 ? (
+                          <Badge variant="secondary" className="text-xs font-bold">
+                            {row.check_in_count}
+                          </Badge>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-foreground">{formatHours(row.working_hours)}</td>
+                      <td className="px-4 py-3 font-medium text-indigo-600 dark:text-indigo-400">{formatHours(row.task_hours)}</td>
+                      <td className="px-4 py-3">
+                        <DedicationBadge tier={row.dedication_tier} score={row.attentiveness_score} />
+                      </td>
                       <td className="px-4 py-3 text-muted-foreground">{row.remarks || "-"}</td>
                       <td className="px-4 py-3 text-muted-foreground">{row.marked_by_name || "-"}</td>
                     </tr>
                   )) : (
-                    <tr><td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">No attendance history found.</td></tr>
+                    <tr><td colSpan={12} className="px-4 py-12 text-center text-muted-foreground">No attendance history found.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -1038,22 +1226,62 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Check In</th>
                     <th className="px-4 py-3">Check Out</th>
+                    <th className="px-4 py-3 text-center">Check-ins</th>
+                    <th className="px-4 py-3">Working Hours</th>
+                    <th className="px-4 py-3">Task Hours</th>
+                    <th className="px-4 py-3">Attentive & Dedicated</th>
                     <th className="px-4 py-3">Remarks</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
-                    <TableSkeleton columns={5} />
+                    <TableSkeleton columns={9} />
                   ) : selfAttendance.length ? selfAttendance.map((row) => (
                     <tr key={row.attendance_date} className="border-b border-border/70">
                       <td className="px-4 py-3">{formatDate(row.attendance_date)}</td>
                       <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
-                      <td className="px-4 py-3">{formatTime(row.check_in_time) || "-"}</td>
-                      <td className="px-4 py-3">{formatTime(row.check_out_time) || "-"}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-mono">{formatTime(row.check_in_time) || "-"}</div>
+                        {row.check_in_time && (
+                          <div className="text-[11px]">
+                            {row.is_late ? (
+                              <span className="font-medium text-amber-500">⚠️ Late (+{row.late_minutes}m)</span>
+                            ) : (
+                              <span className="font-medium text-emerald-500">✓ On Time</span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-mono">{formatTime(row.check_out_time) || "-"}</div>
+                        {row.check_out_time && (
+                          <div className="text-[11px]">
+                            {row.is_early_exit ? (
+                              <span className="font-medium text-amber-500">⚠️ Left Early (-{row.early_exit_minutes}m)</span>
+                            ) : (
+                              <span className="font-medium text-emerald-500">✓ Full Shift</span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center font-mono">
+                        {row.check_in_count && Number(row.check_in_count) > 0 ? (
+                          <Badge variant="secondary" className="text-xs font-bold">
+                            {row.check_in_count}
+                          </Badge>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-foreground">{formatHours(row.working_hours)}</td>
+                      <td className="px-4 py-3 font-medium text-indigo-600 dark:text-indigo-400">{formatHours(row.task_hours)}</td>
+                      <td className="px-4 py-3">
+                        <DedicationBadge tier={row.dedication_tier} score={row.attentiveness_score} />
+                      </td>
                       <td className="px-4 py-3 text-muted-foreground">{row.remarks || "-"}</td>
                     </tr>
                   )) : (
-                    <tr><td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">No attendance found for this month.</td></tr>
+                    <tr><td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">No attendance found for this month.</td></tr>
                   )}
                 </tbody>
               </table>

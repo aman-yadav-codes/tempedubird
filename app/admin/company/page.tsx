@@ -30,6 +30,9 @@ import {
   IndianRupee,
   Copy,
   Check,
+  Upload,
+  Globe,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -108,7 +111,7 @@ export type PaymentMethodItem = {
 };
 
 const PAGE_TABS = [
-  { slug: "contact-branches", label: "Contact & Branches", icon: MapPin },
+  { slug: "contact-branches", label: "Company Info & Branches", icon: Building2 },
   { slug: "payment-methods", label: "Payment Methods", icon: CreditCard },
   { slug: "faqs", label: "FAQs", icon: HelpCircle },
   { slug: "privacy-policy", label: "Privacy Policy", icon: ShieldCheck },
@@ -236,14 +239,42 @@ export default function AdminCompanyPage() {
   const [branchDialogOpen, setBranchDialogOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState<any | null>(null);
   const [branchName, setBranchName] = useState("");
+  const [branchType, setBranchType] = useState("Regional Office");
   const [branchCity, setBranchCity] = useState("");
+  const [branchState, setBranchState] = useState("");
+  const [branchPincode, setBranchPincode] = useState("");
   const [branchAddress, setBranchAddress] = useState("");
   const [branchPhone, setBranchPhone] = useState("");
   const [branchEmail, setBranchEmail] = useState("");
   const [branchMapUrl, setBranchMapUrl] = useState("");
   const [branchManagerName, setBranchManagerName] = useState("");
   const [branchStatus, setBranchStatus] = useState("active");
+  const [branchIsHq, setBranchIsHq] = useState(false);
   const [savingBranch, setSavingBranch] = useState(false);
+
+  // Platform Company Info State
+  const [companyInfo, setCompanyInfo] = useState({
+    company_name: "EduBird Technologies Private Limited",
+    brand_name: "EduBird Platform",
+    logo_url: "",
+    favicon_url: "",
+    tagline: "Empowering Next-Generation Academic & Campus Management",
+    about_text: "",
+    support_email: "support@edubird.com",
+    support_phone: "+91 98765 43210",
+    helpline_toll_free: "1800 123 4567",
+    website_url: "https://edubird.com",
+    address_street: "",
+    address_city: "",
+    address_state: "",
+    address_pincode: "",
+    cin_number: "",
+    gstin: "",
+    working_hours: "Monday - Saturday: 9:00 AM - 6:00 PM",
+  });
+  const [loadingCompanyInfo, setLoadingCompanyInfo] = useState(false);
+  const [savingCompanyInfo, setSavingCompanyInfo] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   // Payment Methods State
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodItem[]>([]);
@@ -299,6 +330,72 @@ export default function AdminCompanyPage() {
     }
   }, [authHeader]);
 
+  const fetchCompanyInfo = useCallback(async () => {
+    setLoadingCompanyInfo(true);
+    try {
+      const res = await fetch("/api/admin/company/info", { headers: authHeader });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data) {
+          setCompanyInfo((prev) => ({
+            ...prev,
+            ...json.data,
+          }));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load company info:", err);
+    } finally {
+      setLoadingCompanyInfo(false);
+    }
+  }, [authHeader]);
+
+  const handleSaveCompanyInfo = async () => {
+    setSavingCompanyInfo(true);
+    try {
+      const res = await fetch("/api/admin/company/info", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeader,
+        },
+        body: JSON.stringify(companyInfo),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to update company info");
+      toast.success("Company info and brand identity updated successfully!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save company information");
+    } finally {
+      setSavingCompanyInfo(false);
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: "logo_url" | "favicon_url" = "logo_url") => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/admin/uploads/image", {
+        method: "POST",
+        headers: authHeader,
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok || !json.url) {
+        throw new Error(json.error || "Upload failed");
+      }
+      setCompanyInfo((prev) => ({ ...prev, [field]: json.url }));
+      toast.success(field === "logo_url" ? "Company logo uploaded!" : "Icon uploaded!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload image");
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
   // Fetch pages data
   const fetchPagesData = useCallback(async () => {
     setLoadingPages(true);
@@ -340,7 +437,8 @@ export default function AdminCompanyPage() {
       void fetchHostels();
     } else if (activeTab === "libraries") {
       void fetchLibraries();
-    } else if (activeTab === "branches") {
+    } else if (activeTab === "branches" || activeTab === "contact-branches") {
+      void fetchCompanyInfo();
       void fetchBranches();
     } else if (activeTab === "payment-methods") {
       void fetchPaymentMethods();
@@ -349,7 +447,7 @@ export default function AdminCompanyPage() {
     } else {
       void fetchPagesData();
     }
-  }, [isReady, canAccessCompany, activeTab, fetchHostels, fetchLibraries, fetchBranches, fetchPaymentMethods, fetchFaqsData, fetchPagesData]);
+  }, [isReady, canAccessCompany, activeTab, fetchHostels, fetchLibraries, fetchBranches, fetchCompanyInfo, fetchPaymentMethods, fetchFaqsData, fetchPagesData]);
 
   // Handle Page Form Field Changes
   const handlePageChange = (slug: string, field: string, value: any) => {
@@ -698,26 +796,34 @@ export default function AdminCompanyPage() {
   const handleOpenAddBranch = () => {
     setEditingBranch(null);
     setBranchName("");
+    setBranchType("Regional Office");
     setBranchCity("");
+    setBranchState("");
+    setBranchPincode("");
     setBranchAddress("");
     setBranchPhone("");
     setBranchEmail("");
     setBranchMapUrl("");
     setBranchManagerName("");
     setBranchStatus("active");
+    setBranchIsHq(false);
     setBranchDialogOpen(true);
   };
 
   const handleOpenEditBranch = (b: any) => {
     setEditingBranch(b);
     setBranchName(b.branch_name || "");
+    setBranchType(b.branch_type || "Regional Office");
     setBranchCity(b.city || "");
+    setBranchState(b.state || "");
+    setBranchPincode(b.pincode || "");
     setBranchAddress(b.address || "");
     setBranchPhone(b.phone || "");
     setBranchEmail(b.email || "");
     setBranchMapUrl(b.map_url || "");
     setBranchManagerName(b.manager_name || "");
     setBranchStatus(b.status || "active");
+    setBranchIsHq(Boolean(b.is_headquarters));
     setBranchDialogOpen(true);
   };
 
@@ -738,13 +844,17 @@ export default function AdminCompanyPage() {
         body: JSON.stringify({
           id: editingBranch?.id,
           branch_name: branchName,
+          branch_type: branchType,
           city: branchCity,
+          state: branchState,
+          pincode: branchPincode,
           address: branchAddress,
           phone: branchPhone,
           email: branchEmail,
           map_url: branchMapUrl,
           manager_name: branchManagerName,
           status: branchStatus,
+          is_headquarters: branchIsHq,
         }),
       });
 
@@ -1393,21 +1503,350 @@ export default function AdminCompanyPage() {
             </CardContent>
           </Card>
         </TabsContent>
-        {/* Contact & Branches Tab */}
+        {/* Company Info & Branches Tab */}
         <TabsContent value="contact-branches" className="space-y-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between border-b bg-card px-6 py-4">
-              <div>
+          {/* 1. Platform Company Information & Brand Identity Card */}
+          <Card className="border-border shadow-xs">
+            <CardHeader className="flex flex-row items-center justify-between border-b bg-card/60 px-6 py-4">
+              <div className="space-y-1">
                 <CardTitle className="text-xl flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-primary" />
-                  Platform Contact & Branches Directory
+                  <Building2 className="h-5 w-5 text-primary" />
+                  Platform Company Information & Brand Identity
                 </CardTitle>
                 <CardDescription>
-                  Manage official EduBird regional branch offices, contact centers, and headquarters displayed on the home and contact pages.
+                  Configure legal company entity, brand assets, platform logos, corporate identity numbers, and official contact channels.
+                </CardDescription>
+              </div>
+              <Button
+                onClick={handleSaveCompanyInfo}
+                disabled={savingCompanyInfo || loadingCompanyInfo}
+                size="sm"
+                className="gap-2"
+              >
+                {savingCompanyInfo ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save Company Info
+              </Button>
+            </CardHeader>
+
+            <CardContent className="p-6 space-y-6">
+              {loadingCompanyInfo ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />
+                  <span>Loading company details...</span>
+                </div>
+              ) : (
+                <>
+                  {/* Brand & Logo Section */}
+                  <div className="p-5 rounded-xl border bg-muted/20 space-y-5">
+                    <div className="flex items-center gap-2 border-b pb-3">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                      <h3 className="font-semibold text-sm tracking-wide uppercase text-foreground">Brand Identity & Visual Assets</h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                      {/* Logo Preview & Upload */}
+                      <div className="md:col-span-4 flex flex-col items-center justify-center p-5 border rounded-xl bg-background text-center space-y-3">
+                        <Label className="text-xs font-semibold text-muted-foreground">Official Platform Logo</Label>
+                        <div className="w-32 h-32 rounded-xl border border-dashed flex items-center justify-center overflow-hidden bg-muted/30 relative group shadow-inner">
+                          {companyInfo.logo_url ? (
+                            <img
+                              src={companyInfo.logo_url}
+                              alt="Company Logo"
+                              className="w-full h-full object-contain p-2"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLElement).style.display = "none";
+                              }}
+                            />
+                          ) : (
+                            <div className="flex flex-col items-center text-muted-foreground p-3">
+                              <Building2 className="h-10 w-10 stroke-[1.5] text-primary/60 mb-1" />
+                              <span className="text-[11px]">No logo set</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="w-full space-y-2">
+                          <label className="cursor-pointer inline-flex items-center justify-center gap-1.5 w-full text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors py-2 px-3 rounded-lg border border-primary/20">
+                            {uploadingLogo ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Upload className="h-3.5 w-3.5" />
+                            )}
+                            <span>{uploadingLogo ? "Uploading..." : "Upload Logo File"}</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              disabled={uploadingLogo}
+                              onChange={(e) => handleLogoUpload(e, "logo_url")}
+                            />
+                          </label>
+                          <p className="text-[11px] text-muted-foreground">PNG, SVG, or WebP (max 5MB)</p>
+                        </div>
+                      </div>
+
+                      {/* Direct Logo URL & Favicon */}
+                      <div className="md:col-span-8 space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="ci-logo-url" className="text-xs font-semibold">Logo Image URL</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="ci-logo-url"
+                              value={companyInfo.logo_url || ""}
+                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, logo_url: e.target.value }))}
+                              placeholder="https://example.com/logo.png or uploaded asset path"
+                              className="font-mono text-xs"
+                            />
+                            {companyInfo.logo_url && (
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => window.open(companyInfo.logo_url, "_blank")}
+                                title="Open logo link"
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">Upload a file on the left or paste an image URL directly.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="ci-brand-name" className="text-xs font-semibold">Brand / Platform Display Name *</Label>
+                            <Input
+                              id="ci-brand-name"
+                              value={companyInfo.brand_name || ""}
+                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, brand_name: e.target.value }))}
+                              placeholder="e.g. EduBird Platform"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="ci-favicon" className="text-xs font-semibold">Favicon / Browser Icon URL</Label>
+                            <Input
+                              id="ci-favicon"
+                              value={companyInfo.favicon_url || ""}
+                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, favicon_url: e.target.value }))}
+                              placeholder="e.g. /favicon.ico or icon URL"
+                              className="font-mono text-xs"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="ci-tagline" className="text-xs font-semibold">Brand Tagline / Slogan</Label>
+                          <Input
+                            id="ci-tagline"
+                            value={companyInfo.tagline || ""}
+                            onChange={(e) => setCompanyInfo((prev) => ({ ...prev, tagline: e.target.value }))}
+                            placeholder="e.g. Empowering Next-Generation Academic & Campus Management"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Legal Entity & Compliance Information */}
+                  <div className="p-5 rounded-xl border bg-muted/20 space-y-4">
+                    <div className="flex items-center gap-2 border-b pb-3">
+                      <Building2 className="h-4 w-4 text-primary" />
+                      <h3 className="font-semibold text-sm tracking-wide uppercase text-foreground">Legal Entity & Registration</h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2 md:col-span-1">
+                        <Label htmlFor="ci-legal-name" className="text-xs font-semibold">Registered Company Legal Name *</Label>
+                        <Input
+                          id="ci-legal-name"
+                          value={companyInfo.company_name || ""}
+                          onChange={(e) => setCompanyInfo((prev) => ({ ...prev, company_name: e.target.value }))}
+                          placeholder="e.g. EduBird Technologies Private Limited"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="ci-cin" className="text-xs font-semibold">Corporate Identity No (CIN)</Label>
+                        <Input
+                          id="ci-cin"
+                          value={companyInfo.cin_number || ""}
+                          onChange={(e) => setCompanyInfo((prev) => ({ ...prev, cin_number: e.target.value }))}
+                          placeholder="e.g. U72900DL2023PTC123456"
+                          className="font-mono text-xs"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="ci-gstin" className="text-xs font-semibold">GSTIN / Tax ID</Label>
+                        <Input
+                          id="ci-gstin"
+                          value={companyInfo.gstin || ""}
+                          onChange={(e) => setCompanyInfo((prev) => ({ ...prev, gstin: e.target.value }))}
+                          placeholder="e.g. 07AAAAA0000A1Z5"
+                          className="font-mono text-xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ci-about" className="text-xs font-semibold">About Company / Platform Brief</Label>
+                      <Textarea
+                        id="ci-about"
+                        rows={2}
+                        value={companyInfo.about_text || ""}
+                        onChange={(e) => setCompanyInfo((prev) => ({ ...prev, about_text: e.target.value }))}
+                        placeholder="Brief summary of company vision, mission, and scope shown on platform landing pages..."
+                      />
+                    </div>
+                  </div>
+
+                  {/* Official Contacts & Registered Headquarters Address */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Contacts */}
+                    <div className="p-5 rounded-xl border bg-muted/20 space-y-4">
+                      <div className="flex items-center gap-2 border-b pb-3">
+                        <Mail className="h-4 w-4 text-primary" />
+                        <h3 className="font-semibold text-sm tracking-wide uppercase text-foreground">Official Platform Contact</h3>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="ci-email" className="text-xs font-semibold">Support & Inquiries Email *</Label>
+                          <Input
+                            id="ci-email"
+                            type="email"
+                            value={companyInfo.support_email || ""}
+                            onChange={(e) => setCompanyInfo((prev) => ({ ...prev, support_email: e.target.value }))}
+                            placeholder="support@edubird.com"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="ci-phone" className="text-xs font-semibold">Support Phone</Label>
+                            <Input
+                              id="ci-phone"
+                              value={companyInfo.support_phone || ""}
+                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, support_phone: e.target.value }))}
+                              placeholder="+91 98765 43210"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="ci-tollfree" className="text-xs font-semibold">Toll-Free Helpline</Label>
+                            <Input
+                              id="ci-tollfree"
+                              value={companyInfo.helpline_toll_free || ""}
+                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, helpline_toll_free: e.target.value }))}
+                              placeholder="1800 123 4567"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="ci-web" className="text-xs font-semibold">Official Website</Label>
+                            <Input
+                              id="ci-web"
+                              value={companyInfo.website_url || ""}
+                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, website_url: e.target.value }))}
+                              placeholder="https://edubird.com"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="ci-hours" className="text-xs font-semibold">Working Hours</Label>
+                            <Input
+                              id="ci-hours"
+                              value={companyInfo.working_hours || ""}
+                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, working_hours: e.target.value }))}
+                              placeholder="Mon - Sat: 9:00 AM - 6:00 PM"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Registered Headquarters Address */}
+                    <div className="p-5 rounded-xl border bg-muted/20 space-y-4">
+                      <div className="flex items-center gap-2 border-b pb-3">
+                        <MapPin className="h-4 w-4 text-primary" />
+                        <h3 className="font-semibold text-sm tracking-wide uppercase text-foreground">Registered Office / Headquarters</h3>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="ci-addr-street" className="text-xs font-semibold">Street / Building Address *</Label>
+                          <Textarea
+                            id="ci-addr-street"
+                            rows={2}
+                            value={companyInfo.address_street || ""}
+                            onChange={(e) => setCompanyInfo((prev) => ({ ...prev, address_street: e.target.value }))}
+                            placeholder="Plot No. 45, Cyber City Phase II, Technology Corridor..."
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="ci-addr-city" className="text-xs font-semibold">City *</Label>
+                            <Input
+                              id="ci-addr-city"
+                              value={companyInfo.address_city || ""}
+                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, address_city: e.target.value }))}
+                              placeholder="Gurugram"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="ci-addr-state" className="text-xs font-semibold">State</Label>
+                            <Input
+                              id="ci-addr-state"
+                              value={companyInfo.address_state || ""}
+                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, address_state: e.target.value }))}
+                              placeholder="Haryana"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="ci-addr-pin" className="text-xs font-semibold">Pincode</Label>
+                            <Input
+                              id="ci-addr-pin"
+                              value={companyInfo.address_pincode || ""}
+                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, address_pincode: e.target.value }))}
+                              placeholder="122002"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <Button
+                      onClick={handleSaveCompanyInfo}
+                      disabled={savingCompanyInfo}
+                      className="gap-2"
+                    >
+                      {savingCompanyInfo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                      Save Company Information & Brand
+                    </Button>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 2. Platform Branch Offices Directory Card */}
+          <Card className="border-border shadow-xs">
+            <CardHeader className="flex flex-row items-center justify-between border-b bg-card/60 px-6 py-4">
+              <div className="space-y-1">
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-primary" />
+                  Regional Branch Offices & Campus Centers
+                </CardTitle>
+                <CardDescription>
+                  Manage official EduBird regional branch offices, state liaison centers, and local operational units.
                 </CardDescription>
               </div>
               <Button onClick={handleOpenAddBranch} size="sm" className="flex items-center gap-1.5">
-                <Plus className="h-4 w-4" /> Add Branch
+                <Plus className="h-4 w-4" /> Add Branch Office
               </Button>
             </CardHeader>
 
@@ -1419,10 +1858,10 @@ export default function AdminCompanyPage() {
               ) : branches.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground border rounded-lg bg-muted/20">
                   <MapPin className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3" />
-                  <p className="font-medium text-base">No branch offices added yet.</p>
-                  <p className="text-sm text-muted-foreground mb-4">Add regional branches to showcase your platform presence across cities.</p>
+                  <p className="font-medium text-base">No branch offices configured yet.</p>
+                  <p className="text-sm text-muted-foreground mb-4">Add regional branches to showcase your platform presence across cities and states.</p>
                   <Button onClick={handleOpenAddBranch} size="sm">
-                    <Plus className="mr-1.5 h-4 w-4" /> Add Branch
+                    <Plus className="mr-1.5 h-4 w-4" /> Add Branch Office
                   </Button>
                 </div>
               ) : (
@@ -1430,45 +1869,76 @@ export default function AdminCompanyPage() {
                   {branches.map((b) => (
                     <div
                       key={b.id}
-                      className="p-5 rounded-2xl border bg-card hover:border-primary/50 transition-all shadow-xs flex flex-col justify-between space-y-4"
+                      className={`p-5 rounded-2xl border bg-card hover:border-primary/50 transition-all shadow-xs flex flex-col justify-between space-y-4 ${
+                        b.is_headquarters ? "border-primary/40 bg-primary/[0.02]" : ""
+                      }`}
                     >
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <span className="font-bold text-base text-foreground block">{b.branch_name}</span>
-                            <Badge variant="outline" className="text-xs font-semibold text-primary mt-0.5">
-                              {b.city}
-                            </Badge>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-base text-foreground block">{b.branch_name}</span>
+                              {b.is_headquarters ? (
+                                <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 text-[10px] gap-1 py-0 h-5 font-semibold">
+                                  <Sparkles className="w-3 h-3" /> HQ
+                                </Badge>
+                              ) : null}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              <Badge variant="outline" className="text-xs font-semibold text-primary">
+                                {b.city}{b.state ? `, ${b.state}` : ""}
+                              </Badge>
+                              {b.branch_type && (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {b.branch_type}
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                           <Badge variant={b.status === "active" ? "default" : "secondary"} className="text-[10px]">
                             {b.status}
                           </Badge>
                         </div>
-                        <p className="text-xs text-muted-foreground">{b.address}</p>
-                        {b.phone && (
-                          <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-zinc-300">
-                            <Phone className="w-3.5 h-3.5 text-primary" /> {b.phone}
-                          </div>
-                        )}
-                        {b.email && (
-                          <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-zinc-300">
-                            <Mail className="w-3.5 h-3.5 text-primary" /> {b.email}
-                          </div>
-                        )}
-                        {b.manager_name && (
-                          <p className="text-[11px] text-muted-foreground pt-1">
-                            Branch Manager: <span className="font-medium text-foreground">{b.manager_name}</span>
-                          </p>
-                        )}
+
+                        <div className="space-y-1.5 text-xs text-muted-foreground pt-1">
+                          <p className="leading-relaxed text-foreground/80">{b.address}{b.pincode ? ` - ${b.pincode}` : ""}</p>
+                          {b.phone && (
+                            <div className="flex items-center gap-1.5 text-slate-600 dark:text-zinc-300">
+                              <Phone className="w-3.5 h-3.5 text-primary shrink-0" /> {b.phone}
+                            </div>
+                          )}
+                          {b.email && (
+                            <div className="flex items-center gap-1.5 text-slate-600 dark:text-zinc-300">
+                              <Mail className="w-3.5 h-3.5 text-primary shrink-0" /> {b.email}
+                            </div>
+                          )}
+                          {b.manager_name && (
+                            <p className="text-[11px] text-muted-foreground pt-1">
+                              Manager: <span className="font-medium text-foreground">{b.manager_name}</span>
+                            </p>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="flex items-center justify-end gap-2 pt-2 border-t">
-                        <Button variant="outline" size="sm" onClick={() => handleOpenEditBranch(b)}>
-                          <Edit className="h-4 w-4 mr-1" /> Edit
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteBranch(b.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                      <div className="flex items-center justify-between pt-3 border-t">
+                        {b.map_url ? (
+                          <a
+                            href={b.map_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                          >
+                            <Globe className="h-3.5 w-3.5" /> Map Location
+                          </a>
+                        ) : <span />}
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" onClick={() => handleOpenEditBranch(b)}>
+                            <Edit className="h-3.5 w-3.5 mr-1" /> Edit
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteBranch(b.id)}>
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1564,7 +2034,7 @@ export default function AdminCompanyPage() {
           <DialogHeader>
             <DialogTitle>{editingBranch ? "Edit Branch Office" : "Add Branch Office"}</DialogTitle>
             <DialogDescription>
-              Provide regional branch details to feature on the public platform.
+              Provide regional branch details, office type, and location to feature on the public platform.
             </DialogDescription>
           </DialogHeader>
 
@@ -1580,25 +2050,74 @@ export default function AdminCompanyPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="br-city">City *</Label>
-                <Input
-                  id="br-city"
-                  value={branchCity}
-                  onChange={(e) => setBranchCity(e.target.value)}
-                  placeholder="e.g. New Delhi, Bengaluru"
-                />
+                <Label htmlFor="br-type">Branch Type</Label>
+                <select
+                  id="br-type"
+                  value={branchType}
+                  onChange={(e) => setBranchType(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                >
+                  <option value="Headquarters">Headquarters</option>
+                  <option value="Regional Office">Regional Office</option>
+                  <option value="Branch Office">Branch Office</option>
+                  <option value="Support & Grievance Hub">Support & Grievance Hub</option>
+                  <option value="Zonal Center">Zonal Center</option>
+                </select>
               </div>
             </div>
 
+            <div className="flex items-center space-x-2 pt-0.5">
+              <input
+                type="checkbox"
+                id="br-is-hq"
+                checked={branchIsHq}
+                onChange={(e) => setBranchIsHq(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+              />
+              <Label htmlFor="br-is-hq" className="text-xs font-medium cursor-pointer">
+                Mark this office as Principal Headquarters (HQ)
+              </Label>
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="br-addr">Full Address *</Label>
+              <Label htmlFor="br-addr">Full Street Address *</Label>
               <Textarea
                 id="br-addr"
                 rows={2}
                 value={branchAddress}
                 onChange={(e) => setBranchAddress(e.target.value)}
-                placeholder="e.g. Plot 102, Knowledge Park III..."
+                placeholder="e.g. Plot 102, Knowledge Park III, Sector 62..."
               />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="br-city">City *</Label>
+                <Input
+                  id="br-city"
+                  value={branchCity}
+                  onChange={(e) => setBranchCity(e.target.value)}
+                  placeholder="e.g. Noida"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="br-state">State</Label>
+                <Input
+                  id="br-state"
+                  value={branchState}
+                  onChange={(e) => setBranchState(e.target.value)}
+                  placeholder="e.g. Uttar Pradesh"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="br-pin">Pincode</Label>
+                <Input
+                  id="br-pin"
+                  value={branchPincode}
+                  onChange={(e) => setBranchPincode(e.target.value)}
+                  placeholder="e.g. 201301"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -1618,7 +2137,7 @@ export default function AdminCompanyPage() {
                   type="email"
                   value={branchEmail}
                   onChange={(e) => setBranchEmail(e.target.value)}
-                  placeholder="delhi@edubird.com"
+                  placeholder="noida@edubird.com"
                 />
               </div>
             </div>
@@ -1645,6 +2164,16 @@ export default function AdminCompanyPage() {
                   <option value="inactive">Inactive</option>
                 </select>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="br-map">Google Maps Embed or Location Link URL</Label>
+              <Input
+                id="br-map"
+                value={branchMapUrl}
+                onChange={(e) => setBranchMapUrl(e.target.value)}
+                placeholder="https://maps.google.com/?q=..."
+              />
             </div>
           </div>
 

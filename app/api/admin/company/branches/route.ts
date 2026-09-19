@@ -7,8 +7,14 @@ import { ensureFeatureSchema } from "@/lib/db/ensure-feature-schema";
 export async function GET(req: Request) {
   try {
     await ensureFeatureSchema();
+    await db.query(`
+      ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS state VARCHAR(100);
+      ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS pincode VARCHAR(20);
+      ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS branch_type VARCHAR(50) DEFAULT 'Branch Office';
+      ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS is_headquarters BOOLEAN DEFAULT FALSE;
+    `);
     const res = await db.query(
-      `SELECT * FROM platform_branches ORDER BY id ASC`
+      `SELECT * FROM platform_branches ORDER BY is_headquarters DESC, id ASC`
     );
     return NextResponse.json({ branches: res.rows });
   } catch (error: any) {
@@ -26,17 +32,49 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { branch_name, city, address, phone, email, map_url, manager_name, status = "active" } = body;
+    const {
+      branch_name,
+      city,
+      state,
+      pincode,
+      address,
+      phone,
+      email,
+      map_url,
+      manager_name,
+      branch_type = "Branch Office",
+      is_headquarters = false,
+      status = "active",
+    } = body;
 
     if (!branch_name || !city || !address) {
       return NextResponse.json({ error: "Branch name, city, and address are required" }, { status: 400 });
     }
 
+    if (is_headquarters) {
+      await db.query(`UPDATE platform_branches SET is_headquarters = FALSE WHERE is_headquarters = TRUE`);
+    }
+
     const res = await db.query(
-      `INSERT INTO platform_branches (branch_name, city, address, phone, email, map_url, manager_name, status, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-       RETURNING *`,
-      [branch_name, city, address, phone || null, email || null, map_url || null, manager_name || null, status]
+      `INSERT INTO platform_branches (
+        branch_name, city, state, pincode, address, phone, email, map_url, manager_name, branch_type, is_headquarters, status, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+      RETURNING *`,
+      [
+        branch_name,
+        city,
+        state || null,
+        pincode || null,
+        address,
+        phone || null,
+        email || null,
+        map_url || null,
+        manager_name || null,
+        branch_type || "Branch Office",
+        Boolean(is_headquarters),
+        status,
+      ]
     );
 
     return NextResponse.json({ branch: res.rows[0], message: "Branch added successfully" });
@@ -55,26 +93,62 @@ export async function PUT(req: Request) {
     }
 
     const body = await req.json();
-    const { id, branch_name, city, address, phone, email, map_url, manager_name, status } = body;
+    const {
+      id,
+      branch_name,
+      city,
+      state,
+      pincode,
+      address,
+      phone,
+      email,
+      map_url,
+      manager_name,
+      branch_type,
+      is_headquarters,
+      status,
+    } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Branch ID is required" }, { status: 400 });
+    }
+
+    if (is_headquarters) {
+      await db.query(`UPDATE platform_branches SET is_headquarters = FALSE WHERE id <> $1`, [id]);
     }
 
     const res = await db.query(
       `UPDATE platform_branches 
        SET branch_name = COALESCE($1, branch_name),
            city = COALESCE($2, city),
-           address = COALESCE($3, address),
-           phone = COALESCE($4, phone),
-           email = COALESCE($5, email),
-           map_url = COALESCE($6, map_url),
-           manager_name = COALESCE($7, manager_name),
-           status = COALESCE($8, status),
+           state = COALESCE($3, state),
+           pincode = COALESCE($4, pincode),
+           address = COALESCE($5, address),
+           phone = COALESCE($6, phone),
+           email = COALESCE($7, email),
+           map_url = COALESCE($8, map_url),
+           manager_name = COALESCE($9, manager_name),
+           branch_type = COALESCE($10, branch_type),
+           is_headquarters = COALESCE($11, is_headquarters),
+           status = COALESCE($12, status),
            updated_at = NOW()
-       WHERE id = $9
+       WHERE id = $13
        RETURNING *`,
-      [branch_name, city, address, phone, email, map_url, manager_name, status, id]
+      [
+        branch_name,
+        city,
+        state,
+        pincode,
+        address,
+        phone,
+        email,
+        map_url,
+        manager_name,
+        branch_type,
+        is_headquarters !== undefined ? Boolean(is_headquarters) : null,
+        status,
+        id,
+      ]
     );
 
     if (!res.rows.length) {

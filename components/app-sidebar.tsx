@@ -424,7 +424,7 @@ const navItems: SidebarItem[] = [
         permissionPath: "/admin/company",
         icon: Building2,
         children: [
-            { title: "Contact & Branches", url: "/admin/company?tab=contact-branches", icon: MapPin },
+            { title: "Company Info & Branches", url: "/admin/company?tab=contact-branches", icon: Building2 },
             { title: "Payment Methods", url: "/admin/company?tab=payment-methods", icon: CreditCard },
             { title: "FAQs", url: "/admin/company?tab=faqs", icon: HelpCircle },
             { title: "Privacy Policy", url: "/admin/company?tab=privacy-policy", icon: ShieldCheck },

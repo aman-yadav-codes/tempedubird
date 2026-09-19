@@ -4,6 +4,7 @@ import { db } from "@/lib/db/db";
 import { ensureFeatureSchema } from "@/lib/db/ensure-feature-schema";
 import { publishRealtimeNotification } from "@/lib/notifications/socket-publisher";
 import { isPlatformAdminUser, isInstitutionAdminUser, hasPermission } from "@/lib/auth/permissions";
+import { syncTaskAttendanceToDatabase } from "@/app/lib/task-attendance-sync";
 
 async function processDailyRecurringTasksAndPenalties(dbInstance: any) {
   try {
@@ -89,6 +90,7 @@ export async function GET(req: Request) {
     const urgency = url.searchParams.get("urgency")?.trim() || "";
     const clientId = url.searchParams.get("client_id")?.trim() || "";
     const employeeId = url.searchParams.get("employee_id")?.trim() || "";
+    const scope = url.searchParams.get("scope")?.trim() || "";
 
     let query = `SELECT * FROM operations_tasks WHERE 1=1`;
     const params: any[] = [];
@@ -183,7 +185,8 @@ export async function GET(req: Request) {
         )
       )`;
     } else {
-      const effectiveEmployeeId = employeeId === "me" ? (user?.id ? String(user.id) : "") : employeeId;
+      const isSelfScope = employeeId === "me" || scope === "me";
+      const effectiveEmployeeId = isSelfScope ? (user?.id ? String(user.id) : "") : employeeId;
       if (effectiveEmployeeId && effectiveEmployeeId !== "all") {
         params.push(effectiveEmployeeId);
         const empParam = params.length;
@@ -544,16 +547,32 @@ export async function POST(req: Request) {
 
     const todayDateStr = new Date().toISOString().split("T")[0];
 
-    const assignedEmployees = Array.isArray(body.assigned_employees) ? body.assigned_employees : [];
-    const assignedEmpId = body.assigned_employee_id
+    const assignedEmployees = Array.isArray(body.assigned_employees) ? [...body.assigned_employees] : [];
+    let assignedEmpId = body.assigned_employee_id
       ? parseInt(String(body.assigned_employee_id))
       : (assignedEmployees.length > 0 && assignedEmployees[0]?.id ? parseInt(String(assignedEmployees[0].id)) : null);
-    const assignedEmpName = body.assigned_employee_name?.trim()
+    let assignedEmpName = body.assigned_employee_name?.trim()
       || (assignedEmployees.length > 0 ? assignedEmployees.map((e: any) => e.name).filter(Boolean).join(", ") : null);
-    const assignedEmpRole = body.assigned_employee_role?.trim()
+    let assignedEmpRole = body.assigned_employee_role?.trim()
       || (assignedEmployees.length > 0 ? assignedEmployees.map((e: any) => e.role).filter(Boolean).join(", ") : null);
-    const assignedEmpEmail = body.assigned_employee_email?.trim()
+    let assignedEmpEmail = body.assigned_employee_email?.trim()
       || (assignedEmployees.length > 0 && assignedEmployees[0]?.email ? assignedEmployees[0].email.trim() : null);
+
+    // If staff creates a task and didn't specify an assignee, default to assigning themselves
+    if (!assignedEmpId && user?.id) {
+      assignedEmpId = user.id;
+      assignedEmpName = (user as any)?.full_name || (user as any)?.name || assignedEmpName || "Staff Member";
+      assignedEmpRole = creatorRole || assignedEmpRole || "Staff";
+      assignedEmpEmail = user.email || assignedEmpEmail;
+      if (assignedEmployees.length === 0) {
+        assignedEmployees.push({
+          id: user.id,
+          name: assignedEmpName,
+          role: assignedEmpRole,
+          email: assignedEmpEmail,
+        });
+      }
+    }
 
     const res = await db.query(
       `INSERT INTO operations_tasks (
@@ -602,6 +621,15 @@ export async function POST(req: Request) {
     );
 
     const createdTask = res.rows[0];
+
+    // Auto-sync staff attendance working hours, check-in count, checkout, and task hours
+    const syncStaffId = createdTask.assigned_employee_id || (user as any)?.id;
+    const syncInstId = createdTask.institution_id || (user as any)?.institution_id;
+    if (syncStaffId && syncInstId) {
+      void syncTaskAttendanceToDatabase(db, syncStaffId, syncInstId).catch((e) =>
+        console.error("Auto attendance sync error:", e)
+      );
+    }
 
     // If initial status is completed, award points
     if (calcStatus === "completed" && createdTask.assigned_employee_id) {
@@ -1036,6 +1064,15 @@ export async function PUT(req: Request) {
 
       const updatedTask = res.rows[0];
 
+      // Auto-sync staff attendance working hours, check-in count, checkout, and task hours
+      const syncStaffId = updatedTask.assigned_employee_id || (user as any)?.id;
+      const syncInstId = updatedTask.institution_id || (user as any)?.institution_id;
+      if (syncStaffId && syncInstId) {
+        void syncTaskAttendanceToDatabase(db, syncStaffId, syncInstId).catch((e) =>
+          console.error("Auto attendance sync error:", e)
+        );
+      }
+
       // If marked under review, notify admins
       if (markedUnderReview) {
         const staffName = user?.full_name || updatedTask.assigned_employee_name || "Staff Member";
@@ -1181,6 +1218,15 @@ export async function PUT(req: Request) {
     }
 
     const updatedTask = res.rows[0];
+
+    // Auto-sync staff attendance working hours, check-in count, checkout, and task hours
+    const syncStaffId = updatedTask.assigned_employee_id || (user as any)?.id;
+    const syncInstId = updatedTask.institution_id || (user as any)?.institution_id;
+    if (syncStaffId && syncInstId) {
+      void syncTaskAttendanceToDatabase(db, syncStaffId, syncInstId).catch((e) =>
+        console.error("Auto attendance sync error:", e)
+      );
+    }
 
     if (status === "completed" && existingTask.status !== "completed") {
       const empId = updatedTask.assigned_employee_id || (user as any)?.id;

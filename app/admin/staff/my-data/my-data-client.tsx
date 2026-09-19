@@ -125,6 +125,9 @@ type AttendanceLog = {
   status: "present" | "absent" | "late" | "half_day" | "leave";
   check_in_time?: string;
   check_out_time?: string;
+  working_hours?: number | string;
+  task_hours?: number | string;
+  check_in_count?: number;
   remarks?: string;
 };
 
@@ -1210,6 +1213,9 @@ export function MyDataClient({ initialTab }: MyDataClientProps = {}) {
                         <th className="px-4 py-3">Status</th>
                         <th className="px-4 py-3">Check-in</th>
                         <th className="px-4 py-3">Check-out</th>
+                        <th className="px-4 py-3 text-center">Check-ins</th>
+                        <th className="px-4 py-3">Working Hours</th>
+                        <th className="px-4 py-3">Task Hours</th>
                         <th className="px-4 py-3">Remarks</th>
                       </tr>
                     </thead>
@@ -1225,8 +1231,19 @@ export function MyDataClient({ initialTab }: MyDataClientProps = {}) {
                               {log.status.replace("_", " ")}
                             </Badge>
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground">{log.check_in_time || "-"}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{log.check_out_time || "-"}</td>
+                          <td className="px-4 py-3 font-mono text-muted-foreground">{log.check_in_time || "-"}</td>
+                          <td className="px-4 py-3 font-mono text-muted-foreground">{log.check_out_time || "-"}</td>
+                          <td className="px-4 py-3 text-center font-mono">
+                            {log.check_in_count && Number(log.check_in_count) > 0 ? (
+                              <Badge variant="secondary" className="text-[10px] font-bold">
+                                {log.check_in_count}
+                              </Badge>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-foreground">{log.working_hours ? `${log.working_hours}h` : "-"}</td>
+                          <td className="px-4 py-3 font-medium text-indigo-600 dark:text-indigo-400">{log.task_hours ? `${log.task_hours}h` : "-"}</td>
                           <td className="px-4 py-3 text-muted-foreground">{log.remarks || "-"}</td>
                         </tr>
                       ))}

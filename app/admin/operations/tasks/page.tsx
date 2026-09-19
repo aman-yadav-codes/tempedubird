@@ -587,10 +587,13 @@ export default function OperationsTasksPage() {
     setFormClientName("");
     setClientSearchQuery("");
     setClientDropdownOpen(false);
-    setFormAssignedStaffId("none");
-    setFormAssignedStaffName("");
-    setFormAssignedStaffRole("");
-    setFormAssignedStaffIds([]);
+    const defaultStaffId = isStaffRole && user?.id ? String(user.id) : "none";
+    const defaultStaffName = isStaffRole && user?.full_name ? user.full_name : "";
+    const defaultStaffRole = isStaffRole ? ((user as any)?.role || (user as any)?.primary_role || "Staff") : "";
+    setFormAssignedStaffId(defaultStaffId);
+    setFormAssignedStaffName(defaultStaffName);
+    setFormAssignedStaffRole(defaultStaffRole);
+    setFormAssignedStaffIds(isStaffRole && user?.id ? [String(user.id)] : []);
     setStaffSearchQuery("");
     setStaffDropdownOpen(false);
     setFormDetails("");
