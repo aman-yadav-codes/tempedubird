@@ -17,6 +17,12 @@ let lastSyncAt = 0;
 let syncPromise: Promise<void> | null = null;
 const SYNC_INTERVAL_MS = 10 * 60_000;
 
+export const MANAGED_PLATFORM_ROLE_NAMES: Record<string, string> = {
+  platform_admin: "Platform Admin",
+  accountant: "Accountant",
+  guest: "Guest",
+};
+
 export const MANAGED_INSTITUTION_ROLE_NAMES: Record<string, string> = {
   institution_admin: "Institution Admin",
   director: "Director",
@@ -71,23 +77,31 @@ export async function syncPermissionRegistry(db: Queryable, force = false) {
 }
 
 async function runPermissionRegistrySync(db: Queryable) {
+  // 0. Normalize role codes to lowercase to prevent unique constraint conflicts
+  await db.query(`
+    UPDATE roles
+    SET code = LOWER(code)
+    WHERE code <> LOWER(code)
+  `).catch(() => {});
+
   // 1. Seed / update managed platform roles
+  const platformRoleCodes = [...MANAGED_PLATFORM_ROLE_CODES];
+  const platformRoleNames = platformRoleCodes.map(
+    (code) => MANAGED_PLATFORM_ROLE_NAMES[code] ?? code
+  );
+
   await db.query(
     `
       INSERT INTO roles (name, code, scope_id, is_system, is_deleted, deleted_at, deleted_by)
       SELECT
-        CASE role_code
-          WHEN 'accountant' THEN 'Accountant'
-          WHEN 'guest' THEN 'Guest'
-          ELSE 'Platform Admin'
-        END AS name,
-        role_code AS code,
+        r.name,
+        r.code,
         scope.id AS scope_id,
         TRUE,
         FALSE,
         NULL,
         NULL
-      FROM unnest($1::text[]) AS managed_roles(role_code)
+      FROM unnest($1::text[], $2::text[]) AS r(code, name)
       CROSS JOIN scope_types scope
       WHERE scope.code = 'platform'
       ON CONFLICT (code)
@@ -99,7 +113,7 @@ async function runPermissionRegistrySync(db: Queryable) {
         deleted_at = NULL,
         deleted_by = NULL
     `,
-    [MANAGED_PLATFORM_ROLE_CODES]
+    [platformRoleCodes, platformRoleNames]
   );
 
   // 2. Seed / update managed institution roles
@@ -357,6 +371,8 @@ async function runPermissionRegistrySync(db: Queryable) {
     // --- Leadership & Executive Roles (Director, Principal, Vice Principal, Dean, Center Head, Branch Manager, Academic Coordinator) ---
     {
       roleCodes: [
+        "admin",
+        "owner",
         "director",
         "principal",
         "vice_principal",
@@ -446,7 +462,7 @@ async function runPermissionRegistrySync(db: Queryable) {
 
     // --- Finance & Fee Collection (Institution Accountant, Fee Collector) ---
     {
-      roleCodes: ["institution_accountant", "fee_collector"],
+      roleCodes: ["accountant", "institution_accountant", "fee_collector"],
       permissionFilter: (code) =>
         code === "dashboard.view" ||
         code === "managestudents.allstudents.view" ||

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   User,
   BadgeCheck,
@@ -48,11 +48,19 @@ import {
 
 export function AdminUserProfileMenu() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, setAuth, clearAuth } = useAuthStore();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [switchingRole, setSwitchingRole] = useState<string | null>(null);
+
+  const isClientRole =
+    (user as any)?.role === "client" ||
+    (user as any)?.primary_role === "client" ||
+    user?.role_codes?.includes("client") ||
+    user?.roles?.some((r: any) => String(r).toLowerCase() === "client") ||
+    Boolean(pathname?.startsWith("/client"));
 
   if (!user) return null;
 
@@ -210,16 +218,18 @@ export function AdminUserProfileMenu() {
 
           <DropdownMenuSeparator />
 
-          <DropdownMenuGroup className="space-y-0.5">
-            <DropdownMenuItem
-              onClick={() => setSwitchAccountOpen(true)}
-              className="cursor-pointer font-bold text-primary focus:text-primary focus:bg-primary/10"
-            >
-              <Sparkles className="mr-2 h-4 w-4 text-primary" />
-              <span className="flex-1 text-xs">All Switchable Accounts</span>
-              <Badge variant="secondary" className="text-[9px] h-4 bg-primary/10 text-primary">Browse All</Badge>
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
+          {!isClientRole && (
+            <DropdownMenuGroup className="space-y-0.5">
+              <DropdownMenuItem
+                onClick={() => setSwitchAccountOpen(true)}
+                className="cursor-pointer font-bold text-primary focus:text-primary focus:bg-primary/10"
+              >
+                <Sparkles className="mr-2 h-4 w-4 text-primary" />
+                <span className="flex-1 text-xs">All Switchable Accounts</span>
+                <Badge variant="secondary" className="text-[9px] h-4 bg-primary/10 text-primary">Browse All</Badge>
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          )}
 
           <DropdownMenuSeparator />
 

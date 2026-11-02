@@ -1,10 +1,28 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { ArrowUpDown, KeyRound, MoreHorizontal, UserCheck, ShieldAlert, Users, Landmark } from "lucide-react"
+import {
+  ArrowUpDown,
+  BadgeDollarSign,
+  Calendar,
+  FileSpreadsheet,
+  FileText,
+  IndianRupee,
+  KeyRound,
+  Landmark,
+  MoreHorizontal,
+  Pencil,
+  ShieldAlert,
+  TrendingUp,
+  UserCheck,
+  Users,
+  Copy,
+  Sparkles,
+} from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { toast } from "sonner"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,15 +52,22 @@ export type User = {
 
 type UserColumnsOptions = {
   currentUserId?: number
-  onViewProfile: (user: User) => void
+  onViewProfile?: (user: User) => void
   onEditUser: (user: User) => void
   onManageSalaryAccount?: (user: User) => void
+  onManageCommission?: (user: User) => void
   onGeneratePassword?: (user: User) => void
   onChangeEmploymentStatus?: (user: User, status: string) => void
   onToggleShowInTeam?: (user: User, showInTeam: boolean) => void
+  onViewDocuments?: (user: User) => void
+  onViewSalaryRecords?: (user: User) => void
+  onViewSalarySlips?: (user: User) => void
+  onViewAttendance?: (user: User) => void
+  onViewPerformance?: (user: User) => void
   onRemoveUser: (user: User) => void
   removalLabel: string
   entityLabel?: string
+  basePrefix?: string
 }
 
 export function buildUserColumns({
@@ -50,12 +75,19 @@ export function buildUserColumns({
   onViewProfile,
   onEditUser,
   onManageSalaryAccount,
+  onManageCommission,
   onGeneratePassword,
   onChangeEmploymentStatus,
   onToggleShowInTeam,
+  onViewDocuments,
+  onViewSalaryRecords,
+  onViewSalarySlips,
+  onViewAttendance,
+  onViewPerformance,
   onRemoveUser,
   removalLabel,
   entityLabel = "user",
+  basePrefix = "/admin",
 }: UserColumnsOptions): ColumnDef<User>[] {
   return [
     // Checkbox column
@@ -107,9 +139,19 @@ export function buildUserColumns({
       cell: ({ row }) => {
         const user = row.original;
         const isSelf = Boolean(currentUserId && user.id === currentUserId);
+        const prefix = basePrefix || "/admin";
+        const profileUrl = `${prefix}/staff/profile?id=${user.id}`;
         return (
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="font-medium">{user.full_name}</span>
+            <a
+              href={profileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium hover:underline text-foreground hover:text-primary transition-colors cursor-pointer"
+              title="Open profile in new tab"
+            >
+              {user.full_name}
+            </a>
             {isSelf && (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 font-semibold">
                 You
@@ -152,12 +194,47 @@ export function buildUserColumns({
       accessorKey: "generated_password",
       header: "Saved Password",
       cell: ({ row }) => {
+        const user = row.original;
         const pass = row.getValue("generated_password") as string | undefined | null;
-        if (!pass) return <span className="text-xs text-muted-foreground italic">Not saved</span>;
+        if (!pass) {
+          return onGeneratePassword ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onGeneratePassword(user)}
+              className="h-6 px-2 text-[11px] font-bold text-primary hover:bg-primary/10 gap-1 rounded-md border border-dashed border-primary/40 cursor-pointer shadow-2xs"
+              title="Generate login password for this staff member"
+            >
+              <Sparkles className="w-3 h-3 text-primary" />
+              <span>+ Generate</span>
+            </Button>
+          ) : (
+            <span className="text-xs text-muted-foreground italic">Not saved</span>
+          );
+        }
         return (
-          <code className="px-2 py-0.5 rounded bg-muted text-xs font-mono text-foreground font-semibold">
-            {pass}
-          </code>
+          <div className="flex items-center gap-1.5">
+            <code
+              onClick={() => onGeneratePassword && onGeneratePassword(user)}
+              className="px-2 py-0.5 rounded bg-muted hover:bg-muted/80 text-xs font-mono text-foreground font-semibold cursor-pointer transition-colors border border-border"
+              title="Click to view or edit login credentials"
+            >
+              {pass}
+            </code>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground cursor-pointer"
+              title="Copy password to clipboard"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(pass);
+                toast.success(`Password for ${user.full_name} copied!`);
+              }}
+            >
+              <Copy className="h-3 w-3" />
+            </Button>
+          </div>
         );
       },
     },
@@ -227,27 +304,41 @@ export function buildUserColumns({
       cell: ({ row }) => {
         const user = row.original
         const isSelf = Boolean(currentUserId && user.id === currentUserId)
+        const prefix = basePrefix || "/admin"
         return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem
-                onClick={() => navigator.clipboard.writeText(user.email)}
+          <div className="flex items-center gap-1.5 justify-end">
+            {onGeneratePassword && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onGeneratePassword(user)}
+                className="h-8 px-2.5 rounded-lg text-xs font-semibold border-primary/30 hover:bg-primary/10 text-primary gap-1.5 cursor-pointer shadow-2xs"
+                title="Generate or view staff login password"
               >
-                Copy email
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onViewProfile(user)}>
-                View profile
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onEditUser(user)}>
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Password</span>
+              </Button>
+            )}
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-8 w-8 p-0 cursor-pointer">
+                  <span className="sr-only">Open menu</span>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => onEditUser(user)} className="cursor-pointer">
+                <Pencil className="mr-2 h-4 w-4" />
                 Edit {entityLabel.toLowerCase()}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onViewDocuments ? onViewDocuments(user) : window.open(`${prefix}/staff/documents?staffUserId=${user.id}`, "_blank")}
+                className="cursor-pointer font-medium"
+              >
+                <FileText className="mr-2 h-4 w-4 text-blue-600 dark:text-blue-400" />
+                Documents
               </DropdownMenuItem>
               {onManageSalaryAccount && (
                 <DropdownMenuItem
@@ -258,6 +349,43 @@ export function buildUserColumns({
                   Salary & Bank Account
                 </DropdownMenuItem>
               )}
+              <DropdownMenuItem
+                onClick={() => onViewSalaryRecords ? onViewSalaryRecords(user) : window.open(`${prefix}/staff/salary?staffUserId=${user.id}`, "_blank")}
+                className="cursor-pointer font-medium"
+              >
+                <IndianRupee className="mr-2 h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                Salary Records
+              </DropdownMenuItem>
+              {onManageCommission && (
+                <DropdownMenuItem
+                  onClick={() => onManageCommission(user)}
+                  className="cursor-pointer font-medium"
+                >
+                  <BadgeDollarSign className="mr-2 h-4 w-4 text-primary" />
+                  Commission & Incentive
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onClick={() => onViewSalarySlips ? onViewSalarySlips(user) : window.open(`${prefix}/staff/salary-slips?staffUserId=${user.id}`, "_blank")}
+                className="cursor-pointer font-medium"
+              >
+                <FileSpreadsheet className="mr-2 h-4 w-4 text-teal-600 dark:text-teal-400" />
+                Salary Slips
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onViewAttendance ? onViewAttendance(user) : window.open(`${prefix}/staff/attendance?staffUserId=${user.id}`, "_blank")}
+                className="cursor-pointer font-medium"
+              >
+                <Calendar className="mr-2 h-4 w-4 text-amber-600 dark:text-amber-400" />
+                Attendance
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onViewPerformance ? onViewPerformance(user) : window.open(`${prefix}/staff/performance?staffUserId=${user.id}`, "_blank")}
+                className="cursor-pointer font-medium"
+              >
+                <TrendingUp className="mr-2 h-4 w-4 text-purple-600 dark:text-purple-400" />
+                Performance
+              </DropdownMenuItem>
               {onGeneratePassword && (
                 <DropdownMenuItem onClick={() => onGeneratePassword(user)}>
                   <KeyRound className="mr-2 h-4 w-4" />
@@ -334,8 +462,9 @@ export function buildUserColumns({
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-        )
-      },
+        </div>
+      );
     },
+  },
   ]
 }

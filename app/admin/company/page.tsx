@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import {
   Building2,
   BookOpen,
@@ -111,7 +111,6 @@ export type PaymentMethodItem = {
 };
 
 const PAGE_TABS = [
-  { slug: "contact-branches", label: "Company Info & Branches", icon: Building2 },
   { slug: "payment-methods", label: "Payment Methods", icon: CreditCard },
   { slug: "faqs", label: "FAQs", icon: HelpCircle },
   { slug: "privacy-policy", label: "Privacy Policy", icon: ShieldCheck },
@@ -125,15 +124,17 @@ export default function AdminCompanyPage() {
   const { isReady } = useAdminGuard();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const pathname = usePathname();
   const { user, accessToken } = useAuthStore();
   const isPlatformAdmin = isPlatformAdminUser(user);
   const isInstAdmin = isInstitutionAdminUser(user);
   const canAccessCompany = isPlatformAdmin || isInstAdmin;
 
-  const tabFromUrl = searchParams.get("tab") || "faqs";
+  const rawTab = searchParams.get("tab");
+  const tabFromUrl = rawTab || "contact-branches";
   const [activeTab, setActiveTab] = useState<string>(tabFromUrl);
 
-  const [loadingPages, setLoadingPages] = useState(true);
+  const [loadingPages, setLoadingPages] = useState(false);
   const [pagesData, setPagesData] = useState<Record<string, CompanyPageData>>({});
   const [savingPage, setSavingPage] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
@@ -198,9 +199,11 @@ export default function AdminCompanyPage() {
     }
   }, [tabFromUrl, activeTab]);
 
+  const basePath = pathname?.startsWith("/platformadmin") ? "/platformadmin/company" : "/admin/company";
+
   const handleTabChange = (val: string) => {
     setActiveTab(val);
-    router.push(`/admin/company?tab=${val}`);
+    router.push(`${basePath}?tab=${val}`);
   };
 
   const fetchHostels = useCallback(async () => {
@@ -886,7 +889,7 @@ export default function AdminCompanyPage() {
     }
   };
 
-  if (!isReady || loadingPages) {
+  if (!isReady) {
     return (
       <div className="flex h-96 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -905,8 +908,34 @@ export default function AdminCompanyPage() {
 
   return (
     <div className="space-y-6 p-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b pb-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <Building2 className="h-6 w-6 text-primary" />
+            Company & Legal Information
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Manage company brand assets, branch offices, payment methods, and legal policies.
+          </p>
+        </div>
+      </div>
+
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
+        {/* Navigation Tabs Bar */}
+        <TabsList className="flex flex-wrap h-auto gap-1.5 p-1.5 bg-muted/50 rounded-xl border border-border/60">
+          {PAGE_TABS.map((tab) => (
+            <TabsTrigger
+              key={tab.slug}
+              value={tab.slug}
+              className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all cursor-pointer"
+            >
+              <tab.icon className="w-3.5 h-3.5 text-primary" />
+              <span>{tab.label}</span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
         {/* Dynamic Page Content Tabs (Excluding FAQs, Payment Methods & Branches) */}
         {PAGE_TABS.filter((t) => t.slug !== "faqs" && t.slug !== "payment-methods" && t.slug !== "contact-branches").map((tab) => {
           const page: CompanyPageData = pagesData[tab.slug] || {
@@ -922,7 +951,13 @@ export default function AdminCompanyPage() {
 
           return (
             <TabsContent key={tab.slug} value={tab.slug} className="space-y-6">
-              <Card>
+              {loadingPages ? (
+                <div className="flex h-64 items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <span className="ml-2 text-sm text-muted-foreground">Loading {tab.label} content...</span>
+                </div>
+              ) : (
+                <Card>
                 <CardHeader className="flex flex-row items-center justify-between border-b bg-card px-6 py-4">
                   <div>
                     <CardTitle className="text-xl flex items-center gap-2">
@@ -1094,6 +1129,7 @@ export default function AdminCompanyPage() {
                   </div>
                 </CardContent>
               </Card>
+              )}
             </TabsContent>
           );
         })}
@@ -1914,7 +1950,7 @@ export default function AdminCompanyPage() {
                           )}
                           {b.manager_name && (
                             <p className="text-[11px] text-muted-foreground pt-1">
-                              Manager: <span className="font-medium text-foreground">{b.manager_name}</span>
+                              Contact Person: <span className="font-medium text-foreground">{b.manager_name}</span>
                             </p>
                           )}
                         </div>
@@ -2080,7 +2116,7 @@ export default function AdminCompanyPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="br-addr">Full Street Address *</Label>
+              <Label htmlFor="br-addr">Branch Street Address *</Label>
               <Textarea
                 id="br-addr"
                 rows={2}
@@ -2122,7 +2158,7 @@ export default function AdminCompanyPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="br-phone">Contact Phone</Label>
+                <Label htmlFor="br-phone">Branch Phone Number</Label>
                 <Input
                   id="br-phone"
                   value={branchPhone}
@@ -2131,7 +2167,7 @@ export default function AdminCompanyPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="br-email">Email Address</Label>
+                <Label htmlFor="br-email">Branch Email Address</Label>
                 <Input
                   id="br-email"
                   type="email"
@@ -2144,7 +2180,7 @@ export default function AdminCompanyPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="br-mgr">Branch Manager</Label>
+                <Label htmlFor="br-mgr">Contact Person of Branch *</Label>
                 <Input
                   id="br-mgr"
                   value={branchManagerName}

@@ -45,6 +45,7 @@ const PUBLIC_TOP_LEVEL_ROUTES = new Set([
     "teachers",
     "terms",
     "test",
+    "uploads",
 ]);
 
 function isDebuggingEnabled() {
@@ -170,6 +171,7 @@ export async function proxy(request: NextRequest) {
         firstSegment &&
         firstSegment !== "api" &&
         firstSegment !== "admin" &&
+        firstSegment !== "uploads" &&
         !firstSegment.startsWith("_next") &&
         !firstSegment.includes(".") &&
         !PUBLIC_TOP_LEVEL_ROUTES.has(firstSegment) &&

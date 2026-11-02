@@ -462,7 +462,7 @@ export async function GET(req: Request) {
       const selectedInstitutionId =
         Math.max(Number(url.searchParams.get("institutionId")) || 0, 0) || null;
       const page = Math.max(Number(url.searchParams.get("page")) || 1, 1);
-      const maxLimit = type === "permissions" ? 500 : 50;
+      const maxLimit = type === "permissions" ? 2000 : 50;
       const limit = Math.min(
         Math.max(Number(url.searchParams.get("limit")) || 20, 1),
         maxLimit,

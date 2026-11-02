@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
     LayoutDashboard,
+    AlertTriangle,
     LayoutGrid,
     Users,
     UsersRound,
@@ -34,6 +35,8 @@ import {
     Palette,
     Loader2,
     FolderTree,
+    FolderKanban,
+    GitFork,
     BookOpen,
     BookCheck,
     GraduationCap,
@@ -153,6 +156,7 @@ import {
     adminPathMatchesRoute,
     hasAdminPagePermission,
     isAdminPathVisibleForRole,
+    isInstitutionAdminUser,
     normalizeAdminPath,
 } from "@/lib/auth/permissions";
 import { toCanonicalAdminPath, toRoleRoutePath } from "@/lib/auth/role-routes";
@@ -160,15 +164,28 @@ import { toCanonicalAdminPath, toRoleRoutePath } from "@/lib/auth/role-routes";
 const navItems: SidebarItem[] = [
     { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
     {
+        title: "Operations",
+        url: "/admin/operations/tasks",
+        icon: Briefcase,
+        children: [
+            { title: "Task Management", url: "/admin/operations/tasks", icon: ClipboardList },
+            { title: "Project Types", url: "/admin/operations/project-types", icon: FolderKanban },
+            { title: "Project Pipelines", url: "/admin/operations/project-pipelines", icon: GitFork },
+            { title: "Generate Documents", url: "/admin/generate", icon: Sparkles },
+            { title: "Penalty Rules", url: "/admin/operations/penalty-rules", icon: AlertTriangle },
+        ],
+    },
+    {
         title: "My Profile",
         url: "/admin/my-profile",
         icon: UserCheck,
         children: [
             { title: "My Account", url: "/admin/account", permissionPath: "/admin/account", icon: UserCog },
-                        { title: "Attendance", url: "/admin/my-profile?tab=attendance", permissionPath: "/admin/my-profile", icon: CalendarDays },
+            { title: "Attendance", url: "/admin/my-profile?tab=attendance", permissionPath: "/admin/my-profile", icon: CalendarDays },
             { title: "Salary Slip", url: "/admin/my-profile?tab=salary-slip", permissionPath: "/admin/my-profile", icon: Receipt },
             { title: "My Tasks", url: "/admin/my-profile?tab=tasks", permissionPath: "/admin/my-profile", icon: ClipboardList },
             { title: "Performance", url: "/admin/my-profile?tab=performance", permissionPath: "/admin/my-profile", icon: TrendingUp },
+            { title: "Leaderboard", url: "/admin/my-profile?tab=leaderboard", permissionPath: "/admin/my-profile", icon: Trophy },
             { title: "Queries", url: "/admin/my-profile?tab=queries", permissionPath: "/admin/my-profile", icon: HelpCircle },
             { title: "Complaints", url: "/admin/my-profile?tab=complaints", permissionPath: "/admin/my-profile", icon: MessageSquareWarning },
             { title: "Documents", url: "/admin/my-profile?tab=documents", permissionPath: "/admin/my-profile", icon: FileCheck2 },
@@ -230,8 +247,8 @@ const navItems: SidebarItem[] = [
             { title: "Noticeboard", url: "/admin/institutions/news", icon: Bell },
             { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
             { title: "All Staff", url: "/admin/staff", icon: UsersRound },
-            { title: "Task Management", url: "/admin/operations/tasks", icon: ClipboardList },
             { title: "Staff Performance", url: "/admin/staff/performance", icon: TrendingUp },
+            { title: "Leaderboard", url: "/admin/performance/leaderboard", icon: Trophy },
             { title: "Attendance", url: "/admin/staff/attendance", icon: ClipboardCheck },
             { title: "Queries", url: "/admin/staff/queries", icon: HelpCircle },
             { title: "Our Jobs", url: "/admin/staff/jobs", icon: Briefcase },
@@ -254,7 +271,7 @@ const navItems: SidebarItem[] = [
         title: "My Classroom",
         url: "/admin/classroom/attendance",
         icon: School,
-          children: [
+        children: [
             { title: "Attendance", url: "/admin/classroom/attendance", icon: ClipboardCheck },
             { title: "Achievements", url: "/admin/classroom/achievements", icon: Trophy },
             { title: "Assignments", url: "/admin/classroom/assignments", icon: ClipboardList },
@@ -265,8 +282,8 @@ const navItems: SidebarItem[] = [
             { title: "ID Card", url: "/admin/classroom/id-card", icon: IdCard },
             { title: "My Fee", url: "/admin/classroom/fees", icon: CreditCard },
             { title: "Notes", url: "/admin/students/notes", icon: StickyNote },
-          ],
-      },
+        ],
+    },
     {
         title: "My Program",
         url: "/admin/my-program",
@@ -404,10 +421,9 @@ const navItems: SidebarItem[] = [
     },
     {
         title: "Admin",
-        url: "/admin/generate",
+        url: "/admin/vendors",
         icon: ShieldCheck,
         children: [
-            { title: "Generate", url: "/admin/generate", icon: Sparkles },
             { title: "Vendors", url: "/admin/vendors", icon: Store },
             { title: "Inventory", url: "/admin/inventory", icon: Boxes },
             { title: "Team", url: "/admin/team", icon: Users },
@@ -440,6 +456,7 @@ const navItems: SidebarItem[] = [
         icon: Settings,
         children: [
             { title: "General", url: "/admin/settings", icon: Palette },
+            { title: "Performance Settings", url: "/admin/settings/performance", icon: Trophy },
             { title: "Controls", url: "/admin/notifications/settings", permissionPath: "/admin/notifications/settings", icon: Settings },
             { title: "Support", url: "/admin/support", icon: LifeBuoy },
             { title: "Logs", url: "/admin/settings/logs", icon: History },
@@ -627,10 +644,11 @@ export function AppSidebar() {
     const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const isPlatformAdmin = Boolean(user?.role_codes?.includes("platform_admin") || user?.is_super_admin);
-    const isInstitutionAdmin = Boolean(user?.role_codes?.includes("institution_admin") && !isPlatformAdmin);
+    const isInstitutionAdmin = Boolean((user?.role_codes?.includes("institution_admin") || isInstitutionAdminUser(user)) && !isPlatformAdmin);
     const isParent = Boolean(user?.role_codes?.includes("parent") && !isPlatformAdmin && !isInstitutionAdmin);
     const isStudent = Boolean((user?.role_codes?.includes("student") || (user as { roles?: string[] })?.roles?.includes("student") || user?.primary_role === "student") && !isPlatformAdmin && !isInstitutionAdmin && !isParent);
     const isTeacher = Boolean((user?.role_codes?.includes("teacher") || (user as { roles?: string[] })?.roles?.includes("teacher") || user?.primary_role === "teacher" || user?.primary_role?.toLowerCase() === "teacher") && !isPlatformAdmin && !isInstitutionAdmin);
+    const isClient = Boolean((user?.role_codes?.includes("client") || (user as { roles?: string[] })?.roles?.includes("client") || user?.primary_role === "client") && !isPlatformAdmin && !isInstitutionAdmin);
     const isRoleInstitutionUser = Boolean(!isPlatformAdmin && !isInstitutionAdmin && user?.role_codes?.some((role) => ["student", "teacher", "parent", "driver"].includes(role)));
     const [activeInstitutionId, setActiveInstitutionId] = useState<number | null>(() => {
         return getStoredActiveInstitutionId();
@@ -720,230 +738,253 @@ export function AppSidebar() {
         );
     }, [user, isStudent, isParent, isInstitutionAdmin]);
     const roleAwareNavItems = useMemo(
-        () => navItems.flatMap((item) => {
-            if (item.url === "/admin/my-profile") {
-                if (isStudent || isParent) return [];
-                return [item];
+        () => {
+            if (isClient) {
+                return [
+                    {
+                        title: "My Projects & Tasks",
+                        url: "/admin/operations/tasks",
+                        icon: Briefcase,
+                    },
+                    {
+                        title: "My Profile",
+                        url: "/admin/my-profile",
+                        icon: UserCog,
+                    },
+                ];
             }
-            if (!isStudent && item.url === "/admin/my-program") {
-                return [];
-            }
-            if (item.url === "/admin/students") {
-                if (isTeacher) {
+            return navItems.flatMap((item) => {
+                if (item.url === "/admin/my-profile") {
+                    if (isStudent || isParent) return [];
+                    return [item];
+                }
+                if (!isStudent && item.url === "/admin/my-program") {
                     return [];
                 }
-                if (isInstitutionAdmin) {
-                    return [{
-                        title: "My Classroom",
-                        url: "/admin/students",
-                        icon: School,
-                        children: [
-                            { title: "All Students", url: "/admin/students", icon: UsersRound },
-                            { title: "Attendance", url: "/admin/students/attendance", icon: ClipboardCheck },
-                            { title: "Assignments", url: "/admin/content/assignments", icon: ClipboardList },
-                            { title: "Practice Exams", url: "/admin/content/practice-exams", icon: BookCheck },
-                            { title: "Exams", url: "/admin/content/exams", icon: FileText },
-                            { title: "Lecture Notes", url: "/admin/content/notes", icon: StickyNote },
-                            { title: "My Timetable", url: "/admin/classroom/my-timetable", icon: CalendarDays },
-                            { title: "Growth Chart", url: "/admin/content/growth-chart", icon: TrendingUp },
-                        ],
-                    }];
+                if (item.url === "/admin/students") {
+                    if (isTeacher) {
+                        return [];
+                    }
+                    if (isInstitutionAdmin) {
+                        return [{
+                            title: "My Classroom",
+                            url: "/admin/students",
+                            icon: School,
+                            children: [
+                                { title: "All Students", url: "/admin/students", icon: UsersRound },
+                                { title: "Attendance", url: "/admin/students/attendance", icon: ClipboardCheck },
+                                { title: "Assignments", url: "/admin/content/assignments", icon: ClipboardList },
+                                { title: "Practice Exams", url: "/admin/content/practice-exams", icon: BookCheck },
+                                { title: "Exams", url: "/admin/content/exams", icon: FileText },
+                                { title: "Lecture Notes", url: "/admin/content/notes", icon: StickyNote },
+                                { title: "My Timetable", url: "/admin/classroom/my-timetable", icon: CalendarDays },
+                                { title: "Growth Chart", url: "/admin/content/growth-chart", icon: TrendingUp },
+                            ],
+                        }];
+                    }
+                    return [item];
                 }
-                return [item];
-            }
-            if (item.url === "/admin/master-data") {
-                if (!isPlatformAdmin) {
+                if (item.url === "/admin/master-data") {
+                    if (!isPlatformAdmin) {
+                        return [];
+                    }
+                    return [item];
+                }
+                if (item.url === "/admin/staff") {
+                    if (isStudent || isParent) {
+                        return [];
+                    }
+                    if (!isPlatformAdmin && !isInstitutionAdmin) {
+                        return [{
+                            ...item,
+                            title: "Manage Staff",
+                            children: [
+                                { title: "My Data", url: "/admin/staff/my-data", icon: Sparkles },
+                                { title: "My Attendance", url: "/admin/institution/my-attendance", icon: ClipboardCheck },
+                                { title: "My Tasks", url: "/admin/operations/tasks?scope=me", icon: ClipboardList },
+                                { title: "Staff Performance", url: "/admin/staff/performance", icon: TrendingUp },
+                                { title: "Leaderboard", url: "/admin/performance/leaderboard", icon: Trophy },
+                                { title: "My Salary", url: "/admin/institution/my-salary", icon: IndianRupee },
+                                { title: "Noticeboard", url: "/admin/institutions/news", icon: Bell },
+                                { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
+                                { title: "Queries", url: "/admin/staff/queries", icon: HelpCircle },
+                                { title: "Support", url: "/admin/support", icon: LifeBuoy },
+                            ],
+                        }];
+                    }
+                    return [item];
+                }
+                if (item.url === "/admin/marketing/packages") {
+                    if (!isPlatformAdmin && !isInstitutionAdmin) return [];
+                    if (isInstitutionAdmin && item.children) {
+                        return [{
+                            ...item,
+                            children: item.children.filter((child) => {
+                                if (child.url === "/admin/marketing/packages") return false;
+                                if (child.url === "/admin/marketing/business-analytics") return false;
+                                if (child.url === "/admin/marketing/search-history") return false;
+                                return true;
+                            }),
+                        }];
+                    }
+                    return [item];
+                }
+                if (item.url === "/admin/sales/pipeline" && item.children) {
+                    if (isInstitutionAdmin) {
+                        return [{
+                            ...item,
+                            children: item.children.filter((child) => child.url !== "/admin/sales/orders"),
+                        }];
+                    }
+                    return [item];
+                }
+                if ((item.url === "/admin/content" || item.url === "/admin/content/notes" || item.title === "Academics") && item.children) {
+                    if (isPlatformAdmin || isStudent || isParent || isTeacher) return [];
+                    return [item];
+                }
+                if (item.url === "/admin/vendors" && item.children) {
+                    if (!isPlatformAdmin && !isInstitutionAdmin) {
+                        return [];
+                    }
+                    if (isPlatformAdmin) {
+                        return [{
+                            ...item,
+                            title: "Administration",
+                            children: item.children.map((child) => {
+                                if (child.url === "/admin/master-data/institute-calendar") {
+                                    return { ...child, title: "Company Calendar" };
+                                }
+                                return child;
+                            }),
+                        }];
+                    }
+                    return [item];
+                }
+                if (item.url === "/admin/sales/leads") {
+                    return isPlatformAdmin || isInstitutionAdmin ? [item] : [];
+                }
+                if (item.url === "/admin/finance/income" && item.children) {
+                    if (isTeacher) {
+                        return [{
+                            ...item,
+                            children: [
+                                { title: "Purchase & Sell Requests", url: "/admin/finance/requests", icon: ArrowLeftRight },
+                                { title: "Allowance", url: "/admin/finance/allowance", icon: BadgeDollarSign },
+                            ],
+                        }];
+                    }
+                    if (isInstitutionAdmin) {
+                        const children = item.children.filter((child) => child.title !== "Fee Management");
+                        children.push({
+                            title: "Fee Management",
+                            url: "/admin/finance/fee-management",
+                            permissionPath: "/admin/students/fee-management",
+                            icon: CreditCard,
+                        });
+                        return [{
+                            ...item,
+                            children,
+                        }];
+                    }
+                    return [item];
+                }
+                if (isRoleInstitutionUser && item.url === "/admin/institutions") {
                     return [];
                 }
-                return [item];
-            }
-            if (item.url === "/admin/staff") {
-                if (isStudent || isParent) {
+                if ((isPlatformAdmin || isInstitutionAdmin) && item.url === "/admin/institution/calendar") {
                     return [];
                 }
-                if (!isPlatformAdmin && !isInstitutionAdmin) {
+                if ((isPlatformAdmin || isInstitutionAdmin) && item.url === "/admin/classroom/attendance") {
+                    return [];
+                }
+                if (item.url === "/admin/classroom/attendance") {
+                    if (isTeacher) {
+                        return [{
+                            title: "My Classroom",
+                            url: "/admin/students",
+                            icon: School,
+                            children: [
+                                { title: "All Students", url: "/admin/students", icon: UsersRound },
+                                { title: "Attendance", url: "/admin/students/attendance", icon: ClipboardCheck },
+                                { title: "Assignments", url: "/admin/content/assignments", icon: ClipboardList },
+                                { title: "Practice Exams", url: "/admin/content/practice-exams", icon: BookCheck },
+                                { title: "Exams", url: "/admin/content/exams", icon: FileText },
+                                { title: "Lecture Notes", url: "/admin/content/notes", icon: StickyNote },
+                                { title: "My Timetable", url: "/admin/classroom/my-timetable", icon: CalendarDays },
+                                { title: "Growth Chart", url: "/admin/content/growth-chart", icon: TrendingUp },
+                            ],
+                        }];
+                    }
+
+                    const baseChildren = (item.children || [])
+                        .map((child) => ({
+                            ...child,
+                            title: isParent
+                                ? child.title === "My Timetable"
+                                    ? "Timetable"
+                                    : child.title === "My Fee"
+                                        ? "Child Fee"
+                                        : child.title
+                                : child.title,
+                        }));
+
                     return [{
                         ...item,
-                        title: "Manage Staff",
-                        children: [
-                            { title: "My Data", url: "/admin/staff/my-data", icon: Sparkles },
-                            { title: "My Attendance", url: "/admin/institution/my-attendance", icon: ClipboardCheck },
-                            { title: "My Tasks", url: "/admin/operations/tasks?scope=me", icon: ClipboardList },
-                            { title: "Staff Performance", url: "/admin/staff/performance", icon: TrendingUp },
-                            { title: "My Salary", url: "/admin/institution/my-salary", icon: IndianRupee },
-                            { title: "Noticeboard", url: "/admin/institutions/news", icon: Bell },
-                            { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
-                            { title: "Queries", url: "/admin/staff/queries", icon: HelpCircle },
-                            { title: "Support", url: "/admin/support", icon: LifeBuoy },
-                        ],
+                        title: isParent ? "Child Classroom" : "My Classroom",
+                        children: baseChildren,
                     }];
                 }
-                return [item];
-            }
-            if (item.url === "/admin/marketing/packages") {
-                if (!isPlatformAdmin && !isInstitutionAdmin) return [];
-                if (isInstitutionAdmin && item.children) {
+                if (isStudent && item.url === "/admin/students" && item.children) {
+                    return [{
+                        ...item,
+                        children: item.children.filter((child) => child.url !== "/admin/students/notes"),
+                    }];
+                }
+                if (item.url === "/admin/institution/calendar") {
+                    if (isPlatformAdmin || isInstitutionAdmin || isTeacher || !isParent) {
+                        return [];
+                    }
+                    const baseChildren = (item.children || [])
+                        .map((child) => ({ ...child }));
+
+                    return [{
+                        ...item,
+                        title: isParent ? "Institution" : "My Institution",
+                        children: baseChildren,
+                    }];
+                }
+                if (item.url === "/admin/institutions" && item.children) {
                     return [{
                         ...item,
                         children: item.children.filter((child) => {
-                            if (child.url === "/admin/marketing/packages") return false;
-                            if (child.url === "/admin/marketing/business-analytics") return false;
-                            if (child.url === "/admin/marketing/search-history") return false;
+                            if (!isInstitutionAdmin && child.url === "/admin/institution/complaints") return false;
+                            if ((isStudent || isParent) && child.url === "/admin/institutions/news") return false;
+                            return true;
+                        }),
+                    }];
+                }
+                if (item.url === "/admin/settings" && item.children) {
+                    if (!isPlatformAdmin && !isInstitutionAdmin) {
+                        return [];
+                    }
+                    const isPlatformAdminPanel = isPlatformAdmin && Boolean(pathname?.startsWith("/platformadmin"));
+                    return [{
+                        ...item,
+                        children: item.children.filter((child) => {
+                            if (child.url === "/admin/settings/payments") {
+                                return isPlatformAdminPanel;
+                            }
+                            if (child.url === "/admin/settings/subscription") {
+                                return isPlatformAdminPanel;
+                            }
                             return true;
                         }),
                     }];
                 }
                 return [item];
-            }
-            if (item.url === "/admin/sales/pipeline" && item.children) {
-                if (isInstitutionAdmin) {
-                    return [{
-                        ...item,
-                        children: item.children.filter((child) => child.url !== "/admin/sales/orders"),
-                    }];
-                }
-                return [item];
-            }
-            if ((item.url === "/admin/content" || item.url === "/admin/content/notes" || item.title === "Academics") && item.children) {
-                if (isPlatformAdmin || isStudent || isParent || isTeacher) return [];
-                return [item];
-            }
-            if (item.url === "/admin/generate" && item.children) {
-                if (!isPlatformAdmin && !isInstitutionAdmin) {
-                    return [];
-                }
-                if (isPlatformAdmin) {
-                    return [{
-                        ...item,
-                        children: item.children.map((child) => {
-                            if (child.url === "/admin/master-data/institute-calendar") {
-                                return { ...child, title: "Company Calendar" };
-                            }
-                            return child;
-                        }),
-                    }];
-                }
-                return [item];
-            }
-            if (item.url === "/admin/sales/leads") {
-                return isPlatformAdmin || isInstitutionAdmin ? [item] : [];
-            }
-            if (item.url === "/admin/finance/income" && item.children) {
-                if (isTeacher) {
-                    return [{
-                        ...item,
-                        children: [
-                            { title: "Purchase & Sell Requests", url: "/admin/finance/requests", icon: ArrowLeftRight },
-                            { title: "Allowance", url: "/admin/finance/allowance", icon: BadgeDollarSign },
-                        ],
-                    }];
-                }
-                if (isInstitutionAdmin) {
-                    const children = item.children.filter((child) => child.title !== "Fee Management");
-                    children.push({
-                        title: "Fee Management",
-                        url: "/admin/finance/fee-management",
-                        permissionPath: "/admin/students/fee-management",
-                        icon: CreditCard,
-                    });
-                    return [{
-                        ...item,
-                        children,
-                    }];
-                }
-                return [item];
-            }
-            if (isRoleInstitutionUser && item.url === "/admin/institutions") {
-                return [];
-            }
-            if ((isPlatformAdmin || isInstitutionAdmin) && item.url === "/admin/institution/calendar") {
-                return [];
-            }
-            if (isInstitutionAdmin && item.url === "/admin/classroom/attendance") {
-                return [];
-            }
-            if (item.url === "/admin/classroom/attendance") {
-                if (isTeacher) {
-                    return [{
-                        title: "My Classroom",
-                        url: "/admin/students",
-                        icon: School,
-                        children: [
-                            { title: "All Students", url: "/admin/students", icon: UsersRound },
-                            { title: "Attendance", url: "/admin/students/attendance", icon: ClipboardCheck },
-                            { title: "Assignments", url: "/admin/content/assignments", icon: ClipboardList },
-                            { title: "Practice Exams", url: "/admin/content/practice-exams", icon: BookCheck },
-                            { title: "Exams", url: "/admin/content/exams", icon: FileText },
-                            { title: "Lecture Notes", url: "/admin/content/notes", icon: StickyNote },
-                            { title: "My Timetable", url: "/admin/classroom/my-timetable", icon: CalendarDays },
-                            { title: "Growth Chart", url: "/admin/content/growth-chart", icon: TrendingUp },
-                        ],
-                    }];
-                }
-
-                const baseChildren = (item.children || [])
-                    .map((child) => ({
-                        ...child,
-                        title: isParent
-                            ? child.title === "My Timetable"
-                                ? "Timetable"
-                                : child.title === "My Fee"
-                                  ? "Child Fee"
-                                : child.title
-                            : child.title,
-                    }));
-
-                return [{
-                    ...item,
-                    title: isParent ? "Child Classroom" : "My Classroom",
-                    children: baseChildren,
-                }];
-            }
-            if (isStudent && item.url === "/admin/students" && item.children) {
-                return [{
-                    ...item,
-                    children: item.children.filter((child) => child.url !== "/admin/students/notes"),
-                }];
-            }
-            if (item.url === "/admin/institution/calendar") {
-                if (isPlatformAdmin || isInstitutionAdmin || isTeacher || !isParent) {
-                    return [];
-                }
-                const baseChildren = (item.children || [])
-                    .map((child) => ({ ...child }));
-
-                return [{
-                    ...item,
-                    title: isParent ? "Institution" : "My Institution",
-                    children: baseChildren,
-                }];
-            }
-            if (item.url === "/admin/institutions" && item.children) {
-                return [{
-                    ...item,
-                    children: item.children.filter((child) => {
-                        if (!isInstitutionAdmin && child.url === "/admin/institution/complaints") return false;
-                        if ((isStudent || isParent) && child.url === "/admin/institutions/news") return false;
-                        return true;
-                    }),
-                }];
-            }
-            if (item.url === "/admin/settings" && item.children) {
-                if (!isPlatformAdmin && !isInstitutionAdmin) {
-                    return [];
-                }
-                return [{
-                    ...item,
-                    children: item.children.filter((child) => {
-                        if (isInstitutionAdmin && child.url === "/admin/settings/payments") return false;
-                        if (child.url === "/admin/settings/subscription") return isPlatformAdmin || isInstitutionAdmin;
-                        return true;
-                    }),
-                }];
-            }
-            return [item];
-        }),
-        [canPage, isInstitutionAdmin, isParent, isPlatformAdmin, isRoleInstitutionUser, isStudent, isTeacher]
+            });
+        },
+        [canPage, isClient, isInstitutionAdmin, isParent, isPlatformAdmin, isRoleInstitutionUser, isStudent, isTeacher, pathname]
     );
     const visibleNavItems = filterNavItems(
         roleAwareNavItems,
@@ -964,7 +1005,7 @@ export function AppSidebar() {
         .join("")
         .toUpperCase()
         .slice(0, 2);
-        const formatStaffRole = (code: string | null | undefined): string => {
+    const formatStaffRole = (code: string | null | undefined): string => {
         if (!code) return "Staff";
         return code
             .split("_")
@@ -978,25 +1019,29 @@ export function AppSidebar() {
             ? null
             : isStudent
                 ? (activeStudentEnrollment as any)?.institutionLogo ?? (activeStudentEnrollment as any)?.institution_logo_url ?? (studentInstitution as any)?.institution_logo ?? (studentInstitution as any)?.institution_logo_url ?? null
-            : staffInstitution?.logoUrl ?? activeInstitution?.logoUrl ?? null;
+                : staffInstitution?.logoUrl ?? activeInstitution?.logoUrl ?? null;
 
     const activeWorkspaceName = isPlatformAdmin
         ? "EduBird Platform"
-        : isParent
-            ? activeChild?.name ?? "EduBird"
-            : isStudent
-                ? activeStudentEnrollment?.institutionName ?? studentInstitution?.institution_name ?? "EduBird"
-            : staffInstitution?.name ?? activeInstitution?.name ?? "EduBird";
+        : isClient
+            ? "Client Portal"
+            : isParent
+                ? activeChild?.name ?? "EduBird"
+                : isStudent
+                    ? activeStudentEnrollment?.institutionName ?? studentInstitution?.institution_name ?? "EduBird"
+                    : staffInstitution?.name ?? activeInstitution?.name ?? "EduBird";
 
     const activeWorkspaceRole = isPlatformAdmin
         ? "Platform Admin"
-        : isParent
-            ? activeChild?.institutionName ?? "Parent"
-            : isStudent
-                ? activeStudentEnrollment
-                    ? `${activeStudentEnrollment.programName}${activeStudentEnrollment.sectionName ? ` • ${activeStudentEnrollment.sectionName}` : ""}`
-                    : "Student"
-            : staffInstitution?.roleName ?? activeInstitution?.roleName ?? user?.primary_role ?? (user?.role_codes?.[0] ? formatStaffRole(user.role_codes[0]) : "Staff");
+        : isClient
+            ? "Client"
+            : isParent
+                ? activeChild?.institutionName ?? "Parent"
+                : isStudent
+                    ? activeStudentEnrollment
+                        ? `${activeStudentEnrollment.programName}${activeStudentEnrollment.sectionName ? ` • ${activeStudentEnrollment.sectionName}` : ""}`
+                        : "Student"
+                    : staffInstitution?.roleName ?? activeInstitution?.roleName ?? user?.primary_role ?? (user?.role_codes?.[0] ? formatStaffRole(user.role_codes[0]) : "Staff");
 
     const activeWorkspaceInitial = isPlatformAdmin ? "E" : (activeWorkspaceName[0] ?? "E").toUpperCase();
     const canSwitchInstitution = isInstitutionAdmin && !isPlatformAdmin && institutionTeams.length > 1;
@@ -1209,42 +1254,42 @@ export function AppSidebar() {
                                                 </DropdownMenuCheckboxItem>
                                             ))
                                             : canSwitchStudentEnrollment
-                                              ? studentEnrollments.map((enrollment) => (
-                                                <DropdownMenuCheckboxItem
-                                                    key={enrollment.id}
-                                                    checked={enrollment.id === activeStudentEnrollment?.id}
-                                                    onCheckedChange={() => selectStudentEnrollment(enrollment.id)}
-                                                    onSelect={(event) => event.preventDefault()}
-                                                    className="min-w-0 gap-2 p-2 cursor-pointer"
-                                                >
-                                                    <div className="flex w-full min-w-0 flex-col pl-1">
-                                                        <span className="truncate text-sm font-semibold">
-                                                            {enrollment.institutionName}
-                                                        </span>
-                                                        <span className="truncate text-xs text-muted-foreground">
-                                                            {enrollment.programName}{enrollment.sectionName ? ` · ${enrollment.sectionName}` : ""} ({enrollment.academicYearName})
-                                                        </span>
-                                                    </div>
-                                                </DropdownMenuCheckboxItem>
-                                              ))
-                                            : institutionTeams.map((institution) => (
-                                                <DropdownMenuCheckboxItem
-                                                    key={institution.id}
-                                                    checked={institution.id === activeInstitutionStorageId}
-                                                    onCheckedChange={() => selectActiveInstitution(institution.id)}
-                                                    onSelect={(event) => event.preventDefault()}
-                                                    className="min-w-0 gap-2 p-2"
-                                                >
-                                                    <div className="flex w-full min-w-0 flex-col pl-1">
-                                                        <span className="truncate text-sm font-medium">
-                                                            {institution.name}
-                                                        </span>
-                                                        <span className="truncate text-xs text-muted-foreground">
-                                                            {institution.roleName ?? "Institution"}
-                                                        </span>
-                                                    </div>
-                                                </DropdownMenuCheckboxItem>
-                                            ))}
+                                                ? studentEnrollments.map((enrollment) => (
+                                                    <DropdownMenuCheckboxItem
+                                                        key={enrollment.id}
+                                                        checked={enrollment.id === activeStudentEnrollment?.id}
+                                                        onCheckedChange={() => selectStudentEnrollment(enrollment.id)}
+                                                        onSelect={(event) => event.preventDefault()}
+                                                        className="min-w-0 gap-2 p-2 cursor-pointer"
+                                                    >
+                                                        <div className="flex w-full min-w-0 flex-col pl-1">
+                                                            <span className="truncate text-sm font-semibold">
+                                                                {enrollment.institutionName}
+                                                            </span>
+                                                            <span className="truncate text-xs text-muted-foreground">
+                                                                {enrollment.programName}{enrollment.sectionName ? ` · ${enrollment.sectionName}` : ""} ({enrollment.academicYearName})
+                                                            </span>
+                                                        </div>
+                                                    </DropdownMenuCheckboxItem>
+                                                ))
+                                                : institutionTeams.map((institution) => (
+                                                    <DropdownMenuCheckboxItem
+                                                        key={institution.id}
+                                                        checked={institution.id === activeInstitutionStorageId}
+                                                        onCheckedChange={() => selectActiveInstitution(institution.id)}
+                                                        onSelect={(event) => event.preventDefault()}
+                                                        className="min-w-0 gap-2 p-2"
+                                                    >
+                                                        <div className="flex w-full min-w-0 flex-col pl-1">
+                                                            <span className="truncate text-sm font-medium">
+                                                                {institution.name}
+                                                            </span>
+                                                            <span className="truncate text-xs text-muted-foreground">
+                                                                {institution.roleName ?? "Institution"}
+                                                            </span>
+                                                        </div>
+                                                    </DropdownMenuCheckboxItem>
+                                                ))}
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                             ) : (
@@ -1253,18 +1298,18 @@ export function AppSidebar() {
                                     className="cursor-default hover:bg-transparent hover:text-foreground active:bg-transparent"
                                 >
                                     <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive/10 text-xs font-bold text-destructive-foreground overflow-hidden border border-border/40 shrink-0">
-                                                {activeWorkspaceLogo ? (
-                                                    <img
-                                                        src={activeWorkspaceLogo}
-                                                        alt={activeWorkspaceName}
-                                                        className="h-full w-full object-cover rounded-lg"
-                                                    />
-                                                ) : (
-                                                    <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive text-xs font-bold text-destructive-foreground">
-                                                        {activeWorkspaceInitial}
-                                                    </div>
-                                                )}
+                                        {activeWorkspaceLogo ? (
+                                            <img
+                                                src={activeWorkspaceLogo}
+                                                alt={activeWorkspaceName}
+                                                className="h-full w-full object-cover rounded-lg"
+                                            />
+                                        ) : (
+                                            <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive text-xs font-bold text-destructive-foreground">
+                                                {activeWorkspaceInitial}
                                             </div>
+                                        )}
+                                    </div>
                                     <div className="grid flex-1 text-left text-sm leading-tight">
                                         <span className="truncate font-semibold">{activeWorkspaceName}</span>
                                         <span className="truncate text-xs text-muted-foreground">{activeWorkspaceRole}</span>

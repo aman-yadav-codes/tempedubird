@@ -113,7 +113,17 @@ export const studentRecordsSchema = z.object({
   documents: z.array(z.object({
     document_type: z.string().trim().min(2).max(50).transform((value) => value.toUpperCase()),
     document_number: nullableText(100, (value) => value.toUpperCase()),
-    file_url: z.string().url(),
+    file_url: z.string().refine((val) => {
+      if (!val) return false;
+      const trimmed = val.trim();
+      if (trimmed.startsWith("/") || trimmed.startsWith("data:") || trimmed.startsWith("blob:")) return true;
+      try {
+        const url = new URL(trimmed);
+        return Boolean(url.protocol);
+      } catch {
+        return false;
+      }
+    }, { message: "Enter a valid URL or path" }),
     public_id: nullableText(500, (value) => value),
     resource_type: nullableText(50, (value) => value.toLowerCase()),
     is_verified: z.boolean().default(false),

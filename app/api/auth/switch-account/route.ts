@@ -6,6 +6,7 @@ import { db } from "@/lib/db/db";
 import { getUserById, insertUser, insertUserRole } from "@/lib/queries/user";
 import { createSession } from "@/models/sessionModel";
 import { toRoleRoutePath } from "@/lib/auth/role-routes";
+import { hasAdminPagePermission, getFirstAllowedAdminPath } from "@/lib/auth/permissions";
 import { hashPassword } from "@/lib/auth/hash";
 
 const DEMO_FALLBACKS: Record<number, { email: string; full_name: string; role_code: string; phone: string }> = {
@@ -14,7 +15,7 @@ const DEMO_FALLBACKS: Record<number, { email: string; full_name: string; role_co
   9903: { email: "rajesh.verma@maasharda.com", full_name: "Prof. Rajesh Verma (Teacher)", role_code: "teacher", phone: "9876543222" },
   9904: { email: "ramesh.driver@maasharda.com", full_name: "Ramesh Kumar (Transport Driver)", role_code: "driver", phone: "9876543223" },
   9905: { email: "deepakdv74@gmail.com", full_name: "Deepak Yadav (Maa Sharda Institute Admin)", role_code: "institution_admin", phone: "8887787846" },
-  9906: { email: "demo.platform_admin@edubird.com", full_name: "Demo Platform Super Admin", role_code: "platform_admin", phone: "9876543213" },
+  9906: { email: "admin@gmail.com", full_name: "Platform Admin", role_code: "platform_admin", phone: "917666775754" },
 };
 
 export async function POST(req: Request) {
@@ -98,7 +99,11 @@ export async function POST(req: Request) {
     const token = createAccessToken(user.id, sessionId);
 
     // Determine target redirect route
-    let redirectTo = toRoleRoutePath("/admin", sessionUser);
+    const hasDashboardAccess = hasAdminPagePermission(sessionUser, "/admin");
+    const targetPath = hasDashboardAccess
+      ? "/admin"
+      : (getFirstAllowedAdminPath(sessionUser) || "/admin/account");
+    let redirectTo = toRoleRoutePath(targetPath, sessionUser);
     if (sessionUser.role_codes?.includes("student")) {
       redirectTo = "/student/dashboard";
     } else if (sessionUser.role_codes?.includes("parent") || sessionUser.role_codes?.includes("guardian")) {

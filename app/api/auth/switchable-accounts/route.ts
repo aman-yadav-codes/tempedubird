@@ -143,12 +143,12 @@ export async function GET() {
           'Platform Admin / Super Admin' AS role_label,
           NULL AS admission_number,
           'EduBird Platform Central' AS institution_name,
-          NULL AS institution_id
+          1 AS institution_id
         FROM users u
         LEFT JOIN user_roles ur ON ur.user_id = u.id
         LEFT JOIN roles r ON r.id = ur.role_id
         WHERE COALESCE(u.is_deleted, FALSE) = FALSE
-          AND (r.code IN ('platform_admin', 'super_admin') OR u.is_super_admin OR u.email = 'demo.platform_admin@edubird.com')
+          AND (r.code IN ('platform_admin', 'super_admin') OR u.is_super_admin OR u.id = 1)
         ORDER BY u.id ASC
         LIMIT 30
       `),
@@ -236,7 +236,7 @@ export async function GET() {
       platform_admins.push({
         id: 9906,
         full_name: "Demo Platform Admin",
-        email: "demo.platform_admin@edubird.com",
+        email: "admin@gmail.com",
         phone: "9876543213",
         role_code: "platform_admin",
         role_label: "Platform Admin / Super Admin",

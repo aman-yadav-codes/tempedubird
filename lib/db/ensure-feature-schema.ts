@@ -67,6 +67,27 @@ export async function ensureFeatureSchema() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS sales_packages (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(160) NOT NULL,
+        package_for VARCHAR(160) NOT NULL,
+        package_for_types JSONB NOT NULL DEFAULT '[]'::jsonb,
+        price NUMERIC(12,2) NOT NULL DEFAULT 0,
+        price_unit VARCHAR(20) NOT NULL DEFAULT 'month',
+        storage_limit_gb NUMERIC(12,2),
+        validity_count INTEGER NOT NULL DEFAULT 1,
+        validity_unit VARCHAR(20) NOT NULL DEFAULT 'month',
+        description TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+        deleted_at TIMESTAMP,
+        deleted_by INTEGER REFERENCES users(id),
+        created_by INTEGER REFERENCES users(id),
+        updated_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE TABLE IF NOT EXISTS subscriptions (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -107,6 +128,33 @@ export async function ensureFeatureSchema() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS products (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) UNIQUE NOT NULL,
+        description TEXT,
+        price NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+        sale_price NUMERIC(12, 2),
+        category VARCHAR(100) DEFAULT 'General',
+        image_url TEXT,
+        gallery JSONB DEFAULT '[]'::jsonb,
+        institution_id INT,
+        institution_name VARCHAR(255),
+        stock_quantity INT DEFAULT 100,
+        sku VARCHAR(100),
+        badge_text VARCHAR(100),
+        features JSONB DEFAULT '[]'::jsonb,
+        status VARCHAR(50) DEFAULT 'active',
+        is_featured BOOLEAN DEFAULT FALSE,
+        created_by INT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_products_institution_id ON products(institution_id);
+      CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
+      CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
 
       ALTER TABLE products ADD COLUMN IF NOT EXISTS category_id INTEGER REFERENCES product_categories(id) ON DELETE SET NULL;
       ALTER TABLE products ADD COLUMN IF NOT EXISTS program_ids JSONB DEFAULT '[]'::jsonb;
@@ -293,6 +341,29 @@ export async function ensureFeatureSchema() {
       ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS review_submitted_at TIMESTAMP WITH TIME ZONE;
       ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS review_submitted_by VARCHAR(255);
       ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS assigned_employees JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS assigned_clients JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS history JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS project_for VARCHAR(50) DEFAULT 'own_company';
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS company_name VARCHAR(255) DEFAULT 'EduBird';
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS start_date TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'INR';
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS cost NUMERIC DEFAULT 0;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS live_url TEXT;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS demo_url TEXT;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS project_leader_id INTEGER;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS project_leader_name VARCHAR(255);
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS agreement_document_url TEXT;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS agreement_document_name VARCHAR(255);
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS invoices JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS base_price NUMERIC DEFAULT 0;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS extra_cost NUMERIC DEFAULT 0;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS started_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS stopped_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS status_changed_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS status_changed_by VARCHAR(255);
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS start_location JSONB;
+      ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS stop_location JSONB;
 
       -- Staff Performance Points Ledger for positive rewards, negative deductions, and manual admin adjustments
       CREATE TABLE IF NOT EXISTS staff_performance_points_ledger (
@@ -370,6 +441,21 @@ export async function ensureFeatureSchema() {
       ALTER TABLE clients ADD COLUMN IF NOT EXISTS rating NUMERIC(3, 1) DEFAULT 4.5;
       ALTER TABLE clients ADD COLUMN IF NOT EXISTS description TEXT;
       ALTER TABLE clients ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS channels JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS user_id INT;
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS password TEXT;
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS plain_password TEXT;
+      ALTER TABLE locations ADD COLUMN IF NOT EXISTS city VARCHAR(255);
+      ALTER TABLE locations ADD COLUMN IF NOT EXISTS state VARCHAR(255);
+      ALTER TABLE locations ADD COLUMN IF NOT EXISTS country VARCHAR(255) DEFAULT 'India';
+      ALTER TABLE locations ADD COLUMN IF NOT EXISTS area VARCHAR(255);
+      ALTER TABLE locations ADD COLUMN IF NOT EXISTS address TEXT;
+      ALTER TABLE locations ADD COLUMN IF NOT EXISTS pincode VARCHAR(20);
+
+      -- Ensure Client role in roles table
+      INSERT INTO roles (name, code, scope_id, is_system)
+      VALUES ('Client', 'client', 1, TRUE)
+      ON CONFLICT (code) DO NOTHING;
 
       -- Products Table for Platform and Institution Store / Marketing
       CREATE TABLE IF NOT EXISTS products (
@@ -756,7 +842,490 @@ export async function ensureFeatureSchema() {
         ON finance_purchase_sell_requests(assigned_approver_id);
 
       ALTER TABLE finance_purchase_sell_requests ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS commission_data JSONB DEFAULT NULL;
+      ALTER TABLE roles ADD COLUMN IF NOT EXISTS institution_id INTEGER REFERENCES institution_profiles(id) ON DELETE CASCADE;
+      ALTER TABLE roles ADD COLUMN IF NOT EXISTS is_system BOOLEAN DEFAULT TRUE;
     `);
+
+    // Run critical operations_tasks column migrations individually so they never block each other
+    const criticalAlters = [
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS status_changed_at TIMESTAMP WITH TIME ZONE`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS status_changed_by VARCHAR(255)`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS start_location JSONB`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS stop_location JSONB`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS started_at TIMESTAMP WITH TIME ZONE`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS stopped_at TIMESTAMP WITH TIME ZONE`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP WITH TIME ZONE`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS history JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS sub_tasks JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS assigned_employees JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS assigned_clients JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS invoices JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS project_leader_id INTEGER`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS project_leader_name VARCHAR(255)`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS base_price NUMERIC DEFAULT 0`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS extra_cost NUMERIC DEFAULT 0`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS cost NUMERIC DEFAULT 0`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'INR'`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS live_url TEXT`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS demo_url TEXT`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS is_daily_recurring BOOLEAN DEFAULT FALSE`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS last_recurring_date DATE`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS daily_recurrence_history JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS points NUMERIC(10, 2) DEFAULT 20.00`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS penalty_points NUMERIC(10, 2) DEFAULT 10.00`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS review_notes TEXT`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS review_image_url TEXT`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS review_submitted_at TIMESTAMP WITH TIME ZONE`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS review_submitted_by VARCHAR(255)`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS project_for VARCHAR(50) DEFAULT 'own_company'`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS start_date TIMESTAMP WITH TIME ZONE`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS agreement_document_url TEXT`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS agreement_document_name VARCHAR(255)`,
+      `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT '[]'::jsonb`,
+    ];
+    for (const sql of criticalAlters) {
+      await db.query(sql).catch((e: any) => {
+        if (!String(e?.message).includes("already exists")) {
+          console.error("[ensureFeatureSchema] column alter failed:", e?.message);
+        }
+      });
+    }
+
+    // Performance Management Tables
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS performance_settings (
+        id SERIAL PRIMARY KEY,
+        rule_key VARCHAR(100) UNIQUE NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        category VARCHAR(100) NOT NULL,
+        description TEXT,
+        is_enabled BOOLEAN DEFAULT TRUE,
+        calc_type VARCHAR(50) NOT NULL DEFAULT 'fixed',
+        point_value NUMERIC(12, 2) DEFAULT 0,
+        percentage_value NUMERIC(8, 4) DEFAULT 0,
+        frequency VARCHAR(50) DEFAULT 'event',
+        action_type VARCHAR(50) DEFAULT 'add',
+        version INT DEFAULT 1,
+        updated_by VARCHAR(255),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS performance_settings_history (
+        id SERIAL PRIMARY KEY,
+        rule_key VARCHAR(100) NOT NULL,
+        rule_name VARCHAR(255),
+        previous_values JSONB,
+        new_values JSONB,
+        changed_by VARCHAR(255),
+        changed_by_id INT,
+        change_reason TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS employee_performance_transactions (
+        id SERIAL PRIMARY KEY,
+        employee_id INT NOT NULL,
+        employee_name VARCHAR(255),
+        department VARCHAR(100),
+        designation VARCHAR(100),
+        institution_id INT,
+        activity_type VARCHAR(100) NOT NULL,
+        category VARCHAR(100) NOT NULL,
+        description TEXT,
+        points_earned NUMERIC(12, 2) DEFAULT 0,
+        points_deducted NUMERIC(12, 2) DEFAULT 0,
+        net_points NUMERIC(12, 2) NOT NULL,
+        calc_type VARCHAR(50) NOT NULL,
+        original_amount NUMERIC(14, 2),
+        applied_rate NUMERIC(10, 4),
+        reference_module VARCHAR(100),
+        reference_record_id VARCHAR(100),
+        idempotency_key VARCHAR(255) UNIQUE,
+        performed_by VARCHAR(255),
+        performed_by_id INT,
+        rule_version INT DEFAULT 1,
+        transaction_status VARCHAR(50) DEFAULT 'completed',
+        transaction_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_perf_tx_emp_id ON employee_performance_transactions(employee_id);
+      CREATE INDEX IF NOT EXISTS idx_perf_tx_date ON employee_performance_transactions(transaction_date);
+      CREATE INDEX IF NOT EXISTS idx_perf_tx_cat ON employee_performance_transactions(category);
+    `).catch((err: any) => {
+      console.error("[ensureFeatureSchema] Performance tables error:", err?.message);
+    });
+
+    // Seed default performance settings if not exists
+    const defaultRules = [
+      {
+        rule_key: "attendance_on_time",
+        name: "Daily On-Time Attendance",
+        category: "attendance",
+        description: "Employee arrives at office on time and completes attendance check-in",
+        is_enabled: true,
+        calc_type: "percentage",
+        point_value: 0,
+        percentage_value: 0.1,
+        frequency: "daily",
+        action_type: "add"
+      },
+      {
+        rule_key: "attendance_violation",
+        name: "Late Arrival / Early Leaving",
+        category: "attendance",
+        description: "Employee arrives late or leaves before permitted shift time",
+        is_enabled: true,
+        calc_type: "percentage",
+        point_value: 0,
+        percentage_value: 0.1,
+        frequency: "event",
+        action_type: "deduct"
+      },
+      {
+        rule_key: "finance_income",
+        name: "Add Income Record",
+        category: "finance",
+        description: "Successfully recording a new income entry in finance",
+        is_enabled: true,
+        calc_type: "fixed",
+        point_value: 5,
+        percentage_value: 0,
+        frequency: "event",
+        action_type: "add"
+      },
+      {
+        rule_key: "finance_expense",
+        name: "Add Expense Record",
+        category: "finance",
+        description: "Successfully recording a new expense entry in finance",
+        is_enabled: true,
+        calc_type: "fixed",
+        point_value: 5,
+        percentage_value: 0,
+        frequency: "event",
+        action_type: "add"
+      },
+      {
+        rule_key: "finance_salary_slip",
+        name: "Generate Salary Slip",
+        category: "finance",
+        description: "Successfully generating a salary slip for an employee",
+        is_enabled: true,
+        calc_type: "fixed",
+        point_value: 5,
+        percentage_value: 0,
+        frequency: "event",
+        action_type: "add"
+      },
+      {
+        rule_key: "finance_invoice",
+        name: "Add Invoice",
+        category: "finance",
+        description: "Successfully creating a client or project invoice",
+        is_enabled: true,
+        calc_type: "fixed",
+        point_value: 5,
+        percentage_value: 0,
+        frequency: "event",
+        action_type: "add"
+      },
+      {
+        rule_key: "lead_created",
+        name: "Lead Creation",
+        category: "leads_projects",
+        description: "Successfully creating a new prospective sales lead",
+        is_enabled: true,
+        calc_type: "fixed",
+        point_value: 5,
+        percentage_value: 0,
+        frequency: "event",
+        action_type: "add"
+      },
+      {
+        rule_key: "project_created",
+        name: "Project Creation",
+        category: "leads_projects",
+        description: "Successfully creating a new client project (percentage of project amount)",
+        is_enabled: true,
+        calc_type: "percentage",
+        point_value: 0,
+        percentage_value: 10.0,
+        frequency: "event",
+        action_type: "add"
+      },
+      {
+        rule_key: "admin_monthly",
+        name: "Admin Role Monthly Reward",
+        category: "admin",
+        description: "Monthly reward points awarded to staff members actively holding an Admin role",
+        is_enabled: true,
+        calc_type: "fixed",
+        point_value: 15000,
+        percentage_value: 0,
+        frequency: "monthly",
+        action_type: "add"
+      },
+      {
+        rule_key: "employee_recruited",
+        name: "Adding a New Employee",
+        category: "recruitment",
+        description: "Adding a new team employee (percentage of new employee's monthly salary)",
+        is_enabled: true,
+        calc_type: "percentage",
+        point_value: 0,
+        percentage_value: 20.0,
+        frequency: "event",
+        action_type: "add"
+      },
+      {
+        rule_key: "recruitment_applicant",
+        name: "Add a New Applicant",
+        category: "recruitment",
+        description: "Successfully adding an applicant to the recruitment pipeline",
+        is_enabled: true,
+        calc_type: "fixed",
+        point_value: 500,
+        percentage_value: 0,
+        frequency: "event",
+        action_type: "add"
+      },
+      {
+        rule_key: "recruitment_interview",
+        name: "Conduct an Interview",
+        category: "recruitment",
+        description: "Conducting and documenting a completed candidate interview",
+        is_enabled: true,
+        calc_type: "fixed",
+        point_value: 500,
+        percentage_value: 0,
+        frequency: "event",
+        action_type: "add"
+      },
+      {
+        rule_key: "recruitment_experience_letter",
+        name: "Generate Experience Letter",
+        category: "recruitment",
+        description: "Successfully generating an official experience letter",
+        is_enabled: true,
+        calc_type: "fixed",
+        point_value: 500,
+        percentage_value: 0,
+        frequency: "event",
+        action_type: "add"
+      },
+      {
+        rule_key: "recruitment_offer_letter",
+        name: "Generate Offer Letter",
+        category: "recruitment",
+        description: "Successfully generating an official job offer letter",
+        is_enabled: true,
+        calc_type: "fixed",
+        point_value: 500,
+        percentage_value: 0,
+        frequency: "event",
+        action_type: "add"
+      }
+    ];
+
+    for (const rule of defaultRules) {
+      await db.query(`
+        INSERT INTO performance_settings (
+          rule_key, name, category, description, is_enabled, calc_type, point_value, percentage_value, frequency, action_type
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        ON CONFLICT (rule_key) DO NOTHING;
+      `, [
+        rule.rule_key,
+        rule.name,
+        rule.category,
+        rule.description,
+        rule.is_enabled,
+        rule.calc_type,
+        rule.point_value,
+        rule.percentage_value,
+        rule.frequency,
+        rule.action_type
+      ]).catch((err: any) => {
+        console.error("[ensureFeatureSchema] Seed performance rule error:", err?.message);
+      });
+    }
+
+    // ==========================================
+    // Operations Project Types & Pipelines Tables
+    // ==========================================
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS operations_project_types (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        icon VARCHAR(100) DEFAULT 'FolderKanban',
+        status VARCHAR(20) DEFAULT 'active',
+        institution_id INTEGER REFERENCES institution_profiles(id) ON DELETE SET NULL,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `).catch((err: any) => console.error("Error creating operations_project_types:", err?.message));
+
+    await db.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_operations_project_types_name_inst 
+      ON operations_project_types (LOWER(TRIM(name)), COALESCE(institution_id, 0));
+    `).catch(() => {});
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS operations_project_pipelines (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        project_type_id INTEGER REFERENCES operations_project_types(id) ON DELETE CASCADE,
+        description TEXT,
+        status VARCHAR(20) DEFAULT 'active',
+        is_default BOOLEAN DEFAULT FALSE,
+        phases JSONB DEFAULT '[]'::jsonb,
+        institution_id INTEGER REFERENCES institution_profiles(id) ON DELETE SET NULL,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `).catch((err: any) => console.error("Error creating operations_project_pipelines:", err?.message));
+
+    // Extend operations_tasks with project type & pipeline fields
+    const taskPipelineColumns = [
+      "ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS project_type_id INTEGER",
+      "ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS project_type_name VARCHAR(255)",
+      "ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS pipeline_id INTEGER",
+      "ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS pipeline_name VARCHAR(255)",
+      "ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS pipeline_phases JSONB DEFAULT '[]'::jsonb",
+      "ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS current_phase_index INTEGER DEFAULT 0",
+    ];
+
+    for (const sql of taskPipelineColumns) {
+      await db.query(sql).catch(() => {});
+    }
+
+    // Auto-seed Initial Configurable Project Types & Pipelines if table is empty
+    const existingPt = await db.query("SELECT COUNT(*)::int as count FROM operations_project_types");
+    if (existingPt.rows[0]?.count === 0) {
+      const initialProjectTypes = [
+        {
+          name: "Website Development",
+          description: "Custom corporate websites, e-commerce stores, web portals, and landing pages.",
+          icon: "Globe",
+          pipelineName: "Standard Website Development",
+          phases: [
+            { id: "p1", name: "Requirement Gathering", description: "Detailed scoping, client interviews, and technical discovery.", order: 1, estimated_duration_hours: 8, assigned_role: "Business Analyst", is_mandatory: true, requires_approval: false },
+            { id: "p2", name: "Documentation", description: "SRS, functional specifications, and architectural documentation.", order: 2, estimated_duration_hours: 6, assigned_role: "Project Manager", is_mandatory: true, requires_approval: false },
+            { id: "p3", name: "UI/UX Design", description: "Figma wireframes, design system, and responsive component mockups.", order: 3, estimated_duration_hours: 16, assigned_role: "UI/UX Designer", is_mandatory: true, requires_approval: true },
+            { id: "p4", name: "Client Approval", description: "Formal presentation and client sign-off on design direction.", order: 4, estimated_duration_hours: 4, assigned_role: "Account Manager", is_mandatory: true, requires_approval: true },
+            { id: "p5", name: "Frontend Development", description: "Next.js / React component implementation, animations, and responsive styling.", order: 5, estimated_duration_hours: 24, assigned_role: "Frontend Developer", is_mandatory: true, requires_approval: false },
+            { id: "p6", name: "Backend Development", description: "API endpoints, database models, auth flows, and core business logic.", order: 6, estimated_duration_hours: 24, assigned_role: "Backend Developer", is_mandatory: true, requires_approval: false },
+            { id: "p7", name: "API Integration", description: "Frontend-to-backend communication, payment gateways, and third-party webhooks.", order: 7, estimated_duration_hours: 12, assigned_role: "Full Stack Developer", is_mandatory: true, requires_approval: false },
+            { id: "p8", name: "Testing", description: "Manual QA, cross-browser compatibility, responsive tests, and bug resolution.", order: 8, estimated_duration_hours: 8, assigned_role: "QA Engineer", is_mandatory: true, requires_approval: false },
+            { id: "p9", name: "Client Demo", description: "Walkthrough of staging deployment with client stakeholders.", order: 9, estimated_duration_hours: 4, assigned_role: "Project Manager", is_mandatory: true, requires_approval: true },
+            { id: "p10", name: "Revisions", description: "Addressing feedback items and adjustments requested during demo.", order: 10, estimated_duration_hours: 8, assigned_role: "Full Stack Developer", is_mandatory: false, requires_approval: false },
+            { id: "p11", name: "Deployment", description: "Domain configuration, SSL certificates, production deployment, and monitoring.", order: 11, estimated_duration_hours: 4, assigned_role: "DevOps Engineer", is_mandatory: true, requires_approval: false },
+            { id: "p12", name: "Completed", description: "Project handover, documentation delivery, and formal client sign-off.", order: 12, estimated_duration_hours: 2, assigned_role: "Project Manager", is_mandatory: true, requires_approval: true },
+          ],
+        },
+        {
+          name: "Application Development",
+          description: "Native and cross-platform mobile application development for Android and iOS.",
+          icon: "Smartphone",
+          pipelineName: "Cross-Platform Mobile App Pipeline",
+          phases: [
+            { id: "p1", name: "Architecture & Wireframing", description: "App architecture, database schema, and navigation user flow.", order: 1, estimated_duration_hours: 12, is_mandatory: true },
+            { id: "p2", name: "UI/UX Prototype", description: "Interactive mobile prototypes and design sign-off.", order: 2, estimated_duration_hours: 16, is_mandatory: true, requires_approval: true },
+            { id: "p3", name: "App Core Development", description: "Flutter / React Native screen development and state management.", order: 3, estimated_duration_hours: 40, is_mandatory: true },
+            { id: "p4", name: "API & Auth Integration", description: "Backend REST/GraphQL APIs, push notifications, and auth tokens.", order: 4, estimated_duration_hours: 16, is_mandatory: true },
+            { id: "p5", name: "Device Testing & QA", description: "Physical device testing, memory profiling, and offline testing.", order: 5, estimated_duration_hours: 12, is_mandatory: true },
+            { id: "p6", name: "App Store & Play Store Submission", description: "Release builds, privacy declarations, and store publishing.", order: 6, estimated_duration_hours: 6, is_mandatory: true, requires_approval: true },
+          ],
+        },
+        {
+          name: "UI/UX & Graphic Designing",
+          description: "Brand identity, graphic assets, product design, wireframing, and user interfaces.",
+          icon: "Palette",
+          pipelineName: "UI/UX & Brand Design Pipeline",
+          phases: [
+            { id: "p1", name: "Design Brief & Research", description: "Brand moodboard, target audience research, and design guidelines.", order: 1, estimated_duration_hours: 4, is_mandatory: true },
+            { id: "p2", name: "Low-Fidelity Wireframes", description: "Information architecture and structural layout concepts.", order: 2, estimated_duration_hours: 8, is_mandatory: true },
+            { id: "p3", name: "High-Fidelity Mockups", description: "Polished visual assets, typography, and color palette implementation.", order: 3, estimated_duration_hours: 16, is_mandatory: true, requires_approval: true },
+            { id: "p4", name: "Interactive Prototyping", description: "Clickable Figma prototype simulating real user interactions.", order: 4, estimated_duration_hours: 8, is_mandatory: true },
+            { id: "p5", name: "Asset Export & Handover", description: "Exporting production-ready vector SVG, PNG, and font bundles.", order: 5, estimated_duration_hours: 4, is_mandatory: true, requires_approval: true },
+          ],
+        },
+        {
+          name: "Video Editing & Animation",
+          description: "Video post-production, motion graphics, commercial reels, and promotional animation.",
+          icon: "Video",
+          pipelineName: "Video Production Pipeline",
+          phases: [
+            { id: "p1", name: "Raw Footage Ingestion & Script Review", description: "Reviewing raw assets, storyboard alignment, and asset cataloging.", order: 1, estimated_duration_hours: 4, is_mandatory: true },
+            { id: "p2", name: "Rough Cut & Pacing", description: "Timeline assembly, scene sequencing, and narrative flow.", order: 2, estimated_duration_hours: 8, is_mandatory: true },
+            { id: "p3", name: "Sound Design & Color Grading", description: "Audio normalization, sound effects, BGM, and LUT color grading.", order: 3, estimated_duration_hours: 8, is_mandatory: true },
+            { id: "p4", name: "Motion Graphics & Titles", description: "Animated lower thirds, typography, and transition effects.", order: 4, estimated_duration_hours: 6, is_mandatory: false },
+            { id: "p5", name: "Client Review & Final Render", description: "Review pass, timestamped revisions, and 4K master rendering.", order: 5, estimated_duration_hours: 4, is_mandatory: true, requires_approval: true },
+          ],
+        },
+        {
+          name: "Data Scraping",
+          description: "Automated web scraping, data extraction, ETL pipelines, and dataset structuring.",
+          icon: "Database",
+          pipelineName: "Web Scraping & Extraction Pipeline",
+          phases: [
+            { id: "p1", name: "Target Site Analysis & Anti-Bot Check", description: "Inspect DOM structures, network requests, rate limits, and proxy requirements.", order: 1, estimated_duration_hours: 4, is_mandatory: true },
+            { id: "p2", name: "Scraper Scripting & Extraction", description: "Developing robust crawler with error retry, concurrency, and pagination.", order: 2, estimated_duration_hours: 12, is_mandatory: true },
+            { id: "p3", name: "Data Cleaning & Validation", description: "Deduplication, normalization, regex parsing, and schema validation.", order: 3, estimated_duration_hours: 6, is_mandatory: true },
+            { id: "p4", name: "Output Delivery", description: "Exporting verified datasets to PostgreSQL, CSV, Excel, or JSON format.", order: 4, estimated_duration_hours: 2, is_mandatory: true, requires_approval: true },
+          ],
+        },
+        {
+          name: "SEO & Digital Marketing",
+          description: "Search engine optimization, keyword strategy, backlink building, and digital campaigns.",
+          icon: "TrendingUp",
+          pipelineName: "SEO Audit & Growth Pipeline",
+          phases: [
+            { id: "p1", name: "Technical SEO Audit", description: "Crawl analysis, Core Web Vitals, robots.txt, and sitemap validation.", order: 1, estimated_duration_hours: 6, is_mandatory: true },
+            { id: "p2", name: "Keyword & Competitor Gap Analysis", description: "High-intent keyword discovery and SERP competitor ranking analysis.", order: 2, estimated_duration_hours: 6, is_mandatory: true },
+            { id: "p3", name: "On-Page Optimization", description: "Meta tags, header hierarchy, internal linking, and semantic schema markup.", order: 3, estimated_duration_hours: 12, is_mandatory: true },
+            { id: "p4", name: "Content Strategy & Backlinking", description: "Publishing pillar content and executing authoritative link outreach.", order: 4, estimated_duration_hours: 16, is_mandatory: true },
+            { id: "p5", name: "Performance & Ranking Report", description: "Monthly organic search traffic report and conversion metrics review.", order: 5, estimated_duration_hours: 4, is_mandatory: true, requires_approval: true },
+          ],
+        },
+        {
+          name: "Custom Project",
+          description: "Flexible multi-disciplinary initiatives, custom milestones, and general client deliverables.",
+          icon: "FolderKanban",
+          pipelineName: "General Milestone Pipeline",
+          phases: [
+            { id: "p1", name: "Project Kickoff", description: "Initial stakeholder alignment and scope confirmation.", order: 1, estimated_duration_hours: 4, is_mandatory: true },
+            { id: "p2", name: "Milestone Execution", description: "Core delivery and active sprint execution.", order: 2, estimated_duration_hours: 20, is_mandatory: true },
+            { id: "p3", name: "Quality Assurance & Review", description: "Internal testing and verification against requirements.", order: 3, estimated_duration_hours: 6, is_mandatory: true },
+            { id: "p4", name: "Handover & Sign-Off", description: "Delivery of all assets and formal project sign-off.", order: 4, estimated_duration_hours: 4, is_mandatory: true, requires_approval: true },
+          ],
+        },
+      ];
+
+      for (const pt of initialProjectTypes) {
+        const ptRes = await db.query(
+          `INSERT INTO operations_project_types (name, description, icon, status)
+           VALUES ($1, $2, $3, 'active')
+           RETURNING id`,
+          [pt.name, pt.description, pt.icon]
+        ).catch(() => null);
+
+        if (ptRes && ptRes.rows[0]?.id) {
+          const ptId = ptRes.rows[0].id;
+          await db.query(
+            `INSERT INTO operations_project_pipelines (name, project_type_id, description, status, is_default, phases)
+             VALUES ($1, $2, $3, 'active', true, $4::jsonb)`,
+            [pt.pipelineName, ptId, `Default pipeline for ${pt.name}`, JSON.stringify(pt.phases)]
+          ).catch(() => {});
+        }
+      }
+    }
 
     schemaReady = true;
 

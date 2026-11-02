@@ -1,3 +1,4 @@
+import { recordPerformancePoints } from "@/lib/performance/performance-engine";
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth/auth";
 import { isPlatformFullAccess } from "@/lib/auth/permissions";
@@ -74,6 +75,22 @@ export async function PATCH(req: Request) {
       status: body.status,
       notes: body.notes,
     });
+
+    if (String(body.status || "").toLowerCase().includes("interview") && user?.id) {
+      try {
+        await recordPerformancePoints({
+          employeeId: user.id,
+          activityType: "recruitment_interview",
+          referenceModule: "staff_recruitment",
+          referenceRecordId: id,
+          performedBy: { id: user.id, name: user.full_name || "Interviewer" },
+          customDescription: "Conducted candidate interview for application #" + id,
+          institutionId: existing.institution_id || undefined,
+        });
+      } catch (perfErr) {
+        console.warn("[Recruitment Interview] Performance points warning:", perfErr);
+      }
+    }
 
     return NextResponse.json({ success: true, data: updated });
   } catch (err: unknown) {

@@ -27,7 +27,7 @@ const nullableCapitalizedString = (max: number) =>
 
 const nullableUrl = z.preprocess(
   emptyToNull,
-  z.union([z.string().url("Enter a valid URL"), z.null()]).optional()
+  z.union([z.string().max(2000), z.null()]).optional()
 );
 
 const nullableNumber = z.preprocess(

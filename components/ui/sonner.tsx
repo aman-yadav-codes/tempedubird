@@ -1,8 +1,9 @@
+"use client";
+
 // components/ui/sonner.tsx
 // Thin wrapper around the sonner <Toaster> so theme is wired automatically.
 // Import this once in the root layout — then call toast() anywhere.
 
-"use client";
 
 import { Toaster as SonnerToaster } from "sonner";
 import { usePublicTheme } from "@/components/public-theme";

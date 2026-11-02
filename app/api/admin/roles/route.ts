@@ -18,7 +18,7 @@ export async function GET(req: Request) {
     const roles = await listRolesQuery(db, institutionId);
     const canAssignPlatformAdmin = isPlatformAdminUser(currentUser);
     const canAssignInstitutionRoles =
-      canAssignPlatformAdmin || currentUser.role_codes.includes("institution_admin");
+      canAssignPlatformAdmin || currentUser.role_codes?.includes("institution_admin");
     const assignableRoles = canAssignPlatformAdmin
       ? roles
       : canAssignInstitutionRoles
@@ -28,7 +28,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ data: assignableRoles });
   } catch (err: unknown) {
     const message = getErrorMessage(err);
-    const status = message === "Forbidden: Admin access required" ? 403 : 401;
-    return NextResponse.json({ error: message }, { status });
+    if (message === "Forbidden: Admin access required") {
+      return NextResponse.json({ error: message }, { status: 403 });
+    }
+    if (message === "Unauthorized" || message === "User not found") {
+      return NextResponse.json({ error: message }, { status: 401 });
+    }
+    console.error("[GET /api/admin/roles] Error:", err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

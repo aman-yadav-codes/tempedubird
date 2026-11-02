@@ -35,7 +35,9 @@ import {
   FileText,
   CalendarDays,
   ShieldCheck,
+  Trophy,
 } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -478,6 +480,20 @@ export function StaffPerformanceClient() {
           >
             <Download className="w-3.5 h-3.5 text-primary" />
             Export CSV
+          </Button>
+
+          <Button asChild size="sm" className="h-9 gap-1.5 text-xs font-bold bg-primary shadow-xs">
+            <Link href="/admin/performance/leaderboard">
+              <Trophy className="w-3.5 h-3.5" />
+              Leaderboard
+            </Link>
+          </Button>
+
+          <Button asChild variant="outline" size="sm" className="h-9 gap-1.5 text-xs font-semibold">
+            <Link href="/admin/settings/performance">
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              Rules Settings
+            </Link>
           </Button>
         </div>
       </div>

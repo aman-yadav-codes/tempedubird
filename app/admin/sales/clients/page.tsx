@@ -1,5 +1,7 @@
 "use client";
 
+import { normalizeUrl } from "@/lib/utils";
+
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Building2,
@@ -34,6 +36,12 @@ import {
   ChevronRight,
   ChevronLeft,
   UserCheck,
+  KeyRound,
+  Copy,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -100,7 +108,147 @@ export type ContactPersonEntry = {
   email: string;
 };
 
+export type ChannelType =
+  | "phone"
+  | "whatsapp"
+  | "email"
+  | "facebook"
+  | "teams"
+  | "telegram"
+  | "linkedin"
+  | "instagram"
+  | "website"
+  | "other";
+
+export type ClientContactChannel = {
+  id: string;
+  type: ChannelType;
+  value: string;
+  label: string;
+  is_primary?: boolean;
+};
+
+export const CHANNEL_OPTIONS: Array<{
+  id: ChannelType;
+  label: string;
+  placeholder: string;
+  iconName: string;
+}> = [
+  { id: "phone", label: "Phone Number", placeholder: "+91 98765 43210", iconName: "phone" },
+  { id: "whatsapp", label: "WhatsApp Number", placeholder: "+91 98765 43210", iconName: "whatsapp" },
+  { id: "email", label: "Email Address", placeholder: "partner@company.com", iconName: "email" },
+  { id: "facebook", label: "Facebook Profile", placeholder: "https://facebook.com/username", iconName: "facebook" },
+  { id: "teams", label: "Microsoft Teams", placeholder: "user@organization.com or link", iconName: "teams" },
+  { id: "telegram", label: "Telegram", placeholder: "@username or https://t.me/...", iconName: "telegram" },
+  { id: "linkedin", label: "LinkedIn Profile", placeholder: "https://linkedin.com/in/username", iconName: "linkedin" },
+  { id: "instagram", label: "Instagram Profile", placeholder: "@username or https://instagram.com/...", iconName: "instagram" },
+  { id: "website", label: "Website Link", placeholder: "https://company.com", iconName: "website" },
+  { id: "other", label: "Other Link / ID", placeholder: "Profile or contact handle", iconName: "other" },
+];
+
+
+export function renderChannelIcon(type: ChannelType, className = "w-3.5 h-3.5") {
+  switch (type) {
+    case "whatsapp":
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.312.045-.634.074-1.807-.411-1.425-.589-2.34-2.029-2.411-2.124-.07-.094-.576-.767-.576-1.464 0-.697.362-1.04.492-1.183.13-.143.284-.179.379-.179.094 0 .189.001.272.005.087.004.204-.033.319.243.119.287.406.992.441 1.064.035.072.059.156.012.249-.047.094-.07.153-.141.235-.07.083-.149.185-.213.249-.071.071-.145.148-.063.289.083.141.368.608.79 0.984.544.484 1.003.633 1.144.704.141.07.225.059.309-.035.083-.095.355-.415.449-.557.094-.143.189-.119.319-.071.13.047.824.389.966.46.141.072.235.107.27.166.035.059.035.346-.109.751zM12 2C6.477 2 2 6.477 2 12c0 1.891.523 3.663 1.433 5.176L2 22l4.954-1.399C8.409 21.497 10.147 22 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2z" />
+        </svg>
+      );
+    case "facebook":
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+        </svg>
+      );
+    case "teams":
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M19.5 7.5a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5zm-5 0a3 3 0 100-6 3 3 0 000 6zM22.5 10h-6a1.5 1.5 0 00-1.5 1.5V17a3 3 0 003 3h4.5a1.5 1.5 0 001.5-1.5v-7a1.5 1.5 0 00-1.5-1.5zm-9 0h-8A2.5 2.5 0 003 12.5v6A2.5 2.5 0 005.5 21h8a2.5 2.5 0 002.5-2.5v-6A2.5 2.5 0 0013.5 10z" />
+        </svg>
+      );
+    case "telegram":
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.19-.08-.05-.19-.02-.27 0-.12.03-1.99 1.27-5.63 3.73-.53.36-1.02.54-1.45.53-.48-.01-1.4-.27-2.08-.49-.84-.27-1.51-.42-1.45-.89.03-.25.38-.5.99-.76 3.88-1.69 6.47-2.8 7.78-3.34 3.71-1.54 4.48-1.81 4.98-1.82.11 0 .35.03.51.16.13.11.17.26.19.37-.01.07.01.21 0 .28z" />
+        </svg>
+      );
+    case "linkedin":
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 8.76a1.62 1.62 0 1 0 0-3.24 1.62 1.62 0 0 0 0 3.24m1.39 9.74v-8.37H5.07v8.37h2.78z" />
+        </svg>
+      );
+    case "instagram":
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+        </svg>
+      );
+    case "email":
+      return <Mail className={className} />;
+    case "website":
+      return <Globe className={className} />;
+    case "phone":
+    default:
+      return <Phone className={className} />;
+  }
+}
+
+export function getChannelBadgeClass(type: ChannelType) {
+  switch (type) {
+    case "whatsapp":
+      return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20";
+    case "facebook":
+      return "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/20";
+    case "teams":
+      return "bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/30 hover:bg-violet-500/20";
+    case "telegram":
+      return "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30 hover:bg-sky-500/20";
+    case "linkedin":
+      return "bg-blue-600/10 text-blue-700 dark:text-blue-400 border-blue-600/30 hover:bg-blue-600/20";
+    case "instagram":
+      return "bg-pink-500/10 text-pink-700 dark:text-pink-400 border-pink-500/30 hover:bg-pink-500/20";
+    case "email":
+      return "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/20";
+    case "website":
+      return "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/20";
+    case "phone":
+    default:
+      return "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/20";
+  }
+}
+
+export function getChannelHref(type: ChannelType, val: string) {
+  const v = (val || "").trim();
+  switch (type) {
+    case "phone":
+      return `tel:${v.replace(/[^0-9+]/g, "")}`;
+    case "whatsapp":
+      return `https://wa.me/${v.replace(/[^0-9]/g, "")}`;
+    case "email":
+      return `mailto:${v}`;
+    case "facebook":
+      return v.startsWith("http") ? v : `https://facebook.com/${v.replace(/^@/, "")}`;
+    case "teams":
+      return v.startsWith("http") ? v : `https://teams.microsoft.com/l/chat/0/0?users=${encodeURIComponent(v)}`;
+    case "telegram":
+      return v.startsWith("http") ? v : `https://t.me/${v.replace(/^@/, "")}`;
+    case "linkedin":
+      return v.startsWith("http") ? v : `https://linkedin.com/in/${v.replace(/^@/, "")}`;
+    case "instagram":
+      return v.startsWith("http") ? v : `https://instagram.com/${v.replace(/^@/, "")}`;
+    case "website":
+      return v.startsWith("http") ? v : `https://${v}`;
+    default:
+      return v.startsWith("http") ? v : `https://${v}`;
+  }
+}
+
+export const CHANNEL_TAGS = ["Primary", "Work", "Personal", "Support", "Direct", "Office", "Billing"];
+
 export type VendorClientItem = {
+  channels?: ClientContactChannel[];
   id: number;
   name: string;
   company_name: string | null;
@@ -131,6 +279,8 @@ export type VendorClientItem = {
   created_at: string;
   updated_at?: string;
 };
+
+export type ClientRecord = VendorClientItem;
 
 const ENTITY_TYPES = [
   { id: "client", label: "Corporate Client", badgeColor: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-300" },
@@ -205,6 +355,9 @@ export default function SalesClientsPage() {
   const [formStatus, setFormStatus] = useState<"active" | "inactive">("active");
 
   // Form Fields - Tab 2: Multiple Contacts (Phones & Emails)
+  const [formChannels, setFormChannels] = useState<ClientContactChannel[]>([
+    { id: "1", type: "phone", value: "", label: "Primary", is_primary: true },
+  ]);
   const [formPhones, setFormPhones] = useState<PhoneEntry[]>([
     { id: "1", number: "", label: "Primary Mobile", is_primary: true },
   ]);
@@ -281,6 +434,39 @@ export default function SalesClientsPage() {
   useEffect(() => {
     fetchRecords();
   }, [fetchRecords]);
+
+
+  const handleAddChannel = (type: ChannelType = "phone") => {
+    setFormChannels((prev) => [
+      ...prev,
+      {
+        id: `ch_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        type,
+        value: "",
+        label: type === "phone" ? "Primary" : type === "whatsapp" ? "WhatsApp" : "Work",
+        is_primary: prev.length === 0,
+      },
+    ]);
+  };
+
+  const handleUpdateChannel = (index: number, patch: Partial<ClientContactChannel>) => {
+    setFormChannels((prev) =>
+      prev.map((c, i) => (i === index ? { ...c, ...patch } : c))
+    );
+  };
+
+  const handleRemoveChannel = (index: number) => {
+    setFormChannels((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSetPrimaryChannel = (index: number) => {
+    setFormChannels((prev) =>
+      prev.map((c, i) => ({
+        ...c,
+        is_primary: i === index,
+      }))
+    );
+  };
 
   const handleAddPhone = () => {
     setFormPhones((prev) => [
@@ -372,6 +558,12 @@ export default function SalesClientsPage() {
     setFormNotes("");
     setFormStatus("active");
 
+    // Communication Channels
+    setFormChannels([
+      { id: "1", type: "phone", value: "", label: "Primary", is_primary: true },
+      { id: "2", type: "whatsapp", value: "", label: "WhatsApp", is_primary: false },
+      { id: "3", type: "email", value: "", label: "Work", is_primary: false },
+    ]);
     // Multiple Phones
     setFormPhones([{ id: "1", number: "", label: "Primary Mobile", is_primary: true }]);
     // Multiple Emails
@@ -403,6 +595,75 @@ export default function SalesClientsPage() {
     setFormDescription(item.description || "");
     setFormNotes(item.notes || "");
     setFormStatus(item.status || "active");
+
+    // Channels
+    let initialChannels: ClientContactChannel[] = [];
+    if (Array.isArray(item.channels) && item.channels.length > 0) {
+      initialChannels = item.channels.map((ch, idx) => ({
+        id: ch.id || String(idx + 1),
+        type: ch.type || "phone",
+        value: ch.value || "",
+        label: ch.label || "Primary",
+        is_primary: Boolean(ch.is_primary),
+      }));
+    } else {
+      if (Array.isArray(item.phones) && item.phones.length > 0) {
+        item.phones.forEach((p, idx) => {
+          if (p.number) {
+            initialChannels.push({
+              id: `p_${idx}`,
+              type: p.label?.toLowerCase().includes("whatsapp") ? "whatsapp" : "phone",
+              value: p.number,
+              label: p.label || (p.is_primary ? "Primary" : "Work"),
+              is_primary: p.is_primary,
+            });
+          }
+        });
+      } else if (item.phone) {
+        initialChannels.push({
+          id: "p_0",
+          type: "phone",
+          value: item.phone,
+          label: "Primary",
+          is_primary: true,
+        });
+      }
+
+      if (Array.isArray(item.emails) && item.emails.length > 0) {
+        item.emails.forEach((e, idx) => {
+          if (e.email) {
+            initialChannels.push({
+              id: `e_${idx}`,
+              type: "email",
+              value: e.email,
+              label: e.label || "Work",
+              is_primary: e.is_primary,
+            });
+          }
+        });
+      } else if (item.email) {
+        initialChannels.push({
+          id: "e_0",
+          type: "email",
+          value: item.email,
+          label: "Work",
+          is_primary: false,
+        });
+      }
+
+      if (item.website) {
+        initialChannels.push({
+          id: "w_0",
+          type: "website",
+          value: item.website,
+          label: "Website",
+        });
+      }
+    }
+    if (initialChannels.length === 0) {
+      initialChannels.push({ id: "1", type: "phone", value: "", label: "Primary", is_primary: true });
+    }
+    setFormChannels(initialChannels);
 
     // Phones
     if (Array.isArray(item.phones) && item.phones.length > 0) {
@@ -471,23 +732,37 @@ export default function SalesClientsPage() {
     e.preventDefault();
     const company = formCompanyName.trim();
     const contact = formName.trim();
-    if (!company && !contact) {
-      toast.error("Please enter a business name or contact person name");
+    if (!contact && !company) {
+      toast.error("Please enter contact person name");
       setDialogTab("company");
       return;
     }
 
-    const validPhones = formPhones.filter((p) => p.number.trim().length > 0);
-    const validEmails = formEmails.filter((e) => e.email.trim().length > 0);
-    const primaryPhone = validPhones.find((p) => p.is_primary)?.number || validPhones[0]?.number || "";
-    const primaryEmail = validEmails.find((e) => e.is_primary)?.email || validEmails[0]?.email || "";
+    const validChannels = formChannels.filter((c) => c.value.trim().length > 0);
+    const primaryPhoneCh = validChannels.find((c) => (c.type === "phone" || c.type === "whatsapp") && c.is_primary)
+      || validChannels.find((c) => c.type === "phone" || c.type === "whatsapp");
+    const primaryEmailCh = validChannels.find((c) => c.type === "email" && c.is_primary)
+      || validChannels.find((c) => c.type === "email");
+
+    const validPhones = validChannels.filter((c) => c.type === "phone" || c.type === "whatsapp").map((c) => ({
+      number: c.value,
+      label: c.label || (c.type === "whatsapp" ? "WhatsApp" : "Primary"),
+      is_primary: c.is_primary,
+    }));
+    const validEmails = validChannels.filter((c) => c.type === "email").map((c) => ({
+      email: c.value,
+      label: c.label || "Work",
+      is_primary: c.is_primary,
+    }));
+    const primaryPhone = primaryPhoneCh?.value || "";
+    const primaryEmail = primaryEmailCh?.value || "";
 
     setSaving(true);
     try {
       const payload = {
         id: editingItem?.id,
         name: contact || company,
-        company_name: company || contact,
+        company_name: company || null,
         contact_person: contact || company,
         category: formCategory || "Corporate Client",
         vendor_type: formType || "corporate",
@@ -496,8 +771,9 @@ export default function SalesClientsPage() {
         email: primaryEmail || null,
         phones: validPhones,
         emails: validEmails,
-        contacts: formAdditionalContacts.filter((c) => c.name.trim().length > 0),
-        website: formWebsite.trim() || null,
+        channels: validChannels,
+        contacts: [],
+        website: normalizeUrl(formWebsite),
         address: formAddress.trim() || null,
         city: formCity.trim() || null,
         state: formState.trim() || null,
@@ -575,6 +851,159 @@ export default function SalesClientsPage() {
     const categoriesCount = new Set(records.map((r) => r.category).filter(Boolean)).size;
     return { total, activeClients, corporateCount, categoriesCount };
   }, [records]);
+
+  // Password & Access Management State
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [passwordClient, setPasswordClient] = useState<ClientRecord | null>(null);
+  const [passwordValue, setPasswordValue] = useState("");
+  const [passwordEmail, setPasswordEmail] = useState("");
+  const [passwordPhone, setPasswordPhone] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [existingPassword, setExistingPassword] = useState<string | null>(null);
+  const [hasExistingAccount, setHasExistingAccount] = useState(false);
+  const [copiedCredentials, setCopiedCredentials] = useState(false);
+
+  const generateRandomPassword = () => {
+    const chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let rand = "";
+    for (let i = 0; i < 6; i++) {
+      rand += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const special = ["@", "#", "!", "$", "%"][Math.floor(Math.random() * 5)];
+    return `Client@${rand}${special}`;
+  };
+
+  const handleOpenPasswordDialog = async (client: ClientRecord) => {
+    setPasswordClient(client);
+    setPasswordDialogOpen(true);
+    setPasswordLoading(true);
+    setCopiedCredentials(false);
+    setShowPassword(false);
+
+    const chEmail = Array.isArray(client.channels)
+      ? client.channels.find((c: any) => c.type === "email")?.value
+      : "";
+    const chPhone = Array.isArray(client.channels)
+      ? client.channels.find((c: any) => c.type === "phone" || c.type === "whatsapp")?.value
+      : "";
+
+    const emailToUse = client.email || chEmail || "";
+    const phoneToUse = client.phone || chPhone || "";
+    setPasswordEmail(emailToUse);
+    setPasswordPhone(phoneToUse);
+
+    const newPass = generateRandomPassword();
+    setPasswordValue(newPass);
+
+    try {
+      const headers: Record<string, string> = {};
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+      const res = await fetch(`/api/admin/sales/clients/credentials?clientId=${client.id}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setHasExistingAccount(Boolean(data.exists));
+        if (data.plainPassword) {
+          setExistingPassword(data.plainPassword);
+          setPasswordValue(data.plainPassword);
+        } else {
+          setExistingPassword(null);
+        }
+        if (data.user?.email) setPasswordEmail(data.user.email);
+        if (data.user?.phone) setPasswordPhone(data.user.phone);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const handleCopyCredentials = () => {
+    const loginIdentifier = passwordEmail || passwordPhone || "Primary Email / Phone";
+    const textToCopy = `Client Portal Access Credentials:
+Login URL: ${typeof window !== "undefined" ? window.location.origin : ""}/admin/login
+Username: ${loginIdentifier}
+Password: ${passwordValue}`;
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(textToCopy);
+      setCopiedCredentials(true);
+      toast.success("Login credentials copied to clipboard!");
+      setTimeout(() => setCopiedCredentials(false), 2500);
+    }
+  };
+
+  const handleSavePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordClient) return;
+    if (!passwordValue || passwordValue.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    if (!passwordEmail && !passwordPhone) {
+      toast.error("Please provide either an email address or phone number for login");
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+      const res = await fetch("/api/admin/sales/clients/credentials", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          clientId: passwordClient.id,
+          email: passwordEmail,
+          phone: passwordPhone,
+          password: passwordValue,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to set client portal password");
+
+      toast.success("Client portal credentials generated and saved successfully!");
+      setHasExistingAccount(true);
+      setExistingPassword(passwordValue);
+      setPasswordDialogOpen(false);
+      fetchRecords();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save password");
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
+  const handleToggleStatus = async (item: ClientRecord) => {
+    const newStatus = item.status === "active" ? "inactive" : "active";
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+      const res = await fetch("/api/admin/sales/clients", {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ id: item.id, status: newStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update client status");
+
+      toast.success(
+        newStatus === "active"
+          ? `${item.company_name || item.name} is now Active`
+          : `${item.company_name || item.name} has been Deactivated`
+      );
+      setRecords((prev) =>
+        prev.map((r) => (r.id === item.id ? { ...r, status: newStatus } : r))
+      );
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update status");
+    }
+  };
 
   // Category options for filter
   const distinctCategories = useMemo(() => {
@@ -687,127 +1116,21 @@ export default function SalesClientsPage() {
         </Card>
       </div>
 
-      {/* Tabs & Controls */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 border-b pb-4">
-        {/* Quick Tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-xl border border-border/50 flex-wrap">
-          <button
-            onClick={() => setActiveTab("all")}
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-              activeTab === "all"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            All Clients ({records.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("client")}
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
-              activeTab === "client"
-                ? "bg-background text-blue-600 dark:text-blue-400 shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Briefcase className="w-3.5 h-3.5" />
-            Corporate Clients ({records.filter((r) => r.vendor_type === "client" || r.vendor_type === "corporate").length})
-          </button>
-          <button
-            onClick={() => setActiveTab("sponsor")}
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
-              activeTab === "sponsor"
-                ? "bg-background text-amber-600 dark:text-amber-400 shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <HeartHandshake className="w-3.5 h-3.5" />
-            Sponsors & Donors ({records.filter((r) => r.vendor_type === "sponsor").length})
-          </button>
-          <button
-            onClick={() => setActiveTab("partner")}
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
-              activeTab === "partner"
-                ? "bg-background text-purple-600 dark:text-purple-400 shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <GraduationCap className="w-3.5 h-3.5" />
-            Educational Partners ({records.filter((r) => r.vendor_type === "partner" || r.vendor_type === "recruiter").length})
-          </button>
-        </div>
-
-        {/* View Switcher */}
-        <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/50 self-end md:self-auto shrink-0">
-          <Button
-            variant={viewMode === "cards" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setViewMode("cards")}
-            className="h-8 px-2.5 rounded-lg text-xs"
-          >
-            <LayoutGrid className="w-3.5 h-3.5 mr-1" />
-            Cards
-          </Button>
-          <Button
-            variant={viewMode === "table" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setViewMode("table")}
-            className="h-8 px-2.5 rounded-lg text-xs"
-          >
-            <TableIcon className="w-3.5 h-3.5 mr-1" />
-            Table
-          </Button>
-        </div>
-      </div>
-
       {/* Filter Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         {/* Search */}
-        <div className="relative">
+        <div className="relative flex-1">
           <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
           <Input
-            placeholder="Search by name, company, phone..."
+            placeholder="Search by name, company, phone, email, contact..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9 h-10 rounded-xl text-xs bg-background"
           />
         </div>
 
-        {/* Entity Type Filter */}
-        <div>
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="h-10 text-xs bg-background rounded-xl">
-              <SelectValue placeholder="All Client Types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">All Client Types</SelectItem>
-              {ENTITY_TYPES.map((t) => (
-                <SelectItem key={t.id} value={t.id} className="text-xs">
-                  {t.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Category Filter */}
-        <div>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="h-10 text-xs bg-background rounded-xl">
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">All Categories</SelectItem>
-              {distinctCategories.map((cat) => (
-                <SelectItem key={cat} value={cat} className="text-xs">
-                  {cat}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
         {/* Status Filter */}
-        <div>
+        <div className="w-full sm:w-48 shrink-0">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="h-10 text-xs bg-background rounded-xl">
               <SelectValue placeholder="All Statuses" />
@@ -855,28 +1178,7 @@ export default function SalesClientsPage() {
               >
                 <div>
                   <div className="p-5 pb-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant="outline"
-                          className={`text-[11px] font-semibold uppercase tracking-wider rounded-lg px-2 py-0.5 ${entityTypeObj.badgeColor}`}
-                        >
-                          {entityTypeObj.label}
-                        </Badge>
-                        <Badge variant="secondary" className="text-[11px] font-medium rounded-lg">
-                          {item.category}
-                        </Badge>
-                      </div>
-
-                      <Badge
-                        variant={item.status === "active" ? "default" : "destructive"}
-                        className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full"
-                      >
-                        {item.status}
-                      </Badge>
-                    </div>
-
-                    <h3 className="text-base font-bold text-foreground mt-3 line-clamp-1">
+                    <h3 className="text-base font-bold text-foreground line-clamp-1">
                       {item.company_name || item.name}
                     </h3>
                     {item.company_name && item.company_name !== item.name && (
@@ -891,37 +1193,45 @@ export default function SalesClientsPage() {
                       </p>
                     )}
 
-                    {/* Meta Fields */}
+                    {/* Contact Channels (Phone, WhatsApp, Email, FB, Teams, Telegram, etc.) */}
                     <div className="space-y-1.5 mt-4 pt-3 border-t text-xs text-muted-foreground">
-                      {item.phone && (
-                        <div className="flex items-center gap-2">
-                          <Phone className="w-3.5 h-3.5 text-primary shrink-0" />
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <a href={`tel:${item.phone}`} className="hover:underline hover:text-foreground font-mono">
-                              {item.phone}
+                      {Array.isArray(item.channels) && item.channels.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          {item.channels.map((ch, idx) => (
+                            <a
+                              key={ch.id || idx}
+                              href={getChannelHref(ch.type, ch.value)}
+                              target={ch.type === "phone" ? "_self" : "_blank"}
+                              rel="noopener noreferrer"
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-all shadow-2xs ${getChannelBadgeClass(
+                                ch.type
+                              )}`}
+                              title={`${ch.label ? `${ch.label}: ` : ""}${ch.value}`}
+                            >
+                              {renderChannelIcon(ch.type, "w-3.5 h-3.5 shrink-0")}
+                              <span className="truncate max-w-[170px]">{ch.value}</span>
                             </a>
-                            {item.phones && item.phones.length > 1 && (
-                              <Badge variant="secondary" className="text-[10px] px-1 py-0 font-mono h-4">
-                                +{item.phones.length - 1} more
-                              </Badge>
-                            )}
-                          </div>
+                          ))}
                         </div>
-                      )}
-                      {item.email && (
-                        <div className="flex items-center gap-2">
-                          <Mail className="w-3.5 h-3.5 text-primary shrink-0" />
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <a href={`mailto:${item.email}`} className="hover:underline hover:text-foreground truncate max-w-[170px]">
-                              {item.email}
-                            </a>
-                            {item.emails && item.emails.length > 1 && (
-                              <Badge variant="secondary" className="text-[10px] px-1 py-0 font-sans h-4">
-                                +{item.emails.length - 1} more
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
+                      ) : (
+                        <>
+                          {item.phone && (
+                            <div className="flex items-center gap-2">
+                              <Phone className="w-3.5 h-3.5 text-primary shrink-0" />
+                              <a href={`tel:${item.phone}`} className="hover:underline hover:text-foreground font-mono">
+                                {item.phone}
+                              </a>
+                            </div>
+                          )}
+                          {item.email && (
+                            <div className="flex items-center gap-2">
+                              <Mail className="w-3.5 h-3.5 text-primary shrink-0" />
+                              <a href={`mailto:${item.email}`} className="hover:underline hover:text-foreground truncate max-w-[170px]">
+                                {item.email}
+                              </a>
+                            </div>
+                          )}
+                        </>
                       )}
                       {item.website && (
                         <div className="flex items-center gap-2">
@@ -948,24 +1258,59 @@ export default function SalesClientsPage() {
                 </div>
 
                 {/* Footer Actions */}
-                <div className="p-3 bg-muted/30 border-t flex items-center justify-end gap-1.5">
+                <div className="p-3 bg-muted/30 border-t flex items-center justify-between gap-1.5 flex-wrap">
+                  {/* Status Active / Deactive Toggle Button */}
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    onClick={() => handleOpenEdit(item)}
-                    className="h-8 px-2.5 rounded-lg text-xs font-semibold hover:bg-background"
+                    onClick={() => handleToggleStatus(item)}
+                    className={`h-8 px-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      item.status === "active"
+                        ? "border-emerald-500/40 text-emerald-600 bg-emerald-500/10 hover:bg-rose-500/10 hover:text-rose-600 hover:border-rose-400"
+                        : "border-muted-foreground/30 text-muted-foreground bg-muted/40 hover:bg-emerald-500/10 hover:text-emerald-600 hover:border-emerald-400"
+                    }`}
+                    title={item.status === "active" ? "Active (Click to Deactivate)" : "Inactive (Click to Activate)"}
                   >
-                    <Edit2 className="w-3.5 h-3.5 mr-1" />
-                    Edit
+                    <span className={`w-2 h-2 rounded-full mr-1.5 ${item.status === "active" ? "bg-emerald-500" : "bg-muted-foreground"}`} />
+                    {item.status === "active" ? "Active" : "Inactive"}
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setDeleteConfirmId(item.id)}
-                    className="h-8 px-2.5 rounded-lg text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-500/10"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
+
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    {/* Create / View Password Button */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleOpenPasswordDialog(item)}
+                      className="h-8 px-2.5 rounded-lg text-xs font-semibold border-primary/30 hover:bg-primary/10 text-primary gap-1.5 cursor-pointer shadow-2xs"
+                      title="Generate or view client portal login password"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                      <span>Password</span>
+                    </Button>
+
+                    {/* Edit Button */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleOpenEdit(item)}
+                      className="h-8 px-2.5 rounded-lg text-xs font-semibold hover:bg-background cursor-pointer"
+                      title="Edit client record"
+                    >
+                      <Edit2 className="w-3.5 h-3.5 mr-1" />
+                      Edit
+                    </Button>
+
+                    {/* Delete Button */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setDeleteConfirmId(item.id)}
+                      className="h-8 px-2.5 rounded-lg text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 cursor-pointer"
+                      title="Delete client record"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </Card>
             );
@@ -1007,44 +1352,88 @@ export default function SalesClientsPage() {
                         </Badge>
                       </td>
                       <td className="p-3.5">{item.category}</td>
-                      <td className="p-3.5 space-y-0.5 font-mono">
-                        {item.phone && (
-                          <div className="flex items-center gap-1">
-                            <span>{item.phone}</span>
-                            {item.phones && item.phones.length > 1 && (
-                              <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5">
-                                +{item.phones.length - 1}
+                      <td className="p-3.5 space-y-1">
+                        {Array.isArray(item.channels) && item.channels.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 max-w-[220px]">
+                            {item.channels.slice(0, 3).map((ch, i) => (
+                              <a
+                                key={ch.id || i}
+                                href={getChannelHref(ch.type, ch.value)}
+                                target={ch.type === "phone" ? "_self" : "_blank"}
+                                rel="noopener noreferrer"
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] border ${getChannelBadgeClass(ch.type)}`}
+                                title={`${ch.label || ch.type}: ${ch.value}`}
+                              >
+                                {renderChannelIcon(ch.type, "w-3 h-3 shrink-0")}
+                                <span className="truncate max-w-[110px]">{ch.value}</span>
+                              </a>
+                            ))}
+                            {item.channels.length > 3 && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                                +{item.channels.length - 3}
                               </Badge>
                             )}
                           </div>
-                        )}
-                        {item.email && (
-                          <div className="text-muted-foreground font-sans truncate max-w-[160px] flex items-center gap-1">
-                            <span className="truncate">{item.email}</span>
-                            {item.emails && item.emails.length > 1 && (
-                              <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5">
-                                +{item.emails.length - 1}
-                              </Badge>
+                        ) : (
+                          <>
+                            {item.phone && (
+                              <div className="flex items-center gap-1 font-mono">
+                                <span>{item.phone}</span>
+                                {item.phones && item.phones.length > 1 && (
+                                  <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5">
+                                    +{item.phones.length - 1}
+                                  </Badge>
+                                )}
+                              </div>
                             )}
-                          </div>
+                            {item.email && (
+                              <div className="text-muted-foreground font-sans truncate max-w-[160px] flex items-center gap-1">
+                                <span className="truncate">{item.email}</span>
+                                {item.emails && item.emails.length > 1 && (
+                                  <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5">
+                                    +{item.emails.length - 1}
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
+                          </>
                         )}
                       </td>
                       <td className="p-3.5 max-w-[200px] truncate">{item.address || "-"}</td>
                       <td className="p-3.5">
-                        <Badge
-                          variant={item.status === "active" ? "default" : "destructive"}
-                          className="text-[10px] uppercase font-bold"
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleToggleStatus(item)}
+                          className={`h-7 px-2 rounded-lg text-[10px] font-semibold cursor-pointer transition-all ${
+                            item.status === "active"
+                              ? "border-emerald-500/40 text-emerald-600 bg-emerald-500/10 hover:bg-rose-500/10 hover:text-rose-600"
+                              : "border-muted-foreground/30 text-muted-foreground bg-muted/40 hover:bg-emerald-500/10 hover:text-emerald-600"
+                          }`}
+                          title={item.status === "active" ? "Click to Deactivate" : "Click to Activate"}
                         >
-                          {item.status}
-                        </Badge>
+                          <span className={`w-1.5 h-1.5 rounded-full mr-1 ${item.status === "active" ? "bg-emerald-500" : "bg-muted-foreground"}`} />
+                          {item.status === "active" ? "Active" : "Inactive"}
+                        </Button>
                       </td>
                       <td className="p-3.5 pr-5 text-right">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenPasswordDialog(item)}
+                            className="h-7 px-2 rounded-lg text-xs font-semibold border-primary/30 text-primary hover:bg-primary/10 gap-1 cursor-pointer"
+                            title="Generate or view client portal password"
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                            <span>Password</span>
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleOpenEdit(item)}
-                            className="h-7 w-7 p-0 rounded-lg hover:bg-muted"
+                            className="h-7 w-7 p-0 rounded-lg hover:bg-muted cursor-pointer"
+                            title="Edit"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </Button>
@@ -1052,7 +1441,8 @@ export default function SalesClientsPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => setDeleteConfirmId(item.id)}
-                            className="h-7 w-7 p-0 rounded-lg text-rose-600 hover:bg-rose-500/10"
+                            className="h-7 w-7 p-0 rounded-lg text-rose-600 hover:bg-rose-500/10 cursor-pointer"
+                            title="Delete"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
@@ -1135,16 +1525,12 @@ export default function SalesClientsPage() {
                   {/* Name and Company Name */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <Label className="text-xs font-semibold">Business / Company Name *</Label>
+                      <Label className="text-xs font-semibold">Business / Company Name <span className="text-muted-foreground font-normal">(Optional)</span></Label>
                       <Input
                         placeholder="e.g., Apex Tech Solutions Pvt Ltd"
                         value={formCompanyName}
-                        onChange={(e) => {
-                          setFormCompanyName(e.target.value);
-                          if (!formName) setFormName(e.target.value);
-                        }}
+                        onChange={(e) => setFormCompanyName(e.target.value)}
                         className="text-xs h-9"
-                        required
                       />
                     </div>
 
@@ -1164,7 +1550,7 @@ export default function SalesClientsPage() {
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold">Website / Profile Link</Label>
                     <Input
-                      placeholder="https://company.com"
+                      placeholder="e.g. xyz.com, www.xyz.com, or https://..."
                       value={formWebsite}
                       onChange={(e) => setFormWebsite(e.target.value)}
                       className="text-xs h-9"
@@ -1187,231 +1573,125 @@ export default function SalesClientsPage() {
                 </div>
               )}
 
-              {/* TAB 2: CONTACTS & NUMBERS */}
+              {/* TAB 2: COMMUNICATION CHANNELS & SOCIAL PROFILES */}
               {dialogTab === "contacts" && (
-                <div className="space-y-5">
-                  {/* Phone Numbers Section */}
+                <div className="space-y-4">
                   <div className="rounded-xl border p-4 bg-card/60 space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Phone className="w-4 h-4 text-primary" />
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Phone Numbers</h4>
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-                          {formPhones.length}
-                        </Badge>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                          Contact Channels & Social Profiles ({formChannels.length})
+                        </h4>
                       </div>
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={handleAddPhone}
-                        className="text-xs h-7 gap-1 font-semibold"
+                        onClick={() => handleAddChannel("phone")}
+                        className="text-xs h-7 gap-1 font-semibold cursor-pointer"
                       >
                         <Plus className="w-3 h-3" />
-                        Add Phone
+                        Add Channel
                       </Button>
                     </div>
+
+                    <p className="text-[11px] text-muted-foreground">
+                      Choose what you want to add: Phone Number, WhatsApp, Email, Facebook Profile Link, Microsoft Teams, Telegram, etc.
+                    </p>
 
                     <div className="space-y-2.5 pt-1">
-                      {formPhones.map((phoneItem, idx) => (
-                        <div key={phoneItem.id || idx} className="flex items-center gap-2">
-                          <Input
-                            placeholder="+91 98765 43210"
-                            value={phoneItem.number}
-                            onChange={(e) => handleUpdatePhone(idx, { number: e.target.value })}
-                            className="text-xs h-9 font-mono flex-1"
-                          />
-                          <Select
-                            value={phoneItem.label}
-                            onValueChange={(val) => handleUpdatePhone(idx, { label: val })}
+                      {formChannels.map((ch, idx) => {
+                        const opt = CHANNEL_OPTIONS.find((o) => o.id === ch.type) || CHANNEL_OPTIONS[0];
+                        return (
+                          <div
+                            key={ch.id || idx}
+                            className="flex flex-col sm:flex-row sm:items-center gap-2 p-2.5 rounded-lg border bg-background shadow-2xs"
                           >
-                            <SelectTrigger className="text-xs h-9 w-36">
-                              <SelectValue placeholder="Type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {PHONE_LABELS.map((lbl) => (
-                                <SelectItem key={lbl} value={lbl} className="text-xs">
-                                  {lbl}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-
-                          <button
-                            type="button"
-                            onClick={() => handleSetPrimaryPhone(idx)}
-                            className={`px-2 py-1.5 text-[11px] font-semibold rounded-md transition-all shrink-0 ${
-                              phoneItem.is_primary
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-muted text-muted-foreground hover:text-foreground"
-                            }`}
-                          >
-                            {phoneItem.is_primary ? "Primary" : "Make Primary"}
-                          </button>
-
-                          {formPhones.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemovePhone(idx)}
-                              className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-500/10 shrink-0"
+                            {/* Type Dropdown */}
+                            <Select
+                              value={ch.type}
+                              onValueChange={(val: ChannelType) => {
+                                handleUpdateChannel(idx, {
+                                  type: val,
+                                  label: val === "phone" ? "Primary" : val === "whatsapp" ? "WhatsApp" : "Work",
+                                });
+                              }}
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                              <SelectTrigger className="text-xs h-9 w-full sm:w-48 bg-muted/20 font-medium">
+                                <div className="flex items-center gap-1.5 truncate">
+                                  {renderChannelIcon(ch.type, "w-3.5 h-3.5 shrink-0")}
+                                  <SelectValue />
+                                </div>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {CHANNEL_OPTIONS.map((o) => (
+                                  <SelectItem key={o.id} value={o.id} className="text-xs">
+                                    <div className="flex items-center gap-2">
+                                      {renderChannelIcon(o.id, "w-3.5 h-3.5 shrink-0")}
+                                      <span>{o.label}</span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
 
-                  {/* Email Addresses Section */}
-                  <div className="rounded-xl border p-4 bg-card/60 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Mail className="w-4 h-4 text-primary" />
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Email Addresses</h4>
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-                          {formEmails.length}
-                        </Badge>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleAddEmail}
-                        className="text-xs h-7 gap-1 font-semibold"
-                      >
-                        <Plus className="w-3 h-3" />
-                        Add Email
-                      </Button>
-                    </div>
+                            {/* Value Input */}
+                            <Input
+                              placeholder={opt.placeholder}
+                              value={ch.value}
+                              onChange={(e) => handleUpdateChannel(idx, { value: e.target.value })}
+                              className="text-xs h-9 flex-1"
+                            />
 
-                    <div className="space-y-2.5 pt-1">
-                      {formEmails.map((emailItem, idx) => (
-                        <div key={emailItem.id || idx} className="flex items-center gap-2">
-                          <Input
-                            type="email"
-                            placeholder="partner@company.com"
-                            value={emailItem.email}
-                            onChange={(e) => handleUpdateEmail(idx, { email: e.target.value })}
-                            className="text-xs h-9 flex-1"
-                          />
-                          <Select
-                            value={emailItem.label}
-                            onValueChange={(val) => handleUpdateEmail(idx, { label: val })}
-                          >
-                            <SelectTrigger className="text-xs h-9 w-36">
-                              <SelectValue placeholder="Type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {EMAIL_LABELS.map((lbl) => (
-                                <SelectItem key={lbl} value={lbl} className="text-xs">
-                                  {lbl}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-
-                          <button
-                            type="button"
-                            onClick={() => handleSetPrimaryEmail(idx)}
-                            className={`px-2 py-1.5 text-[11px] font-semibold rounded-md transition-all shrink-0 ${
-                              emailItem.is_primary
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-muted text-muted-foreground hover:text-foreground"
-                            }`}
-                          >
-                            {emailItem.is_primary ? "Primary" : "Make Primary"}
-                          </button>
-
-                          {formEmails.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemoveEmail(idx)}
-                              className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-500/10 shrink-0"
+                            {/* Tag / Label Dropdown */}
+                            <Select
+                              value={ch.label || "Work"}
+                              onValueChange={(val) => handleUpdateChannel(idx, { label: val })}
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                              <SelectTrigger className="text-xs h-9 w-28 bg-muted/20">
+                                <SelectValue placeholder="Tag" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {CHANNEL_TAGS.map((tag) => (
+                                  <SelectItem key={tag} value={tag} className="text-xs">
+                                    {tag}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
 
-                  {/* Additional Representatives (Optional) */}
-                  <div className="rounded-xl border p-4 bg-card/60 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <UsersRound className="w-4 h-4 text-primary" />
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Key Representatives</h4>
-                        {formAdditionalContacts.length > 0 && (
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-                            {formAdditionalContacts.length}
-                          </Badge>
-                        )}
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleAddContactPerson}
-                        className="text-xs h-7 gap-1 font-semibold"
-                      >
-                        <Plus className="w-3 h-3" />
-                        Add Representative
-                      </Button>
-                    </div>
-
-                    {formAdditionalContacts.length === 0 ? (
-                      <p className="text-[11px] text-muted-foreground italic">
-                        Optional: Add secondary contacts (e.g. HR Manager, Procurement Head).
-                      </p>
-                    ) : (
-                      <div className="space-y-2.5 pt-1">
-                        {formAdditionalContacts.map((c, idx) => (
-                          <div key={c.id || idx} className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center p-2.5 rounded-lg border bg-background">
-                            <Input
-                              placeholder="Full Name"
-                              value={c.name}
-                              onChange={(e) => handleUpdateContactPerson(idx, { name: e.target.value })}
-                              className="text-xs h-8"
-                            />
-                            <Input
-                              placeholder="Designation / Role"
-                              value={c.designation}
-                              onChange={(e) => handleUpdateContactPerson(idx, { designation: e.target.value })}
-                              className="text-xs h-8"
-                            />
-                            <Input
-                              placeholder="Direct Phone"
-                              value={c.phone}
-                              onChange={(e) => handleUpdateContactPerson(idx, { phone: e.target.value })}
-                              className="text-xs h-8 font-mono"
-                            />
-                            <div className="flex items-center gap-1.5">
-                              <Input
-                                placeholder="Direct Email"
-                                value={c.email}
-                                onChange={(e) => handleUpdateContactPerson(idx, { email: e.target.value })}
-                                className="text-xs h-8 flex-1"
-                              />
-                              <Button
+                            <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
+                              <button
                                 type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleRemoveContactPerson(idx)}
-                                className="h-7 w-7 p-0 text-rose-600 hover:bg-rose-500/10 shrink-0"
+                                onClick={() => handleSetPrimaryChannel(idx)}
+                                className={`px-2 py-1 text-[10px] font-semibold rounded-md transition-all cursor-pointer ${
+                                  ch.is_primary
+                                    ? "bg-primary text-primary-foreground shadow-xs"
+                                    : "bg-muted text-muted-foreground hover:text-foreground"
+                                }`}
+                                title="Set as primary contact method"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
+                                {ch.is_primary ? "Primary" : "Make Primary"}
+                              </button>
+
+                              {formChannels.length > 1 && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleRemoveChannel(idx)}
+                                  className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-500/10 shrink-0 cursor-pointer"
+                                  title="Remove channel"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1586,6 +1866,180 @@ export default function SalesClientsPage() {
         accessToken={accessToken}
         onSuccess={fetchRecords}
       />
+
+      {/* Client Portal Password / Access Dialog */}
+      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+        <DialogContent className="sm:max-w-lg rounded-2xl p-6">
+          <DialogHeader>
+            <div className="flex items-center gap-2.5 text-primary font-bold text-lg">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                <KeyRound className="w-5 h-5" />
+              </div>
+              <DialogTitle className="text-lg font-bold text-foreground">
+                Client Portal Login & Password
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground pt-1">
+              Generate portal access credentials for{" "}
+              <span className="font-semibold text-foreground">
+                {passwordClient?.company_name || passwordClient?.name}
+              </span>
+              . The client can log into the system with their email or phone number to view their profile and associated projects.
+            </DialogDescription>
+          </DialogHeader>
+
+          {passwordLoading ? (
+            <div className="flex flex-col items-center justify-center py-10">
+              <Loader2 className="w-7 h-7 animate-spin text-primary mb-2" />
+              <p className="text-xs text-muted-foreground">Checking client account status...</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSavePassword} className="space-y-4 pt-2">
+              {hasExistingAccount && existingPassword && (
+                <div className="p-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 flex items-start gap-2.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="text-xs space-y-1">
+                    <p className="font-semibold text-emerald-700 dark:text-emerald-400">
+                      Active Portal Account Found
+                    </p>
+                    <p className="text-muted-foreground text-[11px]">
+                      This client already has portal login access. You can view or reset their password below.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Login Email */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">
+                  Login Email <span className="text-muted-foreground font-normal">(Primary username)</span>
+                </Label>
+                <div className="relative">
+                  <Mail className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Input
+                    type="email"
+                    placeholder="e.g. client@company.com"
+                    value={passwordEmail}
+                    onChange={(e) => setPasswordEmail(e.target.value)}
+                    className="pl-9 h-9 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Login Phone */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">
+                  Login Phone <span className="text-muted-foreground font-normal">(Alternative username)</span>
+                </Label>
+                <div className="relative">
+                  <Phone className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Input
+                    placeholder="e.g. +91 98765 43210"
+                    value={passwordPhone}
+                    onChange={(e) => setPasswordPhone(e.target.value)}
+                    className="pl-9 h-9 text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Password Field */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">Password *</Label>
+                  <button
+                    type="button"
+                    onClick={() => setPasswordValue(generateRandomPassword())}
+                    className="text-[11px] text-primary hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    Generate Strong Password
+                  </button>
+                </div>
+                <div className="relative">
+                  <Lock className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter or generate password"
+                    value={passwordValue}
+                    onChange={(e) => setPasswordValue(e.target.value)}
+                    className="pl-9 pr-10 h-9 text-xs font-mono"
+                    required
+                    minLength={6}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((p) => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Credentials Copy Card */}
+              {passwordValue && (
+                <div className="p-3 rounded-xl bg-muted/40 border text-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-foreground text-[11px]">Portal Login Summary</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyCredentials}
+                      className="h-7 px-2 text-[11px] font-semibold gap-1.5 border-primary/20 text-primary hover:bg-primary/5 cursor-pointer"
+                    >
+                      {copiedCredentials ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-600" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copy Credentials</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <div className="text-[11px] space-y-1 font-mono text-muted-foreground bg-background p-2 rounded-lg border">
+                    <div><span className="text-foreground font-sans font-medium">Login: </span>{passwordEmail || passwordPhone || "—"}</div>
+                    <div><span className="text-foreground font-sans font-medium">Password: </span>{passwordValue}</div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setPasswordDialogOpen(false)}
+                  className="rounded-xl text-xs h-9 cursor-pointer"
+                  disabled={passwordSaving}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={passwordSaving || (!passwordEmail && !passwordPhone) || !passwordValue}
+                  className="rounded-xl text-xs h-9 font-semibold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
+                >
+                  {passwordSaving ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound className="w-3.5 h-3.5" />
+                      {hasExistingAccount ? "Update Password" : "Save & Enable Login"}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteConfirmId !== null} onOpenChange={(o) => !o && setDeleteConfirmId(null)}>

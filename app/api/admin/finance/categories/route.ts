@@ -7,6 +7,7 @@ import {
   createUnifiedFinanceCategory,
   deleteUnifiedFinanceCategory,
   listUnifiedFinanceCategories,
+  updateUnifiedFinanceCategory,
   type FinanceScope,
 } from "@/lib/queries/finance";
 
@@ -123,6 +124,50 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export async function PUT(req: NextRequest) {
+  try {
+    const user = await getAuthenticatedUser(req);
+    const body = await req.json();
+    const rawInstitutionId = body.institutionId ? Number(body.institutionId) : null;
+    const { scope, institutionId } = resolveScope(
+      user,
+      Number.isInteger(rawInstitutionId) && (rawInstitutionId ?? 0) > 0 ? rawInstitutionId : null
+    );
+
+    const oldName = String(body.oldName || "").trim();
+    const name = String(body.name || "").trim();
+    if (!oldName || !name) {
+      return jsonError("Category name is required", 400);
+    }
+
+    const targets = Array.isArray(body.targets)
+      ? (body.targets.filter((t: string) => ["income", "expense", "recurring"].includes(t)) as ("income" | "expense" | "recurring")[])
+      : [];
+
+    if (targets.length === 0) {
+      return jsonError("Select at least one page for this category (Income, Expense, or Recurring Expenses)", 400);
+    }
+
+    await updateUnifiedFinanceCategory(db, {
+      scope_type: scope,
+      institution_id: institutionId,
+      oldName,
+      name,
+      targets,
+      user_id: user.id,
+    });
+
+    const data = await listUnifiedFinanceCategories(db, {
+      scope_type: scope,
+      institution_id: institutionId,
+    });
+
+    return NextResponse.json({ success: true, message: "Category updated successfully", data });
+  } catch (error) {
+    return jsonError(error, 400);
+  }
+}
+
 export async function DELETE(req: NextRequest) {
   try {
     const user = await getAuthenticatedUser(req);
@@ -145,7 +190,12 @@ export async function DELETE(req: NextRequest) {
       name,
     });
 
-    return NextResponse.json({ success: true, message: "Category deleted successfully" });
+    const data = await listUnifiedFinanceCategories(db, {
+      scope_type: scope,
+      institution_id: institutionId,
+    });
+
+    return NextResponse.json({ success: true, message: "Category deleted successfully", data });
   } catch (error) {
     return jsonError(error, 400);
   }

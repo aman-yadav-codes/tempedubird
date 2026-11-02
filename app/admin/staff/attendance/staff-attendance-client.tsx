@@ -29,6 +29,7 @@ import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { hasPermission } from "@/lib/auth/permissions";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store";
+import { StaffAttendanceDialog } from "@/app/admin/staff/_components/staff-attendance-dialog";
 
 type StaffAttendanceStatus = "PRESENT" | "ABSENT" | "LEAVE" | "LATE" | "HALF_DAY" | "HOLIDAY";
 type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -338,6 +339,8 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
   const [pageSize, setPageSize] = useState(10);
   const [totalRows, setTotalRows] = useState(0);
   const [historyPage, setHistoryPage] = useState(1);
+  const [detailedStaffUser, setDetailedStaffUser] = useState<{ id: number; full_name: string; email?: string } | null>(null);
+  const [detailedDialogOpen, setDetailedDialogOpen] = useState(false);
   const [historyPageSize, setHistoryPageSize] = useState(10);
   const [historyTotalRows, setHistoryTotalRows] = useState(0);
   const [historyFromDate, setHistoryFromDate] = useState(today());
@@ -826,7 +829,17 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
                         />
                       </td>
                       <td className="px-4 py-3">
-                        <div className="font-medium">{row.full_name}</div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDetailedStaffUser({ id: row.staff_user_id, full_name: row.full_name, email: row.email || undefined });
+                            setDetailedDialogOpen(true);
+                          }}
+                          className="font-medium hover:underline hover:text-primary text-left cursor-pointer transition-colors"
+                          title="Click to view detailed daily attendance & working hours"
+                        >
+                          {row.full_name}
+                        </button>
                         <div className="text-xs text-muted-foreground">{row.email || `User #${row.staff_user_id}`}</div>
                       </td>
                       <td className="px-4 py-3">
@@ -1044,7 +1057,17 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
                     <tr key={row.id} className="border-b border-border/70">
                       <td className="px-4 py-3">{formatDate(row.attendance_date)}</td>
                       <td className="px-4 py-3">
-                        <div className="font-medium">{row.full_name}</div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDetailedStaffUser({ id: row.staff_user_id, full_name: row.full_name, email: row.email || undefined });
+                            setDetailedDialogOpen(true);
+                          }}
+                          className="font-medium hover:underline hover:text-primary text-left cursor-pointer transition-colors"
+                          title="Click to view detailed daily attendance & working hours"
+                        >
+                          {row.full_name}
+                        </button>
                         <div className="text-xs text-muted-foreground">{row.email || `User #${row.staff_user_id}`}</div>
                       </td>
                       <td className="px-4 py-3">
@@ -1293,6 +1316,13 @@ export function StaffAttendanceClient({ mode }: { mode: Mode }) {
           <LeaveManagement leaves={leaves} loading={loading} readOnly />
         </TabsContent>
       </Tabs>
+
+      <StaffAttendanceDialog
+        open={detailedDialogOpen}
+        onOpenChange={setDetailedDialogOpen}
+        staffUser={detailedStaffUser}
+        accessToken={accessToken}
+      />
     </div>
   );
 }

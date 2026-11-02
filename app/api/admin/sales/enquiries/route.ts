@@ -1,3 +1,4 @@
+import { recordPerformancePoints } from "@/lib/performance/performance-engine";
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
@@ -320,7 +321,24 @@ export async function POST(req: Request) {
             ]
         );
 
-        return NextResponse.json({ success: true, id: res.rows[0]?.id });
+        const createdLeadId = res.rows[0]?.id;
+        if (createdLeadId && user?.id) {
+          try {
+            await recordPerformancePoints({
+              employeeId: user.id,
+              activityType: "lead_created",
+              referenceModule: "sales_lead",
+              referenceRecordId: createdLeadId,
+              performedBy: { id: user.id, name: (user as any).full_name || "Sales Admin" },
+              customDescription: "Created prospective sales lead: " + studentName,
+              institutionId: institutionId || undefined,
+            });
+          } catch (perfErr) {
+            console.warn("[Sales Lead] Performance points warning:", perfErr);
+          }
+        }
+
+        return NextResponse.json({ success: true, id: createdLeadId });
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to record enquiry";
         return NextResponse.json({ error: message }, { status: 500 });

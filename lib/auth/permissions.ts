@@ -445,6 +445,14 @@ export function isStudentUser(
   return Boolean(user?.role_codes?.includes("student"));
 }
 
+export function isClientUser(
+  user: {
+    role_codes?: string[];
+  } | null | undefined
+) {
+  return Boolean(user?.role_codes?.includes("client"));
+}
+
 const TEACHING_ROLE_CODES = new Set([
   "teacher",
   "faculty",
@@ -500,6 +508,16 @@ export function isAdminPathVisibleForRole(
   pathname: string
 ) {
   const normalized = normalizeAdminPath(pathname);
+  if (isClientUser(user)) {
+    return (
+      normalized === "/admin/operations/tasks" ||
+      normalized.startsWith("/admin/operations/tasks/") ||
+      normalized === "/admin/my-profile" ||
+      normalized.startsWith("/admin/my-profile/") ||
+      normalized === "/admin/account" ||
+      normalized.startsWith("/admin/account/")
+    );
+  }
   if (normalized === "/admin/my-profile" || normalized.startsWith("/admin/my-profile/")) {
     return !isStudentUser(user) && !isParentUser(user);
   }
@@ -537,7 +555,13 @@ export function isAdminPathVisibleForRole(
     if (normalized === "/admin/operations/tasks") {
       return !isStudentUser(user) && !isParentUser(user);
     }
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    return (
+      isPlatformAdminUser(user) ||
+      isInstitutionAdminUser(user) ||
+      hasPermission(user, "operations.tasks.manage") ||
+      hasPermission(user, "operations.tasks.view_all") ||
+      hasPermission(user, "managestaff.tasks")
+    );
   }
 
   if (normalized === "/admin/content" || normalized.startsWith("/admin/content/")) {
@@ -911,6 +935,9 @@ export function canAccessAdminArea(
   if (
     user.role_codes?.some((role) =>
       [
+        "client",
+        "accountant",
+        "institution_accountant",
         "student",
         "parent",
         "guardian",
@@ -1149,6 +1176,9 @@ export function getRequestPermission(method: string, url: string) {
   if (pathname.includes("/api/help/categories") && verb !== "GET") return permissionForAction("settings.help_center_categories", verb);
   if (pathname.includes("/api/help/articles") && verb !== "GET") return permissionForAction("settings.help_center_articles", verb);
   if (pathname.includes("/api/help/recent-updates") && verb !== "GET") return permissionForAction("settings.help_center_updates", verb);
+  if (pathname.includes("/api/admin/settings/performance")) return AUTHENTICATED_LOOKUP_PERMISSION;
+  if (pathname.includes("/api/admin/performance/leaderboard")) return AUTHENTICATED_LOOKUP_PERMISSION;
+  if (pathname.includes("/api/admin/performance/transactions")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/sections")) return AUTHENTICATED_LOOKUP_PERMISSION;
 
   return FULL_ACCESS_PERMISSION;
@@ -1200,6 +1230,7 @@ export function hasAdminPagePermission(
   const normalized = normalizeAdminPath(pathname);
   if (!normalized.startsWith("/admin")) return true;
   if (!isAdminPathVisibleForRole(user, normalized)) return false;
+  if (isClientUser(user)) return true;
 
   if (normalized === "/admin/affiliate" || normalized.startsWith("/admin/affiliate")) return true;
 
@@ -1226,6 +1257,14 @@ export function hasAdminPagePermission(
       hasPermission(user, "settings.general.view") ||
       hasPermission(user, "institution.general_settings.view")
     );
+  }
+
+  if (normalized === "/admin/settings/performance") {
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+  }
+
+  if (normalized === "/admin/performance/leaderboard" || normalized.startsWith("/admin/performance")) {
+    return !isStudentUser(user) && !isParentUser(user);
   }
 
   if (normalized === "/admin/settings/subscription") {
@@ -1280,7 +1319,13 @@ export function hasAdminPagePermission(
     if (normalized === "/admin/operations/tasks") {
       return !isStudentUser(user) && !isParentUser(user);
     }
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    return (
+      isPlatformAdminUser(user) ||
+      isInstitutionAdminUser(user) ||
+      hasPermission(user, "operations.tasks.manage") ||
+      hasPermission(user, "operations.tasks.view_all") ||
+      hasPermission(user, "managestaff.tasks")
+    );
   }
 
   if (normalized === "/admin/company" || normalized.startsWith("/admin/company")) {
@@ -1467,6 +1512,7 @@ export function getFirstAllowedAdminPath(
   } | null | undefined
 ) {
   if (!user) return null;
+  if (isClientUser(user)) return "/admin/operations/tasks";
   const match = ADMIN_PERMISSION_MODULES.find(
     (module) =>
       isAdminPathVisibleForRole(user, module.page) &&

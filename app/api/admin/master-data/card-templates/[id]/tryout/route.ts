@@ -184,7 +184,8 @@ async function getStudents(
         AND COALESCE(prog.is_deleted, FALSE) = FALSE
       LEFT JOIN categories class_category ON class_category.id = se.class_category_id
       LEFT JOIN sections section ON section.id = se.section_id
-      WHERE se.status = 'active'
+      WHERE ($1::int IS NULL OR $1::int = $1::int)
+        AND se.status = 'active'
         AND COALESCE(se.is_deleted, FALSE) = FALSE
         AND COALESCE(u.is_deleted, FALSE) = FALSE
         AND ($2::boolean OR se.institution_id = ANY($3::int[]))
@@ -219,27 +220,28 @@ async function getStaff(
         u.email,
         u.phone,
         COALESCE(u.is_profile_complete, FALSE) AS is_profile_complete,
-        im.institution_id,
+        COALESCE(im.institution_id, up.under_institution_id) AS institution_id,
         ip.name AS institution_name,
         r.code AS role_code,
         COALESCE(desig.name, initcap(replace(r.code, '_', ' ')), 'Staff') AS role_name
       FROM users u
+      LEFT JOIN user_profiles up ON up.user_id = u.id
       LEFT JOIN institution_memberships im
         ON im.user_id = u.id
-       AND im.is_active = TRUE
        AND COALESCE(im.is_deleted, FALSE) = FALSE
+       AND ($6::int IS NULL OR im.institution_id = $6)
       LEFT JOIN roles r ON r.id = im.role_id
-      LEFT JOIN user_profiles up ON up.user_id = u.id
       LEFT JOIN designations desig ON desig.id = up.designation_id
       LEFT JOIN institution_profiles ip
-         ON ip.id = im.institution_id
+         ON ip.id = COALESCE(im.institution_id, up.under_institution_id)
         AND ip.is_active = TRUE
         AND COALESCE(ip.is_deleted, FALSE) = FALSE
-      WHERE COALESCE(u.is_deleted, FALSE) = FALSE
+      WHERE ($1::int IS NULL OR $1::int = $1::int)
+        AND COALESCE(u.is_deleted, FALSE) = FALSE
         AND u.is_active = TRUE
         AND (r.code IS NULL OR r.code NOT IN ('student', 'guardian', 'parent'))
-        AND ($2::boolean OR im.institution_id = ANY($3::int[]) OR im.institution_id IS NULL)
-        AND ($6::int IS NULL OR im.institution_id = $6)
+        AND ($2::boolean OR COALESCE(im.institution_id, up.under_institution_id) = ANY($3::int[]) OR COALESCE(im.institution_id, up.under_institution_id) IS NULL)
+        AND ($6::int IS NULL OR COALESCE(im.institution_id, up.under_institution_id) = $6)
         AND (
           $4 = ''
           OR u.full_name ILIKE $5
@@ -248,7 +250,7 @@ async function getStaff(
           OR r.code ILIKE $5
           OR desig.name ILIKE $5
         )
-      ORDER BY u.id, u.full_name
+      ORDER BY u.id, COALESCE(im.is_active, FALSE) DESC, u.full_name
       LIMIT 25
     `,
     [templateId, isPlatformAdmin, institutionIds, search, `%${search}%`, institutionId]
@@ -374,7 +376,8 @@ async function getStudentValues(
           AND COALESCE(is_deleted, FALSE) = FALSE
           AND media_type IN ('image', 'logo')
       ) media ON TRUE
-      WHERE sp.id = $2
+      WHERE ($1::int IS NULL OR $1::int = $1::int)
+        AND sp.id = $2
         AND se.status = 'active'
         AND COALESCE(se.is_deleted, FALSE) = FALSE
         AND COALESCE(u.is_deleted, FALSE) = FALSE
@@ -464,16 +467,19 @@ async function getStudentValues(
     sourceValues.netAmountPayable = sourceValues.totalFee;
     sourceValues.paymentAmount = sourceValues.totalFee;
   }
-  const defaultsResult = await db.query<{ field_values: Record<string, unknown> }>(
-    `
-      SELECT field_values
-      FROM institution_template_defaults
-      WHERE institution_id = $1 AND template_id = $2
-      LIMIT 1
-    `,
-    [row.institution_id, templateId]
-  );
-  const storedDefaults = defaultsResult.rows[0]?.field_values ?? {};
+  let storedDefaults: Record<string, unknown> = {};
+  if (row.institution_id) {
+    const defaultsResult = await db.query<{ field_values: Record<string, unknown> }>(
+      `
+        SELECT field_values
+        FROM institution_template_defaults
+        WHERE institution_id = $1::int AND template_id = $2::int
+        LIMIT 1
+      `,
+      [row.institution_id, templateId]
+    );
+    storedDefaults = defaultsResult.rows[0]?.field_values ?? {};
+  }
   const institutionDefaults = Object.fromEntries(
     Object.entries(storedDefaults)
       .filter(([key]) => key !== AUTO_GENERATE_FIELDS_KEY)
@@ -499,7 +505,7 @@ async function getStaffValues(
     `
       SELECT DISTINCT ON (u.id)
         u.id AS staff_user_id,
-        im.institution_id,
+        COALESCE(im.institution_id, up.under_institution_id) AS institution_id,
         im.join_date,
         u.full_name,
         u.email,
@@ -533,16 +539,16 @@ async function getStaffValues(
         media.logo_url,
         media.gallery_image_url
       FROM users u
+      LEFT JOIN user_profiles up ON up.user_id = u.id
       LEFT JOIN institution_memberships im
         ON im.user_id = u.id
-       AND im.is_active = TRUE
        AND COALESCE(im.is_deleted, FALSE) = FALSE
+       AND ($5::int IS NULL OR im.institution_id = $5)
       LEFT JOIN roles r ON r.id = im.role_id
-      LEFT JOIN user_profiles up ON up.user_id = u.id
       LEFT JOIN user_locations ul ON ul.user_id = u.id
       LEFT JOIN designations desig ON desig.id = up.designation_id
       LEFT JOIN institution_profiles ip
-         ON ip.id = im.institution_id
+         ON ip.id = COALESCE(im.institution_id, up.under_institution_id)
         AND ip.is_active = TRUE
         AND COALESCE(ip.is_deleted, FALSE) = FALSE
       LEFT JOIN institution_types itype ON itype.id = ip.institution_type_id
@@ -571,12 +577,20 @@ async function getStaffValues(
           AND COALESCE(is_deleted, FALSE) = FALSE
           AND media_type IN ('image', 'logo')
       ) media ON TRUE
-      WHERE u.id = $2
+      WHERE ($1::int IS NULL OR $1::int = $1::int)
+        AND u.id = $2
         AND COALESCE(u.is_deleted, FALSE) = FALSE
         AND u.is_active = TRUE
-        AND ($3::boolean OR im.institution_id = ANY($4::int[]) OR im.institution_id IS NULL)
-        AND ($5::int IS NULL OR im.institution_id = $5)
-      ORDER BY u.id, im.updated_at DESC, im.id DESC
+        AND (
+          $3::boolean 
+          OR COALESCE(im.institution_id, up.under_institution_id) = ANY($4::int[]) 
+          OR COALESCE(im.institution_id, up.under_institution_id) IS NULL
+        )
+        AND (
+          $5::int IS NULL 
+          OR COALESCE(im.institution_id, up.under_institution_id) = $5
+        )
+      ORDER BY u.id, COALESCE(im.is_active, FALSE) DESC, im.updated_at DESC NULLS LAST, im.id DESC NULLS LAST
       LIMIT 1
     `,
     [templateId, staffUserId, isPlatformAdmin, institutionIds, institutionId]
@@ -619,16 +633,19 @@ async function getStaffValues(
     "institution.logo_url": value(row.logo_url),
     "institution.gallery_image_url": value(row.gallery_image_url),
   };
-  const defaultsResult = await db.query<{ field_values: Record<string, unknown> }>(
-    `
-      SELECT field_values
-      FROM institution_template_defaults
-      WHERE institution_id = $1 AND template_id = $2
-      LIMIT 1
-    `,
-    [row.institution_id, templateId]
-  );
-  const storedDefaults = defaultsResult.rows[0]?.field_values ?? {};
+  let storedDefaults: Record<string, unknown> = {};
+  if (row.institution_id) {
+    const defaultsResult = await db.query<{ field_values: Record<string, unknown> }>(
+      `
+        SELECT field_values
+        FROM institution_template_defaults
+        WHERE institution_id = $1::int AND template_id = $2::int
+        LIMIT 1
+      `,
+      [row.institution_id, templateId]
+    );
+    storedDefaults = defaultsResult.rows[0]?.field_values ?? {};
+  }
   const institutionDefaults = Object.fromEntries(
     Object.entries(storedDefaults)
       .filter(([key]) => key !== AUTO_GENERATE_FIELDS_KEY)

@@ -6,7 +6,6 @@ import {
   AlertCircle,
   CalendarDays,
   Check,
-  ChevronDown,
   CreditCard,
   Edit2,
   Loader2,
@@ -15,10 +14,8 @@ import {
   RefreshCw,
   Search,
   Tag,
-  Tags,
   Trash2,
   TrendingUp,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -63,21 +60,23 @@ const TARGET_CONFIG: Record<CategoryTarget, { label: string; icon: typeof Trendi
     label: "Income",
     icon: TrendingUp,
     color: "text-emerald-500",
-    badgeClass: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400",
+    badgeClass: "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 dark:text-emerald-400",
   },
   expense: {
     label: "Expense",
     icon: CreditCard,
     color: "text-rose-500",
-    badgeClass: "bg-rose-500/10 text-rose-600 border-rose-500/20 dark:text-rose-400",
+    badgeClass: "bg-rose-500/10 text-rose-600 border border-rose-500/20 dark:text-rose-400",
   },
   recurring: {
     label: "Recurring",
     icon: CalendarDays,
     color: "text-indigo-500",
-    badgeClass: "bg-indigo-500/10 text-indigo-600 border-indigo-500/20 dark:text-indigo-400",
+    badgeClass: "bg-indigo-500/10 text-indigo-600 border border-indigo-500/20 dark:text-indigo-400",
   },
 };
+
+const ALL_TARGETS: CategoryTarget[] = ["income", "expense", "recurring"];
 
 export function FinanceCategoriesClient() {
   const pathname = usePathname();
@@ -146,7 +145,7 @@ export function FinanceCategoriesClient() {
       return;
     }
     if (selectedTargets.length === 0) {
-      toast.error("Select at least one page for this category");
+      toast.error("Select at least one page for this category (Income, Expense, or Recurring)");
       return;
     }
 
@@ -182,26 +181,18 @@ export function FinanceCategoriesClient() {
       return;
     }
     if (editTargets.length === 0) {
-      toast.error("Select at least one page");
+      toast.error("Select at least one page (Income, Expense, or Recurring)");
       return;
     }
 
     setSavingEdit(true);
     try {
-      // First delete old and create new with updated targets
-      const params = new URLSearchParams({ name: editingCategory.name });
-      if (activeInstitutionId) params.set("institutionId", String(activeInstitutionId));
-
-      await fetch(`/api/admin/finance/categories?${params.toString()}`, {
-        method: "DELETE",
-        headers: authHeader,
-      });
-
       const res = await fetch("/api/admin/finance/categories", {
-        method: "POST",
+        method: "PUT",
         headers: { ...authHeader, "Content-Type": "application/json" },
         body: JSON.stringify({
-          institutionId: activeInstitutionId,
+          institutionId: targetInstitutionId,
+          oldName: editingCategory.name,
           name: cleanName,
           targets: editTargets,
         }),
@@ -224,7 +215,7 @@ export function FinanceCategoriesClient() {
     setDeleting(true);
     try {
       const params = new URLSearchParams({ name: deletingCategory.name });
-      if (activeInstitutionId) params.set("institutionId", String(activeInstitutionId));
+      if (targetInstitutionId) params.set("institutionId", String(targetInstitutionId));
 
       const res = await fetch(`/api/admin/finance/categories?${params.toString()}`, {
         method: "DELETE",
@@ -235,7 +226,7 @@ export function FinanceCategoriesClient() {
 
       toast.success(`Deleted "${deletingCategory.name}"`);
       setDeletingCategory(null);
-      void fetchCategories();
+      setCategories(json.data ?? []);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete category");
     } finally {
@@ -249,14 +240,11 @@ export function FinanceCategoriesClient() {
     return categories.filter((c) => c.name.toLowerCase().includes(term));
   }, [categories, search]);
 
-  const allTargets: CategoryTarget[] = ["income", "expense", "recurring"];
-  const unselectedAddTargets = allTargets.filter((t) => !selectedTargets.includes(t));
-
   if (!isReady) return null;
 
   return (
     <div className="space-y-6">
-      {/* Header Banner matching screenshot */}
+      {/* Header Banner */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Finance Categories</h1>
@@ -269,7 +257,7 @@ export function FinanceCategoriesClient() {
         </Badge>
       </div>
 
-      {/* Add Category Section matching screenshot layout */}
+      {/* Add Category Section */}
       <form onSubmit={handleAddCategory} className="rounded-lg border bg-card/60 p-4 shadow-xs">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           {/* Text Input */}
@@ -282,73 +270,34 @@ export function FinanceCategoriesClient() {
             />
           </div>
 
-          {/* Multi-Select Pills Container */}
-          <div className="flex min-h-11 min-w-[280px] items-center justify-between gap-1.5 rounded-md border border-muted-foreground/30 bg-background px-2.5 py-1.5 shadow-xs">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {selectedTargets.map((target) => {
-                const cfg = TARGET_CONFIG[target];
-                return (
-                  <span
-                    key={target}
-                    className="inline-flex items-center gap-1 rounded-full border bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-foreground"
-                  >
-                    <span>{cfg.label}</span>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedTargets((prev) => prev.filter((t) => t !== target))}
-                      className="text-muted-foreground hover:text-foreground cursor-pointer"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </span>
-                );
-              })}
-              {selectedTargets.length === 0 && (
-                <span className="text-xs text-muted-foreground">Select pages...</span>
-              )}
-            </div>
-
-            {/* Target Selector Dropdown */}
-            <div className="flex items-center gap-1 pl-2">
-              {selectedTargets.length > 0 && (
+          {/* Quick Target Toggle Buttons */}
+          <div className="flex items-center gap-1 rounded-md border border-muted-foreground/30 bg-background p-1.5 shadow-xs">
+            <span className="text-xs text-muted-foreground px-2 font-medium hidden sm:inline">Applies to:</span>
+            {ALL_TARGETS.map((target) => {
+              const cfg = TARGET_CONFIG[target];
+              const Icon = cfg.icon;
+              const active = selectedTargets.includes(target);
+              return (
                 <button
                   type="button"
-                  onClick={() => setSelectedTargets([])}
-                  title="Clear all"
-                  className="rounded-full p-1 text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
+                  key={target}
+                  onClick={() =>
+                    setSelectedTargets((prev) =>
+                      active ? prev.filter((t) => t !== target) : [...prev, target]
+                    )
+                  }
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
+                    active
+                      ? cfg.badgeClass
+                      : "text-muted-foreground hover:bg-muted/60 opacity-60 hover:opacity-100"
+                  }`}
                 >
-                  <X className="size-3.5" />
+                  <Icon className="size-3.5" />
+                  <span>{cfg.label}</span>
+                  {active && <Check className="size-3 ml-0.5" />}
                 </button>
-              )}
-              {unselectedAddTargets.length > 0 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="rounded-full p-1 text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
-                    >
-                      <ChevronDown className="size-4" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {unselectedAddTargets.map((target) => {
-                      const cfg = TARGET_CONFIG[target];
-                      const Icon = cfg.icon;
-                      return (
-                        <DropdownMenuItem
-                          key={target}
-                          onClick={() => setSelectedTargets((prev) => [...prev, target])}
-                          className="gap-2 text-xs font-medium cursor-pointer"
-                        >
-                          <Icon className={`size-3.5 ${cfg.color}`} />
-                          Add {cfg.label}
-                        </DropdownMenuItem>
-                      );
-                    })}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-            </div>
+              );
+            })}
           </div>
 
           {/* Add Category Submit Button */}
@@ -455,7 +404,7 @@ export function FinanceCategoriesClient() {
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => setDeletingCategory(category)}
-                          className="gap-2 text-rose-600 font-medium cursor-pointer"
+                          className="gap-2 text-rose-600 focus:text-rose-600 cursor-pointer"
                         >
                           <Trash2 className="size-3.5" />
                           Delete Category
@@ -493,7 +442,7 @@ export function FinanceCategoriesClient() {
             <div className="space-y-1.5">
               <Label>Applies to Sections</Label>
               <div className="grid grid-cols-3 gap-2">
-                {allTargets.map((target) => {
+                {ALL_TARGETS.map((target) => {
                   const cfg = TARGET_CONFIG[target];
                   const Icon = cfg.icon;
                   const active = editTargets.includes(target);

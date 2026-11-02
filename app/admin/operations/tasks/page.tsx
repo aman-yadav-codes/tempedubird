@@ -1,8 +1,25 @@
 "use client";
 
+export const PROJECT_CURRENCIES = [
+  { code: "INR", symbol: "₹", label: "INR (₹) - Indian Rupee" },
+  { code: "USD", symbol: "$", label: "USD ($) - US Dollar" },
+  { code: "EUR", symbol: "€", label: "EUR (€) - Euro" },
+  { code: "GBP", symbol: "£", label: "GBP (£) - British Pound" },
+  { code: "AED", symbol: "د.إ", label: "AED (د.إ) - UAE Dirham" },
+];
+
+export function getCurrencySymbol(code?: string | null) {
+  const match = PROJECT_CURRENCIES.find((c) => c.code === (code || "INR").toUpperCase());
+  return match?.symbol || (code || "₹");
+}
+
+
+
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams, usePathname } from "next/navigation";
+import Link from "next/link";
 import {
+  Check,
   ClipboardCheck,
   ClipboardList,
   Plus,
@@ -35,6 +52,7 @@ import {
   Sparkles,
   User,
   FileCheck,
+  FileText,
   ImageIcon,
   ExternalLink,
   RotateCcw,
@@ -46,6 +64,18 @@ import {
   TrendingDown,
   Pencil,
   History,
+  MoreVertical,
+  Receipt,
+  ListPlus,
+  Globe,
+  Monitor,
+  Crown,
+  FolderKanban,
+  GitFork,
+  Star,
+  Play,
+  ArrowRightCircle,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +83,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import {
   Card,
   CardContent,
@@ -74,13 +111,19 @@ import { ProgressiveSaveIndicator } from "@/components/shared/progressive-save-i
 import { useAuthStore } from "@/store";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { TaskHistoryDialog } from "./task-history-dialog";
+import { SubTaskUploadDialog } from "./subtask-upload-dialog";
+import { ProjectInvoicesDialog } from "./project-invoices-dialog";
+import { SubtaskCard } from "@/components/subtask-card";
+import { SubtaskModalDialog } from "@/components/subtask-modal-dialog";
 
-export type TaskStatus = "pending" | "in_progress" | "under_review" | "recheck" | "completed" | "cancelled";
+export type TaskStatus = "pending" | "in_progress" | "under_review" | "rework" | "recheck" | "completed" | "on_hold" | "cancelled" | "failed";
 
 export type SubTask = {
   id: string;
   title: string;
   price: number; // Task Cost / Price (₹)
+  image_url?: string | null;
+  image_name?: string | null;
   assigned_employee_id?: number | null;
   assigned_employee_name?: string | null;
   assigned_employee_role?: string | null;
@@ -93,12 +136,49 @@ export type SubTask = {
   deadline_time?: string | null;
   daily_time?: string | null;
   is_daily_recurring?: boolean;
+  cadence?: string | null;
   urgency: "low" | "medium" | "high" | "urgent";
   status: TaskStatus;
   notes?: string | null;
+  uploads?: any[];
+  work_updates?: any[];
 };
 
 export type OperationTask = {
+  project_for?: "own_company" | "client" | null;
+  company_name?: string | null;
+  start_date?: string | null;
+  due_date?: string | null;
+  currency?: string | null;
+  cost?: string | number | null;
+  live_url?: string | null;
+  demo_url?: string | null;
+  project_leader_id?: number | null;
+  project_leader_name?: string | null;
+  agreement_document_url?: string | null;
+  agreement_document_name?: string | null;
+  project_type_id?: number | null;
+  project_type_name?: string | null;
+  pipeline_id?: number | null;
+  pipeline_name?: string | null;
+  pipeline_phases?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    order: number;
+    estimated_duration_hours?: number;
+    assigned_role?: string;
+    is_mandatory?: boolean;
+    requires_approval?: boolean;
+    status?: "not_started" | "in_progress" | "under_review" | "completed" | "on_hold" | "failed" | "cancelled";
+    started_at?: string | null;
+    completed_at?: string | null;
+    notes?: string;
+  }>;
+  current_phase_index?: number;
+  base_price?: number | null;
+  extra_cost?: number | null;
+  history?: any[];
   id: number;
   title: string;
   created_by?: number | string | null;
@@ -116,6 +196,14 @@ export type OperationTask = {
     name: string;
     role?: string | null;
     email?: string | null;
+  }>;
+  assigned_clients?: Array<{
+    id: number;
+    name: string;
+    company_name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    client_type?: string | null;
   }>;
   estimated_hours: string | number;
   logged_hours: string | number;
@@ -162,8 +250,11 @@ const STATUS_TABS = [
   { id: "pending", label: "Pending", badgeColor: "bg-slate-100 text-slate-700 border-slate-300" },
   { id: "in_progress", label: "In Progress", badgeColor: "bg-blue-100 text-blue-800 border-blue-300" },
   { id: "under_review", label: "Under Review", badgeColor: "bg-amber-100 text-amber-800 border-amber-300" },
+  { id: "rework", label: "Rework", badgeColor: "bg-rose-100 text-rose-800 border-rose-300" },
   { id: "completed", label: "Completed", badgeColor: "bg-emerald-100 text-emerald-800 border-emerald-300" },
   { id: "cancelled", label: "Cancelled", badgeColor: "bg-zinc-100 text-zinc-800 border-zinc-300" },
+  { id: "on_hold", label: "On Hold", badgeColor: "bg-orange-100 text-orange-800 border-orange-300" },
+  { id: "failed", label: "Failed", badgeColor: "bg-red-100 text-red-800 border-red-300" },
 ];
 
 export const formatSubtaskDuration = (durationHours?: number | null, durationMinutes?: number | null) => {
@@ -206,13 +297,19 @@ export default function OperationsTasksPage() {
   const [modalStaffList, setModalStaffList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const isClientRole = useMemo(() => {
+    if (!user) return false;
+    const codes = (user as any)?.role_codes || [(user as any)?.role || (user as any)?.primary_role || ""];
+    return codes.includes("client") || (user as any)?.role === "client" || (user as any)?.primary_role === "client";
+  }, [user]);
+
   const isStaffRole = useMemo(() => {
     if (!user) return false;
     const codes = (user as any)?.role_codes || [(user as any)?.role || (user as any)?.primary_role || ""];
-    const isOwnerOrAdmin = codes.some((r: string) =>
-      ["platform_admin", "super_admin", "institution_admin", "school_owner", "college_owner", "university_owner"].includes(r)
+    const isOwnerOrAdminOrClient = codes.some((r: string) =>
+      ["platform_admin", "super_admin", "institution_admin", "school_owner", "college_owner", "university_owner", "client"].includes(r)
     );
-    return !isOwnerOrAdmin;
+    return !isOwnerOrAdminOrClient;
   }, [user]);
 
   const isStaffViewer = useMemo(() => {
@@ -224,6 +321,17 @@ export default function OperationsTasksPage() {
     const num = typeof price === "number" ? price : parseFloat(String(price || 0));
     return `₹${num.toLocaleString("en-IN")}`;
   }, [isStaffViewer]);
+
+  const formatDateDisplay = useCallback((dateStr?: string | null) => {
+    if (!dateStr) return null;
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    } catch {
+      return dateStr;
+    }
+  }, []);
 
   const initialScope = searchParams.get("scope") === "me" || isStaffRole ? "assigned_to_me" : "all";
   const [scopeFilter, setScopeFilter] = useState<"all" | "assigned_to_me">(initialScope);
@@ -281,8 +389,272 @@ export default function OperationsTasksPage() {
   const [loadingModalOrgStaff, setLoadingModalOrgStaff] = useState<boolean>(false);
   const [formClientId, setFormClientId] = useState<string>("none");
   const [formClientName, setFormClientName] = useState("");
+  const [formAssignedClientIds, setFormAssignedClientIds] = useState<string[]>([]);
+  const [formProjectFor, setFormProjectFor] = useState<"own_company" | "client">("own_company");
+  const [formCompanyName, setFormCompanyName] = useState("EduBird");
+  const [formStartDate, setFormStartDate] = useState("");
+  const [formDueDate, setFormDueDate] = useState("");
+  const [formCurrency, setFormCurrency] = useState("INR");
+  const [formCost, setFormCost] = useState("0");
+  const [formLiveUrl, setFormLiveUrl] = useState("");
+  const [formDemoUrl, setFormDemoUrl] = useState("");
+  const [formProjectLeaderId, setFormProjectLeaderId] = useState("none");
+  const [formProjectLeaderName, setFormProjectLeaderName] = useState("");
+  const [formAgreementDocUrl, setFormAgreementDocUrl] = useState("");
+  const [formAgreementDocName, setFormAgreementDocName] = useState("");
+  const [uploadingAgreement, setUploadingAgreement] = useState(false);
+
+  // Dedicated Phase Status & Details Modal State
+  const [phaseModalState, setPhaseModalState] = useState<{
+    task: OperationTask;
+    phaseIndex: number;
+    phase: any;
+  } | null>(null);
+  const [phaseModalStatus, setPhaseModalStatus] = useState<string>("not_started");
+  const [phaseModalNotes, setPhaseModalNotes] = useState<string>("");
+  const [phaseModalAdvanceNext, setPhaseModalAdvanceNext] = useState<boolean>(true);
+  const [savingPhaseModal, setSavingPhaseModal] = useState<boolean>(false);
+
+  // Quick Attach Pipeline Modal State for existing projects
+  const [attachPipelineTask, setAttachPipelineTask] = useState<OperationTask | null>(null);
+  const [attachTypeId, setAttachTypeId] = useState<string>("none");
+  const [attachPipelineId, setAttachPipelineId] = useState<string>("none");
+  const [attachAvailablePipelines, setAttachAvailablePipelines] = useState<any[]>([]);
+  const [savingAttachPipeline, setSavingAttachPipeline] = useState<boolean>(false);
+  // Project Types & Pipelines for Project Creation
+  const [projectTypesList, setProjectTypesList] = useState<any[]>([]);
+  const [formProjectTypeId, setFormProjectTypeId] = useState<string>("none");
+  const [formProjectTypeName, setFormProjectTypeName] = useState<string>("");
+  const [formPipelineId, setFormPipelineId] = useState<string>("none");
+  const [formPipelineName, setFormPipelineName] = useState<string>("");
+  const [availablePipelines, setAvailablePipelines] = useState<any[]>([]);
+  const [formPipelinePhases, setFormPipelinePhases] = useState<any[]>([]);
+  const [loadingPipelines, setLoadingPipelines] = useState<boolean>(false);
+
+  const fetchProjectTypesForModal = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/operations/project-types?status=active");
+      if (res.ok) {
+        const json = await res.json();
+        setProjectTypesList(json.project_types || []);
+      }
+    } catch (e) {
+      console.warn("fetchProjectTypesForModal error:", e);
+    }
+  }, []);
+
+  const handleSelectProjectType = async (typeIdStr: string) => {
+    setFormProjectTypeId(typeIdStr);
+    if (typeIdStr === "none" || !typeIdStr) {
+      setFormProjectTypeName("");
+      setFormPipelineId("none");
+      setFormPipelineName("");
+      setAvailablePipelines([]);
+      setFormPipelinePhases([]);
+      return;
+    }
+    const pt = projectTypesList.find((p) => String(p.id) === String(typeIdStr));
+    setFormProjectTypeName(pt ? pt.name : "");
+    try {
+      setLoadingPipelines(true);
+      const res = await fetch(`/api/admin/operations/project-pipelines?project_type_id=${typeIdStr}&status=active`);
+      if (res.ok) {
+        const json = await res.json();
+        const pls: any[] = json.pipelines || [];
+        setAvailablePipelines(pls);
+        const defaultPl = pls.find((p) => p.is_default) || pls[0];
+        if (defaultPl) {
+          setFormPipelineId(String(defaultPl.id));
+          setFormPipelineName(defaultPl.name);
+          setFormPipelinePhases(Array.isArray(defaultPl.phases) ? defaultPl.phases : []);
+        } else {
+          setFormPipelineId("none");
+          setFormPipelineName("");
+          setFormPipelinePhases([]);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to load pipelines for type:", err);
+    } finally {
+      setLoadingPipelines(false);
+    }
+  };
+
+  const handleSelectPipeline = (pipelineIdStr: string) => {
+    setFormPipelineId(pipelineIdStr);
+    if (pipelineIdStr === "none" || !pipelineIdStr) {
+      setFormPipelineName("");
+      setFormPipelinePhases([]);
+      return;
+    }
+    const pl = availablePipelines.find((p) => String(p.id) === String(pipelineIdStr));
+    if (pl) {
+      setFormPipelineName(pl.name);
+      setFormPipelinePhases(Array.isArray(pl.phases) ? pl.phases : []);
+    }
+  };
+
+  const handleUpdateProjectPhase = async (
+    task: OperationTask,
+    phaseIndex: number,
+    newStatus: string,
+    advanceNext: boolean = false,
+    notes?: string
+  ) => {
+    try {
+      const currentPhases = Array.isArray(task.pipeline_phases) ? [...task.pipeline_phases] : [];
+      if (!currentPhases[phaseIndex]) return;
+
+      currentPhases[phaseIndex] = {
+        ...currentPhases[phaseIndex],
+        status: newStatus as any,
+        notes: notes !== undefined ? notes : currentPhases[phaseIndex].notes || "",
+        started_at: newStatus === "in_progress" && !currentPhases[phaseIndex].started_at ? new Date().toISOString() : currentPhases[phaseIndex].started_at,
+        completed_at: newStatus === "completed" ? new Date().toISOString() : currentPhases[phaseIndex].completed_at,
+      };
+
+      let newCurrentIndex = task.current_phase_index || 0;
+      if (advanceNext && phaseIndex + 1 < currentPhases.length) {
+        newCurrentIndex = phaseIndex + 1;
+        if (currentPhases[newCurrentIndex].status === "not_started") {
+          currentPhases[newCurrentIndex].status = "in_progress";
+          currentPhases[newCurrentIndex].started_at = new Date().toISOString();
+        }
+      }
+
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+      const res = await fetch("/api/admin/operations/tasks", {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          id: task.id,
+          pipeline_phases: currentPhases,
+          current_phase_index: newCurrentIndex,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to update phase status");
+      }
+
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === task.id
+            ? { ...t, pipeline_phases: currentPhases, current_phase_index: newCurrentIndex }
+            : t
+        )
+      );
+
+      toast.success(
+        advanceNext
+          ? `Advanced to next phase: "${currentPhases[newCurrentIndex]?.name}"`
+          : `Phase "${currentPhases[phaseIndex]?.name}" status updated to ${newStatus}`
+      );
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update phase");
+    }
+  };
+
+  const handleAgreementFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAgreement(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/admin/uploads/documents", {
+        method: "POST",
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to upload agreement");
+      setFormAgreementDocUrl(data.url || data.file_url || "");
+      setFormAgreementDocName(file.name);
+      toast.success("Agreement document uploaded successfully");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload document");
+    } finally {
+      setUploadingAgreement(false);
+    }
+  };
+
+  const [directDocUploadingTaskId, setDirectDocUploadingTaskId] = useState<number | null>(null);
+
+  const handleDirectAgreementDocUpload = async (taskId: number, file: File) => {
+    setDirectDocUploadingTaskId(taskId);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/admin/uploads/documents", {
+        method: "POST",
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to upload document");
+
+      const fileUrl = data.url || data.file_url;
+      const fileName = file.name;
+
+      const targetTask = tasks.find((t) => t.id === taskId);
+      const updateRes = await fetch("/api/admin/operations/tasks", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({
+          id: taskId,
+          title: targetTask?.title || "Project",
+          agreement_document_url: fileUrl,
+          agreement_document_name: fileName,
+        }),
+      });
+
+      if (!updateRes.ok) {
+        const d = await updateRes.json();
+        throw new Error(d.error || "Failed to update project with agreement document");
+      }
+
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId
+            ? { ...t, agreement_document_url: fileUrl, agreement_document_name: fileName }
+            : t
+        )
+      );
+
+      toast.success(`Agreement document "${fileName}" uploaded and attached!`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload agreement document");
+    } finally {
+      setDirectDocUploadingTaskId(null);
+    }
+  };
+
   const [clientSearchQuery, setClientSearchQuery] = useState("");
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+
+  const fetchClientsForModal = useCallback(async () => {
+    try {
+      const headers: Record<string, string> = {};
+      const token = accessToken || (typeof window !== "undefined" ? localStorage.getItem("accessToken") || localStorage.getItem("token") : "");
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch("/api/admin/sales/clients?status=active", { headers });
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.clients) && json.clients.length > 0) {
+          setClients(json.clients);
+        }
+      }
+    } catch (err) {
+      console.warn("fetchClientsForModal error:", err);
+    }
+  }, [accessToken]);
   const [formAssignedStaffId, setFormAssignedStaffId] = useState<string>("none");
   const [formAssignedStaffName, setFormAssignedStaffName] = useState("");
   const [formAssignedStaffRole, setFormAssignedStaffRole] = useState("");
@@ -346,7 +718,7 @@ export default function OperationsTasksPage() {
   }, [pathname]);
 
   const filteredClientList = useMemo(() => {
-    const baseList = isPlatformRoute ? clients.filter((c) => !c.institution_id) : clients;
+    const baseList = clients;
     if (!clientSearchQuery.trim()) return baseList;
     const q = clientSearchQuery.toLowerCase();
     return baseList.filter((c) => {
@@ -356,7 +728,7 @@ export default function OperationsTasksPage() {
       const email = (c.email || "").toLowerCase();
       return name.includes(q) || type.includes(q) || contact.includes(q) || email.includes(q);
     });
-  }, [clients, clientSearchQuery, isPlatformRoute]);
+  }, [clients, clientSearchQuery]);
 
   const filteredStaffList = useMemo(() => {
     if (!staffSearchQuery.trim()) return dialogStaffList;
@@ -410,47 +782,99 @@ export default function OperationsTasksPage() {
   // Modal 2: Manage Sub-Tasks for a Task
   const [subtaskModalOpen, setSubtaskModalOpen] = useState(false);
   const [selectedTaskForSubtasks, setSelectedTaskForSubtasks] = useState<OperationTask | null>(null);
+  const [editingSubtaskObject, setEditingSubtaskObject] = useState<SubTask | null>(null);
   const [activeSubTasks, setActiveSubTasks] = useState<SubTask[]>([]);
   const [savingSubtasks, setSavingSubtasks] = useState(false);
+
+  // Helper to extract ONLY employees and clients assigned to a project/task
+  const getProjectStaffOptions = useCallback((task: any) => {
+    if (!task) return [];
+    const optionsMap = new Map<string, { id: any; name: string; role?: string }>();
+
+    // 1. Staff: Project assigned employees array
+    if (Array.isArray(task.assigned_employees) && task.assigned_employees.length > 0) {
+      task.assigned_employees.forEach((emp: any) => {
+        if (emp?.id) {
+          optionsMap.set(String(emp.id), {
+            id: emp.id,
+            name: emp.name || emp.full_name || `Employee #${emp.id}`,
+            role: emp.role || "Staff Member",
+          });
+        }
+      });
+    }
+
+    // 2. Staff: Project primary assigned employee
+    if (task.assigned_employee_id) {
+      optionsMap.set(String(task.assigned_employee_id), {
+        id: task.assigned_employee_id,
+        name: task.assigned_employee_name || "Assigned Staff",
+        role: task.assigned_employee_role || "Staff Member",
+      });
+    }
+
+    // 3. Staff: Project Leader
+    if (task.project_leader_id) {
+      if (!optionsMap.has(String(task.project_leader_id))) {
+        optionsMap.set(String(task.project_leader_id), {
+          id: task.project_leader_id,
+          name: task.project_leader_name || "Project Leader",
+          role: "Project Leader",
+        });
+      }
+    }
+
+    // 4. Clients: Project assigned clients array
+    if (Array.isArray(task.assigned_clients) && task.assigned_clients.length > 0) {
+      task.assigned_clients.forEach((c: any) => {
+        const cId = c?.user_id || c?.id;
+        if (cId) {
+          optionsMap.set(String(cId), {
+            id: cId,
+            name: c.company_name || c.name || `Client #${c.id}`,
+            role: c.client_type ? `${c.client_type} (Client)` : "Client",
+          });
+        }
+      });
+    }
+
+    // 5. Clients: Project primary client
+    if (task.client_id && task.client_name && task.client_name !== "EduBird") {
+      if (!optionsMap.has(String(task.client_id))) {
+        optionsMap.set(String(task.client_id), {
+          id: task.client_id,
+          name: task.client_name,
+          role: "Client",
+        });
+      }
+    }
+
+    // 6. Fallback only if project has NO assigned members or clients at all
+    if (optionsMap.size === 0) {
+      if (user?.id) {
+        optionsMap.set(String(user.id), {
+          id: user.id,
+          name: user.full_name || (user as any)?.name || user.email || "You",
+          role: (user as any)?.role || "Staff Member",
+        });
+      }
+    }
+
+    return Array.from(optionsMap.values());
+  }, [user]);
 
   // When a main task is created/assigned with specific members, only those members appear in subtasks
   const subtaskAssigneeOptions = useMemo(() => {
     if (!selectedTaskForSubtasks) return uniqueModalStaffList;
-
-    // 1. Check if the project has assigned employees array
-    if (
-      Array.isArray(selectedTaskForSubtasks.assigned_employees) &&
-      selectedTaskForSubtasks.assigned_employees.length > 0
-    ) {
-      return selectedTaskForSubtasks.assigned_employees.map((emp) => ({
-        id: emp.id,
-        name: emp.name,
-        role: emp.role || "Staff Member",
-        email: emp.email || null,
-      }));
-    }
-
-    // 2. Check if the project has a single assigned employee
-    if (selectedTaskForSubtasks.assigned_employee_id) {
-      return [
-        {
-          id: selectedTaskForSubtasks.assigned_employee_id,
-          name: selectedTaskForSubtasks.assigned_employee_name || "Assigned Staff",
-          role: selectedTaskForSubtasks.assigned_employee_role || "Staff Member",
-          email: selectedTaskForSubtasks.assigned_employee_email || null,
-        },
-      ];
-    }
-
-    // 3. Fallback to all modal staff if project was left unassigned
-    return uniqueModalStaffList;
-  }, [selectedTaskForSubtasks, uniqueModalStaffList]);
+    const opts = getProjectStaffOptions(selectedTaskForSubtasks);
+    return opts.length > 0 ? opts : uniqueModalStaffList;
+  }, [selectedTaskForSubtasks, uniqueModalStaffList, getProjectStaffOptions]);
 
   const isSelectedTaskAssigned = useMemo(() => {
     return Boolean(
       (Array.isArray(selectedTaskForSubtasks?.assigned_employees) &&
         selectedTaskForSubtasks.assigned_employees.length > 0) ||
-        selectedTaskForSubtasks?.assigned_employee_id
+      selectedTaskForSubtasks?.assigned_employee_id
     );
   }, [selectedTaskForSubtasks]);
 
@@ -489,7 +913,42 @@ export default function OperationsTasksPage() {
   const [newSubStatus, setNewSubStatus] = useState<"pending" | "in_progress" | "under_review" | "completed" | "cancelled">("pending");
   const [newSubDailyTime, setNewSubDailyTime] = useState("10:00");
   const [newSubIsDailyRecurring, setNewSubIsDailyRecurring] = useState<boolean>(false);
+  const [newSubCadence, setNewSubCadence] = useState<string>("once");
+  const [editSubCadence, setEditSubCadence] = useState<string>("once");
+
+  // Mode toggle and bulk state for Modal 2
+  const [subTaskCreationMode, setSubTaskCreationMode] = useState<"single" | "bulk">("single");
+  const [bulkSubTaskText, setBulkSubTaskText] = useState("");
+  const [bulkSubStripBullets, setBulkSubStripBullets] = useState(true);
+  const [bulkSubDeduplicate, setBulkSubDeduplicate] = useState(true);
+
+  const parsedBulkSubtasks = useMemo(() => {
+    const lines = bulkSubTaskText.split(/\r?\n/);
+    const seen = new Set<string>();
+    const result: string[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i].trim();
+      if (!line) continue;
+
+      if (bulkSubStripBullets) {
+        line = line.replace(/^(\d+[\.\)]\s*|[-*•]\s*|\[[\sxX]?\]\s*)/, "").trim();
+      }
+      if (!line) continue;
+
+      const normKey = line.toLowerCase();
+      if (bulkSubDeduplicate && seen.has(normKey)) continue;
+      seen.add(normKey);
+
+      result.push(line);
+    }
+    return result;
+  }, [bulkSubTaskText, bulkSubStripBullets, bulkSubDeduplicate]);
+
   const [historyModalTask, setHistoryModalTask] = useState<OperationTask | null>(null);
+  const [historyModalSubtask, setHistoryModalSubtask] = useState<SubTask | null>(null);
+  const [uploadModalState, setUploadModalState] = useState<{ task: OperationTask; subtask: SubTask } | null>(null);
+  const [invoicesModalTask, setInvoicesModalTask] = useState<OperationTask | null>(null);
 
   const fetchTasks = useCallback(async () => {
     const seq = ++fetchSeqRef.current;
@@ -506,7 +965,6 @@ export default function OperationsTasksPage() {
         params.set("institution_id", String(effectiveInstId));
       }
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
-      if (selectedStatusTab && selectedStatusTab !== "all") params.set("status", selectedStatusTab);
       if (urgencyFilter && urgencyFilter !== "all") params.set("urgency", urgencyFilter);
       if (clientFilter && clientFilter !== "all") params.set("client_id", clientFilter);
       if (staffFilter && staffFilter !== "all") {
@@ -536,7 +994,7 @@ export default function OperationsTasksPage() {
         setLoading(false);
       }
     }
-  }, [effectiveInstId, orgFilter, searchQuery, selectedStatusTab, urgencyFilter, clientFilter, staffFilter, accessToken, pathname, isStaffRole, scopeFilter, isPlatformRoute]);
+  }, [effectiveInstId, orgFilter, searchQuery, urgencyFilter, clientFilter, staffFilter, accessToken, pathname, isStaffRole, scopeFilter, isPlatformRoute]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -556,6 +1014,8 @@ export default function OperationsTasksPage() {
   }, [searchParams, tasks, subtaskModalOpen]);
 
   const resetSubtaskDraft = (defaultStaffId: string = "none") => {
+    setSubTaskCreationMode("single");
+    setBulkSubTaskText("");
     setNewSubTitle("");
     setNewSubPrice("5000");
     setNewSubStaffId(defaultStaffId);
@@ -579,14 +1039,16 @@ export default function OperationsTasksPage() {
     const initialInstId = isPlatformRoute
       ? "none"
       : ((orgFilter && orgFilter !== "all" && orgFilter !== "none")
-          ? orgFilter
-          : (activeInstitutionId ? String(activeInstitutionId) : (institutions[0]?.id ? String(institutions[0].id) : "none")));
+        ? orgFilter
+        : (activeInstitutionId ? String(activeInstitutionId) : (institutions[0]?.id ? String(institutions[0].id) : "none")));
     setFormInstitutionId(initialInstId);
     void fetchStaffForModal(initialInstId);
     setFormClientId("none");
     setFormClientName("");
+    setFormAssignedClientIds([]);
     setClientSearchQuery("");
     setClientDropdownOpen(false);
+    void fetchClientsForModal();
     const defaultStaffId = isStaffRole && user?.id ? String(user.id) : "none";
     const defaultStaffName = isStaffRole && user?.full_name ? user.full_name : "";
     const defaultStaffRole = isStaffRole ? ((user as any)?.role || (user as any)?.primary_role || "Staff") : "";
@@ -596,10 +1058,25 @@ export default function OperationsTasksPage() {
     setFormAssignedStaffIds(isStaffRole && user?.id ? [String(user.id)] : []);
     setStaffSearchQuery("");
     setStaffDropdownOpen(false);
+    setFormStartDate("");
+    setFormDueDate("");
+    setFormLiveUrl("");
+    setFormDemoUrl("");
+    setFormProjectLeaderId("none");
+    setFormProjectLeaderName("");
+    setFormAgreementDocUrl("");
+    setFormAgreementDocName("");
     setFormDetails("");
     setFormIsDailyRecurring(false);
     setFormPoints("20");
     setFormPenaltyPoints("10");
+    setFormProjectTypeId("none");
+    setFormProjectTypeName("");
+    setFormPipelineId("none");
+    setFormPipelineName("");
+    setAvailablePipelines([]);
+    setFormPipelinePhases([]);
+    void fetchProjectTypesForModal();
     setTaskDialogOpen(true);
   };
 
@@ -614,8 +1091,13 @@ export default function OperationsTasksPage() {
     void fetchStaffForModal(initialInstId);
     setFormClientId(t.client_id ? String(t.client_id) : "none");
     setFormClientName(t.client_name || "");
+    const initialClientIds = Array.isArray(t.assigned_clients) && t.assigned_clients.length > 0
+      ? t.assigned_clients.map((c) => String(c.id))
+      : (t.client_id ? [String(t.client_id)] : []);
+    setFormAssignedClientIds(initialClientIds);
     setClientSearchQuery("");
     setClientDropdownOpen(false);
+    void fetchClientsForModal();
     setFormAssignedStaffId(t.assigned_employee_id ? String(t.assigned_employee_id) : "none");
     setFormAssignedStaffName(t.assigned_employee_name || "");
     setFormAssignedStaffRole(t.assigned_employee_role || "");
@@ -628,10 +1110,40 @@ export default function OperationsTasksPage() {
     }
     setStaffSearchQuery("");
     setStaffDropdownOpen(false);
+    const isForClient = Boolean(t.client_id || (Array.isArray(t.assigned_clients) && t.assigned_clients.length > 0) || (t.client_name && t.client_name !== "EduBird"));
+    setFormProjectFor(t.project_for === "client" || isForClient ? "client" : "own_company");
+    setFormCompanyName(t.company_name || "EduBird");
+    setFormStartDate(t.start_date ? t.start_date.split("T")[0] : "");
+    setFormDueDate(t.due_date ? t.due_date.split("T")[0] : (t.deadline ? t.deadline.split("T")[0] : ""));
+    setFormCurrency(t.currency || "INR");
+    setFormCost(t.cost !== undefined ? String(t.cost) : (t.price !== undefined ? String(t.price) : "0"));
+    setFormLiveUrl(t.live_url || "");
+    setFormDemoUrl(t.demo_url || "");
+    setFormProjectLeaderId(t.project_leader_id ? String(t.project_leader_id) : "none");
+    setFormProjectLeaderName(t.project_leader_name || "");
+    setFormAgreementDocUrl(t.agreement_document_url || "");
+    setFormAgreementDocName(t.agreement_document_name || "");
     setFormDetails(t.details || "");
     setFormIsDailyRecurring(Boolean(t.is_daily_recurring));
     setFormPoints(t.points !== undefined ? String(t.points) : "20");
     setFormPenaltyPoints(t.penalty_points !== undefined ? String(t.penalty_points) : "10");
+    setFormProjectTypeId(t.project_type_id ? String(t.project_type_id) : "none");
+    setFormProjectTypeName(t.project_type_name || "");
+    setFormPipelineId(t.pipeline_id ? String(t.pipeline_id) : "none");
+    setFormPipelineName(t.pipeline_name || "");
+    setFormPipelinePhases(Array.isArray(t.pipeline_phases) ? t.pipeline_phases : []);
+    void fetchProjectTypesForModal();
+    if (t.project_type_id) {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/admin/operations/project-pipelines?project_type_id=${t.project_type_id}&status=active`);
+          if (res.ok) {
+            const json = await res.json();
+            setAvailablePipelines(json.pipelines || []);
+          }
+        } catch { }
+      })();
+    }
     setTaskDialogOpen(true);
   };
 
@@ -648,6 +1160,25 @@ export default function OperationsTasksPage() {
       const method = editingTask ? "PUT" : "POST";
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+      const selectedClientObjects = clients
+        .filter((c) => formAssignedClientIds.includes(String(c.id)))
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          company_name: c.company_name || c.name,
+          email: c.email || null,
+          phone: c.phone || null,
+          client_type: c.client_type || null,
+          user_id: c.user_id || null,
+        }));
+
+      const primaryClientId = selectedClientObjects.length > 0
+        ? selectedClientObjects[0].id
+        : (formClientId !== "none" ? parseInt(formClientId) : null);
+      const combinedClientNames = selectedClientObjects.length > 0
+        ? selectedClientObjects.map((c) => c.company_name || c.name).filter(Boolean).join(", ")
+        : (formClientName.trim() || null);
 
       const selectedStaffObjects = dialogStaffList
         .filter((s) => formAssignedStaffIds.includes(String(s.id)))
@@ -670,17 +1201,37 @@ export default function OperationsTasksPage() {
           id: editingTask?.id,
           title: formTitle.trim(),
           institution_id: isPlatformRoute ? null : (formInstitutionId !== "none" && formInstitutionId !== "all" ? parseInt(formInstitutionId) : null),
-          client_id: isInstitutionAdmin ? null : (formClientId !== "none" ? formClientId : null),
-          client_name: isInstitutionAdmin ? null : (formClientName.trim() || null),
+          project_for: formProjectFor,
+          company_name: formProjectFor === "own_company" ? formCompanyName : null,
+          client_id: formProjectFor === "client" ? primaryClientId : null,
+          client_name: formProjectFor === "client" ? combinedClientNames : "EduBird",
+          assigned_clients: formProjectFor === "client" ? selectedClientObjects : [],
           assigned_employees: selectedStaffObjects,
           assigned_employee_id: primaryStaffId,
           assigned_employee_name: combinedStaffNames,
           assigned_employee_role: combinedStaffRoles,
+          start_date: formStartDate || null,
+          due_date: formDueDate || null,
+          deadline: formDueDate || null,
+          currency: formCurrency,
+          cost: parseFloat(formCost) || 0,
+          price: parseFloat(formCost) || 0,
+          live_url: formLiveUrl.trim() || null,
+          demo_url: formDemoUrl.trim() || null,
+          project_leader_id: formProjectLeaderId !== "none" ? parseInt(formProjectLeaderId) : null,
+          project_leader_name: formProjectLeaderName.trim() || null,
+          agreement_document_url: formAgreementDocUrl.trim() || null,
+          agreement_document_name: formAgreementDocName.trim() || null,
           details: formDetails.trim() || null,
           is_daily_recurring: formIsDailyRecurring,
           points: parseFloat(formPoints) || 20,
           penalty_points: parseFloat(formPenaltyPoints) || 10,
           sub_tasks: editingTask?.sub_tasks || [],
+          project_type_id: formProjectTypeId !== "none" ? parseInt(formProjectTypeId) : null,
+          project_type_name: formProjectTypeName.trim() || null,
+          pipeline_id: formPipelineId !== "none" ? parseInt(formPipelineId) : null,
+          pipeline_name: formPipelineName.trim() || null,
+          pipeline_phases: formPipelinePhases,
         }),
       });
 
@@ -704,6 +1255,7 @@ export default function OperationsTasksPage() {
   // Step 2: Open Dedicated Sub-Tasks Manager Modal
   const handleOpenSubtasksModal = async (task: OperationTask) => {
     setSelectedTaskForSubtasks(task);
+    setEditingSubtaskObject(null);
     setActiveSubTasks(Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : []);
 
     const projectMembers = Array.isArray(task.assigned_employees) && task.assigned_employees.length > 0
@@ -734,6 +1286,53 @@ export default function OperationsTasksPage() {
 
   // Add Sub-Task in Modal 2 (Prepends to top so latest appears first)
   const handleAddSubTaskToList = async () => {
+    if (subTaskCreationMode === "bulk") {
+      if (parsedBulkSubtasks.length === 0) {
+        toast.error("Please enter at least one deliverable name (one per line)");
+        return;
+      }
+
+      const assignedStaff = subtaskAssigneeOptions.find((s) => String(s.id) === newSubStaffId);
+      const parsedHours = Math.max(0, parseInt(newSubDurationHours, 10) || 0);
+      const parsedMins = Math.max(0, Math.min(59, parseInt(newSubDurationMinutes, 10) || 0));
+      const isDaily = newSubCadence === "daily";
+      const now = Date.now();
+
+      const newSubs: SubTask[] = parsedBulkSubtasks.map((line, idx) => ({
+        id: `sub_${now}_${idx}_${Math.random().toString(36).substring(2, 6)}`,
+        title: line.trim(),
+        price: Number(newSubPrice) || 0,
+        assigned_employee_id: assignedStaff ? assignedStaff.id : null,
+        assigned_employee_name: assignedStaff ? assignedStaff.name : null,
+        assigned_employee_role: assignedStaff ? assignedStaff.role : null,
+        duration_hours: parsedHours,
+        duration_minutes: parsedMins,
+        points: Number(newSubPoints) || 20,
+        penalty_points: Number(newSubPenaltyPoints) || 10,
+        deadline_date: isDaily ? null : (newSubDeadlineDate || null),
+        deadline_time: isDaily ? (newSubDailyTime || "10:00") : (newSubDeadlineNumber || "18:00"),
+        daily_time: isDaily ? (newSubDailyTime || "10:00") : null,
+        urgency: newSubUrgency,
+        status: "pending",
+        is_daily_recurring: isDaily,
+        cadence: newSubCadence,
+      }));
+
+      const updated = [...newSubs, ...activeSubTasks];
+      setActiveSubTasks(updated);
+
+      toast.success(`Added ${newSubs.length} sub-tasks!`);
+      const projectMembers = Array.isArray(selectedTaskForSubtasks?.assigned_employees) && selectedTaskForSubtasks.assigned_employees.length > 0
+        ? selectedTaskForSubtasks.assigned_employees
+        : (selectedTaskForSubtasks?.assigned_employee_id ? [{ id: selectedTaskForSubtasks.assigned_employee_id }] : []);
+      resetSubtaskDraft(projectMembers.length === 1 ? String(projectMembers[0].id) : "none");
+
+      if (selectedTaskForSubtasks) {
+        await saveSubtasksToServer(selectedTaskForSubtasks.id, updated);
+      }
+      return;
+    }
+
     if (!newSubTitle.trim()) {
       toast.error("Please enter a sub-task deliverable name");
       return;
@@ -744,6 +1343,7 @@ export default function OperationsTasksPage() {
     const parsedHours = Math.max(0, parseInt(newSubDurationHours, 10) || 0);
     const parsedMins = Math.max(0, Math.min(59, parseInt(newSubDurationMinutes, 10) || 0));
 
+    const isDaily = newSubCadence === "daily";
     const newSub: SubTask = {
       id: `sub_${Date.now()}`,
       title: newSubTitle.trim(),
@@ -755,12 +1355,13 @@ export default function OperationsTasksPage() {
       duration_minutes: parsedMins,
       points: Number(newSubPoints) || 20,
       penalty_points: Number(newSubPenaltyPoints) || 10,
-      deadline_date: newSubIsDailyRecurring ? null : (newSubDeadlineDate || null),
-      deadline_time: newSubIsDailyRecurring ? (newSubDailyTime || "10:00") : (newSubDeadlineNumber || "18:00"),
-      daily_time: newSubIsDailyRecurring ? (newSubDailyTime || "10:00") : null,
+      deadline_date: isDaily ? null : (newSubDeadlineDate || null),
+      deadline_time: isDaily ? (newSubDailyTime || "10:00") : (newSubDeadlineNumber || "18:00"),
+      daily_time: isDaily ? (newSubDailyTime || "10:00") : null,
       urgency: newSubUrgency,
       status: "pending",
-      is_daily_recurring: newSubIsDailyRecurring,
+      is_daily_recurring: isDaily,
+      cadence: newSubCadence,
     };
 
     const updated = [newSub, ...activeSubTasks];
@@ -802,11 +1403,11 @@ export default function OperationsTasksPage() {
     const updated = activeSubTasks.map((s) =>
       s.id === subId
         ? {
-            ...s,
-            assigned_employee_id: assignedStaff ? assignedStaff.id : null,
-            assigned_employee_name: assignedStaff ? assignedStaff.name : null,
-            assigned_employee_role: assignedStaff ? assignedStaff.role : null,
-          }
+          ...s,
+          assigned_employee_id: assignedStaff ? assignedStaff.id : null,
+          assigned_employee_name: assignedStaff ? assignedStaff.name : null,
+          assigned_employee_role: assignedStaff ? assignedStaff.role : null,
+        }
         : s
     );
     setActiveSubTasks(updated);
@@ -865,21 +1466,9 @@ export default function OperationsTasksPage() {
   const [editSubPenaltyPoints, setEditSubPenaltyPoints] = useState("10");
 
   const handleOpenEditSubtask = (task: OperationTask, sub: SubTask) => {
-    setEditingSubtaskTargetTask(task);
-    setEditingSubtaskId(sub.id);
-    setEditSubTitle(sub.title || "");
-    setEditSubPrice(sub.price !== undefined && sub.price !== null ? String(sub.price) : "");
-    setEditSubAssignedStaffId(sub.assigned_employee_id ? String(sub.assigned_employee_id) : "none");
-    setEditSubIsDaily(Boolean((sub as any).is_daily_recurring));
-    setEditSubDurationHours(sub.duration_hours !== undefined && sub.duration_hours !== null ? String(sub.duration_hours) : "");
-    setEditSubDurationMinutes(sub.duration_minutes !== undefined && sub.duration_minutes !== null ? String(sub.duration_minutes) : "");
-    setEditSubDailyTime((sub as any).daily_time || "");
-    setEditSubDeadlineDate(sub.deadline_date || "");
-    setEditSubDeadlineTime(sub.deadline_time || "");
-    setEditSubUrgency(sub.urgency || "medium");
-    setEditSubPoints(sub.points !== undefined && sub.points !== null ? String(sub.points) : "20");
-    setEditSubPenaltyPoints(sub.penalty_points !== undefined && sub.penalty_points !== null ? String(sub.penalty_points) : "10");
-    setEditSubtaskDialogOpen(true);
+    setSelectedTaskForSubtasks(task);
+    setEditingSubtaskObject(sub);
+    setSubtaskModalOpen(true);
   };
 
   const handleSaveEditedSubtask = async (e: React.FormEvent) => {
@@ -892,19 +1481,21 @@ export default function OperationsTasksPage() {
 
     const assignedStaff = subtaskAssigneeOptions.find((s) => String(s.id) === editSubAssignedStaffId);
     const currentSubs = Array.isArray(editingSubtaskTargetTask.sub_tasks) ? [...editingSubtaskTargetTask.sub_tasks] : [];
-    
+    const isDaily = editSubCadence === "daily";
+
     const updatedSubs = currentSubs.map((s) => {
       if (s.id !== editingSubtaskId) return s;
       return {
         ...s,
         title: editSubTitle.trim(),
         price: parseFloat(editSubPrice) || 0,
-        is_daily_recurring: editSubIsDaily,
+        is_daily_recurring: isDaily,
+        cadence: editSubCadence,
         duration_hours: parseFloat(editSubDurationHours) || 0,
         duration_minutes: parseFloat(editSubDurationMinutes) || 0,
-        daily_time: editSubIsDaily ? (editSubDailyTime || "10:00") : null,
-        deadline_date: !editSubIsDaily ? (editSubDeadlineDate || null) : null,
-        deadline_time: !editSubIsDaily ? (editSubDeadlineTime || null) : null,
+        daily_time: isDaily ? (editSubDailyTime || "10:00") : null,
+        deadline_date: !isDaily ? (editSubDeadlineDate || null) : null,
+        deadline_time: !isDaily ? (editSubDeadlineTime || null) : null,
         urgency: editSubUrgency,
         points: parseFloat(editSubPoints) || 20,
         penalty_points: parseFloat(editSubPenaltyPoints) || 10,
@@ -925,6 +1516,36 @@ export default function OperationsTasksPage() {
     setEditSubtaskDialogOpen(false);
     await saveSubtasksToServer(editingSubtaskTargetTask.id, updatedSubs);
     toast.success("Sub-task updated successfully!");
+  };
+
+
+
+  // 1-Click inline field update for subtask (Price, Priority, Cadence, Assignee)
+  const handleDirectSubtaskFieldUpdate = async (
+    task: any,
+    subId: string | number,
+    fieldUpdates: Record<string, any>
+  ) => {
+    const currentSubs = Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : [];
+    const updatedSubs = currentSubs.map((s: any) => {
+      if (String(s.id) !== String(subId)) return s;
+      return {
+        ...s,
+        ...fieldUpdates,
+      };
+    });
+
+    setTasks((prev) =>
+      prev.map((t) => (t.id === task.id ? { ...t, sub_tasks: updatedSubs } : t))
+    );
+
+    try {
+      await saveSubtasksToServer(task.id, updatedSubs);
+      toast.success("Subtask updated");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update subtask");
+      fetchTasks();
+    }
   };
 
   // 1-Click direct sub-task status toggle
@@ -1171,12 +1792,12 @@ export default function OperationsTasksPage() {
       setAdjustHistory((prev) => [data.adjustment, ...prev]);
       setAdjustHistorySummary((prev: any) => prev
         ? {
-            ...prev,
-            total_bonus: adjustType === "bonus" ? prev.total_bonus + pts : prev.total_bonus,
-            total_penalty: adjustType === "penalty" ? prev.total_penalty + pts : prev.total_penalty,
-            net: adjustType === "bonus" ? prev.net + pts : prev.net - pts,
-            count: prev.count + 1,
-          }
+          ...prev,
+          total_bonus: adjustType === "bonus" ? prev.total_bonus + pts : prev.total_bonus,
+          total_penalty: adjustType === "penalty" ? prev.total_penalty + pts : prev.total_penalty,
+          net: adjustType === "bonus" ? prev.net + pts : prev.net - pts,
+          count: prev.count + 1,
+        }
         : null
       );
       setAdjustPoints("10");
@@ -1261,9 +1882,23 @@ export default function OperationsTasksPage() {
   const isTaskDirectlyAssignedToMe = useCallback(
     (task: OperationTask) => {
       if (!user?.id) return false;
+      if (isClientRole) return true;
+
       const currentUserId = Number(user.id);
       const currentUserEmail = (user.email || "").toLowerCase().trim();
       const currentUserName = (user.full_name || "").toLowerCase().trim();
+
+      // Check client assignment
+      if (task.client_id && Number(task.client_id) === currentUserId) return true;
+      if (Array.isArray(task.assigned_clients)) {
+        const clientMatch = task.assigned_clients.some(
+          (c: any) =>
+            (c.id && Number(c.id) === currentUserId) ||
+            (c.user_id && Number(c.user_id) === currentUserId) ||
+            (currentUserEmail && c.email && c.email.toLowerCase().trim() === currentUserEmail)
+        );
+        if (clientMatch) return true;
+      }
 
       if (task.assigned_employee_id && Number(task.assigned_employee_id) === currentUserId) return true;
       if (task.assigned_employee_email && currentUserEmail && task.assigned_employee_email.toLowerCase().trim() === currentUserEmail) return true;
@@ -1289,7 +1924,7 @@ export default function OperationsTasksPage() {
       }
       return false;
     },
-    [user]
+    [user, isClientRole]
   );
 
   const isTaskAssignedToMe = useCallback(
@@ -1305,6 +1940,16 @@ export default function OperationsTasksPage() {
     [user, isTaskDirectlyAssignedToMe]
   );
 
+  const normalizeStatus = (s?: string | null): TaskStatus => {
+    const val = (s || "pending").toLowerCase().trim().replace("-", "_").replace(" ", "_");
+    if (val === "progress") return "in_progress";
+    if (val === "review") return "under_review";
+    if (val === "recheck" || val === "rework") return "rework";
+    if (val === "on_hold" || val === "hold") return "on_hold";
+    if (val === "failed") return "failed";
+    return val as TaskStatus;
+  };
+
   const displayedTasks = useMemo(() => {
     const isStaffRoute = Boolean(pathname?.startsWith("/staff"));
     const isStaffContext = isStaffRole || isStaffRoute;
@@ -1313,9 +1958,15 @@ export default function OperationsTasksPage() {
       ? tasks.filter((t) => isTaskAssignedToMe(t))
       : tasks;
 
-    // "once task will not apear once complete marked"
-    // When viewing "All Tasks", hide completed Once tasks so only active tasks and daily tasks are displayed
-    if (selectedStatusTab === "all") {
+    if (selectedStatusTab !== "all") {
+      pool = pool.filter((t) => {
+        const subs: SubTask[] = Array.isArray(t.sub_tasks) ? t.sub_tasks : [];
+        if (subs.length > 0) {
+          return subs.some((s) => normalizeStatus(s.status) === selectedStatusTab);
+        }
+        return normalizeStatus(t.status) === selectedStatusTab;
+      });
+    } else {
       pool = pool.filter((t) => !(t.status === "completed" && !t.is_daily_recurring));
     }
 
@@ -1326,17 +1977,30 @@ export default function OperationsTasksPage() {
     return tasks.filter((t) => isTaskAssignedToMe(t)).length;
   }, [tasks, isTaskAssignedToMe]);
 
-  // Get task count for tab
+  // Get task count for tab across subtasks (Image 3)
   const getTabCount = (tabId: string) => {
-    const pool = scopeFilter === "assigned_to_me" ? displayedTasks : tasks;
-    if (tabId === "all") return pool.filter((t) => !(t.status === "completed" && !t.is_daily_recurring)).length;
-    if (tabId === "pending") return pool.filter((t) => t.status === "pending").length;
-    if (tabId === "in_progress") return pool.filter((t) => t.status === "in_progress").length;
-    if (tabId === "under_review") return pool.filter((t) => t.status === "under_review").length;
-    if (tabId === "recheck") return pool.filter((t) => t.status === "recheck").length;
-    if (tabId === "completed") return pool.filter((t) => t.status === "completed").length;
-    if (tabId === "cancelled") return pool.filter((t) => t.status === "cancelled").length;
-    return 0;
+    const isStaffRoute = Boolean(pathname?.startsWith("/staff"));
+    const isStaffContext = isStaffRole || isStaffRoute;
+    const pool = (scopeFilter === "assigned_to_me" || isStaffContext)
+      ? tasks.filter((t) => isTaskAssignedToMe(t))
+      : tasks;
+
+    let count = 0;
+    for (const t of pool) {
+      const subs: SubTask[] = Array.isArray(t.sub_tasks) ? t.sub_tasks : [];
+      if (subs.length > 0) {
+        if (tabId === "all") {
+          count += subs.length;
+        } else {
+          count += subs.filter((s) => normalizeStatus(s.status) === tabId).length;
+        }
+      } else {
+        if (tabId === "all" || normalizeStatus(t.status) === tabId) {
+          count += 1;
+        }
+      }
+    }
+    return count;
   };
 
   // Subtasks modal calculated totals
@@ -1370,73 +2034,103 @@ export default function OperationsTasksPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <Button onClick={handleOpenCreateTask} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md gap-1.5 h-9">
-            <Plus className="w-4 h-4" /> Create Task / Project
-          </Button>
-        </div>
+        {!(isClientRole || Boolean(pathname?.startsWith("/client"))) && (() => {
+          const opsBasePath = pathname?.startsWith("/platformadmin") ? "/platformadmin/operations" : "/admin/operations";
+          return (
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              <Link href={`${opsBasePath}/project-types`}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs font-semibold gap-1.5 border hover:bg-muted/60 transition-colors shadow-2xs"
+                  title="Configure and manage project types"
+                >
+                  <FolderKanban className="w-4 h-4 text-primary" />
+                  <span>Project Types</span>
+                </Button>
+              </Link>
+
+              <Link href={`${opsBasePath}/project-pipelines`}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs font-semibold gap-1.5 border hover:bg-muted/60 transition-colors shadow-2xs"
+                  title="Design and manage project pipeline templates"
+                >
+                  <GitFork className="w-4 h-4 text-primary" />
+                  <span>Project Pipelines</span>
+                </Button>
+              </Link>
+
+              <Button
+                onClick={handleOpenCreateTask}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md gap-1.5 h-9 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" /> Create Task / Project
+              </Button>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Scope Switcher: Hidden on Institution Admin side */}
       {!isInstitutionAdmin && (
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-card rounded-2xl border shadow-xs">
-        <div className="flex items-center gap-2">
-          {!(isStaffRole || pathname?.startsWith("/staff")) ? (
-            <>
-              <Button
-                size="sm"
-                variant={scopeFilter === "all" ? "default" : "outline"}
-                onClick={() => setScopeFilter("all")}
-                className="h-8 text-xs font-bold gap-1.5"
-              >
-                <ClipboardList className="w-3.5 h-3.5" /> All Tasks
-                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
-                  {tasks.length}
-                </Badge>
-              </Button>
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-card rounded-2xl border shadow-xs">
+          <div className="flex items-center gap-2">
+            {!(isStaffRole || pathname?.startsWith("/staff")) ? (
+              <>
+                <Button
+                  size="sm"
+                  variant={scopeFilter === "all" ? "default" : "outline"}
+                  onClick={() => setScopeFilter("all")}
+                  className="h-8 text-xs font-bold gap-1.5"
+                >
+                  <ClipboardList className="w-3.5 h-3.5" /> All Tasks
+                  <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
+                    {tasks.length}
+                  </Badge>
+                </Button>
 
-              <Button
-                size="sm"
-                variant={scopeFilter === "assigned_to_me" ? "default" : "outline"}
-                onClick={() => setScopeFilter("assigned_to_me")}
-                className={`h-8 text-xs font-bold gap-1.5 ${
-                  scopeFilter === "assigned_to_me"
+                <Button
+                  size="sm"
+                  variant={scopeFilter === "assigned_to_me" ? "default" : "outline"}
+                  onClick={() => setScopeFilter("assigned_to_me")}
+                  className={`h-8 text-xs font-bold gap-1.5 ${scopeFilter === "assigned_to_me"
                     ? "bg-emerald-600 text-white hover:bg-emerald-700"
                     : "border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10"
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Assigned to Me
-                <Badge
-                  className={`ml-1 text-[10px] px-1.5 py-0 ${
-                    scopeFilter === "assigned_to_me" ? "bg-white text-emerald-800" : "bg-emerald-600 text-white"
-                  }`}
+                    }`}
                 >
-                  {myAssignedTasksCount}
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Assigned to Me
+                  <Badge
+                    className={`ml-1 text-[10px] px-1.5 py-0 ${scopeFilter === "assigned_to_me" ? "bg-white text-emerald-800" : "bg-emerald-600 text-white"
+                      }`}
+                  >
+                    {myAssignedTasksCount}
+                  </Badge>
+                </Button>
+              </>
+            ) : (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-700 dark:text-emerald-300 text-xs font-bold">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" /> My Tasks (Assigned to You or Created by You)
+                <Badge className="bg-emerald-600 text-white text-[10px] px-1.5 py-0">
+                  {displayedTasks.length}
                 </Badge>
-              </Button>
-            </>
-          ) : (
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-700 dark:text-emerald-300 text-xs font-bold">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" /> My Tasks (Assigned to You or Created by You)
-              <Badge className="bg-emerald-600 text-white text-[10px] px-1.5 py-0">
-                {displayedTasks.length}
-              </Badge>
+              </div>
+            )}
+          </div>
+
+          {user?.full_name && (
+            <div className="text-xs text-muted-foreground flex items-center gap-1.5 font-medium">
+              <span>Staff Account:</span>
+              <span className="font-bold text-foreground">{user.full_name}</span>
+              {isStaffRole && (
+                <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30">
+                  Staff Mode
+                </Badge>
+              )}
             </div>
           )}
         </div>
-
-        {user?.full_name && (
-          <div className="text-xs text-muted-foreground flex items-center gap-1.5 font-medium">
-            <span>Staff Account:</span>
-            <span className="font-bold text-foreground">{user.full_name}</span>
-            {isStaffRole && (
-              <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30">
-                Staff Mode
-              </Badge>
-            )}
-          </div>
-        )}
-      </div>
       )}
 
       {/* Metrics Row */}
@@ -1512,17 +2206,15 @@ export default function OperationsTasksPage() {
             <button
               key={tab.id}
               onClick={() => setSelectedStatusTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                isSelected
-                  ? "bg-background text-foreground shadow-sm border border-border"
-                  : "text-muted-foreground hover:text-foreground hover:bg-background/50"
-              }`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${isSelected
+                ? "bg-background text-foreground shadow-sm border border-border"
+                : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                }`}
             >
               <span>{tab.label}</span>
               <span
-                className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
-                  isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                }`}
+                className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                  }`}
               >
                 {count}
               </span>
@@ -1647,28 +2339,89 @@ export default function OperationsTasksPage() {
           )}
         </div>
       ) : (
-        /* FULL WIDTH CARDS VIEW: Each task card expands with full horizontal room */
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        /* FULL WIDTH CARDS VIEW: Each project card takes full horizontal row */
+        <div className="space-y-5">
           {displayedTasks.map((task) => {
-            const subTasksList = Array.isArray(task.sub_tasks) ? task.sub_tasks : [];
-            const completedSubs = subTasksList.filter((s) => s.status === "completed").length;
-            const totalCost = subTasksList.reduce((sum, s) => sum + (parseFloat(String(s.price)) || 0), 0) || parseFloat(String(task.price || 0));
-            const totalMinutes = subTasksList.reduce((sum, s) => {
+            const rawSubTasksList: SubTask[] = Array.isArray(task.sub_tasks) ? task.sub_tasks : [];
+            const subTasksList: SubTask[] = selectedStatusTab === "all"
+              ? rawSubTasksList
+              : rawSubTasksList.filter((s) => normalizeStatus(s.status) === selectedStatusTab);
+            const completedSubs = rawSubTasksList.filter((s) => normalizeStatus(s.status) === "completed").length;
+            const totalCost = rawSubTasksList.reduce((sum, s) => sum + (parseFloat(String(s.price)) || 0), 0) || parseFloat(String(task.price || 0));
+            const totalMinutes = rawSubTasksList.reduce((sum, s) => {
               const h = parseFloat(String(s.duration_hours)) || 0;
               const m = parseFloat(String(s.duration_minutes)) || 0;
               return sum + (h * 60) + m;
             }, 0);
             const totalHoursDisplay = totalMinutes > 0
               ? (() => {
-                  const h = Math.floor(totalMinutes / 60);
-                  const m = Math.round(totalMinutes % 60);
-                  if (h > 0 && m > 0) return `${h}h ${m}m`;
-                  if (h > 0) return `${h}h`;
-                  if (m > 0) return `${m}m`;
-                  return "0m";
-                })()
+                const h = Math.floor(totalMinutes / 60);
+                const m = Math.round(totalMinutes % 60);
+                if (h > 0 && m > 0) return `${h}h ${m}m`;
+                if (h > 0) return `${h}h`;
+                if (m > 0) return `${m}m`;
+                return "0m";
+              })()
               : (parseFloat(String(task.estimated_hours || 0)) ? `${task.estimated_hours}h` : "0h");
-            const isExpanded = expandedTaskSubtasks[task.id] ?? true;
+
+
+            // Expected duration calculated according to team members assigned/working on each sub-task
+            const expectedMinutes = rawSubTasksList.reduce((sum, s) => {
+              const baseMin = ((parseFloat(String(s.duration_hours)) || 0) * 60) + (parseFloat(String(s.duration_minutes)) || 0);
+              const teamMembers = new Set<string>();
+              if (s.assigned_employee_name) {
+                s.assigned_employee_name.split(",").map((x) => x.trim()).filter(Boolean).forEach((x) => teamMembers.add(x));
+              }
+              if (Array.isArray((s as any).assigned_employees)) {
+                (s as any).assigned_employees.forEach((e: any) => {
+                  const n = typeof e === "string" ? e : (e?.name || e?.full_name);
+                  if (n) teamMembers.add(String(n).trim());
+                });
+              }
+              if (Array.isArray(s.uploads)) {
+                s.uploads.forEach((u: any) => {
+                  if (u?.uploaded_by_name) teamMembers.add(String(u.uploaded_by_name).trim());
+                });
+              }
+              if (Array.isArray(s.work_updates)) {
+                s.work_updates.forEach((w: any) => {
+                  if (w?.author_name) teamMembers.add(String(w.author_name).trim());
+                });
+              }
+              if ((s as any).started_by_name) teamMembers.add(String((s as any).started_by_name).trim());
+              const teamCount = Math.max(1, teamMembers.size);
+              return sum + (baseMin * teamCount);
+            }, 0);
+
+            const expectedDurationDisplay = expectedMinutes > 0
+              ? (() => {
+                const h = Math.floor(expectedMinutes / 60);
+                const m = Math.round(expectedMinutes % 60);
+                if (h > 0 && m > 0) return `${h}h ${m}m`;
+                if (h > 0) return `${h} hours`;
+                if (m > 0) return `${m}m`;
+                return "0m";
+              })()
+              : totalHoursDisplay;
+
+            // Duration taken by team
+            const durationTakenMinutes = rawSubTasksList.reduce((sum, s) => {
+              const baseMin = ((parseFloat(String(s.duration_hours)) || 0) * 60) + (parseFloat(String(s.duration_minutes)) || 0);
+              const logged = parseFloat(String((s as any).logged_minutes)) || 0;
+              return sum + (logged > 0 ? logged : baseMin);
+            }, 0);
+
+            const durationTakenDisplay = durationTakenMinutes > 0
+              ? (() => {
+                const h = Math.floor(durationTakenMinutes / 60);
+                const m = Math.round(durationTakenMinutes % 60);
+                if (h > 0 && m > 0) return `${h}h ${m}m`;
+                if (h > 0) return `${h}h`;
+                if (m > 0) return `${m}m`;
+                return "0m";
+              })()
+              : totalHoursDisplay;
+            const isExpanded = expandedTaskSubtasks[task.id] ?? false;
             const isCreator = Boolean(user?.id && task.created_by && Number(task.created_by) === Number(user.id));
             const isAssigned = isTaskDirectlyAssignedToMe(task);
             const canEditOrRemove = !isStaffViewer || isCreator;
@@ -1683,84 +2436,121 @@ export default function OperationsTasksPage() {
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     {!isInstitutionAdmin ? (
                       <div className="flex items-center gap-2 flex-wrap">
-                      {getUrgencyBadge(task.urgency)}
-                      <span className="text-[11px] text-muted-foreground font-mono">#{task.id}</span>
-                      <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] gap-1 font-semibold">
-                        <Sparkles className="w-3 h-3 text-amber-500" /> +{task.points || 20} / -{task.penalty_points || 10} pts
-                      </Badge>
-                      {task.is_daily_recurring && (
-                        <Badge variant="outline" className={task.status === "completed" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] gap-1 font-semibold" : "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 text-[10px] gap-1 font-semibold"}>
-                          <RefreshCw className="w-3 h-3" /> {task.status === "completed" ? "Daily Task (Completed Today)" : "Daily Recurring Task"}
+                        {getUrgencyBadge(task.urgency)}
+                        <span className="text-[11px] text-muted-foreground font-mono">#{task.id}</span>
+                        <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] gap-1 font-semibold">
+                          <Sparkles className="w-3 h-3 text-amber-500" /> +{task.points || 20} / -{task.penalty_points || 10} pts
                         </Badge>
-                      )}
-                      {isAssigned && isCreator && (
-                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] gap-1 font-semibold">
-                          <Sparkles className="w-3 h-3 text-amber-500" /> Assigned & Created by You
-                        </Badge>
-                      )}
-                      {isAssigned && !isCreator && (
-                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] gap-1 font-semibold">
-                          <Sparkles className="w-3 h-3 text-amber-500" /> Assigned to You
-                        </Badge>
-                      )}
-                      {!isAssigned && isCreator && (
-                        <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 text-[10px] gap-1 font-semibold">
-                          <Sparkles className="w-3 h-3 text-blue-500" /> Created by You
-                        </Badge>
-                      )}
-                    </div>
+                        {task.is_daily_recurring && (
+                          <Badge variant="outline" className={task.status === "completed" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] gap-1 font-semibold" : "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 text-[10px] gap-1 font-semibold"}>
+                            <RefreshCw className="w-3 h-3" /> {task.status === "completed" ? "Daily Task (Completed Today)" : "Daily Recurring Task"}
+                          </Badge>
+                        )}
+                        {isAssigned && isCreator && (
+                          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] gap-1 font-semibold">
+                            <Sparkles className="w-3 h-3 text-amber-500" /> Assigned & Created by You
+                          </Badge>
+                        )}
+                        {isAssigned && !isCreator && (
+                          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] gap-1 font-semibold">
+                            <Sparkles className="w-3 h-3 text-amber-500" /> Assigned to You
+                          </Badge>
+                        )}
+                        {!isAssigned && isCreator && (
+                          <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 text-[10px] gap-1 font-semibold">
+                            <Sparkles className="w-3 h-3 text-blue-500" /> Created by You
+                          </Badge>
+                        )}
+                      </div>
                     ) : (
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-mono font-bold text-muted-foreground">#{task.id}</span>
                       </div>
                     )}
 
-                    <div className="flex items-center gap-2 shrink-0 ml-auto">
-                      {/* Quick Status Dropdown - Hidden for institution admin */}
-                      {!isInstitutionAdmin && (
-                        <select
-                          value={task.status}
-                        onChange={(e) => handleQuickTaskStatusChange(task.id, e.target.value)}
-                        className="h-8 text-xs font-bold w-32 bg-muted/30 rounded-lg border border-input px-2 outline-none focus:ring-1 focus:ring-primary/40 cursor-pointer text-foreground"
-                      >
-                        {allowedStatuses.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.label}
-                          </option>
-                        ))}
-                      </select>
-                      )}
-
-                      {/* Adjust Score button — admin only */}
-                      {!isStaffRole && (
+                    <div className="flex items-center gap-2 shrink-0 ml-auto flex-wrap">
+                      {/* Add Sub-Task Button */}
+                      {canEditOrRemove && !isClientRole && (
                         <Button
                           size="sm"
-                          variant="outline"
-                          onClick={() => handleOpenAdjustScore(task)}
-                          title="Add manual bonus or penalty score"
-                          className="h-8 text-xs font-bold gap-1 border-amber-400/60 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                          onClick={() => handleOpenSubtasksModal(task)}
+                          className="h-8 text-xs font-bold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-2xs cursor-pointer px-3"
+                          title="Add sub-task"
                         >
-                          <Trophy className="w-3.5 h-3.5" /> Adjust Score
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Sub-Task</span>
                         </Button>
                       )}
 
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setHistoryModalTask(task)}
-                        className="h-8 text-xs font-bold gap-1 text-muted-foreground hover:text-foreground cursor-pointer shadow-2xs"
-                        title="View Task History & Geolocation"
+                      {/* Status Dropdown (Image 4): pending, in_progress, completed, on_hold, rework, cancelled, failed */}
+                      <select
+                        value={task.status === "recheck" ? "rework" : task.status || "pending"}
+                        onChange={(e) => handleQuickTaskStatusChange(task.id, e.target.value)}
+                        className="h-8 text-xs font-bold w-32 bg-muted/30 rounded-lg border border-input px-2 outline-none focus:ring-1 focus:ring-primary/40 cursor-pointer text-foreground capitalize"
+                        title="Change project status"
                       >
-                        <History className="w-3.5 h-3.5 text-primary" /> History
-                      </Button>
+                        <option value="pending">Pending</option>
+                        <option value="in_progress">In progress</option>
+                        <option value="completed">Completed</option>
+                        <option value="on_hold">On hold</option>
+                        <option value="rework">Rework</option>
+                        <option value="cancelled">Cancelled</option>
+                        <option value="failed">Failed</option>
+                      </select>
 
-                      <Button
-                        size="sm"
-                        onClick={() => handleOpenSubtasksModal(task)}
-                        className="h-8 text-xs font-bold gap-1 bg-primary text-primary-foreground shadow-sm"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> + Sub-Tasks
-                      </Button>
+                      {/* 3-dots Menu: invoices, Edit, History and info, delete (Image 4) */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg cursor-pointer transition-colors"
+                            title="More project actions"
+                          >
+                            <MoreVertical className="w-4 h-4 fill-current text-red-600" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44 text-xs font-medium">
+                          <DropdownMenuItem
+                            onClick={() => setInvoicesModalTask(task)}
+                            className="gap-2 cursor-pointer font-medium"
+                          >
+                            <Receipt className="w-4 h-4 text-primary" />
+                            <span>Invoices</span>
+                          </DropdownMenuItem>
+                          {canEditOrRemove && !isClientRole && (
+                            <DropdownMenuItem
+                              onClick={() => handleOpenEditTask(task)}
+                              className="gap-2 cursor-pointer font-medium"
+                            >
+                              <Edit2 className="w-4 h-4 text-blue-600" />
+                              <span>Edit</span>
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setHistoryModalSubtask(null);
+                              setHistoryModalTask(task);
+                            }}
+                            className="gap-2 cursor-pointer font-medium"
+                          >
+                            <History className="w-4 h-4 text-amber-600" />
+                            <span>History and info</span>
+                          </DropdownMenuItem>
+                          {canEditOrRemove && !isClientRole && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleDeleteTask(task.id)}
+                                className="gap-2 text-destructive focus:text-destructive cursor-pointer font-medium"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                <span>Delete</span>
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
 
@@ -1771,14 +2561,23 @@ export default function OperationsTasksPage() {
                     </h3>
                   </div>
 
-                  {/* Client (if not institution admin) */}
-                  {!isInstitutionAdmin && task.client_name && (
-                    <div className="flex items-center gap-2 text-xs pt-1">
-                      <Building2 className="w-4 h-4 text-primary shrink-0" />
-                      <span className="text-muted-foreground">Client:</span>
-                      <span className="font-bold text-foreground">{task.client_name}</span>
+                  {/* Assigned Clients Badges */}
+                  {(Array.isArray(task.assigned_clients) && task.assigned_clients.length > 0) || task.client_name ? (
+                    <div className="flex items-center gap-1.5 text-xs pt-1 flex-wrap">
+                      <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
+                      <span className="text-muted-foreground text-[11px] font-medium">Client:</span>
+                      {Array.isArray(task.assigned_clients) && task.assigned_clients.length > 0 ? (
+                        task.assigned_clients.map((c) => (
+                          <Badge key={c.id} variant="secondary" className="text-[11px] py-0 px-2 font-semibold gap-1">
+                            <Building2 className="w-2.5 h-2.5 text-primary" />
+                            {c.company_name || c.name}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="font-bold text-foreground text-xs">{task.client_name}</span>
+                      )}
                     </div>
-                  )}
+                  ) : null}
 
                   {task.details && (
                     <p className="text-muted-foreground text-xs leading-relaxed bg-muted/20 p-2.5 rounded-xl border">
@@ -1786,8 +2585,202 @@ export default function OperationsTasksPage() {
                     </p>
                   )}
 
+                  {/* Project Extended Details: Leader, Teams Staff, Dates, Live URL, Demo URL, Agreement Document */}
+                  {(() => {
+                    const teamStaffList: Array<{ id?: string | number; name: string; role?: string | null }> = [];
+                    if (Array.isArray(task.assigned_employees) && task.assigned_employees.length > 0) {
+                      task.assigned_employees.forEach((emp) => {
+                        if (emp && emp.name && !teamStaffList.some((s) => String(s.id) === String(emp.id))) {
+                          teamStaffList.push(emp);
+                        }
+                      });
+                    } else if (task.assigned_employee_name) {
+                      teamStaffList.push({
+                        id: task.assigned_employee_id || "emp",
+                        name: task.assigned_employee_name,
+                        role: task.assigned_employee_role || null,
+                      });
+                    }
+
+                    const isOverdue = Boolean(
+                      task.due_date &&
+                      new Date(task.due_date).getTime() < Date.now() &&
+                      task.status !== "completed"
+                    );
+
+                    return (
+                      <div className="space-y-2 p-3 bg-muted/20 rounded-xl border text-xs">
+                        {/* Row 1: Project Leader, Teams Staff & Timeline Dates */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {/* Project Leader */}
+                            {task.project_leader_name ? (
+                              <Badge variant="outline" className="bg-amber-500/10 text-amber-900 dark:text-amber-300 border-amber-500/30 gap-1.5 py-1 px-2.5 font-semibold text-[11px]">
+                                <Crown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                <span className="text-muted-foreground font-normal">Leader:</span>
+                                <strong className="text-foreground">{task.project_leader_name}</strong>
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-muted/40 text-muted-foreground border-dashed gap-1 py-1 px-2 text-[11px]">
+                                <Crown className="w-3 h-3 opacity-50 shrink-0" />
+                                <span>No Leader Assigned</span>
+                              </Badge>
+                            )}
+
+                            {/* Teams Staff */}
+                            <Badge variant="outline" className="bg-blue-500/10 text-blue-900 dark:text-blue-300 border-blue-500/30 gap-1.5 py-1 px-2.5 font-semibold text-[11px]">
+                              <Users className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                              <span className="text-muted-foreground font-normal">Team Staff:</span>
+                              {teamStaffList.length > 0 ? (
+                                <strong className="text-foreground">
+                                  {teamStaffList.map((m) => m.name).join(", ")}
+                                </strong>
+                              ) : (
+                                <span className="italic font-normal text-muted-foreground">Unassigned</span>
+                              )}
+                            </Badge>
+                          </div>
+
+                          {/* Start Date & Due Date */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="outline" className="bg-background text-foreground border gap-1.5 py-1 px-2.5 text-[11px] font-medium">
+                              <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
+                              <span className="text-muted-foreground">Start Date:</span>
+                              <strong className="font-mono">{task.start_date ? formatDateDisplay(task.start_date) : "Not set"}</strong>
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={`gap-1.5 py-1 px-2.5 text-[11px] font-medium ${isOverdue
+                                  ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/40"
+                                  : "bg-background text-foreground border"
+                                }`}
+                            >
+                              <Clock className={`w-3.5 h-3.5 shrink-0 ${isOverdue ? "text-rose-600" : "text-amber-600"}`} />
+                              <span className="text-muted-foreground">Due Date:</span>
+                              <strong className="font-mono">{(task.due_date || task.deadline) ? formatDateDisplay(task.due_date || task.deadline) : "Not set"}</strong>
+                              {isOverdue && (
+                                <span className="text-[9px] uppercase font-bold text-rose-600 tracking-wider bg-rose-500/20 px-1 py-0.2 rounded ml-0.5">
+                                  Overdue
+                                </span>
+                              )}
+                            </Badge>
+                          </div>
+                        </div>
+
+                        {/* Row 2: Live Website, Demo URL & Project Agreement Document */}
+                        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                          {/* Live Website */}
+                          {task.live_url ? (
+                            <a
+                              href={task.live_url.startsWith("http") ? task.live_url : `https://${task.live_url}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all group shadow-2xs"
+                              title={`Open Live Website: ${task.live_url}`}
+                            >
+                              <Globe className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform shrink-0" />
+                              <span>Live Website</span>
+                              <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                            </a>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-muted-foreground/60 bg-muted/30 border border-dashed">
+                              <Globe className="w-3 h-3 opacity-40 shrink-0" />
+                              <span>No Live Website</span>
+                            </span>
+                          )}
+
+                          {/* Demo URL */}
+                          {task.demo_url ? (
+                            <a
+                              href={task.demo_url.startsWith("http") ? task.demo_url : `https://${task.demo_url}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-blue-500/10 text-blue-800 dark:text-blue-300 border border-blue-500/30 hover:bg-blue-500/20 transition-all group shadow-2xs"
+                              title={`Open Demo URL: ${task.demo_url}`}
+                            >
+                              <Monitor className="w-3.5 h-3.5 text-blue-600 group-hover:scale-110 transition-transform shrink-0" />
+                              <span>Demo URL</span>
+                              <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                            </a>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-muted-foreground/60 bg-muted/30 border border-dashed">
+                              <Monitor className="w-3 h-3 opacity-40 shrink-0" />
+                              <span>No Demo URL</span>
+                            </span>
+                          )}
+
+                          {/* Project Agreement Document */}
+                          {task.agreement_document_url ? (
+                            <div className="inline-flex items-center gap-1.5 flex-wrap">
+                              <a
+                                href={task.agreement_document_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-violet-500/10 text-violet-800 dark:text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 transition-all group shadow-2xs"
+                                title={`View/Download Agreement: ${task.agreement_document_name || "Agreement Document"}`}
+                              >
+                                <FileText className="w-3.5 h-3.5 text-violet-600 group-hover:scale-110 transition-transform shrink-0" />
+                                <span className="truncate max-w-[220px]">
+                                  {task.agreement_document_name || "Project Agreement Document"}
+                                </span>
+                                <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                              </a>
+                              <label
+                                className="inline-flex items-center gap-1 px-1.5 py-1 rounded-md text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/80 cursor-pointer border border-dashed border-border transition-colors"
+                                title="Upload new version / replace agreement document"
+                              >
+                                {directDocUploadingTaskId === task.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                                ) : (
+                                  <Upload className="w-3 h-3 text-muted-foreground" />
+                                )}
+                                <input
+                                  type="file"
+                                  className="hidden"
+                                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.txt,.xlsx,.xls"
+                                  disabled={directDocUploadingTaskId === task.id}
+                                  onChange={(e) => {
+                                    const f = e.target.files?.[0];
+                                    if (f) handleDirectAgreementDocUpload(task.id, f);
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          ) : (
+                            <label
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-muted-foreground bg-muted/30 hover:bg-violet-500/10 hover:text-violet-700 hover:border-violet-500/40 border border-dashed cursor-pointer transition-all group shadow-2xs"
+                              title="Click here to upload agreement document"
+                            >
+                              {directDocUploadingTaskId === task.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600 shrink-0" />
+                              ) : (
+                                <FileText className="w-3.5 h-3.5 opacity-60 group-hover:text-violet-600 shrink-0" />
+                              )}
+                              <span>No Agreement Doc</span>
+                              <span className="text-[10px] text-violet-600 dark:text-violet-400 font-bold underline underline-offset-2 ml-0.5">
+                                + Upload
+                              </span>
+                              <input
+                                type="file"
+                                className="hidden"
+                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.txt,.xlsx,.xls"
+                                disabled={directDocUploadingTaskId === task.id}
+                                onChange={(e) => {
+                                  const f = e.target.files?.[0];
+                                  if (f) handleDirectAgreementDocUpload(task.id, f);
+                                  e.target.value = "";
+                                }}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Summary Bar: Total Cost, Duration, Sub-Tasks Progress */}
-                  <div className="grid grid-cols-3 gap-2 bg-muted/30 p-3 rounded-xl border text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-muted/30 p-3 rounded-xl border text-xs">
                     <div>
                       <span className="text-muted-foreground block text-[10px] font-medium uppercase">Total Cost</span>
                       <span className="font-bold text-foreground font-mono text-sm tracking-wider">
@@ -1795,9 +2788,15 @@ export default function OperationsTasksPage() {
                       </span>
                     </div>
                     <div className="border-l pl-3">
-                      <span className="text-muted-foreground block text-[10px] font-medium uppercase">Total Duration</span>
+                      <span className="text-muted-foreground block text-[10px] font-medium uppercase">Expected Duration</span>
                       <span className="font-bold text-foreground font-mono text-sm">
-                        {totalHoursDisplay}
+                        {expectedDurationDisplay}
+                      </span>
+                    </div>
+                    <div className="border-l pl-3">
+                      <span className="text-muted-foreground block text-[10px] font-medium uppercase">Duration Taken</span>
+                      <span className="font-bold text-foreground font-mono text-sm">
+                        {durationTakenDisplay}
                       </span>
                     </div>
                     <div className="border-l pl-3">
@@ -1890,6 +2889,281 @@ export default function OperationsTasksPage() {
                     </div>
                   )}
 
+                  {/* Project Pipeline Instance Workflow (if attached) */}
+                  {Array.isArray(task.pipeline_phases) && task.pipeline_phases.length > 0 ? (() => {
+                    const phases = task.pipeline_phases;
+                    const currentIndex = task.current_phase_index ?? 0;
+                    const completedPhasesCount = phases.filter((p) => p.status === "completed").length;
+                    const currentPhase = phases[currentIndex] || phases[0];
+
+                    const getPhaseStatusBadgeInfo = (st?: string) => {
+                      switch (st) {
+                        case "completed":
+                          return { label: "Completed", bg: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30", dot: "bg-emerald-500" };
+                        case "in_progress":
+                          return { label: "In Progress", bg: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30", dot: "bg-blue-500 animate-pulse" };
+                        case "under_review":
+                          return { label: "Under Review", bg: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40", dot: "bg-amber-500" };
+                        case "on_hold":
+                          return { label: "On Hold", bg: "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30", dot: "bg-orange-500" };
+                        case "failed":
+                          return { label: "Failed", bg: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30", dot: "bg-rose-500" };
+                        case "cancelled":
+                          return { label: "Cancelled", bg: "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/30", dot: "bg-zinc-500" };
+                        default:
+                          return { label: "Not Started", bg: "bg-muted/80 text-muted-foreground border-border", dot: "bg-muted-foreground/40" };
+                      }
+                    };
+
+                    return (
+                      <div className="space-y-3 p-3.5 bg-muted/25 rounded-xl border text-xs">
+                        {/* Pipeline Header Bar */}
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b pb-2.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-foreground flex items-center gap-1.5 text-xs">
+                              <GitFork className="w-4 h-4 text-primary" />
+                              {task.pipeline_name || "Project Pipeline"}
+                            </span>
+                            {task.project_type_name && (
+                              <Badge variant="outline" className="text-[10px] bg-background font-semibold gap-1 py-0.5 px-2">
+                                <FolderKanban className="w-3 h-3 text-primary" />
+                                {task.project_type_name}
+                              </Badge>
+                            )}
+                            <Badge
+                              variant="secondary"
+                              className="text-[10px] font-bold py-0.5 px-2.5 bg-primary/10 text-primary border border-primary/20"
+                            >
+                              Phase {currentIndex + 1} of {phases.length}: {currentPhase?.name || "In Progress"}
+                            </Badge>
+                          </div>
+
+                          <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                            <span className="font-mono font-semibold text-foreground">
+                              {completedPhasesCount}/{phases.length} Phases Done
+                            </span>
+                            <div className="w-20 bg-muted h-2.5 rounded-full overflow-hidden border">
+                              <div
+                                className="bg-primary h-full transition-all duration-300"
+                                style={{ width: `${(completedPhasesCount / phases.length) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Interactive Phase Sequence Stepper */}
+                        <div className="flex items-center gap-2.5 overflow-x-auto py-1 no-scrollbar">
+                          {phases.map((ph, idx) => {
+                            const isCurrent = idx === currentIndex;
+                            const isDone = ph.status === "completed";
+                            const isReview = ph.status === "under_review";
+                            const statusInfo = getPhaseStatusBadgeInfo(ph.status);
+
+                            return (
+                              <div key={ph.id || idx} className="flex items-center gap-2 shrink-0">
+                                <div
+                                  className={`flex flex-col rounded-xl p-3 min-w-[200px] max-w-[220px] border shadow-2xs transition-all ${
+                                    isCurrent
+                                      ? "bg-card border-primary ring-2 ring-primary/30"
+                                      : isDone
+                                      ? "bg-emerald-500/5 border-emerald-500/30"
+                                      : "bg-card border-border hover:border-input"
+                                  }`}
+                                >
+                                  {/* Step number & Phase Status Dropdown */}
+                                  <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                                    <span
+                                      className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md ${
+                                        isDone
+                                          ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                                          : isCurrent
+                                          ? "bg-primary text-primary-foreground"
+                                          : "bg-muted text-muted-foreground"
+                                      }`}
+                                    >
+                                      Step {idx + 1}
+                                    </span>
+
+                                    {/* Prominent Phase Status Change Dropdown */}
+                                    {canEditOrRemove ? (
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <button
+                                            type="button"
+                                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors cursor-pointer shadow-2xs ${statusInfo.bg}`}
+                                            title="Click to change phase status"
+                                          >
+                                            <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot}`} />
+                                            <span>{statusInfo.label}</span>
+                                            <ChevronDown className="w-2.5 h-2.5 opacity-60 ml-0.5" />
+                                          </button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-44 text-xs font-medium">
+                                          <DropdownMenuItem
+                                            onClick={() => handleUpdateProjectPhase(task, idx, "not_started")}
+                                            className="gap-2 cursor-pointer text-xs"
+                                          >
+                                            <span className="w-2 h-2 rounded-full bg-slate-400" />
+                                            <span>Not Started</span>
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={() => handleUpdateProjectPhase(task, idx, "in_progress")}
+                                            className="gap-2 cursor-pointer text-xs text-blue-600 font-semibold"
+                                          >
+                                            <span className="w-2 h-2 rounded-full bg-blue-500" />
+                                            <span>In Progress</span>
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={() => handleUpdateProjectPhase(task, idx, "under_review")}
+                                            className="gap-2 cursor-pointer text-xs text-amber-600 font-semibold"
+                                          >
+                                            <span className="w-2 h-2 rounded-full bg-amber-500" />
+                                            <span>Under Review</span>
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={() => handleUpdateProjectPhase(task, idx, "completed")}
+                                            className="gap-2 cursor-pointer text-xs text-emerald-600 font-semibold"
+                                          >
+                                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                            <span>Completed</span>
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={() => handleUpdateProjectPhase(task, idx, "on_hold")}
+                                            className="gap-2 cursor-pointer text-xs text-orange-600 font-semibold"
+                                          >
+                                            <span className="w-2 h-2 rounded-full bg-orange-500" />
+                                            <span>On Hold</span>
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={() => handleUpdateProjectPhase(task, idx, "failed")}
+                                            className="gap-2 cursor-pointer text-xs text-rose-600 font-semibold"
+                                          >
+                                            <span className="w-2 h-2 rounded-full bg-rose-500" />
+                                            <span>Failed</span>
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={() => handleUpdateProjectPhase(task, idx, "cancelled")}
+                                            className="gap-2 cursor-pointer text-xs text-muted-foreground font-semibold"
+                                          >
+                                            <span className="w-2 h-2 rounded-full bg-zinc-400" />
+                                            <span>Cancelled</span>
+                                          </DropdownMenuItem>
+                                          <DropdownMenuSeparator />
+                                          <DropdownMenuItem
+                                            onClick={() => {
+                                              setPhaseModalState({ task, phaseIndex: idx, phase: ph });
+                                              setPhaseModalStatus(ph.status || "not_started");
+                                              setPhaseModalNotes(ph.notes || "");
+                                              setPhaseModalAdvanceNext(true);
+                                            }}
+                                            className="gap-2 cursor-pointer text-xs text-primary font-bold"
+                                          >
+                                            <Edit2 className="w-3 h-3" />
+                                            <span>Phase Details & Notes...</span>
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    ) : (
+                                      <Badge
+                                        variant="outline"
+                                        className={`text-[10px] px-2 py-0.5 font-semibold ${statusInfo.bg}`}
+                                      >
+                                        <span className={`w-1.5 h-1.5 rounded-full mr-1 ${statusInfo.dot}`} />
+                                        {statusInfo.label}
+                                      </Badge>
+                                    )}
+                                  </div>
+
+                                  {/* Phase Title */}
+                                  <span
+                                    className={`text-xs font-bold leading-tight line-clamp-1 ${
+                                      isDone ? "text-emerald-800 dark:text-emerald-300 line-through opacity-80" : "text-foreground"
+                                    }`}
+                                    title={ph.name}
+                                  >
+                                    {ph.name}
+                                  </span>
+
+                                  {/* Role & Duration */}
+                                  <div className="flex items-center justify-between text-[10px] text-muted-foreground mt-1.5 pt-1.5 border-t">
+                                    <span className="truncate max-w-[105px]" title={ph.assigned_role || "Role: Unassigned"}>
+                                      {ph.assigned_role || "Any"}
+                                    </span>
+                                    <span className="font-mono font-semibold">
+                                      {ph.estimated_duration_hours ? `${ph.estimated_duration_hours}h` : "—"}
+                                    </span>
+                                  </div>
+
+                                  {/* Quick Action buttons for current phase */}
+                                  {canEditOrRemove && isCurrent && (
+                                    <div className="pt-2 flex items-center gap-1.5">
+                                      {ph.requires_approval && isReview ? (
+                                        <Button
+                                          size="sm"
+                                          onClick={() => handleUpdateProjectPhase(task, idx, "completed", true)}
+                                          className="h-6 text-[10px] font-bold w-full bg-amber-600 hover:bg-amber-700 text-white py-0 px-2 gap-1 shadow-2xs"
+                                          title="Approve this phase and advance to next phase"
+                                        >
+                                          <Check className="w-3 h-3" /> Approve Phase
+                                        </Button>
+                                      ) : isDone && idx + 1 < phases.length ? (
+                                        <Button
+                                          size="sm"
+                                          onClick={() => handleUpdateProjectPhase(task, idx, "completed", true)}
+                                          className="h-6 text-[10px] font-bold w-full bg-primary hover:bg-primary/90 text-primary-foreground py-0 px-2 gap-1 shadow-2xs"
+                                        >
+                                          Next Phase <ArrowRight className="w-3 h-3" />
+                                        </Button>
+                                      ) : !isDone ? (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => handleUpdateProjectPhase(task, idx, "completed", true)}
+                                          className="h-6 text-[10px] font-bold w-full border-emerald-500/40 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 py-0 px-2 gap-1"
+                                        >
+                                          <Check className="w-3 h-3 text-emerald-600" /> Mark Complete
+                                        </Button>
+                                      ) : null}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {idx < phases.length - 1 && (
+                                  <ArrowRight
+                                    className={`w-3.5 h-3.5 shrink-0 ${
+                                      idx < currentIndex ? "text-emerald-500" : "text-muted-foreground/30"
+                                    }`}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })() : canEditOrRemove && (
+                    <div className="flex items-center justify-between p-2.5 bg-muted/20 rounded-xl border border-dashed text-xs">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <GitFork className="w-4 h-4 text-primary opacity-60" />
+                        <span>No pipeline workflow assigned to this project yet.</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setAttachPipelineTask(task);
+                          setAttachTypeId("none");
+                          setAttachPipelineId("none");
+                          setAttachAvailablePipelines([]);
+                          void fetchProjectTypesForModal();
+                        }}
+                        className="h-7 text-xs font-semibold gap-1 text-primary border-primary/30 hover:bg-primary/10"
+                      >
+                        <Plus className="w-3 h-3" /> Assign Pipeline
+                      </Button>
+                    </div>
+                  )}
+
                   {/* Full-Width Sub-Tasks List */}
                   <div className="space-y-2 pt-1 border-t">
                     <div
@@ -1903,687 +3177,916 @@ export default function OperationsTasksPage() {
                     >
                       <div className="flex items-center gap-1.5">
                         <Layers className="w-4 h-4 text-primary" />
-                        <span>Sub-Tasks & Assignees ({subTasksList.length})</span>
+                        <span>
+                          Sub-Tasks & Assignees ({subTasksList.length}
+                          {rawSubTasksList.length !== subTasksList.length ? ` of ${rawSubTasksList.length}` : ""})
+                        </span>
                       </div>
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        {isExpanded ? "Collapse" : "Expand"}
-                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {canEditOrRemove && !isClientRole && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenSubtasksModal(task);
+                            }}
+                            className="h-6 text-[11px] font-semibold gap-1 text-primary hover:bg-primary/10 border-primary/30 py-0 px-2 cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>add sub task</span>
+                          </Button>
+                        )}
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          {isExpanded ? "Collapse" : "Expand"}
+                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </span>
+                      </div>
                     </div>
 
                     {isExpanded && subTasksList.length > 0 && (
-                      <div className="space-y-2 pt-1">
-                        {subTasksList.map((sub, index) => {
-                          const isSubtaskAssignedToMe = Boolean(
-                            user?.id &&
-                            ((sub.assigned_employee_id && Number(sub.assigned_employee_id) === Number(user.id)) ||
-                             (user.email && sub.assigned_employee_email && sub.assigned_employee_email.toLowerCase().trim() === user.email.toLowerCase().trim()) ||
-                             (user.full_name && user.full_name.trim().length > 2 && user.full_name.toLowerCase() !== "admin" && sub.assigned_employee_name && sub.assigned_employee_name.toLowerCase().trim() === user.full_name.toLowerCase().trim()))
-                          );
-
-                          return (
-                          <div
-                            key={sub.id}
-                            className={`p-3 rounded-xl bg-background border text-xs space-y-2 transition-colors shadow-2xs ${
-                              isSubtaskAssignedToMe ? "border-emerald-500/50 bg-emerald-500/5" : "hover:border-primary/40"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                                <span className="font-bold text-muted-foreground text-[10px]">#{index + 1}</span>
-                                <span className={`font-bold text-xs truncate ${sub.status === "completed" ? "line-through text-muted-foreground" : "text-foreground"}`}>
-                                  {sub.title}
-                                </span>
-                                <span className="font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded text-[11px] tracking-wider">
-                                  {formatPriceDisplay(sub.price)}
-                                </span>
-                                {sub.is_daily_recurring ? (
-                                  <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 text-[9px] gap-1 font-semibold">
-                                    <RefreshCw className="w-2.5 h-2.5" /> Daily Basis
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/30 text-[9px] gap-1 font-semibold">
-                                    <Zap className="w-2.5 h-2.5" /> Once
-                                  </Badge>
-                                )}
-                                <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] gap-1.5 font-semibold">
-                                  <span className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-300 font-bold">
-                                    <Sparkles className="w-2.5 h-2.5 text-emerald-600" /> Bonus +{sub.points !== undefined && sub.points !== null ? sub.points : 20}
-                                  </span>
-                                  <span className="text-muted-foreground/60">/</span>
-                                  <span className="inline-flex items-center gap-0.5 text-rose-700 dark:text-rose-300 font-bold">
-                                    Penalty -{sub.penalty_points !== undefined && sub.penalty_points !== null ? sub.penalty_points : 10} pts
-                                  </span>
-                                </Badge>
-                                {isSubtaskAssignedToMe && (
-                                  <Badge variant="outline" className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border-emerald-500/40 text-[9px] px-1.5 py-0 gap-1 font-bold">
-                                    <Sparkles className="w-2.5 h-2.5 text-amber-500" /> Assigned to You
-                                  </Badge>
-                                )}
-                              </div>
-
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                {getUrgencyBadge(sub.urgency)}
-                                {canEditOrRemove && (
-                                  <div className="flex items-center gap-0.5">
-                                    <Button
-                                      type="button"
-                                      size="icon"
-                                      variant="ghost"
-                                      onClick={() => handleOpenEditSubtask(task, sub)}
-                                      className="h-6 w-6 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md cursor-pointer"
-                                      title="Edit Deliverable / Sub-Task"
-                                    >
-                                      <Edit2 className="w-3 h-3" />
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      size="icon"
-                                      variant="ghost"
-                                      onClick={() => handleDirectRemoveSubTask(task, sub.id)}
-                                      className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md cursor-pointer"
-                                      title="Remove Deliverable / Sub-Task"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </Button>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t text-[11px] text-muted-foreground">
-                              <div className="flex flex-wrap items-center gap-3">
-                                {sub.assigned_employee_name ? (
-                                  <span className="inline-flex items-center gap-1 font-semibold text-foreground">
-                                    <UserCheck className="w-3.5 h-3.5 text-primary" />
-                                    {sub.assigned_employee_name}
-                                  </span>
-                                ) : (
-                                  <span className="italic text-muted-foreground">Unassigned</span>
-                                )}
-
-                                {formatSubtaskDuration(sub.duration_hours, sub.duration_minutes) && (
-                                  <span className="inline-flex items-center gap-1 font-mono">
-                                    <Clock className="w-3.5 h-3.5" />
-                                    {formatSubtaskDuration(sub.duration_hours, sub.duration_minutes)}
-                                  </span>
-                                )}
-
-                                {sub.is_daily_recurring ? (
-                                  <span className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-400 font-medium">
-                                    <RotateCcw className="w-3.5 h-3.5" />
-                                    <span>Daily at {sub.daily_time || sub.deadline_time || "10:00"}</span>
-                                  </span>
-                                ) : (
-                                  sub.deadline_date && (
-                                    <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 font-medium">
-                                      <Calendar className="w-3.5 h-3.5" />
-                                      {sub.deadline_date} {sub.deadline_time || ""}
-                                    </span>
-                                  )
-                                )}
-                              </div>
-
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] text-muted-foreground">Status:</span>
-                                <select
-                                  value={sub.status || "pending"}
-                                  onChange={(e) => handleSubTaskStatusDirectUpdate(task, sub.id, e.target.value)}
-                                  className="h-6 text-[10px] font-semibold w-28 bg-muted/20 rounded border border-input px-1.5 outline-none cursor-pointer text-foreground"
-                                >
-                                  {allowedStatuses.map((s) => (
-                                    <option key={s.id} value={s.id}>
-                                      {s.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                      <div className="space-y-3 pt-1">
+                        {subTasksList.map((sub, index) => (
+                          <SubtaskCard
+                            key={sub.id || index}
+                            task={task}
+                            subtask={sub as any}
+                            index={index}
+                            currentUserId={user?.id}
+                            isClientView={isClientRole || Boolean(pathname?.startsWith("/client"))}
+                            staffOptions={getProjectStaffOptions(task)}
+                            allowedStatuses={allowedStatuses}
+                            onUpdateSubtask={handleDirectSubtaskFieldUpdate}
+                            onDeleteSubtask={(t, subId) => handleDirectRemoveSubTask(t, String(subId))}
+                            onOpenEdit={(t, s) => handleOpenEditSubtask(t, s as any)}
+                            onOpenHistory={(t, s) => {
+                              setHistoryModalSubtask(s as any);
+                              setHistoryModalTask(t);
+                            }}
+                            onOpenUploads={(t, s) => setUploadModalState({ task: t, subtask: s as any })}
+                            onStatusChange={(t, subId, status) => handleSubTaskStatusDirectUpdate(t, String(subId), status)}
+                            onStart={(t, s) => handleSubTaskStatusDirectUpdate(t, String(s.id), "in_progress")}
+                            onStop={(t, s) => handleSubTaskStatusDirectUpdate(t, String(s.id), "pending")}
+                          />
+                        ))}
                       </div>
                     )}
                   </div>
                 </CardContent>
 
-                {/* Card Footer Actions */}
-                <div className="flex items-center justify-between px-5 py-3 border-t bg-muted/10">
-                  <div className="text-[11px] text-muted-foreground">
-                    Created: {new Date(task.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}
-                  </div>
 
-                  {canEditOrRemove && (
-                    <div className="flex items-center gap-1">
-                      <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => handleOpenEditTask(task)}>
-                        <Edit2 className="w-3.5 h-3.5 mr-1" /> Edit Task
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => handleDeleteTask(task.id)}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
               </Card>
             );
           })}
         </div>
       )}
 
-      {/* MODAL 1: Create / Edit Task / Project */}
+      {/* MODAL 1: Create / Edit Project */}
       <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
-        <DialogContent className="sm:max-w-xl w-[92vw] max-h-[88vh] flex flex-col p-0 overflow-hidden shadow-2xl border">
+        <DialogContent className="sm:max-w-2xl w-[94vw] max-h-[90vh] flex flex-col p-0 overflow-hidden shadow-2xl border">
           <DialogHeader className="px-6 pt-5 pb-4 border-b shrink-0 bg-background/95 backdrop-blur-xs">
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <FolderPlus className="w-5 h-5 text-primary" />
-              <span>{editingTask ? "Edit Task / Project" : "Create New Task / Project"}</span>
+              <span>{editingTask ? "Edit Project" : "Create Project"}</span>
             </DialogTitle>
             <DialogDescription className="text-xs">
-              {isInstitutionAdmin
-                ? "First, enter the Task/Project Title and add an overview. You can add sub-tasks immediately after!"
-                : "First, enter the Task/Project Title, select or enter the Client Name, and add an overview. You can add sub-tasks immediately after!"}
+              Provide project details, ownership, timeline, budget currency, project leader, and agreement document.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSaveMainTask} className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-            {/* Organization / Institution Selection */}
-            {!isInstitutionAdmin && (
-            <div className="space-y-1.5 p-3 rounded-xl border bg-muted/20">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5 text-primary" />
-                  Organization / Institution *
-                </Label>
-                <span className="text-[10px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                  {isPlatformRoute ? "EduBird Platform" : "Staff Dedicated to Organization"}
-                </span>
-              </div>
-              {isPlatformRoute ? (
-                <div className="flex items-center justify-between h-9 px-3 text-xs rounded-md border border-input bg-background/80 shadow-xs">
-                  <span className="font-semibold text-foreground truncate flex items-center gap-2">
-                    <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
-                    EduBird Organization
-                  </span>
-                  <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30 font-medium">
-                    EduBird Staff Only
-                  </Badge>
-                </div>
-              ) : institutions.length > 1 ? (
-                <select
-                  value={formInstitutionId}
-                  onChange={(e) => handleFormInstitutionChange(e.target.value)}
-                  className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring font-medium text-foreground cursor-pointer"
-                >
-                  {institutions.map((inst) => (
-                    <option key={inst.id} value={String(inst.id)}>
-                      {inst.name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <div className="flex items-center justify-between h-9 px-3 text-xs rounded-md border border-input bg-background/80">
-                  <span className="font-semibold text-foreground truncate">
-                    {activeInstitution?.name || institutions[0]?.name || "My Organization"}
-                  </span>
-                  <Badge variant="outline" className="text-[10px] bg-primary/5 text-primary border-primary/20">
-                    Active Organization
-                  </Badge>
-                </div>
-              )}
-            </div>
-            )}
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Task / Project Name *</Label>
-              <Input
-                required
-                value={formTitle}
-                onChange={(e) => setFormTitle(e.target.value)}
-                placeholder="e.g. Corporate AWS Training Setup, Campus Hiring Drive"
-                className="text-xs h-9"
-              />
-            </div>
-
-            {/* Client Selection with Search & Quick Add - Hidden on Institution Admin Side */}
-            {!isInstitutionAdmin && (
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5 text-primary" />
-                  Client Name (From Sales / Vendors)
-                </Label>
-                <div className="flex items-center gap-2">
-                  <a
-                    href={addClientUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1 bg-primary/10 hover:bg-primary/20 transition-colors px-2 py-0.5 rounded-full"
-                    title="Open clients directory to add a new client record"
-                  >
-                    <Plus className="w-3 h-3" /> Add Client
-                  </a>
-                  {(formClientId !== "none" || formClientName) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFormClientId("none");
-                        setFormClientName("");
-                        setClientSearchQuery("");
-                      }}
-                      className="text-[10px] text-muted-foreground hover:text-destructive transition-colors font-medium underline"
+              {/* Organization / Institution Selection (if multiple) */}
+              {!isInstitutionAdmin && (
+                <div className="space-y-1.5 p-3 rounded-xl border bg-muted/20">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-primary" />
+                      Organization / Institution *
+                    </Label>
+                    <span className="text-[10px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                      {isPlatformRoute ? "EduBird Platform" : "Staff Dedicated to Organization"}
+                    </span>
+                  </div>
+                  {isPlatformRoute ? (
+                    <div className="flex items-center justify-between h-9 px-3 text-xs rounded-md border border-input bg-background/80 shadow-xs">
+                      <span className="font-semibold text-foreground truncate flex items-center gap-2">
+                        <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
+                        EduBird Organization
+                      </span>
+                      <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30 font-medium">
+                        EduBird Staff Only
+                      </Badge>
+                    </div>
+                  ) : institutions.length > 1 ? (
+                    <select
+                      value={formInstitutionId}
+                      onChange={(e) => handleFormInstitutionChange(e.target.value)}
+                      className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring font-medium text-foreground cursor-pointer"
                     >
-                      Clear
-                    </button>
+                      {institutions.map((inst) => (
+                        <option key={inst.id} value={String(inst.id)}>
+                          {inst.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="flex items-center justify-between h-9 px-3 text-xs rounded-md border border-input bg-background/80">
+                      <span className="font-semibold text-foreground truncate">
+                        {activeInstitution?.name || institutions[0]?.name || "My Organization"}
+                      </span>
+                      <Badge variant="outline" className="text-[10px] bg-primary/5 text-primary border-primary/20">
+                        Active Organization
+                      </Badge>
+                    </div>
                   )}
                 </div>
-              </div>
-
-              {/* Custom Searchable Dropdown Trigger */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setClientDropdownOpen(!clientDropdownOpen)}
-                  className="w-full flex items-center justify-between h-9 px-3 py-1.5 text-xs rounded-md border border-input bg-transparent shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
-                >
-                  <span className={`truncate text-left ${formClientId === "none" && !formClientName ? "text-muted-foreground" : "text-foreground font-medium flex items-center gap-2"}`}>
-                    {formClientId !== "none" ? (
-                      (() => {
-                        const c = clients.find((cl) => String(cl.id) === formClientId);
-                        if (!c) return formClientName || "Selected Client";
-                        return (
-                          <>
-                            <span className="font-semibold text-foreground truncate">{c.company_name || c.name}</span>
-                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-normal shrink-0">
-                              {c.client_type || "Client"}
-                            </Badge>
-                          </>
-                        );
-                      })()
-                    ) : formClientName ? (
-                      <>
-                        <span className="font-semibold text-foreground truncate">{formClientName}</span>
-                        <Badge variant="secondary" className="text-[10px] py-0 px-1.5 font-normal text-muted-foreground shrink-0">
-                          Custom Client
-                        </Badge>
-                      </>
-                    ) : (
-                      "-- Select Client Account (Searchable) --"
-                    )}
-                  </span>
-                  <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${clientDropdownOpen ? "rotate-180" : ""}`} />
-                </button>
-
-                {/* Dropdown Content */}
-                {clientDropdownOpen && (
-                  <div className="mt-1.5 p-2 rounded-xl border bg-popover text-popover-foreground shadow-lg space-y-2 z-50">
-                    {/* Search Bar inside dropdown */}
-                    <div className="relative">
-                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
-                      <Input
-                        value={clientSearchQuery}
-                        onChange={(e) => setClientSearchQuery(e.target.value)}
-                        placeholder="Search clients by name, company, or type..."
-                        className="pl-8 text-xs h-8"
-                        autoFocus
-                      />
-                    </div>
-
-                    {/* Quick helper row */}
-                    <div className="flex items-center justify-between px-1 text-[11px] text-muted-foreground border-b pb-1.5">
-                      <span>
-                        Showing {filteredClientList.length} client{filteredClientList.length === 1 ? "" : "s"}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFormClientId("none");
-                          setFormClientName("");
-                          setClientDropdownOpen(false);
-                        }}
-                        className="text-[11px] text-muted-foreground hover:text-foreground underline"
-                      >
-                        Internal / No Client
-                      </button>
-                    </div>
-
-                    {/* Scrollable list of clients */}
-                    <div className="max-h-56 overflow-y-auto space-y-0.5 pr-1">
-                      {/* Option to type custom name if searched */}
-                      {clientSearchQuery.trim() && (
-                        <div
-                          onClick={() => {
-                            setFormClientId("none");
-                            setFormClientName(clientSearchQuery.trim());
-                            setClientDropdownOpen(false);
-                          }}
-                          className="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors text-xs bg-primary/5 hover:bg-primary/10 border border-dashed border-primary/30 text-primary font-medium mb-1"
-                        >
-                          <PlusCircle className="w-4 h-4 shrink-0 text-primary" />
-                          <span className="truncate">
-                            Use custom: <strong>&ldquo;{clientSearchQuery.trim()}&rdquo;</strong>
-                          </span>
-                        </div>
-                      )}
-
-                      {filteredClientList.length === 0 && !clientSearchQuery.trim() ? (
-                        <div className="py-4 text-center text-xs text-muted-foreground">
-                          No client accounts saved yet.
-                        </div>
-                      ) : filteredClientList.length === 0 ? (
-                        <div className="py-3 text-center text-xs text-muted-foreground space-y-1">
-                          <p>No client accounts found matching &quot;{clientSearchQuery}&quot;</p>
-                          <p className="text-[10px]">Click the button above to use it as a custom client name.</p>
-                        </div>
-                      ) : (
-                        filteredClientList.map((c) => {
-                          const isSelected = String(c.id) === formClientId;
-                          return (
-                            <div
-                              key={c.id}
-                              onClick={() => {
-                                setFormClientId(String(c.id));
-                                setFormClientName(c.company_name || c.name);
-                                setClientDropdownOpen(false);
-                              }}
-                              className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors text-xs ${
-                                isSelected
-                                  ? "bg-primary/10 text-foreground font-medium"
-                                  : "hover:bg-muted/60 text-muted-foreground"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2.5 truncate">
-                                <Building2 className={`w-3.5 h-3.5 shrink-0 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
-                                <div className="truncate">
-                                  <span className="truncate text-foreground font-medium block">
-                                    {c.company_name || c.name}
-                                  </span>
-                                  {c.contact_person && c.contact_person !== c.name && (
-                                    <span className="text-[10px] text-muted-foreground block truncate">
-                                      Contact: {c.contact_person}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <Badge variant="outline" className="text-[10px] py-0 px-1.5 shrink-0 bg-background/50 capitalize ml-2">
-                                {c.client_type || "Client"}
-                              </Badge>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-
-                    <div className="pt-1.5 border-t flex items-center justify-between text-[11px] text-muted-foreground">
-                      <a
-                        href={addClientUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline font-semibold flex items-center gap-1"
-                      >
-                        <Plus className="w-3 h-3" /> Create new client in Directory
-                      </a>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setClientDropdownOpen(false)}
-                        className="h-6 text-[11px] px-2"
-                      >
-                        Close
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* If custom client is chosen or formClientId === 'none' and there's a custom client, show editable input */}
-              {formClientId === "none" && formClientName && (
-                <div className="relative mt-1">
-                  <Input
-                    value={formClientName}
-                    onChange={(e) => setFormClientName(e.target.value)}
-                    placeholder="Custom client name..."
-                    className="text-xs h-8 pr-20 font-medium"
-                  />
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground font-medium">
-                    Custom Name
-                  </span>
-                </div>
               )}
-            </div>
-            )}
 
-            {/* Assign to Staff Members (Multiple Choice) */}
-            {!isInstitutionAdmin && (
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5 text-primary" />
-                  Assign to Staff Member(s) ({selectedOrgName})
-                </Label>
-                {formAssignedStaffIds.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                      {formAssignedStaffIds.length} Selected
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setFormAssignedStaffIds([])}
-                      className="text-[10px] text-muted-foreground hover:text-destructive transition-colors font-medium underline"
+              {/* Project Name */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Project Name *</Label>
+                <Input
+                  required
+                  value={formTitle}
+                  onChange={(e) => setFormTitle(e.target.value)}
+                  placeholder="e.g. EduBird LMS Portal Redesign, Enterprise Cloud Migration"
+                  className="text-xs h-9"
+                />
+              </div>
+
+              {/* Project Type & Pipeline Template Selection */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl border bg-muted/20">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                      <FolderKanban className="w-3.5 h-3.5 text-primary" />
+                      Project Type
+                    </Label>
+                    <Link
+                      href="/admin/operations/project-types"
+                      target="_blank"
+                      className="text-[10px] text-primary hover:underline font-medium"
                     >
-                      Clear All
-                    </button>
+                      Manage Types
+                    </Link>
+                  </div>
+                  <select
+                    value={formProjectTypeId}
+                    onChange={(e) => handleSelectProjectType(e.target.value)}
+                    className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring font-medium text-foreground cursor-pointer"
+                  >
+                    <option value="none">-- Select Project Type --</option>
+                    {projectTypesList.map((pt) => (
+                      <option key={pt.id} value={String(pt.id)}>
+                        {pt.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                      <GitFork className="w-3.5 h-3.5 text-primary" />
+                      Pipeline Template
+                    </Label>
+                    <Link
+                      href="/admin/operations/project-pipelines"
+                      target="_blank"
+                      className="text-[10px] text-primary hover:underline font-medium"
+                    >
+                      Manage Pipelines
+                    </Link>
+                  </div>
+                  <select
+                    value={formPipelineId}
+                    disabled={formProjectTypeId === "none" || availablePipelines.length === 0}
+                    onChange={(e) => handleSelectPipeline(e.target.value)}
+                    className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring font-medium text-foreground cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="none">
+                      {formProjectTypeId === "none"
+                        ? "-- Select Project Type First --"
+                        : availablePipelines.length === 0
+                          ? "-- No Active Pipelines for this Type --"
+                          : "-- Select Pipeline Template --"}
+                    </option>
+                    {availablePipelines.map((pl) => (
+                      <option key={pl.id} value={String(pl.id)}>
+                        {pl.name} {pl.is_default ? "★ (Default)" : ""} ({Array.isArray(pl.phases) ? pl.phases.length : 0} phases)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Pipeline Phases Preview */}
+                {formPipelinePhases.length > 0 && (
+                  <div className="sm:col-span-2 space-y-1.5 pt-1 border-t mt-1">
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span className="font-semibold text-foreground flex items-center gap-1">
+                        <Layers className="w-3 h-3 text-primary" />
+                        Pipeline Snapshot: {formPipelinePhases.length} Phases
+                      </span>
+                      <span className="font-mono text-[10px]">
+                        Total Est: {formPipelinePhases.reduce((acc, p) => acc + (parseFloat(String(p.estimated_duration_hours || 0)) || 0), 0)}h
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar">
+                      {formPipelinePhases.map((ph, idx) => (
+                        <div
+                          key={ph.id || idx}
+                          className="flex items-center gap-1 text-[10px] bg-background border px-2 py-1 rounded-md shrink-0 shadow-2xs"
+                        >
+                          <span className="font-mono font-bold text-primary">{idx + 1}.</span>
+                          <span className="font-medium text-foreground max-w-[120px] truncate" title={ph.name}>
+                            {ph.name}
+                          </span>
+                          {ph.requires_approval && (
+                            <span className="text-[9px] text-amber-600 bg-amber-500/15 px-1 rounded font-semibold">
+                              Approval
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* Custom Multi-Select Dropdown Trigger */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setStaffDropdownOpen(!staffDropdownOpen)}
-                  className="w-full flex items-center justify-between h-9 px-3 py-1.5 text-xs rounded-md border border-input bg-transparent shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
-                >
-                  <span className={`truncate text-left ${formAssignedStaffIds.length === 0 ? "text-muted-foreground" : "text-foreground font-medium"}`}>
-                    {formAssignedStaffIds.length === 0
-                      ? "-- Unassigned (Click to Select Staff) --"
-                      : formAssignedStaffIds.length === 1
-                      ? (() => {
-                          const s = dialogStaffList.find((st) => String(st.id) === formAssignedStaffIds[0]);
-                          return s ? `${s.name} (${s.role})` : "1 staff member selected";
-                        })()
-                      : `${formAssignedStaffIds.length} staff members selected`}
-                  </span>
-                  <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${staffDropdownOpen ? "rotate-180" : ""}`} />
-                </button>
+              {/* Ownership: For Own Company or Client */}
+              <div className="space-y-2 p-3 rounded-xl border bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-primary" />
+                    Project For *
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground font-medium">Select internal company or sales client</span>
+                </div>
 
-                {/* Dropdown Content */}
-                {staffDropdownOpen && (
-                  <div className="mt-1.5 p-2 rounded-xl border bg-popover text-popover-foreground shadow-lg space-y-2 z-50">
-                    {/* Search Bar inside dropdown */}
-                    <div className="relative">
-                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
-                      <Input
-                        value={staffSearchQuery}
-                        onChange={(e) => setStaffSearchQuery(e.target.value)}
-                        placeholder="Search staff by name or role..."
-                        className="pl-8 text-xs h-8"
-                        autoFocus
-                      />
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormProjectFor("own_company");
+                      setFormCompanyName("EduBird");
+                      setFormClientName("EduBird");
+                      setFormClientId("none");
+                      setFormAssignedClientIds([]);
+                    }}
+                    className={`flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all cursor-pointer ${formProjectFor === "own_company"
+                      ? "bg-primary/10 border-primary shadow-xs ring-1 ring-primary/40 text-foreground font-semibold"
+                      : "bg-background hover:bg-muted/40 border-border text-muted-foreground"
+                      }`}
+                  >
+                    <Building2 className="w-4 h-4 text-primary shrink-0" />
+                    <div>
+                      <div className="text-xs font-bold text-foreground">Own Company (EduBird)</div>
+                      <div className="text-[10px] text-muted-foreground">Assign for EduBird platform</div>
                     </div>
+                  </button>
 
-                    {/* Quick Select Buttons */}
-                    <div className="flex items-center justify-between px-1 text-[11px] text-muted-foreground border-b pb-1.5">
-                      <span>
-                        Showing {filteredStaffList.length} staff member{filteredStaffList.length === 1 ? "" : "s"} from {selectedOrgName}
-                      </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormProjectFor("client");
+                      setFormCompanyName("");
+                      if (formClientName === "EduBird") {
+                        setFormClientName("");
+                        setFormClientId("none");
+                      }
+                      void fetchClientsForModal();
+                    }}
+                    className={`flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all cursor-pointer ${formProjectFor === "client"
+                      ? "bg-primary/10 border-primary shadow-xs ring-1 ring-primary/40 text-foreground font-semibold"
+                      : "bg-background hover:bg-muted/40 border-border text-muted-foreground"
+                      }`}
+                  >
+                    <Users className="w-4 h-4 text-primary shrink-0" />
+                    <div>
+                      <div className="text-xs font-bold text-foreground">Client</div>
+                      <div className="text-[10px] text-muted-foreground">Select from sales client section</div>
+                    </div>
+                  </button>
+                </div>
+
+                {formProjectFor === "own_company" ? (
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20 text-xs text-primary font-medium">
+                    <Building2 className="w-4 h-4 shrink-0" />
+                    <span>This project will be assigned for internal company: <strong>EduBird</strong></span>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-primary" />
+                        Client Name (From Sales Client Section) <span className="text-destructive">*</span>
+                        {formAssignedClientIds.length > 0 && (
+                          <Badge variant="secondary" className="text-[10px] py-0 px-1.5 font-bold">
+                            {formAssignedClientIds.length} Selected
+                          </Badge>
+                        )}
+                      </Label>
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const allIds = Array.from(new Set([...formAssignedStaffIds, ...filteredStaffList.map((s) => String(s.id))]));
-                            setFormAssignedStaffIds(allIds);
-                          }}
-                          className="text-primary hover:underline font-semibold"
+                        <a
+                          href={addClientUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1 bg-primary/10 hover:bg-primary/20 transition-colors px-2 py-0.5 rounded-full"
+                          title="Open clients directory to add a new client record"
                         >
-                          Select All
-                        </button>
-                        <span>•</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const removeIds = new Set(filteredStaffList.map((s) => String(s.id)));
-                            setFormAssignedStaffIds(formAssignedStaffIds.filter((id) => !removeIds.has(id)));
-                          }}
-                          className="hover:underline text-destructive font-semibold"
-                        >
-                          Deselect
-                        </button>
+                          <Plus className="w-3 h-3" /> Add Client
+                        </a>
+                        {formAssignedClientIds.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormAssignedClientIds([]);
+                              setFormClientId("none");
+                              setFormClientName("");
+                              setClientSearchQuery("");
+                            }}
+                            className="text-[10px] text-muted-foreground hover:text-destructive transition-colors font-medium underline cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    {/* Scrollable list of staff members with checkboxes */}
-                    <div className="max-h-56 overflow-y-auto space-y-0.5 pr-1">
-                      {loadingModalOrgStaff ? (
-                        <div className="py-4 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-                          <span>Loading {selectedOrgName} staff...</span>
-                        </div>
-                      ) : filteredStaffList.length === 0 ? (
-                        <div className="py-4 text-center text-xs text-muted-foreground">
-                          No staff members found for {selectedOrgName}
-                        </div>
-                      ) : (
-                        filteredStaffList.map((s) => {
-                          const isSelected = formAssignedStaffIds.includes(String(s.id));
-                          return (
-                            <div
-                              key={s.id}
-                              onClick={() => {
-                                setFormAssignedStaffIds((prev) =>
-                                  prev.includes(String(s.id))
-                                    ? prev.filter((id) => id !== String(s.id))
-                                    : [...prev, String(s.id)]
-                                );
-                              }}
-                              className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors text-xs ${
-                                isSelected
-                                  ? "bg-primary/10 text-foreground font-medium"
-                                  : "hover:bg-muted/60 text-muted-foreground"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2.5 truncate">
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={() => {}}
-                                  className="pointer-events-none"
-                                />
-                                <span className="truncate text-foreground font-medium">{s.name}</span>
-                              </div>
-                              <Badge variant="outline" className="text-[10px] py-0 px-1.5 shrink-0 bg-background/50">
-                                {s.role}
-                              </Badge>
+                    {/* Multi-Client Searchable Picker Trigger */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!clientDropdownOpen) {
+                            void fetchClientsForModal();
+                          }
+                          setClientDropdownOpen(!clientDropdownOpen);
+                        }}
+                        className="w-full flex items-center justify-between h-9 px-3 py-1.5 text-xs rounded-md border border-input bg-background shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+                      >
+                        <span className="flex items-center gap-2 min-w-0 flex-1 truncate">
+                          <Building2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          <span className={`truncate text-left ${formAssignedClientIds.length === 0 ? "text-muted-foreground" : "text-foreground font-medium"}`}>
+                            {formAssignedClientIds.length === 0
+                              ? "-- Select Client Account (Searchable) --"
+                              : formAssignedClientIds.length === 1
+                                ? (() => {
+                                  const c = clients.find((cl) => String(cl.id) === formAssignedClientIds[0]);
+                                  return c ? `${c.company_name || c.name} (${c.client_type || "Client"})` : (formClientName || "1 client selected");
+                                })()
+                                : `${formAssignedClientIds.length} clients selected`}
+                          </span>
+                        </span>
+                        <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${clientDropdownOpen ? "rotate-180" : ""}`} />
+                      </button>
+
+                      {clientDropdownOpen && (
+                        <div className="mt-1.5 p-2 rounded-xl border bg-popover text-popover-foreground shadow-lg space-y-2 z-50">
+                          <div className="relative">
+                            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+                            <Input
+                              value={clientSearchQuery}
+                              onChange={(e) => setClientSearchQuery(e.target.value)}
+                              placeholder="Search clients by name, company, or type..."
+                              className="pl-8 text-xs h-8"
+                              autoFocus
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between px-1 text-[11px] text-muted-foreground border-b pb-1.5">
+                            <span>
+                              Showing {filteredClientList.length} client{filteredClientList.length === 1 ? "" : "s"}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {filteredClientList.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const allIds = Array.from(new Set([...formAssignedClientIds, ...filteredClientList.map((c) => String(c.id))]));
+                                    setFormAssignedClientIds(allIds);
+                                    if (allIds.length > 0) {
+                                      setFormClientId(String(allIds[0]));
+                                      const primaryC = clients.find((c) => String(c.id) === String(allIds[0]));
+                                      if (primaryC) setFormClientName(primaryC.company_name || primaryC.name);
+                                    }
+                                  }}
+                                  className="text-[10px] text-primary hover:underline font-semibold cursor-pointer"
+                                >
+                                  Select All
+                                </button>
+                              )}
+                              {formAssignedClientIds.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFormAssignedClientIds([]);
+                                    setFormClientId("none");
+                                    setFormClientName("");
+                                  }}
+                                  className="text-[10px] text-muted-foreground hover:underline cursor-pointer"
+                                >
+                                  Clear
+                                </button>
+                              )}
                             </div>
-                          );
-                        })
+                          </div>
+
+                          <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
+                            {filteredClientList.length === 0 ? (
+                              <div className="py-4 text-center text-xs text-muted-foreground">
+                                No clients found matching &quot;{clientSearchQuery}&quot;
+                              </div>
+                            ) : (
+                              filteredClientList.map((c) => {
+                                const isChecked = formAssignedClientIds.includes(String(c.id));
+                                return (
+                                  <div
+                                    key={c.id}
+                                    onClick={() => {
+                                      if (isChecked) {
+                                        const newIds = formAssignedClientIds.filter((id) => id !== String(c.id));
+                                        setFormAssignedClientIds(newIds);
+                                        if (newIds.length === 0) {
+                                          setFormClientId("none");
+                                          setFormClientName("");
+                                        } else {
+                                          setFormClientId(String(newIds[0]));
+                                          const primaryC = clients.find((cl) => String(cl.id) === String(newIds[0]));
+                                          if (primaryC) setFormClientName(primaryC.company_name || primaryC.name);
+                                        }
+                                      } else {
+                                        const newIds = [...formAssignedClientIds, String(c.id)];
+                                        setFormAssignedClientIds(newIds);
+                                        setFormClientId(String(newIds[0]));
+                                        setFormClientName(c.company_name || c.name);
+                                      }
+                                    }}
+                                    className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors text-xs ${isChecked
+                                      ? "bg-primary/10 text-primary font-bold"
+                                      : "hover:bg-muted"
+                                      }`}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <Checkbox
+                                        checked={isChecked}
+                                        onCheckedChange={() => { }}
+                                        className="h-3.5 w-3.5"
+                                      />
+                                      <Building2 className={`w-3.5 h-3.5 shrink-0 ${isChecked ? "text-primary" : "text-muted-foreground"}`} />
+                                      <div className="min-w-0">
+                                        <span className="font-semibold text-foreground truncate block">
+                                          {c.company_name || c.name}
+                                        </span>
+                                        {c.company_name && c.name && c.company_name !== c.name && (
+                                          <span className="text-[10px] text-muted-foreground truncate block font-normal">
+                                            {c.name}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 shrink-0 bg-background/50 capitalize ml-2">
+                                      {c.client_type || "Client"}
+                                    </Badge>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
                       )}
                     </div>
 
-                    <div className="pt-1 border-t flex justify-end">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="default"
-                        onClick={() => setStaffDropdownOpen(false)}
-                        className="h-7 text-xs font-semibold px-3"
-                      >
-                        Done
-                      </Button>
-                    </div>
+                    {/* Selected Clients Badges / Chips */}
+                    {formAssignedClientIds.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {clients
+                          .filter((c) => formAssignedClientIds.includes(String(c.id)))
+                          .map((c) => (
+                            <Badge
+                              key={c.id}
+                              variant="secondary"
+                              className="text-[11px] py-1 pl-2 pr-1.5 gap-1.5 font-medium bg-muted/60 hover:bg-muted"
+                            >
+                              <Building2 className="w-3 h-3 text-primary" />
+                              <span className="truncate max-w-[150px]">{c.company_name || c.name}</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const newIds = formAssignedClientIds.filter((id) => id !== String(c.id));
+                                  setFormAssignedClientIds(newIds);
+                                  if (newIds.length === 0) {
+                                    setFormClientId("none");
+                                    setFormClientName("");
+                                  } else {
+                                    setFormClientId(String(newIds[0]));
+                                    const primaryC = clients.find((cl) => String(cl.id) === String(newIds[0]));
+                                    if (primaryC) setFormClientName(primaryC.company_name || primaryC.name);
+                                  }
+                                }}
+                                className="hover:bg-muted-foreground/20 rounded-full p-0.5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
-              {/* Selected Staff Member Chips (Below Trigger) */}
-              {formAssignedStaffIds.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pt-1.5">
-                  {dialogStaffList
-                    .filter((s) => formAssignedStaffIds.includes(String(s.id)))
-                    .map((s) => (
-                      <Badge
-                        key={s.id}
-                        variant="secondary"
-                        className="text-[11px] py-0.5 pl-2 pr-1 gap-1 font-medium bg-muted/80 hover:bg-muted border"
-                      >
-                        <span>{s.name}</span>
-                        <span className="text-[9px] text-muted-foreground">({s.role})</span>
-                        <button
-                          type="button"
-                          onClick={() => setFormAssignedStaffIds((prev) => prev.filter((id) => id !== String(s.id)))}
-                          className="hover:bg-destructive/20 hover:text-destructive rounded-full p-0.5 transition-colors"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
+              {/* Timeline: Start Date and Due Date */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-primary" />
+                    Start Date
+                  </Label>
+                  <Input
+                    type="date"
+                    value={formStartDate}
+                    onChange={(e) => setFormStartDate(e.target.value)}
+                    className="text-xs h-9 bg-background"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-rose-600" />
+                    Due Date / Deadline
+                  </Label>
+                  <Input
+                    type="date"
+                    value={formDueDate}
+                    onChange={(e) => setFormDueDate(e.target.value)}
+                    className="text-xs h-9 bg-background"
+                  />
+                </div>
+              </div>
+
+              {/* Budget & Cost Section */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <IndianRupee className="w-3.5 h-3.5 text-emerald-600" />
+                    Currency
+                  </Label>
+                  <select
+                    value={formCurrency}
+                    onChange={(e) => setFormCurrency(e.target.value)}
+                    className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring font-medium"
+                  >
+                    <option value="INR">INR (₹) - Indian Rupee</option>
+                    <option value="USD">USD ($) - US Dollar</option>
+                    <option value="EUR">EUR (€) - Euro</option>
+                    <option value="GBP">GBP (£) - British Pound</option>
+                    <option value="AED">AED (د.إ) - UAE Dirham</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <IndianRupee className="w-3.5 h-3.5 text-emerald-600" />
+                    Project Cost ({formCurrency === "INR" ? "₹" : formCurrency})
+                  </Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formCost}
+                    onChange={(e) => setFormCost(e.target.value)}
+                    placeholder="0.00"
+                    className="text-xs h-9 bg-background"
+                  />
+                </div>
+              </div>
+
+              {/* Live and Demo URLs */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <ExternalLink className="w-3.5 h-3.5 text-primary" />
+                    Live Website / Portal URL
+                  </Label>
+                  <Input
+                    type="url"
+                    value={formLiveUrl}
+                    onChange={(e) => setFormLiveUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="text-xs h-9 bg-background"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
+                    Demo / Staging URL
+                  </Label>
+                  <Input
+                    type="url"
+                    value={formDemoUrl}
+                    onChange={(e) => setFormDemoUrl(e.target.value)}
+                    placeholder="https://staging..."
+                    className="text-xs h-9 bg-background"
+                  />
+                </div>
+              </div>
+
+              {/* Agreement Document Upload */}
+              <div className="space-y-2 p-3 rounded-xl border bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-primary" />
+                    Project Agreement / Contract Document
+                  </Label>
+                  {formAgreementDocUrl && (
+                    <a
+                      href={formAgreementDocUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-primary hover:underline font-medium inline-flex items-center gap-1"
+                    >
+                      <ExternalLink className="w-3 h-3" /> View Uploaded Agreement
+                    </a>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="file"
+                    accept=".pdf,.doc,.docx,image/*"
+                    onChange={handleAgreementFileUpload}
+                    disabled={uploadingAgreement}
+                    className="text-xs h-9 bg-background file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+                  />
+                  {uploadingAgreement && <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />}
+                </div>
+                {formAgreementDocName && (
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground bg-background px-2.5 py-1 rounded border">
+                    <span className="truncate max-w-[400px]">📄 {formAgreementDocName}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormAgreementDocUrl("");
+                        setFormAgreementDocName("");
+                      }}
+                      className="text-destructive hover:underline text-[10px] ml-2"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Project Leader Assignment */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold flex items-center gap-1.5">
+                  <UserCheck className="w-3.5 h-3.5 text-primary" />
+                  Project Leader (Responsible Owner)
+                </Label>
+                <select
+                  value={formProjectLeaderId}
+                  onChange={(e) => {
+                    setFormProjectLeaderId(e.target.value);
+                    const s = dialogStaffList.find((st) => String(st.id) === e.target.value);
+                    setFormProjectLeaderName(s?.name || "");
+                  }}
+                  className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring font-medium"
+                >
+                  <option value="none">-- Select Project Leader (Optional) --</option>
+                  {dialogStaffList.map((s) => (
+                    <option key={s.id} value={String(s.id)}>
+                      {s.name} ({s.role || "Staff Member"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Team Members Multi-Select */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-primary" />
+                    Assign Team Staff Members (Multiple)
+                    {formAssignedStaffIds.length > 0 && (
+                      <Badge variant="secondary" className="text-[10px] py-0 px-1.5 font-bold">
+                        {formAssignedStaffIds.length} Selected
                       </Badge>
-                    ))}
+                    )}
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    {formAssignedStaffIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormAssignedStaffIds([]);
+                          setFormAssignedStaffId("none");
+                          setFormAssignedStaffName("");
+                          setFormAssignedStaffRole("");
+                        }}
+                        className="text-[11px] text-muted-foreground hover:text-foreground underline cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setStaffDropdownOpen(!staffDropdownOpen)}
+                    className="w-full flex items-center justify-between p-2 rounded-xl border bg-background text-xs hover:border-primary/50 transition-colors cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1.5 min-w-0 flex-1 truncate">
+                      <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      <span className={`truncate text-left ${formAssignedStaffIds.length === 0 ? "text-muted-foreground" : "text-foreground font-medium"}`}>
+                        {formAssignedStaffIds.length === 0
+                          ? "-- Select Staff Members (Searchable) --"
+                          : formAssignedStaffIds.length === 1
+                            ? (() => {
+                              const s = dialogStaffList.find((st) => String(st.id) === formAssignedStaffIds[0]);
+                              return s ? `${s.name} (${s.role || "Staff Member"})` : "1 staff member selected";
+                            })()
+                            : `${formAssignedStaffIds.length} staff members selected`}
+                      </span>
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${staffDropdownOpen ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {staffDropdownOpen && (
+                    <div className="mt-1.5 p-2 rounded-xl border bg-popover text-popover-foreground shadow-lg space-y-2 z-50">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+                        <Input
+                          value={staffSearchQuery}
+                          onChange={(e) => setStaffSearchQuery(e.target.value)}
+                          placeholder="Search staff by name or role..."
+                          className="pl-8 text-xs h-8"
+                          autoFocus
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between px-1 text-[11px] text-muted-foreground border-b pb-1.5">
+                        <span>
+                          Showing {filteredStaffList.length} staff member{filteredStaffList.length === 1 ? "" : "s"}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {filteredStaffList.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const allIds = Array.from(new Set([...formAssignedStaffIds, ...filteredStaffList.map((s) => String(s.id))]));
+                                setFormAssignedStaffIds(allIds);
+                              }}
+                              className="text-[10px] text-primary hover:underline font-semibold cursor-pointer"
+                            >
+                              Select All
+                            </button>
+                          )}
+                          {formAssignedStaffIds.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setFormAssignedStaffIds([])}
+                              className="text-[10px] text-muted-foreground hover:underline cursor-pointer"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
+                        {filteredStaffList.length === 0 ? (
+                          <div className="py-4 text-center text-xs text-muted-foreground">
+                            No staff found matching &quot;{staffSearchQuery}&quot;
+                          </div>
+                        ) : (
+                          filteredStaffList.map((s) => {
+                            const isChecked = formAssignedStaffIds.includes(String(s.id));
+                            return (
+                              <div
+                                key={s.id}
+                                onClick={() => {
+                                  if (isChecked) {
+                                    setFormAssignedStaffIds(formAssignedStaffIds.filter((id) => id !== String(s.id)));
+                                  } else {
+                                    setFormAssignedStaffIds([...formAssignedStaffIds, String(s.id)]);
+                                  }
+                                }}
+                                className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors text-xs ${isChecked
+                                  ? "bg-primary/10 text-primary font-bold"
+                                  : "hover:bg-muted"
+                                  }`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <Checkbox
+                                    checked={isChecked}
+                                    onCheckedChange={() => { }}
+                                    className="h-3.5 w-3.5"
+                                  />
+                                  <User className={`w-3.5 h-3.5 shrink-0 ${isChecked ? "text-primary" : "text-muted-foreground"}`} />
+                                  <span className="font-semibold text-foreground truncate block">
+                                    {s.name}
+                                  </span>
+                                </div>
+                                <Badge variant="outline" className="text-[10px] py-0 px-1.5 shrink-0 bg-background/50 capitalize ml-2">
+                                  {s.role || "Staff Member"}
+                                </Badge>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Selected Staff Chips */}
+                {formAssignedStaffIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {dialogStaffList
+                      .filter((s) => formAssignedStaffIds.includes(String(s.id)))
+                      .map((s) => (
+                        <Badge
+                          key={s.id}
+                          variant="secondary"
+                          className="text-[11px] py-1 pl-2 pr-1.5 gap-1.5 font-medium bg-muted/60 hover:bg-muted"
+                        >
+                          <User className="w-3 h-3 text-primary" />
+                          <span className="truncate max-w-[150px]">{s.name}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFormAssignedStaffIds(formAssignedStaffIds.filter((id) => id !== String(s.id)));
+                            }}
+                            className="hover:bg-muted-foreground/20 rounded-full p-0.5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Project Scope / Description */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Project Scope & Deliverables (Optional)</Label>
+                <Textarea
+                  value={formDetails}
+                  onChange={(e) => setFormDetails(e.target.value)}
+                  placeholder="Describe project requirements, milestones, client specifications..."
+                  className="text-xs min-h-[70px] resize-y"
+                />
+              </div>
+
+              {/* Task Cadence / Frequency Selector */}
+              {!isInstitutionAdmin && (
+                <div className="space-y-2 p-3 rounded-xl border bg-muted/20">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-primary" />
+                      Project Cadence *
+                    </Label>
+                    <span className="text-[10px] text-muted-foreground font-medium">Daily vs One-Time</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormIsDailyRecurring(false)}
+                      className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all ${!formIsDailyRecurring
+                        ? "bg-background border-primary shadow-xs ring-1 ring-primary/40 text-foreground"
+                        : "bg-card/60 hover:bg-background/80 border-border text-muted-foreground"
+                        }`}
+                    >
+                      <span className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                        ⚡ Standard Project
+                      </span>
+                      <span className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
+                        Deliverable workflow with milestones and sub-tasks.
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setFormIsDailyRecurring(true)}
+                      className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all ${formIsDailyRecurring
+                        ? "bg-background border-primary shadow-xs ring-1 ring-primary/40 text-foreground"
+                        : "bg-card/60 hover:bg-background/80 border-border text-muted-foreground"
+                        }`}
+                    >
+                      <span className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                        🔁 Daily Recurring
+                      </span>
+                      <span className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
+                        Regenerates daily with routine checks.
+                      </span>
+                    </button>
+                  </div>
                 </div>
               )}
-            </div>
-            )}
-
-            {/* Task Cadence / Frequency Selector */}
-            {!isInstitutionAdmin && (
-              <div className="space-y-2 p-3.5 rounded-xl border bg-muted/20">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-primary" />
-                  Task Frequency & Cadence *
-                </Label>
-                <span className="text-[10px] text-muted-foreground font-medium">Daily vs One-Time</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFormIsDailyRecurring(false)}
-                  className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
-                    !formIsDailyRecurring
-                      ? "bg-background border-primary shadow-xs ring-1 ring-primary/40 text-foreground"
-                      : "bg-card/60 hover:bg-background/80 border-border text-muted-foreground"
-                  }`}
-                >
-                  <span className="text-xs font-bold flex items-center gap-1.5 text-foreground">
-                    ⚡ Once (One-Time)
-                  </span>
-                  <span className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
-                    Standard single deliverable. Disappears from active board once completed.
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setFormIsDailyRecurring(true)}
-                  className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
-                    formIsDailyRecurring
-                      ? "bg-background border-primary shadow-xs ring-1 ring-primary/40 text-foreground"
-                      : "bg-card/60 hover:bg-background/80 border-border text-muted-foreground"
-                  }`}
-                >
-                  <span className="text-xs font-bold flex items-center gap-1.5 text-foreground">
-                    🔁 Daily Basis
-                  </span>
-                  <span className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
-                    Regenerates everyday. Must be marked completed daily, else penalty applies.
-                  </span>
-                </button>
-              </div>
-            </div>
-            )}
-
-
-
-
-
             </div>
 
             <div className="flex items-center justify-between px-6 py-3.5 border-t bg-muted/20 shrink-0">
@@ -2599,9 +4102,9 @@ export default function OperationsTasksPage() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={savingTask} className="bg-primary font-bold">
+                <Button type="submit" disabled={savingTask || uploadingAgreement} className="bg-primary font-bold">
                   {savingTask && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  {editingTask ? "Save Changes" : "Create Task & Continue to Sub-Tasks"}
+                  {editingTask ? "Save Project Changes" : "Create Project & Continue to Sub-Tasks"}
                 </Button>
               </div>
             </div>
@@ -2609,566 +4112,273 @@ export default function OperationsTasksPage() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL 2: Dedicated Sub-Tasks Manager Modal */}
-      <Dialog open={subtaskModalOpen} onOpenChange={setSubtaskModalOpen}>
-        <DialogContent className="sm:max-w-[1150px] md:max-w-[1200px] w-[95vw] max-h-[92vh] overflow-y-auto p-6">
+      {/* MODAL: Phase Status & Details Modal */}
+      <Dialog open={Boolean(phaseModalState)} onOpenChange={(open) => !open && setPhaseModalState(null)}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b pb-3">
-              <div>
-                <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                  <Layers className="w-5 h-5 text-primary" />
-                  <span>Sub-Tasks Deliverables & Assignments</span>
-                </DialogTitle>
-                <DialogDescription className="text-xs mt-0.5">
-                  Project: <strong className="text-foreground">{selectedTaskForSubtasks?.title}</strong>
-                  {!isInstitutionAdmin && selectedTaskForSubtasks?.client_name && (
-                    <span> • Client: <strong className="text-primary">{selectedTaskForSubtasks.client_name}</strong></span>
-                  )}
-                </DialogDescription>
-              </div>
-
-              {/* Live Rollup Summary & Done & Close */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-3 bg-muted/40 px-3 py-1.5 rounded-xl border text-xs">
-                  <div>
-                    <span className="text-[10px] text-muted-foreground block">Total Cost</span>
-                    <span className="font-bold text-foreground font-mono tracking-wider">{formatPriceDisplay(totalSubModalCost)}</span>
-                  </div>
-                  <div className="border-l pl-3">
-                    <span className="text-[10px] text-muted-foreground block">Total Duration</span>
-                    <span className="font-bold text-foreground font-mono">{totalSubModalHoursDisplay}</span>
-                  </div>
-                  <div className="border-l pl-3">
-                    <span className="text-[10px] text-muted-foreground block">Completed</span>
-                    <span className="font-bold text-emerald-600 font-mono">{completedSubModalCount}/{activeSubTasks.length}</span>
-                  </div>
-                </div>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => selectedTaskForSubtasks && setHistoryModalTask(selectedTaskForSubtasks)}
-                  className="h-9 px-3 text-xs font-bold gap-1.5 text-muted-foreground hover:text-foreground cursor-pointer shadow-2xs"
-                  title="View Task History & Geolocation"
-                >
-                  <History className="w-3.5 h-3.5 text-primary" /> History
-                </Button>
-
-                <Button
-                  type="button"
-                  onClick={() => setSubtaskModalOpen(false)}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-9 px-4 text-xs shadow-sm cursor-pointer"
-                >
-                  Done & Close
-                </Button>
-              </div>
-            </div>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold">
+              <Layers className="w-5 h-5 text-primary" />
+              <span>Change Phase Status & Notes</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Project: <strong>{phaseModalState?.task.title}</strong>
+              <span className="block text-[11px] text-muted-foreground mt-0.5">
+                Phase #{Number(phaseModalState?.phaseIndex ?? 0) + 1}: {phaseModalState?.phase?.name}
+              </span>
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 pt-2">
-            {/* Sub-Task Input Box */}
-            <div className="p-4 rounded-xl border bg-card/60 space-y-3 shadow-xs">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-bold text-foreground uppercase tracking-wider text-primary">
-                  + Add New Sub-Task Deliverable
-                </p>
-                <span className="text-[11px] text-muted-foreground">Fill in fields and click Add</span>
-              </div>
-
-              {/* Row 1: Name, Price, Assign Staff */}
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                <div className="sm:col-span-5 space-y-1">
-                  <Label className="text-xs font-semibold">Sub-Task Name *</Label>
-                  <Input
-                    value={newSubTitle}
-                    onChange={(e) => setNewSubTitle(e.target.value)}
-                    placeholder="e.g. Curriculum Design, Lab Environment Setup, Class Assignment"
-                    className="text-xs h-9 bg-background"
-                  />
-                </div>
-
-                <div className="sm:col-span-3 space-y-1">
-                  <Label className="text-xs font-semibold">Task Cost / Price (₹)</Label>
-                  <div className="relative">
-                    <IndianRupee className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    {isStaffViewer ? (
-                      <Input
-                        type="text"
-                        value="★★★★★"
-                        disabled
-                        className="pl-8 text-xs h-9 font-mono bg-muted/40 cursor-not-allowed select-none text-muted-foreground font-bold tracking-wider"
-                      />
-                    ) : (
-                      <Input
-                        type="number"
-                        step="100"
-                        value={newSubPrice}
-                        onChange={(e) => setNewSubPrice(e.target.value)}
-                        placeholder="0.00"
-                        className="pl-8 text-xs h-9 font-mono bg-background"
-                      />
-                    )}
-                  </div>
-                </div>
-
-                <div className="sm:col-span-4 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-semibold">Assign Staff Member</Label>
-                    {isSelectedTaskAssigned ? (
-                      <span className="text-[10px] text-primary font-bold bg-primary/10 px-1.5 py-0.5 rounded">
-                        Project Team ({subtaskAssigneeOptions.length})
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground font-normal">
-                        All Staff
-                      </span>
-                    )}
-                  </div>
-                  <select
-                    value={newSubStaffId}
-                    onChange={(e) => setNewSubStaffId(e.target.value)}
-                    className="w-full h-9 text-xs bg-background rounded-md border border-input px-3 font-medium outline-none focus:ring-1 focus:ring-ring cursor-pointer text-foreground"
-                  >
-                    <option value="none">-- Unassigned --</option>
-                    {subtaskAssigneeOptions.map((s) => (
-                      <option key={s.id} value={String(s.id)}>
-                        {s.name} {s.role ? `(${s.role})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Row 2: Task Frequency & Cadence: Daily Basis vs Once */}
-              <div className="space-y-1.5 p-3 rounded-xl border bg-muted/20">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-primary" />
-                    Task Frequency & Cadence *
-                  </Label>
-                  <span className="text-[10px] text-muted-foreground font-medium">Daily vs One-Time</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setNewSubIsDailyRecurring(false)}
-                    className={`flex items-center gap-2.5 p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
-                      !newSubIsDailyRecurring
-                        ? "bg-background border-primary shadow-xs ring-1 ring-primary/40 text-foreground font-semibold"
-                        : "bg-card/60 hover:bg-background/80 border-border text-muted-foreground"
-                    }`}
-                  >
-                    <Zap className="w-4 h-4 text-amber-500 shrink-0" />
-                    <div>
-                      <div className="text-xs font-bold text-foreground">⚡ Once (One-Time)</div>
-                      <div className="text-[10px] text-muted-foreground leading-tight">Standard single deliverable with deadline</div>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setNewSubIsDailyRecurring(true)}
-                    className={`flex items-center gap-2.5 p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
-                      newSubIsDailyRecurring
-                        ? "bg-background border-primary shadow-xs ring-1 ring-primary/40 text-foreground font-semibold"
-                        : "bg-card/60 hover:bg-background/80 border-border text-muted-foreground"
-                    }`}
-                  >
-                    <RefreshCw className="w-4 h-4 text-blue-500 shrink-0" />
-                    <div>
-                      <div className="text-xs font-bold text-foreground">🔁 Daily Basis</div>
-                      <div className="text-[10px] text-muted-foreground leading-tight">Repeats everyday at exact time</div>
-                    </div>
-                  </button>
-                </div>
-              </div>
-
-              {/* Row 3: Daily Task Timing, Duration, Urgency & Performance Points */}
-              {newSubIsDailyRecurring ? (
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-3 rounded-xl border bg-muted/10">
-                  <div className="sm:col-span-3 space-y-1">
-                    <Label className="text-xs font-semibold">Duration (Required)</Label>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
-                          value={newSubDurationHours}
-                          onChange={(e) => setNewSubDurationHours(e.target.value)}
-                          className="text-xs h-9 font-mono bg-background pr-6"
-                        />
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground pointer-events-none">
-                          h
-                        </span>
-                      </div>
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          min="0"
-                          max="59"
-                          placeholder="0"
-                          value={newSubDurationMinutes}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === "" || (Number(val) >= 0 && Number(val) <= 59)) {
-                              setNewSubDurationMinutes(val);
-                            }
-                          }}
-                          className="text-xs h-9 font-mono bg-background pr-6"
-                        />
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground pointer-events-none">
-                          m
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="sm:col-span-3 space-y-1">
-                    <Label className="text-xs font-semibold flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-blue-500" />
-                      <span>Exact Daily Time</span>
-                    </Label>
-                    <Input
-                      type="time"
-                      value={newSubDailyTime}
-                      onChange={(e) => setNewSubDailyTime(e.target.value)}
-                      className="text-xs h-9 bg-background font-mono"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-3 space-y-1">
-                    <Label className="text-xs font-semibold">Urgency Level</Label>
-                    <select
-                      value={newSubUrgency}
-                      onChange={(e) => setNewSubUrgency(e.target.value as any)}
-                      className="w-full h-9 text-xs bg-background rounded-md border border-input px-3 font-medium outline-none focus:ring-1 focus:ring-ring cursor-pointer text-foreground"
+          {phaseModalState && (
+            <div className="space-y-4 py-1 text-xs">
+              {/* Selectable Phase Status Grid */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-foreground">Phase Status</Label>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  {[
+                    { id: "not_started", label: "Not Started", color: "bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-900/40 dark:text-slate-200" },
+                    { id: "in_progress", label: "In Progress", color: "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/40 dark:text-blue-200" },
+                    { id: "under_review", label: "Under Review", color: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-200" },
+                    { id: "completed", label: "Completed", color: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-200" },
+                    { id: "on_hold", label: "On Hold", color: "bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/40 dark:text-orange-200" },
+                    { id: "failed", label: "Failed", color: "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-900/40 dark:text-rose-200" },
+                  ].map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setPhaseModalStatus(s.id)}
+                      className={`flex items-center gap-2 p-2 rounded-lg border text-left font-semibold text-xs transition-all cursor-pointer ${
+                        phaseModalStatus === s.id
+                          ? `${s.color} ring-2 ring-primary shadow-xs font-bold`
+                          : "bg-background border-border text-muted-foreground hover:bg-muted/40"
+                      }`}
                     >
-                      {SUBTASK_URGENCIES.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="sm:col-span-3 space-y-1">
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <Label className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-0.5 truncate">
-                        <Sparkles className="w-2.5 h-2.5 shrink-0" />
-                        +Reward PTS
-                      </Label>
-                      <Label className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-0.5 truncate">
-                        <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
-                        -Penalty PTS
-                      </Label>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          value={newSubPoints}
-                          onChange={(e) => setNewSubPoints(e.target.value)}
-                          disabled={isStaffViewer}
-                          placeholder="20"
-                          className={`text-xs h-9 font-mono bg-background pr-7 ${isStaffViewer ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
-                        />
-                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-emerald-600 pointer-events-none">
-                          +PTS
-                        </span>
-                      </div>
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          value={newSubPenaltyPoints}
-                          onChange={(e) => setNewSubPenaltyPoints(e.target.value)}
-                          disabled={isStaffViewer}
-                          placeholder="10"
-                          className={`text-xs h-9 font-mono bg-background text-rose-600 pr-7 ${isStaffViewer ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
-                        />
-                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-rose-600 pointer-events-none">
-                          -PTS
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-3 rounded-xl border bg-muted/10">
-                  <div className="sm:col-span-3 space-y-1">
-                    <Label className="text-xs font-semibold">Duration of Task</Label>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
-                          value={newSubDurationHours}
-                          onChange={(e) => setNewSubDurationHours(e.target.value)}
-                          className="text-xs h-9 font-mono bg-background pr-6"
-                        />
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground pointer-events-none">
-                          h
-                        </span>
-                      </div>
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          min="0"
-                          max="59"
-                          placeholder="0"
-                          value={newSubDurationMinutes}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === "" || (Number(val) >= 0 && Number(val) <= 59)) {
-                              setNewSubDurationMinutes(val);
-                            }
-                          }}
-                          className="text-xs h-9 font-mono bg-background pr-6"
-                        />
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground pointer-events-none">
-                          m
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="sm:col-span-2 space-y-1">
-                    <Label className="text-xs font-semibold">Deadline Date</Label>
-                    <Input
-                      type="date"
-                      value={newSubDeadlineDate}
-                      onChange={(e) => setNewSubDeadlineDate(e.target.value)}
-                      className="text-xs h-9 bg-background"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2 space-y-1">
-                    <Label className="text-xs font-semibold">Deadline Time</Label>
-                    <Input
-                      type="time"
-                      value={newSubDeadlineNumber}
-                      onChange={(e) => setNewSubDeadlineNumber(e.target.value)}
-                      className="text-xs h-9 bg-background"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2 space-y-1">
-                    <Label className="text-xs font-semibold">Urgency Level</Label>
-                    <select
-                      value={newSubUrgency}
-                      onChange={(e) => setNewSubUrgency(e.target.value as any)}
-                      className="w-full h-9 text-xs bg-background rounded-md border border-input px-3 font-medium outline-none focus:ring-1 focus:ring-ring cursor-pointer text-foreground"
-                    >
-                      {SUBTASK_URGENCIES.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="sm:col-span-3 space-y-1">
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <Label className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-0.5 truncate">
-                        <Sparkles className="w-2.5 h-2.5 shrink-0" />
-                        +Reward PTS
-                      </Label>
-                      <Label className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-0.5 truncate">
-                        <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
-                        -Penalty PTS
-                      </Label>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          value={newSubPoints}
-                          onChange={(e) => setNewSubPoints(e.target.value)}
-                          disabled={isStaffViewer}
-                          placeholder="20"
-                          className={`text-xs h-9 font-mono bg-background pr-7 ${isStaffViewer ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
-                        />
-                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-emerald-600 pointer-events-none">
-                          +PTS
-                        </span>
-                      </div>
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          value={newSubPenaltyPoints}
-                          onChange={(e) => setNewSubPenaltyPoints(e.target.value)}
-                          disabled={isStaffViewer}
-                          placeholder="10"
-                          className={`text-xs h-9 font-mono bg-background text-rose-600 pr-7 ${isStaffViewer ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
-                        />
-                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-rose-600 pointer-events-none">
-                          -PTS
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end pt-1">
-                <Button type="button" size="sm" onClick={handleAddSubTaskToList} className="h-9 px-5 text-xs font-bold gap-1.5 shadow-sm">
-                  <Plus className="w-4 h-4" /> Add Sub-Task to List
-                </Button>
-              </div>
-            </div>
-
-            {/* List of Added Sub-Tasks */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <Label className="text-xs font-bold text-foreground">
-                  Current Sub-Tasks ({activeSubTasks.length})
-                </Label>
-                {isStaffViewer && (
-                  <span className="text-[10px] text-muted-foreground font-medium italic">
-                    (Added subtasks can only be modified or removed by Institution & Platform Admins)
-                  </span>
-                )}
-              </div>
-
-              {activeSubTasks.length > 0 ? (
-                <div className="space-y-2 max-h-72 overflow-y-auto">
-                  {activeSubTasks.map((sub, index) => (
-                    <div
-                      key={sub.id}
-                      className="p-3 rounded-xl bg-background border text-xs space-y-2 hover:border-primary/40 transition-colors shadow-2xs"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-bold text-muted-foreground text-[10px]">#{index + 1}</span>
-                          <span className={`font-bold text-sm truncate ${sub.status === "completed" ? "line-through text-muted-foreground" : "text-foreground"}`}>
-                            {sub.title}
-                          </span>
-                          <span className="font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded text-xs tracking-wider">
-                            {formatPriceDisplay(sub.price)}
-                          </span>
-                          {sub.is_daily_recurring ? (
-                            <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 text-[10px] gap-1 font-semibold">
-                              <RefreshCw className="w-2.5 h-2.5" /> Daily Basis
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/30 text-[10px] gap-1 font-semibold">
-                              <Zap className="w-2.5 h-2.5" /> Once
-                            </Badge>
-                          )}
-                          <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] gap-1.5 font-semibold">
-                            <span className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-300 font-bold">
-                              <Sparkles className="w-2.5 h-2.5 text-emerald-600" /> Bonus +{sub.points !== undefined && sub.points !== null ? sub.points : 20}
-                            </span>
-                            <span className="text-muted-foreground/60">/</span>
-                            <span className="inline-flex items-center gap-0.5 text-rose-700 dark:text-rose-300 font-bold">
-                              Penalty -{sub.penalty_points !== undefined && sub.penalty_points !== null ? sub.penalty_points : 10} pts
-                            </span>
-                          </Badge>
-                        </div>
-
-                        <div className="flex items-center gap-1 shrink-0">
-                          {getUrgencyBadge(sub.urgency)}
-                          {!isStaffViewer && (
-                            <>
-                              <Button
-                                type="button"
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => selectedTaskForSubtasks && handleOpenEditSubtask(selectedTaskForSubtasks, sub)}
-                                className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md cursor-pointer"
-                                title="Edit Sub-Task"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </Button>
-                              <Button
-                                type="button"
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => handleRemoveSubTaskFromList(sub.id)}
-                                className="h-7 w-7 text-destructive hover:bg-destructive/10 rounded-md cursor-pointer"
-                                title="Remove Sub-Task"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t text-[11px] text-muted-foreground">
-                        <div className="flex flex-wrap items-center gap-3">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] text-muted-foreground font-medium">Assignee:</span>
-                            {isStaffViewer ? (
-                              <span className="font-semibold text-foreground text-[11px]">
-                                {sub.assigned_employee_name || "Unassigned"}
-                              </span>
-                            ) : (
-                              <select
-                                value={sub.assigned_employee_id ? String(sub.assigned_employee_id) : "none"}
-                                onChange={(e) => handleSubTaskAssigneeChangeInModal(sub.id, e.target.value)}
-                                className="h-7 text-[11px] font-semibold bg-background rounded border border-input px-2 outline-none cursor-pointer text-foreground max-w-[170px] truncate"
-                              >
-                                <option value="none">-- Unassigned --</option>
-                                {subtaskAssigneeOptions.map((s) => (
-                                  <option key={s.id} value={String(s.id)}>
-                                    {s.name}
-                                  </option>
-                                ))}
-                              </select>
-                            )}
-                          </div>
-
-                          {formatSubtaskDuration(sub.duration_hours, sub.duration_minutes) && (
-                            <span className="inline-flex items-center gap-1 font-mono">
-                              <Clock className="w-3.5 h-3.5" />
-                              {formatSubtaskDuration(sub.duration_hours, sub.duration_minutes)}
-                            </span>
-                          )}
-
-                          {sub.is_daily_recurring ? (
-                            <span className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-400 font-medium">
-                              <RotateCcw className="w-3.5 h-3.5" />
-                              <span>Daily at {sub.daily_time || sub.deadline_time || "10:00"}</span>
-                            </span>
-                          ) : (
-                            sub.deadline_date && (
-                              <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 font-medium">
-                                <Calendar className="w-3.5 h-3.5" />
-                                {sub.deadline_date} {sub.deadline_time || ""}
-                              </span>
-                            )
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-muted-foreground">Status:</span>
-                          <select
-                            value={sub.status}
-                            onChange={(e) => handleSubTaskStatusChangeInModal(sub.id, e.target.value)}
-                            className="h-7 text-[10px] font-semibold w-28 bg-background rounded border border-input px-1.5 outline-none cursor-pointer text-foreground"
-                          >
-                            {allowedStatuses.map((s) => (
-                              <option key={s.id} value={s.id}>
-                                {s.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    </div>
+                      <span className={`w-2 h-2 rounded-full ${phaseModalStatus === s.id ? "bg-primary" : "bg-muted-foreground/40"}`} />
+                      <span>{s.label}</span>
+                    </button>
                   ))}
                 </div>
-              ) : (
-                <div className="text-center py-8 border border-dashed rounded-2xl text-xs text-muted-foreground bg-muted/10">
-                  No sub-tasks added to this project yet. Use the form above to add deliverables with cost, assignee, duration, and deadlines.
-                </div>
+              </div>
+
+              {/* Phase Notes & Updates */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-foreground">Phase Deliverables & Notes</Label>
+                <Textarea
+                  value={phaseModalNotes}
+                  onChange={(e) => setPhaseModalNotes(e.target.value)}
+                  placeholder="Record deliverable status, client approvals, or instructions for this phase..."
+                  rows={3}
+                  className="text-xs resize-none"
+                />
+              </div>
+
+              {/* Advance Next Phase Toggle */}
+              {phaseModalStatus === "completed" && (
+                <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer bg-muted/30 p-2.5 rounded-lg border">
+                  <input
+                    type="checkbox"
+                    checked={phaseModalAdvanceNext}
+                    onChange={(e) => setPhaseModalAdvanceNext(e.target.checked)}
+                    className="rounded border-input text-primary h-4 w-4"
+                  />
+                  <span>Automatically advance project to next phase</span>
+                </label>
               )}
             </div>
-          </div>
+          )}
+
+          <DialogFooter className="gap-2 pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setPhaseModalState(null)}
+              className="cursor-pointer"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={savingPhaseModal}
+              onClick={async () => {
+                if (!phaseModalState) return;
+                setSavingPhaseModal(true);
+                await handleUpdateProjectPhase(
+                  phaseModalState.task,
+                  phaseModalState.phaseIndex,
+                  phaseModalStatus,
+                  phaseModalStatus === "completed" && phaseModalAdvanceNext,
+                  phaseModalNotes
+                );
+                setSavingPhaseModal(false);
+                setPhaseModalState(null);
+              }}
+              className="bg-primary text-primary-foreground font-semibold cursor-pointer"
+            >
+              <Check className="w-3.5 h-3.5 mr-1" /> Save Phase Status
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL: Assign Pipeline Workflow to Existing Project */}
+      <Dialog open={Boolean(attachPipelineTask)} onOpenChange={(open) => !open && setAttachPipelineTask(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold">
+              <GitFork className="w-5 h-5 text-primary" />
+              <span>Assign Pipeline Workflow</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Project: <strong>{attachPipelineTask?.title}</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Select Project Type</Label>
+              <select
+                value={attachTypeId}
+                onChange={async (e) => {
+                  const tId = e.target.value;
+                  setAttachTypeId(tId);
+                  if (tId === "none") {
+                    setAttachPipelineId("none");
+                    setAttachAvailablePipelines([]);
+                    return;
+                  }
+                  try {
+                    const res = await fetch(`/api/admin/operations/project-pipelines?project_type_id=${tId}&status=active`);
+                    if (res.ok) {
+                      const data = await res.json();
+                      const pls = data.pipelines || [];
+                      setAttachAvailablePipelines(pls);
+                      const def = pls.find((p: any) => p.is_default) || pls[0];
+                      if (def) setAttachPipelineId(String(def.id));
+                    }
+                  } catch (err) {
+                    console.error("Error loading pipelines:", err);
+                  }
+                }}
+                className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background font-medium cursor-pointer"
+              >
+                <option value="none">-- Select Project Type --</option>
+                {projectTypesList.map((pt) => (
+                  <option key={pt.id} value={String(pt.id)}>
+                    {pt.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Select Pipeline Template</Label>
+              <select
+                value={attachPipelineId}
+                disabled={attachTypeId === "none" || attachAvailablePipelines.length === 0}
+                onChange={(e) => setAttachPipelineId(e.target.value)}
+                className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background font-medium cursor-pointer disabled:opacity-50"
+              >
+                <option value="none">
+                  {attachTypeId === "none"
+                    ? "-- Select Project Type First --"
+                    : attachAvailablePipelines.length === 0
+                    ? "-- No active pipelines --"
+                    : "-- Select Pipeline Template --"}
+                </option>
+                {attachAvailablePipelines.map((pl) => (
+                  <option key={pl.id} value={String(pl.id)}>
+                    {pl.name} {pl.is_default ? "★ (Default)" : ""} ({Array.isArray(pl.phases) ? pl.phases.length : 0} phases)
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setAttachPipelineTask(null)}
+              className="cursor-pointer"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={savingAttachPipeline || attachPipelineId === "none"}
+              onClick={async () => {
+                if (!attachPipelineTask || attachPipelineId === "none") return;
+                setSavingAttachPipeline(true);
+                try {
+                  const selType = projectTypesList.find((p) => String(p.id) === String(attachTypeId));
+                  const selPl = attachAvailablePipelines.find((p) => String(p.id) === String(attachPipelineId));
+                  const plPhases = Array.isArray(selPl?.phases) ? selPl.phases : [];
+
+                  const headers: Record<string, string> = { "Content-Type": "application/json" };
+                  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+                  const res = await fetch("/api/admin/operations/tasks", {
+                    method: "PUT",
+                    headers,
+                    body: JSON.stringify({
+                      id: attachPipelineTask.id,
+                      title: attachPipelineTask.title,
+                      project_type_id: selType?.id || null,
+                      project_type_name: selType?.name || null,
+                      pipeline_id: selPl?.id || null,
+                      pipeline_name: selPl?.name || null,
+                      pipeline_phases: plPhases.map((ph: any, i: number) => ({
+                        ...ph,
+                        order: ph.order || i + 1,
+                        status: i === 0 ? "in_progress" : "not_started",
+                        started_at: i === 0 ? new Date().toISOString() : null,
+                        completed_at: null,
+                      })),
+                      current_phase_index: 0,
+                    }),
+                  });
+
+                  const resData = await res.json().catch(() => ({}));
+                  if (!res.ok) throw new Error(resData.error || "Failed to assign pipeline");
+                  toast.success(`Pipeline "${selPl?.name}" assigned to project!`);
+                  setAttachPipelineTask(null);
+                  await fetchTasks();
+                } catch (err: any) {
+                  toast.error(err.message || "Failed to assign pipeline");
+                } finally {
+                  setSavingAttachPipeline(false);
+                }
+              }}
+              className="bg-primary text-primary-foreground font-semibold cursor-pointer"
+            >
+              {savingAttachPipeline ? "Assigning..." : "Assign Pipeline"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Unified Sub-Tasks Add & Edit Dialog */}
+      <SubtaskModalDialog
+        open={subtaskModalOpen}
+        onOpenChange={(open) => {
+          setSubtaskModalOpen(open);
+          if (!open) {
+            setEditingSubtaskObject(null);
+          }
+        }}
+        task={selectedTaskForSubtasks}
+        editingSubtask={editingSubtaskObject}
+        staffOptions={subtaskAssigneeOptions}
+        isStaffViewer={isStaffViewer}
+        onSaved={fetchTasks}
+        onOpenHistory={(t, s) => {
+          setHistoryModalSubtask(s || null);
+          setHistoryModalTask(t);
+        }}
+      />
 
       {/* Modal 3: Submit Task Under Review Dialog (Optional Text & Image) */}
       <Dialog open={reviewModalOpen} onOpenChange={setReviewModalOpen}>
@@ -3343,18 +4553,15 @@ export default function OperationsTasksPage() {
               <button
                 type="button"
                 onClick={() => setAdjustType("bonus")}
-                className={`flex flex-col items-center justify-center gap-1.5 p-4 rounded-xl border-2 transition-all ${
-                  adjustType === "bonus"
-                    ? "border-emerald-500 bg-emerald-500/10 shadow-sm"
-                    : "border-border bg-card/60 hover:bg-muted/40"
-                }`}
+                className={`flex flex-col items-center justify-center gap-1.5 p-4 rounded-xl border-2 transition-all ${adjustType === "bonus"
+                  ? "border-emerald-500 bg-emerald-500/10 shadow-sm"
+                  : "border-border bg-card/60 hover:bg-muted/40"
+                  }`}
               >
-                <PlusCircle className={`w-7 h-7 ${
-                  adjustType === "bonus" ? "text-emerald-600" : "text-muted-foreground"
-                }`} />
-                <span className={`text-sm font-bold ${
-                  adjustType === "bonus" ? "text-emerald-700 dark:text-emerald-300" : "text-muted-foreground"
-                }`}>Bonus (+)</span>
+                <PlusCircle className={`w-7 h-7 ${adjustType === "bonus" ? "text-emerald-600" : "text-muted-foreground"
+                  }`} />
+                <span className={`text-sm font-bold ${adjustType === "bonus" ? "text-emerald-700 dark:text-emerald-300" : "text-muted-foreground"
+                  }`}>Bonus (+)</span>
                 <span className="text-[10px] text-muted-foreground text-center leading-snug">
                   Reward for great work, extra effort, or client appreciation
                 </span>
@@ -3363,18 +4570,15 @@ export default function OperationsTasksPage() {
               <button
                 type="button"
                 onClick={() => setAdjustType("penalty")}
-                className={`flex flex-col items-center justify-center gap-1.5 p-4 rounded-xl border-2 transition-all ${
-                  adjustType === "penalty"
-                    ? "border-rose-500 bg-rose-500/10 shadow-sm"
-                    : "border-border bg-card/60 hover:bg-muted/40"
-                }`}
+                className={`flex flex-col items-center justify-center gap-1.5 p-4 rounded-xl border-2 transition-all ${adjustType === "penalty"
+                  ? "border-rose-500 bg-rose-500/10 shadow-sm"
+                  : "border-border bg-card/60 hover:bg-muted/40"
+                  }`}
               >
-                <MinusCircle className={`w-7 h-7 ${
-                  adjustType === "penalty" ? "text-rose-600" : "text-muted-foreground"
-                }`} />
-                <span className={`text-sm font-bold ${
-                  adjustType === "penalty" ? "text-rose-700 dark:text-rose-300" : "text-muted-foreground"
-                }`}>Penalty (-)</span>
+                <MinusCircle className={`w-7 h-7 ${adjustType === "penalty" ? "text-rose-600" : "text-muted-foreground"
+                  }`} />
+                <span className={`text-sm font-bold ${adjustType === "penalty" ? "text-rose-700 dark:text-rose-300" : "text-muted-foreground"
+                  }`}>Penalty (-)</span>
                 <span className="text-[10px] text-muted-foreground text-center leading-snug">
                   Deduction for delay, missed deadline, or quality issue
                 </span>
@@ -3431,13 +4635,11 @@ export default function OperationsTasksPage() {
                     value={adjustPoints}
                     onChange={(e) => setAdjustPoints(e.target.value)}
                     placeholder="e.g. 10"
-                    className={`text-sm h-10 font-mono pr-14 ${
-                      adjustType === "bonus" ? "text-emerald-700" : "text-rose-600"
-                    }`}
+                    className={`text-sm h-10 font-mono pr-14 ${adjustType === "bonus" ? "text-emerald-700" : "text-rose-600"
+                      }`}
                   />
-                  <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold ${
-                    adjustType === "bonus" ? "text-emerald-600" : "text-rose-600"
-                  }`}>
+                  <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold ${adjustType === "bonus" ? "text-emerald-600" : "text-rose-600"
+                    }`}>
                     {adjustType === "bonus" ? "+PTS" : "-PTS"}
                   </span>
                 </div>
@@ -3451,13 +4653,12 @@ export default function OperationsTasksPage() {
                       key={p}
                       type="button"
                       onClick={() => setAdjustPoints(String(p))}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
-                        adjustPoints === String(p)
-                          ? adjustType === "bonus"
-                            ? "bg-emerald-500 text-white border-emerald-500"
-                            : "bg-rose-500 text-white border-rose-500"
-                          : "bg-muted border-border text-muted-foreground hover:bg-muted/80"
-                      }`}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${adjustPoints === String(p)
+                        ? adjustType === "bonus"
+                          ? "bg-emerald-500 text-white border-emerald-500"
+                          : "bg-rose-500 text-white border-rose-500"
+                        : "bg-muted border-border text-muted-foreground hover:bg-muted/80"
+                        }`}
                     >
                       {p}
                     </button>
@@ -3482,11 +4683,10 @@ export default function OperationsTasksPage() {
             </div>
 
             {/* ── Live Preview ── */}
-            <div className={`flex items-center justify-between gap-3 p-3.5 rounded-xl border-2 ${
-              adjustType === "bonus"
-                ? "border-emerald-500/40 bg-emerald-500/5"
-                : "border-rose-500/40 bg-rose-500/5"
-            }`}>
+            <div className={`flex items-center justify-between gap-3 p-3.5 rounded-xl border-2 ${adjustType === "bonus"
+              ? "border-emerald-500/40 bg-emerald-500/5"
+              : "border-rose-500/40 bg-rose-500/5"
+              }`}>
               <div className="flex items-center gap-2">
                 {adjustType === "bonus" ? (
                   <PlusCircle className="w-5 h-5 text-emerald-600" />
@@ -3502,9 +4702,8 @@ export default function OperationsTasksPage() {
                   </p>
                 </div>
               </div>
-              <span className={`text-2xl font-black font-mono ${
-                adjustType === "bonus" ? "text-emerald-600" : "text-rose-600"
-              }`}>
+              <span className={`text-2xl font-black font-mono ${adjustType === "bonus" ? "text-emerald-600" : "text-rose-600"
+                }`}>
                 {adjustType === "bonus" ? "+" : "-"}{adjustPoints || "0"} pts
               </span>
             </div>
@@ -3522,11 +4721,10 @@ export default function OperationsTasksPage() {
                 type="button"
                 onClick={handleSaveAdjustment}
                 disabled={savingAdjustment || adjustEmployeeId === "none"}
-                className={`font-bold gap-1.5 ${
-                  adjustType === "bonus"
-                    ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                    : "bg-rose-600 hover:bg-rose-700 text-white"
-                }`}
+                className={`font-bold gap-1.5 ${adjustType === "bonus"
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  : "bg-rose-600 hover:bg-rose-700 text-white"
+                  }`}
               >
                 {savingAdjustment ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -3550,9 +4748,8 @@ export default function OperationsTasksPage() {
                   <div className="flex items-center gap-3 text-[11px] font-mono">
                     <span className="text-emerald-600 font-bold">+{adjustHistorySummary.total_bonus} bonus</span>
                     <span className="text-rose-600 font-bold">-{adjustHistorySummary.total_penalty} penalty</span>
-                    <span className={`font-black ${
-                      adjustHistorySummary.net >= 0 ? "text-emerald-600" : "text-rose-600"
-                    }`}>
+                    <span className={`font-black ${adjustHistorySummary.net >= 0 ? "text-emerald-600" : "text-rose-600"
+                      }`}>
                       Net: {adjustHistorySummary.net >= 0 ? "+" : ""}{adjustHistorySummary.net}
                     </span>
                   </div>
@@ -3572,11 +4769,10 @@ export default function OperationsTasksPage() {
                   {adjustHistory.map((adj: any) => (
                     <div
                       key={adj.id}
-                      className={`flex items-start justify-between gap-3 p-3 rounded-xl border text-xs ${
-                        adj.adjustment_type === "bonus"
-                          ? "bg-emerald-500/5 border-emerald-500/20"
-                          : "bg-rose-500/5 border-rose-500/20"
-                      }`}
+                      className={`flex items-start justify-between gap-3 p-3 rounded-xl border text-xs ${adj.adjustment_type === "bonus"
+                        ? "bg-emerald-500/5 border-emerald-500/20"
+                        : "bg-rose-500/5 border-rose-500/20"
+                        }`}
                     >
                       <div className="flex items-start gap-2 min-w-0">
                         {adj.adjustment_type === "bonus" ? (
@@ -3593,9 +4789,8 @@ export default function OperationsTasksPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className={`text-sm font-black font-mono ${
-                          adj.adjustment_type === "bonus" ? "text-emerald-600" : "text-rose-600"
-                        }`}>
+                        <span className={`text-sm font-black font-mono ${adj.adjustment_type === "bonus" ? "text-emerald-600" : "text-rose-600"
+                          }`}>
                           {adj.adjustment_type === "bonus" ? "+" : "-"}{adj.points}
                         </span>
                         <Button
@@ -3618,227 +4813,35 @@ export default function OperationsTasksPage() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL 3: Edit Deliverable / Sub-Task Dialog */}
-      <Dialog open={editSubtaskDialogOpen} onOpenChange={setEditSubtaskDialogOpen}>
-        <DialogContent className="sm:max-w-2xl w-[95vw] max-h-[92vh] overflow-y-auto p-6">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold flex items-center gap-2">
-              <Edit2 className="w-4 h-4 text-primary" />
-              <span>Edit Deliverable / Sub-Task</span>
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Modify deliverables, pricing, duration, urgency, and deadlines for:{" "}
-              <strong className="text-foreground">{editingSubtaskTargetTask?.title}</strong>
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleSaveEditedSubtask} className="space-y-4 pt-2">
-            {/* Title */}
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Sub-Task Deliverable Name *</Label>
-              <Input
-                value={editSubTitle}
-                onChange={(e) => setEditSubTitle(e.target.value)}
-                placeholder="e.g. Curriculum Design, Lab Environment Setup"
-                className="text-xs h-9"
-                required
-              />
-            </div>
-
-            {/* Price & Assignee */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Task Cost / Price (₹)</Label>
-                <div className="relative">
-                  <IndianRupee className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={editSubPrice}
-                    onChange={(e) => setEditSubPrice(e.target.value)}
-                    className="pl-8 text-xs h-9 font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Assign Staff Member</Label>
-                <select
-                  value={editSubAssignedStaffId}
-                  onChange={(e) => setEditSubAssignedStaffId(e.target.value)}
-                  className="w-full h-9 text-xs bg-background rounded-md border border-input px-3 font-medium outline-none cursor-pointer text-foreground"
-                >
-                  <option value="none">Unassigned</option>
-                  {subtaskAssigneeOptions.map((s) => (
-                    <option key={s.id} value={String(s.id)}>
-                      {s.name} ({s.role || "Staff"})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Frequency Cadence: Daily vs Once */}
-            <div className="space-y-1.5 p-3 rounded-xl border bg-muted/20">
-              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-primary" />
-                <span>Task Cadence: Daily Recurring vs One-Time</span>
-              </Label>
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setEditSubIsDaily(false)}
-                  className={`p-2.5 rounded-lg border text-left transition-all text-xs font-bold flex items-center gap-2 cursor-pointer ${
-                    !editSubIsDaily
-                      ? "bg-background border-primary text-foreground shadow-xs ring-1 ring-primary/40"
-                      : "bg-muted/40 text-muted-foreground hover:bg-background border-border"
-                  }`}
-                >
-                  <Zap className="w-3.5 h-3.5 text-primary" />
-                  <span>⚡ Once (One-Time)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditSubIsDaily(true)}
-                  className={`p-2.5 rounded-lg border text-left transition-all text-xs font-bold flex items-center gap-2 cursor-pointer ${
-                    editSubIsDaily
-                      ? "bg-background border-primary text-foreground shadow-xs ring-1 ring-primary/40"
-                      : "bg-muted/40 text-muted-foreground hover:bg-background border-border"
-                  }`}
-                >
-                  <RotateCcw className="w-3.5 h-3.5 text-blue-500" />
-                  <span>🔁 Daily Basis</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Duration & Scheduling */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Duration Required</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="relative">
-                    <Input
-                      type="number"
-                      min="0"
-                      placeholder="0"
-                      value={editSubDurationHours}
-                      onChange={(e) => setEditSubDurationHours(e.target.value)}
-                      className="text-xs h-9 font-mono pr-6"
-                    />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground pointer-events-none">
-                      h
-                    </span>
-                  </div>
-                  <div className="relative">
-                    <Input
-                      type="number"
-                      min="0"
-                      max="59"
-                      placeholder="0"
-                      value={editSubDurationMinutes}
-                      onChange={(e) => setEditSubDurationMinutes(e.target.value)}
-                      className="text-xs h-9 font-mono pr-6"
-                    />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground pointer-events-none">
-                      m
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {editSubIsDaily ? (
-                <div className="space-y-1">
-                  <Label className="text-xs font-semibold flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-blue-500" />
-                    <span>Exact Daily Time</span>
-                  </Label>
-                  <Input
-                    type="time"
-                    value={editSubDailyTime}
-                    onChange={(e) => setEditSubDailyTime(e.target.value)}
-                    className="text-xs h-9 font-mono"
-                  />
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold">Deadline Date</Label>
-                    <Input
-                      type="date"
-                      value={editSubDeadlineDate}
-                      onChange={(e) => setEditSubDeadlineDate(e.target.value)}
-                      className="text-xs h-9"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold">Deadline Time</Label>
-                    <Input
-                      type="time"
-                      value={editSubDeadlineTime}
-                      onChange={(e) => setEditSubDeadlineTime(e.target.value)}
-                      className="text-xs h-9 font-mono"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Urgency & Points */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Urgency Level</Label>
-                <select
-                  value={editSubUrgency}
-                  onChange={(e) => setEditSubUrgency(e.target.value as any)}
-                  className="w-full h-9 text-xs bg-background rounded-md border border-input px-3 font-medium outline-none cursor-pointer text-foreground"
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Bonus Points</Label>
-                <Input
-                  type="number"
-                  value={editSubPoints}
-                  onChange={(e) => setEditSubPoints(e.target.value)}
-                  className="text-xs h-9 font-mono"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-rose-600 dark:text-rose-400">Penalty Points</Label>
-                <Input
-                  type="number"
-                  value={editSubPenaltyPoints}
-                  onChange={(e) => setEditSubPenaltyPoints(e.target.value)}
-                  className="text-xs h-9 font-mono text-rose-600"
-                />
-              </div>
-            </div>
-
-            <DialogFooter className="pt-2 border-t flex items-center justify-between gap-2">
-              <Button type="button" variant="outline" onClick={() => setEditSubtaskDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" className="bg-primary font-bold">
-                Save Sub-Task Changes
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
       {/* Task History & Geolocation Audit Trail Dialog */}
       <TaskHistoryDialog
         open={Boolean(historyModalTask)}
-        onOpenChange={(open) => !open && setHistoryModalTask(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setHistoryModalTask(null);
+            setHistoryModalSubtask(null);
+          }
+        }}
         task={historyModalTask}
+        filterSubtaskId={historyModalSubtask?.id}
+        filterSubtaskTitle={historyModalSubtask?.title}
+      />
+
+      {/* Sub-Task Upload Dialog (Deliverables & Files) */}
+      <SubTaskUploadDialog
+        open={Boolean(uploadModalState)}
+        onOpenChange={(open) => !open && setUploadModalState(null)}
+        task={uploadModalState?.task || null}
+        subtask={uploadModalState?.subtask || null}
+        onSaved={fetchTasks}
+      />
+
+      {/* Project Invoices Dialog */}
+      <ProjectInvoicesDialog
+        open={Boolean(invoicesModalTask)}
+        onOpenChange={(open) => !open && setInvoicesModalTask(null)}
+        task={invoicesModalTask}
+        onSaved={fetchTasks}
       />
     </div>
   );

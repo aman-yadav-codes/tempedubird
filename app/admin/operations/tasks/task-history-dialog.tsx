@@ -24,6 +24,10 @@ import {
   RefreshCw,
   Layers,
   Sparkles,
+  MessageSquare,
+  Upload,
+  Trash2,
+  UserCheck,
 } from "lucide-react";
 
 export interface TaskHistoryEvent {
@@ -50,9 +54,22 @@ interface TaskHistoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   task: any | null;
+  filterSubtaskId?: string | null;
+  filterSubtaskTitle?: string | null;
 }
 
-export function TaskHistoryDialog({ open, onOpenChange, task }: TaskHistoryDialogProps) {
+export function TaskHistoryDialog({
+  open,
+  onOpenChange,
+  task,
+  filterSubtaskId,
+  filterSubtaskTitle,
+}: TaskHistoryDialogProps) {
+  const [activeSubFilter, setActiveSubFilter] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setActiveSubFilter(filterSubtaskId || null);
+  }, [filterSubtaskId, open]);
   if (!task) return null;
 
   const formatDate = (dateStr?: string | null) => {
@@ -146,6 +163,48 @@ export function TaskHistoryDialog({ open, onOpenChange, task }: TaskHistoryDialo
 
   const getActionBadge = (action: string) => {
     switch (action) {
+      case "task_file_uploaded":
+        return (
+          <Badge className="bg-blue-600 text-white gap-1 text-[10px] font-bold">
+            <Upload className="w-2.5 h-2.5" /> File Uploaded
+          </Badge>
+        );
+      case "task_file_deleted":
+        return (
+          <Badge className="bg-rose-600 text-white gap-1 text-[10px] font-bold">
+            <Trash2 className="w-2.5 h-2.5" /> File Deleted
+          </Badge>
+        );
+      case "work_updated":
+        return (
+          <Badge className="bg-emerald-600 text-white gap-1 text-[10px] font-bold">
+            <MessageSquare className="w-2.5 h-2.5" /> Work Updated
+          </Badge>
+        );
+      case "subtask_created":
+        return (
+          <Badge className="bg-purple-600 text-white gap-1 text-[10px] font-bold">
+            <Sparkles className="w-2.5 h-2.5" /> Deliverable Created
+          </Badge>
+        );
+      case "subtask_assigned":
+        return (
+          <Badge className="bg-indigo-600 text-white gap-1 text-[10px] font-bold">
+            <UserCheck className="w-2.5 h-2.5" /> Assigned
+          </Badge>
+        );
+      case "subtask_status_changed":
+        return (
+          <Badge className="bg-amber-600 text-white gap-1 text-[10px] font-bold">
+            <RefreshCw className="w-2.5 h-2.5" /> Status Changed
+          </Badge>
+        );
+      case "subtask_edited":
+        return (
+          <Badge variant="outline" className="border-indigo-500 text-indigo-700 dark:text-indigo-300 gap-1 text-[10px] font-bold">
+            Deliverable Edited
+          </Badge>
+        );
       case "started":
         return (
           <Badge className="bg-blue-600 text-white gap-1 text-[10px] font-bold">
@@ -190,6 +249,10 @@ export function TaskHistoryDialog({ open, onOpenChange, task }: TaskHistoryDialo
         );
     }
   };
+
+  const filteredEvents = activeSubFilter
+    ? displayEvents.filter((e) => String(e.subtask_id) === String(activeSubFilter))
+    : displayEvents;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -308,13 +371,13 @@ export function TaskHistoryDialog({ open, onOpenChange, task }: TaskHistoryDialo
               <span className="text-[10px] text-muted-foreground">Newest first</span>
             </div>
 
-            {displayEvents.length === 0 ? (
+            {filteredEvents.length === 0 ? (
               <div className="p-6 text-center text-xs text-muted-foreground border border-dashed rounded-xl">
                 No activity history recorded yet.
               </div>
             ) : (
               <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                {displayEvents.map((evt, idx) => (
+                {filteredEvents.map((evt, idx) => (
                   <div
                     key={evt.id || idx}
                     className="p-2.5 rounded-xl border bg-background text-xs space-y-1 hover:border-primary/40 transition-colors shadow-2xs"

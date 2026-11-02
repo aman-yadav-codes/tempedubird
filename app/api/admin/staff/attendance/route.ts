@@ -17,8 +17,8 @@ import {
   applyPenaltyRules,
   computeMinutesLate,
 } from "@/lib/penalties/applyPenaltyRules";
+import { syncTaskAttendanceToDatabase } from "@/app/lib/task-attendance-sync-server";
 import {
-  syncTaskAttendanceToDatabase,
   parseShiftTiming,
   evaluateComplianceAndDedication,
 } from "@/app/lib/task-attendance-sync";
@@ -433,7 +433,7 @@ async function listSelfAttendance(queryable: Queryable, institutionId: number, u
         COALESCE(shift_name, 'General Shift') AS shift_name,
         COALESCE(remarks, '') AS remarks
       FROM staff_attendance
-      WHERE institution_id = $1
+      WHERE (institution_id = $1 OR $1 = 0 OR $1 IS NULL)
         AND staff_user_id = $2
         AND to_char(attendance_date, 'YYYY-MM') = $3
       ORDER BY attendance_date DESC
@@ -538,8 +538,12 @@ export async function GET(req: Request) {
     await ensureStaffAttendanceSchemaOnce();
 
     const url = new URL(req.url);
-    const institutionId = positive(url.searchParams.get("institutionId"));
+    const rawInstId = url.searchParams.get("institutionId") || url.searchParams.get("institution_id");
     const mode = url.searchParams.get("mode") === "self" ? "self" : "admin";
+    let institutionId = positive(rawInstId);
+    if (!institutionId && mode === "self") {
+      institutionId = currentUser.memberships?.find((m: any) => m.institution_id)?.institution_id || 1;
+    }
     const action = url.searchParams.get("action") || "list";
     const date = isoDate(url.searchParams.get("date"));
     const month = monthValue(url.searchParams.get("month"));

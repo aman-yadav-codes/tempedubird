@@ -34,24 +34,24 @@ const DEMO_ACCOUNTS = {
     full_name: "Deepak yadav (Maa Sharda Institute)",
     role_code: "institution_admin",
     phone: "8887787846",
-    institution_id: 160,
+    institution_id: 5,
   },
   institution_admin: {
     email: "deepakdv74@gmail.com",
     full_name: "Deepak yadav (Maa Sharda Institute)",
     role_code: "institution_admin",
     phone: "8887787846",
-    institution_id: 160,
+    institution_id: 5,
   },
   platform_admin: {
-    email: "demo.platform_admin@edubird.com",
-    full_name: "Demo Platform Admin",
+    email: "admin@gmail.com",
+    full_name: "Platform Admin",
     role_code: "platform_admin",
     phone: "9876543213",
   },
   admin: {
-    email: "demo.platform_admin@edubird.com",
-    full_name: "Demo Platform Admin",
+    email: "admin@gmail.com",
+    full_name: "Platform Admin",
     role_code: "platform_admin",
     phone: "9876543213",
   },
@@ -66,39 +66,36 @@ export async function POST(req: Request) {
 
     let userId: number;
 
-    // For Professional / Institution Admin: specifically log into Maa Sharda account (Institution ID 160)
-    if (roleKey === "professional" || roleKey === "institution_admin") {
-      const shardaMemberRes = await db.query<{ id: number }>(
-        `SELECT u.id 
-         FROM users u 
-         JOIN institution_memberships im ON im.user_id = u.id 
-         WHERE im.institution_id = 160 
-           AND COALESCE(u.is_deleted, FALSE) = FALSE 
-         ORDER BY (CASE WHEN im.role_id = 7 THEN 0 ELSE 1 END), u.id ASC 
-         LIMIT 1`
+    // For Platform Admin: log into Platform Admin account (User ID 1)
+    if (roleKey === "platform_admin" || roleKey === "admin") {
+      userId = 1;
+      await db.query(`UPDATE users SET is_active = TRUE, is_verified = TRUE WHERE id = 1`);
+    } else if (roleKey === "professional" || roleKey === "institution_admin") {
+      const userByEmail = await db.query<{ id: number }>(
+        `SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+        [demoConfig.email]
       );
 
-      if (shardaMemberRes.rows.length > 0) {
-        userId = shardaMemberRes.rows[0].id;
-        await db.query(`UPDATE users SET is_active = TRUE, is_verified = TRUE WHERE id = $1`, [userId]);
+      if (userByEmail.rows.length > 0) {
+        userId = userByEmail.rows[0].id;
+        await db.query(`UPDATE users SET is_active = TRUE, is_deleted = FALSE, deleted_at = NULL, is_verified = TRUE WHERE id = $1`, [userId]);
       } else {
-        const userByEmail = await db.query<{ id: number }>(
-          `SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND COALESCE(is_deleted, FALSE) = FALSE LIMIT 1`,
-          [demoConfig.email]
+        const shardaMemberRes = await db.query<{ id: number }>(
+          `SELECT u.id 
+           FROM users u 
+           JOIN institution_memberships im ON im.user_id = u.id 
+           WHERE im.institution_id = 5 
+             AND u.id <> 1
+             AND COALESCE(u.is_deleted, FALSE) = FALSE 
+           ORDER BY (CASE WHEN im.role_id = 7 THEN 0 ELSE 1 END), u.id ASC 
+           LIMIT 1`
         );
-        if (userByEmail.rows.length > 0) {
-          userId = userByEmail.rows[0].id;
-          await db.query(`UPDATE users SET is_active = TRUE, is_verified = TRUE WHERE id = $1`, [userId]);
+
+        if (shardaMemberRes.rows.length > 0) {
+          userId = shardaMemberRes.rows[0].id;
+          await db.query(`UPDATE users SET is_active = TRUE, is_deleted = FALSE, deleted_at = NULL, is_verified = TRUE WHERE id = $1`, [userId]);
         } else {
-          // Check if user with ID 160 exists as fallback
-          const userById160 = await db.query<{ id: number }>(
-            `SELECT id FROM users WHERE id = 160 AND COALESCE(is_deleted, FALSE) = FALSE LIMIT 1`
-          );
-          if (userById160.rows.length > 0) {
-            userId = userById160.rows[0].id;
-          } else {
-            userId = 0;
-          }
+          userId = 0;
         }
       }
     } else {
@@ -108,13 +105,13 @@ export async function POST(req: Request) {
     if (!userId) {
       // 1. Try finding existing user by email
       const userResult = await db.query<{ id: number; email: string; is_active: boolean }>(
-        `SELECT id, email, is_active FROM users WHERE LOWER(email) = LOWER($1) AND COALESCE(is_deleted, FALSE) = FALSE LIMIT 1`,
+        `SELECT id, email, is_active FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
         [demoConfig.email]
       );
 
       if (userResult.rows.length > 0) {
         userId = userResult.rows[0].id;
-        await db.query(`UPDATE users SET is_active = TRUE WHERE id = $1`, [userId]);
+        await db.query(`UPDATE users SET is_active = TRUE, is_deleted = FALSE, deleted_at = NULL, is_verified = TRUE WHERE id = $1`, [userId]);
       } else {
         // Find or create role
         let roleRes = await db.query<{ id: number }>(

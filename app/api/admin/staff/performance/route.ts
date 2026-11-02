@@ -357,7 +357,7 @@ export async function GET(req: NextRequest) {
     // 2. Fetch Tasks Data from operations_tasks
     let taskWhere = "WHERE 1=1";
     const taskParams: unknown[] = [];
-    if (targetInstitutionId) {
+    if (targetInstitutionId && modeParam !== "self") {
       taskParams.push(targetInstitutionId);
       taskWhere += ` AND (institution_id = $${taskParams.length} OR institution_id IS NULL)`;
     }
@@ -550,7 +550,7 @@ export async function GET(req: NextRequest) {
       const userTasks: any[] = [];
       tasksList.forEach((t: any) => {
         let isDirect = false;
-        if (Number(t.assigned_employee_id) === Number(staff.id)) {
+        if (Number(t.assigned_employee_id) === Number(staff.id) || Number(t.created_by) === Number(staff.id) || Number(t.project_leader_id) === Number(staff.id)) {
           isDirect = true;
         } else if (t.assigned_employee_name && t.assigned_employee_name.toLowerCase() === (staff.full_name || "").toLowerCase()) {
           isDirect = true;

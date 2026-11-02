@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import {
   CalendarDays,
@@ -365,6 +366,8 @@ function DetailContent({
 }
 
 export function RecurringExpensesClient() {
+  const pathname = usePathname();
+  const isPlatformSection = pathname?.startsWith("/platformadmin");
   const { isReady } = useAdminGuard();
   const { accessToken, user } = useAuthStore();
   const { activeInstitutionId, activeInstitution } = useActiveInstitution();
@@ -989,7 +992,7 @@ export function RecurringExpensesClient() {
               <div className="flex items-center justify-between">
                 <Label>Category <span className="text-rose-500">*</span></Label>
                 <Link
-                  href="/admin/finance/categories"
+                  href={isPlatformSection ? "/platformadmin/finance/categories" : "/admin/finance/categories"}
                   target="_blank"
                   className="text-xs text-primary hover:underline inline-flex items-center gap-1 font-medium"
                 >

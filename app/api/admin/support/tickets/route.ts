@@ -194,19 +194,23 @@ export async function GET(req: Request) {
     const allowedInstitutionIds = getAllowedInstitutionIds(user);
 
     const requestedInstId = Number(url.searchParams.get("institutionId") || url.searchParams.get("institution_id"));
-    if (Number.isInteger(requestedInstId) && requestedInstId > 0) {
+    const mode = url.searchParams.get("mode");
+    if (Number.isInteger(requestedInstId) && requestedInstId > 0 && mode !== "self") {
       params.push(requestedInstId);
       where.push(`t.institution_id = $${params.length}`);
     }
 
-    if (isPlatformAdminUser(user)) {
+    if (mode === "self") {
+      params.push(user.id);
+      where.push(`(t.created_by = $${params.length} OR t.assigned_to = $${params.length})`);
+    } else if (isPlatformAdminUser(user)) {
       // Platform admin can see tickets across all institutions and platform staff
     } else if (isInstitutionAdmin(user) && allowedInstitutionIds) {
       params.push(allowedInstitutionIds, user.id);
-      where.push(`(t.institution_id = ANY($${params.length - 1}::int[]) OR t.created_by = $${params.length})`);
+      where.push(`(t.institution_id = ANY($${params.length - 1}::int[]) OR t.created_by = $${params.length} OR t.assigned_to = $${params.length})`);
     } else {
       params.push(user.id);
-      where.push(`t.created_by = $${params.length}`);
+      where.push(`(t.created_by = $${params.length} OR t.assigned_to = $${params.length})`);
     }
 
     if (search) {

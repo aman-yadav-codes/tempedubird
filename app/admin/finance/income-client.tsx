@@ -14,6 +14,9 @@ import {
   ChevronDown,
   Copy,
   CreditCard,
+  Download,
+  Eye,
+  Printer,
   FileText,
   GraduationCap,
   IndianRupee,
@@ -130,6 +133,8 @@ type IncomeRow = {
   created_by_role?: string | null;
   staff_id?: number | null;
   created_at: string;
+  invoice_id?: number | string | null;
+  invoice_number?: string | null;
 };
 
 type IncomeResponse = {
@@ -181,6 +186,13 @@ function currency(value: string | number | null | undefined) {
   }).format(Number(value) || 0);
 }
 
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return `${date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} at ${date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}`;
+}
+
 function formatDate(value: string | null | undefined) {
   if (!value) return "-";
   const date = new Date(value);
@@ -199,17 +211,48 @@ function normalizeAmountInput(value: string) {
   return `${whole}.${decimalParts.join("").slice(0, 2)}`;
 }
 
-function DetailContent({ row }: { row: IncomeRow }) {
-  const details = [
-    ["Date", formatDate(row.income_date)],
-    ["Amount", currency(row.amount)],
-    ["Source", SOURCE_LABELS[row.source_type] ?? row.source_type],
-    ["Category", row.category_name],
-    ["Method", PAYMENT_METHOD_LABELS[row.payment_method] ?? row.payment_method],
-    ["Paid To", row.paid_to_label],
-    ["Paid By", row.payer_name || row.institution_name || "-"],
-    ["Reference", row.reference || "-"],
-    ["Institution", row.institution_name || "-"],
+function DetailContent({
+  row,
+  onViewInvoice,
+  onPrintInvoice,
+}: {
+  row: IncomeRow;
+  onViewInvoice?: (row: IncomeRow) => void;
+  onPrintInvoice?: (row: IncomeRow) => void;
+}) {
+  const invNumber = row.invoice_number || `INV-${new Date(row.created_at || row.income_date).toISOString().slice(0, 10).replace(/-/g, "")}-${String(row.source_id).padStart(4, "0")}`;
+
+  const details: { label: string; value: React.ReactNode }[] = [
+    { label: "Income Date", value: formatDate(row.income_date) },
+    { label: "Record Added On", value: formatDateTime(row.created_at) },
+    {
+      label: "Recorded By",
+      value: (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span>{row.created_by_name || "Admin"}</span>
+          {row.created_by_role && (
+            <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-normal">
+              {row.created_by_role}
+            </Badge>
+          )}
+        </div>
+      ),
+    },
+    {
+      label: "Scope",
+      value: (
+        <Badge variant={row.institution_name ? "secondary" : "default"} className="text-[11px]">
+          {row.institution_name ? row.institution_name : "Platform Global"}
+        </Badge>
+      ),
+    },
+    { label: "Amount", value: currency(row.amount) },
+    { label: "Source", value: SOURCE_LABELS[row.source_type] ?? row.source_type },
+    { label: "Category", value: row.category_name },
+    { label: "Method", value: PAYMENT_METHOD_LABELS[row.payment_method] ?? row.payment_method },
+    { label: "Paid By", value: row.payer_name || row.paid_by_label || row.institution_name || "-" },
+    { label: "Paid To", value: row.paid_to_label || row.paid_to || "-" },
+    { label: "Reference", value: row.reference || "-" },
   ];
 
   return (
@@ -218,13 +261,62 @@ function DetailContent({ row }: { row: IncomeRow }) {
         <p className="text-xs font-medium uppercase text-muted-foreground">Income Amount</p>
         <p className="mt-2 text-2xl font-bold">{currency(row.amount)}</p>
         <p className="mt-1 text-sm text-muted-foreground">{row.category_name} on {formatDate(row.income_date)}</p>
+        {row.created_at ? (
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Added on {formatDateTime(row.created_at)}
+            {row.created_by_name ? ` by ${row.created_by_name}` : ""}
+          </p>
+        ) : null}
+      </div>
+
+      {/* Invoice & Receipt Actions Card */}
+      <div className="rounded-md border p-4 space-y-3 bg-muted/5">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase text-muted-foreground">Invoice &amp; Payment Receipt</p>
+            <p className="text-sm font-semibold font-mono">{invNumber}</p>
+          </div>
+          <Badge variant="outline" className="font-mono text-xs font-semibold uppercase bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+            PAID
+          </Badge>
+        </div>
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            className="gap-2 cursor-pointer"
+            onClick={() => onViewInvoice?.(row)}
+          >
+            <Eye className="size-4" />
+            View Invoice
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-2 cursor-pointer"
+            onClick={() => onPrintInvoice?.(row)}
+          >
+            <Download className="size-4" />
+            Download / Print PDF
+          </Button>
+          {row.invoice_url ? (
+            <Button asChild variant="ghost" size="sm" className="gap-2">
+              <a href={row.invoice_url} target="_blank" rel="noreferrer">
+                <FileText className="size-4" />
+                Attached Bill
+              </a>
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid gap-3 rounded-md border p-4 sm:grid-cols-2">
-        {details.map(([label, value]) => (
+        {details.map(({ label, value }) => (
           <div key={label} className="min-w-0">
             <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
-            <p className="mt-1 break-words text-sm font-semibold">{value}</p>
+            <div className="mt-1 break-words text-sm font-semibold">{value}</div>
           </div>
         ))}
       </div>
@@ -234,15 +326,6 @@ function DetailContent({ row }: { row: IncomeRow }) {
           <p className="text-xs font-medium uppercase text-muted-foreground">Description</p>
           <p className="mt-2 whitespace-pre-wrap text-sm">{row.description}</p>
         </div>
-      ) : null}
-
-      {row.invoice_url ? (
-        <Button asChild variant="outline" className="w-full justify-start gap-2">
-          <a href={row.invoice_url} target="_blank" rel="noreferrer">
-            <FileText className="size-4" />
-            Open invoice attachment
-          </a>
-        </Button>
       ) : null}
     </div>
   );
@@ -296,6 +379,111 @@ export function IncomeClient() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
   const [selectedRow, setSelectedRow] = useState<IncomeRow | null>(null);
+  const [viewingInvoiceRow, setViewingInvoiceRow] = useState<IncomeRow | null>(null);
+
+  const handlePrintInvoice = (row: IncomeRow) => {
+    const invNum = row.invoice_number || `INV-${new Date(row.created_at || row.income_date).toISOString().slice(0, 10).replace(/-/g, "")}-${String(row.source_id).padStart(4, "0")}`;
+    const printWindow = window.open("", "_blank", "width=800,height=900");
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+    const orgName = row.institution_name || activeInstitution?.name || "EduBird Platform";
+    const payerName = row.payer_name || row.paid_by_label || row.institution_name || "Customer / Payer";
+    const receiverName = row.paid_to_label || row.paid_to || "Receiver";
+    const dateFormatted = formatDate(row.income_date);
+    const amountFormatted = Number(row.amount || 0).toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Invoice - ${invNum}</title>
+          <style>
+            @page { size: auto; margin: 15mm; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 20px; color: #0f172a; line-height: 1.5; }
+            .receipt-box { max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 24px; }
+            .title { font-size: 22px; font-weight: 800; margin: 0; color: #0f172a; }
+            .subtitle { font-size: 12px; color: #64748b; margin-top: 4px; }
+            .badge { display: inline-block; padding: 4px 10px; font-size: 11px; font-weight: 700; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; border-radius: 4px; text-transform: uppercase; }
+            .inv-num { font-size: 13px; font-weight: 700; margin: 8px 0 2px 0; font-family: monospace; }
+            .date { font-size: 12px; color: #64748b; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+            .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px; font-size: 13px; }
+            .card-title { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; margin-bottom: 6px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 13px; }
+            th { background: #f1f5f9; text-align: left; padding: 10px 12px; font-size: 11px; text-transform: uppercase; color: #475569; }
+            td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
+            .total-row { background: #f8fafc; font-weight: 700; font-size: 14px; }
+            .footer { text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 16px; margin-top: 24px; }
+            @media print {
+              body { margin: 0; }
+              .receipt-box { border: none; padding: 0; box-shadow: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="receipt-box">
+            <div class="header">
+              <div>
+                <h1 class="title">${orgName}</h1>
+                <div class="subtitle">Official Payment Receipt &amp; Tax Invoice</div>
+              </div>
+              <div style="text-align: right;">
+                <span class="badge">PAID</span>
+                <div class="inv-num">${invNum}</div>
+                <div class="date">${dateFormatted}</div>
+              </div>
+            </div>
+            <div class="grid">
+              <div class="card">
+                <div class="card-title">Billed To (Payer)</div>
+                <div style="font-weight: 700; font-size: 14px;">${payerName}</div>
+                <div style="color: #64748b; margin-top: 4px;">Payment For: ${row.category_name}</div>
+              </div>
+              <div class="card">
+                <div class="card-title">Payment Details</div>
+                <div style="font-weight: 700; font-size: 14px; text-transform: capitalize;">${PAYMENT_METHOD_LABELS[row.payment_method] || row.payment_method}</div>
+                <div style="color: #64748b; margin-top: 4px;">Received By: ${receiverName}</div>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th style="text-align: right;">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <strong>${row.category_name}</strong>
+                    ${row.description ? `<br><span style="font-size: 11px; color: #64748b;">${row.description}</span>` : ""}
+                  </td>
+                  <td style="text-align: right; font-family: monospace; font-weight: 600;">${amountFormatted}</td>
+                </tr>
+                <tr class="total-row">
+                  <td>Total Received</td>
+                  <td style="text-align: right; font-family: monospace; color: #059669; font-size: 15px;">${amountFormatted}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="footer">
+              <p>This is a computer-generated invoice receipt and does not require a physical signature.</p>
+              <p>Recorded by: ${row.created_by_name || "Admin"} on ${formatDateTime(row.created_at)}</p>
+            </div>
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
   const [addOpen, setAddOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<IncomeRow | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -665,7 +853,7 @@ export function IncomeClient() {
     },
     {
       accessorKey: "payer_name",
-      header: isPlatformScope ? "Institution" : "Paid By",
+      header: "Paid By",
       cell: ({ row }) => row.original.payer_name || row.original.institution_name || "-",
     },
     {
@@ -677,29 +865,7 @@ export function IncomeClient() {
       accessorKey: "paid_to_label",
       header: "Paid To",
     },
-    {
-      accessorKey: "created_by_name",
-      header: "Recorded By",
-      cell: ({ row }) => (
-        <div className="min-w-0 space-y-0.5">
-          <p className="font-medium text-xs truncate">{row.original.created_by_name || "Admin"}</p>
-          {row.original.created_by_role && (
-            <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-normal">
-              {row.original.created_by_role}
-            </Badge>
-          )}
-        </div>
-      ),
-    },
-    ...(isPlatformScope ? [{
-      id: "scope_column",
-      header: "Scope",
-      cell: ({ row }: { row: { original: IncomeRow } }) => (
-        <Badge variant={row.original.institution_name ? "secondary" : "default"} className="text-[11px]">
-          {row.original.institution_name ? row.original.institution_name : "Platform Global"}
-        </Badge>
-      ),
-    }] : []),
+
     {
       accessorKey: "amount",
       header: "Amount",
@@ -718,6 +884,14 @@ export function IncomeClient() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => setSelectedRow(row.original)}>View details</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setViewingInvoiceRow(row.original)}>
+              <Eye className="size-4 mr-2" />
+              View Invoice
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handlePrintInvoice(row.original)}>
+              <Printer className="size-4 mr-2" />
+              Print / Download PDF
+            </DropdownMenuItem>
             {row.original.source_type === "manual" ? (
               <>
                 <DropdownMenuItem onClick={() => openEdit(row.original)}>Edit</DropdownMenuItem>
@@ -968,7 +1142,7 @@ export function IncomeClient() {
                   </button>
                   <span className="text-muted-foreground">•</span>
                   <Link
-                    href="/admin/finance/categories"
+                    href={isPlatformSection ? "/platformadmin/finance/categories" : "/admin/finance/categories"}
                     target="_blank"
                     className="text-xs text-muted-foreground hover:underline inline-flex items-center gap-1 font-medium"
                   >
@@ -1496,7 +1670,7 @@ export function IncomeClient() {
               <DrawerDescription>{selectedRow ? SOURCE_LABELS[selectedRow.source_type] : ""}</DrawerDescription>
             </DrawerHeader>
             <div className="overflow-y-auto px-4 pb-6">
-              {selectedRow ? <DetailContent row={selectedRow} /> : null}
+              {selectedRow ? <DetailContent row={selectedRow} onViewInvoice={(r) => setViewingInvoiceRow(r)} onPrintInvoice={handlePrintInvoice} /> : null}
             </div>
           </DrawerContent>
         </Drawer>
@@ -1508,7 +1682,7 @@ export function IncomeClient() {
               <SheetDescription>{selectedRow ? SOURCE_LABELS[selectedRow.source_type] : ""}</SheetDescription>
             </SheetHeader>
             <div className="p-5">
-              {selectedRow ? <DetailContent row={selectedRow} /> : null}
+              {selectedRow ? <DetailContent row={selectedRow} onViewInvoice={(r) => setViewingInvoiceRow(r)} onPrintInvoice={handlePrintInvoice} /> : null}
             </div>
           </SheetContent>
         </Sheet>
@@ -1561,6 +1735,100 @@ export function IncomeClient() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    
+      {/* PRINTABLE RECEIPT / INVOICE MODAL */}
+      <Dialog open={Boolean(viewingInvoiceRow)} onOpenChange={(open) => !open && setViewingInvoiceRow(null)}>
+        <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-xl p-0">
+          <div className="p-6 space-y-6" id="printable-income-invoice">
+            {/* INVOICE HEADER */}
+            <div className="flex items-start justify-between border-b pb-5">
+              <div>
+                <h3 className="text-xl font-bold tracking-tight text-foreground">
+                  {viewingInvoiceRow?.institution_name || activeInstitution?.name || "EduBird Platform"}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Official Payment Receipt &amp; Tax Invoice</p>
+              </div>
+              <div className="text-right">
+                <Badge variant="outline" className="font-mono text-xs font-semibold uppercase bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                  PAID
+                </Badge>
+                <p className="font-mono text-xs font-bold text-foreground mt-1.5">
+                  {viewingInvoiceRow?.invoice_number || (viewingInvoiceRow ? `INV-${new Date(viewingInvoiceRow.created_at || viewingInvoiceRow.income_date).toISOString().slice(0, 10).replace(/-/g, "")}-${String(viewingInvoiceRow.source_id).padStart(4, "0")}` : "")}
+                </p>
+                <p className="text-[11px] text-muted-foreground">{formatDate(viewingInvoiceRow?.income_date)}</p>
+              </div>
+            </div>
+
+            {/* DETAILS GRID */}
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              <div className="rounded-lg border bg-muted/20 p-3 space-y-1">
+                <p className="font-semibold text-muted-foreground uppercase text-[10px] tracking-wider">Billed To (Payer)</p>
+                <p className="font-bold text-sm text-foreground">{viewingInvoiceRow?.payer_name || viewingInvoiceRow?.paid_by_label || viewingInvoiceRow?.institution_name || "Customer / Payer"}</p>
+                <p className="text-muted-foreground">Category: {viewingInvoiceRow?.category_name}</p>
+              </div>
+              <div className="rounded-lg border bg-muted/20 p-3 space-y-1">
+                <p className="font-semibold text-muted-foreground uppercase text-[10px] tracking-wider">Payment Details</p>
+                <p className="font-bold text-sm text-foreground capitalize">
+                  {PAYMENT_METHOD_LABELS[viewingInvoiceRow?.payment_method || "cash"] || viewingInvoiceRow?.payment_method}
+                </p>
+                <p className="text-muted-foreground">Received By: {viewingInvoiceRow?.paid_to_label || viewingInvoiceRow?.paid_to || "Receiver"}</p>
+              </div>
+            </div>
+
+            {/* LINE ITEM TABLE */}
+            <div className="rounded-lg border overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-muted/50 border-b text-muted-foreground font-semibold">
+                    <th className="p-2.5 text-left">Description</th>
+                    <th className="p-2.5 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b">
+                    <td className="p-2.5">
+                      <p className="font-medium text-foreground">{viewingInvoiceRow?.category_name}</p>
+                      {viewingInvoiceRow?.description && (
+                        <p className="text-[11px] text-muted-foreground mt-0.5">{viewingInvoiceRow.description}</p>
+                      )}
+                    </td>
+                    <td className="p-2.5 text-right font-mono font-medium">{currency(viewingInvoiceRow?.amount)}</td>
+                  </tr>
+                  <tr className="bg-muted/20 font-bold">
+                    <td className="p-2.5 text-foreground">Total Paid</td>
+                    <td className="p-2.5 text-right font-mono text-emerald-600 text-sm">{currency(viewingInvoiceRow?.amount)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="text-center text-[11px] text-muted-foreground border-t pt-4">
+              <p>This is a computer-generated receipt and does not require a physical signature.</p>
+              <p className="mt-0.5">Recorded by {viewingInvoiceRow?.created_by_name || "Admin"} on {formatDateTime(viewingInvoiceRow?.created_at)}</p>
+            </div>
+          </div>
+
+          <DialogFooter className="border-t p-4 sm:justify-between bg-muted/10">
+            <Button variant="outline" size="sm" onClick={() => setViewingInvoiceRow(null)}>
+              Close
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                className="gap-2 cursor-pointer"
+                onClick={() => {
+                  if (viewingInvoiceRow) handlePrintInvoice(viewingInvoiceRow);
+                }}
+              >
+                <Printer className="size-4" />
+                Print / Download PDF
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

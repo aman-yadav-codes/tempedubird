@@ -208,6 +208,13 @@ function formatDate(value: string | null | undefined) {
   return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return `${date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} at ${date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}`;
+}
+
 function todayText() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -220,17 +227,38 @@ function normalizeAmountInput(value: string) {
 }
 
 function DetailContent({ row }: { row: ExpenseRow }) {
-  const details = [
-    ["Date", formatDate(row.expense_date)],
-    ["Amount", currency(row.amount)],
-    ["Status", STATUS_LABELS[row.payment_status] ?? row.payment_status],
-    ["Source", SOURCE_LABELS[row.source_type] ?? row.source_type],
-    ["Payment For", row.category_name],
-    ["Method", PAYMENT_METHOD_LABELS[row.payment_method] ?? row.payment_method],
-    ["Paid By", row.paid_by_label],
-    ["Paid To (Vendor/Receiver)", row.paid_to_label || row.paid_to || "-"],
-    ["Reference", row.reference || "-"],
-    ["Institution", row.institution_name || "-"],
+  const details: { label: string; value: React.ReactNode }[] = [
+    { label: "Expense Date", value: formatDate(row.expense_date) },
+    { label: "Record Added On", value: formatDateTime(row.created_at) },
+    {
+      label: "Recorded By",
+      value: (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span>{row.created_by_name || "Admin"}</span>
+          {row.created_by_role && (
+            <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-normal">
+              {row.created_by_role}
+            </Badge>
+          )}
+        </div>
+      ),
+    },
+    {
+      label: "Scope",
+      value: (
+        <Badge variant={row.institution_name ? "secondary" : "default"} className="text-[11px]">
+          {row.institution_name ? row.institution_name : "Platform Global"}
+        </Badge>
+      ),
+    },
+    { label: "Amount", value: currency(row.amount) },
+    { label: "Status", value: STATUS_LABELS[row.payment_status] ?? row.payment_status },
+    { label: "Source", value: SOURCE_LABELS[row.source_type] ?? row.source_type },
+    { label: "Payment For", value: row.category_name },
+    { label: "Method", value: PAYMENT_METHOD_LABELS[row.payment_method] ?? row.payment_method },
+    { label: "Paid By", value: row.paid_by_label },
+    { label: "Paid To (Vendor/Receiver)", value: row.paid_to_label || row.paid_to || "-" },
+    { label: "Reference", value: row.reference || "-" },
   ];
 
   return (
@@ -239,12 +267,18 @@ function DetailContent({ row }: { row: ExpenseRow }) {
         <p className="text-xs font-medium uppercase text-muted-foreground">Expense Amount</p>
         <p className="mt-2 text-2xl font-bold">{currency(row.amount)}</p>
         <p className="mt-1 text-sm text-muted-foreground">{row.category_name} on {formatDate(row.expense_date)}</p>
+        {row.created_at ? (
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Added on {formatDateTime(row.created_at)}
+            {row.created_by_name ? ` by ${row.created_by_name}` : ""}
+          </p>
+        ) : null}
       </div>
       <div className="grid gap-3 rounded-md border p-4 sm:grid-cols-2">
-        {details.map(([label, value]) => (
+        {details.map(({ label, value }) => (
           <div key={label} className="min-w-0">
             <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
-            <p className="mt-1 break-words text-sm font-semibold">{value}</p>
+            <div className="mt-1 break-words text-sm font-semibold">{value}</div>
           </div>
         ))}
       </div>
@@ -712,29 +746,6 @@ export function ExpenseClient() {
       cell: ({ row }) => row.original.paid_to_label || row.original.paid_to || "-",
     },
     {
-      accessorKey: "created_by_name",
-      header: "Recorded By",
-      cell: ({ row }) => (
-        <div className="min-w-0 space-y-0.5">
-          <p className="font-medium text-xs truncate">{row.original.created_by_name || "Admin"}</p>
-          {row.original.created_by_role && (
-            <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-normal">
-              {row.original.created_by_role}
-            </Badge>
-          )}
-        </div>
-      ),
-    },
-    ...(isPlatformScope ? [{
-      id: "scope_column",
-      header: "Scope",
-      cell: ({ row }: { row: { original: ExpenseRow } }) => (
-        <Badge variant={row.original.institution_name ? "secondary" : "default"} className="text-[11px]">
-          {row.original.institution_name ? row.original.institution_name : "Platform Global"}
-        </Badge>
-      ),
-    }] : []),
-    {
       accessorKey: "amount",
       header: "Amount",
       cell: ({ row }) => <span className="font-semibold">{currency(row.original.amount)}</span>,
@@ -1016,7 +1027,7 @@ export function ExpenseClient() {
                   </button>
                   <span className="text-muted-foreground">•</span>
                   <Link
-                    href="/admin/finance/categories"
+                    href={isPlatformSection ? "/platformadmin/finance/categories" : "/admin/finance/categories"}
                     target="_blank"
                     className="text-xs text-muted-foreground hover:underline inline-flex items-center gap-1 font-medium"
                   >
