@@ -30,8 +30,10 @@ import {
   AlertCircle,
   FolderGit2,
   CheckSquare,
-  PlayCircle,
-  StopCircle,
+  ShieldCheck,
+  Target,
+  ArrowRight,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
@@ -49,12 +51,12 @@ import {
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-interface SystemWorkLogItem {
+export interface SystemWorkLogItem {
   id: string;
   timestamp: string;
   time_display: string;
   date_display: string;
-  module: "operations" | "finance" | "clients" | "staff" | "categories" | "settings";
+  module: "operation" | "finance" | "sales" | "manage_staff" | "admin";
   action: string;
   action_label: string;
   title: string;
@@ -104,6 +106,25 @@ function getTodayKolkata(): string {
   }
 }
 
+function getShiftedDate(baseDate: string, days: number): string {
+  try {
+    const d = new Date(baseDate + "T00:00:00");
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  } catch {
+    return getTodayKolkata();
+  }
+}
+
+const MODULE_TABS = [
+  { id: "all", label: "All Logs", icon: Layers },
+  { id: "operation", label: "Operation", icon: Briefcase },
+  { id: "finance", label: "Finance", icon: DollarSign },
+  { id: "sales", label: "Sales", icon: Target },
+  { id: "manage_staff", label: "Manage Staff", icon: UserCheck },
+  { id: "admin", label: "Admin", icon: ShieldCheck },
+];
+
 export default function DailyWorkLogsPage() {
   const pathname = usePathname();
   const { accessToken } = useAuthStore();
@@ -111,12 +132,15 @@ export default function DailyWorkLogsPage() {
   const isPlatformRoute = Boolean(pathname?.startsWith("/platformadmin"));
   const tasksUrl = isPlatformRoute ? "/platformadmin/operations/tasks" : "/admin/operations/tasks";
 
-  const [date, setDate] = useState<string>(getTodayKolkata());
+  const todayStr = useMemo(() => getTodayKolkata(), []);
+  const [fromDate, setFromDate] = useState<string>(todayStr);
+  const [toDate, setToDate] = useState<string>(todayStr);
+
   const [moduleFilter, setModuleFilter] = useState<string>("all");
   const [staffFilter, setStaffFilter] = useState<string>("all");
   const [clientFilter, setClientFilter] = useState<string>("all");
   const [search, setSearch] = useState<string>("");
-  const [viewMode, setViewMode] = useState<"stream" | "by_staff" | "by_client">("stream");
+  const [viewMode, setViewMode] = useState<"stream" | "by_module" | "by_client">("stream");
 
   const [loading, setLoading] = useState<boolean>(true);
   const [logs, setLogs] = useState<SystemWorkLogItem[]>([]);
@@ -137,7 +161,8 @@ export default function DailyWorkLogsPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      params.set("date", date);
+      params.set("from_date", fromDate);
+      params.set("to_date", toDate);
       if (moduleFilter !== "all") params.set("module", moduleFilter);
       if (staffFilter !== "all") params.set("staff_id", staffFilter);
       if (clientFilter !== "all") params.set("client_id", clientFilter);
@@ -150,7 +175,7 @@ export default function DailyWorkLogsPage() {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to load daily work logs");
+      if (!res.ok) throw new Error(data.error || "Failed to load work logs");
 
       setLogs(data.items || []);
       setSummary(
@@ -175,44 +200,97 @@ export default function DailyWorkLogsPage() {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, date, moduleFilter, staffFilter, clientFilter, search, isPlatformRoute, activeInstitutionId]);
+  }, [accessToken, fromDate, toDate, moduleFilter, staffFilter, clientFilter, search, isPlatformRoute, activeInstitutionId]);
 
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
 
-  // Date shifting
-  const handleShiftDate = (days: number) => {
-    try {
-      const d = new Date(date + "T00:00:00");
-      d.setDate(d.getDate() + days);
-      setDate(d.toISOString().slice(0, 10));
-    } catch {
-      setDate(getTodayKolkata());
+  // Quick Date Presets
+  const handleSetPreset = (preset: "today" | "yesterday" | "last7" | "this_month") => {
+    const today = getTodayKolkata();
+    if (preset === "today") {
+      setFromDate(today);
+      setToDate(today);
+    } else if (preset === "yesterday") {
+      const yest = getShiftedDate(today, -1);
+      setFromDate(yest);
+      setToDate(yest);
+    } else if (preset === "last7") {
+      setFromDate(getShiftedDate(today, -6));
+      setToDate(today);
+    } else if (preset === "this_month") {
+      const firstDay = today.slice(0, 8) + "01";
+      setFromDate(firstDay);
+      setToDate(today);
     }
+  };
+
+  const handleShiftRange = (days: number) => {
+    setFromDate((prev) => getShiftedDate(prev, days));
+    setToDate((prev) => getShiftedDate(prev, days));
   };
 
   const handlePrint = () => {
     window.print();
   };
 
-  // Grouping helpers
-  const groupedByStaff = useMemo(() => {
-    const map = new Map<string, { staff_name: string; role?: string; items: SystemWorkLogItem[] }>();
-    for (const item of logs) {
-      const key = item.user_id ? String(item.user_id) : item.user_name || "Unknown";
-      if (!map.has(key)) {
-        map.set(key, {
-          staff_name: item.user_name || "Staff Member",
-          role: item.user_role || undefined,
-          items: [],
-        });
-      }
-      map.get(key)!.items.push(item);
-    }
-    return Array.from(map.values()).sort((a, b) => b.items.length - a.items.length);
-  }, [logs]);
+  // Group by Module
+  const groupedByModule = useMemo(() => {
+    const order: Array<SystemWorkLogItem["module"]> = ["operation", "finance", "sales", "manage_staff", "admin"];
+    const labels: Record<SystemWorkLogItem["module"], { title: string; desc: string; icon: any; color: string }> = {
+      operation: {
+        title: "Operations & Tasks",
+        desc: "Projects, subtasks, deliverables, files, comments, and timer activities",
+        icon: Briefcase,
+        color: "text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/20",
+      },
+      finance: {
+        title: "Finance & Accounts",
+        desc: "Invoices generated, customer payments received, expenses, and transaction records",
+        icon: DollarSign,
+        color: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+      },
+      sales: {
+        title: "Sales & Clients",
+        desc: "New client registrations, leads, quotations, pipeline milestones, and deals",
+        icon: Target,
+        color: "text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20",
+      },
+      manage_staff: {
+        title: "Manage Staff & Attendance",
+        desc: "Daily punch-ins, staff check-ins, attendance logs, and hours worked",
+        icon: UserCheck,
+        color: "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20",
+      },
+      admin: {
+        title: "Admin & Settings",
+        desc: "System configurations, category additions, permissions, and audit logs",
+        icon: ShieldCheck,
+        color: "text-zinc-600 dark:text-zinc-400 bg-zinc-500/10 border-zinc-500/20",
+      },
+    };
 
+    const map = new Map<SystemWorkLogItem["module"], SystemWorkLogItem[]>();
+    for (const mod of order) {
+      map.set(mod, []);
+    }
+    for (const item of logs) {
+      const arr = map.get(item.module) || [];
+      arr.push(item);
+      map.set(item.module, arr);
+    }
+
+    return order
+      .filter((mod) => (map.get(mod)?.length || 0) > 0 || moduleFilter === mod)
+      .map((mod) => ({
+        module: mod,
+        meta: labels[mod],
+        items: map.get(mod) || [],
+      }));
+  }, [logs, moduleFilter]);
+
+  // Group by Client
   const groupedByClient = useMemo(() => {
     const map = new Map<string, { client_name: string; items: SystemWorkLogItem[] }>();
     for (const item of logs) {
@@ -247,114 +325,206 @@ export default function DailyWorkLogsPage() {
 
   const getModuleIcon = (mod: string) => {
     switch (mod) {
-      case "operations":
+      case "operation":
         return <Briefcase className="w-3.5 h-3.5 text-blue-500" />;
       case "finance":
         return <DollarSign className="w-3.5 h-3.5 text-emerald-500" />;
-      case "staff":
-        return <UserCheck className="w-3.5 h-3.5 text-purple-500" />;
-      case "clients":
-        return <Building2 className="w-3.5 h-3.5 text-amber-500" />;
-      case "categories":
-        return <Tag className="w-3.5 h-3.5 text-rose-500" />;
+      case "sales":
+        return <Target className="w-3.5 h-3.5 text-purple-500" />;
+      case "manage_staff":
+        return <UserCheck className="w-3.5 h-3.5 text-amber-500" />;
+      case "admin":
+        return <ShieldCheck className="w-3.5 h-3.5 text-zinc-500" />;
       default:
         return <Layers className="w-3.5 h-3.5 text-zinc-500" />;
     }
   };
 
+  const getModuleBadge = (mod: string) => {
+    switch (mod) {
+      case "operation":
+        return (
+          <Badge variant="outline" className="text-[10px] font-bold bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20">
+            Operation
+          </Badge>
+        );
+      case "finance":
+        return (
+          <Badge variant="outline" className="text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20">
+            Finance
+          </Badge>
+        );
+      case "sales":
+        return (
+          <Badge variant="outline" className="text-[10px] font-bold bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20">
+            Sales
+          </Badge>
+        );
+      case "manage_staff":
+        return (
+          <Badge variant="outline" className="text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20">
+            Manage Staff
+          </Badge>
+        );
+      case "admin":
+        return (
+          <Badge variant="outline" className="text-[10px] font-bold bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 border-zinc-500/20">
+            Admin
+          </Badge>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const isToday = fromDate === todayStr && toDate === todayStr;
+
   return (
     <div className="space-y-6 pb-20">
-      {/* Top Banner & Date Picker Bar */}
+      {/* Top Banner & Date Filter Bar */}
       <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/10 via-background to-blue-500/5 p-6 shadow-xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-primary/15 text-primary text-xs font-bold">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>System-Wide Daily Operations Hub</span>
+              <span>System-Wide Work Logs & Audit Hub</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
               Daily Work Logs & Activity Hub
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl">
-              Track all work done date-wise across every tab: tasks, sub-task updates, deliverables, income, expenses, categories, client milestones, and staff attendance punch-ins.
+              Track and audit all changes, tasks, subtask updates, deliverable files, income, expenses, sales leads, and staff punch-ins module-wise date by date.
             </p>
           </div>
 
-          {/* Date Selector Controls */}
-          <div className="flex flex-wrap items-center gap-2 shrink-0 bg-background/80 p-2 rounded-xl border shadow-2xs backdrop-blur-xs">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 cursor-pointer"
-              onClick={() => handleShiftDate(-1)}
-              title="Previous Day"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
+          {/* Date Range Selector Controls ("from to date needed as well") */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0 bg-background/90 p-2.5 rounded-xl border shadow-2xs backdrop-blur-xs">
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 cursor-pointer shrink-0"
+                onClick={() => handleShiftRange(-1)}
+                title="Previous Day"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
 
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-muted/40 rounded-lg border">
-              <CalendarIcon className="w-3.5 h-3.5 text-primary shrink-0" />
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="bg-transparent text-xs font-bold outline-none cursor-pointer text-foreground"
-              />
+              {/* From Date */}
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-muted/40 rounded-lg border text-xs">
+                <span className="text-[10px] font-bold uppercase text-muted-foreground">From</span>
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => {
+                    const newFrom = e.target.value;
+                    setFromDate(newFrom);
+                    if (newFrom > toDate) setToDate(newFrom);
+                  }}
+                  className="bg-transparent text-xs font-bold outline-none cursor-pointer text-foreground"
+                />
+              </div>
+
+              {/* To Date */}
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-muted/40 rounded-lg border text-xs">
+                <span className="text-[10px] font-bold uppercase text-muted-foreground">To</span>
+                <input
+                  type="date"
+                  value={toDate}
+                  min={fromDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  className="bg-transparent text-xs font-bold outline-none cursor-pointer text-foreground"
+                />
+              </div>
+
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 cursor-pointer shrink-0"
+                onClick={() => handleShiftRange(1)}
+                title="Next Day"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
             </div>
 
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 cursor-pointer"
-              onClick={() => handleShiftDate(1)}
-              title="Next Day"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </Button>
+            {/* Quick Presets */}
+            <div className="flex items-center gap-1 overflow-x-auto pt-1 sm:pt-0">
+              <Button
+                variant={isToday ? "default" : "outline"}
+                size="sm"
+                className="h-8 text-xs font-bold cursor-pointer"
+                onClick={() => handleSetPreset("today")}
+              >
+                Today
+              </Button>
 
-            <Button
-              variant={date === getTodayKolkata() ? "default" : "outline"}
-              size="sm"
-              className="h-8 text-xs font-bold cursor-pointer"
-              onClick={() => setDate(getTodayKolkata())}
-            >
-              Today
-            </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs font-semibold cursor-pointer"
+                onClick={() => handleSetPreset("yesterday")}
+              >
+                Yesterday
+              </Button>
 
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 cursor-pointer text-muted-foreground hover:text-foreground"
-              onClick={fetchLogs}
-              title="Refresh Logs"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-            </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs font-semibold cursor-pointer"
+                onClick={() => handleSetPreset("last7")}
+              >
+                Last 7D
+              </Button>
 
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs font-semibold gap-1.5 cursor-pointer ml-1"
-              onClick={handlePrint}
-              title="Print Daily EOD Report"
-            >
-              <Printer className="w-3.5 h-3.5 text-muted-foreground" />
-              <span className="hidden sm:inline">Print EOD</span>
-            </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 cursor-pointer text-muted-foreground hover:text-foreground shrink-0"
+                onClick={fetchLogs}
+                title="Refresh Logs"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs font-semibold gap-1.5 cursor-pointer ml-1"
+                onClick={handlePrint}
+                title="Print Work Logs Report"
+              >
+                <Printer className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="hidden xl:inline">Print</span>
+              </Button>
+            </div>
           </div>
         </div>
 
         {/* Date human display */}
         <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between text-xs text-muted-foreground">
           <div className="flex items-center gap-2 font-medium">
-            <span>Viewing logs for:</span>
+            <span>Viewing logs:</span>
             <span className="font-bold text-foreground">
-              {new Date(date + "T00:00:00").toLocaleDateString(undefined, {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
+              {fromDate === toDate
+                ? new Date(fromDate + "T00:00:00").toLocaleDateString(undefined, {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })
+                : `${new Date(fromDate + "T00:00:00").toLocaleDateString(undefined, {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })} → ${new Date(toDate + "T00:00:00").toLocaleDateString(undefined, {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}`}
+            </span>
+            <span className="text-muted-foreground text-[11px] font-mono">
+              (Times displayed in India Standard Time • IST)
             </span>
           </div>
           <Link
@@ -446,37 +616,35 @@ export default function DailyWorkLogsPage() {
       {/* Filter and View Mode Control Strip */}
       <div className="bg-card p-4 rounded-xl border shadow-xs space-y-3">
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-          {/* Module Filter Tabs */}
+          {/* Module Filter Tabs: All Logs, Operation, Finance, Sales, Manage Staff, Admin */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
-            {[
-              { id: "all", label: "All Logs" },
-              { id: "operations", label: "Operations & Tasks" },
-              { id: "finance", label: "Income & Expenses" },
-              { id: "staff", label: "Staff & Attendance" },
-              { id: "clients", label: "Clients & Invoices" },
-              { id: "categories", label: "Categories" },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setModuleFilter(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                  moduleFilter === tab.id
-                    ? "bg-primary text-primary-foreground shadow-2xs"
-                    : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+            {MODULE_TABS.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = moduleFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setModuleFilter(tab.id)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                    isActive
+                      ? "bg-primary text-primary-foreground shadow-2xs"
+                      : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
 
-          {/* View Mode Toggle */}
+          {/* View Mode Toggle: Timeline Stream | Group by Module | Group by Client (Group by Staff removed as requested) */}
           <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border shrink-0">
             <button
               type="button"
               onClick={() => setViewMode("stream")}
-              className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
                 viewMode === "stream" ? "bg-background shadow-xs text-foreground" : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -484,17 +652,17 @@ export default function DailyWorkLogsPage() {
             </button>
             <button
               type="button"
-              onClick={() => setViewMode("by_staff")}
-              className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
-                viewMode === "by_staff" ? "bg-background shadow-xs text-foreground" : "text-muted-foreground hover:text-foreground"
+              onClick={() => setViewMode("by_module")}
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                viewMode === "by_module" ? "bg-background shadow-xs text-foreground" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Group by Staff
+              Group by Module
             </button>
             <button
               type="button"
               onClick={() => setViewMode("by_client")}
-              className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
                 viewMode === "by_client" ? "bg-background shadow-xs text-foreground" : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -552,20 +720,20 @@ export default function DailyWorkLogsPage() {
       {loading ? (
         <div className="py-20 flex flex-col items-center justify-center gap-3">
           <RefreshCw className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-xs text-muted-foreground font-semibold">Aggregating daily work logs across all systems...</p>
+          <p className="text-xs text-muted-foreground font-semibold">Aggregating work logs across all modules...</p>
         </div>
       ) : logs.length === 0 ? (
         <Card className="rounded-2xl border border-dashed p-12 text-center">
           <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground mb-3">
             <AlertCircle className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-foreground">No Activity Found for this Date</h3>
+          <h3 className="text-base font-bold text-foreground">No Activity Found for this Date Range</h3>
           <p className="text-xs text-muted-foreground max-w-sm mx-auto mt-1">
-            No changes, task updates, income, expense, or attendance records were recorded on{" "}
-            {new Date(date + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}.
+            No changes, task updates, income, expense, sales, or attendance records were recorded between{" "}
+            {fromDate} and {toDate}.
           </p>
           <div className="mt-4 flex justify-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => setDate(getTodayKolkata())}>
+            <Button size="sm" variant="outline" onClick={() => handleSetPreset("today")}>
               Go to Today
             </Button>
             <Button size="sm" variant="ghost" onClick={fetchLogs}>
@@ -603,13 +771,15 @@ export default function DailyWorkLogsPage() {
                 </div>
 
                 <div className="flex items-center gap-1.5 flex-wrap">
+                  {getModuleBadge(item.module)}
+
                   <Badge variant="outline" className={`text-[10px] font-bold py-0.5 px-2 border ${getBadgeClass(item.badge_color)}`}>
                     {getModuleIcon(item.module)}
                     <span className="ml-1 capitalize">{item.action_label}</span>
                   </Badge>
 
-                  <div className="inline-flex items-center gap-1 text-[11px] font-mono text-muted-foreground bg-muted/30 px-2 py-0.5 rounded-md">
-                    <Clock className="w-3 h-3" />
+                  <div className="inline-flex items-center gap-1 text-[11px] font-mono text-muted-foreground bg-muted/30 px-2 py-0.5 rounded-md font-semibold">
+                    <Clock className="w-3 h-3 text-primary/70" />
                     <span>{item.time_display}</span>
                   </div>
                 </div>
@@ -626,7 +796,7 @@ export default function DailyWorkLogsPage() {
                   {item.task_title && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-700 dark:text-blue-300 font-medium">
                       <Briefcase className="w-3 h-3 text-blue-500" />
-                      <span>Project: {item.task_title}</span>
+                      <span>Task: {item.task_title}</span>
                     </span>
                   )}
 
@@ -704,84 +874,105 @@ export default function DailyWorkLogsPage() {
             </div>
           ))}
         </div>
-      ) : viewMode === "by_staff" ? (
-        /* Grouped by Staff View */
-        <div className="space-y-4">
-          {groupedByStaff.map((group) => (
-            <Card key={group.staff_name} className="rounded-2xl border shadow-xs overflow-hidden">
-              <div className="bg-muted/30 px-5 py-3 border-b flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <Avatar className="w-8 h-8 font-bold text-xs">
-                    <AvatarFallback className="bg-primary/15 text-primary text-xs">
-                      {group.staff_name.slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h3 className="font-bold text-sm text-foreground">{group.staff_name}</h3>
-                    {group.role && (
-                      <span className="text-[11px] text-muted-foreground capitalize">
-                        {group.role.replace(/_/g, " ")}
-                      </span>
-                    )}
+      ) : viewMode === "by_module" ? (
+        /* Grouped by Module View ("task details needed modules wise") */
+        <div className="space-y-6">
+          {groupedByModule.map((group) => {
+            const Icon = group.meta.icon;
+            return (
+              <Card key={group.module} className="rounded-2xl border shadow-xs overflow-hidden">
+                <div className="bg-muted/40 px-5 py-3.5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`p-2 rounded-xl border ${group.meta.color}`}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-sm text-foreground flex items-center gap-2">
+                        <span>{group.meta.title}</span>
+                        <Badge variant="secondary" className="text-[10px] font-bold">
+                          {group.items.length} {group.items.length === 1 ? "activity" : "activities"}
+                        </Badge>
+                      </h3>
+                      <p className="text-[11px] text-muted-foreground">{group.meta.desc}</p>
+                    </div>
                   </div>
                 </div>
 
-                <Badge variant="secondary" className="text-xs font-bold">
-                  {group.items.length} {group.items.length === 1 ? "activity" : "activities"}
-                </Badge>
-              </div>
+                <CardContent className="p-4 space-y-3 divide-y divide-border/40">
+                  {group.items.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic py-3 text-center">
+                      No logs recorded for {group.meta.title} in selected period.
+                    </p>
+                  ) : (
+                    group.items.map((item) => (
+                      <div key={item.id} className="pt-3 first:pt-0 space-y-1.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-foreground">{item.title}</span>
+                            <Badge variant="outline" className={`text-[10px] py-0 px-1.5 ${getBadgeClass(item.badge_color)}`}>
+                              {item.action_label}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
+                            <span>{item.date_display}</span>
+                            <span className="font-bold text-foreground">{item.time_display}</span>
+                          </div>
+                        </div>
 
-              <CardContent className="p-4 space-y-2.5 divide-y divide-border/40">
-                {group.items.map((item) => (
-                  <div key={item.id} className="pt-2.5 first:pt-0 space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground">{item.title}</span>
-                        <Badge variant="outline" className={`text-[10px] py-0 px-1.5 ${getBadgeClass(item.badge_color)}`}>
-                          {item.action_label}
-                        </Badge>
+                        {/* Associated Entities */}
+                        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                          <span className="text-muted-foreground font-medium">By: {item.user_name}</span>
+                          {item.task_title && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 font-medium">
+                              <Briefcase className="w-3 h-3 text-blue-500" />
+                              Task: {item.task_title}
+                            </span>
+                          )}
+                          {item.subtask_title && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-700 dark:text-purple-300 font-medium">
+                              <CheckSquare className="w-3 h-3 text-purple-500" />
+                              Subtask: {item.subtask_title}
+                            </span>
+                          )}
+                          {item.client_name && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 font-medium">
+                              <Building2 className="w-3 h-3 text-amber-500" />
+                              Client: {item.client_name}
+                            </span>
+                          )}
+                          {typeof item.amount === "number" && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold">
+                              ₹{item.amount.toLocaleString("en-IN")}
+                            </span>
+                          )}
+                        </div>
+
+                        {item.details && (
+                          <p className="text-xs text-muted-foreground leading-relaxed pl-2.5 border-l-2 border-primary/30">
+                            {item.details}
+                          </p>
+                        )}
+
+                        {item.file_url && (
+                          <div className="pt-0.5">
+                            <a
+                              href={item.file_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline"
+                            >
+                              <Download className="w-3 h-3" />
+                              <span>View attachment / proof</span>
+                            </a>
+                          </div>
+                        )}
                       </div>
-                      <span className="text-[11px] font-mono text-muted-foreground">{item.time_display}</span>
-                    </div>
-
-                    {item.details && (
-                      <p className="text-xs text-muted-foreground leading-relaxed pl-2 border-l-2 border-primary/30">
-                        {item.details}
-                      </p>
-                    )}
-
-                    <div className="flex items-center gap-2 pt-1 text-[11px] flex-wrap">
-                      {item.task_title && (
-                        <span className="text-blue-600 dark:text-blue-400 font-medium">
-                          Task: {item.task_title}
-                        </span>
-                      )}
-                      {item.subtask_title && (
-                        <span className="text-purple-600 dark:text-purple-400 font-medium">
-                          • Sub-task: {item.subtask_title}
-                        </span>
-                      )}
-                      {item.client_name && (
-                        <span className="text-amber-600 dark:text-amber-400 font-medium">
-                          • Client: {item.client_name}
-                        </span>
-                      )}
-                      {item.file_url && (
-                        <a
-                          href={item.file_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-primary hover:underline font-bold inline-flex items-center gap-1"
-                        >
-                          <Download className="w-2.5 h-2.5" /> File Attached
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          ))}
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       ) : (
         /* Grouped by Client View */
@@ -789,10 +980,16 @@ export default function DailyWorkLogsPage() {
           {groupedByClient.map((group) => (
             <Card key={group.client_name} className="rounded-2xl border shadow-xs overflow-hidden">
               <div className="bg-muted/30 px-5 py-3 border-b flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-amber-500" />
-                  <h3 className="font-bold text-sm text-foreground">{group.client_name}</h3>
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-foreground">{group.client_name}</h3>
+                    <span className="text-[11px] text-muted-foreground">Client Activity Trail</span>
+                  </div>
                 </div>
+
                 <Badge variant="secondary" className="text-xs font-bold">
                   {group.items.length} {group.items.length === 1 ? "activity" : "activities"}
                 </Badge>
@@ -804,16 +1001,18 @@ export default function DailyWorkLogsPage() {
                     <div className="flex items-center justify-between text-xs">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-foreground">{item.title}</span>
+                        {getModuleBadge(item.module)}
                         <Badge variant="outline" className={`text-[10px] py-0 px-1.5 ${getBadgeClass(item.badge_color)}`}>
                           {item.action_label}
                         </Badge>
                       </div>
-                      <span className="text-[11px] font-mono text-muted-foreground">{item.time_display}</span>
+                      <span className="text-[11px] font-mono font-bold text-muted-foreground">{item.time_display}</span>
                     </div>
 
                     <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                      <span>By: <strong className="text-foreground">{item.user_name}</strong></span>
-                      {item.task_title && <span>• Task: {item.task_title}</span>}
+                      <span>By: {item.user_name}</span>
+                      {item.task_title && <span>• Project: {item.task_title}</span>}
+                      {item.subtask_title && <span>• Sub-task: {item.subtask_title}</span>}
                     </div>
 
                     {item.details && (
@@ -823,16 +1022,15 @@ export default function DailyWorkLogsPage() {
                     )}
 
                     {item.file_url && (
-                      <div className="pt-1">
-                        <a
-                          href={item.file_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-primary hover:underline text-xs font-bold inline-flex items-center gap-1"
-                        >
-                          <Download className="w-3 h-3" /> View Deliverable
-                        </a>
-                      </div>
+                      <a
+                        href={item.file_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline pt-0.5"
+                      >
+                        <Download className="w-3 h-3" />
+                        <span>View Attachment</span>
+                      </a>
                     )}
                   </div>
                 ))}
@@ -844,4 +1042,3 @@ export default function DailyWorkLogsPage() {
     </div>
   );
 }
-

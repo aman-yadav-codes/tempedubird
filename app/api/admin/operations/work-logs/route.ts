@@ -2,14 +2,14 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
 import { ensureFeatureSchema } from "@/lib/db/ensure-feature-schema";
-import { isPlatformAdminUser, isInstitutionAdminUser, hasPermission } from "@/lib/auth/permissions";
+import { isPlatformAdminUser, isInstitutionAdminUser } from "@/lib/auth/permissions";
 
 export interface SystemWorkLogItem {
   id: string;
   timestamp: string;
   time_display: string;
   date_display: string;
-  module: "operations" | "finance" | "clients" | "staff" | "categories" | "settings";
+  module: "operation" | "finance" | "sales" | "manage_staff" | "admin";
   action: string;
   action_label: string;
   title: string;
@@ -41,17 +41,44 @@ export interface SystemWorkLogItem {
   points?: number | null;
 }
 
-function getKolkataDate(d = new Date()): string {
+function getKolkataDate(d: Date | string = new Date()): string {
   try {
-    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(d);
+    const dateObj = typeof d === "string" ? new Date(d) : d;
+    if (isNaN(dateObj.getTime())) return new Date().toISOString().slice(0, 10);
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(dateObj);
   } catch {
-    return d.toISOString().slice(0, 10);
+    return new Date().toISOString().slice(0, 10);
   }
 }
 
-function formatTimeDisplay(isoString: string): string {
+function isDateInRange(val: unknown, from: string, to: string): boolean {
+  if (!val) return false;
+  let dateStr = "";
+  if (typeof val === "string" && /^\d{4}-\d{2}-\d{2}$/.test(val.trim())) {
+    dateStr = val.trim();
+  } else {
+    const str = String(val).trim();
+    const normalized = str.includes("T") ? str : str.replace(" ", "T");
+    const withTz = /([+-]\d{2}(:\d{2})?|Z)$/.test(normalized) ? normalized : `${normalized}Z`;
+    const d = new Date(withTz);
+    if (isNaN(d.getTime())) return false;
+    dateStr = getKolkataDate(d);
+  }
+  return dateStr >= from && dateStr <= to;
+}
+
+function formatTimeDisplay(val: unknown): string {
   try {
-    const d = new Date(isoString);
+    if (!val) return "--:--";
+    let d: Date;
+    if (val instanceof Date) {
+      d = val;
+    } else {
+      const str = String(val).trim();
+      const normalized = str.includes("T") ? str : str.replace(" ", "T");
+      const withTz = /([+-]\d{2}(:\d{2})?|Z)$/.test(normalized) ? normalized : `${normalized}Z`;
+      d = new Date(withTz);
+    }
     if (isNaN(d.getTime())) return "--:--";
     return new Intl.DateTimeFormat("en-IN", {
       timeZone: "Asia/Kolkata",
@@ -64,6 +91,20 @@ function formatTimeDisplay(isoString: string): string {
   }
 }
 
+function toIsoTimestamp(val: unknown): string {
+  try {
+    if (!val) return new Date().toISOString();
+    if (val instanceof Date) return val.toISOString();
+    const str = String(val).trim();
+    const normalized = str.includes("T") ? str : str.replace(" ", "T");
+    const withTz = /([+-]\d{2}(:\d{2})?|Z)$/.test(normalized) ? normalized : `${normalized}Z`;
+    const d = new Date(withTz);
+    return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+}
+
 export async function GET(req: Request) {
   try {
     await ensureFeatureSchema();
@@ -73,8 +114,22 @@ export async function GET(req: Request) {
     }
 
     const url = new URL(req.url);
-    const targetDate = url.searchParams.get("date")?.trim() || getKolkataDate();
-    const selectedModule = url.searchParams.get("module")?.trim() || "all";
+    const rawFrom = url.searchParams.get("from_date") || url.searchParams.get("fromDate");
+    const rawTo = url.searchParams.get("to_date") || url.searchParams.get("toDate");
+    const singleDate = url.searchParams.get("date")?.trim();
+
+    const fromDate = rawFrom?.trim() || singleDate || getKolkataDate();
+    const toDate = rawTo?.trim() || singleDate || fromDate;
+
+    // Normalizing selectedModule
+    const rawModule = (url.searchParams.get("module")?.trim() || "all").toLowerCase();
+    const selectedModule =
+      rawModule === "operations" ? "operation" :
+      rawModule === "staff" ? "manage_staff" :
+      rawModule === "categories" ? "admin" :
+      rawModule === "clients" ? "sales" :
+      rawModule;
+
     const selectedStaffId = url.searchParams.get("staff_id")?.trim() || "";
     const selectedClientId = url.searchParams.get("client_id")?.trim() || "";
     const search = url.searchParams.get("search")?.trim().toLowerCase() || "";
@@ -83,10 +138,8 @@ export async function GET(req: Request) {
 
     const roleCodes: string[] = (user as any).role_codes || [(user as any).role || (user as any).primary_role || ""];
     const isClient = roleCodes.includes("client");
-    const isPlatformAdmin = isPlatformAdminUser(user);
-    const isInstAdmin = isInstitutionAdminUser(user);
 
-    // If client, look up their linked client profile
+    // Client scope resolution
     let clientProfileId: number | null = null;
     if (isClient) {
       const clientRes = await db.query(
@@ -106,32 +159,35 @@ export async function GET(req: Request) {
     try {
       const dbLogsRes = await db.query(
         `SELECT * FROM system_activity_logs 
-         WHERE created_at::date = $1::date
-           AND ($2::int IS NULL OR institution_id = $2::int OR institution_id IS NULL)
+         WHERE (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND $2::date
+           AND ($3::int IS NULL OR institution_id = $3::int OR institution_id IS NULL)
          ORDER BY created_at DESC`,
-        [targetDate, institutionId]
+        [fromDate, toDate, institutionId]
       );
 
       for (const row of dbLogsRes.rows) {
         const meta = row.metadata || {};
+        let mod: SystemWorkLogItem["module"] = "admin";
+        if (row.module === "operations" || row.module === "operation") mod = "operation";
+        else if (row.module === "finance") mod = "finance";
+        else if (row.module === "sales" || row.module === "clients") mod = "sales";
+        else if (row.module === "staff" || row.module === "manage_staff") mod = "manage_staff";
+
         allEvents.push({
           id: `dblog_${row.id}`,
-          timestamp: new Date(row.created_at).toISOString(),
+          timestamp: toIsoTimestamp(row.created_at),
           time_display: formatTimeDisplay(row.created_at),
-          date_display: targetDate,
-          module: row.module || "operations",
+          date_display: getKolkataDate(row.created_at),
+          module: mod,
           action: row.action_type || "activity",
           action_label: (row.action_type || "Activity").replace(/_/g, " ").toUpperCase(),
           title: row.title,
           details: row.description,
           badge_color:
-            row.module === "finance"
-              ? "emerald"
-              : row.module === "clients"
-              ? "purple"
-              : row.module === "staff"
-              ? "blue"
-              : "amber",
+            mod === "finance" ? "emerald" :
+            mod === "sales" ? "purple" :
+            mod === "manage_staff" ? "blue" :
+            mod === "operation" ? "amber" : "zinc",
           user_id: row.user_id,
           user_name: row.user_name || "System",
           user_role: row.user_role,
@@ -152,9 +208,7 @@ export async function GET(req: Request) {
           duration_minutes: meta.duration_minutes,
         });
       }
-    } catch {
-      // ignore if table empty or query fails
-    }
+    } catch {}
 
     // ==========================================
     // 2. SYNTHESIZE FROM operations_tasks
@@ -164,14 +218,14 @@ export async function GET(req: Request) {
         `SELECT id, title, client_id, client_name, assigned_clients, institution_id, 
                 created_by, created_at, updated_at, history, sub_tasks, status
          FROM operations_tasks
-         WHERE ($2::int IS NULL OR institution_id = $2::int OR institution_id IS NULL)
+         WHERE ($3::int IS NULL OR institution_id = $3::int OR institution_id IS NULL)
            AND (
-             created_at::date = $1::date
-             OR updated_at::date = $1::date
+             (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND $2::date
+             OR (updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND $2::date
              OR history IS NOT NULL
              OR sub_tasks IS NOT NULL
            )`,
-        [targetDate, institutionId]
+        [fromDate, toDate, institutionId]
       );
 
       for (const t of tasksRes.rows) {
@@ -179,14 +233,14 @@ export async function GET(req: Request) {
         const clientName = t.client_name || clientsArr[0]?.company_name || clientsArr[0]?.name || null;
         const clientId = t.client_id || clientsArr[0]?.id || null;
 
-        // A. Project Created on target date
-        if (t.created_at && getKolkataDate(new Date(t.created_at)) === targetDate) {
+        // A. Project Created in date range
+        if (t.created_at && isDateInRange(t.created_at, fromDate, toDate)) {
           allEvents.push({
             id: `task_create_${t.id}`,
-            timestamp: new Date(t.created_at).toISOString(),
+            timestamp: toIsoTimestamp(t.created_at),
             time_display: formatTimeDisplay(t.created_at),
-            date_display: targetDate,
-            module: "operations",
+            date_display: getKolkataDate(t.created_at),
+            module: "operation",
             action: "task_created",
             action_label: "Project Created",
             title: `Created project: "${t.title}"`,
@@ -202,11 +256,11 @@ export async function GET(req: Request) {
           });
         }
 
-        // B. Task History events on target date
+        // B. Task History events in date range
         const historyArr = Array.isArray(t.history) ? t.history : [];
         for (let i = 0; i < historyArr.length; i++) {
           const h = historyArr[i];
-          if (h && h.timestamp && getKolkataDate(new Date(h.timestamp)) === targetDate) {
+          if (h && h.timestamp && isDateInRange(h.timestamp, fromDate, toDate)) {
             const act = String(h.action || "updated").toLowerCase();
             let label = "Task Activity";
             let color: "emerald" | "blue" | "amber" | "rose" | "purple" | "zinc" = "zinc";
@@ -223,8 +277,8 @@ export async function GET(req: Request) {
             } else if (act === "rework") {
               label = "Sent to Rework";
               color = "rose";
-            } else if (act.includes("file") || act.includes("upload")) {
-              label = "File / Deliverable Activity";
+            } else if (act.includes("file") || act.includes("upload") || act.includes("deliverable")) {
+              label = "Deliverable Activity";
               color = "purple";
             } else if (act === "status_changed") {
               label = `Status: ${(h.new_status || "").replace(/_/g, " ").toUpperCase()}`;
@@ -233,10 +287,10 @@ export async function GET(req: Request) {
 
             allEvents.push({
               id: `hist_${t.id}_${h.id || i}`,
-              timestamp: new Date(h.timestamp).toISOString(),
+              timestamp: toIsoTimestamp(h.timestamp),
               time_display: formatTimeDisplay(h.timestamp),
-              date_display: targetDate,
-              module: "operations",
+              date_display: getKolkataDate(h.timestamp),
+              module: "operation",
               action: h.action || "task_event",
               action_label: label,
               title: h.subtask_title
@@ -259,18 +313,18 @@ export async function GET(req: Request) {
           }
         }
 
-        // C. Subtask Work Updates on target date
+        // C. Subtask Work Updates in date range
         const subtasksArr = Array.isArray(t.sub_tasks) ? t.sub_tasks : [];
         for (const s of subtasksArr) {
           const updates = Array.isArray(s.work_updates) ? s.work_updates : [];
           for (const u of updates) {
-            if (u && u.created_at && getKolkataDate(new Date(u.created_at)) === targetDate) {
+            if (u && u.created_at && isDateInRange(u.created_at, fromDate, toDate)) {
               allEvents.push({
                 id: `subupd_${u.id || Math.random()}`,
-                timestamp: new Date(u.created_at).toISOString(),
+                timestamp: toIsoTimestamp(u.created_at),
                 time_display: formatTimeDisplay(u.created_at),
-                date_display: targetDate,
-                module: "operations",
+                date_display: getKolkataDate(u.created_at),
+                module: "operation",
                 action: "work_update",
                 action_label: "Deliverable & Work Note",
                 title: `Deliverable Update on "${s.title}" (${t.title})`,
@@ -299,7 +353,7 @@ export async function GET(req: Request) {
     }
 
     // ==========================================
-    // 3. SYNTHESIZE FROM FINANCE (Income, Expenses, Categories, Invoices)
+    // 3. SYNTHESIZE FROM FINANCE (Income, Expenses, Invoices)
     // ==========================================
     // A. Income Entries
     try {
@@ -308,18 +362,21 @@ export async function GET(req: Request) {
          FROM finance_income_entries inc
          LEFT JOIN finance_income_categories cat ON cat.id = inc.category_id
          LEFT JOIN users u ON u.id = inc.created_by
-         WHERE (inc.income_date = $1::date OR inc.created_at::date = $1::date)
-           AND ($2::int IS NULL OR inc.institution_id = $2::int OR inc.institution_id IS NULL)
+         WHERE (
+           inc.income_date BETWEEN $1::date AND $2::date 
+           OR (inc.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND $2::date
+         )
+         AND ($3::int IS NULL OR inc.institution_id = $3::int OR inc.institution_id IS NULL)
          ORDER BY inc.created_at DESC`,
-        [targetDate, institutionId]
+        [fromDate, toDate, institutionId]
       );
 
       for (const inc of incomeRes.rows) {
         allEvents.push({
           id: `income_${inc.id}`,
-          timestamp: inc.created_at ? new Date(inc.created_at).toISOString() : `${targetDate}T12:00:00.000Z`,
-          time_display: formatTimeDisplay(inc.created_at || `${targetDate}T12:00:00.000Z`),
-          date_display: targetDate,
+          timestamp: toIsoTimestamp(inc.created_at || `${inc.income_date}T12:00:00.000Z`),
+          time_display: formatTimeDisplay(inc.created_at || `${inc.income_date}T12:00:00.000Z`),
+          date_display: getKolkataDate(inc.income_date || inc.created_at),
           module: "finance",
           action: "income_added",
           action_label: "Income Added",
@@ -344,18 +401,21 @@ export async function GET(req: Request) {
          FROM finance_expense_entries exp
          LEFT JOIN finance_expense_categories cat ON cat.id = exp.category_id
          LEFT JOIN users u ON u.id = exp.created_by
-         WHERE (exp.expense_date = $1::date OR exp.created_at::date = $1::date)
-           AND ($2::int IS NULL OR exp.institution_id = $2::int OR exp.institution_id IS NULL)
+         WHERE (
+           exp.expense_date BETWEEN $1::date AND $2::date 
+           OR (exp.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND $2::date
+         )
+         AND ($3::int IS NULL OR exp.institution_id = $3::int OR exp.institution_id IS NULL)
          ORDER BY exp.created_at DESC`,
-        [targetDate, institutionId]
+        [fromDate, toDate, institutionId]
       );
 
       for (const exp of expRes.rows) {
         allEvents.push({
           id: `expense_${exp.id}`,
-          timestamp: exp.created_at ? new Date(exp.created_at).toISOString() : `${targetDate}T12:00:00.000Z`,
-          time_display: formatTimeDisplay(exp.created_at || `${targetDate}T12:00:00.000Z`),
-          date_display: targetDate,
+          timestamp: toIsoTimestamp(exp.created_at || `${exp.expense_date}T12:00:00.000Z`),
+          time_display: formatTimeDisplay(exp.created_at || `${exp.expense_date}T12:00:00.000Z`),
+          date_display: getKolkataDate(exp.expense_date || exp.created_at),
           module: "finance",
           action: "expense_added",
           action_label: "Expense Logged",
@@ -374,68 +434,24 @@ export async function GET(req: Request) {
       }
     } catch {}
 
-    // C. Categories Created/Updated Today
-    try {
-      const incCatRes = await db.query(
-        `SELECT id, name, created_at, updated_at FROM finance_income_categories 
-         WHERE (created_at::date = $1::date OR updated_at::date = $1::date)
-           AND ($2::int IS NULL OR institution_id = $2::int OR institution_id IS NULL)`,
-        [targetDate, institutionId]
-      );
-      for (const c of incCatRes.rows) {
-        allEvents.push({
-          id: `inccat_${c.id}`,
-          timestamp: new Date(c.created_at || c.updated_at).toISOString(),
-          time_display: formatTimeDisplay(c.created_at || c.updated_at),
-          date_display: targetDate,
-          module: "categories",
-          action: "category_created",
-          action_label: "Income Category Added",
-          title: `Added Income Category: "${c.name}"`,
-          badge_color: "purple",
-          category_name: c.name,
-          user_name: "Administrator",
-        });
-      }
-
-      const expCatRes = await db.query(
-        `SELECT id, name, created_at, updated_at FROM finance_expense_categories 
-         WHERE (created_at::date = $1::date OR updated_at::date = $1::date)
-           AND ($2::int IS NULL OR institution_id = $2::int OR institution_id IS NULL)`,
-        [targetDate, institutionId]
-      );
-      for (const c of expCatRes.rows) {
-        allEvents.push({
-          id: `expcat_${c.id}`,
-          timestamp: new Date(c.created_at || c.updated_at).toISOString(),
-          time_display: formatTimeDisplay(c.created_at || c.updated_at),
-          date_display: targetDate,
-          module: "categories",
-          action: "category_created",
-          action_label: "Expense Category Added",
-          title: `Added Expense Category: "${c.name}"`,
-          badge_color: "purple",
-          category_name: c.name,
-          user_name: "Administrator",
-        });
-      }
-    } catch {}
-
-    // D. Invoices Generated
+    // C. Invoices Generated
     try {
       const invRes = await db.query(
         `SELECT inv.*, u.full_name as author_name FROM finance_invoices inv
          LEFT JOIN users u ON u.id = inv.created_by
-         WHERE (inv.invoice_date = $1::date OR inv.created_at::date = $1::date)
-           AND ($2::int IS NULL OR inv.institution_id = $2::int OR inv.institution_id IS NULL)`,
-        [targetDate, institutionId]
+         WHERE (
+           inv.invoice_date BETWEEN $1::date AND $2::date 
+           OR (inv.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND $2::date
+         )
+         AND ($3::int IS NULL OR inv.institution_id = $3::int OR inv.institution_id IS NULL)`,
+        [fromDate, toDate, institutionId]
       );
       for (const inv of invRes.rows) {
         allEvents.push({
           id: `inv_${inv.id}`,
-          timestamp: inv.created_at ? new Date(inv.created_at).toISOString() : `${targetDate}T12:00:00.000Z`,
-          time_display: formatTimeDisplay(inv.created_at || `${targetDate}T12:00:00.000Z`),
-          date_display: targetDate,
+          timestamp: toIsoTimestamp(inv.created_at || `${inv.invoice_date}T12:00:00.000Z`),
+          time_display: formatTimeDisplay(inv.created_at || `${inv.invoice_date}T12:00:00.000Z`),
+          date_display: getKolkataDate(inv.invoice_date || inv.created_at),
           module: "finance",
           action: "invoice_created",
           action_label: "Invoice Generated",
@@ -452,25 +468,26 @@ export async function GET(req: Request) {
     } catch {}
 
     // ==========================================
-    // 4. SYNTHESIZE FROM CLIENTS
+    // 4. SYNTHESIZE FROM SALES & CLIENTS
     // ==========================================
+    // A. Clients Added
     try {
       const clientsRes = await db.query(
         `SELECT id, name, company_name, email, phone, created_at FROM clients 
-         WHERE created_at::date = $1::date
-           AND ($2::int IS NULL OR institution_id = $2::int OR institution_id IS NULL)`,
-        [targetDate, institutionId]
+         WHERE (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND $2::date
+           AND ($3::int IS NULL OR institution_id = $3::int OR institution_id IS NULL)`,
+        [fromDate, toDate, institutionId]
       );
       for (const cl of clientsRes.rows) {
         allEvents.push({
           id: `client_${cl.id}`,
-          timestamp: new Date(cl.created_at).toISOString(),
+          timestamp: toIsoTimestamp(cl.created_at),
           time_display: formatTimeDisplay(cl.created_at),
-          date_display: targetDate,
-          module: "clients",
+          date_display: getKolkataDate(cl.created_at),
+          module: "sales",
           action: "client_created",
-          action_label: "Client Added",
-          title: `Added Client: "${cl.company_name || cl.name}"`,
+          action_label: "New Client Onboarded",
+          title: `Client Registered: "${cl.company_name || cl.name}"`,
           details: cl.email ? `Email: ${cl.email} • Phone: ${cl.phone || 'N/A'}` : null,
           badge_color: "purple",
           client_id: cl.id,
@@ -480,24 +497,84 @@ export async function GET(req: Request) {
       }
     } catch {}
 
+    // B. Sales Contacts & Leads Created
+    try {
+      const salesContactsRes = await db.query(
+        `SELECT sc.*, u.full_name as rep_name 
+         FROM sales_contacts sc
+         LEFT JOIN users u ON u.id = sc.created_by
+         WHERE (sc.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND $2::date
+           AND sc.is_deleted IS NOT TRUE
+         ORDER BY sc.created_at DESC`,
+        [fromDate, toDate]
+      );
+      for (const sc of salesContactsRes.rows) {
+        allEvents.push({
+          id: `sales_con_${sc.id}`,
+          timestamp: toIsoTimestamp(sc.created_at),
+          time_display: formatTimeDisplay(sc.created_at),
+          date_display: getKolkataDate(sc.created_at),
+          module: "sales",
+          action: "sales_lead_created",
+          action_label: "Sales Lead Created",
+          title: `New Lead: "${sc.full_name || sc.business_name}" (${sc.pipeline_stage || sc.sales_stage || 'Prospect'})`,
+          details: `Source: ${sc.lead_source || 'Direct'} • Next Follow-up: ${sc.next_follow_up_date ? String(sc.next_follow_up_date).slice(0, 10) : 'Not set'}`,
+          badge_color: "purple",
+          client_name: sc.business_name || sc.full_name,
+          user_id: sc.created_by,
+          user_name: sc.rep_name || "Sales Rep",
+        });
+      }
+    } catch {}
+
+    // C. Sales Stage Changes
+    try {
+      const salesChangesRes = await db.query(
+        `SELECT ch.*, u.full_name as author_name, sc.full_name as contact_name, sc.business_name
+         FROM sales_contact_changes ch
+         LEFT JOIN users u ON u.id = ch.changed_by
+         LEFT JOIN sales_contacts sc ON sc.id = ch.contact_id
+         WHERE (ch.changed_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND $2::date
+         ORDER BY ch.changed_at DESC`,
+        [fromDate, toDate]
+      );
+      for (const ch of salesChangesRes.rows) {
+        allEvents.push({
+          id: `sales_ch_${ch.id}`,
+          timestamp: toIsoTimestamp(ch.changed_at),
+          time_display: formatTimeDisplay(ch.changed_at),
+          date_display: getKolkataDate(ch.changed_at),
+          module: "sales",
+          action: ch.action || "lead_updated",
+          action_label: "Lead Milestone Updated",
+          title: `Lead Activity: "${ch.contact_name || ch.business_name || 'Contact'}" ${ch.action || 'updated'}`,
+          details: `Updated by ${ch.author_name || 'Sales Rep'}`,
+          badge_color: "purple",
+          user_id: ch.changed_by,
+          user_name: ch.author_name || "Sales Rep",
+        });
+      }
+    } catch {}
+
     // ==========================================
-    // 5. SYNTHESIZE FROM STAFF ATTENDANCE
+    // 5. SYNTHESIZE FROM MANAGE STAFF (Attendance & Documents)
     // ==========================================
+    // A. Staff Attendance
     try {
       const attRes = await db.query(
         `SELECT att.*, u.full_name as staff_name FROM staff_attendance att
          JOIN users u ON u.id = att.staff_user_id
-         WHERE att.attendance_date = $1::date
-           AND ($2::int IS NULL OR att.institution_id = $2::int OR att.institution_id IS NULL)`,
-        [targetDate, institutionId]
+         WHERE att.attendance_date BETWEEN $1::date AND $2::date
+           AND ($3::int IS NULL OR att.institution_id = $3::int OR att.institution_id IS NULL)`,
+        [fromDate, toDate, institutionId]
       );
       for (const a of attRes.rows) {
         allEvents.push({
           id: `att_${a.id}`,
-          timestamp: a.created_at ? new Date(a.created_at).toISOString() : `${targetDate}T09:00:00.000Z`,
-          time_display: formatTimeDisplay(a.created_at || `${targetDate}T09:00:00.000Z`),
-          date_display: targetDate,
-          module: "staff",
+          timestamp: toIsoTimestamp(a.created_at || `${a.attendance_date}T09:00:00.000Z`),
+          time_display: formatTimeDisplay(a.created_at || `${a.attendance_date}T09:00:00.000Z`),
+          date_display: getKolkataDate(a.attendance_date || a.created_at),
+          module: "manage_staff",
           action: "attendance_marked",
           action_label: `Attendance (${a.status})`,
           title: `${a.staff_name} marked ${a.status} (Punch-in: ${a.check_in_time || 'N/A'})`,
@@ -511,9 +588,63 @@ export async function GET(req: Request) {
     } catch {}
 
     // ==========================================
-    // 6. DEDUPLICATE & FILTER
+    // 6. SYNTHESIZE FROM ADMIN (Categories & System Setup)
     // ==========================================
-    // Deduplicate by custom key
+    try {
+      const incCatRes = await db.query(
+        `SELECT id, name, created_at, updated_at FROM finance_income_categories 
+         WHERE (
+           (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND $2::date 
+           OR (updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND $2::date
+         )
+         AND ($3::int IS NULL OR institution_id = $3::int OR institution_id IS NULL)`,
+        [fromDate, toDate, institutionId]
+      );
+      for (const c of incCatRes.rows) {
+        allEvents.push({
+          id: `inccat_${c.id}`,
+          timestamp: toIsoTimestamp(c.created_at || c.updated_at),
+          time_display: formatTimeDisplay(c.created_at || c.updated_at),
+          date_display: getKolkataDate(c.created_at || c.updated_at),
+          module: "admin",
+          action: "category_created",
+          action_label: "Income Category Added",
+          title: `Added Income Category: "${c.name}"`,
+          badge_color: "purple",
+          category_name: c.name,
+          user_name: "Administrator",
+        });
+      }
+
+      const expCatRes = await db.query(
+        `SELECT id, name, created_at, updated_at FROM finance_expense_categories 
+         WHERE (
+           (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND $2::date 
+           OR (updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND $2::date
+         )
+         AND ($3::int IS NULL OR institution_id = $3::int OR institution_id IS NULL)`,
+        [fromDate, toDate, institutionId]
+      );
+      for (const c of expCatRes.rows) {
+        allEvents.push({
+          id: `expcat_${c.id}`,
+          timestamp: toIsoTimestamp(c.created_at || c.updated_at),
+          time_display: formatTimeDisplay(c.created_at || c.updated_at),
+          date_display: getKolkataDate(c.created_at || c.updated_at),
+          module: "admin",
+          action: "category_created",
+          action_label: "Expense Category Added",
+          title: `Added Expense Category: "${c.name}"`,
+          badge_color: "purple",
+          category_name: c.name,
+          user_name: "Administrator",
+        });
+      }
+    } catch {}
+
+    // ==========================================
+    // 7. DEDUPLICATE & SORT
+    // ==========================================
     const seen = new Set<string>();
     const uniqueEvents: SystemWorkLogItem[] = [];
 
@@ -531,7 +662,7 @@ export async function GET(req: Request) {
     let scopedEvents = uniqueEvents;
     if (isClient && clientProfileId) {
       scopedEvents = scopedEvents.filter(
-        (ev) => Number(ev.client_id) === Number(clientProfileId) || (ev.module === "operations" && ev.client_id === clientProfileId)
+        (ev) => Number(ev.client_id) === Number(clientProfileId) || (ev.module === "operation" && ev.client_id === clientProfileId)
       );
     }
 
@@ -542,12 +673,16 @@ export async function GET(req: Request) {
 
     // Apply Staff Filter
     if (selectedStaffId && selectedStaffId !== "all") {
-      scopedEvents = scopedEvents.filter((ev) => String(ev.user_id) === selectedStaffId || ev.user_name.toLowerCase().includes(selectedStaffId.toLowerCase()));
+      scopedEvents = scopedEvents.filter(
+        (ev) => String(ev.user_id) === selectedStaffId || ev.user_name.toLowerCase().includes(selectedStaffId.toLowerCase())
+      );
     }
 
     // Apply Client Filter
     if (selectedClientId && selectedClientId !== "all") {
-      scopedEvents = scopedEvents.filter((ev) => String(ev.client_id) === selectedClientId || (ev.client_name && ev.client_name.toLowerCase().includes(selectedClientId.toLowerCase())));
+      scopedEvents = scopedEvents.filter(
+        (ev) => String(ev.client_id) === selectedClientId || (ev.client_name && ev.client_name.toLowerCase().includes(selectedClientId.toLowerCase()))
+      );
     }
 
     // Apply Keyword Search
@@ -564,13 +699,13 @@ export async function GET(req: Request) {
     }
 
     // ==========================================
-    // 7. SUMMARY KPIS
+    // 8. SUMMARY KPIS
     // ==========================================
     const tasksTouched = new Set<number>();
     const staffActive = new Set<string>();
     let subtasksDoneCount = 0;
-    let totalIncomeToday = 0;
-    let totalExpenseToday = 0;
+    let totalIncomePeriod = 0;
+    let totalExpensePeriod = 0;
     let filesCount = 0;
 
     for (const ev of uniqueEvents) {
@@ -580,15 +715,15 @@ export async function GET(req: Request) {
         subtasksDoneCount += 1;
       }
       if (ev.module === "finance" && ev.action === "income_added" && ev.amount) {
-        totalIncomeToday += ev.amount;
+        totalIncomePeriod += ev.amount;
       }
       if (ev.module === "finance" && ev.action === "expense_added" && ev.amount) {
-        totalExpenseToday += ev.amount;
+        totalExpensePeriod += ev.amount;
       }
       if (ev.file_url) filesCount += 1;
     }
 
-    // Build unique staff and client options for dropdowns
+    // Dropdown options
     const staffOptionsMap = new Map<string, string>();
     const clientOptionsMap = new Map<string, string>();
 
@@ -603,13 +738,14 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       success: true,
-      date: targetDate,
+      from_date: fromDate,
+      to_date: toDate,
       summary: {
         total_activities: scopedEvents.length,
         tasks_worked_on: tasksTouched.size,
         subtasks_completed: subtasksDoneCount,
-        total_income: totalIncomeToday,
-        total_expense: totalExpenseToday,
+        total_income: totalIncomePeriod,
+        total_expense: totalExpensePeriod,
         active_staff_count: staffActive.size,
         files_uploaded: filesCount,
       },
@@ -624,4 +760,3 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: error.message || "Failed to fetch work logs" }, { status: 500 });
   }
 }
-
