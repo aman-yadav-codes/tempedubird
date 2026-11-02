@@ -2056,11 +2056,10 @@ export default function OperationsTasksPage() {
 
         {(() => {
           const isClient = isClientRole || Boolean(pathname?.startsWith("/client"));
+          if (isClient) return null;
           const opsBasePath = pathname?.startsWith("/platformadmin") ? "/platformadmin/operations" : "/admin/operations";
           return (
             <div className="flex items-center gap-2 shrink-0 flex-wrap">
-              {!isClient && (
-                <>
               <Link href={`${opsBasePath}/project-types`}>
                 <Button
                   variant="outline"
@@ -2084,8 +2083,6 @@ export default function OperationsTasksPage() {
                   <span>Project Pipelines</span>
                 </Button>
               </Link>
-                </>
-              )}
 
               <Button
                 onClick={handleOpenCreateTask}

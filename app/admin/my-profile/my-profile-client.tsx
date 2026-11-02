@@ -3004,6 +3004,14 @@ export function MyProfileClient() {
               <span className="text-xs font-bold text-primary">
                 {tasks.filter(t => normalizeTaskStatus(t.status) === "completed").length} of {tasks.length} Completed
               </span>
+              <Button
+                size="sm"
+                onClick={() => setCreateTaskDialogOpen(true)}
+                className="h-8 text-xs font-bold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Create Task / Project</span>
+              </Button>
             </div>
           </div>
 
