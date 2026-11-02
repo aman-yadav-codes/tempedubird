@@ -1990,7 +1990,34 @@ export default function OperationsTasksPage() {
   const isTaskDirectlyAssignedToMe = useCallback(
     (task: OperationTask) => {
       if (!user?.id) return false;
-      if (isClientRole) return true;
+      if (isClientRole) {
+        const currentUserId = Number(user.id);
+        const currentUserEmail = (user.email || "").toLowerCase().trim();
+        const currentUserName = ((user as any).full_name || (user as any).name || "").toLowerCase().trim();
+        if (task.created_by && Number(task.created_by) === currentUserId) return true;
+        if (task.client_id && Number(task.client_id) === currentUserId) return true;
+        if (task.client_name && currentUserName && task.client_name.toLowerCase().trim() === currentUserName) return true;
+        if (Array.isArray(task.assigned_clients)) {
+          const clientMatch = task.assigned_clients.some(
+            (c: any) =>
+              (c.id && Number(c.id) === currentUserId) ||
+              (c.user_id && Number(c.user_id) === currentUserId) ||
+              (currentUserEmail && c.email && c.email.toLowerCase().trim() === currentUserEmail) ||
+              (currentUserName && c.name && c.name.toLowerCase().trim() === currentUserName) ||
+              (currentUserName && c.company_name && c.company_name.toLowerCase().trim() === currentUserName)
+          );
+          if (clientMatch) return true;
+        }
+        if (Array.isArray(task.sub_tasks)) {
+          const subMatch = task.sub_tasks.some(
+            (st: any) =>
+              (st.client_id && Number(st.client_id) === currentUserId) ||
+              (Array.isArray(st.uploads) && st.uploads.some((up: any) => up.uploaded_by_id && Number(up.uploaded_by_id) === currentUserId))
+          );
+          if (subMatch) return true;
+        }
+        return false;
+      }
 
       const currentUserId = Number(user.id);
       const currentUserEmail = (user.email || "").toLowerCase().trim();
@@ -2061,8 +2088,9 @@ export default function OperationsTasksPage() {
   const displayedTasks = useMemo(() => {
     const isStaffRoute = Boolean(pathname?.startsWith("/staff"));
     const isStaffContext = isStaffRole || isStaffRoute;
+    const isClient = isClientRole || Boolean(pathname?.startsWith("/client"));
 
-    let pool = (scopeFilter === "assigned_to_me")
+    let pool = (scopeFilter === "assigned_to_me" || isClient)
       ? tasks.filter((t) => isTaskAssignedToMe(t))
       : tasks;
 
@@ -2089,7 +2117,8 @@ export default function OperationsTasksPage() {
   const getTabCount = (tabId: string) => {
     const isStaffRoute = Boolean(pathname?.startsWith("/staff"));
     const isStaffContext = isStaffRole || isStaffRoute;
-    const pool = (scopeFilter === "assigned_to_me")
+    const isClient = isClientRole || Boolean(pathname?.startsWith("/client"));
+    const pool = (scopeFilter === "assigned_to_me" || isClient)
       ? tasks.filter((t) => isTaskAssignedToMe(t))
       : tasks;
 
@@ -2380,7 +2409,7 @@ export default function OperationsTasksPage() {
         </div>
 
         {/* Client Filter */}
-        {!isInstitutionAdmin && (
+        {!isInstitutionAdmin && !(isClientRole || Boolean(pathname?.startsWith("/client"))) && (
           <div className="w-full sm:w-44">
             <select
               value={clientFilter}

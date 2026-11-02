@@ -230,8 +230,61 @@ export async function GET(req: Request) {
       params.push(urgency);
       query += ` AND urgency = $${params.length}`;
     }
-    const isClient = userRole === "client" || user?.role_codes?.includes("client") || (user as any)?.roles?.some((r: any) => String(r).toLowerCase() === "client");
-    if (isClient) {
+    const referer = req.headers.get("referer") || "";
+    const isClientRoute = referer.includes("/client/") || referer.endsWith("/client");
+    const isClient = userRole === "client" || user?.role_codes?.includes("client") || (user as any)?.roles?.some((r: any) => String(r).toLowerCase() === "client") || isClientRoute;
+
+    let allClientIds: number[] = [];
+    if (isClient && user) {
+      const clientMatch = await db.query(
+        `SELECT id, name, company_name, email, phone FROM clients WHERE user_id = $1 OR (email IS NOT NULL AND lower(email) = lower($2)) OR (phone IS NOT NULL AND phone = $3)`,
+        [user.id, user.email || "", user.phone || ""]
+      );
+      const matchedClientIds = clientMatch.rows.map((r: any) => Number(r.id)).filter(Boolean);
+      allClientIds = Array.from(new Set([...matchedClientIds, Number(user.id)]));
+      const clientNames = Array.from(new Set(
+        clientMatch.rows.flatMap((r: any) => [r.name, r.company_name])
+          .concat([(user as any)?.full_name, (user as any)?.name])
+          .filter(Boolean)
+          .map((n: string) => n.trim().toLowerCase())
+      ));
+
+      const clientIdsToQuery = (allClientIds.length > 0) ? allClientIds : [-1];
+      params.push(clientIdsToQuery);
+      const clientIdsParam = params.length;
+      params.push(Number(user.id));
+      const userIdParam = params.length;
+      params.push((user.email || "").toLowerCase().trim());
+      const userEmailParam = params.length;
+      params.push(clientNames.length > 0 ? clientNames : ["__none__"]);
+      const clientNamesParam = params.length;
+
+      // In client portal or for client role: MUST ONLY SEE PROJECTS ASSOCIATED WITH THIS CLIENT
+      query += ` AND (
+        client_id = ANY($${clientIdsParam}::int[])
+        OR created_by = $${userIdParam}
+        OR EXISTS (
+          SELECT 1 FROM jsonb_array_elements(COALESCE(assigned_clients, '[]'::jsonb)) elem 
+          WHERE (
+            ((elem->>'id') ~ '^[0-9]+$' AND (elem->>'id')::int = ANY($${clientIdsParam}::int[]))
+            OR ((elem->>'user_id') ~ '^[0-9]+$' AND (elem->>'user_id')::int = $${userIdParam})
+            OR ($${userEmailParam} != '' AND lower(COALESCE(elem->>'email', '')) = $${userEmailParam})
+            OR (lower(COALESCE(elem->>'name', '')) = ANY($${clientNamesParam}::text[]))
+            OR (lower(COALESCE(elem->>'company_name', '')) = ANY($${clientNamesParam}::text[]))
+          )
+        )
+        OR EXISTS (
+          SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) st
+          WHERE (
+            ((st->>'client_id') ~ '^[0-9]+$' AND (st->>'client_id')::int = ANY($${clientIdsParam}::int[]))
+            OR EXISTS (
+              SELECT 1 FROM jsonb_array_elements(COALESCE(st->'uploads', '[]'::jsonb)) up
+              WHERE (up->>'uploaded_by_id') ~ '^[0-9]+$' AND (up->>'uploaded_by_id')::int = $${userIdParam}
+            )
+          )
+        )
+      )`;
+
       if (clientId && clientId !== "all") {
         params.push(clientId);
         query += ` AND (
@@ -239,32 +292,6 @@ export async function GET(req: Request) {
           OR EXISTS (
             SELECT 1 FROM jsonb_array_elements(COALESCE(assigned_clients, '[]'::jsonb)) elem 
             WHERE (elem->>'id')::int = $${params.length}
-          )
-        )`;
-      } else if (isSelfScope) {
-        const clientMatch = await db.query(
-          `SELECT id FROM clients WHERE user_id = $1 OR (email IS NOT NULL AND lower(email) = lower($2)) OR (phone IS NOT NULL AND phone = $3)`,
-          [user.id, user.email || "", user.phone || ""]
-        );
-        const matchedClientIds = clientMatch.rows.map((r: any) => r.id);
-        const allClientIds = Array.from(new Set([...matchedClientIds, Number(user.id)]));
-        params.push(allClientIds.length > 0 ? allClientIds : [-1]);
-        const clientIdsParam = params.length;
-        params.push(Number(user.id));
-        const userIdParam = params.length;
-        params.push((user.email || "").toLowerCase().trim());
-        const userEmailParam = params.length;
-
-        query += ` AND (
-          client_id = ANY($${clientIdsParam}::int[])
-          OR created_by = $${userIdParam}
-          OR EXISTS (
-            SELECT 1 FROM jsonb_array_elements(COALESCE(assigned_clients, '[]'::jsonb)) elem 
-            WHERE (
-              ((elem->>'id') ~ '^[0-9]+$' AND (elem->>'id')::int = ANY($${clientIdsParam}::int[]))
-              OR ((elem->>'user_id') ~ '^[0-9]+$' AND (elem->>'user_id')::int = $${userIdParam})
-              OR ($${userEmailParam} != '' AND lower(COALESCE(elem->>'email', '')) = $${userEmailParam})
-            )
           )
         )`;
       }
@@ -334,20 +361,31 @@ export async function GET(req: Request) {
       userInstIds.push(Number(userInstId));
     }
     const targetInst = targetInstId || userInstId || 1;
-    const clientsRes = await db.query(
-      `SELECT id, name, company_name, email, phone, client_type, institution_id
-       FROM clients
-       WHERE (status = 'active' OR status IS NULL)
-         AND (
-           $1::boolean = TRUE
-           OR institution_id = $2::int
-           OR institution_id = 1
-           OR institution_id IS NULL
-           OR institution_id = ANY($3::int[])
-         )
-       ORDER BY COALESCE(company_name, name) ASC`,
-      [Boolean(isPlatform), targetInst, userInstIds.length > 0 ? userInstIds : [1]]
-    );
+    let clientsRes;
+    if (isClient && user) {
+      clientsRes = await db.query(
+        `SELECT id, name, company_name, email, phone, client_type, institution_id
+         FROM clients
+         WHERE id = ANY($1::int[]) OR user_id = $2::int
+         ORDER BY COALESCE(company_name, name) ASC`,
+        [allClientIds.length > 0 ? allClientIds : [-1], Number(user.id)]
+      );
+    } else {
+      clientsRes = await db.query(
+        `SELECT id, name, company_name, email, phone, client_type, institution_id
+         FROM clients
+         WHERE (status = 'active' OR status IS NULL)
+           AND (
+             $1::boolean = TRUE
+             OR institution_id = $2::int
+             OR institution_id = 1
+             OR institution_id IS NULL
+             OR institution_id = ANY($3::int[])
+           )
+         ORDER BY COALESCE(company_name, name) ASC`,
+        [Boolean(isPlatform), targetInst, userInstIds.length > 0 ? userInstIds : [1]]
+      );
+    }
     
     // Fetch list of staff/employees for picker strictly filtered to staff belonging to the active organization
     let staffRes;
