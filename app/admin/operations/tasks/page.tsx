@@ -318,12 +318,32 @@ export default function OperationsTasksPage() {
   }, [isStaffRole, pathname]);
 
   const canUserSeeTaskPrice = useCallback((taskItem?: any | null) => {
-    if (!taskItem) return false;
-    const isOwnerOrAdmin = (user as any)?.role_codes?.some((r: string) =>
-      ["platform_admin", "super_admin", "institution_admin", "school_owner", "college_owner", "university_owner", "admin"].includes(r)
+    if (!user) return false;
+    const roleCodes: string[] = Array.isArray((user as any)?.role_codes)
+      ? (user as any).role_codes
+      : [(user as any)?.role || (user as any)?.primary_role || ""].filter(Boolean);
+    const isOwnerOrAdmin = roleCodes.some((r: string) =>
+      [
+        "platform_admin",
+        "super_admin",
+        "superadmin",
+        "institution_admin",
+        "school_owner",
+        "college_owner",
+        "university_owner",
+        "admin",
+        "platformadmin",
+        "head_of_operations",
+      ].includes(String(r).toLowerCase())
     );
     if (isOwnerOrAdmin) return true;
-    if (!user) return false;
+
+    const isLeaderRole = roleCodes.some((r: string) =>
+      ["leader", "project_leader", "team_leader", "head_of_operations"].includes(String(r).toLowerCase())
+    );
+    if (isLeaderRole) return true;
+
+    if (!taskItem) return false;
     const uid = String(user.id);
     const leaderId = taskItem.project_leader_id ? String(taskItem.project_leader_id) : null;
     const leaderName = taskItem.project_leader_name?.toLowerCase().trim();
@@ -342,11 +362,11 @@ export default function OperationsTasksPage() {
     if (taskItem) {
       if (!canUserSeeTaskPrice(taskItem)) return "★★★★★";
     } else {
-      if (isStaffViewer) return "★★★★★";
+      if (!canUserSeeTaskPrice(null)) return "★★★★★";
     }
     const num = typeof price === "number" ? price : parseFloat(String(price || 0));
     return `₹${num.toLocaleString("en-IN")}`;
-  }, [isStaffViewer, canUserSeeTaskPrice]);
+  }, [canUserSeeTaskPrice]);
 
   const formatDateDisplay = useCallback((dateStr?: string | null) => {
     if (!dateStr) return null;
@@ -359,7 +379,7 @@ export default function OperationsTasksPage() {
     }
   }, []);
 
-  const initialScope = searchParams.get("scope") === "me" || isStaffRole ? "assigned_to_me" : "all";
+  const initialScope = searchParams.get("scope") === "me" ? "assigned_to_me" : "all";
   const [scopeFilter, setScopeFilter] = useState<"all" | "assigned_to_me">(initialScope);
 
   const uniqueStaffList = useMemo(() => {
@@ -2216,46 +2236,35 @@ export default function OperationsTasksPage() {
       {!isInstitutionAdmin && !(isClientRole || Boolean(pathname?.startsWith("/client"))) && (
         <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-card rounded-2xl border shadow-xs">
           <div className="flex items-center gap-2">
-            {!(isStaffRole || pathname?.startsWith("/staff")) ? (
-              <>
-                <Button
-                  size="sm"
-                  variant={scopeFilter === "all" ? "default" : "outline"}
-                  onClick={() => setScopeFilter("all")}
-                  className="h-8 text-xs font-bold gap-1.5"
-                >
-                  <ClipboardList className="w-3.5 h-3.5" /> All Tasks
-                  <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
-                    {tasks.length}
-                  </Badge>
-                </Button>
+            <Button
+              size="sm"
+              variant={scopeFilter === "all" ? "default" : "outline"}
+              onClick={() => setScopeFilter("all")}
+              className="h-8 text-xs font-bold gap-1.5"
+            >
+              <ClipboardList className="w-3.5 h-3.5" /> All Tasks
+              <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
+                {tasks.length}
+              </Badge>
+            </Button>
 
-                <Button
-                  size="sm"
-                  variant={scopeFilter === "assigned_to_me" ? "default" : "outline"}
-                  onClick={() => setScopeFilter("assigned_to_me")}
-                  className={`h-8 text-xs font-bold gap-1.5 ${scopeFilter === "assigned_to_me"
-                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                    : "border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10"
-                    }`}
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Assigned to Me
-                  <Badge
-                    className={`ml-1 text-[10px] px-1.5 py-0 ${scopeFilter === "assigned_to_me" ? "bg-white text-emerald-800" : "bg-emerald-600 text-white"
-                      }`}
-                  >
-                    {myAssignedTasksCount}
-                  </Badge>
-                </Button>
-              </>
-            ) : (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-700 dark:text-emerald-300 text-xs font-bold">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" /> My Tasks (Assigned to You or Created by You)
-                <Badge className="bg-emerald-600 text-white text-[10px] px-1.5 py-0">
-                  {displayedTasks.length}
-                </Badge>
-              </div>
-            )}
+            <Button
+              size="sm"
+              variant={scopeFilter === "assigned_to_me" ? "default" : "outline"}
+              onClick={() => setScopeFilter("assigned_to_me")}
+              className={`h-8 text-xs font-bold gap-1.5 ${scopeFilter === "assigned_to_me"
+                ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                : "border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10"
+                }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Assigned to Me
+              <Badge
+                className={`ml-1 text-[10px] px-1.5 py-0 ${scopeFilter === "assigned_to_me" ? "bg-white text-emerald-800" : "bg-emerald-600 text-white"
+                  }`}
+              >
+                {myAssignedTasksCount}
+              </Badge>
+            </Button>
           </div>
 
           {user?.full_name && (

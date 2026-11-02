@@ -281,12 +281,32 @@ export function MyProfileClient() {
   }, [user, pathname]);
 
   const canUserSeeTaskPrice = useCallback((taskItem?: any | null) => {
-    if (!taskItem) return false;
-    const isOwnerOrAdmin = (user as any)?.role_codes?.some((r: string) =>
-      ["platform_admin", "super_admin", "institution_admin", "school_owner", "college_owner", "university_owner", "admin"].includes(r)
+    if (!user) return false;
+    const roleCodes: string[] = Array.isArray((user as any)?.role_codes)
+      ? (user as any).role_codes
+      : [(user as any)?.role || (user as any)?.primary_role || ""].filter(Boolean);
+    const isOwnerOrAdmin = roleCodes.some((r: string) =>
+      [
+        "platform_admin",
+        "super_admin",
+        "superadmin",
+        "institution_admin",
+        "school_owner",
+        "college_owner",
+        "university_owner",
+        "admin",
+        "platformadmin",
+        "head_of_operations",
+      ].includes(String(r).toLowerCase())
     );
     if (isOwnerOrAdmin) return true;
-    if (!user) return false;
+
+    const isLeaderRole = roleCodes.some((r: string) =>
+      ["leader", "project_leader", "team_leader", "head_of_operations"].includes(String(r).toLowerCase())
+    );
+    if (isLeaderRole) return true;
+
+    if (!taskItem) return false;
     const uid = String(user.id);
     const leaderId = taskItem.project_leader_id ? String(taskItem.project_leader_id) : null;
     const leaderName = taskItem.project_leader_name?.toLowerCase().trim();

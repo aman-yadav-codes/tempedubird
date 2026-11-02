@@ -57,7 +57,16 @@ export function SubtaskModalDialog({
 
   // Check if currentUser is project leader or platform admin
   const isLeader = useMemo(() => {
-    if (!currentUser || !task) return false;
+    if (!currentUser) return false;
+    const roleCodes: string[] = Array.isArray((currentUser as any)?.role_codes)
+      ? (currentUser as any).role_codes
+      : [(currentUser as any)?.role || (currentUser as any)?.primary_role || ""].filter(Boolean);
+    const hasLeaderRole = roleCodes.some((r) =>
+      ["leader", "project_leader", "team_leader", "head_of_operations"].includes(String(r).toLowerCase())
+    );
+    if (hasLeaderRole) return true;
+
+    if (!task) return false;
     const uid = String(currentUser.id);
     const leaderId = task.project_leader_id ? String(task.project_leader_id) : null;
     const leaderName = task.project_leader_name?.toLowerCase().trim();
@@ -73,11 +82,11 @@ export function SubtaskModalDialog({
 
   const isPlatformAdmin = useMemo(() => {
     if (!currentUser) return false;
-    const roleCodes: string[] = (currentUser as any)?.role_codes || [
-      (currentUser as any)?.role || (currentUser as any)?.primary_role || ""
-    ];
+    const roleCodes: string[] = Array.isArray((currentUser as any)?.role_codes)
+      ? (currentUser as any).role_codes
+      : [(currentUser as any)?.role || (currentUser as any)?.primary_role || ""].filter(Boolean);
     return roleCodes.some((r) =>
-      ["platform_admin", "superadmin", "super_admin", "admin", "platformadmin", "institution_admin"].includes(
+      ["platform_admin", "superadmin", "super_admin", "admin", "platformadmin", "institution_admin", "head_of_operations"].includes(
         String(r).toLowerCase()
       )
     );

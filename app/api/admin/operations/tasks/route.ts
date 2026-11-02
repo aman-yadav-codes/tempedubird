@@ -539,11 +539,17 @@ export async function GET(req: Request) {
         tasks = seeded.rows;
       }
     }
-    // Check if requester is platform admin / institution admin
+    // Check if requester is platform admin / institution admin / head of operations
+    const userRoleCodes: string[] = Array.isArray((user as any)?.role_codes)
+      ? (user as any).role_codes
+      : [(user as any)?.role || (user as any)?.primary_role || ""].filter(Boolean);
+    const hasLeaderRole = userRoleCodes.some((r: string) =>
+      ["leader", "project_leader", "team_leader", "head_of_operations"].includes(String(r).toLowerCase())
+    );
     const isUserPlatformAdmin = Boolean(user && (
       isPlatformAdminUser(user) ||
       isInstitutionAdminUser(user) ||
-      (user as any)?.role_codes?.some((r: string) => ["platform_admin", "superadmin", "super_admin", "admin", "institution_admin"].includes(String(r).toLowerCase())) ||
+      userRoleCodes.some((r: string) => ["platform_admin", "superadmin", "super_admin", "admin", "institution_admin", "head_of_operations"].includes(String(r).toLowerCase())) ||
       hasPermission(user, "operations.tasks.manage", { institutionId: targetInstId || undefined })
     ));
     const currentUserIdStr = user?.id ? String(user.id) : "";
@@ -552,7 +558,7 @@ export async function GET(req: Request) {
 
     // Mask task prices for staff members who are NOT the project leader and NOT platform admin
     const sanitizedTasks = tasks.map((t: any) => {
-      const isTaskLeader = Boolean(user && (
+      const isTaskLeader = hasLeaderRole || Boolean(user && (
         (t.project_leader_id && String(t.project_leader_id) === currentUserIdStr) ||
         (t.project_leader_name && currentUserNameLower && t.project_leader_name.toLowerCase().trim() === currentUserNameLower) ||
         (t.project_leader_email && currentUserEmailLower && t.project_leader_email.toLowerCase().trim() === currentUserEmailLower)
@@ -1118,6 +1124,8 @@ export async function PUT(req: Request) {
       const isAuthorizedForTask =
         Number(existingTask.created_by) === uId ||
         Number(existingTask.assigned_employee_id) === uId ||
+        Number(existingTask.project_leader_id) === uId ||
+        (existingTask.project_leader_email && user.email && existingTask.project_leader_email.toLowerCase().trim() === user.email.toLowerCase().trim()) ||
         (Array.isArray(existingTask.assigned_employees) &&
           existingTask.assigned_employees.some((e: any) => Number(e.id) === uId || Number(e.employee_id) === uId)) ||
         (Array.isArray(existingTask.sub_tasks) &&
@@ -1128,9 +1136,12 @@ export async function PUT(req: Request) {
           { status: 403 }
         );
       }
-      // Staff members cannot edit task details/definition for tasks created by administrators
-      const isCreator = Number(existingTask.created_by) === uId;
-      if (title !== undefined && !isCreator) {
+      // Staff members cannot edit task details/definition for tasks created by administrators (leaders and creators can)
+      const isCreatorOrLeader =
+        Number(existingTask.created_by) === uId ||
+        Number(existingTask.project_leader_id) === uId ||
+        (existingTask.project_leader_email && user.email && existingTask.project_leader_email.toLowerCase().trim() === user.email.toLowerCase().trim());
+      if (title !== undefined && !isCreatorOrLeader) {
         return NextResponse.json(
           { error: "Staff members cannot edit tasks created by administrators." },
           { status: 403 }
@@ -1491,15 +1502,21 @@ export async function PUT(req: Request) {
         const existingSubs = Array.isArray(existingTask.sub_tasks) ? existingTask.sub_tasks : [];
         const existingMap = new Map<string, any>(existingSubs.map((s: any) => [String(s.id), s]));
 
+        const putUserRoleCodes: string[] = Array.isArray((user as any)?.role_codes)
+          ? (user as any).role_codes
+          : [(user as any)?.role || (user as any)?.primary_role || ""].filter(Boolean);
+        const hasLeaderRole = putUserRoleCodes.some((r: string) =>
+          ["leader", "project_leader", "team_leader", "head_of_operations"].includes(String(r).toLowerCase())
+        );
         const isUserPlatformAdmin = Boolean(user && (
           isPlatformAdminUser(user) ||
           isInstitutionAdminUser(user) ||
-          (user as any)?.role_codes?.some((r: string) => ["platform_admin", "superadmin", "super_admin", "admin", "institution_admin"].includes(String(r).toLowerCase()))
+          putUserRoleCodes.some((r: string) => ["platform_admin", "superadmin", "super_admin", "admin", "institution_admin", "head_of_operations"].includes(String(r).toLowerCase()))
         ));
         const currentUserIdStr = user?.id ? String(user.id) : "";
         const currentUserNameLower = (user?.full_name || (user as any)?.name || "").toLowerCase().trim();
         const currentUserEmailLower = (user?.email || "").toLowerCase().trim();
-        const isTaskLeader = Boolean(user && (
+        const isTaskLeader = hasLeaderRole || Boolean(user && (
           (existingTask.project_leader_id && String(existingTask.project_leader_id) === currentUserIdStr) ||
           (existingTask.project_leader_name && currentUserNameLower && existingTask.project_leader_name.toLowerCase().trim() === currentUserNameLower) ||
           (existingTask.project_leader_email && currentUserEmailLower && existingTask.project_leader_email.toLowerCase().trim() === currentUserEmailLower)
@@ -1530,8 +1547,9 @@ export async function PUT(req: Request) {
           }
           return {
             ...s,
-            points: s.points !== undefined ? s.points : 20,
-            penalty_points: s.penalty_points !== undefined ? s.penalty_points : 10,
+            price: canModifyPriceAndPoints ? (s.price !== undefined ? parseFloat(String(s.price)) || 0 : 0) : 0,
+            points: canModifyPriceAndPoints ? (s.points !== undefined ? s.points : 20) : 20,
+            penalty_points: canModifyPriceAndPoints ? (s.penalty_points !== undefined ? s.penalty_points : 10) : 10,
             started_at: isThisSubStarting ? new Date().toISOString() : null,
             started_by_name: isThisSubStarting ? currentUserName : null,
             started_by_id: isThisSubStarting ? currentUserId : null,
