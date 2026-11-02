@@ -18,9 +18,14 @@ export type AdminPermissionModule = {
   page: string;
 };
 
-export const MANAGED_PLATFORM_ROLE_CODES = ["platform_admin", "accountant", "guest"] as const;
+export const MANAGED_PLATFORM_ROLE_CODES = ["platform_admin", "admin", "accountant", "guest"] as const;
 export const MANAGED_INSTITUTION_ROLE_CODES = [
   "institution_admin",
+  "hr_head",
+  "sales_head",
+  "finance_head",
+  "head_of_operations",
+  "business_operations_manager",
   "director",
   "principal",
   "vice_principal",
@@ -241,6 +246,35 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "admin.vendors", label: "Vendors & Suppliers", description: "manage vendors and suppliers", scope: "institution", page: "/admin/vendors" },
   { key: "admin.team", label: "Internal Admin Team", description: "manage internal admin team members", scope: "institution", page: "/admin/team" },
   { key: "admin.generate", label: "Document & Card Generator", description: "generate student and staff ID cards and documents", scope: "institution", page: "/admin/generate" },
+
+  // Operations modules
+  { key: "operations.work_logs", label: "Daily Work Logs", description: "daily employee work logs and activity history", scope: "institution", page: "/admin/operations/work-logs" },
+  { key: "operations.project_types", label: "Project Types", description: "manage project types and categories", scope: "institution", page: "/admin/operations/project-types" },
+  { key: "operations.project_pipelines", label: "Project Pipelines", description: "manage project pipelines and workflow stages", scope: "institution", page: "/admin/operations/project-pipelines" },
+  { key: "operations.penalty_rules", label: "Penalty Rules", description: "manage task delay penalty and bonus reward rules", scope: "institution", page: "/admin/operations/penalty-rules" },
+
+  // HR & Staff Management modules
+  { key: "managestaff.documents", label: "Staff Documents", description: "staff documents and verification files", scope: "institution", page: "/admin/staff/documents" },
+  { key: "managestaff.leaderboard", label: "Staff Leaderboard", description: "company and staff performance leaderboard", scope: "institution", page: "/admin/performance/leaderboard" },
+
+  // Sales modules
+  { key: "sales.requests", label: "Purchase & Sell Requests", description: "purchase and sell authorization requests", scope: "institution", page: "/admin/finance/requests" },
+  { key: "sales.clients", label: "Sales Clients", description: "client accounts and customer management", scope: "institution", page: "/admin/sales/clients" },
+
+  // Finance modules
+  { key: "finance.performance", label: "Financial Performance", description: "audit profit, loss, gross and net financial performance", scope: "institution", page: "/admin/finance/performance" },
+  { key: "finance.payment_methods", label: "Finance Payment Methods", description: "payment gateways and finance payment methods", scope: "institution", page: "/admin/finance/payment-methods" },
+  { key: "finance.categories", label: "Finance Categories", description: "income, expense, and transaction categories", scope: "institution", page: "/admin/finance/categories" },
+  { key: "finance.transportation_fee", label: "Transportation Fee", description: "transportation fee rules and distance slabs", scope: "institution", page: "/admin/finance/transportation-fee" },
+
+  // Administration & Settings modules
+  { key: "company.faqs", label: "Company FAQs", description: "frequently asked questions management", scope: "institution", page: "/admin/company" },
+  { key: "company.privacy_policy", label: "Privacy Policy", description: "company privacy policy configuration", scope: "institution", page: "/admin/company" },
+  { key: "company.terms_conditions", label: "Terms & Conditions", description: "company terms and conditions configuration", scope: "institution", page: "/admin/company" },
+  { key: "company.copyright_policy", label: "Copyright Policy", description: "copyright policy configuration", scope: "institution", page: "/admin/company" },
+  { key: "company.refund_policy", label: "Refund Policy", description: "refund policy configuration", scope: "institution", page: "/admin/company" },
+  { key: "company.social_links", label: "Social Media Links", description: "company social media profiles and links", scope: "institution", page: "/admin/company" },
+  { key: "settings.performance", label: "Performance Settings", description: "system performance and point evaluation settings", scope: "institution", page: "/admin/settings/performance" },
 ];
 
 export const LEGACY_PERMISSION_MODULE_MAP: Record<string, string> = {
@@ -621,18 +655,18 @@ export function isPlatformOnlyPermission(permission: string) {
 
 export function isPermissionAssignableToRole(permission: string, roleCode?: string | null, roleScope?: string | null) {
   if (permission === FULL_ACCESS_PERMISSION) {
-    return roleCode === "platform_admin";
+    return roleCode === "platform_admin" || roleCode === "admin";
   }
 
   const permissionModule = getPermissionModule(permission);
   if (!permissionModule) return false;
 
   if (permissionModule.scope === "platform") {
-    return roleCode === "platform_admin" || roleScope === "platform";
+    return roleCode === "platform_admin" || roleCode === "admin" || roleScope === "platform";
   }
 
   if (permissionModule.key.startsWith("finance.platform.")) {
-    return roleCode === "platform_admin" || roleScope === "platform";
+    return roleCode === "platform_admin" || roleCode === "admin" || roleScope === "platform";
   }
 
   const roleOwnedPrefix = permissionModule.key.split(".")[0];
@@ -660,6 +694,18 @@ export function isPermissionAssignableToRole(permission: string, roleCode?: stri
   if (roleCode === "teacher") {
     if (roleOwnedPrefix === "teacher") {
       return permissionModule.key.endsWith(".complaints") || permission.endsWith(".view");
+    }
+    if (
+      permission === "managestaff.tasks.create" ||
+      permission === "managestaff.tasks.view" ||
+      permission === "managestaff.tasks.edit" ||
+      permission === "operations.work_logs.view" ||
+      permission === "operations.project_types.view" ||
+      permission === "operations.project_pipelines.view" ||
+      permission === "admin.generate.view" ||
+      permission === "operations.penalty_rules.view"
+    ) {
+      return true;
     }
     return (
       permissionModule.key.startsWith("managestudents.") ||
