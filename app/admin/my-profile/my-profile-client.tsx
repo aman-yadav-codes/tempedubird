@@ -3047,18 +3047,6 @@ export function MyProfileClient() {
                 );
               })}
             </div>
-
-            {Boolean(activeRunningTask) && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleStopCurrentTask}
-                className="h-8 px-3 text-xs font-bold gap-1.5 text-rose-600 dark:text-rose-400 border-rose-300 dark:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl cursor-pointer shrink-0 shadow-xs"
-              >
-                <Square className="w-3 h-3 fill-current text-rose-600 dark:text-rose-400" />
-                <span>Stop Current Task</span>
-              </Button>
-            )}
           </div>
 
           {filteredTasks.length === 0 ? (
