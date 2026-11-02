@@ -552,7 +552,7 @@ export function isAdminPathVisibleForRole(
   }
 
   if (normalized === "/admin/operations" || normalized.startsWith("/admin/operations/")) {
-    if (normalized === "/admin/operations/tasks") {
+    if (normalized === "/admin/operations/tasks" || normalized === "/admin/operations/work-logs") {
       return !isStudentUser(user) && !isParentUser(user);
     }
     return (
@@ -1316,7 +1316,7 @@ export function hasAdminPagePermission(
   }
 
   if (normalized === "/admin/operations" || normalized.startsWith("/admin/operations")) {
-    if (normalized === "/admin/operations/tasks") {
+    if (normalized === "/admin/operations/tasks" || normalized === "/admin/operations/work-logs") {
       return !isStudentUser(user) && !isParentUser(user);
     }
     return (

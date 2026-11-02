@@ -4,26 +4,15 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useAuthStore } from "@/store";
 import { toast } from "sonner";
 import {
-  Play,
   Square,
   Clock,
-  ChevronDown,
-  ListTodo,
-  Search,
-  CheckCircle2,
-  ExternalLink,
+  Briefcase,
+  Play,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CheckInLocationDialog } from "@/components/check-in-location-dialog";
 import { captureBrowserLocation, BrowserLocation } from "@/app/lib/geolocation";
 
 interface SubTask {
@@ -83,13 +72,7 @@ export function AdminActiveTaskWidget() {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isOperating, setIsOperating] = useState<boolean>(false);
-  const [popoverOpen, setPopoverOpen] = useState<boolean>(false);
-  const [searchQuery, setSearchQuery] = useState<string>("");
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
-
-  // Geo-location check-in dialog state
-  const [checkInDialogOpen, setCheckInDialogOpen] = useState<boolean>(false);
-  const [pendingStartTask, setPendingStartTask] = useState<TaskItem | null>(null);
 
   // Fetch tasks assigned to current user
   const fetchTasks = useCallback(async () => {
@@ -125,8 +108,8 @@ export function AdminActiveTaskWidget() {
     window.addEventListener("task-status-updated", handleTaskUpdated);
     window.addEventListener("focus", handleTaskUpdated);
 
-    // Light periodic sync every 30s
-    const pollInterval = setInterval(fetchTasks, 30000);
+    // Periodic sync every 20s
+    const pollInterval = setInterval(fetchTasks, 20000);
 
     return () => {
       window.removeEventListener("task-status-updated", handleTaskUpdated);
@@ -135,21 +118,51 @@ export function AdminActiveTaskWidget() {
     };
   }, [fetchTasks]);
 
-  // Find currently running active task (and subtask if any)
+  // Find currently running active subtask or task
   const activeInfo = useMemo(() => {
+    // 1. Priority 1: Any subtask explicitly in_progress or with started_at and no stopped_at
     for (const t of tasks) {
-      const isTaskInProgress = normalizeStatus(t.status) === "in_progress";
-      const runningSub = Array.isArray(t.sub_tasks)
-        ? t.sub_tasks.find((s) => normalizeStatus(s.status) === "in_progress")
-        : null;
-
-      if (isTaskInProgress || runningSub) {
+      const subs = Array.isArray(t.sub_tasks) ? t.sub_tasks : [];
+      const runningSub = subs.find(
+        (s) => normalizeStatus(s.status) === "in_progress" || Boolean(s.started_at && !s.stopped_at)
+      );
+      if (runningSub) {
         return {
           task: t,
-          subtask: runningSub || null,
+          subtask: runningSub,
         };
       }
     }
+
+    // 2. Priority 2: Task history where latest start/stop action was "started" with subtask_id
+    for (const t of tasks) {
+      const hist = Array.isArray(t.history) ? t.history : [];
+      const lastEvent = [...hist]
+        .reverse()
+        .find((h) => h.action === "started" || h.action === "stopped");
+      if (lastEvent && lastEvent.action === "started" && lastEvent.subtask_id) {
+        const subs = Array.isArray(t.sub_tasks) ? t.sub_tasks : [];
+        const matchSub = subs.find((s) => String(s.id) === String(lastEvent.subtask_id));
+        if (matchSub) {
+          return {
+            task: t,
+            subtask: matchSub,
+          };
+        }
+      }
+    }
+
+    // 3. Priority 3: Parent task in_progress
+    for (const t of tasks) {
+      if (normalizeStatus(t.status) === "in_progress") {
+        const subs = Array.isArray(t.sub_tasks) ? t.sub_tasks : [];
+        return {
+          task: t,
+          subtask: subs[0] || null,
+        };
+      }
+    }
+
     return null;
   }, [tasks]);
 
@@ -165,18 +178,23 @@ export function AdminActiveTaskWidget() {
 
     let startTimestamp: number | null = null;
 
-    if (Array.isArray(activeTask.history) && activeTask.history.length > 0) {
-      const starts = activeTask.history
-        .filter((h: any) => h.action === "started" && h.timestamp)
-        .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-      if (starts[0]) {
-        startTimestamp = new Date(starts[0].timestamp).getTime();
-      }
+    if (activeSubtask?.started_at) {
+      startTimestamp = new Date(activeSubtask.started_at).getTime();
     }
 
-    if (!startTimestamp && activeSubtask?.started_at) {
-      startTimestamp = new Date(activeSubtask.started_at).getTime();
+    if (!startTimestamp && Array.isArray(activeTask.history)) {
+      const subStarts = activeTask.history
+        .filter(
+          (h: any) =>
+            h.action === "started" &&
+            (!activeSubtask || String(h.subtask_id) === String(activeSubtask.id)) &&
+            h.timestamp
+        )
+        .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+      if (subStarts[0]?.timestamp) {
+        startTimestamp = new Date(subStarts[0].timestamp).getTime();
+      }
     }
 
     if (!startTimestamp && activeTask.started_at) {
@@ -197,24 +215,24 @@ export function AdminActiveTaskWidget() {
     return () => clearInterval(interval);
   }, [activeTask, activeSubtask]);
 
-  // Handle Stop Task with stop_location
+  // Handle Stop Sub-task / Task
   const handleStopTask = async () => {
     if (!activeTask || isOperating) return;
     setIsOperating(true);
 
     try {
-      // Attempt fast location capture on checkout
       let stopLoc: BrowserLocation | null = null;
       try {
         stopLoc = await captureBrowserLocation(2000);
       } catch {}
 
       const updatedSubs = Array.isArray(activeTask.sub_tasks)
-        ? activeTask.sub_tasks.map((s) =>
-            normalizeStatus(s.status) === "in_progress"
+        ? activeTask.sub_tasks.map((s) => {
+            const isMatch = activeSubtask ? String(s.id) === String(activeSubtask.id) : normalizeStatus(s.status) === "in_progress";
+            return isMatch
               ? { ...s, status: "pending", stopped_at: new Date().toISOString() }
-              : s
-          )
+              : s;
+          })
         : [];
 
       const payload: any = {
@@ -240,7 +258,8 @@ export function AdminActiveTaskWidget() {
       });
 
       if (res.ok) {
-        toast.success(`Task stopped: "${activeTask.title}". Check-out recorded.`);
+        const titleLabel = activeSubtask ? `Sub-task: "${activeSubtask.title}"` : `Task: "${activeTask.title}"`;
+        toast.success(`${titleLabel} stopped.`);
         await fetchTasks();
         window.dispatchEvent(
           new CustomEvent("task-status-updated", {
@@ -249,147 +268,52 @@ export function AdminActiveTaskWidget() {
         );
       } else {
         const errData = await res.json().catch(() => ({}));
-        toast.error(errData.error || "Failed to stop task.");
+        toast.error(errData.error || "Failed to stop sub-task.");
       }
     } catch (err) {
       console.error("[AdminActiveTaskWidget] Stop error:", err);
-      toast.error("Error stopping task.");
+      toast.error("Error stopping sub-task.");
     } finally {
       setIsOperating(false);
     }
   };
 
-  // User clicked start on a task -> Open Location confirmation dialog first!
-  const initiateStartTask = (task: TaskItem) => {
-    setPendingStartTask(task);
-    setPopoverOpen(false);
-    setCheckInDialogOpen(true);
-  };
+  const tasksUrl = pathname?.startsWith("/client")
+    ? "/client/operations/tasks"
+    : pathname?.startsWith("/platformadmin")
+    ? "/platformadmin/operations/tasks"
+    : "/admin/operations/tasks";
 
-  // Confirmed check-in with location -> execute start API
-  const handleConfirmStartWithLocation = async (locData: BrowserLocation | null) => {
-    if (!pendingStartTask || isOperating) return;
-    setIsOperating(true);
-
-    const task = pendingStartTask;
-
-    try {
-      // If another task was active, stop it first
-      if (activeTask && activeTask.id !== task.id) {
-        const updatedSubs = Array.isArray(activeTask.sub_tasks)
-          ? activeTask.sub_tasks.map((s) =>
-              normalizeStatus(s.status) === "in_progress"
-                ? { ...s, status: "pending", stopped_at: new Date().toISOString() }
-                : s
-            )
-          : [];
-
-        await fetch("/api/admin/operations/tasks", {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            id: activeTask.id,
-            status: "pending",
-            action: "stop_task",
-            sub_tasks: updatedSubs,
-          }),
-        }).catch(() => {});
-      }
-
-      const res = await fetch("/api/admin/operations/tasks", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          id: task.id,
-          status: "in_progress",
-          action: "start_task",
-          start_location: locData && locData.latitude ? locData : undefined,
-        }),
-      });
-
-      if (res.ok) {
-        const locLabel = locData?.latitude ? ` at ${locData.latitude.toFixed(4)}°, ${locData.longitude.toFixed(4)}°` : "";
-        toast.success(`Check-In recorded${locLabel}! Task "${task.title}" started.`);
-        setCheckInDialogOpen(false);
-        setPendingStartTask(null);
-        await fetchTasks();
-        window.dispatchEvent(
-          new CustomEvent("task-status-updated", {
-            detail: { taskId: task.id, status: "in_progress" },
-          })
-        );
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        toast.error(errData.error || "Failed to start task.");
-      }
-    } catch (err) {
-      console.error("[AdminActiveTaskWidget] Start error:", err);
-      toast.error("Error starting task.");
-    } finally {
-      setIsOperating(false);
-    }
-  };
-
-  // Pending tasks available to be started
-  const pendingTasks = useMemo(() => {
-    return tasks.filter((t) => {
-      const norm = normalizeStatus(t.status);
-      return norm === "pending" || norm === "under_review";
-    });
-  }, [tasks]);
-
-  const filteredPendingTasks = useMemo(() => {
-    if (!searchQuery.trim()) return pendingTasks;
-    const q = searchQuery.toLowerCase();
-    return pendingTasks.filter((t) => t.title.toLowerCase().includes(q));
-  }, [pendingTasks, searchQuery]);
-
-  // Profile tasks link base
-  const profileTasksHref = pathname?.startsWith("/platformadmin")
-    ? "/platformadmin/my-profile?tab=tasks"
-    : "/admin/my-profile?tab=tasks";
-
-  if (!user || isClientRole) return null;
+  if (!user) return null;
 
   return (
     <div className="flex items-center gap-2">
       {activeTask ? (
-        // ================= ACTIVE RUNNING STATE =================
-        <div className="flex items-center gap-2 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-2.5 sm:px-3 py-1 shadow-2xs max-w-[280px] sm:max-w-[420px] md:max-w-[520px]">
-          {/* Pulsing indicator */}
-          <span className="relative flex h-2.5 w-2.5 shrink-0" title="Task in progress">
+        // ================= ACTIVE RUNNING STATE (SHOWS SUB-TASK NAME) =================
+        <div className="flex items-center gap-2 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-2.5 sm:px-3 py-1 shadow-2xs">
+          {/* Pulsing live status indicator */}
+          <span className="relative flex h-2.5 w-2.5 shrink-0" title="Sub-task in progress">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
           </span>
 
-          {/* Task Title & Subtask Info */}
-          <div className="flex flex-col min-w-0 pr-1">
-            <div className="flex items-center gap-1.5 min-w-0">
+          {/* Sub-task Name (Prominently displayed as requested) */}
+          <div className="flex items-center gap-1.5 min-w-0 pr-1">
+            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 shrink-0">
+              Sub-task:
+            </span>
+            <span
+              className="font-bold text-xs sm:text-sm text-foreground truncate max-w-[130px] sm:max-w-[200px] md:max-w-[300px]"
+              title={activeSubtask ? activeSubtask.title : activeTask.title}
+            >
+              {activeSubtask ? activeSubtask.title : activeTask.title}
+            </span>
+            {activeTask && activeSubtask && (
               <span
-                className="font-semibold text-xs sm:text-sm text-foreground truncate max-w-[110px] sm:max-w-[190px] md:max-w-[280px]"
+                className="hidden md:inline-flex text-[11px] text-muted-foreground truncate max-w-[130px]"
                 title={activeTask.title}
               >
-                {activeTask.title}
-              </span>
-              {activeSubtask && (
-                <Badge
-                  variant="outline"
-                  className="hidden md:inline-flex text-[10px] py-0 px-1.5 h-4 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 truncate max-w-[110px]"
-                  title={activeSubtask.title}
-                >
-                  {activeSubtask.title}
-                </Badge>
-              )}
-            </div>
-            {activeSubtask && (
-              <span className="text-[10px] text-muted-foreground md:hidden truncate max-w-[120px]">
-                {activeSubtask.title}
+                ({activeTask.title})
               </span>
             )}
           </div>
@@ -406,145 +330,24 @@ export function AdminActiveTaskWidget() {
             variant="destructive"
             disabled={isOperating}
             onClick={handleStopTask}
-            title="Stop Current Task and Record Work Duration"
-            className="h-7 sm:h-8 px-2.5 sm:px-3 text-xs font-bold gap-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-2xs shrink-0 cursor-pointer transition-all ml-1"
+            title="Stop sub-task timer and record duration"
+            className="h-7 sm:h-8 px-2.5 text-xs font-bold gap-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-2xs shrink-0 cursor-pointer transition-all ml-1"
           >
-            <Square className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-current" />
-            <span className="hidden sm:inline">Stop Task</span>
-            <span className="sm:hidden">Stop</span>
+            <Square className="w-3 h-3 fill-current" />
+            <span>Stop</span>
           </Button>
         </div>
       ) : (
-        // ================= IDLE / START TASK STATE =================
-        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              size="sm"
-              disabled={isOperating || isLoading}
-              className="h-8 px-2.5 sm:px-3 text-xs font-bold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-2xs cursor-pointer transition-all shrink-0"
-              title="Start a task from your assigned tasks"
-            >
-              <Play className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-current" />
-              <span>Start Task</span>
-              <ChevronDown className="w-3 h-3 opacity-70 ml-0.5" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            className="w-80 sm:w-96 p-0 shadow-xl rounded-2xl border bg-popover"
-            align="start"
-            sideOffset={8}
-          >
-            <div className="p-3 border-b flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ListTodo className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                <span className="font-bold text-sm text-foreground">Assigned Tasks</span>
-              </div>
-              <Badge variant="outline" className="text-[11px] font-bold">
-                {pendingTasks.length} Pending
-              </Badge>
-            </div>
-
-            {pendingTasks.length > 3 && (
-              <div className="p-2 border-b">
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Search task to start..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="h-8 text-xs pl-8 rounded-lg"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="max-h-72 overflow-y-auto p-2 space-y-1.5 divide-y divide-border/40">
-              {filteredPendingTasks.length === 0 ? (
-                <div className="py-8 px-4 text-center">
-                  <CheckCircle2 className="w-8 h-8 mx-auto text-muted-foreground opacity-40 mb-2" />
-                  <p className="text-xs font-semibold text-foreground">No pending tasks found</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {searchQuery ? "No tasks matched your search." : "All your tasks are either in progress or completed."}
-                  </p>
-                  <div className="mt-3">
-                    <Link
-                      href={profileTasksHref}
-                      onClick={() => setPopoverOpen(false)}
-                      className="text-xs text-primary hover:underline font-semibold inline-flex items-center gap-1"
-                    >
-                      View all tasks in profile <ExternalLink className="w-3 h-3" />
-                    </Link>
-                  </div>
-                </div>
-              ) : (
-                filteredPendingTasks.map((t) => {
-                  const urgency = (t.urgency || "medium").toLowerCase();
-                  const urgencyClass =
-                    urgency === "urgent"
-                      ? "text-rose-600 bg-rose-500/10 border-rose-500/20"
-                      : urgency === "high"
-                      ? "text-orange-600 bg-orange-500/10 border-orange-500/20"
-                      : "text-blue-600 bg-blue-500/10 border-blue-500/20";
-
-                  return (
-                    <div
-                      key={t.id}
-                      className="pt-1.5 first:pt-0 flex items-center justify-between gap-2 p-2 hover:bg-muted/60 rounded-xl transition-colors group"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold text-foreground truncate" title={t.title}>
-                          {t.title}
-                        </p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className={`text-[10px] font-bold uppercase px-1.5 py-0.2 rounded border ${urgencyClass}`}>
-                            {urgency}
-                          </span>
-                          {Array.isArray(t.sub_tasks) && t.sub_tasks.length > 0 && (
-                            <span className="text-[10px] text-muted-foreground">
-                              • {t.sub_tasks.length} deliverable(s)
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <Button
-                        size="sm"
-                        disabled={isOperating}
-                        onClick={() => initiateStartTask(t)}
-                        className="h-7 px-2.5 text-xs font-bold gap-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-2xs shrink-0 cursor-pointer"
-                      >
-                        <Play className="w-3 h-3 fill-current" />
-                        <span>Start</span>
-                      </Button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <div className="p-2 border-t bg-muted/30 rounded-b-2xl flex items-center justify-between text-[11px] text-muted-foreground px-3">
-              <span>First task start counts as Check-In</span>
-              <Link
-                href={profileTasksHref}
-                onClick={() => setPopoverOpen(false)}
-                className="text-primary hover:underline font-semibold"
-              >
-                My Tasks &rarr;
-              </Link>
-            </div>
-          </PopoverContent>
-        </Popover>
+        // ================= IDLE STATE (NO DROPDOWN AS REQUESTED) =================
+        <Link
+          href={tasksUrl}
+          className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-semibold text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted/70 rounded-xl border border-dashed transition-all cursor-pointer"
+          title="No sub-task currently in progress. Click to open Task Management"
+        >
+          <span className="w-2 h-2 rounded-full bg-zinc-400 shrink-0" />
+          <span>No Active Sub-task</span>
+        </Link>
       )}
-
-      {/* Geo-location confirmation dialog before check-in */}
-      <CheckInLocationDialog
-        open={checkInDialogOpen}
-        onOpenChange={setCheckInDialogOpen}
-        taskTitle={pendingStartTask?.title || "Task"}
-        urgency={pendingStartTask?.urgency}
-        isStarting={isOperating}
-        onConfirm={handleConfirmStartWithLocation}
-      />
     </div>
   );
 }

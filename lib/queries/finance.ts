@@ -1057,11 +1057,12 @@ export async function listFinanceIncomeCategories(
   await ensureDefaultPaymentCategories(db, scopeType, institutionId);
   const params = scopedParams({ scope_type: scopeType, institution_id: institutionId });
   const result = await db.query<FinanceIncomeCategoryRow>(`
-    SELECT id, scope_type, institution_id, name, is_active, created_at, updated_at
+    SELECT DISTINCT ON (LOWER(fic.name))
+      id, scope_type, institution_id, name, is_active, created_at, updated_at
     FROM finance_income_categories fic
     WHERE ${scopePredicate("fic", { scope_type: scopeType, institution_id: institutionId })}
       AND fic.is_active = TRUE
-    ORDER BY fic.name ASC
+    ORDER BY LOWER(fic.name) ASC, fic.id ASC
   `, params);
   return result.rows;
 }
@@ -1300,8 +1301,10 @@ export async function createFinanceIncomeEntry(db: Queryable, input: FinanceInco
     FROM finance_income_categories fic
     WHERE fic.id = $1
       AND fic.is_active = TRUE
-      AND fic.scope_type = $2
-      AND COALESCE(fic.institution_id, 0) = COALESCE($3::int, 0)
+      AND (
+        ($2 = 'platform' AND fic.scope_type = 'platform')
+        OR (fic.scope_type = $2 AND COALESCE(fic.institution_id, 0) = COALESCE($3::int, 0))
+      )
     LIMIT 1
   `, [input.category_id, input.scope_type, input.institution_id]);
   if (!category.rows[0]) throw new Error("Select a valid income category");
@@ -1431,8 +1434,10 @@ export async function updateFinanceRecurringExpense(db: Queryable, input: Recurr
     FROM finance_recurring_expense_categories frec
     WHERE frec.id = ANY($1::int[])
       AND frec.is_active = TRUE
-      AND frec.scope_type = $2
-      AND COALESCE(frec.institution_id, 0) = COALESCE($3::int, 0)
+      AND (
+        ($2 = 'platform' AND frec.scope_type = 'platform')
+        OR (frec.scope_type = $2 AND COALESCE(frec.institution_id, 0) = COALESCE($3::int, 0))
+      )
   `, [input.category_ids, input.scope_type, input.institution_id]);
   if (Number(validCategories.rows[0]?.count ?? 0) !== input.category_ids.length) {
     throw new Error("Select valid recurring categories");
@@ -1776,11 +1781,12 @@ export async function listFinanceExpenseCategories(
   await ensureDefaultPaymentCategories(db, scopeType, institutionId);
   const params = expenseScopedParams({ scope_type: scopeType, institution_id: institutionId });
   const result = await db.query<FinanceExpenseCategoryRow>(`
-    SELECT id, scope_type, institution_id, name, is_active, created_at, updated_at
+    SELECT DISTINCT ON (LOWER(fec.name))
+      id, scope_type, institution_id, name, is_active, created_at, updated_at
     FROM finance_expense_categories fec
     WHERE ${expenseScopePredicate("fec", { scope_type: scopeType, institution_id: institutionId })}
       AND fec.is_active = TRUE
-    ORDER BY CASE WHEN fec.name = 'Others' THEN 1 ELSE 0 END, fec.name ASC
+    ORDER BY LOWER(fec.name) ASC, fec.id ASC
   `, params);
   return result.rows;
 }
@@ -1810,8 +1816,10 @@ export async function createFinanceExpenseEntry(db: Queryable, input: FinanceExp
     FROM finance_expense_categories fec
     WHERE fec.id = $1
       AND fec.is_active = TRUE
-      AND fec.scope_type = $2
-      AND COALESCE(fec.institution_id, 0) = COALESCE($3::int, 0)
+      AND (
+        ($2 = 'platform' AND fec.scope_type = 'platform')
+        OR (fec.scope_type = $2 AND COALESCE(fec.institution_id, 0) = COALESCE($3::int, 0))
+      )
     LIMIT 1
   `, [input.category_id, input.scope_type, input.institution_id]);
   if (!category.rows[0]) throw new Error("Select a valid expense category");
@@ -2141,8 +2149,10 @@ export async function createFinanceRecurringExpense(db: Queryable, input: Financ
     FROM finance_recurring_expense_categories frec
     WHERE frec.id = ANY($1::int[])
       AND frec.is_active = TRUE
-      AND frec.scope_type = $2
-      AND COALESCE(frec.institution_id, 0) = COALESCE($3::int, 0)
+      AND (
+        ($2 = 'platform' AND frec.scope_type = 'platform')
+        OR (frec.scope_type = $2 AND COALESCE(frec.institution_id, 0) = COALESCE($3::int, 0))
+      )
   `, [input.category_ids, input.scope_type, input.institution_id]);
   if (Number(validCategories.rows[0]?.count ?? 0) !== input.category_ids.length) {
     throw new Error("Select valid recurring categories");

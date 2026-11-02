@@ -1,5 +1,17 @@
 // /lib/db.ts
-import { Pool, type PoolClient, type QueryConfig, type QueryResult, type QueryResultRow } from "pg";
+import { Pool, types, type PoolClient, type QueryConfig, type QueryResult, type QueryResultRow } from "pg";
+
+// OID 1114: TIMESTAMP WITHOUT TIME ZONE
+// Postgres stores DEFAULT CURRENT_TIMESTAMP in UTC.
+// By default, node-postgres parses TIMESTAMP WITHOUT TIME ZONE as local system time,
+// which shifts times by local offset (e.g. -5h30m in IST).
+// We parse it explicitly as UTC Date so that toISOString() and Asia/Kolkata conversions match actual event time.
+types.setTypeParser(1114, (stringValue: string) => {
+  if (!stringValue) return null;
+  const normalized = stringValue.includes("T") ? stringValue : stringValue.replace(" ", "T");
+  const utcString = /([+-]\d{2}(:\d{2})?|Z)$/.test(normalized) ? normalized : `${normalized}Z`;
+  return new Date(utcString);
+});
 
 const DEBUG_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
 const TRANSIENT_DB_ERROR_CODES = new Set([

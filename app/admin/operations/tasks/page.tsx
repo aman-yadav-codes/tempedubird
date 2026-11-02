@@ -18,6 +18,7 @@ export function getCurrencySymbol(code?: string | null) {
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
+import { requireBrowserLocation } from "@/app/lib/geolocation";
 import {
   Check,
   ClipboardCheck,
@@ -1550,10 +1551,49 @@ export default function OperationsTasksPage() {
 
   // 1-Click direct sub-task status toggle
   const handleSubTaskStatusDirectUpdate = async (task: OperationTask, subId: string, newStatus: any) => {
+    let startLoc: any = null;
+
+    if (newStatus === "in_progress") {
+      const isAnotherRunning = tasks.some((t) => {
+        if (t.id !== task.id) {
+          return (
+            t.status === "in_progress" ||
+            (Array.isArray(t.sub_tasks) && t.sub_tasks.some((s) => s.status === "in_progress"))
+          );
+        }
+        return (
+          Array.isArray(t.sub_tasks) &&
+          t.sub_tasks.some((s) => String(s.id) !== String(subId) && s.status === "in_progress")
+        );
+      });
+
+      if (isAnotherRunning) {
+        toast.error("Only one task can be started at a time. Please stop your active task before starting a new one.");
+        return;
+      }
+
+      try {
+        toast.info("Requesting location to start deliverable...");
+        startLoc = await requireBrowserLocation();
+      } catch (locErr: any) {
+        toast.error(locErr?.message || "Location permission is required to start a task. You cannot start without sharing location.");
+        return;
+      }
+    }
+
     const currentSubs = Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : [];
-    const updatedSubs = currentSubs.map((s) =>
-      s.id === subId ? { ...s, status: newStatus } : s
-    );
+    const targetSub = currentSubs.find((s) => s.id === subId);
+    const updatedSubs = currentSubs.map((s) => {
+      if (s.id !== subId) return s;
+      const updates: any = { ...s, status: newStatus };
+      if (newStatus === "in_progress") {
+        updates.started_at = new Date().toISOString();
+        updates.stopped_at = null;
+      } else if (newStatus === "pending" || newStatus === "completed") {
+        updates.stopped_at = new Date().toISOString();
+      }
+      return updates;
+    });
 
     setTasks((prev) =>
       prev.map((t) => (t.id === task.id ? { ...t, sub_tasks: updatedSubs } : t))
@@ -1566,7 +1606,14 @@ export default function OperationsTasksPage() {
       const res = await fetch("/api/admin/operations/tasks", {
         method: "PUT",
         headers,
-        body: JSON.stringify({ id: task.id, sub_tasks: updatedSubs }),
+        body: JSON.stringify({
+          id: task.id,
+          sub_tasks: updatedSubs,
+          subtask_id: subId,
+          subtask_title: targetSub?.title,
+          start_location: startLoc && startLoc.latitude ? startLoc : undefined,
+          action: newStatus === "in_progress" ? "start_task" : newStatus === "pending" ? "stop_task" : undefined,
+        }),
       });
 
       if (!res.ok) {
@@ -1579,6 +1626,11 @@ export default function OperationsTasksPage() {
         toast.success(`Subtask marked as ${newStatus.replace("_", " ")}`);
       }
       fetchTasks();
+      window.dispatchEvent(
+        new CustomEvent("task-status-updated", {
+          detail: { taskId: task.id, subtaskId: subId, status: newStatus },
+        })
+      );
     } catch (err: any) {
       toast.error(err.message || "Failed to update subtask status");
       fetchTasks();
@@ -1596,6 +1648,32 @@ export default function OperationsTasksPage() {
       return;
     }
 
+    let startLoc: any = null;
+    if (newStatus === "in_progress") {
+      const isAnotherRunning = tasks.some((t) => {
+        if (t.id !== taskId) {
+          return (
+            t.status === "in_progress" ||
+            (Array.isArray(t.sub_tasks) && t.sub_tasks.some((s) => s.status === "in_progress"))
+          );
+        }
+        return false;
+      });
+
+      if (isAnotherRunning) {
+        toast.error("Only one task can be started at a time. Please stop your active task before starting a new one.");
+        return;
+      }
+
+      try {
+        toast.info("Requesting location to start task...");
+        startLoc = await requireBrowserLocation();
+      } catch (locErr: any) {
+        toast.error(locErr?.message || "Location permission is required to start a task. You cannot start without sharing location.");
+        return;
+      }
+    }
+
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
@@ -1603,7 +1681,12 @@ export default function OperationsTasksPage() {
       const res = await fetch("/api/admin/operations/tasks", {
         method: "PUT",
         headers,
-        body: JSON.stringify({ id: taskId, status: newStatus }),
+        body: JSON.stringify({
+          id: taskId,
+          status: newStatus,
+          action: newStatus === "in_progress" ? "start_task" : newStatus === "pending" ? "stop_task" : undefined,
+          start_location: startLoc && startLoc.latitude ? startLoc : undefined,
+        }),
       });
 
       if (!res.ok) {
@@ -2034,7 +2117,9 @@ export default function OperationsTasksPage() {
           </p>
         </div>
 
-        {!(isClientRole || Boolean(pathname?.startsWith("/client"))) && (() => {
+        {(() => {
+          const isClient = isClientRole || Boolean(pathname?.startsWith("/client"));
+          if (isClient) return null;
           const opsBasePath = pathname?.startsWith("/platformadmin") ? "/platformadmin/operations" : "/admin/operations";
           return (
             <div className="flex items-center gap-2 shrink-0 flex-wrap">
@@ -2073,8 +2158,8 @@ export default function OperationsTasksPage() {
         })()}
       </div>
 
-      {/* Scope Switcher: Hidden on Institution Admin side */}
-      {!isInstitutionAdmin && (
+      {/* Scope Switcher: Hidden on Institution Admin & Client side */}
+      {!isInstitutionAdmin && !(isClientRole || Boolean(pathname?.startsWith("/client"))) && (
         <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-card rounded-2xl border shadow-xs">
           <div className="flex items-center gap-2">
             {!(isStaffRole || pathname?.startsWith("/staff")) ? (
@@ -2470,7 +2555,7 @@ export default function OperationsTasksPage() {
 
                     <div className="flex items-center gap-2 shrink-0 ml-auto flex-wrap">
                       {/* Add Sub-Task Button */}
-                      {canEditOrRemove && !isClientRole && (
+                      {(
                         <Button
                           size="sm"
                           onClick={() => handleOpenSubtasksModal(task)}
@@ -2518,7 +2603,7 @@ export default function OperationsTasksPage() {
                             <Receipt className="w-4 h-4 text-primary" />
                             <span>Invoices</span>
                           </DropdownMenuItem>
-                          {canEditOrRemove && !isClientRole && (
+                          {canEditOrRemove && (
                             <DropdownMenuItem
                               onClick={() => handleOpenEditTask(task)}
                               className="gap-2 cursor-pointer font-medium"

@@ -61,8 +61,12 @@ function ownSalaryPermission(user: PermissionUser) {
 }
 
 async function ensureDefaultSalaryHolidays() {
-  await db.query(`
-    INSERT INTO institution_calendar_events (
+  try {
+    await db.query(`
+      ALTER TABLE institution_calendar_events ADD COLUMN IF NOT EXISTS academic_year_id INTEGER;
+    `).catch(() => {});
+    await db.query(`
+      INSERT INTO institution_calendar_events (
       institution_id,
       academic_year_id,
       title,
@@ -104,6 +108,9 @@ async function ensureDefaultSalaryHolidays() {
           AND LOWER(existing.title) = LOWER(holiday.title)
       )
   `);
+  } catch (err) {
+    console.warn("[salary] ensureDefaultSalaryHolidays warning:", err);
+  }
 }
 
 async function ensureAttendanceLookupSchema(queryable: Queryable) {

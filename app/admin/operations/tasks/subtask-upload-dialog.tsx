@@ -184,6 +184,128 @@ export function SubTaskUploadDialog({
   const [saving, setSaving] = useState(false);
   const [uploadNotes, setUploadNotes] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [deliverableMode, setDeliverableMode] = useState<"single" | "bulk">("single");
+  const [bulkDeliverablesText, setBulkDeliverablesText] = useState("");
+  const [bulkStripBullets, setBulkStripBullets] = useState(true);
+
+  const parsedBulkDeliverables = React.useMemo(() => {
+    if (!bulkDeliverablesText.trim()) return [];
+    const lines = bulkDeliverablesText.split(/\r?\n/);
+    const result: string[] = [];
+    const seen = new Set<string>();
+
+    for (const rawLine of lines) {
+      let line = rawLine.trim();
+      if (!line) continue;
+
+      if (bulkStripBullets) {
+        line = line.replace(/^(\d+[\.\)]\s*|[-*•]\s*)/, "").trim();
+      }
+
+      if (!line) continue;
+      const lower = line.toLowerCase();
+      if (seen.has(lower)) continue;
+      seen.add(lower);
+      result.push(line);
+    }
+
+    return result;
+  }, [bulkDeliverablesText, bulkStripBullets]);
+
+  const handleBulkDeliverablesSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (parsedBulkDeliverables.length === 0) {
+      toast.error("Please enter at least one deliverable name (one per line)");
+      return;
+    }
+    if (!task || !subtask) return;
+
+    setUploading(true);
+    try {
+      const authorName = (user as any)?.full_name || (user as any)?.name || (user as any)?.email || "Staff Member";
+      const nowIso = new Date().toISOString();
+
+      const newRecords: SubTaskUploadItem[] = parsedBulkDeliverables.map((itemTitle, idx) => ({
+        id: `task_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 6)}`,
+        file_name: itemTitle,
+        file_url: "",
+        file_type: "task_item",
+        file_size: 0,
+        notes: null,
+        uploaded_at: nowIso,
+        uploaded_by_id: user?.id || "unknown",
+        uploaded_by_name: authorName,
+        uploaded_by_role: roleCodes[0] || "Staff",
+        status: "pending",
+        status_history: [
+          {
+            id: `uph_${Date.now()}_${idx}`,
+            action: "task_created",
+            status: "pending",
+            changed_at: nowIso,
+            changed_by_id: user?.id || null,
+            changed_by_name: authorName,
+            notes: `Bulk deliverable created: ${itemTitle}`,
+          },
+        ],
+        comments: [],
+      }));
+
+      const updatedUploads = [...newRecords, ...uploadsList];
+      setUploadsList(updatedUploads);
+
+      const currentSubtasks = Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : [];
+      const subIndex = currentSubtasks.findIndex((s) => String(s.id) === String(subtask.id));
+      if (subIndex === -1) throw new Error("Sub-task not found in project");
+
+      currentSubtasks[subIndex] = {
+        ...currentSubtasks[subIndex],
+        uploads: updatedUploads,
+      };
+
+      const currentHistory = Array.isArray(task.history) ? [...task.history] : [];
+      currentHistory.push({
+        id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        action: "deliverable_bulk_created",
+        timestamp: nowIso,
+        user_id: user?.id || null,
+        user_name: authorName,
+        user_role: roleCodes[0] || "Staff",
+        subtask_id: subtask.id,
+        subtask_title: subtask.title,
+        details: `Created ${newRecords.length} bulk deliverables on "${subtask.title}"`,
+      });
+
+      const saveRes = await fetch("/api/admin/operations/tasks", {
+        method: "PUT",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          id: task.id,
+          sub_tasks: currentSubtasks,
+          history: currentHistory,
+        }),
+      });
+
+      const saveData = await saveRes.json();
+      if (!saveRes.ok) throw new Error(saveData.error || "Failed to save bulk deliverables");
+
+      if (saveData.task && Array.isArray(saveData.task.sub_tasks)) {
+        const savedSub = saveData.task.sub_tasks.find((s: any) => String(s.id) === String(subtask.id));
+        if (savedSub && Array.isArray(savedSub.uploads)) {
+          setUploadsList(savedSub.uploads);
+        }
+      }
+
+      toast.success(`Created ${newRecords.length} deliverables successfully!`);
+      setBulkDeliverablesText("");
+      onSaved?.();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to create bulk deliverables");
+    } finally {
+      setUploading(false);
+    }
+  };
   const [editingItem, setEditingItem] = useState<SubTaskUploadItem | null>(null);
   const [editItemName, setEditItemName] = useState("");
   const [editItemNotes, setEditItemNotes] = useState("");
@@ -1186,37 +1308,151 @@ export function SubTaskUploadDialog({
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-5" onPaste={handlePasteImages}>
-            {/* Task Creation Form (Clean single row, Ctrl+V paste supported) */}
-            <form
-              onSubmit={handleUploadSubmit}
-              onPaste={handlePasteImages}
-              className="p-3 rounded-xl border border-primary/30 bg-primary/5 relative group"
-            >
-              <div className="flex items-center gap-2">
-                <Input
-                  value={uploadNotes}
-                  onChange={(e) => setUploadNotes(e.target.value)}
-                  onPaste={handlePasteImages}
-                  placeholder="Optional description / notes for this task (or paste multiple screenshots directly here with Ctrl+V)..."
-                  className="text-xs h-9 bg-background flex-1"
-                  autoFocus
-                />
-
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={uploading}
-                  className="bg-primary hover:bg-primary/90 font-bold text-xs gap-1.5 shrink-0 cursor-pointer h-9 px-4"
-                >
-                  {uploading ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
+            {/* Deliverable Creation Header: Single Deliverable / Bulk Deliverable Toggle */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-xl border border-border/70">
+                  <button
+                    type="button"
+                    onClick={() => setDeliverableMode("single")}
+                    className={cn(
+                      "px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5",
+                      deliverableMode === "single"
+                        ? "bg-background text-foreground shadow-xs border border-border/50"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
                     <Plus className="w-3.5 h-3.5" />
-                  )}
-                  <span>{uploading ? "Creating..." : "+ Create task"}</span>
-                </Button>
+                    <span>Single Deliverable</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeliverableMode("bulk")}
+                    className={cn(
+                      "px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5",
+                      deliverableMode === "bulk"
+                        ? "bg-background text-foreground shadow-xs border border-border/50"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <ClipboardPaste className="w-3.5 h-3.5" />
+                    <span>Bulk Deliverable</span>
+                    {parsedBulkDeliverables.length > 0 && (
+                      <Badge variant="secondary" className="text-[10px] py-0 px-1.5 ml-0.5">
+                        {parsedBulkDeliverables.length}
+                      </Badge>
+                    )}
+                  </button>
+                </div>
+
+                {deliverableMode === "bulk" && (
+                  <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={bulkStripBullets}
+                      onChange={(e) => setBulkStripBullets(e.target.checked)}
+                      className="rounded text-primary h-3.5 w-3.5"
+                    />
+                    <span>Strip bullets & numbering</span>
+                  </label>
+                )}
               </div>
-            </form>
+
+              {deliverableMode === "single" ? (
+                /* Single Deliverable Form */
+                <form
+                  onSubmit={handleUploadSubmit}
+                  onPaste={handlePasteImages}
+                  className="p-3 rounded-xl border border-primary/30 bg-primary/5 relative group"
+                >
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={uploadNotes}
+                      onChange={(e) => setUploadNotes(e.target.value)}
+                      onPaste={handlePasteImages}
+                      placeholder="Optional description / notes for this task (or paste multiple screenshots directly here with Ctrl+V)..."
+                      className="text-xs h-9 bg-background flex-1"
+                      autoFocus
+                    />
+
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={uploading}
+                      className="bg-primary hover:bg-primary/90 font-bold text-xs gap-1.5 shrink-0 cursor-pointer h-9 px-4"
+                    >
+                      {uploading ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="w-3.5 h-3.5" />
+                      )}
+                      <span>{uploading ? "Creating..." : "+ Create task"}</span>
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                /* Bulk Deliverable Form */
+                <form
+                  onSubmit={handleBulkDeliverablesSubmit}
+                  className="p-3 rounded-xl border border-primary/30 bg-primary/5 space-y-2.5"
+                >
+                  <div className="space-y-1.5">
+                    <Textarea
+                      value={bulkDeliverablesText}
+                      onChange={(e) => setBulkDeliverablesText(e.target.value)}
+                      placeholder="Enter deliverable names (one per line)&#10;e.g.&#10;1. Header navigation testing&#10;2. Mobile responsive checkout&#10;3. Payment gateway verification"
+                      rows={4}
+                      className="text-xs bg-background leading-relaxed font-medium"
+                      autoFocus
+                    />
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground px-0.5">
+                      <span>
+                        {parsedBulkDeliverables.length > 0 ? (
+                          <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                            {parsedBulkDeliverables.length} deliverable{parsedBulkDeliverables.length > 1 ? "s" : ""} detected
+                          </span>
+                        ) : (
+                          "Each line creates a separate deliverable task"
+                        )}
+                      </span>
+                      <span className="text-[10px]">Tip: Copy-paste from Excel, Notepad, or ChatGPT</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setBulkDeliverablesText("");
+                        setDeliverableMode("single");
+                      }}
+                      className="h-8 text-xs cursor-pointer"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={uploading || parsedBulkDeliverables.length === 0}
+                      className="bg-primary hover:bg-primary/90 font-bold text-xs gap-1.5 cursor-pointer h-8 px-4"
+                    >
+                      {uploading ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="w-3.5 h-3.5" />
+                      )}
+                      <span>
+                        {uploading
+                          ? "Creating..."
+                          : `+ Create ${parsedBulkDeliverables.length > 0 ? `${parsedBulkDeliverables.length} ` : ""}Deliverables`}
+                      </span>
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </div>
 
             {/* List of Uploaded Files */}
             <div className="space-y-3">

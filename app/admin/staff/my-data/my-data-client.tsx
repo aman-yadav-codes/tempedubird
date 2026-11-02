@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   Bell,
@@ -1094,13 +1095,23 @@ export function MyDataClient({ initialTab }: MyDataClientProps = {}) {
         <TabsContent value="tasks" className="space-y-4">
           <Card className="shadow-xs">
             <CardHeader className="p-4 sm:p-6 pb-3">
-              <CardTitle className="text-base font-bold flex items-center gap-2">
-                <ListTodo className="size-5 text-blue-500" />
-                Assigned Operations & Academic Tasks
-              </CardTitle>
-              <CardDescription className="text-xs">
-                All deliverables and assignments delegated to you.
-              </CardDescription>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base font-bold flex items-center gap-2">
+                    <ListTodo className="size-5 text-blue-500" />
+                    Assigned Operations & Academic Tasks
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    All deliverables and assignments delegated to you.
+                  </CardDescription>
+                </div>
+                <Link href="/admin/operations/tasks">
+                  <Button size="sm" className="h-8 text-xs font-bold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs cursor-pointer">
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Create Task / Project</span>
+                  </Button>
+                </Link>
+              </div>
             </CardHeader>
             <CardContent className="p-4 sm:p-6 pt-0">
               {tasks.length === 0 ? (

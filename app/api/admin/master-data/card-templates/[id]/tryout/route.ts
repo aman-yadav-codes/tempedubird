@@ -229,6 +229,7 @@ async function getStaff(
       LEFT JOIN institution_memberships im
         ON im.user_id = u.id
        AND COALESCE(im.is_deleted, FALSE) = FALSE
+       AND im.is_active = TRUE
        AND ($6::int IS NULL OR im.institution_id = $6)
       LEFT JOIN roles r ON r.id = im.role_id
       LEFT JOIN designations desig ON desig.id = up.designation_id
@@ -239,9 +240,9 @@ async function getStaff(
       WHERE ($1::int IS NULL OR $1::int = $1::int)
         AND COALESCE(u.is_deleted, FALSE) = FALSE
         AND u.is_active = TRUE
-        AND (r.code IS NULL OR r.code NOT IN ('student', 'guardian', 'parent'))
-        AND ($2::boolean OR COALESCE(im.institution_id, up.under_institution_id) = ANY($3::int[]) OR COALESCE(im.institution_id, up.under_institution_id) IS NULL)
-        AND ($6::int IS NULL OR COALESCE(im.institution_id, up.under_institution_id) = $6)
+        AND (r.code IS NULL OR r.code NOT IN ('student', 'guardian', 'parent', 'client'))
+        AND ($2::boolean OR COALESCE(im.institution_id, up.under_institution_id) = ANY($3::int[]))
+        AND ($6::int IS NULL OR im.institution_id = $6 OR up.under_institution_id = $6)
         AND (
           $4 = ''
           OR u.full_name ILIKE $5
@@ -589,6 +590,7 @@ async function getStaffValues(
         AND (
           $5::int IS NULL 
           OR COALESCE(im.institution_id, up.under_institution_id) = $5
+          OR $3::boolean
         )
       ORDER BY u.id, COALESCE(im.is_active, FALSE) DESC, im.updated_at DESC NULLS LAST, im.id DESC NULLS LAST
       LIMIT 1
