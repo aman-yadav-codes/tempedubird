@@ -423,6 +423,12 @@ export async function GET(req: Request) {
       );
     }
     // Auto-seed sample tasks ONLY if table is completely empty and requester is an admin
+    const canManageAllTasks = Boolean(user && (
+      isPlatformAdminUser(user) ||
+      isInstitutionAdminUser(user) ||
+      (user as any)?.role_codes?.some((r: string) => ["platform_admin", "superadmin", "super_admin", "admin", "institution_admin"].includes(String(r).toLowerCase())) ||
+      hasPermission(user, "operations.tasks.manage", { institutionId: targetInstId || undefined })
+    ));
     if (canManageAllTasks && !search && (!status || status === "all") && (!urgency || urgency === "all")) {
       const countCheck = await db.query(`SELECT COUNT(*) as c FROM operations_tasks`);
       if (parseInt(countCheck.rows[0]?.c || "0") === 0) {
