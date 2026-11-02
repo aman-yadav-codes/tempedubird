@@ -1292,40 +1292,6 @@ export function PurchaseSellRequestsClient() {
           </DialogHeader>
 
           <form onSubmit={handleCreateRequest} className="space-y-4 pt-2">
-            {/* Target Organization Context */}
-            {availableOrgs.length > 1 ? (
-              <div className="space-y-1.5 p-2.5 rounded-lg bg-muted/40 border text-xs">
-                <Label className="text-xs font-semibold flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5 text-primary" />
-                  Target Organization <span className="text-destructive">*</span>
-                </Label>
-                <select
-                  value={modalInstId}
-                  onChange={(e) => setModalInstId(e.target.value)}
-                  className="w-full h-8 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-bold text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
-                >
-                  {availableOrgs.map((org) => (
-                    <option key={org.id} value={String(org.id)}>
-                      {org.name}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-muted-foreground">
-                  Select which of your institutions this request is being submitted under.
-                </p>
-              </div>
-            ) : (
-              <div className="flex items-center justify-between p-2 rounded-lg bg-muted/40 border text-xs">
-                <span className="text-muted-foreground flex items-center gap-1.5 font-medium">
-                  <Building2 className="w-3.5 h-3.5 text-primary" />
-                  Organization:
-                </span>
-                <span className="font-bold text-foreground">
-                  {currentOrgName}
-                </span>
-              </div>
-            )}
-
             {/* Title */}
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">

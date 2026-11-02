@@ -1,3 +1,4 @@
+import { normalizeUrl } from "@/lib/utils";
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { isPlatformAdminUser } from "@/lib/auth/permissions";
@@ -17,26 +18,30 @@ export async function GET(req: Request) {
 
     const userRole = (user as any)?.role || (user as any)?.role_code || "";
     const userInstId = (user as any)?.institution_id || user?.memberships?.[0]?.institution_id || null;
+    const userMemberships = user?.memberships || [];
+    const userInstIds = userMemberships.map((m: any) => Number(m.institution_id)).filter(Boolean);
+    if (userInstId && !userInstIds.includes(Number(userInstId))) {
+      userInstIds.push(Number(userInstId));
+    }
     const requestedInstId = url.searchParams.get("institution_id") || req.headers.get("x-institution-id");
-    const parsedInstId = requestedInstId ? Number(requestedInstId) : null;
+    const parsedInstId = requestedInstId && requestedInstId !== "none" && requestedInstId !== "all" ? Number(requestedInstId) : null;
     const targetInstId = Number.isInteger(parsedInstId) && (parsedInstId as number) > 0 ? parsedInstId : (userRole === "institution_admin" ? userInstId : null);
 
     let query = `SELECT * FROM clients WHERE 1=1`;
     const params: any[] = [];
 
     const isPlatformAdmin = isPlatformAdminUser(user);
+    const effectiveInst = targetInstId || userInstId || 1;
     if (isPlatformAdmin) {
-      if (targetInstId) {
+      if (targetInstId && targetInstId !== 1) {
         params.push(targetInstId);
-        query += ` AND institution_id = $${params.length}`;
-      } else {
-        query += ` AND institution_id IS NULL`;
+        query += ` AND (institution_id = $${params.length} OR institution_id = 1 OR institution_id IS NULL)`;
       }
-    } else if (targetInstId) {
-      params.push(targetInstId);
-      query += ` AND institution_id = $${params.length}`;
+      // If no target institution or 1 specified, platform admin sees all clients associated with platform
     } else {
-      query += ` AND 1=0`;
+      params.push(effectiveInst);
+      params.push(userInstIds.length > 0 ? userInstIds : [1]);
+      query += ` AND (institution_id = $${params.length - 1} OR institution_id = 1 OR institution_id IS NULL OR institution_id = ANY($${params.length}::int[]))`;
     }
 
     if (type && type !== "all") {
@@ -51,7 +56,7 @@ export async function GET(req: Request) {
 
     if (status && status !== "all") {
       params.push(status);
-      query += ` AND status = $${params.length}`;
+      query += ` AND (LOWER(status) = LOWER($${params.length}) OR status IS NULL)`;
     }
 
     if (city && city !== "all") {
@@ -95,6 +100,7 @@ export async function GET(req: Request) {
       phones: Array.isArray(r.phones) ? r.phones : (r.metadata?.phones || (r.phone ? [{ number: r.phone, label: "Primary", is_primary: true }] : [])),
       emails: Array.isArray(r.emails) ? r.emails : (r.metadata?.emails || (r.email ? [{ email: r.email, label: "Work", is_primary: true }] : [])),
       contacts: Array.isArray(r.contacts) ? r.contacts : (r.metadata?.contacts || []),
+      channels: Array.isArray(r.channels) ? r.channels : (Array.isArray(r.metadata?.channels) ? r.metadata.channels : []),
       location_data: r.location_data || r.metadata?.location_data || null,
       pincode: r.pincode || null,
       created_at: r.created_at,
@@ -127,7 +133,7 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     const targetInstitutionId = isPlatformAdminUser(user)
-      ? (body.institution_id ? Number(body.institution_id) : null)
+      ? (body.institution_id && body.institution_id !== "none" ? Number(body.institution_id) : 1)
       : userInstId;
 
     // Handle Bulk Upload of Clients
@@ -186,7 +192,7 @@ export async function POST(req: Request) {
             item.client_type || "corporate",
             phone,
             email,
-            item.website?.trim() || null,
+            normalizeUrl(item.website),
             item.address?.trim() || null,
             item.city?.trim() || null,
             item.state?.trim() || null,
@@ -237,17 +243,30 @@ export async function POST(req: Request) {
       phones = [],
       emails = [],
       contacts = [],
+      channels = [],
       location_data = null,
     } = body;
 
-    const finalClientName = name?.trim() || company_name?.trim();
+    const finalClientName = name?.trim() || contact_person?.trim() || company_name?.trim();
     if (!finalClientName) {
-      return NextResponse.json({ error: "Name or Organization name is required" }, { status: 400 });
+      return NextResponse.json({ error: "Contact person or organization name is required" }, { status: 400 });
     }
 
     const finalLocation = location || area || null;
-    const finalPhone = phone?.trim() || (Array.isArray(phones) && phones[0]?.number ? String(phones[0].number).trim() : null);
-    const finalEmail = email?.trim() || (Array.isArray(emails) && emails[0]?.email ? String(emails[0].email).trim() : null);
+    const channelsList = Array.isArray(channels) ? channels : [];
+    const chPhone = channelsList.find((c: any) => c.type === "phone" || c.type === "whatsapp")?.value;
+    const chEmail = channelsList.find((c: any) => c.type === "email")?.value;
+
+    const finalPhone = phone?.trim()
+      || (Array.isArray(phones) && phones[0]?.number ? String(phones[0].number).trim() : null)
+      || (chPhone ? String(chPhone).trim() : null)
+      || null;
+
+    const finalEmail = email?.trim()
+      || (Array.isArray(emails) && emails[0]?.email ? String(emails[0].email).trim() : null)
+      || (chEmail ? String(chEmail).trim() : null)
+      || null;
+
     const phonesJson = JSON.stringify(
       Array.isArray(phones) && phones.length > 0
         ? phones
@@ -258,7 +277,9 @@ export async function POST(req: Request) {
         ? emails
         : (finalEmail ? [{ email: finalEmail, label: "Work", is_primary: true }] : [])
     );
+
     const contactsJson = JSON.stringify(Array.isArray(contacts) ? contacts : []);
+    const channelsJson = JSON.stringify(channelsList);
     const locationJson = JSON.stringify(location_data || {});
 
     const res = await db.query(
@@ -289,18 +310,19 @@ export async function POST(req: Request) {
         emails,
         contacts,
         location_data,
+        channels,
         updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23::jsonb, $24::jsonb, $25::jsonb, $26::jsonb, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23::jsonb, $24::jsonb, $25::jsonb, $26::jsonb, $27::jsonb, NOW())
       RETURNING *`,
       [
         finalClientName,
-        company_name?.trim() || finalClientName,
+        company_name?.trim() || null,
         contact_person?.trim() || finalClientName,
         category || "Corporate Client",
         client_type || "corporate",
         finalPhone,
         finalEmail,
-        website?.trim() || null,
+        normalizeUrl(website),
         profile_image || null,
         address?.trim() || null,
         city?.trim() || null,
@@ -319,6 +341,7 @@ export async function POST(req: Request) {
         emailsJson,
         contactsJson,
         locationJson,
+        channelsJson,
       ]
     );
 
@@ -369,6 +392,7 @@ export async function PUT(req: Request) {
       phones,
       emails,
       contacts,
+      channels,
       location_data,
     } = body;
 
@@ -382,6 +406,7 @@ export async function PUT(req: Request) {
     const phonesJson = phones !== undefined ? JSON.stringify(phones) : undefined;
     const emailsJson = emails !== undefined ? JSON.stringify(emails) : undefined;
     const contactsJson = contacts !== undefined ? JSON.stringify(contacts) : undefined;
+    const channelsJson = channels !== undefined ? JSON.stringify(channels) : undefined;
     const locationJson = location_data !== undefined ? JSON.stringify(location_data) : undefined;
 
     const res = await db.query(
@@ -412,8 +437,9 @@ export async function PUT(req: Request) {
         emails = COALESCE($24::jsonb, emails),
         contacts = COALESCE($25::jsonb, contacts),
         location_data = COALESCE($26::jsonb, location_data),
+        channels = COALESCE($27::jsonb, channels),
         updated_at = NOW()
-      WHERE id = $27
+      WHERE id = $28
       RETURNING *`,
       [
         name ?? null,
@@ -423,7 +449,7 @@ export async function PUT(req: Request) {
         client_type ?? null,
         finalPhone ?? null,
         finalEmail ?? null,
-        website ?? null,
+        normalizeUrl(website),
         profile_image ?? null,
         address ?? null,
         city ?? null,
@@ -442,6 +468,7 @@ export async function PUT(req: Request) {
         emailsJson ?? null,
         contactsJson ?? null,
         locationJson ?? null,
+        channelsJson ?? null,
         id,
       ]
     );
@@ -450,7 +477,13 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: "Client record not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ client: res.rows[0], message: "Client record updated successfully" });
+    const updatedClient = res.rows[0];
+    if (status && updatedClient.user_id) {
+      const isUserActive = status === "active";
+      await db.query(`UPDATE users SET is_active = $1, updated_at = NOW() WHERE id = $2`, [isUserActive, updatedClient.user_id]).catch(() => {});
+    }
+
+    return NextResponse.json({ client: updatedClient, message: "Client record updated successfully" });
   } catch (error: any) {
     console.error("[Sales Clients PUT] Error:", error);
     return NextResponse.json({ error: error.message || "Failed to update client record" }, { status: 500 });

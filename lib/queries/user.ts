@@ -199,10 +199,44 @@ export async function ensureStaffSalaryStructureSchema(db: Queryable) {
           CONSTRAINT staff_salary_components_amount_check CHECK (amount >= 0)
         );
         ALTER TABLE staff_salary_components ADD COLUMN IF NOT EXISTS component_type VARCHAR(20) DEFAULT 'EARNING';
+        ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS commission_data JSONB DEFAULT NULL;
+
+        CREATE TABLE IF NOT EXISTS staff_commission_structures (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          commission_type VARCHAR(50) DEFAULT 'RULES_BASED',
+          commission_rate NUMERIC(10, 2) DEFAULT 0,
+          commission_trigger VARCHAR(100) DEFAULT 'course_admission',
+          minimum_threshold NUMERIC(12, 2),
+          payout_frequency VARCHAR(50) DEFAULT 'monthly',
+          notes TEXT,
+          rules JSONB DEFAULT '[]'::jsonb,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS staff_salary_increments (
+          id BIGSERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          institution_id INTEGER,
+          previous_base_salary NUMERIC(12,2) NOT NULL DEFAULT 0,
+          new_base_salary NUMERIC(12,2) NOT NULL,
+          increment_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+          increment_percentage NUMERIC(6,2) DEFAULT 0,
+          effective_date DATE NOT NULL DEFAULT CURRENT_DATE,
+          reason TEXT,
+          approved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          approved_by_name VARCHAR(150),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
       `);
       await db.query(`
         CREATE INDEX IF NOT EXISTS idx_staff_salary_components_user
-        ON staff_salary_components(user_id, sort_order, id)
+        ON staff_salary_components(user_id, sort_order, id);
+        CREATE INDEX IF NOT EXISTS idx_staff_commission_user
+        ON staff_commission_structures(user_id);
+        CREATE INDEX IF NOT EXISTS idx_staff_salary_increments_user
+        ON staff_salary_increments(user_id, effective_date DESC);
       `);
     })().catch((error) => {
       staffSalaryStructureSchemaReady = null;
@@ -1188,14 +1222,12 @@ export async function getOrCreateEduBirdInstitution(
   db: Queryable
 ): Promise<{ id: number; name: string }> {
   const existing = await db.query<{ id: number; name: string }>(
-    `SELECT id, name FROM institution_profiles 
-     WHERE (LOWER(name) = 'edubird' OR slug = 'edubird' OR LOWER(name) LIKE '%edubird%') 
-       AND COALESCE(is_deleted, FALSE) = FALSE 
-     ORDER BY CASE WHEN LOWER(name) = 'edubird' THEN 0 ELSE 1 END, id ASC LIMIT 1`
+    `SELECT id, name FROM institution_profiles WHERE id = 1 LIMIT 1`
   );
   if (existing.rows[0]) {
     return existing.rows[0];
   }
+  return { id: 1, name: "Edubird" };
 
   const typeRes = await db.query<{ id: number }>(
     `SELECT id FROM institution_types WHERE COALESCE(is_deleted, FALSE) = FALSE LIMIT 1`
@@ -1272,15 +1304,17 @@ async function assignScopedRole(
     await db.query(
       `
         UPDATE user_profiles
-        SET under_institution_id = NULL,
-            designation_id = NULL,
-            is_teacher = FALSE,
-            teacher_type = NULL,
-            hourly_charges = NULL,
+        SET under_institution_id = 1,
             updated_at = CURRENT_TIMESTAMP
         WHERE user_id = $1
       `,
       [userId]
+    );
+    await db.query(
+      `INSERT INTO institution_memberships (user_id, institution_id, role_id, is_active, is_deleted, status)
+       VALUES ($1, 1, $2, TRUE, FALSE, 'ACTIVE')
+       ON CONFLICT DO NOTHING`,
+      [userId, role.id]
     );
     await insertUserRole(db, userId, role.id);
     return;
@@ -1295,10 +1329,9 @@ async function assignScopedRole(
     )
   );
 
-  // If adding staff with an institution role and no institution was selected (e.g. platform admin staff), default to EduBird
-  if (role.scope_code === "institution" && targetInstitutionIds.length === 0) {
-    const edubird = await getOrCreateEduBirdInstitution(db);
-    targetInstitutionIds.push(edubird.id);
+  // If adding staff and no institution was selected, default to Institution 1 (Edubird)
+  if (targetInstitutionIds.length === 0) {
+    targetInstitutionIds.push(1);
   }
 
   if (role.scope_code === "institution" && targetInstitutionIds.length > 0) {
@@ -1834,10 +1867,9 @@ export const createAdminUserWithDetails = async (
     let resolvedInstitutionId = data.profile.under_institution_id ?? null;
     let resolvedInstitutionIds = data.profile.institution_ids ?? [];
 
-    if (!resolvedInstitutionId && resolvedInstitutionIds.length === 0 && roleMeta?.scope_code === "institution") {
-      const edubird = await getOrCreateEduBirdInstitution(client);
-      resolvedInstitutionId = edubird.id;
-      resolvedInstitutionIds = [edubird.id];
+    if (!resolvedInstitutionId && resolvedInstitutionIds.length === 0) {
+      resolvedInstitutionId = 1;
+      resolvedInstitutionIds = [1];
     }
 
     await assignScopedRole(
@@ -2573,10 +2605,9 @@ export const updateAdminUserWithDetails = async (
     let resolvedInstitutionId = data.profile.under_institution_id ?? null;
     let resolvedInstitutionIds = data.profile.institution_ids ?? [];
 
-    if (!resolvedInstitutionId && resolvedInstitutionIds.length === 0 && roleMeta?.scope_code === "institution") {
-      const edubird = await getOrCreateEduBirdInstitution(client);
-      resolvedInstitutionId = edubird.id;
-      resolvedInstitutionIds = [edubird.id];
+    if (!resolvedInstitutionId && resolvedInstitutionIds.length === 0) {
+      resolvedInstitutionId = 1;
+      resolvedInstitutionIds = [1];
     }
 
     await assignScopedRole(

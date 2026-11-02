@@ -67,8 +67,9 @@ export async function ensureSubscriptionSchema(db: Queryable): Promise<void> {
   subscriptionSchemaReady = (async () => {
     try {
       await ensureSalesSchema(db);
+      await initSubscriptionSchemaDirect(db);
     } catch (e) {
-      console.error('Error ensuring sales schema:', e);
+      console.error('Error ensuring subscription schema:', e);
     }
   })();
   return subscriptionSchemaReady;

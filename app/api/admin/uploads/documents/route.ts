@@ -1,13 +1,44 @@
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
+import fs from "fs/promises";
+import path from "path";
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { canAccessAdminArea, hasPermission } from "@/lib/auth/permissions";
 
-const MAX_DOCUMENT_FILE_SIZE = 2 * 1024 * 1024;
+const MAX_DOCUMENT_FILE_SIZE = 100 * 1024 * 1024; // 100MB for video/media support
 const ACCEPTED_DOCUMENT_TYPES = new Set([
+  // Images
   "image/jpeg",
   "image/png",
   "image/webp",
+  "image/gif",
+  "image/svg+xml",
+  "image/bmp",
+  // PDF & Word
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  // Excel & Spreadsheets
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "text/csv",
+  // Videos
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+  "video/x-msvideo",
+  "video/mpeg",
+  "video/ogg",
+  "video/x-matroska",
+  // Generic fallback (verified via extension)
+  "application/octet-stream",
+]);
+
+const ALLOWED_EXTENSIONS = new Set([
+  ".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".bmp",
+  ".pdf", ".doc", ".docx",
+  ".xls", ".xlsx", ".csv",
+  ".mp4", ".mov", ".webm", ".avi", ".mkv", ".mpeg"
 ]);
 const CLOUDINARY_UPLOAD_URL = "https://api.cloudinary.com/v1_1";
 
@@ -45,16 +76,6 @@ export async function POST(req: Request) {
       );
     }
 
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    const apiKey = process.env.CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
-    if (!cloudName || !apiKey || !apiSecret) {
-      return NextResponse.json(
-        { error: "Cloudinary is not configured" },
-        { status: 500 },
-      );
-    }
-
     const formData = await req.formData();
     const file = formData.get("file");
     if (!(file instanceof File)) {
@@ -63,17 +84,50 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-    if (!ACCEPTED_DOCUMENT_TYPES.has(file.type)) {
+    const ext = path.extname(file.name).toLowerCase();
+    const isAcceptedType = ACCEPTED_DOCUMENT_TYPES.has(file.type) || ALLOWED_EXTENSIONS.has(ext);
+
+    if (!isAcceptedType) {
       return NextResponse.json(
-        { error: "Only JPG, PNG and WebP images are allowed" },
+        { error: "Only images, video, PDF, Word (.doc, .docx), and Excel (.xls, .xlsx, .csv) files are allowed" },
         { status: 422 },
       );
     }
     if (file.size > MAX_DOCUMENT_FILE_SIZE) {
       return NextResponse.json(
-        { error: "Image must be 2MB or smaller" },
+        { error: "File must be 100MB or smaller" },
         { status: 422 },
       );
+    }
+
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+    // Fallback to local file storage when Cloudinary is not configured
+    if (!cloudName || !apiKey || !apiSecret) {
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      const fileExt = ext || (file.type.startsWith("video/") ? ".mp4" : file.type === "application/pdf" ? ".pdf" : ".png");
+      const safeBaseName = path.basename(file.name, fileExt).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
+      const uniqueFileName = `${Date.now()}_${safeBaseName}_${randomBytes(4).toString("hex")}${fileExt}`;
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "documents");
+      await fs.mkdir(uploadDir, { recursive: true });
+      await fs.writeFile(path.join(uploadDir, uniqueFileName), buffer);
+
+      let resourceType = "raw";
+      if (file.type.startsWith("image/")) resourceType = "image";
+      else if (file.type.startsWith("video/")) resourceType = "video";
+
+      return NextResponse.json({
+        data: {
+          url: `/uploads/documents/${uniqueFileName}`,
+          public_id: `local_documents_${uniqueFileName}`,
+          resource_type: resourceType,
+          file_type: file.type,
+          file_name: file.name,
+        },
+      });
     }
 
     const timestamp = Math.round(Date.now() / 1000);

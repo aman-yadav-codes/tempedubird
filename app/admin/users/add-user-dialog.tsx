@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
+  Award,
+  Info,
   ArrowRight,
   ChevronLeft,
   ChevronRight,
@@ -391,12 +393,7 @@ export function AddUserDialog({
   const selectedRoleIsTeacher = selectedRole?.code === "teacher";
   const selectedRoleIsStaff = selectedRole?.code === "teacher" || selectedRole?.code === "driver" || selectedRole?.code === "faculty";
   const selectedRoleIsGuest = selectedRole?.code === "guest";
-  const selectedRoleCanHaveDesignation = Boolean(
-    selectedRole?.code === "institution_admin" ||
-    selectedRoleIsTeacher ||
-    selectedRole?.is_designation ||
-    currentUserIsPlatformAdmin
-  );
+  const selectedRoleCanHaveDesignation = true; // Any role can have a designation
   const showAccountInstitution = Boolean(
     selectedRoleIsInstitutionScoped && !selectedRoleIsPlatformAdmin && !currentUserIsPlatformAdmin
   );
@@ -478,19 +475,22 @@ function getRoleDisplay(role: RoleOption) {
   const dialogSteps = useMemo(
     () => [
       { label: "Account Details", icon: UserRound },
+      { label: "About", icon: Info },
       { label: "Address & Location", icon: MapPin },
-      { label: "Background & Education", icon: Briefcase },
-      { label: "Upload Documents", icon: FileText },
-      { label: "Salary Details", icon: IndianRupee },
-      { label: "Commission Assigned", icon: BadgeDollarSign },
+      { label: "Education", icon: GraduationCap },
+      { label: "Experience", icon: Briefcase },
+      { label: "Certificates", icon: Award },
     ],
     []
   );
-  const addressStepIndex = 1;
-  const backgroundStepIndex = 2;
-  const documentsStepIndex = 3;
-  const salaryStepIndex = 4;
-  const commissionStepIndex = 5;
+  const aboutStepIndex = 1;
+  const addressStepIndex = 2;
+  const educationStepIndex = 3;
+  const experienceStepIndex = 4;
+  const certificatesStepIndex = 5;
+  const documentsStepIndex = -1;
+  const salaryStepIndex = -1;
+  const commissionStepIndex = -1;
   const securityStepIndex = -1;
   const reviewStepIndex = -1;
   const isLastStep = activeStep === dialogSteps.length - 1;
@@ -1300,10 +1300,37 @@ function getRoleDisplay(role: RoleOption) {
     return () => window.clearTimeout(timeout);
   }, [actualOpen, currentUserIsPlatformAdmin, preferredInstitution, user]);
 
+  useEffect(() => {
+    if (!actualOpen || isEdit) return;
+    if (availableRoles.length > 0) {
+      const isCurrentRoleInvalid =
+        !form.role_id ||
+        (isStaffContext && !availableRoles.some((r) => String(r.id) === form.role_id));
+      if (isCurrentRoleInvalid) {
+        const defaultRole =
+          availableRoles.find(
+            (role) => role.code === "teacher" || role.name.toLowerCase().includes("teacher")
+          ) ?? availableRoles[0];
+        if (defaultRole) {
+          setForm((prev) => ({
+            ...prev,
+            role_id: String(defaultRole.id),
+            is_teacher: defaultRole.code === "teacher",
+            teacher_type: defaultRole.code === "teacher" ? "institute_teacher" : prev.teacher_type,
+          }));
+        }
+      }
+    }
+  }, [actualOpen, availableRoles, form.role_id, isEdit, isStaffContext]);
+
   const validateStep = (stepIndex: number) => {
     const nextErrors: Record<string, string> = {};
 
     if (stepIndex === 0) {
+      if (showRoleAssignment && !form.role_id) {
+        nextErrors.role_id = "Please select a role for this user.";
+      }
+
       if (safeTrim(form.full_name).length < 2) {
         nextErrors.full_name = "Enter the full name.";
       }
@@ -1771,7 +1798,7 @@ function getRoleDisplay(role: RoleOption) {
                 const isComplete = activeStep > index;
 
                 return (
-                  <li key={step.label} className="w-46 shrink-0 sm:w-48">
+                  <li key={step.label} className="shrink-0">
                     <button
                       ref={(node) => {
                         tabRefs.current[index] = node;
@@ -1779,7 +1806,7 @@ function getRoleDisplay(role: RoleOption) {
                       type="button"
                       onClick={() => goToStep(index)}
                       className={cn(
-                        "flex h-12 w-full items-center gap-2 whitespace-nowrap rounded-md border px-3 text-left text-sm transition-colors",
+                        "flex h-10 items-center gap-2 whitespace-nowrap rounded-lg border px-3.5 text-left text-xs font-semibold transition-colors",
                         isActive && "border-primary bg-primary text-primary-foreground",
                         isComplete && !isActive && "bg-muted",
                         !isActive && !isComplete && "hover:bg-muted"
@@ -1936,97 +1963,8 @@ function getRoleDisplay(role: RoleOption) {
                   </div>
                 )}
               </div>
-              {/* Bio & Avatar in a balanced 2-column layout to reduce scrolling */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                {/* Profile Picture / Avatar */}
-                <div className="space-y-2 rounded-lg border bg-muted/10 p-2.5">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-semibold flex items-center gap-1.5">
-                      <ImageIcon className="h-3.5 w-3.5 text-primary" />
-                      Profile Picture
-                    </Label>
-                    <span className="text-[10px] text-muted-foreground">Upload or paste URL</span>
-                  </div>
 
-                  <div className="flex items-center gap-2.5">
-                    {form.avatar_url ? (
-                      <div className="relative group shrink-0">
-                        <img
-                          src={form.avatar_url}
-                          alt="Avatar"
-                          className="h-11 w-11 rounded-full object-cover border-2 border-primary/30 shadow-xs"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => updateForm("avatar_url", "")}
-                          className="absolute -top-1 -right-1 bg-destructive text-white rounded-full p-0.5 shadow-xs hover:scale-110 transition-transform"
-                          title="Remove photo"
-                        >
-                          <XIcon className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="h-11 w-11 rounded-full bg-primary/10 border-2 border-dashed border-primary/30 grid place-items-center text-[11px] font-black text-primary shrink-0">
-                        {form.full_name?.slice(0, 2)?.toUpperCase() || "AV"}
-                      </div>
-                    )}
-
-                    <div className="flex-1 min-w-0 space-y-1.5">
-                      <DocumentFileUpload
-                        accessToken={accessToken}
-                        files={
-                          form.avatar_url
-                            ? [
-                                {
-                                  url: form.avatar_url,
-                                  publicId: "",
-                                  resourceType: "image",
-                                  fileType: "image/*",
-                                  name: "Profile Photo",
-                                },
-                              ]
-                            : []
-                        }
-                        onFilesChange={(files) => {
-                          if (files.length > 0) {
-                            updateForm("avatar_url", files[0].url);
-                          } else {
-                            updateForm("avatar_url", "");
-                          }
-                        }}
-                        maxFiles={1}
-                        maxSize={5 * 1024 * 1024}
-                        compact
-                        buttonLabel="Upload"
-                        emptyText="Drop or browse image"
-                      />
-                      <Input
-                        type="text"
-                        placeholder="Image URL (https://...)"
-                        value={form.avatar_url || ""}
-                        onChange={(e) => updateForm("avatar_url", e.target.value)}
-                        className="h-7 text-[11px] bg-background"
-                      />
-                    </div>
-                  </div>
-                  <FieldError message={errors.avatar_url} />
-                </div>
-
-                {/* About Staff / Bio */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="add-user-about" className="text-xs font-semibold">About Staff / Bio</Label>
-                  <Textarea
-                    id="add-user-about"
-                    value={form.about || ""}
-                    onChange={(e) => updateForm("about", e.target.value)}
-                    placeholder="Brief background, bio summary, or introduction..."
-                    rows={4}
-                    className="text-xs font-medium resize-none h-[106px]"
-                  />
-                </div>
-              </div>
-
-              {/* Choose Role & Show on EduBird Marketplace Options */}
+              {/* Choose Role & Options */}
               <div className="grid gap-3 sm:grid-cols-2 items-end">
                 {showRoleAssignment && (
                   <div className="space-y-1.5">
@@ -2049,12 +1987,7 @@ function getRoleDisplay(role: RoleOption) {
                           : "";
                         const nextRoleAllowsMultipleInstitutions =
                           currentUserIsPlatformAdmin && nextRole?.code === "institution_admin";
-                        const nextRoleCanHaveDesignation = Boolean(
-                          nextRole?.code === "institution_admin" ||
-                          nextRoleIsTeacher ||
-                          nextRole?.is_designation ||
-                          currentUserIsPlatformAdmin
-                        );
+                        const nextRoleCanHaveDesignation = true; // Any role can have a designation
                         if (!nextRoleIsInstitutionScoped) {
                           setSelectedInstitutionBoardId(null);
                         }
@@ -2136,24 +2069,11 @@ function getRoleDisplay(role: RoleOption) {
                         changed to Institution Admin later.
                       </p>
                     )}
+                    <FieldError message={errors.role_id} />
                   </div>
                 )}
 
-                {/* Account Options - Marketplace */}
-                {showAdminControls && (
-                  <div className="flex h-10 items-center gap-2.5 rounded-md border px-3 bg-primary/5 border-primary/20">
-                    <Checkbox
-                      id="add-user-marketplace"
-                      checked={Boolean(form.is_marketplace_enabled ?? true)}
-                      onCheckedChange={(checked) =>
-                        updateForm("is_marketplace_enabled", checked === true)
-                      }
-                    />
-                    <Label htmlFor="add-user-marketplace" className="cursor-pointer text-xs font-medium">
-                      Show on EduBird Marketplace
-                    </Label>
-                  </div>
-                )}
+                
               </div>
 
               {/* Institution Selection for Institution-Scoped Staff Roles (Hidden on Platform Admin side) */}
@@ -2230,11 +2150,135 @@ function getRoleDisplay(role: RoleOption) {
             </div>
           )}
 
-          {/* STEP 1: Address & Location */}
+                    {/* STEP 1: About Staff Profile & Marketplace */}
           {activeStep === 1 && (
+            <div className="space-y-4">
+              <div className="space-y-4 rounded-xl border bg-card/60 p-5 shadow-xs">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                    <Info className="h-4 w-4 text-primary" />
+                    About Staff Profile
+                  </h4>
+                  <p className="text-[11px] text-muted-foreground">
+                    Set the profile picture, bio summary, and marketplace visibility for this staff member.
+                  </p>
+                </div>
+
+                {/* 2-column layout matching design */}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {/* Profile Picture */}
+                  <div className="space-y-2 rounded-lg border bg-muted/10 p-3 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold flex items-center gap-1.5">
+                        <ImageIcon className="h-3.5 w-3.5 text-primary" />
+                        Profile Picture
+                      </Label>
+                      <span className="text-[10px] text-muted-foreground">Upload or paste URL</span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      {form.avatar_url ? (
+                        <div className="relative group shrink-0">
+                          <img
+                            src={form.avatar_url}
+                            alt="Avatar"
+                            className="h-14 w-14 rounded-full object-cover border-2 border-primary/30 shadow-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateForm("avatar_url", "")}
+                            className="absolute -top-1 -right-1 bg-destructive text-white rounded-full p-0.5 shadow-xs hover:scale-110 transition-transform"
+                            title="Remove photo"
+                          >
+                            <XIcon className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="h-14 w-14 rounded-full bg-primary/10 border-2 border-dashed border-primary/30 grid place-items-center text-xs font-black text-primary shrink-0">
+                          {form.full_name?.slice(0, 2)?.toUpperCase() || "AV"}
+                        </div>
+                      )}
+
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        <DocumentFileUpload
+                          accessToken={accessToken}
+                          files={
+                            form.avatar_url
+                              ? [
+                                  {
+                                    url: form.avatar_url,
+                                    publicId: "",
+                                    resourceType: "image",
+                                    fileType: "image/*",
+                                    name: "Profile Photo",
+                                  },
+                                ]
+                              : []
+                          }
+                          onFilesChange={(files) => {
+                            if (files.length > 0) {
+                              updateForm("avatar_url", files[0].url);
+                            } else {
+                              updateForm("avatar_url", "");
+                            }
+                          }}
+                          maxFiles={1}
+                          maxSize={5 * 1024 * 1024}
+                          compact
+                          buttonLabel="Upload"
+                          emptyText="Drop or browse image"
+                        />
+                        <Input
+                          type="text"
+                          placeholder="Image URL (https://...)"
+                          value={form.avatar_url || ""}
+                          onChange={(e) => updateForm("avatar_url", e.target.value)}
+                          className="h-8 text-xs bg-background"
+                        />
+                      </div>
+                    </div>
+                    <FieldError message={errors.avatar_url} />
+                  </div>
+
+                  {/* About Staff / Bio */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="add-user-about" className="text-xs font-semibold">About Staff / Bio</Label>
+                    <Textarea
+                      id="add-user-about"
+                      value={form.about || ""}
+                      onChange={(e) => updateForm("about", e.target.value)}
+                      placeholder="Brief background, bio summary, or introduction..."
+                      rows={5}
+                      className="text-xs font-medium resize-none h-[120px]"
+                    />
+                  </div>
+                </div>
+
+                {/* Account Options - Marketplace */}
+                {showAdminControls && (
+                  <div className="flex h-11 items-center gap-2.5 rounded-lg border px-3.5 bg-primary/5 border-primary/20">
+                    <Checkbox
+                      id="add-user-marketplace"
+                      checked={Boolean(form.is_marketplace_enabled ?? true)}
+                      onCheckedChange={(checked) =>
+                        updateForm("is_marketplace_enabled", checked === true)
+                      }
+                    />
+                    <Label htmlFor="add-user-marketplace" className="cursor-pointer text-xs font-medium">
+                      Show on EduBird Marketplace
+                    </Label>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: Address & Location */}
+          {activeStep === 2 && (
             <div className="space-y-4">
               <div className="space-y-3 rounded-xl border bg-card/60 p-4 shadow-xs">
                 <GoogleLocationPicker
+                  layout="side-by-side"
                   value={form.location}
                   onChange={(location) => {
                     setForm((prev) => ({
@@ -2247,42 +2291,28 @@ function getRoleDisplay(role: RoleOption) {
                     }));
                   }}
                 />
-                <div className="space-y-1.5 pt-1">
-                  <Label htmlFor="add-user-address" className="text-xs font-semibold text-foreground">
-                    Address / City / Street
-                  </Label>
-                  <Input
-                    id="add-user-address"
-                    value={form.full_address || ""}
-                    onChange={(event) => updateForm("full_address", event.target.value)}
-                    placeholder="Street address or city"
-                    className="text-xs h-9 bg-background font-medium"
-                    autoComplete="off"
-                  />
-                </div>
               </div>
             </div>
           )}
 
-          {/* STEP 2: Background, Education & Experience with Multiple Entries */}
-          {activeStep === 2 && (
-            <div className="space-y-6">
-              {/* Education Qualifications Section */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between border-b pb-2">
+          {/* STEP 3: Education & Qualifications */}
+          {activeStep === 3 && (
+            <div className="space-y-4">
+              <div className="space-y-4 rounded-xl border bg-card/60 p-5 shadow-xs">
+                <div className="flex items-center justify-between border-b pb-3">
                   <div>
                     <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
                       <GraduationCap className="h-4 w-4 text-primary" />
                       Education & Qualifications
                     </h4>
-                    <p className="text-[11px] text-muted-foreground">Add academic degrees, diplomas, and institutional qualifications</p>
+                    <p className="text-[11px] text-muted-foreground">Add academic degrees, diplomas, and institutional qualifications.</p>
                   </div>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => updateForm("education", [...form.education, blankEducation()])}
-                    className="h-8 gap-1 text-xs"
+                    className="h-8 gap-1.5 text-xs font-semibold"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     Add Qualification
@@ -2290,16 +2320,18 @@ function getRoleDisplay(role: RoleOption) {
                 </div>
 
                 {form.education.length === 0 ? (
-                  <div className="rounded-lg border border-dashed p-4 text-center">
-                    <p className="text-xs text-muted-foreground mb-2">No educational qualifications added yet.</p>
+                  <div className="rounded-lg border border-dashed p-8 text-center bg-muted/5">
+                    <GraduationCap className="mx-auto h-9 w-9 text-muted-foreground/40 mb-2" />
+                    <p className="text-xs font-medium text-muted-foreground mb-3">No educational qualifications added yet.</p>
                     <Button
                       type="button"
                       variant="secondary"
                       size="sm"
                       onClick={() => updateForm("education", [blankEducation()])}
-                      className="h-7 text-xs"
+                      className="h-8 text-xs font-medium"
                     >
-                      + Add Qualification
+                      <Plus className="mr-1.5 h-3.5 w-3.5" />
+                      Add Qualification
                     </Button>
                   </div>
                 ) : (
@@ -2324,23 +2356,27 @@ function getRoleDisplay(role: RoleOption) {
                   </div>
                 )}
               </div>
+            </div>
+          )}
 
-              {/* Work Experience Section */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between border-b pb-2">
+          {/* STEP 4: Previous Work Experience & Institutions */}
+          {activeStep === 4 && (
+            <div className="space-y-4">
+              <div className="space-y-4 rounded-xl border bg-card/60 p-5 shadow-xs">
+                <div className="flex items-center justify-between border-b pb-3">
                   <div>
                     <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
                       <Briefcase className="h-4 w-4 text-primary" />
                       Previous Work Experience & Institutions
                     </h4>
-                    <p className="text-[11px] text-muted-foreground">Add employment history, past school/college teaching, and designations</p>
+                    <p className="text-[11px] text-muted-foreground">Add employment history, past school/college teaching, and designations.</p>
                   </div>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => updateForm("experiences", [...form.experiences, blankExperience()])}
-                    className="h-8 gap-1 text-xs"
+                    className="h-8 gap-1.5 text-xs font-semibold"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     Add Experience
@@ -2348,16 +2384,18 @@ function getRoleDisplay(role: RoleOption) {
                 </div>
 
                 {form.experiences.length === 0 ? (
-                  <div className="rounded-lg border border-dashed p-4 text-center">
-                    <p className="text-xs text-muted-foreground mb-2">No previous work experience added yet.</p>
+                  <div className="rounded-lg border border-dashed p-8 text-center bg-muted/5">
+                    <Briefcase className="mx-auto h-9 w-9 text-muted-foreground/40 mb-2" />
+                    <p className="text-xs font-medium text-muted-foreground mb-3">No previous work experience added yet.</p>
                     <Button
                       type="button"
                       variant="secondary"
                       size="sm"
                       onClick={() => updateForm("experiences", [blankExperience()])}
-                      className="h-7 text-xs"
+                      className="h-8 text-xs font-medium"
                     >
-                      + Add Work Experience
+                      <Plus className="mr-1.5 h-3.5 w-3.5" />
+                      Add Work Experience
                     </Button>
                   </div>
                 ) : (
@@ -2382,23 +2420,27 @@ function getRoleDisplay(role: RoleOption) {
                   </div>
                 )}
               </div>
+            </div>
+          )}
 
-              {/* Certifications Section */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between border-b pb-2">
+          {/* STEP 5: Certifications & Specialized Training */}
+          {activeStep === 5 && (
+            <div className="space-y-4">
+              <div className="space-y-4 rounded-xl border bg-card/60 p-5 shadow-xs">
+                <div className="flex items-center justify-between border-b pb-3">
                   <div>
                     <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
-                      <FileText className="h-4 w-4 text-primary" />
+                      <Award className="h-4 w-4 text-primary" />
                       Certifications & Specialized Training
                     </h4>
-                    <p className="text-[11px] text-muted-foreground">Professional certificates, diplomas, training and credentials</p>
+                    <p className="text-[11px] text-muted-foreground">Professional certificates, diplomas, training and credentials.</p>
                   </div>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => updateForm("certifications", [...form.certifications, blankCertification()])}
-                    className="h-8 gap-1 text-xs"
+                    className="h-8 gap-1.5 text-xs font-semibold"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     Add Certification
@@ -2406,16 +2448,18 @@ function getRoleDisplay(role: RoleOption) {
                 </div>
 
                 {form.certifications.length === 0 ? (
-                  <div className="rounded-lg border border-dashed p-4 text-center">
-                    <p className="text-xs text-muted-foreground mb-2">No certifications added yet (optional).</p>
+                  <div className="rounded-lg border border-dashed p-8 text-center bg-muted/5">
+                    <Award className="mx-auto h-9 w-9 text-muted-foreground/40 mb-2" />
+                    <p className="text-xs font-medium text-muted-foreground mb-3">No certifications added yet (optional).</p>
                     <Button
                       type="button"
                       variant="secondary"
                       size="sm"
                       onClick={() => updateForm("certifications", [blankCertification()])}
-                      className="h-7 text-xs"
+                      className="h-8 text-xs font-medium"
                     >
-                      + Add Certification
+                      <Plus className="mr-1.5 h-3.5 w-3.5" />
+                      Add Certification
                     </Button>
                   </div>
                 ) : (
@@ -2438,857 +2482,6 @@ function getRoleDisplay(role: RoleOption) {
                     ))}
                   </div>
                 )}
-              </div>
-            </div>
-          )}
-
-          {/* STEP 3: Upload Documents */}
-          {activeStep === 3 && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b pb-2">
-                <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
-                    <FileText className="h-4 w-4 text-primary" />
-                    Staff Verification Documents
-                  </h4>
-                  <p className="text-[11px] text-muted-foreground">Upload identification, certificates, or resumes for staff records</p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => updateForm("documents", [...form.documents, blankUserDocument()])}
-                  className="h-8 gap-1 text-xs"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add Document
-                </Button>
-              </div>
-
-              {form.documents.length === 0 ? (
-                <div className="rounded-lg border border-dashed p-4 text-center">
-                  <p className="text-xs text-muted-foreground mb-2">No documents added yet (optional).</p>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => updateForm("documents", [blankUserDocument()])}
-                    className="h-7 text-xs"
-                  >
-                    + Add First Document
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {form.documents.map((doc, idx) => (
-                    <div key={doc.id || idx} className="rounded-lg border bg-muted/10 p-3.5 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                          <FileText className="size-3.5 text-primary" />
-                          Document {idx + 1}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => {
-                            const next = form.documents.filter((_, i) => i !== idx);
-                            updateForm("documents", next);
-                          }}
-                        >
-                          <XIcon className="size-4 text-muted-foreground hover:text-destructive" />
-                          <span className="sr-only">Remove document</span>
-                        </Button>
-                      </div>
-
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Document Type</Label>
-                          <Select
-                            value={doc.document_type || "GOVT_ID"}
-                            onValueChange={(val) => {
-                              const next = form.documents.map((item, i) => (i === idx ? { ...item, document_type: val } : item));
-                              updateForm("documents", next);
-                            }}
-                          >
-                            <SelectTrigger className="h-9 text-xs">
-                              <SelectValue placeholder="Select type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="GOVT_ID">Government ID (Aadhaar / PAN)</SelectItem>
-                              <SelectItem value="AADHAAR">Aadhaar Card</SelectItem>
-                              <SelectItem value="PAN">PAN Card</SelectItem>
-                              <SelectItem value="RESUME">Resume / Curriculum Vitae (CV)</SelectItem>
-                              <SelectItem value="DEGREE">Degree / Educational Certificate</SelectItem>
-                              <SelectItem value="EXPERIENCE_LETTER">Experience / Relieving Letter</SelectItem>
-                              <SelectItem value="OTHER">Other Verification Document</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Document / ID Number (Optional)</Label>
-                          <Input
-                            placeholder="e.g. XXXX-XXXX-XXXX / Reference ID"
-                            value={doc.document_number || ""}
-                            onChange={(e) => {
-                              const next = form.documents.map((item, i) => (i === idx ? { ...item, document_number: e.target.value } : item));
-                              updateForm("documents", next);
-                            }}
-                            className="h-9 text-xs"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-xs">Upload Document File / Image</Label>
-                        <DocumentFileUpload
-                          accessToken={accessToken}
-                          files={getDocumentFiles(doc)}
-                          onFilesChange={(files) => {
-                            const next = form.documents.map((item, i) =>
-                              i === idx
-                                ? {
-                                    ...item,
-                                    files,
-                                    file_url: files[0]?.url || "",
-                                    public_id: files[0]?.publicId || "",
-                                    resource_type: files[0]?.resourceType || "",
-                                  }
-                                : item
-                            );
-                            updateForm("documents", next);
-                          }}
-                          maxFiles={3}
-                          maxSize={10 * 1024 * 1024}
-                          compact
-                          buttonLabel="Upload Document"
-                          emptyText="Drop document (PDF, PNG, JPG) here or click to browse"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* STEP 4: Employee Salary Details */}
-          {activeStep === 4 && (
-            <div className="space-y-4">
-              <div className="rounded-lg border bg-card p-4 space-y-4 shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
-                  <div className="space-y-0.5">
-                    <h3 className="text-sm font-semibold flex items-center gap-2">
-                      <IndianRupee className="size-4 text-primary" />
-                      Employee Salary & Compensation Structure
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      Configure basic pay, allowances, deductions, and salary disbursement cycle.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs font-medium text-muted-foreground">Salary Cycle:</Label>
-                    <Select
-                      value={form.salary_frequency || "MONTHLY"}
-                      onValueChange={(val: any) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          salary_frequency: val,
-                        }))
-                      }
-                    >
-                      <SelectTrigger className="h-8 text-xs font-semibold w-36 bg-background">
-                        <SelectValue placeholder="Select cycle" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="MONTHLY">📅 Monthly Basis</SelectItem>
-                        <SelectItem value="WEEKLY">🗓️ Weekly Basis</SelectItem>
-                        <SelectItem value="DAILY">☀️ Daily Basis</SelectItem>
-                        <SelectItem value="YEARLY">📆 Yearly (Annual CTC)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Salary KPI Summary Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="p-3 rounded-lg border bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40">
-                    <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
-                      <TrendingUp className="size-3.5" />
-                      Total Gross Earnings
-                    </span>
-                    <p className="text-lg font-bold text-emerald-800 dark:text-emerald-300 mt-1 font-mono">
-                      ₹{grossSalary.toLocaleString("en-IN")}
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-lg border bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40">
-                    <span className="text-[11px] font-medium text-rose-700 dark:text-rose-400 flex items-center gap-1">
-                      <TrendingDown className="size-3.5" />
-                      Total Deductions
-                    </span>
-                    <p className="text-lg font-bold text-rose-800 dark:text-rose-300 mt-1 font-mono">
-                      ₹{totalDeductions.toLocaleString("en-IN")}
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-lg border bg-primary/5 border-primary/20">
-                    <span className="text-[11px] font-medium text-primary flex items-center gap-1">
-                      <Wallet className="size-3.5" />
-                      Net Take-Home Pay ({(form.salary_frequency || "MONTHLY").toLowerCase()})
-                    </span>
-                    <p className="text-lg font-bold text-primary mt-1 font-mono">
-                      ₹{netTakeHome.toLocaleString("en-IN")}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Earnings & Allowances */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <TrendingUp className="size-3.5 text-emerald-600" />
-                        Earnings & Allowances
-                      </Label>
-                      <p className="text-[11px] text-muted-foreground">
-                        Basic pay, house rent (HRA), dearness allowance (DA), travel, and special allowances.
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setForm((prev) => ({
-                          ...prev,
-                          salary_components: [
-                            ...prev.salary_components,
-                            blankSalaryComponent("", "", "EARNING"),
-                          ],
-                        }));
-                      }}
-                      className="h-7 text-xs gap-1 font-semibold"
-                    >
-                      <Plus className="size-3" />
-                      Add Allowance
-                    </Button>
-                  </div>
-
-                  {/* Quick Preset Buttons for Earnings */}
-                  <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-md bg-muted/25 border border-dashed">
-                    <span className="text-[11px] text-muted-foreground font-semibold shrink-0 mr-0.5">Quick Add:</span>
-                    {[
-                      "Basic Pay",
-                      "House Rent Allowance (HRA)",
-                      "Dearness Allowance (DA)",
-                      "Medical Allowance",
-                      "Conveyance / Travel Allowance",
-                      "Special Allowance",
-                      "Performance Incentive",
-                    ].map((preset) => (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => {
-                          const exists = form.salary_components.some(
-                            (c) => c.label.toLowerCase() === preset.toLowerCase()
-                          );
-                          if (exists) {
-                            toast.info(`${preset} is already in salary components.`);
-                            return;
-                          }
-                          setForm((prev) => ({
-                            ...prev,
-                            salary_components: [
-                              ...prev.salary_components,
-                              blankSalaryComponent(preset, "", "EARNING"),
-                            ],
-                          }));
-                        }}
-                        className="inline-flex items-center text-[11px] px-2.5 py-1 rounded-full border bg-background hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-colors shadow-2xs font-medium cursor-pointer"
-                      >
-                        + {preset}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="space-y-2">
-                    {form.salary_components
-                      .map((component, globalIndex) => ({ component, globalIndex }))
-                      .filter(({ component }) => component.type !== "DEDUCTION")
-                      .map(({ component, globalIndex }) => (
-                        <div
-                          key={component.id || globalIndex}
-                          className="flex items-center gap-2 p-2.5 rounded-lg border bg-muted/20 hover:bg-muted/30 transition-colors"
-                        >
-                          <div className="flex-1">
-                            <Input
-                              placeholder="e.g. Basic Pay, HRA, Medical..."
-                              value={component.label}
-                              onChange={(e) => {
-                                const newLabel = e.target.value;
-                                setForm((prev) => ({
-                                  ...prev,
-                                  salary_components: prev.salary_components.map((c, i) =>
-                                    i === globalIndex ? { ...c, label: newLabel } : c
-                                  ),
-                                }));
-                              }}
-                              className="h-8 text-xs bg-background"
-                            />
-                          </div>
-
-                          <div className="w-40 relative">
-                            <Input
-                              type="number"
-                              placeholder="0.00"
-                              value={component.amount}
-                              onChange={(e) => {
-                                const newAmount = e.target.value;
-                                setForm((prev) => ({
-                                  ...prev,
-                                  salary_components: prev.salary_components.map((c, i) =>
-                                    i === globalIndex ? { ...c, amount: newAmount } : c
-                                  ),
-                                }));
-                              }}
-                              className="h-8 text-xs bg-background pl-6 font-mono font-medium"
-                            />
-                            <span className="absolute left-2 top-2 text-[11px] text-muted-foreground pointer-events-none font-bold">
-                              ₹
-                            </span>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setForm((prev) => ({
-                                ...prev,
-                                salary_components: prev.salary_components.filter(
-                                  (_, i) => i !== globalIndex
-                                ),
-                              }));
-                            }}
-                            className="text-muted-foreground hover:text-destructive p-1 rounded-md transition-colors"
-                            title="Remove allowance"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-
-                {/* Deductions Section */}
-                <div className="space-y-3 pt-3 border-t">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <TrendingDown className="size-3.5 text-rose-600" />
-                        Deductions & Retentions
-                      </Label>
-                      <p className="text-[11px] text-muted-foreground">
-                        Provident Fund (PF), ESI, Professional Tax (PT), TDS/Income Tax, and other deductions.
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setForm((prev) => ({
-                          ...prev,
-                          salary_components: [
-                            ...prev.salary_components,
-                            blankSalaryComponent("", "", "DEDUCTION"),
-                          ],
-                        }));
-                      }}
-                      className="h-7 text-xs gap-1 font-semibold"
-                    >
-                      <Plus className="size-3" />
-                      Add Deduction
-                    </Button>
-                  </div>
-
-                  {/* Quick Preset Buttons for Deductions */}
-                  <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-md bg-muted/25 border border-dashed">
-                    <span className="text-[11px] text-muted-foreground font-semibold shrink-0 mr-0.5">Quick Add:</span>
-                    {[
-                      "Provident Fund (PF)",
-                      "Employee State Insurance (ESI)",
-                      "Professional Tax (PT)",
-                      "TDS / Income Tax Deduction",
-                      "Loan / Advance Recovery",
-                      "Other Deductions",
-                    ].map((preset) => (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => {
-                          const exists = form.salary_components.some(
-                            (c) => c.label.toLowerCase() === preset.toLowerCase()
-                          );
-                          if (exists) {
-                            toast.info(`${preset} is already in salary components.`);
-                            return;
-                          }
-                          setForm((prev) => ({
-                            ...prev,
-                            salary_components: [
-                              ...prev.salary_components,
-                              blankSalaryComponent(preset, "", "DEDUCTION"),
-                            ],
-                          }));
-                        }}
-                        className="inline-flex items-center text-[11px] px-2.5 py-1 rounded-full border bg-background hover:bg-rose-500/10 hover:border-rose-500/40 hover:text-rose-600 transition-colors shadow-2xs font-medium cursor-pointer"
-                      >
-                        + {preset}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="space-y-2">
-                    {form.salary_components
-                      .map((component, globalIndex) => ({ component, globalIndex }))
-                      .filter(({ component }) => component.type === "DEDUCTION")
-                      .map(({ component, globalIndex }) => (
-                        <div
-                          key={component.id || globalIndex}
-                          className="flex items-center gap-2 p-2.5 rounded-lg border bg-rose-50/20 dark:bg-rose-950/10 border-rose-100 dark:border-rose-900/30 transition-colors"
-                        >
-                          <div className="flex-1">
-                            <Input
-                              placeholder="e.g. Provident Fund (PF), Tax..."
-                              value={component.label}
-                              onChange={(e) => {
-                                const newLabel = e.target.value;
-                                setForm((prev) => ({
-                                  ...prev,
-                                  salary_components: prev.salary_components.map((c, i) =>
-                                    i === globalIndex ? { ...c, label: newLabel } : c
-                                  ),
-                                }));
-                              }}
-                              className="h-8 text-xs bg-background"
-                            />
-                          </div>
-
-                          <div className="w-40 relative">
-                            <Input
-                              type="number"
-                              placeholder="0.00"
-                              value={component.amount}
-                              onChange={(e) => {
-                                const newAmount = e.target.value;
-                                setForm((prev) => ({
-                                  ...prev,
-                                  salary_components: prev.salary_components.map((c, i) =>
-                                    i === globalIndex ? { ...c, amount: newAmount } : c
-                                  ),
-                                }));
-                              }}
-                              className="h-8 text-xs bg-background pl-6 font-mono font-medium text-rose-600"
-                            />
-                            <span className="absolute left-2 top-2 text-[11px] text-muted-foreground pointer-events-none font-bold">
-                              ₹
-                            </span>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setForm((prev) => ({
-                                ...prev,
-                                salary_components: prev.salary_components.filter(
-                                  (_, i) => i !== globalIndex
-                                ),
-                              }));
-                            }}
-                            className="text-muted-foreground hover:text-destructive p-1 rounded-md transition-colors"
-                            title="Remove deduction"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 5: Commission & Incentive Structure */}
-          {activeStep === 5 && (
-            <div className="space-y-4">
-              <div className="rounded-lg border bg-card p-4 space-y-4 shadow-sm">
-                <div className="flex items-center justify-between border-b pb-3">
-                  <div className="space-y-0.5">
-                    <h3 className="text-sm font-semibold flex items-center gap-2">
-                      <BadgeDollarSign className="size-4 text-primary" />
-                      Commission & Incentive Structure
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      Configure multi-condition commission rules, lead incentives, admission rewards, and payout terms.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="space-y-1.5 max-w-sm">
-                    <Label className="text-xs font-semibold">Commission Model</Label>
-                    <Select
-                      value={form.commission?.commission_type || "RULES_BASED"}
-                      onValueChange={(val: any) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          commission: {
-                            ...(prev.commission || blankCommission()),
-                            commission_type: val,
-                          },
-                        }))
-                      }
-                    >
-                      <SelectTrigger className="h-9 text-xs">
-                        <SelectValue placeholder="Select commission model" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="RULES_BASED">Condition-Based Rules (Enrollment, Leads, Fees, Custom)</SelectItem>
-                        <SelectItem value="PERCENTAGE">Flat Percentage (%) on All Admissions</SelectItem>
-                        <SelectItem value="FIXED_AMOUNT">Flat Fixed Amount (₹) per Admission</SelectItem>
-                        <SelectItem value="NONE">No Commission (Standard Salary Only)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {form.commission?.commission_type === "RULES_BASED" && (
-                    <div className="space-y-3 pt-2">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                            <Sparkles className="size-3.5 text-amber-500" />
-                            Condition-Specific Commission Rules
-                          </Label>
-                          <p className="text-[11px] text-muted-foreground">
-                            Specify distinct payouts based on whether the staff achieves a confirmed enrollment, brings a raw lead, recovers student fees, etc.
-                          </p>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const newRule = blankCommissionRule("custom", "Custom Condition / Milestone", "PERCENTAGE", "5");
-                            setForm((prev) => ({
-                              ...prev,
-                              commission: {
-                                ...(prev.commission || blankCommission()),
-                                rules: [...(prev.commission?.rules || []), newRule],
-                              },
-                            }));
-                          }}
-                          className="h-7 text-xs gap-1 font-semibold"
-                        >
-                          <Plus className="size-3" />
-                          Add Condition Rule
-                        </Button>
-                      </div>
-
-                      <div className="space-y-2.5">
-                        {(form.commission?.rules || []).map((rule, idx) => (
-                          <div
-                            key={rule.id || idx}
-                            className="p-3 rounded-lg border bg-muted/25 hover:bg-muted/40 transition-colors space-y-2.5"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                                Rule #{idx + 1}
-                              </span>
-                              {(form.commission?.rules || []).length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setForm((prev) => ({
-                                      ...prev,
-                                      commission: {
-                                        ...(prev.commission || blankCommission()),
-                                        rules: (prev.commission?.rules || []).filter((_, i) => i !== idx),
-                                      },
-                                    }));
-                                  }}
-                                  className="text-muted-foreground hover:text-destructive p-1 rounded-md transition-colors"
-                                  title="Delete condition rule"
-                                >
-                                  <Trash2 className="size-3.5" />
-                                </button>
-                              )}
-                            </div>
-
-                            <div className="grid gap-2.5 sm:grid-cols-12 items-start">
-                              <div className="sm:col-span-5 space-y-1">
-                                <Label className="text-[11px] font-medium">Trigger Condition</Label>
-                                <Select
-                                  value={rule.condition_trigger || "successful_enrollment"}
-                                  onValueChange={(val) => {
-                                    const labelMap: Record<string, string> = {
-                                      successful_enrollment: "Successful Student Enrollment / Admission",
-                                      lead_generated: "Lead / Inquiry Brought (Lead Generation)",
-                                      fee_collected: "Student Fee Collection Recovery",
-                                      spot_admission: "Spot Admission / Walk-in Closure",
-                                      course_completion: "Course Completion Milestone",
-                                      custom: "Custom Condition",
-                                    };
-                                    setForm((prev) => ({
-                                      ...prev,
-                                      commission: {
-                                        ...(prev.commission || blankCommission()),
-                                        rules: (prev.commission?.rules || []).map((r, i) =>
-                                          i === idx
-                                            ? {
-                                                ...r,
-                                                condition_trigger: val,
-                                                condition_label: labelMap[val] || val,
-                                              }
-                                            : r
-                                        ),
-                                      },
-                                    }));
-                                  }}
-                                >
-                                  <SelectTrigger className="h-8 text-xs bg-background">
-                                    <SelectValue placeholder="Select trigger" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="successful_enrollment">🎓 Successful Student Enrollment / Admission</SelectItem>
-                                    <SelectItem value="lead_generated">🎯 Lead / Inquiry Brought (Lead Generation)</SelectItem>
-                                    <SelectItem value="fee_collected">💳 Student Fee Collection Recovery</SelectItem>
-                                    <SelectItem value="spot_admission">⚡ Spot Admission / Walk-in Closure</SelectItem>
-                                    <SelectItem value="course_completion">🏆 Course Completion Milestone</SelectItem>
-                                    <SelectItem value="custom">✍️ Custom Condition / Milestone</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-
-                              <div className="sm:col-span-3 space-y-1">
-                                <Label className="text-[11px] font-medium">Reward Type</Label>
-                                <Select
-                                  value={rule.reward_type || "PERCENTAGE"}
-                                  onValueChange={(val: any) =>
-                                    setForm((prev) => ({
-                                      ...prev,
-                                      commission: {
-                                        ...(prev.commission || blankCommission()),
-                                        rules: (prev.commission?.rules || []).map((r, i) =>
-                                          i === idx ? { ...r, reward_type: val } : r
-                                        ),
-                                      },
-                                    }))
-                                  }
-                                >
-                                  <SelectTrigger className="h-8 text-xs bg-background">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="PERCENTAGE">% Percentage</SelectItem>
-                                    <SelectItem value="FIXED_AMOUNT">₹ Fixed Amount</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-
-                              <div className="sm:col-span-4 space-y-1">
-                                <Label className="text-[11px] font-medium">
-                                  {rule.reward_type === "PERCENTAGE" ? "Commission Rate (%)" : "Payout Amount (₹)"}
-                                </Label>
-                                <div className="relative">
-                                  <Input
-                                    type="number"
-                                    placeholder={rule.reward_type === "PERCENTAGE" ? "e.g. 10" : "e.g. 1000"}
-                                    value={rule.rate || ""}
-                                    onChange={(e) =>
-                                      setForm((prev) => ({
-                                        ...prev,
-                                        commission: {
-                                          ...(prev.commission || blankCommission()),
-                                          rules: (prev.commission?.rules || []).map((r, i) =>
-                                            i === idx ? { ...r, rate: e.target.value } : r
-                                          ),
-                                        },
-                                      }))
-                                    }
-                                    className="h-8 text-xs bg-background pr-7 font-mono font-medium"
-                                  />
-                                  <span className="absolute right-2 top-2 text-[11px] text-muted-foreground pointer-events-none font-bold">
-                                    {rule.reward_type === "PERCENTAGE" ? "%" : "₹"}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              <Input
-                                placeholder="Condition threshold (e.g. Minimum 5 leads / On fee > ₹20,000)"
-                                value={rule.minimum_threshold || ""}
-                                onChange={(e) =>
-                                  setForm((prev) => ({
-                                    ...prev,
-                                    commission: {
-                                      ...(prev.commission || blankCommission()),
-                                      rules: (prev.commission?.rules || []).map((r, i) =>
-                                        i === idx ? { ...r, minimum_threshold: e.target.value } : r
-                                      ),
-                                    },
-                                  }))
-                                }
-                                className="h-7 text-[11px] bg-background"
-                              />
-                              <Input
-                                placeholder="Rule notes / eligibility conditions..."
-                                value={rule.notes || ""}
-                                onChange={(e) =>
-                                  setForm((prev) => ({
-                                    ...prev,
-                                    commission: {
-                                      ...(prev.commission || blankCommission()),
-                                      rules: (prev.commission?.rules || []).map((r, i) =>
-                                        i === idx ? { ...r, notes: e.target.value } : r
-                                      ),
-                                    },
-                                  }))
-                                }
-                                className="h-7 text-[11px] bg-background"
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* FLAT RATE FALLBACK */}
-                  {form.commission?.commission_type &&
-                    form.commission.commission_type !== "NONE" &&
-                    form.commission.commission_type !== "RULES_BASED" && (
-                      <div className="grid gap-4 sm:grid-cols-2 pt-2">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium">
-                            {form.commission.commission_type === "PERCENTAGE"
-                              ? "Commission Rate (%)"
-                              : "Fixed Amount (₹)"}
-                          </Label>
-                          <Input
-                            type="number"
-                            placeholder={form.commission.commission_type === "PERCENTAGE" ? "e.g. 10" : "e.g. 1000"}
-                            value={form.commission.commission_rate || ""}
-                            onChange={(e) =>
-                              setForm((prev) => ({
-                                ...prev,
-                                commission: {
-                                  ...(prev.commission || blankCommission()),
-                                  commission_rate: e.target.value,
-                                },
-                              }))
-                            }
-                            className="h-9 text-xs"
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium">Commission Applicable On</Label>
-                          <Select
-                            value={form.commission.commission_trigger || "course_admission"}
-                            onValueChange={(val) =>
-                              setForm((prev) => ({
-                                ...prev,
-                                commission: {
-                                  ...(prev.commission || blankCommission()),
-                                  commission_trigger: val,
-                                },
-                              }))
-                            }
-                          >
-                            <SelectTrigger className="h-9 text-xs">
-                              <SelectValue placeholder="Select trigger" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="course_admission">Course / Batch Enrollment</SelectItem>
-                              <SelectItem value="lead_conversion">Sales / Lead Conversion</SelectItem>
-                              <SelectItem value="fee_collection">Student Fee Collection</SelectItem>
-                              <SelectItem value="all">All Sales & Admissions</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    )}
-
-                  {/* GLOBAL COMMISSION SETTINGS */}
-                  {form.commission?.commission_type && form.commission.commission_type !== "NONE" && (
-                    <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t mt-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">Payout Frequency</Label>
-                        <Select
-                          value={form.commission.payout_frequency || "MONTHLY"}
-                          onValueChange={(val) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              commission: {
-                                ...(prev.commission || blankCommission()),
-                                payout_frequency: val,
-                              },
-                            }))
-                          }
-                        >
-                          <SelectTrigger className="h-9 text-xs">
-                            <SelectValue placeholder="Select payout schedule" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="MONTHLY">Monthly with Salary</SelectItem>
-                            <SelectItem value="PER_TRANSACTION">Per Successful Event (Instant Payout)</SelectItem>
-                            <SelectItem value="QUARTERLY">Quarterly Settlement</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">Overall Minimum Target / Threshold (Optional)</Label>
-                        <Input
-                          placeholder="e.g. Min ₹50,000 total sales or 5 admissions"
-                          value={form.commission.minimum_threshold || ""}
-                          onChange={(e) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              commission: {
-                                ...(prev.commission || blankCommission()),
-                                minimum_threshold: e.target.value,
-                              },
-                            }))
-                          }
-                          className="h-9 text-xs"
-                        />
-                      </div>
-
-                      <div className="space-y-1.5 sm:col-span-2">
-                        <Label className="text-xs font-medium">Commission Notes & Terms</Label>
-                        <Textarea
-                          placeholder="Any special terms, bonus criteria, conditions, or payout guidelines..."
-                          value={form.commission.notes || ""}
-                          onChange={(e) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              commission: {
-                                ...(prev.commission || blankCommission()),
-                                notes: e.target.value,
-                              },
-                            }))
-                          }
-                          className="min-h-[70px] text-xs resize-none"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
           )}

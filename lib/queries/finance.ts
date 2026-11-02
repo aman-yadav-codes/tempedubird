@@ -44,6 +44,8 @@ export type FinanceIncomeRow = {
   created_by_role?: string | null;
   staff_id?: number | null;
   created_at: string;
+  invoice_id?: number | string | null;
+  invoice_number?: string | null;
 };
 
 export type FinanceIncomeInput = {
@@ -751,6 +753,50 @@ export async function ensureFinanceIncomeSchema(db: Queryable) {
         CREATE INDEX IF NOT EXISTS idx_finance_allowance_entries_creator ON finance_allowance_entries(created_by);
         CREATE INDEX IF NOT EXISTS idx_finance_recurring_expenses_creator ON finance_recurring_expenses(created_by);
         CREATE INDEX IF NOT EXISTS idx_finance_invoices_creator ON finance_invoices(created_by);
+
+        -- Backfill missing invoices for any manual income entries
+        INSERT INTO finance_invoices (
+          invoice_number,
+          scope_type,
+          institution_id,
+          income_id,
+          source_type,
+          payer_name,
+          receiver_name,
+          category_name,
+          payment_method,
+          amount,
+          tax_amount,
+          total_amount,
+          invoice_date,
+          status,
+          notes,
+          created_by
+        )
+        SELECT
+          'INV-' || to_char(fie.created_at, 'YYYYMMDD') || '-' || lpad(fie.id::text, 4, '0'),
+          fie.scope_type,
+          fie.institution_id,
+          fie.id,
+          'income',
+          COALESCE(fie.payer_name, fie.paid_by_label, 'Customer / Payer'),
+          COALESCE(fie.paid_to_label, fie.paid_to, 'Receiver'),
+          COALESCE(fic.name, 'Income'),
+          fie.payment_method,
+          fie.amount,
+          0,
+          fie.amount,
+          fie.income_date,
+          'paid',
+          fie.description,
+          fie.created_by
+        FROM finance_income_entries fie
+        LEFT JOIN finance_income_categories fic ON fic.id = fie.category_id
+        WHERE NOT EXISTS (
+          SELECT 1 FROM finance_invoices fi WHERE fi.income_id = fie.id
+        )
+        ON CONFLICT (invoice_number) DO NOTHING;
+
       `);
     })().catch((error) => {
       schemaReady = null;
@@ -1505,8 +1551,11 @@ function incomeRowsSql(options: Pick<FinanceIncomeListOptions, "scope_type" | "i
         COALESCE(creator.full_name, 'Admin') AS created_by_name,
         COALESCE(fie.created_by_role, creator_role.name, 'Admin') AS created_by_role,
         COALESCE(fie.staff_id, fie.created_by) AS staff_id,
-        fie.created_at
+        fie.created_at,
+        fi.id AS invoice_id,
+        fi.invoice_number
       FROM finance_income_entries fie
+      LEFT JOIN finance_invoices fi ON fi.income_id = fie.id
       LEFT JOIN finance_income_categories fic ON fic.id = fie.category_id
       LEFT JOIN institution_profiles ip ON ip.id = fie.institution_id
       LEFT JOIN users creator ON creator.id = fie.created_by
@@ -1550,7 +1599,9 @@ function incomeRowsSql(options: Pick<FinanceIncomeListOptions, "scope_type" | "i
         COALESCE(receiver.full_name, 'Staff') AS created_by_name,
         'Staff / Admin' AS created_by_role,
         COALESCE(sfp.received_by, sfp.verified_by) AS staff_id,
-        sfp.created_at
+        sfp.created_at,
+        NULL::bigint AS invoice_id,
+        NULL::varchar AS invoice_number
       FROM student_fee_payments sfp
       LEFT JOIN institution_profiles ip ON ip.id = sfp.institution_id
       LEFT JOIN users student ON student.id = sfp.student_user_id
@@ -1590,7 +1641,9 @@ function incomeRowsSql(options: Pick<FinanceIncomeListOptions, "scope_type" | "i
         'Platform System' AS created_by_name,
         'Platform Admin' AS created_by_role,
         sub.created_by AS staff_id,
-        sub.updated_at AS created_at
+        sub.updated_at AS created_at,
+        NULL::bigint AS invoice_id,
+        NULL::varchar AS invoice_number
       FROM institution_subscriptions sub
       JOIN institution_profiles ip ON ip.id = sub.institution_id
       JOIN sales_packages sp ON sp.id = sub.package_id
@@ -3355,11 +3408,60 @@ export async function createUnifiedFinanceCategory(db: Queryable, input: {
     );
 
     if (check.rows[0]) {
-      await db.query(`UPDATE ${table} SET is_active = TRUE, updated_by = $1, updated_at = NOW() WHERE id = $2`, [input.user_id, check.rows[0].id]);
+      await db.query(`UPDATE ${table} SET is_active = TRUE, name = $1, updated_by = $2, updated_at = NOW() WHERE id = $3`, [cleanName, input.user_id, check.rows[0].id]);
     } else {
       await db.query(
         `INSERT INTO ${table} (scope_type, institution_id, name, is_active, created_by, updated_by) VALUES ($1, $2, $3, TRUE, $4, $4)`,
         [input.scope_type, input.institution_id, cleanName, input.user_id]
+      );
+    }
+  }
+}
+
+export async function updateUnifiedFinanceCategory(db: Queryable, input: {
+  scope_type: FinanceScope;
+  institution_id: number | null;
+  oldName: string;
+  name: string;
+  targets: ("income" | "expense" | "recurring")[];
+  user_id: number;
+}) {
+  await ensureFinanceIncomeSchema(db);
+  const cleanOldName = input.oldName.trim();
+  const cleanNewName = input.name.trim();
+  if (!cleanOldName || !cleanNewName) throw new Error("Category name is required");
+  if (!input.targets || input.targets.length === 0) throw new Error("Select at least one page for this category");
+
+  const tables: Array<{ target: "income" | "expense" | "recurring"; table: string }> = [
+    { target: "income", table: "finance_income_categories" },
+    { target: "expense", table: "finance_expense_categories" },
+    { target: "recurring", table: "finance_recurring_expense_categories" },
+  ];
+
+  for (const { target, table } of tables) {
+    const isTargetActive = input.targets.includes(target);
+
+    const existing = await db.query<{ id: number; name: string }>(
+      `SELECT id, name FROM ${table} WHERE scope_type = $1 AND COALESCE(institution_id, 0) = COALESCE($2, 0) AND (LOWER(name) = LOWER($3) OR LOWER(name) = LOWER($4)) LIMIT 1`,
+      [input.scope_type, input.institution_id, cleanOldName, cleanNewName]
+    );
+
+    if (existing.rows[0]) {
+      if (isTargetActive) {
+        await db.query(
+          `UPDATE ${table} SET name = $1, is_active = TRUE, updated_by = $2, updated_at = NOW() WHERE id = $3`,
+          [cleanNewName, input.user_id, existing.rows[0].id]
+        );
+      } else {
+        await db.query(
+          `UPDATE ${table} SET is_active = FALSE, updated_by = $1, updated_at = NOW() WHERE id = $2`,
+          [input.user_id, existing.rows[0].id]
+        );
+      }
+    } else if (isTargetActive) {
+      await db.query(
+        `INSERT INTO ${table} (scope_type, institution_id, name, is_active, created_by, updated_by) VALUES ($1, $2, $3, TRUE, $4, $4)`,
+        [input.scope_type, input.institution_id, cleanNewName, input.user_id]
       );
     }
   }
@@ -3373,9 +3475,9 @@ export async function deleteUnifiedFinanceCategory(db: Queryable, input: {
   await ensureFinanceIncomeSchema(db);
   const cleanName = input.name.trim();
   await Promise.all([
-    db.query(`DELETE FROM finance_income_categories WHERE scope_type = $1 AND COALESCE(institution_id, 0) = COALESCE($2, 0) AND LOWER(name) = LOWER($3)`, [input.scope_type, input.institution_id, cleanName]),
-    db.query(`DELETE FROM finance_expense_categories WHERE scope_type = $1 AND COALESCE(institution_id, 0) = COALESCE($2, 0) AND LOWER(name) = LOWER($3)`, [input.scope_type, input.institution_id, cleanName]),
-    db.query(`DELETE FROM finance_recurring_expense_categories WHERE scope_type = $1 AND COALESCE(institution_id, 0) = COALESCE($2, 0) AND LOWER(name) = LOWER($3)`, [input.scope_type, input.institution_id, cleanName]),
+    db.query(`UPDATE finance_income_categories SET is_active = FALSE, updated_at = NOW() WHERE scope_type = $1 AND COALESCE(institution_id, 0) = COALESCE($2, 0) AND LOWER(name) = LOWER($3)`, [input.scope_type, input.institution_id, cleanName]),
+    db.query(`UPDATE finance_expense_categories SET is_active = FALSE, updated_at = NOW() WHERE scope_type = $1 AND COALESCE(institution_id, 0) = COALESCE($2, 0) AND LOWER(name) = LOWER($3)`, [input.scope_type, input.institution_id, cleanName]),
+    db.query(`UPDATE finance_recurring_expense_categories SET is_active = FALSE, updated_at = NOW() WHERE scope_type = $1 AND COALESCE(institution_id, 0) = COALESCE($2, 0) AND LOWER(name) = LOWER($3)`, [input.scope_type, input.institution_id, cleanName]),
   ]);
 }
 

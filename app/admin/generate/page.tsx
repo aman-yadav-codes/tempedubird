@@ -17,6 +17,7 @@ import {
   ChevronRight,
   SlidersHorizontal,
   Zap,
+  Building2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -73,20 +74,20 @@ type SelectedPerson = {
 export default function AdminGenerateDocumentPage() {
   useAdminGuard();
   const { user, accessToken } = useAuthStore();
-  const { activeInstitutionId } = useActiveInstitution();
+  const {
+    institutions,
+    activeInstitution,
+    activeInstitutionId,
+    setActiveInstitutionId,
+  } = useActiveInstitution();
   const isPlatformAdmin = isPlatformAdminUser(user);
+  const currentInstitutionId = activeInstitutionId ?? activeInstitution?.id ?? (institutions.length > 0 ? institutions[0].id : null);
+  const currentInstitution = institutions.find((i) => i.id === currentInstitutionId) ?? activeInstitution ?? institutions[0] ?? null;
 
-  // Audience & Category State
-  // Platform Admin defaults to staff only (no platform student records)
-  const [audience, setAudience] = useState<TargetAudience>(isPlatformAdmin ? "staff" : "student");
+  // Audience & Category State - can select Staff or Student freely
+  const [audience, setAudience] = useState<TargetAudience>("staff");
   const [categories, setCategories] = useState<CardCategory[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
-
-  useEffect(() => {
-    if (isPlatformAdmin) {
-      setAudience("staff");
-    }
-  }, [isPlatformAdmin]);
 
   // Person (Student or Staff) Search & Selection State
   const [personSearch, setPersonSearch] = useState("");
@@ -130,8 +131,8 @@ export default function AdminGenerateDocumentPage() {
         limit: "100",
         view: "generate",
       });
-      if (activeInstitutionId && !isPlatformAdmin) {
-        params.set("institutionId", String(activeInstitutionId));
+      if (currentInstitutionId) {
+        params.set("institutionId", String(currentInstitutionId));
       }
 
       const res = await fetch(`/api/admin/master-data/card-templates?${params.toString()}`, {
@@ -149,7 +150,7 @@ export default function AdminGenerateDocumentPage() {
     } finally {
       setLoadingTemplates(false);
     }
-  }, [accessToken, activeInstitutionId, isPlatformAdmin]);
+  }, [accessToken, currentInstitutionId]);
 
   useEffect(() => {
     fetchCategories();
@@ -161,7 +162,7 @@ export default function AdminGenerateDocumentPage() {
 
   // Search Students or Staff
   useEffect(() => {
-    if (!accessToken || !personSearch.trim()) {
+    if (!accessToken) {
       setPersonSearchResults([]);
       return;
     }
@@ -169,12 +170,12 @@ export default function AdminGenerateDocumentPage() {
     const timer = setTimeout(async () => {
       setSearchingPeople(true);
       try {
-        if (audience === "student" && !isPlatformAdmin) {
+        if (audience === "student") {
           const params = new URLSearchParams({
-            search: personSearch.trim(),
             limit: "10",
           });
-          if (activeInstitutionId) params.set("institutionId", String(activeInstitutionId));
+          if (personSearch.trim()) params.set("search", personSearch.trim());
+          if (currentInstitutionId) params.set("institutionId", String(currentInstitutionId));
 
           const res = await fetch(`/api/admin/students?${params.toString()}`, {
             headers: { Authorization: `Bearer ${accessToken}` },
@@ -195,14 +196,14 @@ export default function AdminGenerateDocumentPage() {
             setPersonSearchResults(mapped);
           }
         } else {
-          // Staff Search - for platform admin, returns ONLY staff added by platform admin
+          // Staff Search - scoped to current/logged-in institution
           const params = new URLSearchParams({
-            search: personSearch.trim(),
             staffScope: "all",
             limit: "10",
           });
-          if (activeInstitutionId && !isPlatformAdmin) {
-            params.set("institutionId", String(activeInstitutionId));
+          if (personSearch.trim()) params.set("search", personSearch.trim());
+          if (currentInstitutionId) {
+            params.set("institutionId", String(currentInstitutionId));
           }
 
           const res = await fetch(`/api/admin/users?${params.toString()}`, {
@@ -232,7 +233,7 @@ export default function AdminGenerateDocumentPage() {
     }, 280);
 
     return () => clearTimeout(timer);
-  }, [accessToken, activeInstitutionId, audience, isPlatformAdmin, personSearch]);
+  }, [accessToken, currentInstitutionId, audience, personSearch]);
 
   // Categories filtered by Audience
   const filteredCategories = useMemo(() => {
@@ -300,9 +301,7 @@ export default function AdminGenerateDocumentPage() {
               Document Generator
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl">
-              {isPlatformAdmin
-                ? "Select a card category, choose a staff member, and generate live staff ID cards, offer letters, certificates, and salary slips."
-                : "Choose student or staff audience, select a card category, choose a template, and generate live ID cards, certificates, letters, and documents."}
+              Select audience (Staff or Students), filter by document type, search or pick a recipient, and generate official ID cards, certificates, letters, and documents.
             </p>
           </div>
 
@@ -328,9 +327,8 @@ export default function AdminGenerateDocumentPage() {
           </div>
         </div>
 
-        {/* Audience Switcher Pills (Only shown for Institution Admin who has students) */}
-        {!isPlatformAdmin && (
-          <div className="mt-6 flex flex-wrap items-center gap-3 pt-4 border-t border-border/40">
+        {/* Audience Switcher Pills */}
+        <div className="mt-6 flex flex-wrap items-center gap-3 pt-4 border-t border-border/40">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider mr-1">
               Generate For:
             </span>
@@ -370,13 +368,42 @@ export default function AdminGenerateDocumentPage() {
               <span>Staff & Teachers ({templates.filter((t) => t.category_target_audience === "staff").length})</span>
             </button>
           </div>
-        )}
       </div>
 
-      {/* Filters & Action Bar: Category, Select Staff/Student, Choose Template Button */}
+      {/* Filters & Action Bar: Institution, Category, Select Staff/Student, Documents Button */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-card p-4 rounded-xl border border-border/60 shadow-xs">
+        {/* 0. Institution Selector */}
+        {institutions.length > 0 && (
+          <div className="md:col-span-3 space-y-1.5">
+            <Label className="text-xs font-bold flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-primary" />
+              <span>Logged-in Institution</span>
+            </Label>
+            <Select
+              value={currentInstitutionId ? String(currentInstitutionId) : undefined}
+              onValueChange={(val) => {
+                const id = Number(val);
+                setActiveInstitutionId(id);
+                setSelectedPerson(null);
+                setPersonSearch("");
+              }}
+            >
+              <SelectTrigger className="h-9 text-xs bg-background font-medium">
+                <SelectValue placeholder="Select Institution" />
+              </SelectTrigger>
+              <SelectContent className="max-h-64">
+                {institutions.map((inst) => (
+                  <SelectItem key={inst.id} value={String(inst.id)}>
+                    <span className="font-semibold">{inst.name}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         {/* 1. Category Filter */}
-        <div className="md:col-span-4 space-y-1.5">
+        <div className={`${institutions.length > 0 ? "md:col-span-3" : "md:col-span-4"} space-y-1.5`}>
           <Label className="text-xs font-bold flex items-center gap-1.5">
             <Filter className="w-3.5 h-3.5 text-primary" />
             <span>Card / Document Category</span>
@@ -399,7 +426,7 @@ export default function AdminGenerateDocumentPage() {
         </div>
 
         {/* 2. Person (Staff Member / Student) Filter */}
-        <div className="md:col-span-5 space-y-1.5 relative">
+        <div className={`${institutions.length > 0 ? "md:col-span-4" : "md:col-span-5"} space-y-1.5 relative`}>
           <div className="flex items-center justify-between">
             <Label className="text-xs font-bold flex items-center gap-1.5">
               <UserCheck className="w-3.5 h-3.5 text-primary" />
@@ -446,10 +473,11 @@ export default function AdminGenerateDocumentPage() {
                   setPersonDropdownOpen(true);
                 }}
                 onFocus={() => setPersonDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setPersonDropdownOpen(false), 250)}
                 placeholder={
                   audience === "student"
-                    ? "Search student name or roll no..."
-                    : "Search staff name or designation..."
+                    ? `Search student in ${currentInstitution?.name || "institution"}...`
+                    : `Search staff in ${currentInstitution?.name || "institution"}...`
                 }
                 className="h-9 text-xs bg-background pr-8"
               />
@@ -491,7 +519,7 @@ export default function AdminGenerateDocumentPage() {
         </div>
 
         {/* 3. Documents Button */}
-        <div className="md:col-span-3 space-y-1.5 flex flex-col justify-end">
+        <div className={`${institutions.length > 0 ? "md:col-span-2" : "md:col-span-3"} space-y-1.5 flex flex-col justify-end`}>
           <Label className="text-xs font-bold flex items-center gap-1.5 opacity-0 pointer-events-none hidden md:flex">
             <span>Documents</span>
           </Label>
@@ -672,7 +700,7 @@ export default function AdminGenerateDocumentPage() {
               <CardTemplateTryout
                 template={selectedTemplate}
                 accessToken={accessToken}
-                institutionId={activeInstitutionId || undefined}
+                institutionId={currentInstitutionId || undefined}
                 isInstitutionTryout={true}
                 initialStudentId={selectedPerson?.id}
                 initialStudentName={selectedPerson?.name}
@@ -690,7 +718,7 @@ export default function AdminGenerateDocumentPage() {
         accessToken={accessToken}
         audience={audience}
         categories={categories}
-        institutionId={activeInstitutionId || undefined}
+        institutionId={currentInstitutionId || undefined}
       />
 
       {/* Bulk Document & Card Generator Modal */}
@@ -700,7 +728,7 @@ export default function AdminGenerateDocumentPage() {
         accessToken={accessToken}
         templates={templates}
         categories={categories}
-        institutionId={activeInstitutionId || undefined}
+        institutionId={currentInstitutionId || undefined}
         onSuccess={() => {
           fetchTemplates();
         }}

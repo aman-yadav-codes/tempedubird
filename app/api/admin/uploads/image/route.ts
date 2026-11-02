@@ -1,4 +1,6 @@
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
+import fs from "fs/promises";
+import path from "path";
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { canAccessAdminArea } from "@/lib/auth/permissions";
@@ -78,17 +80,6 @@ export async function POST(req: Request) {
       );
     }
 
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    const apiKey = process.env.CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
-
-    if (!cloudName || !apiKey || !apiSecret) {
-      return NextResponse.json(
-        { error: "Cloudinary is not configured" },
-        { status: 500 },
-      );
-    }
-
     const formData = await req.formData();
     const file = formData.get("file");
 
@@ -127,6 +118,32 @@ export async function POST(req: Request) {
         { error: "Video must be 100MB or smaller" },
         { status: 422 },
       );
+    }
+
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+    if (!cloudName || !apiKey || !apiSecret) {
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      const ext = path.extname(file.name) || ".png";
+      const safeBaseName = path.basename(file.name, ext).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
+      const uniqueFileName = `${Date.now()}_${safeBaseName}_${randomBytes(4).toString("hex")}${ext}`;
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "media");
+      await fs.mkdir(uploadDir, { recursive: true });
+      await fs.writeFile(path.join(uploadDir, uniqueFileName), buffer);
+
+      return NextResponse.json({
+        data: {
+          url: `/uploads/media/${uniqueFileName}`,
+          public_id: `local_media_${uniqueFileName}`,
+          resource_type: mediaKind === "file" ? "raw" : mediaKind,
+          media_type: mediaKind,
+          file_name: file.name,
+          file_type: file.type,
+        },
+      });
     }
 
     const requestedFolder = String(formData.get("folder") ?? "");

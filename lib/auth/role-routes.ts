@@ -21,6 +21,7 @@ const KNOWN_ROLE_PREFIXES = new Set([
   "driver",
   "accountant",
   "guest",
+  "client",
 ]);
 const PUBLIC_TOP_LEVEL_SEGMENTS = new Set([
   "about",
@@ -75,6 +76,7 @@ const ADMIN_CHILD_SEGMENTS = new Set([
   "marketing",
   "master-data",
   "notifications",
+  "operations",
   "my-profile",
   "profile",
   "reviews",
@@ -115,6 +117,7 @@ const ROLE_PREFIX_MAP: Record<string, string> = {
   parent: "parents",
   guardian: "parents",
   driver: "driver",
+  client: "client",
 };
 
 const PREFIX_PRIORITY = [
@@ -143,6 +146,7 @@ const PREFIX_PRIORITY = [
   "parent",
   "guardian",
   "driver",
+  "client",
 ];
 
 export function sanitizeRolePathSegment(value: string | null | undefined) {
@@ -190,7 +194,7 @@ export function toCanonicalAdminPath(pathname: string) {
   const parts = pathOnly.split("/").filter(Boolean);
   const firstSegment = parts[0];
 
-  if (!firstSegment || firstSegment === "admin" || firstSegment === "platformadmin" || firstSegment === "instituteadmin" || firstSegment === "institutionadmin" || firstSegment === "staff") {
+  if (!firstSegment || firstSegment === "admin" || firstSegment === "platformadmin" || firstSegment === "instituteadmin" || firstSegment === "institutionadmin" || firstSegment === "staff" || firstSegment === "client") {
     const rest = parts.slice(1).join("/");
     return `/admin${rest ? `/${rest}` : ""}${query ? `?${query}` : ""}`;
   }
@@ -231,6 +235,12 @@ export function toRoleRoutePath(pathname: string, user: RoleRouteUser) {
     if (canonical === "/admin") return "/parents";
     if (canonical.startsWith("/admin/")) return `/parents${canonical.slice("/admin".length)}`;
     return "/parents";
+  }
+
+  if (base === "/client") {
+    if (canonical === "/admin" || canonical === "/admin/operations/tasks") return "/client/operations/tasks";
+    if (canonical.startsWith("/admin/")) return `/client${canonical.slice("/admin".length)}`;
+    return "/client/operations/tasks";
   }
 
   if (canonical === "/admin") {

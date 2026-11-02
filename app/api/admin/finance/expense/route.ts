@@ -1,3 +1,4 @@
+import { recordPerformancePoints } from "@/lib/performance/performance-engine";
 import { NextResponse } from "next/server";
 
 import { getAuthenticatedUser } from "@/lib/auth/auth";
@@ -274,7 +275,7 @@ export async function POST(req: Request) {
     const paidTo = body.paid_to ? String(body.paid_to).trim() : null;
     const paidToLabel = body.paid_to_label ? String(body.paid_to_label).trim() : (paidTo || null);
 
-    await createFinanceExpenseEntry(db, {
+    const createdExpense = await createFinanceExpenseEntry(db, {
       scope_type: scope,
       institution_id: institutionId,
       category_id: categoryId,
@@ -295,6 +296,20 @@ export async function POST(req: Request) {
       staff_id: user.id,
       created_by_role: isPlatformAdminUser(user) ? "Platform Admin" : isInstitutionAdminUser(user) ? "Institution Admin" : "Staff",
     });
+
+    try {
+      await recordPerformancePoints({
+        employeeId: user.id,
+        activityType: "finance_expense",
+        referenceModule: "finance_expense",
+        referenceRecordId: createdExpense?.id || Date.now(),
+        performedBy: { id: user.id, name: user.full_name || "Admin" },
+        customDescription: "Added finance expense record",
+        institutionId: institutionId || undefined,
+      });
+    } catch (e) {
+      console.warn("[Finance Expense] Performance points warning:", e);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

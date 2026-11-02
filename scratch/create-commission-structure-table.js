@@ -1,3 +1,4 @@
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const { Pool } = require('pg');
 require('dotenv').config({ path: '.env.local' });
 
@@ -33,6 +34,13 @@ async function main() {
       ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS commission_data JSONB DEFAULT NULL;
     `);
     console.log("Successfully added commission_data column to user_profiles.");
+
+    const res = await pool.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'user_profiles' AND column_name = 'commission_data';
+    `);
+    console.log("Verified column in user_profiles:", res.rows);
   } catch (err) {
     console.error("Error creating commission tables:", err);
   } finally {

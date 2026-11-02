@@ -31,9 +31,7 @@ export const createUser = async (data: User & {
     institutionClaimRoleCodes.includes(role.code) &&
     Boolean(institutionId);
 
-  if (data.designation_id && (!role || !designationRoleCodes.includes(role.code))) {
-    throw new Error("Designation is only allowed for Institution Admin role");
-  }
+  // Any designation is allowed for any role
 
   const client = await db.connect();
 
@@ -62,9 +60,7 @@ export const createUser = async (data: User & {
 
     await createPublicRegisteredUserProfile(client, user.id!, {
       roleCode: role?.code ?? null,
-      designationId: designationRoleCodes.includes(role?.code ?? "")
-        ? data.designation_id ?? null
-        : null,
+      designationId: data.designation_id ?? null,
       isTeacher: data.is_teacher,
       teacherType: role?.code === "teacher" ? "institute_teacher" : data.teacher_type ?? null,
       underInstitutionId: institutionId,

@@ -1,0 +1,10 @@
+[
+  {
+    "name": "run_command",
+    "args": {
+      "CommandLine": "python -c \"\nwith open('app/admin/operations/tasks/page.tsx', 'r', encoding='utf-8') as f:\n    text = f.read()\n\nfor icon in ['ArrowLeft', 'ArrowRight', 'CheckCircle2', 'ListPlus', 'Zap', 'Trash2']:\n    print(icon, icon in text)\n\"",
+      "WaitMsBeforeAsync": 5000,
+      "toolSummary": "Check icons in page.tsx"
+    }
+  }
+]

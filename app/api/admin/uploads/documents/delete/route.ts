@@ -1,4 +1,6 @@
 import { createHash } from "crypto";
+import fs from "fs/promises";
+import path from "path";
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth/auth";
 
@@ -17,17 +19,26 @@ export async function POST(req: Request) {
   try {
     await requireAdmin(req);
 
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    const apiKey = process.env.CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
-    if (!cloudName || !apiKey || !apiSecret) {
-      return NextResponse.json({ error: "Cloudinary is not configured" }, { status: 500 });
-    }
-
     const body = await req.json();
     const publicId = typeof body.publicId === "string" ? body.publicId.trim() : "";
     const resourceType = typeof body.resourceType === "string" ? body.resourceType.trim() : "image";
     if (!publicId) return NextResponse.json({ error: "publicId is required" }, { status: 400 });
+
+    if (publicId.startsWith("local_documents_")) {
+      const fileName = publicId.replace("local_documents_", "");
+      const filePath = path.join(process.cwd(), "public", "uploads", "documents", fileName);
+      try {
+        await fs.unlink(filePath);
+      } catch {}
+      return NextResponse.json({ data: { result: "ok" } });
+    }
+
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    if (!cloudName || !apiKey || !apiSecret) {
+      return NextResponse.json({ data: { result: "ok", message: "Cloudinary not configured; skipped remote delete" } });
+    }
 
     const timestamp = Math.round(Date.now() / 1000);
     const signature = createSignature({ public_id: publicId, timestamp }, apiSecret);

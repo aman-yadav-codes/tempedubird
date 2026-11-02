@@ -153,7 +153,7 @@ export function DocumentFileUpload({
     },
   });
 
-  const isImage = (file: UploadedDocumentFile) => file.fileType.startsWith("image/") || file.url;
+  const isImage = (file: UploadedDocumentFile) => Boolean((file.fileType && file.fileType.startsWith("image/")) || (file.url && /\.(jpg|jpeg|png|webp|gif|svg|avif)($|\?)/i.test(file.url)));
   const isFull = files.length >= maxFiles;
 
   return (

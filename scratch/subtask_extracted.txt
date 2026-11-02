@@ -1,0 +1,54 @@
+Created At: 2026-10-31T16:10:38+05:30
+Completed At: 2026-10-31T16:10:38+05:30
+Showing lines 3910-3960 of 5076
+3910:                   {subtaskAddMode === "single"
+3911:                     ? "Add a single deliverable"
+3912:                     : "Paste 10, 50, or 100+ tasks at once (one per line)"}
+3913:                 </span>
+3914:               </div>
+3915: 
+3916:               {subtaskAddMode === "single" ? (
+3917:                 /* Single Add View */
+3918:                 <div className="flex flex-col gap-2 pt-1">
+3919:                   <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2.5">
+3920:                     <div className="flex-1 space-y-1">
+3921:                       <div className="flex items-center justify-between">
+3922:                         <Label className="text-xs font-semibold">Sub-Task Name *</Label>
+3923:                         <span className="text-[10px] text-muted-foreground font-normal">Tip: Paste image with Ctrl+V to auto-name & attach</span>
+3924:                       </div>
+3925:                       <div className="relative">
+3926:                         <Input
+3927:                           value={newSubTitle}
+3928:                           onChange={(e) => setNewSubTitle(e.target.value)}
+3929:                           onPaste={handlePasteImageToSingleSubtask}
+3930:                           onKeyDown={(e) => {
+3931:                             if (e.key === "Enter") {
+3932:                               e.preventDefault();
+3933:                               handleAddSubTaskToList();
+3934:                             }
+3935:                           }}
+3936:                           placeholder="e.g. Curriculum Design, Lab Environment Setup (or Ctrl+V image)"
+3937:                           className="text-xs h-9 bg-background pr-8"
+3938:                         />
+3939:                         <label
+3940:                           className="absolute right-2 top-2 text-muted-foreground hover:text-primary cursor-pointer p-0.5"
+3941:                           title="Upload image for this sub-task"
+3942:                         >
+3943:                           <ImageIcon className="w-4 h-4" />
+3944:                           <input
+3945:                             type="file"
+3946:                             accept="image/*"
+3947:                             className="hidden"
+3948:                             onChange={handleSingleFileInput}
+3949:                           />
+3950:                         </label>
+3951:                       </div>
+3952:                     </div>
+3953:                     <Button
+3954:                       type="button"
+3955:                       size="sm"
+3956:                       onClick={handleAddSubTaskToList}
+3957:                       className="h-9 px-5 text-xs font-bold gap-1.5 shadow-sm shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer"
+3958:                     >
+3959:                       <Plus className="w-4 h-4" /> Add Sub-Task to List
+3960:                     </Button>

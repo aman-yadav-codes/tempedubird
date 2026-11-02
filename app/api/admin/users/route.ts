@@ -1,3 +1,4 @@
+import { recordPerformancePoints, getEmployeeMonthlySalary } from "@/lib/performance/performance-engine";
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser, requireAdmin } from "@/lib/auth/auth";
 import {
@@ -46,16 +47,8 @@ async function getRoleMeta(roleId: number | null | undefined) {
   return result.rows[0] ?? null;
 }
 
-function roleAllowsDesignation(roleCode: string | null | undefined, isPlatformActor = false) {
-  return (
-    roleCode === "institution_admin" ||
-    roleCode === "teacher" ||
-    isPlatformActor ||
-    !roleCode ||
-    roleCode === "administrative_staff" ||
-    roleCode === "staff" ||
-    roleCode === "faculty"
-  );
+function roleAllowsDesignation(_roleCode: string | null | undefined, _isPlatformActor = false) {
+  return true; // Any designation is allowed for any role
 }
 
 function getProfileRoleError(
@@ -74,9 +67,7 @@ function getProfileRoleError(
     return "Teacher profile fields are only allowed for Teacher role";
   }
 
-  if (data.profile.designation_id && !roleAllowsDesignation(roleCode, isPlatformActor)) {
-    return "Designation is only allowed for Institution Admin, Teacher, or Platform Staff role";
-  }
+  // Any designation is allowed
 
   if (roleCode === "institution_admin" && !data.profile.designation_id) {
     return "Select a designation for this role";
@@ -100,7 +91,7 @@ function normalizeRoleProfile(
       ].filter((id) => Number.isInteger(id) && id > 0)
     )
   );
-  const scopedInstitutionIds = isPlatformScopedRole ? [] : institutionIds;
+  const scopedInstitutionIds = institutionIds.length > 0 ? institutionIds : [1];
 
   return {
     ...data,
@@ -112,8 +103,8 @@ function normalizeRoleProfile(
       teacher_type: isTeacher ? ("institute_teacher" as const) : null,
       hourly_charges: null,
       institution_ids: scopedInstitutionIds,
-      under_institution_id: isPlatformScopedRole ? null : scopedInstitutionIds[0] ?? null,
-      designation_id: roleAllowsDesignation(roleCode) ? data.profile.designation_id ?? null : null,
+      under_institution_id: scopedInstitutionIds[0] ?? 1,
+      designation_id: data.profile.designation_id ?? null,
     },
   };
 }
@@ -389,13 +380,10 @@ export async function POST(req: Request) {
         (Array.isArray(body.profile?.institution_ids) && body.profile.institution_ids.length > 0);
 
       if (!hasInstitution) {
-        const edubird = await getOrCreateEduBirdInstitution(db);
-        if (edubird?.id) {
-          body.profile = body.profile || {};
-          body.profile.under_institution_id = edubird.id;
-          body.profile.institution_ids = [edubird.id];
-          body.profile.under_institution_name = edubird.name || "EduBird";
-        }
+        body.profile = body.profile || {};
+        body.profile.under_institution_id = 1;
+        body.profile.institution_ids = [1];
+        body.profile.under_institution_name = "Edubird";
       }
     }
 
@@ -436,16 +424,44 @@ export async function POST(req: Request) {
     }
 
     if (!roleMeta) {
-      const defaultStudentRoleRes = await db.query<{ id: number; code: string; scope_code: string | null }>(
-        `SELECT r.id, r.code, st.code AS scope_code
-         FROM roles r
-         LEFT JOIN scope_types st ON st.id = r.scope_id
-         WHERE r.code = 'student' OR r.name ILIKE '%student%'
-         LIMIT 1`
-      );
-      if (defaultStudentRoleRes.rows[0]) {
-        parsed.data.role_id = defaultStudentRoleRes.rows[0].id;
-        roleMeta = defaultStudentRoleRes.rows[0];
+      if (staffRole) {
+        const targetStaffRoleRes = await db.query<{ id: number; code: string; scope_code: string | null }>(
+          `SELECT r.id, r.code, st.code AS scope_code
+           FROM roles r
+           LEFT JOIN scope_types st ON st.id = r.scope_id
+           WHERE r.code = $1
+           LIMIT 1`,
+          [staffRole]
+        );
+        if (targetStaffRoleRes.rows[0]) {
+          parsed.data.role_id = targetStaffRoleRes.rows[0].id;
+          roleMeta = targetStaffRoleRes.rows[0];
+        }
+      } else if (url.searchParams.get("staffScope") === "all") {
+        const defaultStaffRoleRes = await db.query<{ id: number; code: string; scope_code: string | null }>(
+          `SELECT r.id, r.code, st.code AS scope_code
+           FROM roles r
+           LEFT JOIN scope_types st ON st.id = r.scope_id
+           WHERE r.code IN ('teacher', 'administrative_staff', 'staff')
+           ORDER BY CASE WHEN r.code = 'teacher' THEN 1 ELSE 2 END
+           LIMIT 1`
+        );
+        if (defaultStaffRoleRes.rows[0]) {
+          parsed.data.role_id = defaultStaffRoleRes.rows[0].id;
+          roleMeta = defaultStaffRoleRes.rows[0];
+        }
+      } else {
+        const defaultStudentRoleRes = await db.query<{ id: number; code: string; scope_code: string | null }>(
+          `SELECT r.id, r.code, st.code AS scope_code
+           FROM roles r
+           LEFT JOIN scope_types st ON st.id = r.scope_id
+           WHERE r.code = 'student' OR r.name ILIKE '%student%'
+           LIMIT 1`
+        );
+        if (defaultStudentRoleRes.rows[0]) {
+          parsed.data.role_id = defaultStudentRoleRes.rows[0].id;
+          roleMeta = defaultStudentRoleRes.rows[0];
+        }
       }
     }
 
@@ -490,13 +506,11 @@ export async function POST(req: Request) {
 
     if (
       isPlatformAdmin &&
-      targetInstitutionIds.length === 0 &&
-      roleMeta?.scope_code === "institution"
+      targetInstitutionIds.length === 0
     ) {
-      const edubird = await getOrCreateEduBirdInstitution(db);
-      userData.profile.under_institution_id = edubird.id;
-      userData.profile.institution_ids = [edubird.id];
-      targetInstitutionIds = [edubird.id];
+      userData.profile.under_institution_id = 1;
+      userData.profile.institution_ids = [1];
+      targetInstitutionIds = [1];
     }
 
     if (!isGuardianCreatingStudent && !canCreateRoleInTargetInstitutions(currentUser, roleMeta?.code, targetInstitutionIds)) {
@@ -554,6 +568,25 @@ export async function POST(req: Request) {
         }
       } catch (linkErr) {
         console.error("Auto linking guardian student error:", linkErr);
+      }
+    }
+
+    // Award recruitment performance points (20% of new employee monthly salary)
+    if (roleMeta?.code !== "student" && user?.id && currentUser?.id) {
+      try {
+        const newStaffSalary = await getEmployeeMonthlySalary(user.id);
+        await recordPerformancePoints({
+          employeeId: currentUser.id,
+          activityType: "employee_recruited",
+          referenceModule: "staff_onboarding",
+          referenceRecordId: user.id,
+          originalAmount: newStaffSalary,
+          performedBy: { id: currentUser.id, name: currentUser.full_name || (currentUser as any).name },
+          customDescription: "Onboarded new employee: " + ((user as any).full_name || (user as any).name || (user as any).email) + " (20% of monthly salary ₹" + newStaffSalary.toLocaleString("en-IN") + ")",
+          institutionId: targetInstitutionIds[0] || undefined,
+        });
+      } catch (recErr) {
+        console.warn("[Recruitment] Performance points warning:", recErr);
       }
     }
 

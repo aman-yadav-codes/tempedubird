@@ -5,6 +5,8 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { captureBrowserLocation } from "@/app/lib/geolocation";
+import { DailyGeoAttendanceHistoryDialog } from "@/components/daily-geo-attendance-history-dialog";
+import { CheckInLocationDialog } from "@/components/check-in-location-dialog";
 import {
   calculateDayTaskAttendance,
   parseShiftTiming,
@@ -12,6 +14,11 @@ import {
   type DedicationTier,
 } from "@/app/lib/task-attendance-sync";
 import { TaskHistoryDialog } from "../operations/tasks/task-history-dialog";
+import { SubTaskUploadDialog } from "../operations/tasks/subtask-upload-dialog";
+import { SubTaskWorkUpdateDialog } from "../operations/tasks/subtask-work-update-dialog";
+import { ProjectInvoicesDialog } from "../operations/tasks/project-invoices-dialog";
+import { SubtaskCard } from "@/components/subtask-card";
+import { SubtaskModalDialog } from "@/components/subtask-modal-dialog";
 import { toast } from "sonner";
 import {
   UserCheck,
@@ -20,6 +27,7 @@ import {
   Lock,
   ExternalLink,
   User,
+  Users,
   Calendar,
   Receipt,
   IndianRupee,
@@ -58,8 +66,27 @@ import {
   AlertTriangle,
   Zap,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Globe,
+  Monitor,
+  Crown,
+  Image as ImageIcon,
+  Upload,
+  MessageSquare,
+  X,
+  Loader2,
+  MoreVertical,
+  Edit2,
+  Trash2,
+  ListPlus,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -84,6 +111,8 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+
+import { ProfileLeaderboardTab } from "./_components/profile-leaderboard-tab";
 
 // Helper currency formatter
 function formatCurrency(amount: number | string) {
@@ -198,8 +227,11 @@ const TASK_STATUS_TABS = [
   { id: "pending", label: "Pending" },
   { id: "in_progress", label: "In Progress" },
   { id: "under_review", label: "Under Review" },
+  { id: "rework", label: "Rework" },
   { id: "completed", label: "Completed" },
   { id: "cancelled", label: "Cancelled" },
+  { id: "on_hold", label: "On Hold" },
+  { id: "failed", label: "Failed" },
 ];
 
 export function MyProfileClient() {
@@ -239,15 +271,99 @@ export function MyProfileClient() {
   const [salaryData, setSalaryData] = useState<any>(null);
   const [tasks, setTasks] = useState<any[]>([]);
   const [taskStatusTab, setTaskStatusTab] = useState<string>("pending");
+
+  const isClientRole = useMemo(() => {
+    const roleCodes: string[] = (user as any)?.role_codes || [(user as any)?.role || (user as any)?.primary_role || ""];
+    return (
+      roleCodes.some((r) => String(r).toLowerCase() === "client") ||
+      Boolean(pathname?.startsWith("/client"))
+    );
+  }, [user, pathname]);
+
+  // Daily Geo Attendance History Dialog State
+  const [geoHistoryDialogOpen, setGeoHistoryDialogOpen] = useState<boolean>(false);
+  const [selectedGeoHistoryRow, setSelectedGeoHistoryRow] = useState<any | null>(null);
+
+  // Check-In Location Verification Dialog State
+  const [locationCheckInOpen, setLocationCheckInOpen] = useState<boolean>(false);
+  const [pendingCheckInInfo, setPendingCheckInInfo] = useState<{
+    task: any;
+    subId?: string | number | null;
+    subTitle?: string | null;
+  } | null>(null);
+
+  const requestStartTaskWithLocation = (task: any, subId?: string | number | null, subTitle?: string | null) => {
+    if (activeRunningTask && activeRunningTask.id !== task.id) {
+      toast.error("Only one task can be started at a time. Please stop your active task first.");
+      return;
+    }
+    setPendingCheckInInfo({ task, subId, subTitle });
+    setLocationCheckInOpen(true);
+  };
+
+  const handleConfirmLocationCheckIn = async (locData: any) => {
+    if (!pendingCheckInInfo) return;
+    const { task, subId, subTitle } = pendingCheckInInfo;
+    if (subId) {
+      await handleSubtaskStatusUpdate(task, subId, "in_progress", locData);
+    } else {
+      await handleUpdateTaskStatus(task.id, "in_progress", locData);
+    }
+    setLocationCheckInOpen(false);
+    setPendingCheckInInfo(null);
+  };
   const [historyModalTask, setHistoryModalTask] = useState<any>(null);
+  const [historyModalSubtask, setHistoryModalSubtask] = useState<any>(null);
+  const [invoicesModalTask, setInvoicesModalTask] = useState<any>(null);
   const [expandedTaskSubtasks, setExpandedTaskSubtasks] = useState<Record<number, boolean>>({});
+  const [uploadModalState, setUploadModalState] = useState<{ task: any; subtask: any } | null>(null);
+  const [workUpdateModalState, setWorkUpdateModalState] = useState<{ task: any; subtask: any } | null>(null);
+
+  const handleRefreshMyProfileTasks = async () => {
+    try {
+      const instQuery = activeInstitutionId ? `&institution_id=${activeInstitutionId}` : "";
+      const headers: Record<string, string> = {};
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+      const tRes = await fetch(`/api/admin/operations/tasks?scope=me&employee_id=me${instQuery}`, { headers });
+      const tData = await tRes.json();
+      if (tData?.tasks) setTasks(tData.tasks);
+    } catch (err) {
+      console.error("Failed to refresh tasks:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (!uploadModalState) return;
+    const currentTask = tasks.find((t: any) => t.id === uploadModalState.task.id);
+    if (!currentTask) return;
+    const currentSub = (currentTask.sub_tasks || []).find(
+      (s: any) => String(s.id) === String(uploadModalState.subtask.id)
+    );
+    if (currentSub) {
+      setUploadModalState({ task: currentTask, subtask: currentSub });
+    }
+  }, [tasks]);
+
+  useEffect(() => {
+    if (!workUpdateModalState) return;
+    const currentTask = tasks.find((t: any) => t.id === workUpdateModalState.task.id);
+    if (!currentTask) return;
+    const currentSub = (currentTask.sub_tasks || []).find(
+      (s: any) => String(s.id) === String(workUpdateModalState.subtask.id)
+    );
+    if (currentSub) {
+      setWorkUpdateModalState({ task: currentTask, subtask: currentSub });
+    }
+  }, [tasks]);
 
   const normalizeTaskStatus = (status?: string) => {
-    const s = (status || "").toLowerCase().trim().replace("-", "_");
-    if (s === "recheck" || s === "needs_recheck") return "recheck";
+    const s = (status || "").toLowerCase().trim().replace("-", "_").replace(" ", "_");
+    if (s === "recheck" || s === "needs_recheck" || s === "rework") return "rework";
     if (s === "under_review" || s === "review") return "under_review";
     if (s === "in_progress" || s === "inprogress") return "in_progress";
     if (s === "completed" || s === "done") return "completed";
+    if (s === "on_hold" || s === "hold") return "on_hold";
+    if (s === "failed") return "failed";
     if (s === "cancelled") return "cancelled";
     return "pending";
   };
@@ -321,7 +437,29 @@ export function MyProfileClient() {
     return seconds;
   };
 
-  const handleUpdateTaskStatus = async (taskId: number, newStatus: string) => {
+  const handleDeleteTask = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this task/project?")) return;
+    try {
+      const headers: Record<string, string> = {};
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+      const res = await fetch(`/api/admin/operations/tasks?id=${id}`, {
+        method: "DELETE",
+        headers,
+      });
+      if (res.ok) {
+        toast.success("Task deleted successfully");
+        setTasks(prev => prev.filter(t => t.id !== id));
+      } else {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d.error || "Failed to delete task");
+      }
+    } catch {
+      toast.error("Failed to delete task");
+    }
+  };
+
+  const handleUpdateTaskStatus = async (taskId: number, newStatus: string, explicitLocation?: any) => {
     const targetTask = tasks.find(t => t.id === taskId);
     const isCreator = Boolean(user?.id && targetTask?.created_by && Number(targetTask.created_by) === Number(user.id));
 
@@ -337,9 +475,9 @@ export function MyProfileClient() {
       }
     }
 
-    // Capture browser geolocation automatically if starting task
-    let startLoc = null;
-    if (newStatus === "in_progress") {
+    // Use explicit verified location or capture automatically
+    let startLoc = explicitLocation || null;
+    if (newStatus === "in_progress" && !startLoc) {
       try {
         startLoc = await captureBrowserLocation(4000);
       } catch (err) {
@@ -388,6 +526,7 @@ export function MyProfileClient() {
             .then(d => { if (d) setAttendanceData(d); })
             .catch(() => {});
         }
+        window.dispatchEvent(new CustomEvent("task-status-updated", { detail: { taskId, status: newStatus } }));
         toast.success(`Task moved to ${newStatus.replace("_", " ")}`);
       } else {
         const d = await res.json().catch(() => ({}));
@@ -398,7 +537,7 @@ export function MyProfileClient() {
     }
   };
 
-  const handleSubtaskStatusUpdate = async (task: any, subId: string, newStatus: string) => {
+  const handleSubtaskStatusUpdate = async (task: any, subId: string | number, newStatus: string, explicitLocation?: any) => {
     // Only one task can be in progress at a time
     if (newStatus === "in_progress") {
       const isAnotherRunning = tasks.some(t => {
@@ -441,9 +580,9 @@ export function MyProfileClient() {
 
     setTasks(prev => prev.map(t => (t.id === task.id ? { ...t, status: parentStatus, sub_tasks: updatedSubs } : t)));
 
-    // Capture browser geolocation automatically if starting task
-    let startLoc = null;
-    if (newStatus === "in_progress") {
+    // Use explicit verified location or capture automatically
+    let startLoc = explicitLocation || null;
+    if (newStatus === "in_progress" && !startLoc) {
       try {
         startLoc = await captureBrowserLocation(4000);
       } catch (err) {
@@ -486,6 +625,7 @@ export function MyProfileClient() {
             .then(d => { if (d) setAttendanceData(d); })
             .catch(() => {});
         }
+        window.dispatchEvent(new CustomEvent("task-status-updated", { detail: { taskId: task.id, subtaskId: subId, status: newStatus } }));
         if (newStatus === "under_review") {
           toast.success("Subtask marked as Under Review (moved to Under Review tab)");
         } else {
@@ -553,18 +693,27 @@ export function MyProfileClient() {
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setAttendanceData(d); })
       .catch(() => {});
+    window.dispatchEvent(new CustomEvent("task-status-updated", { detail: { action: "stop_all" } }));
     toast.success("Active task stopped and moved back to Pending.");
   };
 
   const getTaskTabCount = (tabId: string) => {
-    if (tabId === "all") return tasks.length;
-    return tasks.filter((t) => {
+    let count = 0;
+    for (const t of tasks) {
       const subs: any[] = Array.isArray(t.sub_tasks) ? t.sub_tasks : [];
       if (subs.length > 0) {
-        return subs.some((s: any) => normalizeTaskStatus(s.status) === tabId);
+        if (tabId === "all") {
+          count += subs.length;
+        } else {
+          count += subs.filter((s: any) => normalizeTaskStatus(s.status) === tabId).length;
+        }
+      } else {
+        if (tabId === "all" || normalizeTaskStatus(t.status) === tabId) {
+          count += 1;
+        }
       }
-      return normalizeTaskStatus(t.status) === tabId;
-    }).length;
+    }
+    return count;
   };
 
   const filteredTasks = useMemo(() => {
@@ -592,7 +741,524 @@ export function MyProfileClient() {
   const [complaintForm, setComplaintForm] = useState({ category: "Workplace", subject: "", description: "", priority: "medium" });
   const [complaintSubmitting, setComplaintSubmitting] = useState(false);
 
+  const [directDocUploadingTaskId, setDirectDocUploadingTaskId] = useState<number | null>(null);
+
+  const handleDirectAgreementDocUpload = async (taskId: number, file: File) => {
+    setDirectDocUploadingTaskId(taskId);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/admin/uploads/documents", {
+        method: "POST",
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to upload document");
+
+      const fileUrl = data.url || data.file_url;
+      const fileName = file.name;
+
+      const targetTask = tasks.find((t) => t.id === taskId);
+      const updateRes = await fetch("/api/admin/operations/tasks", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({
+          id: taskId,
+          title: targetTask?.title || "Project",
+          agreement_document_url: fileUrl,
+          agreement_document_name: fileName,
+        }),
+      });
+
+      if (!updateRes.ok) {
+        const d = await updateRes.json();
+        throw new Error(d.error || "Failed to update project with agreement document");
+      }
+
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId
+            ? { ...t, agreement_document_url: fileUrl, agreement_document_name: fileName }
+            : t
+        )
+      );
+
+      toast.success(`Agreement document "${fileName}" uploaded and attached!`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload agreement document");
+    } finally {
+      setDirectDocUploadingTaskId(null);
+    }
+  };
+
   // Add Task Dialog State for Staff
+  // Add Sub-Task Dialog State for Project Cards
+  const [addSubTaskModalOpen, setAddSubTaskModalOpen] = useState(false);
+  const [subtaskModalOpen, setSubtaskModalOpen] = useState(false);
+  const [subtaskModalTask, setSubtaskModalTask] = useState<any | null>(null);
+  const [subtaskModalEditingSub, setSubtaskModalEditingSub] = useState<any | null>(null);
+  const [targetTaskForSubtask, setTargetTaskForSubtask] = useState<any | null>(null);
+  const [subTaskCreationMode, setSubTaskCreationMode] = useState<"single" | "bulk">("single");
+  const [bulkSubTaskText, setBulkSubTaskText] = useState("");
+  const [bulkSubStripBullets, setBulkSubStripBullets] = useState(true);
+  const [bulkSubDeduplicate, setBulkSubDeduplicate] = useState(true);
+  const [newSubTaskTitle, setNewSubTaskTitle] = useState("");
+  const [newSubTaskHours, setNewSubTaskHours] = useState("1");
+  const [newSubTaskMinutes, setNewSubTaskMinutes] = useState("0");
+  const [newSubTaskCadence, setNewSubTaskCadence] = useState<"once" | "daily" | "weekly" | "monthly">("once");
+  const [newSubTaskUrgency, setNewSubTaskUrgency] = useState<"low" | "medium" | "high" | "urgent">("medium");
+  const [newSubTaskDeadline, setNewSubTaskDeadline] = useState("");
+  const [newSubTaskPoints, setNewSubTaskPoints] = useState("20");
+  const [newSubTaskPenalty, setNewSubTaskPenalty] = useState("10");
+  const [newSubTaskPrice, setNewSubTaskPrice] = useState("0");
+  const [newSubTaskNotes, setNewSubTaskNotes] = useState("");
+  const [newSubTaskImages, setNewSubTaskImages] = useState<Array<{ url: string; name: string }>>([]);
+  const [newSubTaskImageUploading, setNewSubTaskImageUploading] = useState(false);
+  const [savingSubTask, setSavingSubTask] = useState(false);
+
+  const parsedBulkSubtasks = useMemo(() => {
+    const lines = bulkSubTaskText.split(/\r?\n/);
+    const seen = new Set<string>();
+    const result: string[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i].trim();
+      if (!line) continue;
+
+      if (bulkSubStripBullets) {
+        line = line.replace(/^(\d+[\.\)]\s*|[-*•]\s*|\[[\sxX]?\]\s*)/, "").trim();
+      }
+      if (!line) continue;
+
+      const normKey = line.toLowerCase();
+      if (bulkSubDeduplicate && seen.has(normKey)) continue;
+      seen.add(normKey);
+
+      result.push(line);
+    }
+    return result;
+  }, [bulkSubTaskText, bulkSubStripBullets, bulkSubDeduplicate]);
+
+  const handleOpenAddSubTaskModal = (task: any) => {
+    setSubtaskModalTask(task);
+    setSubtaskModalEditingSub(null);
+    setSubtaskModalOpen(true);
+  };
+
+  const handleSubTaskImageUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setNewSubTaskImageUploading(true);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch("/api/admin/uploads/image", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
+        if (res.ok && data.url) {
+          setNewSubTaskImages((prev) => [...prev, { url: data.url, name: file.name }]);
+        }
+      }
+      toast.success("Image attached to deliverable");
+    } catch {
+      toast.error("Failed to upload image");
+    } finally {
+      setNewSubTaskImageUploading(false);
+    }
+  };
+
+  const handleSubTaskPaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          handleSubTaskImageUpload(dt.files);
+          break;
+        }
+      }
+    }
+  };
+
+  const handleSaveNewSubTask = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!targetTaskForSubtask) return;
+
+    if (subTaskCreationMode === "bulk") {
+      if (parsedBulkSubtasks.length === 0) {
+        toast.error("Please enter at least one deliverable name (one per line)");
+        return;
+      }
+      setSavingSubTask(true);
+      try {
+        const now = Date.now();
+        const isDaily = newSubTaskCadence === "daily";
+        const newSubs: any[] = parsedBulkSubtasks.map((title, idx) => ({
+          id: `sub-${now}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+          title: title.trim(),
+          status: "pending",
+          duration_hours: parseFloat(newSubTaskHours) || 0,
+          duration_minutes: parseFloat(newSubTaskMinutes) || 0,
+          cadence: newSubTaskCadence,
+          is_daily_recurring: isDaily,
+          urgency: newSubTaskUrgency,
+          deadline: newSubTaskDeadline ? new Date(newSubTaskDeadline).toISOString() : null,
+          points: parseFloat(newSubTaskPoints) || 20,
+          penalty_points: parseFloat(newSubTaskPenalty) || 10,
+          price: parseFloat(newSubTaskPrice) || 0,
+          notes: null,
+          assigned_employee_id: targetTaskForSubtask.assigned_employee_id || user?.id,
+          assigned_employee_name: targetTaskForSubtask.assigned_employee_name || user?.full_name || (user as any)?.name,
+          assigned_employee_role: targetTaskForSubtask.assigned_employee_role || null,
+          images: [],
+          uploads: [],
+          work_updates: [],
+        }));
+
+        const currentSubs = Array.isArray(targetTaskForSubtask.sub_tasks) ? [...targetTaskForSubtask.sub_tasks] : [];
+        const updatedSubs = [...currentSubs, ...newSubs];
+
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+        const res = await fetch("/api/admin/operations/tasks", {
+          method: "PUT",
+          headers,
+          body: JSON.stringify({
+            id: targetTaskForSubtask.id,
+            sub_tasks: updatedSubs,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to add bulk sub-tasks");
+
+        toast.success(`Successfully added ${newSubs.length} sub-tasks!`);
+        setAddSubTaskModalOpen(false);
+        setExpandedTaskSubtasks((prev) => ({ ...prev, [targetTaskForSubtask.id]: true }));
+        handleRefreshMyProfileTasks();
+      } catch (err: any) {
+        toast.error(err.message || "Failed to add sub-tasks");
+      } finally {
+        setSavingSubTask(false);
+      }
+      return;
+    }
+
+    if (!newSubTaskTitle.trim()) {
+      toast.error("Please enter a deliverable / sub-task name");
+      return;
+    }
+    setSavingSubTask(true);
+    try {
+      const newSub: any = {
+        id: "sub-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7),
+        title: newSubTaskTitle.trim(),
+        status: "pending",
+        duration_hours: parseFloat(newSubTaskHours) || 0,
+        duration_minutes: parseFloat(newSubTaskMinutes) || 0,
+        cadence: newSubTaskCadence,
+        is_daily_recurring: newSubTaskCadence === "daily",
+        urgency: newSubTaskUrgency,
+        deadline: newSubTaskDeadline ? new Date(newSubTaskDeadline).toISOString() : null,
+        points: parseFloat(newSubTaskPoints) || 20,
+        penalty_points: parseFloat(newSubTaskPenalty) || 10,
+        price: parseFloat(newSubTaskPrice) || 0,
+        notes: null,
+        assigned_employee_id: targetTaskForSubtask.assigned_employee_id || user?.id,
+        assigned_employee_name: targetTaskForSubtask.assigned_employee_name || user?.full_name || (user as any)?.name,
+        assigned_employee_role: targetTaskForSubtask.assigned_employee_role || null,
+        images: newSubTaskImages,
+        uploads: [],
+        work_updates: [],
+      };
+
+      const currentSubs = Array.isArray(targetTaskForSubtask.sub_tasks) ? [...targetTaskForSubtask.sub_tasks] : [];
+      const updatedSubs = [...currentSubs, newSub];
+
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+      const res = await fetch("/api/admin/operations/tasks", {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          id: targetTaskForSubtask.id,
+          sub_tasks: updatedSubs,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to add sub-task");
+
+      toast.success("Sub-task deliverable added successfully!");
+      setAddSubTaskModalOpen(false);
+      setExpandedTaskSubtasks((prev) => ({ ...prev, [targetTaskForSubtask.id]: true }));
+      handleRefreshMyProfileTasks();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add sub-task");
+    } finally {
+      setSavingSubTask(false);
+    }
+  };
+
+  // Helper to extract ONLY employees and clients assigned to a project/task
+  const getProjectStaffOptions = (task: any) => {
+    if (!task) return [];
+    const optionsMap = new Map<string, { id: any; name: string; role?: string }>();
+
+    // 1. Staff: Project assigned employees array
+    if (Array.isArray(task.assigned_employees) && task.assigned_employees.length > 0) {
+      task.assigned_employees.forEach((emp: any) => {
+        if (emp?.id) {
+          optionsMap.set(String(emp.id), {
+            id: emp.id,
+            name: emp.name || emp.full_name || `Employee #${emp.id}`,
+            role: emp.role || "Staff Member",
+          });
+        }
+      });
+    }
+
+    // 2. Staff: Project primary assigned employee
+    if (task.assigned_employee_id) {
+      optionsMap.set(String(task.assigned_employee_id), {
+        id: task.assigned_employee_id,
+        name: task.assigned_employee_name || "Assigned Staff",
+        role: task.assigned_employee_role || "Staff Member",
+      });
+    }
+
+    // 3. Staff: Project Leader
+    if (task.project_leader_id) {
+      if (!optionsMap.has(String(task.project_leader_id))) {
+        optionsMap.set(String(task.project_leader_id), {
+          id: task.project_leader_id,
+          name: task.project_leader_name || "Project Leader",
+          role: "Project Leader",
+        });
+      }
+    }
+
+    // 4. Clients: Project assigned clients array
+    if (Array.isArray(task.assigned_clients) && task.assigned_clients.length > 0) {
+      task.assigned_clients.forEach((c: any) => {
+        const cId = c?.user_id || c?.id;
+        if (cId) {
+          optionsMap.set(String(cId), {
+            id: cId,
+            name: c.company_name || c.name || `Client #${c.id}`,
+            role: c.client_type ? `${c.client_type} (Client)` : "Client",
+          });
+        }
+      });
+    }
+
+    // 5. Clients: Project primary client
+    if (task.client_id && task.client_name && task.client_name !== "EduBird") {
+      if (!optionsMap.has(String(task.client_id))) {
+        optionsMap.set(String(task.client_id), {
+          id: task.client_id,
+          name: task.client_name,
+          role: "Client",
+        });
+      }
+    }
+
+    // 6. Fallback only if project has NO assigned members or clients at all
+    if (optionsMap.size === 0) {
+      if (user?.id) {
+        optionsMap.set(String(user.id), {
+          id: user.id,
+          name: user.full_name || (user as any)?.name || user.email || "You",
+          role: (user as any)?.role || "Staff Member",
+        });
+      }
+    }
+
+    return Array.from(optionsMap.values());
+  };
+
+  // Direct 1-Click inline field update for subtask (Price, Priority, Cadence, Assignee)
+  const handleDirectSubtaskFieldUpdate = async (
+    task: any,
+    subId: string | number,
+    fieldUpdates: Record<string, any>
+  ) => {
+    const currentSubs = Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : [];
+    const updatedSubs = currentSubs.map((s: any) => {
+      if (String(s.id) !== String(subId)) return s;
+      return {
+        ...s,
+        ...fieldUpdates,
+      };
+    });
+
+    // Optimistic UI update
+    setTasks((prev) =>
+      prev.map((t) => (t.id === task.id ? { ...t, sub_tasks: updatedSubs } : t))
+    );
+
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+      const res = await fetch("/api/admin/operations/tasks", {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          id: task.id,
+          sub_tasks: updatedSubs,
+        }),
+      });
+
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Failed to update subtask");
+      }
+      toast.success("Sub-task updated successfully");
+      handleRefreshMyProfileTasks();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update subtask");
+      handleRefreshMyProfileTasks();
+    }
+  };
+
+  // Direct delete subtask from project
+  const handleDirectSubtaskDelete = async (task: any, subId: string | number) => {
+    if (!confirm("Are you sure you want to delete this sub-task deliverable?")) return;
+
+    const currentSubs = Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : [];
+    const updatedSubs = currentSubs.filter((s: any) => String(s.id) !== String(subId));
+
+    setTasks((prev) =>
+      prev.map((t) => (t.id === task.id ? { ...t, sub_tasks: updatedSubs } : t))
+    );
+
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+      const res = await fetch("/api/admin/operations/tasks", {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          id: task.id,
+          sub_tasks: updatedSubs,
+        }),
+      });
+
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Failed to delete subtask");
+      }
+      toast.success("Sub-task deleted successfully");
+      handleRefreshMyProfileTasks();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete subtask");
+      handleRefreshMyProfileTasks();
+    }
+  };
+
+  // Edit Sub-Task Dialog State & Handlers
+  const [editSubtaskModalOpen, setEditSubtaskModalOpen] = useState(false);
+  const [editingSubtaskTask, setEditingSubtaskTask] = useState<any | null>(null);
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | number | null>(null);
+  const [editSubTitle, setEditSubTitle] = useState("");
+  const [editSubPrice, setEditSubPrice] = useState("0");
+  const [editSubStaffId, setEditSubStaffId] = useState("none");
+  const [editSubCadence, setEditSubCadence] = useState<"once" | "daily" | "weekly" | "monthly">("once");
+  const [editSubUrgency, setEditSubUrgency] = useState<"low" | "medium" | "high" | "urgent">("medium");
+  const [editSubDurationHours, setEditSubDurationHours] = useState("1");
+  const [editSubDurationMinutes, setEditSubDurationMinutes] = useState("0");
+  const [editSubDailyTime, setEditSubDailyTime] = useState("");
+  const [editSubDeadlineDate, setEditSubDeadlineDate] = useState("");
+  const [editSubDeadlineTime, setEditSubDeadlineTime] = useState("");
+  const [editSubPoints, setEditSubPoints] = useState("20");
+  const [editSubPenaltyPoints, setEditSubPenaltyPoints] = useState("10");
+  const [savingEditSubtask, setSavingEditSubtask] = useState(false);
+
+  const handleOpenEditSubtask = (task: any, sub: any) => {
+    setSubtaskModalTask(task);
+    setSubtaskModalEditingSub(sub);
+    setSubtaskModalOpen(true);
+  };
+
+  const handleSaveEditedSubtask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSubtaskTask || !editingSubtaskId) return;
+    if (!editSubTitle.trim()) {
+      toast.error("Sub-task title is required");
+      return;
+    }
+
+    setSavingEditSubtask(true);
+    try {
+      const staffOptions = getProjectStaffOptions(editingSubtaskTask);
+      const selectedStaff = staffOptions.find((s: any) => String(s.id) === editSubStaffId);
+
+      const isDaily = editSubCadence === "daily";
+      const currentSubs = Array.isArray(editingSubtaskTask.sub_tasks) ? [...editingSubtaskTask.sub_tasks] : [];
+      const updatedSubs = currentSubs.map((s: any) => {
+        if (String(s.id) !== String(editingSubtaskId)) return s;
+        return {
+          ...s,
+          title: editSubTitle.trim(),
+          price: parseFloat(editSubPrice) || 0,
+          is_daily_recurring: isDaily,
+          cadence: editSubCadence,
+          daily_time: isDaily ? (editSubDailyTime || "10:00") : null,
+          deadline_date: !isDaily ? (editSubDeadlineDate || null) : null,
+          deadline_time: !isDaily ? (editSubDeadlineTime || null) : null,
+          duration_hours: parseFloat(editSubDurationHours) || 0,
+          duration_minutes: parseFloat(editSubDurationMinutes) || 0,
+          urgency: editSubUrgency,
+          points: parseFloat(editSubPoints) || 20,
+          penalty_points: parseFloat(editSubPenaltyPoints) || 10,
+          assigned_employee_id: selectedStaff ? selectedStaff.id : (editSubStaffId !== "none" ? editSubStaffId : null),
+          assigned_employee_name: selectedStaff ? selectedStaff.name : (editSubStaffId !== "none" ? "Staff" : "Unassigned"),
+          assigned_employee_role: selectedStaff ? selectedStaff.role : null,
+        };
+      });
+
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+      const res = await fetch("/api/admin/operations/tasks", {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          id: editingSubtaskTask.id,
+          sub_tasks: updatedSubs,
+        }),
+      });
+
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Failed to save edited subtask");
+      }
+
+      toast.success("Sub-task deliverable updated successfully!");
+      setEditSubtaskModalOpen(false);
+      handleRefreshMyProfileTasks();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update subtask");
+    } finally {
+      setSavingEditSubtask(false);
+    }
+  };
+
   const [createTaskDialogOpen, setCreateTaskDialogOpen] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDetails, setNewTaskDetails] = useState("");
@@ -717,8 +1383,8 @@ export function MyProfileClient() {
         fetch(`/api/admin/staff/salary?mode=self&month=${selectedMonth}${instQuery}`, { headers }),
         fetch(`/api/admin/operations/tasks?scope=me&employee_id=me${instQuery}`, { headers }),
         fetch(`/api/admin/staff/performance?mode=self${instQuery}`, { headers }),
-        fetch(`/api/admin/support/tickets?limit=25${instQuery}`, { headers }),
-        fetch(`/api/admin/institution/complaints?limit=25${instQuery}`, { headers }),
+        fetch(`/api/admin/support/tickets?mode=self&limit=25${instQuery}`, { headers }),
+        fetch(`/api/admin/institution/complaints?mode=self&limit=25${instQuery}`, { headers }),
         fetch(`/api/admin/staff/letters?mode=self&limit=25${instQuery}`, { headers })
       ]);
 
@@ -760,6 +1426,14 @@ export function MyProfileClient() {
   useEffect(() => {
     loadData();
   }, [accessToken, activeInstitutionId, selectedMonth]);
+
+  useEffect(() => {
+    const handleTaskUpdated = () => {
+      loadData();
+    };
+    window.addEventListener("task-status-updated", handleTaskUpdated);
+    return () => window.removeEventListener("task-status-updated", handleTaskUpdated);
+  }, []);
 
   // Derived user details
   const extendedUser = user as Record<string, any> | null;
@@ -2044,12 +2718,26 @@ export function MyProfileClient() {
                           )}
                         </td>
 
-                        {/* Check-in Count */}
+                        {/* Check-in Count - Clickable Geo History */}
                         <td className="p-3 text-center font-mono font-medium">
                           {row.checkInCount > 0 ? (
-                            <Badge variant="secondary" className="text-[10px] font-bold bg-primary/10 text-primary">
-                              {row.checkInCount}
-                            </Badge>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedGeoHistoryRow(row);
+                                setGeoHistoryDialogOpen(true);
+                              }}
+                              title="Click to view Check-In & Check-Out Geo-Location history for this day"
+                              className="inline-flex items-center gap-1 cursor-pointer group focus:outline-hidden"
+                            >
+                              <Badge
+                                variant="secondary"
+                                className="text-[10px] font-bold bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-all shadow-2xs hover:scale-110 cursor-pointer flex items-center gap-1 px-2 py-0.5"
+                              >
+                                <MapPin className="w-2.5 h-2.5 text-primary group-hover:text-primary-foreground" />
+                                <span>{row.checkInCount}</span>
+                              </Badge>
+                            </button>
                           ) : (
                             "—"
                           )}
@@ -2316,14 +3004,6 @@ export function MyProfileClient() {
               <span className="text-xs font-bold text-primary">
                 {tasks.filter(t => normalizeTaskStatus(t.status) === "completed").length} of {tasks.length} Completed
               </span>
-              <Button
-                size="sm"
-                onClick={() => setCreateTaskDialogOpen(true)}
-                className="h-8 text-xs font-bold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Add Task
-              </Button>
             </div>
           </div>
 
@@ -2465,6 +3145,49 @@ export function MyProfileClient() {
                           {(task.details || task.description) && (
                             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{task.details || task.description}</p>
                           )}
+
+                          {/* Task-Level Attached Images */}
+                          {(() => {
+                            const taskImgs: Array<{ url: string; name: string }> = [];
+                            if (Array.isArray(task.attachments)) {
+                              task.attachments.forEach((att: any) => {
+                                const url = att.url || att.file_url;
+                                const isImg = att.type === "png" || att.type === "jpg" || att.type === "jpeg" || att.type === "webp" || String(url || "").match(/\.(png|jpg|jpeg|webp|gif|svg)/i);
+                                if (url && isImg) {
+                                  taskImgs.push({ url, name: att.name || "Task Image" });
+                                }
+                              });
+                            }
+                            if (taskImgs.length === 0) return null;
+                            return (
+                              <div className="flex items-center gap-2 pt-1.5 flex-wrap">
+                                <span className="text-[11px] font-semibold text-muted-foreground">Task Images:</span>
+                                {taskImgs.map((img, iIdx) => (
+                                  <button
+                                    key={iIdx}
+                                    type="button"
+                                    onClick={() => {
+                                      const targetSub = (Array.isArray(task.sub_tasks) && task.sub_tasks[0]) || {
+                                        id: `task_${task.id}`,
+                                        title: task.title,
+                                        price: Number(task.price) || 0,
+                                        uploads: (task as any).attachments || [],
+                                      };
+                                      setUploadModalState({ task, subtask: targetSub });
+                                    }}
+                                    className="group inline-block shrink-0 cursor-pointer"
+                                    title={img.name || "Click to open uploaded task files & deliverables dialog"}
+                                  >
+                                    <img
+                                      src={img.url}
+                                      alt={img.name}
+                                      className="w-7 h-7 rounded border object-cover group-hover:scale-110 transition-transform shadow-2xs hover:ring-2 hover:ring-primary/50"
+                                    />
+                                  </button>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0 flex-wrap">
@@ -2473,7 +3196,7 @@ export function MyProfileClient() {
                               {normStatus === "pending" && (
                                 <Button
                                   size="sm"
-                                  onClick={() => handleUpdateTaskStatus(task.id, "in_progress")}
+                                  onClick={() => requestStartTaskWithLocation(task)}
                                   className="h-7 px-3 text-xs font-bold gap-1 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-xs"
                                 >
                                   <Play className="w-3 h-3 fill-current" />
@@ -2509,16 +3232,75 @@ export function MyProfileClient() {
                             </>
                           )}
 
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setHistoryModalTask(task)}
-                            className="h-7 px-2.5 text-xs font-bold gap-1 text-muted-foreground hover:text-foreground hover:bg-muted shrink-0 cursor-pointer shadow-2xs"
-                            title="View Task History & Location"
+                          {/* Project Status Dropdown (Image 8) */}
+                          <select
+                            value={task.status === "recheck" ? "rework" : task.status || "pending"}
+                            onChange={(e) => handleUpdateTaskStatus(task.id, e.target.value)}
+                            className="h-7 text-xs font-bold w-28 bg-muted/40 rounded-lg border border-input px-2 outline-none focus:ring-1 focus:ring-primary/40 cursor-pointer text-foreground capitalize"
+                            title="Change project status"
                           >
-                            <History className="w-3.5 h-3.5 text-primary" />
-                            <span>History</span>
-                          </Button>
+                            <option value="pending">Pending</option>
+                            <option value="in_progress">In progress</option>
+                            <option value="completed">Completed</option>
+                            <option value="on_hold">On hold</option>
+                            <option value="rework">Rework</option>
+                            <option value="cancelled">Cancelled</option>
+                            <option value="failed">Failed</option>
+                          </select>
+
+                          {/* 3-dots Menu: invoices, Edit, History and info, delete */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg cursor-pointer transition-colors"
+                                title="More project actions"
+                              >
+                                <MoreVertical className="w-4 h-4 fill-current text-red-600" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44 text-xs font-medium">
+                              <DropdownMenuItem
+                                onClick={() => setInvoicesModalTask(task)}
+                                className="gap-2 cursor-pointer font-medium"
+                              >
+                                <Receipt className="w-4 h-4 text-primary" />
+                                <span>Invoices</span>
+                              </DropdownMenuItem>
+                              {!isClientRole && (
+                                <DropdownMenuItem
+                                  onClick={() => handleOpenEditSubtask(task, task.sub_tasks?.[0] || { id: `task_${task.id}`, title: task.title })}
+                                  className="gap-2 cursor-pointer font-medium"
+                                >
+                                  <Edit2 className="w-4 h-4 text-blue-600" />
+                                  <span>Edit</span>
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setHistoryModalSubtask(null);
+                                  setHistoryModalTask(task);
+                                }}
+                                className="gap-2 cursor-pointer font-medium"
+                              >
+                                <History className="w-4 h-4 text-amber-600" />
+                                <span>History and info</span>
+                              </DropdownMenuItem>
+                              {!isClientRole && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => handleDeleteTask(task.id)}
+                                    className="gap-2 text-destructive focus:text-destructive cursor-pointer font-medium"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    <span>Delete</span>
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
 
@@ -2540,222 +3322,280 @@ export function MyProfileClient() {
                         </div>
                       )}
 
+                      {/* Project Extended Details: Leader, Teams Staff, Dates, Live URL, Demo URL, Agreement Document */}
+                      {(() => {
+                        const teamStaffList: Array<{ id?: string | number; name: string; role?: string | null }> = [];
+                        if (Array.isArray(task.assigned_employees) && task.assigned_employees.length > 0) {
+                          task.assigned_employees.forEach((emp: any) => {
+                            if (emp && emp.name && !teamStaffList.some((s) => String(s.id) === String(emp.id))) {
+                              teamStaffList.push(emp);
+                            }
+                          });
+                        } else if (task.assigned_employee_name) {
+                          teamStaffList.push({
+                            id: task.assigned_employee_id || "emp",
+                            name: task.assigned_employee_name,
+                            role: task.assigned_employee_role || null,
+                          });
+                        }
+
+                        const formatLocalDt = (dStr?: string | null) => {
+                          if (!dStr) return null;
+                          try {
+                            const d = new Date(dStr);
+                            if (isNaN(d.getTime())) return dStr;
+                            return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+                          } catch {
+                            return dStr;
+                          }
+                        };
+
+                        const isOverdue = Boolean(
+                          task.due_date &&
+                          new Date(task.due_date).getTime() < Date.now() &&
+                          task.status !== "completed"
+                        );
+
+                        return (
+                          <div className="space-y-2 p-3 bg-muted/20 rounded-xl border text-xs mt-3">
+                            {/* Row 1: Project Leader, Teams Staff & Timeline Dates */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                {/* Project Leader */}
+                                {task.project_leader_name ? (
+                                  <Badge variant="outline" className="bg-amber-500/10 text-amber-900 dark:text-amber-300 border-amber-500/30 gap-1.5 py-1 px-2.5 font-semibold text-[11px]">
+                                    <Crown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                    <span className="text-muted-foreground font-normal">Leader:</span>
+                                    <strong className="text-foreground">{task.project_leader_name}</strong>
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-muted/40 text-muted-foreground border-dashed gap-1 py-1 px-2 text-[11px]">
+                                    <Crown className="w-3 h-3 opacity-50 shrink-0" />
+                                    <span>No Leader Assigned</span>
+                                  </Badge>
+                                )}
+
+                                {/* Teams Staff */}
+                                <Badge variant="outline" className="bg-blue-500/10 text-blue-900 dark:text-blue-300 border-blue-500/30 gap-1.5 py-1 px-2.5 font-semibold text-[11px]">
+                                  <Users className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                  <span className="text-muted-foreground font-normal">Team Staff:</span>
+                                  {teamStaffList.length > 0 ? (
+                                    <strong className="text-foreground">
+                                      {teamStaffList.map((m) => m.name).join(", ")}
+                                    </strong>
+                                  ) : (
+                                    <span className="italic font-normal text-muted-foreground">Unassigned</span>
+                                  )}
+                                </Badge>
+                              </div>
+
+                              {/* Start Date & Due Date */}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {task.start_date && (
+                                  <Badge variant="outline" className="bg-background text-foreground border gap-1.5 py-1 px-2.5 text-[11px] font-medium">
+                                    <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
+                                    <span className="text-muted-foreground">Start Date:</span>
+                                    <strong className="font-mono">{formatLocalDt(task.start_date)}</strong>
+                                  </Badge>
+                                )}
+                                {(task.due_date || task.deadline) && (
+                                  <Badge
+                                    variant="outline"
+                                    className={`gap-1.5 py-1 px-2.5 text-[11px] font-medium ${
+                                      isOverdue
+                                        ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/40"
+                                        : "bg-background text-foreground border"
+                                    }`}
+                                  >
+                                    <Clock className={`w-3.5 h-3.5 shrink-0 ${isOverdue ? "text-rose-600" : "text-amber-600"}`} />
+                                    <span className="text-muted-foreground">Due Date:</span>
+                                    <strong className="font-mono">{formatLocalDt(task.due_date || task.deadline)}</strong>
+                                    {isOverdue && (
+                                      <span className="text-[9px] uppercase font-bold text-rose-600 tracking-wider bg-rose-500/20 px-1 py-0.2 rounded ml-0.5">
+                                        Overdue
+                                      </span>
+                                    )}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Row 2: Live Website, Demo URL & Project Agreement Document */}
+                            <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                              {/* Live Website */}
+                              {task.live_url ? (
+                                <a
+                                  href={task.live_url.startsWith("http") ? task.live_url : `https://${task.live_url}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all group shadow-2xs"
+                                  title={`Open Live Website: ${task.live_url}`}
+                                >
+                                  <Globe className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform shrink-0" />
+                                  <span>Live Website</span>
+                                  <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                                </a>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-muted-foreground/60 bg-muted/30 border border-dashed">
+                                  <Globe className="w-3 h-3 opacity-40 shrink-0" />
+                                  <span>No Live Website</span>
+                                </span>
+                              )}
+
+                              {/* Demo URL */}
+                              {task.demo_url ? (
+                                <a
+                                  href={task.demo_url.startsWith("http") ? task.demo_url : `https://${task.demo_url}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-blue-500/10 text-blue-800 dark:text-blue-300 border border-blue-500/30 hover:bg-blue-500/20 transition-all group shadow-2xs"
+                                  title={`Open Demo URL: ${task.demo_url}`}
+                                >
+                                  <Monitor className="w-3.5 h-3.5 text-blue-600 group-hover:scale-110 transition-transform shrink-0" />
+                                  <span>Demo URL</span>
+                                  <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                                </a>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-muted-foreground/60 bg-muted/30 border border-dashed">
+                                  <Monitor className="w-3 h-3 opacity-40 shrink-0" />
+                                  <span>No Demo URL</span>
+                                </span>
+                              )}
+
+                              {/* Project Agreement Document */}
+                              {task.agreement_document_url ? (
+                                <div className="inline-flex items-center gap-1.5 flex-wrap">
+                                  <a
+                                    href={task.agreement_document_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-violet-500/10 text-violet-800 dark:text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 transition-all group shadow-2xs"
+                                    title={`View/Download Agreement: ${task.agreement_document_name || "Agreement Document"}`}
+                                  >
+                                    <FileText className="w-3.5 h-3.5 text-violet-600 group-hover:scale-110 transition-transform shrink-0" />
+                                    <span className="truncate max-w-[220px]">
+                                      {task.agreement_document_name || "Project Agreement Document"}
+                                    </span>
+                                    <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                                  </a>
+                                  <label
+                                    className="inline-flex items-center gap-1 px-1.5 py-1 rounded-md text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/80 cursor-pointer border border-dashed border-border transition-colors"
+                                    title="Upload new version / replace agreement document"
+                                  >
+                                    {directDocUploadingTaskId === task.id ? (
+                                      <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                                    ) : (
+                                      <Upload className="w-3 h-3 text-muted-foreground" />
+                                    )}
+                                    <input
+                                      type="file"
+                                      className="hidden"
+                                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.txt,.xlsx,.xls"
+                                      disabled={directDocUploadingTaskId === task.id}
+                                      onChange={(e) => {
+                                        const f = e.target.files?.[0];
+                                        if (f) handleDirectAgreementDocUpload(task.id, f);
+                                        e.target.value = "";
+                                      }}
+                                    />
+                                  </label>
+                                </div>
+                              ) : (
+                                <label
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-muted-foreground bg-muted/30 hover:bg-violet-500/10 hover:text-violet-700 hover:border-violet-500/40 border border-dashed cursor-pointer transition-all group shadow-2xs"
+                                  title="Click here to upload agreement document"
+                                >
+                                  {directDocUploadingTaskId === task.id ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600 shrink-0" />
+                                  ) : (
+                                    <FileText className="w-3.5 h-3.5 opacity-60 group-hover:text-violet-600 shrink-0" />
+                                  )}
+                                  <span>No Agreement Doc</span>
+                                  <span className="text-[10px] text-violet-600 dark:text-violet-400 font-bold underline underline-offset-2 ml-0.5">
+                                    + Upload
+                                  </span>
+                                  <input
+                                    type="file"
+                                    className="hidden"
+                                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.txt,.xlsx,.xls"
+                                    disabled={directDocUploadingTaskId === task.id}
+                                    onChange={(e) => {
+                                      const f = e.target.files?.[0];
+                                      if (f) handleDirectAgreementDocUpload(task.id, f);
+                                      e.target.value = "";
+                                    }}
+                                  />
+                                </label>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                       </CardHeader>
 
                     {/* Sub-Tasks List (if any) */}
                     {subTasksList.length > 0 && (
                       <div className="px-5 py-3 border-t bg-card">
                         <div
-                          className="flex items-center justify-between cursor-pointer hover:text-primary transition-colors text-xs font-bold text-foreground pb-2"
-                          onClick={() => setExpandedTaskSubtasks(prev => ({ ...prev, [task.id]: !isExpanded }))}
+                          className="flex items-center justify-between text-xs font-bold text-foreground pb-2 flex-wrap gap-2"
                         >
-                          <div className="flex items-center gap-1.5">
+                          <div
+                            className="flex items-center gap-1.5 cursor-pointer hover:text-primary transition-colors select-none"
+                            onClick={() => setExpandedTaskSubtasks(prev => ({ ...prev, [task.id]: !isExpanded }))}
+                          >
                             <Layers className="w-4 h-4 text-primary" />
                             <span>
                               Sub-Tasks & Deliverables ({subTasksList.length}
                               {rawSubTasksList.length !== subTasksList.length ? ` of ${rawSubTasksList.length}` : ""})
                             </span>
                           </div>
-                          <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            {isExpanded ? "Collapse" : "Expand"}
-                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenAddSubTaskModal(task);
+                              }}
+                              className="h-6 px-2.5 text-[11px] font-bold gap-1 rounded-lg border-primary/40 text-primary hover:bg-primary/10 cursor-pointer shadow-2xs"
+                              title="Add sub-task deliverable to this project"
+                            >
+                              <Plus className="w-3 h-3 text-primary" />
+                              add sub task
+                            </Button>
+                            <span
+                              className="text-xs text-muted-foreground flex items-center gap-1 cursor-pointer hover:text-foreground select-none"
+                              onClick={() => setExpandedTaskSubtasks(prev => ({ ...prev, [task.id]: !isExpanded }))}
+                            >
+                              {isExpanded ? "Collapse" : "Expand"}
+                              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </span>
+                          </div>
                         </div>
 
                         {isExpanded && (
-                          <div className="space-y-2 pt-1">
-                            {subTasksList.map((sub: any, sIdx: number) => {
-                              const subNormStatus = normalizeTaskStatus(sub.status);
-                              const isSubDone = subNormStatus === "completed";
-                              const isSubPending = subNormStatus === "pending";
-
-                              return (
-                                <div
-                                  key={sub.id || sIdx}
-                                  className="p-3 rounded-xl bg-background border text-xs space-y-2 hover:border-primary/40 transition-colors shadow-2xs"
-                                >
-                                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                                      <span className="font-bold text-muted-foreground text-[10px]">#{sIdx + 1}</span>
-                                      <span className={`font-bold text-xs truncate ${isSubDone ? "line-through text-muted-foreground" : "text-foreground"}`}>
-                                        {sub.title}
-                                      </span>
-                                      {sub.price && (
-                                        <span className="font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded text-[11px] tracking-wider">
-                                          ₹{Number(sub.price).toLocaleString("en-IN")}
-                                        </span>
-                                      )}
-                                      <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[9px] gap-1 font-semibold">
-                                        <Sparkles className="w-2.5 h-2.5 text-amber-500" /> +{sub.points || 20} / -{sub.penalty_points || 10} pts
-                                      </Badge>
-                                      {sub.is_daily_recurring ? (
-                                        <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 text-[9px] gap-1 font-semibold">
-                                          <RefreshCw className="w-2.5 h-2.5" /> Daily Basis
-                                        </Badge>
-                                      ) : (
-                                        <Badge variant="outline" className="bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/30 text-[9px] gap-1 font-semibold">
-                                          <Zap className="w-2.5 h-2.5" /> Once
-                                        </Badge>
-                                      )}
-                                    </div>
-
-                                    {/* Subtask Quick Action Buttons */}
-                                    <div className="flex items-center gap-1.5 ml-auto">
-                                      {isSubPending && (
-                                        <Button
-                                          size="sm"
-                                          onClick={() => handleSubtaskStatusUpdate(task, sub.id, "in_progress")}
-                                          className="h-6 text-[10px] px-2.5 font-bold gap-1 bg-blue-600 hover:bg-blue-700 text-white shadow-2xs cursor-pointer"
-                                        >
-                                          <Play className="w-2.5 h-2.5 fill-current" /> Start
-                                        </Button>
-                                      )}
-
-                                      {subNormStatus === "in_progress" && (
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => handleSubtaskStatusUpdate(task, sub.id, "pending")}
-                                          className="h-6 text-[10px] px-2.5 font-bold gap-1 text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
-                                        >
-                                          <Square className="w-2.5 h-2.5 fill-current" /> Stop
-                                        </Button>
-                                      )}
-
-                                      <select
-                                        value={subNormStatus}
-                                        onChange={(e) => handleSubtaskStatusUpdate(task, sub.id, e.target.value)}
-                                        className="h-6 text-[10px] font-semibold w-24 bg-muted/20 rounded border border-input px-1 outline-none cursor-pointer text-foreground"
-                                      >
-                                        <option value="pending">Pending</option>
-                                        {subNormStatus === "in_progress" && <option value="in_progress" disabled>In Progress</option>}
-                                        <option value="under_review">Under Review</option>
-                                        {subNormStatus === "completed" && <option value="completed" disabled>Completed</option>}
-                                      </select>
-                                    </div>
-                                  </div>
-
-                                  {/* Subtask Details / Meta */}
-                                  <div className="flex flex-wrap items-center gap-3 pt-1 border-t text-[11px] text-muted-foreground">
-                                    {(() => {
-                                      const takenSeconds = getSubtaskDurationTakenSeconds(sub, task, nowTime);
-                                      const isRunning = subNormStatus === "in_progress";
-                                      const targetHours = Number(sub.duration_hours || 0);
-                                      const targetMinutes = Number(sub.duration_minutes || 0);
-                                      const deadlineStr = (sub as any).is_daily_recurring
-                                        ? `Daily at ${(sub as any).daily_time || sub.deadline_time || "10:00"}`
-                                        : sub.deadline_date
-                                        ? `${sub.deadline_date} ${sub.deadline_time || ""}`
-                                        : "No deadline set";
-
-                                      return (
-                                        <TooltipProvider delayDuration={150}>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <div className={`inline-flex items-center gap-1.5 font-mono cursor-pointer px-2 py-0.5 rounded-md border transition-all ${
-                                                isRunning
-                                                  ? "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30"
-                                                  : takenSeconds > 0
-                                                  ? "bg-muted/40 text-foreground border-border/50 hover:bg-muted"
-                                                  : "bg-muted/20 text-muted-foreground border-border/40 hover:bg-muted/40"
-                                              }`}>
-                                                <Clock className={`w-3.5 h-3.5 ${isRunning ? "text-blue-600 animate-spin" : "text-primary"}`} />
-                                                <span className="font-bold text-[11px]">
-                                                  {formatDurationTaken(takenSeconds)}
-                                                </span>
-                                                {isRunning && (
-                                                  <span className="relative flex h-2 w-2">
-                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
-                                                  </span>
-                                                )}
-                                              </div>
-                                            </TooltipTrigger>
-                                            <TooltipContent side="top" className="p-3 max-w-xs space-y-1.5 text-xs shadow-xl border bg-popover text-popover-foreground rounded-xl">
-                                              <div className="font-bold text-[12px] border-b pb-1 text-foreground flex items-center justify-between gap-3">
-                                                <span>⏱️ Duration & Deadline</span>
-                                                <Badge variant="outline" className="text-[9px] uppercase font-bold">
-                                                  {subNormStatus.replace("_", " ")}
-                                                </Badge>
-                                              </div>
-                                              <div className="space-y-1.5 text-[11px] pt-0.5">
-                                                <div className="flex items-center justify-between gap-4">
-                                                  <span className="text-muted-foreground font-medium">Total Duration Taken:</span>
-                                                  <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
-                                                    {formatDurationTaken(takenSeconds)}
-                                                  </span>
-                                                </div>
-                                                <div className="flex items-center justify-between gap-4">
-                                                  <span className="text-muted-foreground font-medium">Target / Assigned:</span>
-                                                  <span className="font-mono font-semibold text-foreground">
-                                                    {targetHours > 0 || targetMinutes > 0 ? `${targetHours}h ${targetMinutes}m` : "Not specified"}
-                                                  </span>
-                                                </div>
-                                                <div className="flex items-center justify-between gap-4 border-t pt-1">
-                                                  <span className="text-muted-foreground font-medium">Deadline:</span>
-                                                  <span className="font-medium text-foreground">
-                                                    {deadlineStr}
-                                                  </span>
-                                                </div>
-                                              </div>
-                                            </TooltipContent>
-                                          </Tooltip>
-                                        </TooltipProvider>
-                                      );
-                                    })()}
-                                    {(sub as any).is_daily_recurring ? (
-                                      <TooltipProvider delayDuration={150}>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <span className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-400 font-medium cursor-pointer hover:underline">
-                                              <RotateCcw className="w-3.5 h-3.5" />
-                                              <span>Daily at {(sub as any).daily_time || sub.deadline_time || "10:00"}</span>
-                                            </span>
-                                          </TooltipTrigger>
-                                          <TooltipContent side="top" className="p-2 text-xs shadow-md border bg-popover text-popover-foreground rounded-lg">
-                                            <div className="text-[11px] space-y-1">
-                                              <div><span className="font-bold text-foreground">Schedule:</span> Recurring Daily at {(sub as any).daily_time || sub.deadline_time || "10:00"}</div>
-                                              <div><span className="font-bold text-foreground">Target Duration:</span> {Number(sub.duration_hours || 0)}h {Number(sub.duration_minutes || 0)}m</div>
-                                            </div>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
-                                    ) : (
-                                      sub.deadline_date && (
-                                        <TooltipProvider delayDuration={150}>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 font-medium cursor-pointer hover:underline">
-                                                <Calendar className="w-3.5 h-3.5" />
-                                                <span>{sub.deadline_date} {sub.deadline_time || ""}</span>
-                                              </span>
-                                            </TooltipTrigger>
-                                            <TooltipContent side="top" className="p-2 text-xs shadow-md border bg-popover text-popover-foreground rounded-lg">
-                                              <div className="text-[11px] space-y-1">
-                                                <div><span className="font-bold text-foreground">Deadline:</span> {sub.deadline_date} {sub.deadline_time || ""}</div>
-                                                <div><span className="font-bold text-foreground">Target Duration:</span> {Number(sub.duration_hours || 0)}h {Number(sub.duration_minutes || 0)}m</div>
-                                              </div>
-                                            </TooltipContent>
-                                          </Tooltip>
-                                        </TooltipProvider>
-                                      )
-                                    )}
-                                    {sub.started_at && (
-                                      <span className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-400 font-semibold">
-                                        <Play className="w-2.5 h-2.5 fill-current" />
-                                        <span>Started: {new Date(sub.started_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</span>
-                                      </span>
-                                    )}
-                                    {sub.stopped_at && subNormStatus !== "in_progress" && (
-                                      <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-400 font-semibold">
-                                        <Square className="w-2.5 h-2.5 fill-current" />
-                                        <span>Stopped: {new Date(sub.stopped_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</span>
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
+                          <div className="space-y-3 pt-1">
+                            {subTasksList.map((sub: any, sIdx: number) => (
+                              <SubtaskCard
+                                key={sub.id || sIdx}
+                                task={task}
+                                subtask={sub}
+                                index={sIdx}
+                                currentUserId={user?.id}
+                                isClientView={isClientRole || Boolean(pathname?.startsWith("/client"))}
+                                staffOptions={getProjectStaffOptions(task)}
+                                onUpdateSubtask={handleDirectSubtaskFieldUpdate}
+                                onDeleteSubtask={(t, subId) => handleDirectSubtaskDelete(t, subId)}
+                                onOpenEdit={(t, s) => handleOpenEditSubtask(t, s)}
+                                onOpenHistory={(t, s) => { setHistoryModalSubtask(s); setHistoryModalTask(t); }}
+                                onOpenUploads={(t, s) => setUploadModalState({ task: t, subtask: s })}
+                                onStatusChange={(t, subId, status) => handleSubtaskStatusUpdate(t, subId, status)}
+                                onStart={(t, s) => requestStartTaskWithLocation(t, s.id, s.title)}
+                                onStop={(t, s) => handleSubtaskStatusUpdate(t, s.id, "pending")}
+                              />
+                            ))}
                           </div>
                         )}
                       </div>
@@ -2770,8 +3610,60 @@ export function MyProfileClient() {
           {/* Task History Audit Trail Dialog */}
           <TaskHistoryDialog
             open={Boolean(historyModalTask)}
-            onOpenChange={(open) => !open && setHistoryModalTask(null)}
+            onOpenChange={(open) => {
+              if (!open) {
+                setHistoryModalTask(null);
+                setHistoryModalSubtask(null);
+              }
+            }}
             task={historyModalTask}
+            filterSubtaskId={historyModalSubtask?.id}
+            filterSubtaskTitle={historyModalSubtask?.title}
+          />
+
+          {/* Project Invoices Dialog */}
+          <ProjectInvoicesDialog
+            open={Boolean(invoicesModalTask)}
+            onOpenChange={(open) => !open && setInvoicesModalTask(null)}
+            task={invoicesModalTask}
+          />
+
+          {/* Unified Subtask Add & Edit Modal Dialog */}
+      <SubtaskModalDialog
+        open={subtaskModalOpen}
+        onOpenChange={(open) => {
+          setSubtaskModalOpen(open);
+          if (!open) {
+            setSubtaskModalEditingSub(null);
+          }
+        }}
+        task={subtaskModalTask}
+        editingSubtask={subtaskModalEditingSub}
+        staffOptions={subtaskModalTask ? getProjectStaffOptions(subtaskModalTask) : []}
+        isStaffViewer={false}
+        onSaved={handleRefreshMyProfileTasks}
+        onOpenHistory={(t, s) => {
+          setHistoryModalSubtask(s || null);
+          setHistoryModalTask(t);
+        }}
+      />
+
+          {/* Sub-Task Upload Dialog (Images, Videos, PDF, Word, Excel) */}
+          <SubTaskUploadDialog
+            open={Boolean(uploadModalState)}
+            onOpenChange={(open) => !open && setUploadModalState(null)}
+            task={uploadModalState?.task || null}
+            subtask={uploadModalState?.subtask || null}
+            onSaved={handleRefreshMyProfileTasks}
+          />
+
+          {/* Sub-Task Work Update Dialog (Post work updates with files & notes) */}
+          <SubTaskWorkUpdateDialog
+            open={Boolean(workUpdateModalState)}
+            onOpenChange={(open) => !open && setWorkUpdateModalState(null)}
+            task={workUpdateModalState?.task || null}
+            subtask={workUpdateModalState?.subtask || null}
+            onSaved={handleRefreshMyProfileTasks}
           />
         </TabsContent>
 
@@ -3195,6 +4087,11 @@ export function MyProfileClient() {
           </Card>
         </TabsContent>
 
+        {/* ================= TAB 5B: LEADERBOARD ================= */}
+        <TabsContent value="leaderboard" className="space-y-6">
+          <ProfileLeaderboardTab />
+        </TabsContent>
+
         {/* ================= TAB 6: QUERIES ================= */}
         <TabsContent value="queries" className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card p-4 rounded-2xl border shadow-xs">
@@ -3223,9 +4120,15 @@ export function MyProfileClient() {
                 <Card key={q.id} className="p-4 rounded-xl border shadow-xs hover:shadow-md transition-shadow">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="space-y-1 min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-bold text-primary">#TKT-{q.id}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs font-bold text-primary">{q.ticket_number || `#TKT-${q.id}`}</span>
                         <Badge variant="outline" className="text-[10px] font-semibold">{q.category || "General"}</Badge>
+                        {Number(q.assigned_to) === Number(user?.id) && (
+                          <Badge className="text-[10px] bg-indigo-500/10 text-indigo-600 border-indigo-200">Assigned to You</Badge>
+                        )}
+                        {Number(q.created_by) === Number(user?.id) && (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">Created by You</Badge>
+                        )}
                       </div>
                       <h4 className="font-bold text-sm text-foreground truncate">{q.subject}</h4>
                       {q.message && <p className="text-xs text-muted-foreground line-clamp-2">{q.message}</p>}
@@ -3277,14 +4180,22 @@ export function MyProfileClient() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {complaints.map((c) => (
+              {complaints.map((c) => {
+                const compDesc = c.description || c.last_message || c.subject;
+                return (
                 <Card key={c.id} className="p-4 rounded-xl border shadow-xs space-y-2">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant="outline" className="text-xs font-mono font-bold text-destructive border-destructive/30 bg-destructive/5">
-                        #CMP-{c.id}
+                        {c.complaint_number || `#CMP-${c.id}`}
                       </Badge>
                       <Badge variant="secondary" className="text-xs">{c.category || "Workplace"}</Badge>
+                      {Number(c.created_by) === Number(user?.id) && (
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground">Filed by You</Badge>
+                      )}
+                      {Number(c.target_user_id) === Number(user?.id) && (
+                        <Badge className="text-[10px] bg-destructive/10 text-destructive border-destructive/20">Directed to You</Badge>
+                      )}
                       <h4 className="font-bold text-sm text-foreground">{c.subject}</h4>
                     </div>
 
@@ -3299,7 +4210,7 @@ export function MyProfileClient() {
                     </Badge>
                   </div>
 
-                  <p className="text-xs text-muted-foreground leading-relaxed">{c.description}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{compDesc}</p>
 
                   {c.resolution_notes && (
                     <div className="p-3 rounded-lg bg-muted/40 border border-border text-xs space-y-1">
@@ -3313,7 +4224,8 @@ export function MyProfileClient() {
                     <span>Priority: <strong className="capitalize">{c.priority || "Medium"}</strong></span>
                   </div>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           )}
         </TabsContent>
@@ -3323,37 +4235,67 @@ export function MyProfileClient() {
           <div className="flex items-center justify-between bg-card p-4 rounded-2xl border shadow-xs">
             <div>
               <h3 className="font-bold text-base text-foreground">Official Documents & Letters</h3>
-              <p className="text-xs text-muted-foreground">Official appointment orders, offer letters, and appreciation certificates</p>
+              <p className="text-xs text-muted-foreground">Official appointment orders, offer letters, salary slips, and verified documents</p>
             </div>
+            <Badge variant="secondary" className="text-xs font-semibold">
+              {documents.length} Document{documents.length === 1 ? "" : "s"}
+            </Badge>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {[
-              { title: "Appointment Letter", type: "Official Order", date: "Jan 2024", id: "DOC-001" },
-              { title: "Employee Identity Card", type: "Digital ID", date: "Jan 2024", id: "DOC-002" },
-              { title: "Faculty Code of Conduct", type: "Policy Document", date: "Jan 2024", id: "DOC-003" },
-              { title: "Annual Increment Letter", type: "Compensation", date: "Apr 2025", id: "DOC-004" },
-            ].map((doc, idx) => (
-              <Card key={idx} className="p-4 rounded-xl border shadow-xs flex flex-col justify-between space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <FileText className="h-5 w-5" />
-                  </div>
-                  <Badge variant="outline" className="text-[10px]">{doc.type}</Badge>
-                </div>
+          {documents.length === 0 ? (
+            <Card className="p-12 text-center border-dashed rounded-2xl">
+              <FileText className="h-10 w-10 mx-auto text-muted-foreground mb-3 opacity-50" />
+              <h4 className="font-bold text-foreground">No Official Documents Issued Yet</h4>
+              <p className="text-xs text-muted-foreground mt-1">Official appointment orders, salary slips, and verified documents will appear here.</p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {documents.map((doc: any, idx: number) => {
+                const docId = doc.document_number || doc.id || `DOC-${idx + 1}`;
+                const docType = doc.category_name || doc.template_name || (doc.letter_type ? String(doc.letter_type).replace(/_/g, " ") : "Official Document");
+                const dateStr = doc.created_at ? new Date(doc.created_at).toLocaleDateString("en-IN", { month: "short", year: "numeric", day: "numeric" }) : "Recent";
+                const fileUrl = doc.pdf_url || doc.image_url || doc.file_url;
 
-                <div>
-                  <h4 className="font-bold text-sm text-foreground">{doc.title}</h4>
-                  <p className="text-xs text-muted-foreground mt-0.5">Issued: {doc.date} • {doc.id}</p>
-                </div>
+                return (
+                  <Card key={doc.id || idx} className="p-4 rounded-xl border shadow-xs flex flex-col justify-between space-y-3 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                        <FileText className="h-5 w-5" />
+                      </div>
+                      <Badge variant="outline" className="text-[10px] capitalize max-w-[140px] truncate">{docType}</Badge>
+                    </div>
 
-                <Button size="sm" variant="outline" className="w-full text-xs gap-1.5" onClick={() => toast.success(`Downloading ${doc.title} PDF`)}>
-                  <Download className="h-3.5 w-3.5" />
-                  Download PDF
-                </Button>
-              </Card>
-            ))}
-          </div>
+                    <div>
+                      <h4 className="font-bold text-sm text-foreground line-clamp-2">{doc.title || docType}</h4>
+                      <p className="text-xs text-muted-foreground mt-0.5">Issued: {dateStr} • #{docId}</p>
+                    </div>
+
+                    {fileUrl ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full text-xs gap-1.5"
+                        onClick={() => window.open(fileUrl, "_blank")}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        View / Download
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full text-xs gap-1.5"
+                        onClick={() => toast.info(`Document #${docId} is available in official institute registry`)}
+                      >
+                        <FileCheck className="h-3.5 w-3.5" />
+                        Official Verified Record
+                      </Button>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -3423,6 +4365,8 @@ export function MyProfileClient() {
         </DialogContent>
       </Dialog>
 
+      
+
       {/* File Complaint Modal */}
       <Dialog open={complaintDialogOpen} onOpenChange={setComplaintDialogOpen}>
         <DialogContent className="max-w-md">
@@ -3488,6 +4432,8 @@ export function MyProfileClient() {
           </form>
         </DialogContent>
       </Dialog>
+
+      
 
       {/* Staff Create Task Dialog */}
       <Dialog open={createTaskDialogOpen} onOpenChange={setCreateTaskDialogOpen}>
@@ -3586,6 +4532,30 @@ export function MyProfileClient() {
           </form>
         </DialogContent>
       </Dialog>
+
+      
+
+      {/* Daily Check-In & Check-Out Geo-Location History Dialog */}
+      <DailyGeoAttendanceHistoryDialog
+        open={geoHistoryDialogOpen}
+        onOpenChange={setGeoHistoryDialogOpen}
+        dateKey={selectedGeoHistoryRow?.dateKey || null}
+        dateFormatted={selectedGeoHistoryRow?.dateFormatted}
+        tasks={tasks}
+        shiftLabel={attendanceData?.shift_info?.label || "09:00 AM - 05:00 PM (General Shift)"}
+        expectedHours={attendanceData?.shift_info?.expectedHours || 8}
+        rowMetrics={selectedGeoHistoryRow}
+      />
+
+      {/* Geo-Location Confirmation Dialog Before Check-In */}
+      <CheckInLocationDialog
+        open={locationCheckInOpen}
+        onOpenChange={setLocationCheckInOpen}
+        taskTitle={pendingCheckInInfo?.task?.title || "Task"}
+        subtaskTitle={pendingCheckInInfo?.subTitle}
+        urgency={pendingCheckInInfo?.task?.urgency}
+        onConfirm={handleConfirmLocationCheckIn}
+      />
     </div>
   );
 }

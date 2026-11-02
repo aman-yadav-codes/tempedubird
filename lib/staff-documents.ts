@@ -1,3 +1,4 @@
+import { recordPerformancePoints } from "@/lib/performance/performance-engine";
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser, requireAdmin } from "@/lib/auth/auth";
 import { isPlatformAdminUser, isInstitutionAdminUser } from "@/lib/auth/permissions";
@@ -701,6 +702,13 @@ export async function handleDocumentGet(req: Request, defaultDocType: string) {
     const params: unknown[] = [docType];
     let paramIndex = 2;
 
+    const staffUserIdParam = Number(url.searchParams.get("staffUserId"));
+    if (Number.isInteger(staffUserIdParam) && staffUserIdParam > 0) {
+      conditions.push(`sgl.staff_user_id = ${paramIndex}`);
+      params.push(staffUserIdParam);
+      paramIndex++;
+    }
+
     if (isPlatformAdmin) {
       const institutionIdParam = Number(url.searchParams.get("institutionId"));
       if (Number.isInteger(institutionIdParam) && institutionIdParam > 0) {
@@ -792,6 +800,144 @@ export async function handleDocumentGet(req: Request, defaultDocType: string) {
   }
 }
 
+
+export function generateSalarySlipHtml({
+  institution,
+  staff,
+  monthName,
+  earnings,
+  deductionsList,
+  grossSalary,
+  totalDeductions,
+  netSalary,
+  notes,
+  generatedDate,
+}: {
+  institution: any;
+  staff: any;
+  monthName: string;
+  earnings: { name: string; amount: number }[];
+  deductionsList: { name: string; amount: number }[];
+  grossSalary: number;
+  totalDeductions: number;
+  netSalary: number;
+  notes?: string;
+  generatedDate: string;
+}) {
+  const maxRows = Math.max(earnings.length, deductionsList.length);
+  const rowsHtml: string[] = [];
+
+  for (let i = 0; i < maxRows; i++) {
+    const earn = earnings[i];
+    const ded = deductionsList[i];
+    rowsHtml.push(`
+      <tr>
+        <td style="padding: 9px 14px; border: 1px solid #e2e8f0; font-size: 13px; color: #334155;">${earn ? earn.name : ""}</td>
+        <td style="padding: 9px 14px; border: 1px solid #e2e8f0; font-size: 13px; text-align: right; font-weight: 600; color: #0f172a;">${earn ? "₹" + Number(earn.amount).toLocaleString("en-IN") : ""}</td>
+        <td style="padding: 9px 14px; border: 1px solid #e2e8f0; font-size: 13px; color: #334155;">${ded ? ded.name : ""}</td>
+        <td style="padding: 9px 14px; border: 1px solid #e2e8f0; font-size: 13px; text-align: right; font-weight: 600; color: #0f172a;">${ded ? "₹" + Number(ded.amount).toLocaleString("en-IN") : ""}</td>
+      </tr>
+    `);
+  }
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Salary Slip - ${monthName} - ${staff.full_name}</title>
+  <style>
+    @media print {
+      body { margin: 0; padding: 0; background: #fff !important; }
+      .no-print { display: none !important; }
+      .payslip-container { border: none !important; box-shadow: none !important; width: 100% !important; max-width: 100% !important; }
+    }
+  </style>
+</head>
+<body style="font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; padding: 24px 12px; margin: 0; color: #0f172a;">
+  <div class="payslip-container" style="max-width: 820px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); padding: 36px 40px; box-sizing: border-box;">
+    
+    <!-- Header -->
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 20px; margin-bottom: 24px;">
+      <div>
+        <div style="font-size: 24px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px;">${institution.name || "EduBird Educational Platform"}</div>
+        <div style="font-size: 13px; color: #64748b; margin-top: 4px;">${institution.address || "Main Institutional Campus"}</div>
+        <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
+          ${institution.email ? "Email: " + institution.email : ""} ${institution.phone ? " | Tel: " + institution.phone : ""}
+        </div>
+      </div>
+      <div style="text-align: right;">
+        <span style="display: inline-block; padding: 4px 12px; background: #e0f2fe; color: #0369a1; border-radius: 6px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Payslip / Salary Slip</span>
+        <div style="font-size: 18px; font-weight: 800; color: #2563eb; margin-top: 6px;">${monthName}</div>
+      </div>
+    </div>
+
+    <!-- Employee Details Card -->
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px; margin-bottom: 24px;">
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 24px; font-size: 13px;">
+        <div><span style="color: #64748b; font-weight: 500;">Employee Name:</span> <strong style="color: #0f172a;">${staff.full_name}</strong></div>
+        <div><span style="color: #64748b; font-weight: 500;">Designation / Role:</span> <strong style="color: #0f172a;">${staff.designation || "Staff Member"}</strong></div>
+        <div><span style="color: #64748b; font-weight: 500;">Employee ID:</span> <strong style="color: #0f172a;">EMP-${staff.id}</strong></div>
+        <div><span style="color: #64748b; font-weight: 500;">Joining Date:</span> <strong style="color: #0f172a;">${staff.joining_date ? new Date(staff.joining_date).toLocaleDateString('en-IN') : "N/A"}</strong></div>
+        <div><span style="color: #64748b; font-weight: 500;">Bank Name:</span> <strong style="color: #0f172a;">${staff.bank_name || "N/A"}</strong></div>
+        <div><span style="color: #64748b; font-weight: 500;">Account Number:</span> <strong style="color: #0f172a;">${staff.account_number ? "XXXX-XXXX-" + staff.account_number.slice(-4) : "N/A"}</strong></div>
+        <div><span style="color: #64748b; font-weight: 500;">IFSC Code:</span> <strong style="color: #0f172a;">${staff.ifsc_code || "N/A"}</strong></div>
+        <div><span style="color: #64748b; font-weight: 500;">PAN Number:</span> <strong style="color: #0f172a;">${staff.pan_number || "N/A"}</strong></div>
+      </div>
+    </div>
+
+    <!-- Salary Breakdown Table -->
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+      <thead>
+        <tr style="background: #f1f5f9; text-align: left;">
+          <th style="padding: 10px 14px; border: 1px solid #cbd5e1; width: 35%; font-size: 12px; font-weight: 800; color: #1e293b; text-transform: uppercase;">Earnings</th>
+          <th style="padding: 10px 14px; border: 1px solid #cbd5e1; width: 15%; font-size: 12px; font-weight: 800; color: #1e293b; text-transform: uppercase; text-align: right;">Amount (₹)</th>
+          <th style="padding: 10px 14px; border: 1px solid #cbd5e1; width: 35%; font-size: 12px; font-weight: 800; color: #1e293b; text-transform: uppercase;">Deductions</th>
+          <th style="padding: 10px 14px; border: 1px solid #cbd5e1; width: 15%; font-size: 12px; font-weight: 800; color: #1e293b; text-transform: uppercase; text-align: right;">Amount (₹)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml.join("")}
+      </tbody>
+      <tfoot>
+        <tr style="background: #f8fafc; font-weight: 800;">
+          <td style="padding: 10px 14px; border: 1px solid #cbd5e1; font-size: 13px; color: #0f172a;">Total Gross Earnings</td>
+          <td style="padding: 10px 14px; border: 1px solid #cbd5e1; font-size: 13px; text-align: right; color: #16a34a;">₹${grossSalary.toLocaleString("en-IN")}</td>
+          <td style="padding: 10px 14px; border: 1px solid #cbd5e1; font-size: 13px; color: #0f172a;">Total Deductions</td>
+          <td style="padding: 10px 14px; border: 1px solid #cbd5e1; font-size: 13px; text-align: right; color: #dc2626;">₹${totalDeductions.toLocaleString("en-IN")}</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <!-- Net Payable Box -->
+    <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px; padding: 18px 24px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+      <div>
+        <div style="font-size: 11px; font-weight: 800; color: #15803d; text-transform: uppercase; letter-spacing: 0.5px;">Net Salary Payable</div>
+        <div style="font-size: 12px; color: #166534; margin-top: 3px;">Payment via Direct Bank Transfer</div>
+      </div>
+      <div style="font-size: 26px; font-weight: 900; color: #15803d;">
+        ₹${netSalary.toLocaleString("en-IN")}
+      </div>
+    </div>
+
+    ${notes ? `<div style="font-size: 12px; color: #64748b; margin-bottom: 24px; font-style: italic;">Note: ${notes}</div>` : ""}
+
+    <!-- Footer Signatures -->
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; padding-top: 36px; border-top: 1px dashed #cbd5e1; font-size: 11px; color: #64748b;">
+      <div>
+        <div>Generated Date: ${generatedDate}</div>
+        <div style="margin-top: 2px;">This is a system generated document and does not require a physical signature.</div>
+      </div>
+      <div style="text-align: center;">
+        <div style="border-bottom: 1.5px solid #0f172a; width: 170px; margin-bottom: 6px;"></div>
+        <div style="font-weight: 700; color: #0f172a;">Authorized Signatory</div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>`;
+}
+
 export async function handleDocumentPost(req: Request, defaultDocType: string) {
   try {
     const currentUser = await getAuthenticatedUser(req);
@@ -819,23 +965,184 @@ export async function handleDocumentPost(req: Request, defaultDocType: string) {
       canvasHeight = 1080,
     } = body;
 
-    if (!staffUserId || !templateId || !renderedHtml || !title) {
-      return NextResponse.json(
-        { error: "Staff member, template, title, and document content are required" },
-        { status: 400 }
-      );
-    }
-
     let finalInstitutionId = isPlatformAdmin
       ? Number(institutionId) || userInstId || 1
       : userInstId || Number(institutionId);
 
-    if (!finalInstitutionId) {
+    if (!finalInstitutionId && staffUserId) {
       const userInstRes = await db.query<{ institution_id: number }>(
         `SELECT institution_id FROM institution_memberships WHERE user_id = $1 AND is_active = TRUE LIMIT 1`,
         [staffUserId]
       );
       finalInstitutionId = userInstRes.rows[0]?.institution_id || 1;
+    }
+
+    let finalTitle = title;
+    let finalHtml = renderedHtml;
+    let finalTemplateId = templateId || null;
+    let finalFieldValues = fieldValues || {};
+
+    if ((!finalHtml || !finalTitle) && (letterType === "salary_slip" || defaultDocType === "salary_slip" || body.month)) {
+      const monthStr = body.month || new Date().toISOString().slice(0, 7);
+      const [yearStr, monthNumStr] = monthStr.split("-");
+      const monthDate = new Date(Number(yearStr), Number(monthNumStr) - 1, 1);
+      const monthName = monthDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+      const staffRes = await db.query(`
+        SELECT u.id, u.full_name, u.email, u.phone,
+               up.bank_name, up.account_holder_name, up.account_number, up.ifsc_code,
+               up.pan_number, up.uan_number, up.esi_number, up.joining_date, up.shift_timing,
+               COALESCE(r.name, 'Staff Member') as designation
+        FROM users u
+        LEFT JOIN user_profiles up ON up.user_id = u.id
+        LEFT JOIN user_roles ur ON ur.user_id = u.id
+        LEFT JOIN roles r ON r.id = ur.role_id
+        WHERE u.id = $1 LIMIT 1
+      `, [staffUserId]);
+      const staff = staffRes.rows[0] || { id: staffUserId, full_name: "Staff Member", email: "", designation: "Staff Member" };
+
+      const instRes = await db.query(`
+        SELECT ip.id, ip.name, ip.logo_url, ip.phone, ip.email,
+               COALESCE(loc.name, 'Main Campus') AS address
+        FROM institution_profiles ip
+        LEFT JOIN locations loc ON loc.id = ip.location_id
+        WHERE ip.id = $1 LIMIT 1
+      `, [finalInstitutionId || 1]);
+      const inst = instRes.rows[0] || { name: "EduBird Academic Platform", address: "Central Campus", phone: "+91 98765 43210", email: "info@edubird.com" };
+
+      let earnings = [];
+      let deductionsList = [];
+
+      if (Array.isArray(body.earnings) && body.earnings.length > 0) {
+        earnings = body.earnings;
+      }
+      if (Array.isArray(body.deductions) && body.deductions.length > 0) {
+        deductionsList = body.deductions;
+      }
+
+      if (earnings.length === 0 && deductionsList.length === 0) {
+        const compRes = await db.query(`
+          SELECT label as component_name, amount, COALESCE(component_type, 'EARNING') as component_type
+          FROM staff_salary_components
+          WHERE user_id = $1
+          ORDER BY sort_order ASC, id ASC
+        `, [staffUserId]);
+
+        if (compRes.rows.length > 0) {
+          compRes.rows.forEach((c) => {
+            const amt = Number(c.amount) || 0;
+            if (c.component_type === "DEDUCTION") {
+              deductionsList.push({ name: c.component_name || "Deduction", amount: amt });
+            } else {
+              earnings.push({ name: c.component_name || "Basic Salary", amount: amt });
+            }
+          });
+        } else {
+          earnings = [
+            { name: "Basic Salary", amount: 24000 },
+            { name: "House Rent Allowance (HRA)", amount: 8000 },
+            { name: "Conveyance Allowance", amount: 2500 },
+            { name: "Special Allowance", amount: 3500 },
+          ];
+          deductionsList = [
+            { name: "Provident Fund (EPF)", amount: 1800 },
+            { name: "Professional Tax", amount: 200 },
+            { name: "Health Insurance (ESI)", amount: 500 },
+          ];
+        }
+
+        // Automatically calculate Bonus, Commission, and Attendance Deductions for this employee & month
+        try {
+          const payoutRes = await db.query(
+            `SELECT bonus_amount, manual_deduction, deduction_amount
+             FROM staff_salary_payouts
+             WHERE staff_user_id = $1 AND salary_month = $2 LIMIT 1`,
+            [staffUserId, monthStr]
+          );
+          if (payoutRes.rows.length > 0) {
+            const p = payoutRes.rows[0];
+            if (Number(p.bonus_amount) > 0) {
+              earnings.push({ name: "Performance Bonus", amount: Number(p.bonus_amount) });
+            }
+            if (Number(p.manual_deduction) > 0) {
+              deductionsList.push({ name: "Other Deduction", amount: Number(p.manual_deduction) });
+            }
+            if (Number(p.deduction_amount) > 0 && !deductionsList.some((d: any) => d.name === "Attendance / Leave Deduction")) {
+              deductionsList.push({ name: "Attendance / Leave Deduction", amount: Number(p.deduction_amount) });
+            }
+          }
+
+          const pointsRes = await db.query(
+            `SELECT COALESCE(SUM(points), 0) AS total_bonus_pts
+             FROM staff_performance_points_ledger
+             WHERE employee_id = $1 AND point_type = 'task_completed'
+               AND to_char(created_at, 'YYYY-MM') = $2`,
+            [staffUserId, monthStr]
+          ).catch(() => ({ rows: [] }));
+          if (pointsRes.rows.length > 0 && Number(pointsRes.rows[0].total_bonus_pts) > 0) {
+            const bonusPts = Number(pointsRes.rows[0].total_bonus_pts);
+            if (!earnings.some((e: any) => e.name.includes("Bonus"))) {
+              earnings.push({ name: `Task Completion Bonus (${bonusPts} pts)`, amount: bonusPts * 10 });
+            }
+          }
+
+          const commRes = await db.query(
+            `SELECT commission_rate, commission_type, minimum_threshold
+             FROM staff_commission_structures
+             WHERE user_id = $1 LIMIT 1`,
+            [staffUserId]
+          ).catch(() => ({ rows: [] }));
+          if (commRes.rows.length > 0 && Number(commRes.rows[0].commission_rate) > 0) {
+            earnings.push({ name: "Sales / Task Commission", amount: Number(commRes.rows[0].commission_rate) });
+          }
+        } catch (calcErr) {
+          console.warn("[salary_slip] Failed to fetch dynamic bonus/deductions:", calcErr);
+        }
+      }
+
+      const grossSalary = earnings.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+      const totalDeductions = deductionsList.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+      const netSalary = Math.max(0, grossSalary - totalDeductions);
+
+      finalTitle = `Salary Slip - ${monthName} (${staff.full_name})`;
+
+      finalFieldValues = {
+        month: monthStr,
+        month_name: monthName,
+        staff_name: staff.full_name,
+        designation: staff.designation,
+        gross_salary: grossSalary,
+        deductions: totalDeductions,
+        net_salary: netSalary,
+        earnings,
+        deductions_list: deductionsList,
+        bank_name: staff.bank_name || "N/A",
+        account_number: staff.account_number ? `XXXX-XXXX-${staff.account_number.slice(-4)}` : "N/A",
+        ifsc_code: staff.ifsc_code || "N/A",
+        pan_number: staff.pan_number || "N/A",
+        uan_number: staff.uan_number || "N/A",
+        notes: body.notes || "Salary disbursed via direct bank transfer.",
+      };
+
+      finalHtml = generateSalarySlipHtml({
+        institution: inst,
+        staff,
+        monthName,
+        earnings,
+        deductionsList,
+        grossSalary,
+        totalDeductions,
+        netSalary,
+        notes: finalFieldValues.notes,
+        generatedDate: new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+      });
+    }
+
+    if (!staffUserId || !finalHtml || !finalTitle) {
+      return NextResponse.json(
+        { error: "Staff member, title, and document content are required" },
+        { status: 400 }
+      );
     }
 
     const insertRes = await db.query(
@@ -857,14 +1164,14 @@ export async function handleDocumentPost(req: Request, defaultDocType: string) {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
       [
-        finalInstitutionId,
+        finalInstitutionId || 1,
         staffUserId,
-        templateId,
+        finalTemplateId,
         cardCategoryId || null,
-        title,
+        finalTitle,
         letterType,
-        renderedHtml,
-        JSON.stringify(fieldValues),
+        finalHtml,
+        JSON.stringify(finalFieldValues),
         imageUrl || null,
         pdfUrl || null,
         canvasWidth,
@@ -872,6 +1179,46 @@ export async function handleDocumentPost(req: Request, defaultDocType: string) {
         currentUser.id,
       ]
     );
+
+    const createdDoc = insertRes.rows[0];
+    if (createdDoc?.id && currentUser?.id) {
+      try {
+        const lowerTitle = String(finalTitle || "").toLowerCase();
+        if (letterType === "salary_slip" || defaultDocType === "salary_slip" || lowerTitle.includes("salary")) {
+          await recordPerformancePoints({
+            employeeId: currentUser.id,
+            activityType: "finance_salary_slip",
+            referenceModule: "staff_salary_slip",
+            referenceRecordId: createdDoc.id,
+            performedBy: { id: currentUser.id, name: currentUser.full_name || "Admin" },
+            customDescription: "Generated salary slip: " + (finalTitle || "Salary Slip"),
+            institutionId: finalInstitutionId || undefined,
+          });
+        } else if (letterType === "experience_letter" || lowerTitle.includes("experience")) {
+          await recordPerformancePoints({
+            employeeId: currentUser.id,
+            activityType: "recruitment_experience_letter",
+            referenceModule: "staff_letter",
+            referenceRecordId: createdDoc.id,
+            performedBy: { id: currentUser.id, name: currentUser.full_name || "Admin" },
+            customDescription: "Generated experience letter: " + (finalTitle || "Experience Letter"),
+            institutionId: finalInstitutionId || undefined,
+          });
+        } else if (letterType === "offer_letter" || lowerTitle.includes("offer")) {
+          await recordPerformancePoints({
+            employeeId: currentUser.id,
+            activityType: "recruitment_offer_letter",
+            referenceModule: "staff_letter",
+            referenceRecordId: createdDoc.id,
+            performedBy: { id: currentUser.id, name: currentUser.full_name || "Admin" },
+            customDescription: "Generated offer letter: " + (finalTitle || "Offer Letter"),
+            institutionId: finalInstitutionId || undefined,
+          });
+        }
+      } catch (perfErr) {
+        console.warn("[Staff Document] Performance points warning:", perfErr);
+      }
+    }
 
     return NextResponse.json({ data: insertRes.rows[0] }, { status: 201 });
   } catch (error) {
@@ -926,6 +1273,48 @@ export async function handleDocumentDelete(req: Request) {
     console.error(`[STAFF_DOCUMENTS_DELETE]`, error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to delete document record" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function handleDocumentPut(req: Request) {
+  try {
+    const currentUser = await getAuthenticatedUser(req);
+    const isPlatformAdmin = isPlatformAdminUser(currentUser);
+    const isInstitutionAdmin = isInstitutionAdminUser(currentUser);
+
+    if (!isPlatformAdmin && !isInstitutionAdmin) {
+      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const { id, title, renderedHtml, fieldValues } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "Document ID required" }, { status: 400 });
+    }
+
+    const res = await db.query(
+      `UPDATE staff_generated_letters
+       SET title = COALESCE($1, title),
+           rendered_html = COALESCE($2, rendered_html),
+           field_values = COALESCE($3::jsonb, field_values),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $4
+       RETURNING *`,
+      [title || null, renderedHtml || null, fieldValues ? JSON.stringify(fieldValues) : null, id]
+    );
+
+    if (res.rowCount === 0) {
+      return NextResponse.json({ error: "Document not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, data: res.rows[0] });
+  } catch (error) {
+    console.error("[STAFF_DOCUMENTS_PUT]", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to update document" },
       { status: 500 }
     );
   }

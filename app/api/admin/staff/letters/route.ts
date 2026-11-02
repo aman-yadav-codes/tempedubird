@@ -209,7 +209,7 @@ export async function GET(req: Request) {
       countParams.push(targetUserId);
     }
 
-    const institutionWhere = institutionId ? "sgl.institution_id = $1" : "(sgl.institution_id IS NULL OR $1::integer IS NULL)";
+    const institutionWhere = (effectiveMode === "self" || !institutionId) ? "(sgl.institution_id = $1 OR $1::integer IS NULL OR 1=1)" : "sgl.institution_id = $1";
 
     const [rowsResult, countResult] = await Promise.all([
       db.query(
@@ -278,9 +278,51 @@ export async function GET(req: Request) {
       ),
     ]);
 
-    const total = Number(countResult.rows[0]?.count ?? 0);
+    let userDocs: any[] = [];
+    if (effectiveMode === "self") {
+      try {
+        const uDocsRes = await db.query(
+          `SELECT id, document_type, document_number, file_url, is_verified, created_at
+           FROM user_documents
+           WHERE user_id = $1
+           ORDER BY id DESC`,
+          [targetUserId]
+        );
+        userDocs = uDocsRes.rows.map((doc: any) => ({
+          id: `UD-${doc.id}`,
+          institution_id: institutionId || 1,
+          staff_user_id: targetUserId,
+          full_name: currentUser.full_name,
+          email: currentUser.email,
+          role_code: "staff",
+          template_id: 0,
+          template_name: doc.document_type ? String(doc.document_type).replace(/_/g, " ") : "Profile Document",
+          card_category_id: 0,
+          category_name: "Verification / Identity",
+          category_slug: "profile_document",
+          title: doc.document_type ? String(doc.document_type).replace(/_/g, " ") : "Personal Document",
+          letter_type: "profile_document",
+          image_url: doc.file_url,
+          pdf_url: doc.file_url,
+          file_url: doc.file_url,
+          canvas_width: null,
+          canvas_height: null,
+          created_at: doc.created_at,
+          generated_by_name: "Self Uploaded",
+          is_verified: doc.is_verified,
+          document_number: doc.document_number,
+        }));
+      } catch {
+        // safe fallback
+      }
+    }
+
+    const allData = [...rowsResult.rows, ...userDocs];
+    const total = Number(countResult.rows[0]?.count ?? 0) + userDocs.length;
     return NextResponse.json({
-      data: rowsResult.rows,
+      data: allData,
+      letters: rowsResult.rows,
+      profile_documents: userDocs,
       total,
       page,
       pageCount: getPageCount(total, limit),

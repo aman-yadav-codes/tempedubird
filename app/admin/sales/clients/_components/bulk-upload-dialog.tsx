@@ -1,5 +1,7 @@
 "use client";
 
+import { normalizeUrl } from "@/lib/utils";
+
 import React, { useState, useRef } from "react";
 import {
   Upload,
@@ -224,7 +226,7 @@ export function BulkUploadClientsDialog({
           contact_person: r.contact_person,
           phone: r.phone || null,
           email: r.email || null,
-          website: r.website || null,
+          website: normalizeUrl(r.website),
           address: r.address || null,
           city: r.city || null,
           state: r.state || null,

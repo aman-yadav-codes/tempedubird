@@ -401,24 +401,32 @@ export async function GET(req: Request) {
     const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit")) || 20));
     const search = url.searchParams.get("search")?.trim() ?? "";
     const isAdmin = isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    const mode = url.searchParams.get("mode");
     const rawView = url.searchParams.get("view");
-    const view = rawView === "created" ? "created" : rawView === "received" ? "received" : (isAdmin ? "all" : "received");
+    const isSelfMode = mode === "self" || rawView === "self";
+    const view = isSelfMode ? "self" : rawView === "created" ? "created" : rawView === "received" ? "received" : (isAdmin ? "all" : "received");
 
     const whereConditions: string[] = [];
     const queryParams: unknown[] = [];
 
     // Institution scope filter
-    const requestedInstParam = url.searchParams.get("institutionId");
+    const requestedInstParam = url.searchParams.get("institutionId") || url.searchParams.get("institution_id");
     if (requestedInstParam && Number.isInteger(Number(requestedInstParam)) && Number(requestedInstParam) > 0) {
       queryParams.push(Number(requestedInstParam));
       whereConditions.push(`c.institution_id = $${queryParams.length}`);
-    } else if (!isPlatformAdminUser(user)) {
+    } else if (!isPlatformAdminUser(user) && !isSelfMode) {
       queryParams.push(institutionId);
       whereConditions.push(`c.institution_id = $${queryParams.length}`);
     }
 
     // Role / View filter
-    if (isAdmin && view === "all") {
+    if (isSelfMode) {
+      queryParams.push(user.id);
+      const userParamIdx = queryParams.length;
+      whereConditions.push(
+        `(c.created_by = $${userParamIdx} OR c.target_user_id = $${userParamIdx})`
+      );
+    } else if (isAdmin && view === "all") {
       // Platform / Institution Admin can see all complaints
     } else if (view === "created") {
       queryParams.push(user.id);
@@ -475,6 +483,8 @@ export async function GET(req: Request) {
                (${studentCondition}) AS is_student_complaint,
                (${canUpdateStatusCondition}) AS can_update_status,
                COUNT(*) OVER()::int AS total_count,
+               (SELECT message FROM institution_complaint_messages earliest
+                WHERE earliest.complaint_id = c.id ORDER BY earliest.id ASC LIMIT 1) AS description,
                (SELECT message FROM institution_complaint_messages latest
                 WHERE latest.complaint_id = c.id ORDER BY latest.id DESC LIMIT 1) AS last_message
         FROM institution_complaints c

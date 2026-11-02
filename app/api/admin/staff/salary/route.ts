@@ -162,6 +162,10 @@ async function ensureAttendanceLookupSchema(queryable: Queryable) {
 
 function ensureStaffSalarySchemas() {
   staffSalaryAttendanceSchemaReady ??= (async () => {
+    await db.query(`
+      ALTER TABLE institution_calendar_events
+        ADD COLUMN IF NOT EXISTS academic_year_id INTEGER REFERENCES academic_years(id) ON DELETE SET NULL
+    `).catch(() => {});
     await ensureStaffSalaryStructureSchema(db);
     await ensureAttendanceLookupSchema(db);
     await ensureDefaultSalaryHolidays();
@@ -554,8 +558,12 @@ export async function GET(req: Request) {
     await ensureStaffSalarySchemas();
 
     const url = new URL(req.url);
-    const institutionId = positive(url.searchParams.get("institutionId"));
+    const rawInstId = url.searchParams.get("institutionId") || url.searchParams.get("institution_id");
     const mode = url.searchParams.get("mode") === "self" ? "self" : "admin";
+    let institutionId = positive(rawInstId);
+    if (!institutionId && mode === "self") {
+      institutionId = currentUser.memberships?.find((m: any) => m.institution_id)?.institution_id || 1;
+    }
     const month = monthValue(url.searchParams.get("month"));
 
     if (!institutionId) return NextResponse.json({ salary: [] });
@@ -565,12 +573,32 @@ export async function GET(req: Request) {
       const requestedStaffUserId = positive(url.searchParams.get("staffUserId"));
       const targetUserId = (canManageStaffSalary(currentUser, institutionId) && requestedStaffUserId) ? requestedStaffUserId : currentUser.id;
       await assertStaffMembership(targetUserId, institutionId).catch(() => {});
-      const [salary, paidHistory, unpaidSalary] = await Promise.all([
+      const [salary, paidHistory, unpaidSalary, incrementsRes, componentsRes] = await Promise.all([
         listMonthlySalary(institutionId, month, targetUserId),
         listPaidHistory(institutionId, month, targetUserId),
         listPreviousUnpaidSalary(institutionId, month, targetUserId),
+        db.query(
+          `SELECT id, user_id, previous_base_salary, new_base_salary, increment_amount, increment_percentage, effective_date, reason, approved_by_name, created_at
+           FROM staff_salary_increments
+           WHERE user_id = $1
+           ORDER BY effective_date DESC, id DESC`,
+          [targetUserId]
+        ).catch(() => ({ rows: [] })),
+        db.query(
+          `SELECT id, label, amount, component_type, sort_order
+           FROM staff_salary_components
+           WHERE user_id = $1
+           ORDER BY sort_order ASC, id ASC`,
+          [targetUserId]
+        ).catch(() => ({ rows: [] })),
       ]);
-      return NextResponse.json({ salary, paidHistory, unpaidSalary });
+      return NextResponse.json({
+        salary,
+        paidHistory,
+        unpaidSalary,
+        increments: incrementsRes.rows,
+        components: componentsRes.rows,
+      });
     }
 
     if (!canManageStaffSalary(currentUser, institutionId)) {
@@ -600,6 +628,92 @@ export async function POST(req: Request) {
     const currentUser = await requireAdmin(req);
     await ensureStaffSalarySchemas();
     const body = await req.json();
+
+    if (body.action === "update_salary") {
+      const staffUserId = positive(body.staffUserId);
+      const newBaseSalary = Number(body.newBaseSalary);
+      const institutionId = positive(body.institutionId) || currentUser.memberships?.find((m: any) => m.institution_id)?.institution_id || 1;
+      
+      if (!staffUserId || isNaN(newBaseSalary) || newBaseSalary < 0) {
+        return NextResponse.json({ error: "Invalid staff user ID or salary amount" }, { status: 400 });
+      }
+      if (!canManageStaffSalary(currentUser, institutionId)) {
+        return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
+      }
+
+      // 1. Get current base salary
+      const compRes = await db.query(
+        `SELECT id, label, amount, component_type FROM staff_salary_components WHERE user_id = $1 ORDER BY sort_order ASC, id ASC`,
+        [staffUserId]
+      );
+      const prevBaseSalary = compRes.rows.reduce(
+        (sum: number, c: any) => sum + (c.component_type === 'DEDUCTION' ? 0 : Number(c.amount) || 0),
+        0
+      );
+
+      const incrementAmount = Number((newBaseSalary - prevBaseSalary).toFixed(2));
+      const incrementPercentage = prevBaseSalary > 0
+        ? Number(((incrementAmount / prevBaseSalary) * 100).toFixed(2))
+        : 0;
+      const effectiveDate = body.effectiveDate || new Date().toISOString().split("T")[0];
+      const reason = body.reason ? String(body.reason).trim() : "Salary Increment / Revision";
+      const approverName = currentUser.full_name || (currentUser as any).name || "Administrator";
+
+      // 2. Insert record into staff_salary_increments
+      await db.query(
+        `INSERT INTO staff_salary_increments (
+           user_id, institution_id, previous_base_salary, new_base_salary,
+           increment_amount, increment_percentage, effective_date, reason,
+           approved_by, approved_by_name
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          staffUserId,
+          institutionId,
+          prevBaseSalary,
+          newBaseSalary,
+          incrementAmount,
+          incrementPercentage,
+          effectiveDate,
+          reason,
+          currentUser.id,
+          approverName,
+        ]
+      );
+
+      // 3. Update staff_salary_components
+      if (Array.isArray(body.components) && body.components.length > 0) {
+        await db.query(`DELETE FROM staff_salary_components WHERE user_id = $1`, [staffUserId]);
+        for (let i = 0; i < body.components.length; i++) {
+          const comp = body.components[i];
+          const compType = String(comp.type || comp.component_type || "EARNING").toUpperCase() === "DEDUCTION" ? "DEDUCTION" : "EARNING";
+          await db.query(
+            `INSERT INTO staff_salary_components (user_id, label, amount, component_type, sort_order)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [staffUserId, String(comp.label || "Salary Component").trim(), Number(comp.amount) || 0, compType, i + 1]
+          );
+        }
+      } else {
+        await db.query(`DELETE FROM staff_salary_components WHERE user_id = $1`, [staffUserId]);
+        await db.query(
+          `INSERT INTO staff_salary_components (user_id, label, amount, component_type, sort_order)
+           VALUES ($1, 'Basic Salary', $2, 'EARNING', 1)`,
+          [staffUserId, newBaseSalary]
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: "Salary updated and increment recorded successfully",
+        increment: {
+          previous_base_salary: prevBaseSalary,
+          new_base_salary: newBaseSalary,
+          increment_amount: incrementAmount,
+          increment_percentage: incrementPercentage,
+          effective_date: effectiveDate,
+          reason,
+        }
+      });
+    }
     const institutionId = positive(body.institutionId);
     const month = monthValue(body.month);
     const staffUserIds = Array.isArray(body.staffUserIds)
