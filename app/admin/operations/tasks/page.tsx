@@ -2469,6 +2469,19 @@ export default function OperationsTasksPage() {
                     )}
 
                     <div className="flex items-center gap-2 shrink-0 ml-auto flex-wrap">
+                      {/* Add Sub-Task Button */}
+                      {canEditOrRemove && !isClientRole && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleOpenSubtasksModal(task)}
+                          className="h-8 text-xs font-bold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-2xs cursor-pointer px-3"
+                          title="Add sub-task"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Sub-Task</span>
+                        </Button>
+                      )}
+
                       {/* Status Dropdown (Image 4): pending, in_progress, completed, on_hold, rework, cancelled, failed */}
                       <select
                         value={task.status === "recheck" ? "rework" : task.status || "pending"}
@@ -3169,10 +3182,26 @@ export default function OperationsTasksPage() {
                           {rawSubTasksList.length !== subTasksList.length ? ` of ${rawSubTasksList.length}` : ""})
                         </span>
                       </div>
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        {isExpanded ? "Collapse" : "Expand"}
-                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {canEditOrRemove && !isClientRole && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenSubtasksModal(task);
+                            }}
+                            className="h-6 text-[11px] font-semibold gap-1 text-primary hover:bg-primary/10 border-primary/30 py-0 px-2 cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>add sub task</span>
+                          </Button>
+                        )}
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          {isExpanded ? "Collapse" : "Expand"}
+                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </span>
+                      </div>
                     </div>
 
                     {isExpanded && subTasksList.length > 0 && (
