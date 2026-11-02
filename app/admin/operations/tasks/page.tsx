@@ -18,6 +18,7 @@ export function getCurrencySymbol(code?: string | null) {
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
+import { requireBrowserLocation } from "@/app/lib/geolocation";
 import {
   Check,
   ClipboardCheck,
@@ -1550,6 +1551,36 @@ export default function OperationsTasksPage() {
 
   // 1-Click direct sub-task status toggle
   const handleSubTaskStatusDirectUpdate = async (task: OperationTask, subId: string, newStatus: any) => {
+    let startLoc: any = null;
+
+    if (newStatus === "in_progress") {
+      const isAnotherRunning = tasks.some((t) => {
+        if (t.id !== task.id) {
+          return (
+            t.status === "in_progress" ||
+            (Array.isArray(t.sub_tasks) && t.sub_tasks.some((s) => s.status === "in_progress"))
+          );
+        }
+        return (
+          Array.isArray(t.sub_tasks) &&
+          t.sub_tasks.some((s) => String(s.id) !== String(subId) && s.status === "in_progress")
+        );
+      });
+
+      if (isAnotherRunning) {
+        toast.error("Only one task can be started at a time. Please stop your active task before starting a new one.");
+        return;
+      }
+
+      try {
+        toast.info("Requesting location to start deliverable...");
+        startLoc = await requireBrowserLocation();
+      } catch (locErr: any) {
+        toast.error(locErr?.message || "Location permission is required to start a task. You cannot start without sharing location.");
+        return;
+      }
+    }
+
     const currentSubs = Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : [];
     const targetSub = currentSubs.find((s) => s.id === subId);
     const updatedSubs = currentSubs.map((s) => {
@@ -1580,6 +1611,7 @@ export default function OperationsTasksPage() {
           sub_tasks: updatedSubs,
           subtask_id: subId,
           subtask_title: targetSub?.title,
+          start_location: startLoc && startLoc.latitude ? startLoc : undefined,
           action: newStatus === "in_progress" ? "start_task" : newStatus === "pending" ? "stop_task" : undefined,
         }),
       });
@@ -1616,6 +1648,32 @@ export default function OperationsTasksPage() {
       return;
     }
 
+    let startLoc: any = null;
+    if (newStatus === "in_progress") {
+      const isAnotherRunning = tasks.some((t) => {
+        if (t.id !== taskId) {
+          return (
+            t.status === "in_progress" ||
+            (Array.isArray(t.sub_tasks) && t.sub_tasks.some((s) => s.status === "in_progress"))
+          );
+        }
+        return false;
+      });
+
+      if (isAnotherRunning) {
+        toast.error("Only one task can be started at a time. Please stop your active task before starting a new one.");
+        return;
+      }
+
+      try {
+        toast.info("Requesting location to start task...");
+        startLoc = await requireBrowserLocation();
+      } catch (locErr: any) {
+        toast.error(locErr?.message || "Location permission is required to start a task. You cannot start without sharing location.");
+        return;
+      }
+    }
+
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
@@ -1623,7 +1681,12 @@ export default function OperationsTasksPage() {
       const res = await fetch("/api/admin/operations/tasks", {
         method: "PUT",
         headers,
-        body: JSON.stringify({ id: taskId, status: newStatus }),
+        body: JSON.stringify({
+          id: taskId,
+          status: newStatus,
+          action: newStatus === "in_progress" ? "start_task" : newStatus === "pending" ? "stop_task" : undefined,
+          start_location: startLoc && startLoc.latitude ? startLoc : undefined,
+        }),
       });
 
       if (!res.ok) {

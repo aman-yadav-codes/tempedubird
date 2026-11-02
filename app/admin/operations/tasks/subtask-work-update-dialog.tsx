@@ -31,6 +31,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { requireBrowserLocation } from "@/app/lib/geolocation";
 import { useAuthStore } from "@/store";
 import { OperationTask, SubTask, TaskStatus } from "./page";
 
@@ -114,6 +115,17 @@ export function SubTaskWorkUpdateDialog({
       return;
     }
 
+    let startLoc: any = null;
+    if (status === "in_progress" && subtask.status !== "in_progress") {
+      try {
+        toast.info("Requesting location to start deliverable...");
+        startLoc = await requireBrowserLocation();
+      } catch (locErr: any) {
+        toast.error(locErr?.message || "Location permission is required to start a task. You cannot start without sharing location.");
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       let fileUrl: string | null = null;
@@ -188,6 +200,10 @@ export function SubTaskWorkUpdateDialog({
           id: task.id,
           sub_tasks: currentSubtasks,
           history: currentHistory,
+          subtask_id: subtask.id,
+          subtask_title: subtask.title,
+          start_location: startLoc && startLoc.latitude ? startLoc : undefined,
+          action: status === "in_progress" ? "start_task" : undefined,
         }),
       });
 

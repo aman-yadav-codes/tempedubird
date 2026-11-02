@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
-import { captureBrowserLocation } from "@/app/lib/geolocation";
+import { captureBrowserLocation, requireBrowserLocation } from "@/app/lib/geolocation";
 import { DailyGeoAttendanceHistoryDialog } from "@/components/daily-geo-attendance-history-dialog";
 import { CheckInLocationDialog } from "@/components/check-in-location-dialog";
 import {
@@ -468,20 +468,21 @@ export function MyProfileClient() {
       return;
     }
 
+    let startLoc = explicitLocation || null;
     if (newStatus === "in_progress") {
       if (activeRunningTask && activeRunningTask.id !== taskId) {
-        toast.error("Only one task can be started at a time. Please stop or complete your active task first.");
+        toast.error(`Only one task can be started at a time. Please stop your active task ("${activeRunningTask.title}") first.`);
         return;
       }
-    }
 
-    // Use explicit verified location or capture automatically
-    let startLoc = explicitLocation || null;
-    if (newStatus === "in_progress" && !startLoc) {
-      try {
-        startLoc = await captureBrowserLocation(4000);
-      } catch (err) {
-        console.warn("Could not capture browser location", err);
+      if (!startLoc) {
+        try {
+          toast.info("Requesting location to start task...");
+          startLoc = await requireBrowserLocation();
+        } catch (err: any) {
+          toast.error(err?.message || "Location permission is required to start a task. You cannot start without sharing location.");
+          return;
+        }
       }
     }
 
@@ -538,6 +539,8 @@ export function MyProfileClient() {
   };
 
   const handleSubtaskStatusUpdate = async (task: any, subId: string | number, newStatus: string, explicitLocation?: any) => {
+    let startLoc = explicitLocation || null;
+
     // Only one task can be in progress at a time
     if (newStatus === "in_progress") {
       const isAnotherRunning = tasks.some(t => {
@@ -545,12 +548,22 @@ export function MyProfileClient() {
           return normalizeTaskStatus(t.status) === "in_progress" ||
             (Array.isArray(t.sub_tasks) && t.sub_tasks.some((s: any) => normalizeTaskStatus(s.status) === "in_progress"));
         }
-        return Array.isArray(t.sub_tasks) && t.sub_tasks.some((s: any) => s.id !== subId && normalizeTaskStatus(s.status) === "in_progress");
+        return Array.isArray(t.sub_tasks) && t.sub_tasks.some((s: any) => String(s.id) !== String(subId) && normalizeTaskStatus(s.status) === "in_progress");
       });
 
       if (isAnotherRunning) {
         toast.error("Only one task can be started at a time. Please stop or complete your active task first.");
         return;
+      }
+
+      if (!startLoc) {
+        try {
+          toast.info("Requesting location to start deliverable...");
+          startLoc = await requireBrowserLocation();
+        } catch (err: any) {
+          toast.error(err?.message || "Location permission is required to start a task. You cannot start without sharing location.");
+          return;
+        }
       }
     }
 
@@ -579,16 +592,6 @@ export function MyProfileClient() {
     }
 
     setTasks(prev => prev.map(t => (t.id === task.id ? { ...t, status: parentStatus, sub_tasks: updatedSubs } : t)));
-
-    // Use explicit verified location or capture automatically
-    let startLoc = explicitLocation || null;
-    if (newStatus === "in_progress" && !startLoc) {
-      try {
-        startLoc = await captureBrowserLocation(4000);
-      } catch (err) {
-        console.warn("Could not capture browser location", err);
-      }
-    }
 
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };

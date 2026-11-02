@@ -1094,11 +1094,11 @@ export async function PUT(req: Request) {
       let taskHistory = Array.isArray(body.history) && body.history.length > 0 ? [...body.history] : (Array.isArray(existingTask.history) ? [...existingTask.history] : []);
       if (body.start_location) {
         params.push(JSON.stringify(body.start_location));
-        updates.push(`start_location =${params.length}::jsonb`);
+        updates.push(`start_location = $${params.length}::jsonb`);
       }
       if (body.stop_location) {
         params.push(JSON.stringify(body.stop_location));
-        updates.push(`stop_location =${params.length}::jsonb`);
+        updates.push(`stop_location = $${params.length}::jsonb`);
       }
       const hasSubtaskStarting = Array.isArray(sub_tasks) && sub_tasks.some((s: any) => {
         if (s.status !== "in_progress") return false;
@@ -1114,6 +1114,80 @@ export async function PUT(req: Request) {
       });
       const isStarting = status === "in_progress" || body.action === "start_task" || hasSubtaskStarting;
       const isStopping = body.action === "stop_task" || (status === "pending" && existingTask.status === "in_progress") || hasSubtaskStopping;
+
+      if (isStarting) {
+        // Enforce mandatory location sharing for any role across the entire system
+        const loc = body.start_location;
+        if (!loc || typeof loc.latitude !== "number" || typeof loc.longitude !== "number" || loc.latitude === 0 || loc.longitude === 0) {
+          return NextResponse.json(
+            { error: "Location sharing is mandatory to start a task. Please enable and allow location access in your browser." },
+            { status: 400 }
+          );
+        }
+
+        // Enforce single active task per user: cannot start a new task/subtask without stopping existing in-progress task
+        try {
+          const activeRunningRes = await db.query(
+            `SELECT id, title, status, sub_tasks, history, assigned_employee_id, client_id, assigned_employees, assigned_clients, created_by
+             FROM operations_tasks
+             WHERE status = 'in_progress'
+                OR EXISTS (
+                  SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) elem
+                  WHERE elem->>'status' = 'in_progress'
+                )`
+          );
+
+          for (const row of activeRunningRes.rows) {
+            const rowSubs = Array.isArray(row.sub_tasks) ? row.sub_tasks : [];
+            const runningSubs = rowSubs.filter((s: any) => s.status === "in_progress");
+
+            const rowHist = Array.isArray(row.history) ? row.history : [];
+            const userStartedThis = rowHist.slice().reverse().find((h: any) =>
+              (h.action === "started" || h.action === "stopped") &&
+              (String(h.user_id) === String(currentUserId) || (user?.email && h.user_name === currentUserName))
+            )?.action === "started";
+
+            const isAssignedToUser =
+              String(row.assigned_employee_id) === String(currentUserId) ||
+              String(row.client_id) === String(currentUserId) ||
+              String(row.created_by) === String(currentUserId) ||
+              JSON.stringify(row.assigned_employees || []).includes(String(currentUserId)) ||
+              JSON.stringify(row.assigned_clients || []).includes(String(currentUserId)) ||
+              runningSubs.some((s: any) =>
+                String(s.assigned_employee_id) === String(currentUserId) ||
+                JSON.stringify(s.assigned_staff_ids || []).includes(String(currentUserId))
+              );
+
+            if (userStartedThis || isAssignedToUser) {
+              if (row.id !== id) {
+                const subTitle = runningSubs[0]?.title ? `"${runningSubs[0].title}" in "${row.title}"` : `"${row.title}"`;
+                return NextResponse.json(
+                  { error: `You already have a task in progress (${subTitle}). You cannot start a new task without stopping your active task first.` },
+                  { status: 400 }
+                );
+              }
+
+              if (body.subtask_id) {
+                const otherRunningSub = runningSubs.find((s: any) => String(s.id) !== String(body.subtask_id));
+                if (otherRunningSub) {
+                  return NextResponse.json(
+                    { error: `Deliverable "${otherRunningSub.title}" is already in progress. You must stop it before starting "${body.subtask_title || 'another deliverable'}".` },
+                    { status: 400 }
+                  );
+                }
+              } else if (runningSubs.length > 0) {
+                return NextResponse.json(
+                  { error: `Deliverable "${runningSubs[0].title}" is currently in progress. You must stop it before starting another task.` },
+                  { status: 400 }
+                );
+              }
+            }
+          }
+        } catch (checkErr) {
+          console.error("Error validating single active task concurrency:", checkErr);
+        }
+      }
+
       if (isStarting) {
         updates.push("started_at = NOW()");
         updates.push("stopped_at = NULL");
