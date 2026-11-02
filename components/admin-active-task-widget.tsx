@@ -278,11 +278,13 @@ export function AdminActiveTaskWidget() {
     }
   };
 
-  const tasksUrl = pathname?.startsWith("/platformadmin")
+  const tasksUrl = pathname?.startsWith("/client")
+    ? "/client/operations/tasks"
+    : pathname?.startsWith("/platformadmin")
     ? "/platformadmin/operations/tasks"
     : "/admin/operations/tasks";
 
-  if (!user || isClientRole) return null;
+  if (!user) return null;
 
   return (
     <div className="flex items-center gap-2">

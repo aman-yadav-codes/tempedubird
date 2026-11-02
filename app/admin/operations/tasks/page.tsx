@@ -2054,10 +2054,13 @@ export default function OperationsTasksPage() {
           </p>
         </div>
 
-        {!(isClientRole || Boolean(pathname?.startsWith("/client"))) && (() => {
+        {(() => {
+          const isClient = isClientRole || Boolean(pathname?.startsWith("/client"));
           const opsBasePath = pathname?.startsWith("/platformadmin") ? "/platformadmin/operations" : "/admin/operations";
           return (
             <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              {!isClient && (
+                <>
               <Link href={`${opsBasePath}/project-types`}>
                 <Button
                   variant="outline"
@@ -2081,6 +2084,8 @@ export default function OperationsTasksPage() {
                   <span>Project Pipelines</span>
                 </Button>
               </Link>
+                </>
+              )}
 
               <Button
                 onClick={handleOpenCreateTask}
@@ -2093,8 +2098,8 @@ export default function OperationsTasksPage() {
         })()}
       </div>
 
-      {/* Scope Switcher: Hidden on Institution Admin side */}
-      {!isInstitutionAdmin && (
+      {/* Scope Switcher: Hidden on Institution Admin & Client side */}
+      {!isInstitutionAdmin && !(isClientRole || Boolean(pathname?.startsWith("/client"))) && (
         <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-card rounded-2xl border shadow-xs">
           <div className="flex items-center gap-2">
             {!(isStaffRole || pathname?.startsWith("/staff")) ? (
@@ -2490,7 +2495,7 @@ export default function OperationsTasksPage() {
 
                     <div className="flex items-center gap-2 shrink-0 ml-auto flex-wrap">
                       {/* Add Sub-Task Button */}
-                      {!isClientRole && (
+                      {(
                         <Button
                           size="sm"
                           onClick={() => handleOpenSubtasksModal(task)}
@@ -2538,7 +2543,7 @@ export default function OperationsTasksPage() {
                             <Receipt className="w-4 h-4 text-primary" />
                             <span>Invoices</span>
                           </DropdownMenuItem>
-                          {canEditOrRemove && !isClientRole && (
+                          {canEditOrRemove && (
                             <DropdownMenuItem
                               onClick={() => handleOpenEditTask(task)}
                               className="gap-2 cursor-pointer font-medium"

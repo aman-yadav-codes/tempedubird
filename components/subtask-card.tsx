@@ -513,39 +513,35 @@ export function SubtaskCard({
             ))}
           </select>
 
-          {/* Start / Stop Button: STRICTLY HIDDEN ON CLIENT PORTAL per user request */}
-          {!isClientView && (
-            <>
-              {isRunning ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    if (onStop) onStop(task, subtask);
-                    else handleStatusSelect("pending");
-                  }}
-                  className="h-7 px-2.5 text-xs font-bold gap-1 text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer shadow-2xs rounded-md"
-                >
-                  <Square className="w-3 h-3 fill-current text-rose-600" />
-                  <span>Stop</span>
-                </Button>
-              ) : !isSubDone ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => {
-                    if (onStart) onStart(task, subtask);
-                    else handleStatusSelect("in_progress");
-                  }}
-                  className="h-7 px-2.5 text-xs font-bold gap-1 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-2xs rounded-md"
-                >
-                  <Play className="w-3 h-3 fill-current" />
-                  <span>Start</span>
-                </Button>
-              ) : null}
-            </>
-          )}
+          {/* Start / Stop Button: available for both staff and client */}
+          {isRunning ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                if (onStop) onStop(task, subtask);
+                else handleStatusSelect("pending");
+              }}
+              className="h-7 px-2.5 text-xs font-bold gap-1 text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer shadow-2xs rounded-md"
+            >
+              <Square className="w-3 h-3 fill-current text-rose-600" />
+              <span>Stop</span>
+            </Button>
+          ) : !isSubDone ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                if (onStart) onStart(task, subtask);
+                else handleStatusSelect("in_progress");
+              }}
+              className="h-7 px-2.5 text-xs font-bold gap-1 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-2xs rounded-md"
+            >
+              <Play className="w-3 h-3 fill-current" />
+              <span>Start</span>
+            </Button>
+          ) : null}
         </div>
 
         {/* Deadline & Task and updates button */}
