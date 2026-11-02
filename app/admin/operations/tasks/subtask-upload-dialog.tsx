@@ -21,6 +21,7 @@ import {
   AlertCircle,
   X,
   CheckCircle2,
+  Check,
   ClipboardPaste,
   History,
   MessageSquare,
@@ -50,6 +51,7 @@ export type SubTaskCommentAttachment = {
   url: string;
   type?: string;
   size?: number;
+  is_completed?: boolean;
 };
 
 export type SubTaskUploadComment = {
@@ -401,6 +403,132 @@ export function SubTaskUploadDialog({
       toast.error(err.message || "Failed to save changes");
     } finally {
       setSavingEditItem(false);
+    }
+  };
+
+  // Inline comment state below attachments
+  const [inlineCommentText, setInlineCommentText] = useState<Record<string, string>>({});
+
+  // Toggle completion checkbox on comment attachment (default pending; green tick when completed)
+  const handleToggleAttachmentCompletion = async (uploadId: string, commentId: string, attId: string) => {
+    if (!task || !subtask) return;
+
+    const updatedUploads = uploadsList.map((upl) => {
+      if (upl.id !== uploadId) return upl;
+
+      const updatedComments = (upl.comments || []).map((c) => {
+        if (c.id !== commentId) return c;
+        const updatedAtts = (c.attachments || []).map((a) => {
+          if (a.id === attId) {
+            return { ...a, is_completed: !a.is_completed };
+          }
+          return a;
+        });
+        return { ...c, attachments: updatedAtts };
+      });
+
+      return { ...upl, comments: updatedComments };
+    });
+
+    setUploadsList(updatedUploads);
+
+    try {
+      const currentSubtasks = Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : [];
+      const subIndex = currentSubtasks.findIndex((s: any) => String(s.id) === String(subtask.id));
+      if (subIndex !== -1) {
+        currentSubtasks[subIndex] = {
+          ...currentSubtasks[subIndex],
+          uploads: updatedUploads,
+        };
+      }
+
+      const res = await fetch("/api/admin/operations/tasks", {
+        method: "PUT",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          id: task.id,
+          sub_tasks: currentSubtasks,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to update status");
+      toast.success("Attachment status updated");
+      if (onSaved) onSaved();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update status");
+      setUploadsList(uploadsList);
+    }
+  };
+
+  // Post comment directly below an attachment
+  const handlePostInlineComment = async (uploadId: string, replyToCommentId: string, replyToAuthor: string) => {
+    const text = (inlineCommentText[replyToCommentId] || "").trim();
+    if (!text || !task || !subtask) return;
+
+    setPostingCommentFor(uploadId);
+    try {
+      const authorName = (user as any)?.full_name || (user as any)?.name || (user as any)?.email || "Staff Member";
+      const authorRole = roleCodes[0] || (user as any)?.role || "Staff";
+
+      const newComment: SubTaskUploadComment = {
+        id: `comm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        user_id: user?.id || null,
+        user_name: authorName,
+        user_role: authorRole,
+        comment: text,
+        created_at: new Date().toISOString(),
+        attachments: [],
+      };
+
+      const updatedUploads = uploadsList.map((upl) => {
+        if (upl.id !== uploadId) return upl;
+        const currentComments = Array.isArray(upl.comments) ? [...upl.comments] : [];
+        const hist = Array.isArray(upl.status_history) ? [...upl.status_history] : [];
+        hist.push({
+          id: `uph_${Date.now()}_comm`,
+          action: "comment_added",
+          status: upl.status,
+          changed_at: new Date().toISOString(),
+          changed_by_id: user?.id || null,
+          changed_by_name: authorName,
+          notes: `Commented: "${text.substring(0, 80)}"`,
+        });
+
+        return {
+          ...upl,
+          comments: [...currentComments, newComment],
+          status_history: hist,
+        };
+      });
+
+      setUploadsList(updatedUploads);
+      setInlineCommentText((prev) => ({ ...prev, [replyToCommentId]: "" }));
+
+      const currentSubtasks = Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : [];
+      const subIndex = currentSubtasks.findIndex((s: any) => String(s.id) === String(subtask.id));
+      if (subIndex !== -1) {
+        currentSubtasks[subIndex] = {
+          ...currentSubtasks[subIndex],
+          uploads: updatedUploads,
+        };
+      }
+
+      const res = await fetch("/api/admin/operations/tasks", {
+        method: "PUT",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          id: task.id,
+          sub_tasks: currentSubtasks,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to post comment");
+      toast.success("Comment posted successfully!");
+      if (onSaved) onSaved();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to post comment");
+    } finally {
+      setPostingCommentFor(null);
     }
   };
 
@@ -1530,19 +1658,19 @@ export function SubTaskUploadDialog({
                                     size: upl.file_size,
                                   })
                                 }
-                                className="font-bold text-foreground hover:text-primary hover:underline truncate block text-left cursor-pointer"
+                                className="font-bold text-foreground hover:text-primary hover:underline block text-left cursor-pointer whitespace-pre-wrap break-words leading-relaxed select-text"
                                 title="Click to view file & notes"
                               >
                                 {upl.file_name}
                               </button>
                             ) : (
-                              <span className="font-bold text-foreground truncate block">
+                              <span className="font-bold text-foreground block whitespace-pre-wrap break-words leading-relaxed select-text">
                                 {upl.file_name}
                               </span>
                             )}
 
                             {upl.notes && (
-                              <p className="text-[11px] text-muted-foreground truncate">
+                              <p className="text-[11px] text-muted-foreground whitespace-pre-wrap break-words leading-relaxed select-text mt-0.5">
                                 {upl.notes}
                               </p>
                             )}
@@ -1814,12 +1942,31 @@ export function SubTaskUploadDialog({
                                           className="group relative flex flex-col justify-between w-24 h-24 sm:w-28 sm:h-28 rounded-xl border border-border bg-card hover:border-primary/60 hover:shadow-md cursor-pointer transition-all overflow-hidden shrink-0 select-none shadow-2xs"
                                           title={`Click to preview: ${att.name}${comm.comment ? `\nMessage: "${comm.comment}"` : ""}`}
                                         >
-                                          {/* Top: Author header */}
-                                          <div className="w-full px-1.5 py-0.5 bg-muted/80 border-b flex items-center justify-between text-[9px] font-bold text-foreground truncate shrink-0">
-                                            <span className="truncate">{comm.user_name}</span>
-                                            {comm.comment && (
-                                              <MessageSquare className="w-2.5 h-2.5 text-primary shrink-0 ml-1" />
-                                            )}
+                                          {/* Top: Author header & Completion Checkbox */}
+                                          <div className="w-full px-1.5 py-0.5 bg-muted/80 border-b flex items-center justify-between text-[9px] font-bold text-foreground shrink-0 gap-1">
+                                            <span className="truncate flex-1">{comm.user_name}</span>
+                                            <div className="flex items-center gap-1 shrink-0">
+                                              {comm.comment && (
+                                                <MessageSquare className="w-2.5 h-2.5 text-primary shrink-0" />
+                                              )}
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleToggleAttachmentCompletion(upl.id, comm.id, att.id);
+                                                }}
+                                                className="cursor-pointer hover:scale-110 transition-transform p-0.5 rounded focus:outline-none"
+                                                title={att.is_completed ? "Completed (click to mark pending)" : "Pending (click to mark completed)"}
+                                              >
+                                                {att.is_completed ? (
+                                                  <div className="w-3.5 h-3.5 rounded bg-emerald-600 text-white flex items-center justify-center shadow-2xs">
+                                                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                                  </div>
+                                                ) : (
+                                                  <div className="w-3.5 h-3.5 rounded border border-muted-foreground/60 bg-background/90 hover:border-emerald-500 transition-colors" />
+                                                )}
+                                              </button>
+                                            </div>
                                           </div>
 
                                           {/* Center: Image or file preview */}
@@ -1952,7 +2099,7 @@ export function SubTaskUploadDialog({
           </div>
 
           {/* Active File / Deliverable Banner */}
-          <div className="px-5 py-2.5 bg-muted/15 border-b flex items-center gap-3 text-xs shrink-0">
+          <div className="px-5 py-3 bg-muted/15 border-b flex items-start gap-3 text-xs shrink-0 max-h-56 overflow-y-auto">
             {(() => {
               const hasUrl = Boolean(activeFile.file_url && activeFile.file_url.trim().length > 0);
               const isImg =
@@ -1982,10 +2129,15 @@ export function SubTaskUploadDialog({
               return getFileIcon(activeFile.file_name);
             })()}
             <div className="min-w-0 flex-1">
-              <span className="font-bold text-foreground truncate block text-xs">
+              <p className="font-bold text-foreground text-xs whitespace-pre-wrap break-words leading-relaxed select-text">
                 {activeFile.file_name}
-              </span>
-              <span className="text-[10px] text-muted-foreground">
+              </p>
+              {activeFile.notes && (
+                <p className="text-[11px] text-muted-foreground mt-1 whitespace-pre-wrap break-words leading-relaxed bg-muted/40 p-2 rounded-md border border-border/40 select-text">
+                  {activeFile.notes}
+                </p>
+              )}
+              <span className="text-[10px] text-muted-foreground block mt-1">
                 {activeFile.file_url ? "Uploaded by" : "Created by"} {activeFile.uploaded_by_name} • {new Date(activeFile.uploaded_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
               </span>
             </div>
@@ -2038,20 +2190,38 @@ export function SubTaskUploadDialog({
                             return (
                               <div className="flex items-center gap-2 flex-wrap">
                                 {imgAtts.map((att, aIdx) => (
-                                  <a
-                                    key={att.id || aIdx}
-                                    href={att.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="group/cimg relative inline-block shrink-0"
-                                    title={`View ${att.name} full size`}
-                                  >
-                                    <img
-                                      src={att.url}
-                                      alt={att.name}
-                                      className="w-16 h-16 rounded-lg border object-cover group-hover/cimg:scale-105 transition-transform shadow-xs hover:ring-2 hover:ring-primary/40 cursor-pointer bg-muted/20"
-                                    />
-                                  </a>
+                                  <div key={att.id || aIdx} className="relative group/cimg inline-block shrink-0">
+                                    <a
+                                      href={att.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-block"
+                                      title={`View ${att.name} full size`}
+                                    >
+                                      <img
+                                        src={att.url}
+                                        alt={att.name}
+                                        className="w-16 h-16 rounded-lg border object-cover group-hover/cimg:scale-105 transition-transform shadow-xs hover:ring-2 hover:ring-primary/40 cursor-pointer bg-muted/20"
+                                      />
+                                    </a>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleAttachmentCompletion(activeFile.id, comm.id, att.id);
+                                      }}
+                                      className="absolute top-1 right-1 z-10 cursor-pointer hover:scale-110 transition-transform p-0.5 rounded focus:outline-none"
+                                      title={att.is_completed ? "Completed (click to mark pending)" : "Pending (click to mark completed)"}
+                                    >
+                                      {att.is_completed ? (
+                                        <div className="w-4 h-4 rounded bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                                          <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                        </div>
+                                      ) : (
+                                        <div className="w-4 h-4 rounded border-2 border-white/90 bg-black/40 hover:border-emerald-400 transition-colors shadow-xs" />
+                                      )}
+                                    </button>
+                                  </div>
                                 ))}
                               </div>
                             );
@@ -2071,6 +2241,20 @@ export function SubTaskUploadDialog({
                                     className="flex items-center justify-between gap-2 p-2 rounded-lg border bg-muted/30 text-xs"
                                   >
                                     <div className="flex items-center gap-2 min-w-0 flex-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleToggleAttachmentCompletion(activeFile.id, comm.id, att.id)}
+                                        className="cursor-pointer hover:scale-110 transition-transform focus:outline-none shrink-0"
+                                        title={att.is_completed ? "Completed (click to mark pending)" : "Pending (click to mark completed)"}
+                                      >
+                                        {att.is_completed ? (
+                                          <div className="w-4 h-4 rounded bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                                            <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                          </div>
+                                        ) : (
+                                          <div className="w-4 h-4 rounded border border-muted-foreground/60 bg-background hover:border-emerald-500 transition-colors" />
+                                        )}
+                                      </button>
                                       {getFileIcon(att.name)}
                                       <span className="truncate font-semibold text-foreground text-[11px]">{att.name}</span>
                                       {att.size && (
@@ -2102,6 +2286,34 @@ export function SubTaskUploadDialog({
                               </div>
                             );
                           })()}
+
+                          {/* Quick comment option directly below all attachments */}
+                          <div className="pt-2 mt-1.5 border-t border-border/40">
+                            <div className="flex items-center gap-1.5">
+                              <Input
+                                placeholder={`Comment on ${comm.user_name}'s attachment...`}
+                                value={inlineCommentText[comm.id] || ""}
+                                onChange={(e) => setInlineCommentText((prev) => ({ ...prev, [comm.id]: e.target.value }))}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handlePostInlineComment(activeFile.id, comm.id, comm.user_name);
+                                  }
+                                }}
+                                className="h-7 text-xs bg-muted/25 rounded-lg flex-1"
+                              />
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={!(inlineCommentText[comm.id] || "").trim() || postingCommentFor === activeFile.id}
+                                onClick={() => handlePostInlineComment(activeFile.id, comm.id, comm.user_name)}
+                                className="h-7 text-xs px-2.5 font-bold gap-1 bg-primary hover:bg-primary/90 text-primary-foreground shrink-0 cursor-pointer shadow-2xs"
+                              >
+                                <Send className="w-3 h-3" />
+                                <span>Comment</span>
+                              </Button>
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
