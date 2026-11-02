@@ -82,6 +82,7 @@ export function GeneratedDocumentsDialog({
   onOpenChange,
   accessToken,
   audience,
+  sourceSection,
   categories,
   institutionId,
 }: GeneratedDocumentsDialogProps) {
@@ -117,7 +118,7 @@ export function GeneratedDocumentsDialog({
     } finally {
       setLoading(false);
     }
-  }, [accessToken, audience, institutionId, selectedCategory, search]);
+  }, [accessToken, audience, sourceSection, institutionId, selectedCategory, search]);
 
   useEffect(() => {
     if (open) {

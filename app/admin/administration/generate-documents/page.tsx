@@ -8,3 +8,4 @@ export const metadata = {
 export default function AdministrationGenerateDocumentsPage() {
   return <AdminGenerateDocumentPage sourceSection="administration" />;
 }
+

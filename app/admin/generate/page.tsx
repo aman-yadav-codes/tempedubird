@@ -668,7 +668,7 @@ export default function AdminGenerateDocumentPage({
         accessToken={accessToken}
         audience="client"
         sourceSection={section}
-        categories={categories}
+        categories={categories as any}
         institutionId={currentInstitutionId || undefined}
       />
 

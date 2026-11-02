@@ -874,7 +874,7 @@ export function CardTemplateTryout({
   const currentTemplate = editedTemplate ?? template;
   const [tryoutAcademicYearId, setTryoutAcademicYearId] = useState<number | null>(null);
   const fields = useMemo(() => currentTemplate.fields ?? [], [currentTemplate.fields]);
-  const isClientTarget = recipientType === "client" || currentTemplate.category_target_audience === "client" || Boolean(sourceSection);
+  const isClientTarget = recipientType === "client" || (currentTemplate.category_target_audience as string) === "client" || Boolean(sourceSection);
   const targetAudience = isClientTarget ? "client" : (currentTemplate.category_target_audience === "staff" ? "staff" : "student");
   const recipientLabel = targetAudience === "client" ? "Client" : targetAudience === "staff" ? "Staff" : "Student";
   const recipientNoun = targetAudience === "client" ? "client" : targetAudience === "staff" ? "staff member" : "student";
@@ -1151,11 +1151,10 @@ export function CardTemplateTryout({
           if (clientValues[fn] !== undefined && clientValues[fn] !== "") {
             nextValues[field.field_name] = clientValues[fn];
           } else {
-            nextValues[field.field_name] = defaults[field.field_name] ?? "";
+            nextValues[field.field_name] = "";
           }
         }
         setValues(nextValues);
-        setOverriddenFieldNames(new Set());
         return;
       }
       const params = new URLSearchParams({
@@ -1486,7 +1485,7 @@ export function CardTemplateTryout({
             clientId: Number(studentId),
             templateId: currentTemplate.id,
             cardCategoryId: overrideCategoryId || currentTemplate.card_category_id,
-            sourceSection: sourceSection || (currentTemplate.category_target_audience === "client" ? "operation" : "administration"),
+            sourceSection: sourceSection || ((currentTemplate.category_target_audience as string) === "client" ? "operation" : "administration"),
             title: currentTemplate.name,
             renderedHtml: saveHtml,
             fieldValues: values,
