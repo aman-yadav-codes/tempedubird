@@ -1327,6 +1327,32 @@ export async function ensureFeatureSchema() {
       }
     }
 
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS system_activity_logs (
+        id BIGSERIAL PRIMARY KEY,
+        institution_id INTEGER REFERENCES institution_profiles(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        user_name VARCHAR(255) NOT NULL,
+        user_role VARCHAR(100),
+        user_type VARCHAR(50) DEFAULT 'staff',
+        module VARCHAR(50) NOT NULL,
+        action_type VARCHAR(100) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        entity_type VARCHAR(100),
+        entity_id VARCHAR(100),
+        client_id INTEGER,
+        client_name VARCHAR(255),
+        metadata JSONB DEFAULT '{}'::jsonb,
+        ip_address VARCHAR(100),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_system_activity_logs_date ON system_activity_logs(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_system_activity_logs_inst_date ON system_activity_logs(institution_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_system_activity_logs_user ON system_activity_logs(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_system_activity_logs_module ON system_activity_logs(module, created_at DESC);
+    `).catch(() => {});
+
     schemaReady = true;
 
   } catch (error) {

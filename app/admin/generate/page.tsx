@@ -199,7 +199,8 @@ export default function AdminGenerateDocumentPage() {
           // Staff Search - scoped to current/logged-in institution
           const params = new URLSearchParams({
             staffScope: "all",
-            limit: "10",
+            status: "active",
+            limit: "25",
           });
           if (personSearch.trim()) params.set("search", personSearch.trim());
           if (currentInstitutionId) {

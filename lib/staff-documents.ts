@@ -704,7 +704,7 @@ export async function handleDocumentGet(req: Request, defaultDocType: string) {
 
     const staffUserIdParam = Number(url.searchParams.get("staffUserId"));
     if (Number.isInteger(staffUserIdParam) && staffUserIdParam > 0) {
-      conditions.push(`sgl.staff_user_id = ${paramIndex}`);
+      conditions.push(`sgl.staff_user_id = $${paramIndex}`);
       params.push(staffUserIdParam);
       paramIndex++;
     }

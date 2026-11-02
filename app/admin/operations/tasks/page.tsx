@@ -2470,7 +2470,7 @@ export default function OperationsTasksPage() {
 
                     <div className="flex items-center gap-2 shrink-0 ml-auto flex-wrap">
                       {/* Add Sub-Task Button */}
-                      {canEditOrRemove && !isClientRole && (
+                      {!isClientRole && (
                         <Button
                           size="sm"
                           onClick={() => handleOpenSubtasksModal(task)}
