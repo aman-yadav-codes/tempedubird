@@ -1551,9 +1551,18 @@ export default function OperationsTasksPage() {
   // 1-Click direct sub-task status toggle
   const handleSubTaskStatusDirectUpdate = async (task: OperationTask, subId: string, newStatus: any) => {
     const currentSubs = Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : [];
-    const updatedSubs = currentSubs.map((s) =>
-      s.id === subId ? { ...s, status: newStatus } : s
-    );
+    const targetSub = currentSubs.find((s) => s.id === subId);
+    const updatedSubs = currentSubs.map((s) => {
+      if (s.id !== subId) return s;
+      const updates: any = { ...s, status: newStatus };
+      if (newStatus === "in_progress") {
+        updates.started_at = new Date().toISOString();
+        updates.stopped_at = null;
+      } else if (newStatus === "pending" || newStatus === "completed") {
+        updates.stopped_at = new Date().toISOString();
+      }
+      return updates;
+    });
 
     setTasks((prev) =>
       prev.map((t) => (t.id === task.id ? { ...t, sub_tasks: updatedSubs } : t))
@@ -1566,7 +1575,13 @@ export default function OperationsTasksPage() {
       const res = await fetch("/api/admin/operations/tasks", {
         method: "PUT",
         headers,
-        body: JSON.stringify({ id: task.id, sub_tasks: updatedSubs }),
+        body: JSON.stringify({
+          id: task.id,
+          sub_tasks: updatedSubs,
+          subtask_id: subId,
+          subtask_title: targetSub?.title,
+          action: newStatus === "in_progress" ? "start_task" : newStatus === "pending" ? "stop_task" : undefined,
+        }),
       });
 
       if (!res.ok) {
@@ -1579,6 +1594,11 @@ export default function OperationsTasksPage() {
         toast.success(`Subtask marked as ${newStatus.replace("_", " ")}`);
       }
       fetchTasks();
+      window.dispatchEvent(
+        new CustomEvent("task-status-updated", {
+          detail: { taskId: task.id, subtaskId: subId, status: newStatus },
+        })
+      );
     } catch (err: any) {
       toast.error(err.message || "Failed to update subtask status");
       fetchTasks();
