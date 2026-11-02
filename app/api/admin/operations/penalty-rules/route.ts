@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
 import { ensureFeatureSchema } from "@/lib/db/ensure-feature-schema";
-import { isPlatformAdminUser, isInstitutionAdminUser } from "@/lib/auth/permissions";
+import { isPlatformAdminUser, isInstitutionAdminUser, hasPermission } from "@/lib/auth/permissions";
 
 // ─── Admin guard helper ───────────────────────────────────────────────────────
 
@@ -14,11 +14,15 @@ function isAdmin(user: any): boolean {
     Boolean(user.is_super_admin) ||
     isPlatformAdminUser(user) ||
     isInstitutionAdminUser(user) ||
+    hasPermission(user, "operations.penalty_rules.create") ||
+    hasPermission(user, "operations.penalty_rules.edit") ||
+    hasPermission(user, "operations.penalty_rules.delete") ||
+    hasPermission(user, "operations.penalty_rules.view") ||
     roleCodes.some((r) =>
       [
         "platform_admin", "super_admin", "institution_admin",
         "school_owner", "college_owner", "university_owner",
-        "director", "principal",
+        "director", "principal", "head_of_operations", "business_operations_manager",
       ].includes(r)
     )
   );

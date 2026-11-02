@@ -586,15 +586,22 @@ export function isAdminPathVisibleForRole(
   }
 
   if (normalized === "/admin/operations" || normalized.startsWith("/admin/operations/")) {
-    if (normalized === "/admin/operations/tasks" || normalized === "/admin/operations/work-logs") {
-      return !isStudentUser(user) && !isParentUser(user);
+    if (isStudentUser(user) || isParentUser(user)) return false;
+    if (isPlatformAdminUser(user) || isInstitutionAdminUser(user)) return true;
+    if (
+      normalized === "/admin/operations" ||
+      normalized === "/admin/operations/tasks" ||
+      normalized === "/admin/operations/work-logs"
+    ) {
+      return true;
     }
     return (
-      isPlatformAdminUser(user) ||
-      isInstitutionAdminUser(user) ||
+      hasPermission(user, getPageViewPermission(normalized)) ||
       hasPermission(user, "operations.tasks.manage") ||
       hasPermission(user, "operations.tasks.view_all") ||
-      hasPermission(user, "managestaff.tasks")
+      hasPermission(user, "managestaff.tasks") ||
+      Boolean(user?.role_codes?.includes("head_of_operations")) ||
+      Boolean(user?.role_codes?.includes("business_operations_manager"))
     );
   }
 
@@ -921,8 +928,6 @@ export function hasPermission(
 
   const platformPermissions = new Set(user.permissions ?? []);
   if (permissionSetAllows(platformPermissions, permission)) return true;
-
-  if (!isInstitutionScopedPermission(permission)) return false;
 
   if (isInstitutionAdminUser(user)) {
     if (target.institutionId) {
@@ -1355,28 +1360,35 @@ export function hasAdminPagePermission(
     if (normalized === "/admin/staff") {
       return true;
     }
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized));
   }
 
   if (normalized === "/admin/operations" || normalized.startsWith("/admin/operations")) {
-    if (normalized === "/admin/operations/tasks" || normalized === "/admin/operations/work-logs") {
-      return !isStudentUser(user) && !isParentUser(user);
+    if (isStudentUser(user) || isParentUser(user)) return false;
+    if (isPlatformAdminUser(user) || isInstitutionAdminUser(user)) return true;
+    if (
+      normalized === "/admin/operations" ||
+      normalized === "/admin/operations/tasks" ||
+      normalized === "/admin/operations/work-logs"
+    ) {
+      return true;
     }
     return (
-      isPlatformAdminUser(user) ||
-      isInstitutionAdminUser(user) ||
+      hasPermission(user, getPageViewPermission(normalized)) ||
       hasPermission(user, "operations.tasks.manage") ||
       hasPermission(user, "operations.tasks.view_all") ||
-      hasPermission(user, "managestaff.tasks")
+      hasPermission(user, "managestaff.tasks") ||
+      Boolean(user?.role_codes?.includes("head_of_operations")) ||
+      Boolean(user?.role_codes?.includes("business_operations_manager"))
     );
   }
 
   if (normalized === "/admin/company" || normalized.startsWith("/admin/company")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized));
   }
 
   if (normalized === "/admin/analytics" || normalized.startsWith("/admin/analytics")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized));
   }
 
   if (normalized === "/admin/content" || normalized.startsWith("/admin/content")) {
@@ -1384,11 +1396,11 @@ export function hasAdminPagePermission(
   }
 
   if (normalized === "/admin/marketing" || normalized.startsWith("/admin/marketing")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized));
   }
 
   if (normalized === "/admin/sales" || normalized.startsWith("/admin/sales")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized));
   }
 
   if (normalized === "/admin/finance/allowance") {
