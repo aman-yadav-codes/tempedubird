@@ -5,6 +5,21 @@ import { db } from "@/lib/db/db";
 
 async function ensureGeneratedDocumentsTables() {
   await db.query(`
+    -- Ensure constraint allows 'client'
+    DO $$
+    BEGIN
+      ALTER TABLE card_categories DROP CONSTRAINT IF EXISTS card_categories_target_audience_check;
+      ALTER TABLE card_categories ADD CONSTRAINT card_categories_target_audience_check
+        CHECK (target_audience IN ('student', 'staff', 'client'));
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END $$;
+
+    -- Ensure 'Project Documentation' category exists
+    INSERT INTO card_categories (name, slug, target_audience)
+    VALUES ('Project Documentation', 'project-documentation', 'client')
+    ON CONFLICT (slug) DO NOTHING;
+
     CREATE TABLE IF NOT EXISTS staff_generated_letters (
       id BIGSERIAL PRIMARY KEY,
       institution_id INTEGER REFERENCES institution_profiles(id) ON DELETE CASCADE,
@@ -42,6 +57,8 @@ async function ensureGeneratedDocumentsTables() {
     );
 
     ALTER TABLE institution_generated_documents
+      ADD COLUMN IF NOT EXISTS client_id INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS source_section VARCHAR(50) DEFAULT 'operation',
       ADD COLUMN IF NOT EXISTS card_category_id INTEGER REFERENCES card_categories(id) ON DELETE RESTRICT,
       ADD COLUMN IF NOT EXISTS enrollment_id INTEGER REFERENCES student_enrollments(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS academic_year_id INTEGER REFERENCES academic_years(id) ON DELETE SET NULL,
@@ -67,7 +84,8 @@ export async function GET(req: Request) {
     await ensureGeneratedDocumentsTables();
 
     const url = new URL(req.url);
-    const audience = url.searchParams.get("audience"); // "staff" | "student" | null
+    const audience = url.searchParams.get("audience"); // "staff" | "student" | "client" | null
+    const section = url.searchParams.get("section"); // "operation" | "administration" | "sales" | null
     const categoryId = url.searchParams.get("categoryId");
     const search = url.searchParams.get("search")?.trim() || "";
     const isPlatformAdmin = isPlatformAdminUser(currentUser);
@@ -75,8 +93,86 @@ export async function GET(req: Request) {
 
     const documents: any[] = [];
 
-    // 1. Fetch Staff Generated Letters (if audience is staff or all)
-    if (!audience || audience === "staff") {
+    // 1. Fetch Client Generated Documents (if audience is "client" or section is given)
+    if (audience === "client" || section) {
+      let clientWhere = [
+        "COALESCE(igd.is_deleted, FALSE) = FALSE",
+        "igd.reference_type = 'client'",
+      ];
+      const clientParams: any[] = [];
+
+      if (!isPlatformAdmin && institutionId) {
+        clientParams.push(Number(institutionId));
+        clientWhere.push(`(igd.institution_id = $${clientParams.length} OR igd.institution_id IS NULL)`);
+      }
+
+      if (section === "operation") {
+        clientWhere.push(`(igd.source_section = 'operation' OR cc.slug = 'project-documentation')`);
+      } else if (section === "administration") {
+        clientWhere.push(`(igd.source_section = 'administration' OR (igd.source_section != 'operation' AND COALESCE(cc.slug, '') != 'project-documentation'))`);
+      } else if (section === "sales") {
+        clientWhere.push(`igd.source_section = 'sales'`);
+      }
+
+      if (categoryId && categoryId !== "all") {
+        clientParams.push(Number(categoryId));
+        clientWhere.push(`igd.card_category_id = $${clientParams.length}`);
+      }
+
+      if (search) {
+        clientParams.push(`%${search}%`);
+        clientWhere.push(`(
+          igd.title ILIKE $${clientParams.length}
+          OR c.name ILIKE $${clientParams.length}
+          OR c.company_name ILIKE $${clientParams.length}
+          OR c.email ILIKE $${clientParams.length}
+          OR COALESCE(cc.name, '') ILIKE $${clientParams.length}
+        )`);
+      }
+
+      const clientRes = await db.query(
+        `
+        SELECT
+          igd.id,
+          'client' AS target_audience,
+          igd.source_section,
+          igd.card_category_id,
+          COALESCE(cc.name, 'Client Document') AS category_name,
+          igd.template_id,
+          dt.name AS template_name,
+          COALESCE(igd.title, dt.name, 'Client Document') AS title,
+          COALESCE(igd.client_id, igd.reference_id) AS recipient_id,
+          COALESCE(c.name, c.company_name, 'Client') AS recipient_name,
+          c.company_name AS recipient_company,
+          c.email AS recipient_email,
+          c.phone AS recipient_phone,
+          c.profile_image AS recipient_avatar,
+          COALESCE(c.company_name, 'Client') AS recipient_role,
+          igd.rendered_html,
+          igd.image_url,
+          igd.pdf_url,
+          igd.canvas_width,
+          igd.canvas_height,
+          igd.field_values,
+          igd.created_at,
+          gen.full_name AS generated_by_name
+        FROM institution_generated_documents igd
+        LEFT JOIN card_categories cc ON cc.id = igd.card_category_id
+        LEFT JOIN document_templates dt ON dt.id = igd.template_id
+        LEFT JOIN clients c ON c.id = COALESCE(igd.client_id, igd.reference_id)
+        LEFT JOIN users gen ON gen.id = igd.generated_by
+        WHERE ${clientWhere.join(" AND ")}
+        ORDER BY igd.created_at DESC
+        LIMIT 100
+        `,
+        clientParams
+      );
+
+      documents.push(...clientRes.rows);
+    }
+
+    // 2. Fetch Staff Generated Letters (if audience is staff or all and NOT in client section)
+    if (!section && (!audience || audience === "staff")) {
       let staffWhere = ["COALESCE(sgl.is_deleted, FALSE) = FALSE"];
       const staffParams: any[] = [];
 
@@ -84,7 +180,6 @@ export async function GET(req: Request) {
         staffParams.push(Number(institutionId));
         staffWhere.push(`sgl.institution_id = $${staffParams.length}`);
       } else if (isPlatformAdmin) {
-        // Platform admin sees all platform staff documents & generated letters
         staffWhere.push(`(
           sgl.institution_id IS NULL
           OR sgl.generated_by = ${currentUser.id}
@@ -153,9 +248,12 @@ export async function GET(req: Request) {
       documents.push(...staffRes.rows);
     }
 
-    // 2. Fetch Student Generated Documents (if audience is student or all and not platform admin)
-    if ((!audience || audience === "student") && !isPlatformAdmin) {
-      let studentWhere = ["COALESCE(igd.is_deleted, FALSE) = FALSE"];
+    // 3. Fetch Student Generated Documents (if audience is student or all, not platform admin, and NOT in client section)
+    if (!section && (!audience || audience === "student") && !isPlatformAdmin) {
+      let studentWhere = [
+        "COALESCE(igd.is_deleted, FALSE) = FALSE",
+        "COALESCE(igd.reference_type, 'student') != 'client'",
+      ];
       const studentParams: any[] = [];
 
       if (institutionId) {
@@ -228,12 +326,124 @@ export async function GET(req: Request) {
   }
 }
 
+export async function POST(req: Request) {
+  try {
+    const currentUser = await requireAdmin(req);
+    await ensureGeneratedDocumentsTables();
+
+    const body = await req.json();
+    const {
+      recipientType, // "client" | "staff" | "student"
+      clientId,
+      templateId,
+      cardCategoryId,
+      sourceSection, // "operation" | "administration" | "sales"
+      title,
+      renderedHtml,
+      fieldValues = {},
+      imageUrl,
+      pdfUrl,
+      canvasWidth,
+      canvasHeight,
+      institutionId,
+    } = body;
+
+    if (!templateId || !renderedHtml) {
+      return NextResponse.json({ error: "templateId and renderedHtml are required" }, { status: 400 });
+    }
+
+    // Client Document Generation
+    if (recipientType === "client" || clientId) {
+      if (!clientId) {
+        return NextResponse.json({ error: "clientId is required for client document generation" }, { status: 400 });
+      }
+
+      const clientCheck = await db.query("SELECT id, name, company_name FROM clients WHERE id = $1", [Number(clientId)]);
+      if (clientCheck.rows.length === 0) {
+        return NextResponse.json({ error: "Client not found" }, { status: 404 });
+      }
+
+      // Categorisation:
+      // Operation -> Project Documentation
+      // Administration -> Existing available categories
+      let finalCategoryId = cardCategoryId ? Number(cardCategoryId) : null;
+      const sectionKey = sourceSection === "administration" ? "administration" : sourceSection === "sales" ? "sales" : "operation";
+
+      if (sectionKey === "operation") {
+        const projDocCat = await db.query("SELECT id FROM card_categories WHERE slug = 'project-documentation' LIMIT 1");
+        if (projDocCat.rows.length > 0) {
+          finalCategoryId = projDocCat.rows[0].id;
+        }
+      } else if (!finalCategoryId) {
+        // Administration: use template's category or default
+        const tplRes = await db.query("SELECT card_category_id, name FROM document_templates WHERE id = $1", [Number(templateId)]);
+        if (tplRes.rows.length > 0 && tplRes.rows[0].card_category_id) {
+          finalCategoryId = tplRes.rows[0].card_category_id;
+        }
+      }
+
+      const docTitle = title || `Document for ${clientCheck.rows[0].name || clientCheck.rows[0].company_name}`;
+
+      const insertRes = await db.query(
+        `
+        INSERT INTO institution_generated_documents (
+          institution_id,
+          template_id,
+          reference_type,
+          reference_id,
+          client_id,
+          source_section,
+          card_category_id,
+          title,
+          rendered_html,
+          field_values,
+          image_url,
+          pdf_url,
+          canvas_width,
+          canvas_height,
+          generated_by
+        ) VALUES (
+          $1, $2, 'client', $3, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+        )
+        RETURNING *;
+        `,
+        [
+          institutionId ? Number(institutionId) : null,
+          Number(templateId),
+          Number(clientId),
+          sectionKey,
+          finalCategoryId,
+          docTitle,
+          renderedHtml,
+          JSON.stringify(fieldValues),
+          imageUrl || null,
+          pdfUrl || null,
+          canvasWidth ? Number(canvasWidth) : null,
+          canvasHeight ? Number(canvasHeight) : null,
+          currentUser.id,
+        ]
+      );
+
+      return NextResponse.json({
+        success: true,
+        data: insertRes.rows[0],
+        message: `Document saved for ${clientCheck.rows[0].name || clientCheck.rows[0].company_name}`,
+      });
+    }
+
+    return NextResponse.json({ error: "Unsupported recipient type" }, { status: 400 });
+  } catch (err: any) {
+    console.error("Error creating generated document:", err);
+    return NextResponse.json({ error: err.message || "Failed to save generated document" }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: Request) {
   try {
     const currentUser = await requireAdmin(req);
     const url = new URL(req.url);
     const id = Number(url.searchParams.get("id"));
-    const audience = url.searchParams.get("audience") || "staff";
+    const audience = url.searchParams.get("audience") || "client";
 
     if (!id) {
       return NextResponse.json({ error: "Document ID is required" }, { status: 400 });

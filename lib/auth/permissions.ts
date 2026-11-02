@@ -609,8 +609,20 @@ export function isAdminPathVisibleForRole(
     return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || isTeacherUser(user);
   }
 
-  if (normalized === "/admin/generate" || normalized.startsWith("/admin/generate/")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, "admin.generate.view") || hasPermission(user, "admin.generate");
+  if (
+    normalized === "/admin/generate" ||
+    normalized.startsWith("/admin/generate/") ||
+    normalized === "/admin/operations/generate-documents" ||
+    normalized === "/admin/administration/generate-documents" ||
+    normalized === "/admin/sales/generate-documents"
+  ) {
+    return (
+      isPlatformAdminUser(user) ||
+      isInstitutionAdminUser(user) ||
+      hasPermission(user, "admin.generate.view") ||
+      hasPermission(user, "admin.generate") ||
+      Boolean(user?.role_codes?.includes("head_of_operations"))
+    );
   }
 
   if (

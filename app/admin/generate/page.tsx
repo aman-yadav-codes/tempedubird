@@ -2,22 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   Sparkles,
-  GraduationCap,
-  Users,
-  IdCard,
+  Building2,
   FileText,
   Filter,
-  CheckCircle2,
   X,
   RefreshCw,
   Layers,
   UserCheck,
-  ChevronRight,
-  SlidersHorizontal,
   Zap,
-  Building2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -46,33 +41,53 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
-import { isPlatformAdminUser } from "@/lib/auth/permissions";
 import type { DocumentTemplateRow } from "@/lib/types/document-template";
 import { useAuthStore } from "@/store";
-
-type TargetAudience = "student" | "staff";
 
 type CardCategory = {
   id: number;
   name: string;
   slug?: string;
-  target_audience?: "student" | "staff";
+  target_audience?: "student" | "staff" | "client";
 };
 
-type SelectedPerson = {
+type SelectedClient = {
   id: number;
   name: string;
+  company_name?: string | null;
   email?: string | null;
   phone?: string | null;
   role?: string | null;
-  identifier?: string | null; // Roll number or employee code
-  subtext?: string | null; // Class/Program or Designation
+  identifier?: string | null;
+  subtext?: string | null;
   avatarUrl?: string | null;
-  institutionName?: string | null;
 };
 
-export default function AdminGenerateDocumentPage() {
+interface AdminGenerateDocumentPageProps {
+  sourceSection?: "operation" | "administration" | "sales";
+}
+
+export default function AdminGenerateDocumentPage({
+  sourceSection: propSourceSection,
+}: AdminGenerateDocumentPageProps = {}) {
   useAdminGuard();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Determine section: operation vs administration vs sales
+  const section: "operation" | "administration" | "sales" = useMemo(() => {
+    if (propSourceSection) return propSourceSection;
+    if (pathname?.includes("/administration/")) return "administration";
+    if (pathname?.includes("/sales/")) return "sales";
+    if (pathname?.includes("/operations/")) return "operation";
+    const q = searchParams?.get("section");
+    if (q === "administration" || q === "sales" || q === "operation") return q;
+    return "operation";
+  }, [propSourceSection, pathname, searchParams]);
+
+  const isOperation = section === "operation";
+  const isAdministration = section === "administration";
+
   const { user, accessToken } = useAuthStore();
   const {
     institutions,
@@ -80,21 +95,19 @@ export default function AdminGenerateDocumentPage() {
     activeInstitutionId,
     setActiveInstitutionId,
   } = useActiveInstitution();
-  const isPlatformAdmin = isPlatformAdminUser(user);
   const currentInstitutionId = activeInstitutionId ?? activeInstitution?.id ?? (institutions.length > 0 ? institutions[0].id : null);
   const currentInstitution = institutions.find((i) => i.id === currentInstitutionId) ?? activeInstitution ?? institutions[0] ?? null;
 
-  // Audience & Category State - can select Staff or Student freely
-  const [audience, setAudience] = useState<TargetAudience>("staff");
+  // Categories State
   const [categories, setCategories] = useState<CardCategory[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
-  // Person (Student or Staff) Search & Selection State
-  const [personSearch, setPersonSearch] = useState("");
-  const [selectedPerson, setSelectedPerson] = useState<SelectedPerson | null>(null);
-  const [personSearchResults, setPersonSearchResults] = useState<SelectedPerson[]>([]);
-  const [searchingPeople, setSearchingPeople] = useState(false);
-  const [personDropdownOpen, setPersonDropdownOpen] = useState(false);
+  // Client Search & Selection State (Exclusively Clients, never students or staff)
+  const [clientSearch, setClientSearch] = useState("");
+  const [selectedClient, setSelectedClient] = useState<SelectedClient | null>(null);
+  const [clientSearchResults, setClientSearchResults] = useState<SelectedClient[]>([]);
+  const [searchingClients, setSearchingClients] = useState(false);
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
 
   // Templates State
   const [templates, setTemplates] = useState<DocumentTemplateRow[]>([]);
@@ -104,6 +117,11 @@ export default function AdminGenerateDocumentPage() {
   const [documentsModalOpen, setDocumentsModalOpen] = useState(false);
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const [, setDetailLoading] = useState(false);
+
+  // Find Project Documentation Category for Operations
+  const projDocCategory = useMemo(() => {
+    return categories.find((c) => c.slug === "project-documentation" || c.name.toLowerCase() === "project documentation");
+  }, [categories]);
 
   // Fetch Categories
   const fetchCategories = useCallback(async () => {
@@ -160,105 +178,68 @@ export default function AdminGenerateDocumentPage() {
     fetchTemplates();
   }, [fetchTemplates]);
 
-  // Search Students or Staff
+  // Search Clients (Clients ONLY, never students or staff)
   useEffect(() => {
     if (!accessToken) {
-      setPersonSearchResults([]);
+      setClientSearchResults([]);
       return;
     }
 
     const timer = setTimeout(async () => {
-      setSearchingPeople(true);
+      setSearchingClients(true);
       try {
-        if (audience === "student") {
-          const params = new URLSearchParams({
-            limit: "10",
-          });
-          if (personSearch.trim()) params.set("search", personSearch.trim());
-          if (currentInstitutionId) params.set("institutionId", String(currentInstitutionId));
+        const params = new URLSearchParams({
+          limit: "25",
+        });
+        if (clientSearch.trim()) params.set("search", clientSearch.trim());
+        if (currentInstitutionId) params.set("institution_id", String(currentInstitutionId));
 
-          const res = await fetch(`/api/admin/students?${params.toString()}`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          });
-          const json = await res.json();
-          if (res.ok && Array.isArray(json.data)) {
-            const mapped: SelectedPerson[] = json.data.map((s: any) => ({
-              id: s.id,
-              name: s.full_name || s.name || "Student",
-              email: s.email,
-              phone: s.phone,
-              role: "Student",
-              identifier: s.admission_number || s.roll_number || `STU-${s.id}`,
-              subtext: s.program_name ? `${s.program_name}${s.section_name ? ` (${s.section_name})` : ""}` : "Student",
-              avatarUrl: s.avatar_url || s.photo_url || s.image_url,
-              institutionName: s.institution_name,
-            }));
-            setPersonSearchResults(mapped);
-          }
-        } else {
-          // Staff Search - scoped to current/logged-in institution
-          const params = new URLSearchParams({
-            staffScope: "all",
-            status: "active",
-            limit: "25",
-          });
-          if (personSearch.trim()) params.set("search", personSearch.trim());
-          if (currentInstitutionId) {
-            params.set("institutionId", String(currentInstitutionId));
-          }
-
-          const res = await fetch(`/api/admin/users?${params.toString()}`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          });
-          const json = await res.json();
-          if (res.ok && Array.isArray(json.data)) {
-            const mapped: SelectedPerson[] = json.data.map((u: any) => ({
-              id: u.id,
-              name: u.full_name || "Staff Member",
-              email: u.email,
-              phone: u.phone,
-              role: u.role_name || u.role_code || (Array.isArray(u.roles) && u.roles[0]) || "Staff",
-              identifier: u.employee_code || `EMP-${u.id}`,
-              subtext: u.designation_name || (Array.isArray(u.roles) && u.roles[0]) || "Staff",
-              avatarUrl: u.avatar_url || u.photo_url || u.image_url,
-              institutionName: u.institution_name,
-            }));
-            setPersonSearchResults(mapped);
-          }
-        }
+        const res = await fetch(`/api/admin/sales/clients?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const json = await res.json();
+        const list = Array.isArray(json.data) ? json.data : Array.isArray(json.clients) ? json.clients : [];
+        const mapped: SelectedClient[] = list.map((c: any) => ({
+          id: c.id,
+          name: c.name || c.company_name || `Client #${c.id}`,
+          company_name: c.company_name,
+          email: c.email,
+          phone: c.phone,
+          role: c.company_name ? `${c.company_name} (Client)` : "Client",
+          identifier: `CLI-${c.id}`,
+          subtext: c.company_name ? `${c.company_name} • ${c.email || c.phone || ""}` : (c.email || c.phone || "Client Partner"),
+          avatarUrl: c.profile_image,
+        }));
+        setClientSearchResults(mapped);
       } catch {
         // ignore
       } finally {
-        setSearchingPeople(false);
+        setSearchingClients(false);
       }
     }, 280);
 
     return () => clearTimeout(timer);
-  }, [accessToken, currentInstitutionId, audience, personSearch]);
+  }, [accessToken, currentInstitutionId, clientSearch]);
 
-  // Categories filtered by Audience
-  const filteredCategories = useMemo(() => {
-    return categories.filter((c) => {
-      if (!c.target_audience) return true;
-      return c.target_audience === audience;
-    });
-  }, [audience, categories]);
+  // Filtered Categories based on section
+  const availableCategories = useMemo(() => {
+    if (isOperation) {
+      // Operation section: category is Project Documentation
+      return projDocCategory ? [projDocCategory] : categories.filter((c) => c.slug === "project-documentation");
+    }
+    // Administration & Sales section: all existing available document categories
+    return categories.filter((c) => c.slug !== "project-documentation");
+  }, [isOperation, categories, projDocCategory]);
 
   // Filtered Templates
   const displayedTemplates = useMemo(() => {
     return templates.filter((tpl) => {
-      // Check audience
-      const tplAudience = tpl.category_target_audience || "student";
-      if (tplAudience !== audience) return false;
-
-      // Check category
       if (selectedCategory !== "all" && String(tpl.card_category_id) !== selectedCategory) {
         return false;
       }
-
       return true;
     });
-  }, [audience, selectedCategory, templates]);
+  }, [selectedCategory, templates]);
 
   // Handle Opening Generator
   const handleOpenGenerator = async (template: DocumentTemplateRow) => {
@@ -296,13 +277,25 @@ export default function AdminGenerateDocumentPage() {
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-primary/15 text-primary text-xs font-bold">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Smart Document & Card Generator</span>
+              <span>
+                {isOperation
+                  ? "Operation • Document Generator"
+                  : isAdministration
+                  ? "Administration • Document Generator"
+                  : "Sales • Document Generator"}
+              </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-              Document Generator
+              {isOperation
+                ? "Generate Project Documentation"
+                : isAdministration
+                ? "Generate Administrative Documents"
+                : "Generate Sales Documents"}
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl">
-              Select audience (Staff or Students), filter by document type, search or pick a recipient, and generate official ID cards, certificates, letters, and documents.
+              {isOperation
+                ? "Generate client project documentation, deliverables, and official records. All documents generated here are automatically categorised as Project Documentation for clients."
+                : "Generate administrative letters, certificates, agreements, and official records using existing system categories exclusively for clients."}
             </p>
           </div>
 
@@ -328,117 +321,71 @@ export default function AdminGenerateDocumentPage() {
           </div>
         </div>
 
-        {/* Audience Switcher Pills */}
+        {/* Exclusively For Clients Badge Strip */}
         <div className="mt-6 flex flex-wrap items-center gap-3 pt-4 border-t border-border/40">
-            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider mr-1">
-              Generate For:
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setAudience("student");
-                setSelectedCategory("all");
-                setSelectedPerson(null);
-                setPersonSearch("");
-              }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer ${
-                audience === "student"
-                  ? "bg-primary text-primary-foreground shadow-md scale-102 ring-2 ring-primary/30"
-                  : "bg-background/80 hover:bg-background text-muted-foreground hover:text-foreground border border-border/80"
-              }`}
-            >
-              <GraduationCap className="w-4 h-4" />
-              <span>Students ({templates.filter((t) => (t.category_target_audience || "student") === "student").length})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setAudience("staff");
-                setSelectedCategory("all");
-                setSelectedPerson(null);
-                setPersonSearch("");
-              }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer ${
-                audience === "staff"
-                  ? "bg-primary text-primary-foreground shadow-md scale-102 ring-2 ring-primary/30"
-                  : "bg-background/80 hover:bg-background text-muted-foreground hover:text-foreground border border-border/80"
-              }`}
-            >
-              <Users className="w-4 h-4" />
-              <span>Staff & Teachers ({templates.filter((t) => t.category_target_audience === "staff").length})</span>
-            </button>
+          <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider mr-1">
+            Document For:
+          </span>
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-primary text-primary-foreground shadow-xs">
+            <Building2 className="w-4 h-4" />
+            <span>Clients Only</span>
           </div>
+
+          <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground font-medium ml-2">
+            <span>Category:</span>
+            <Badge variant="outline" className="font-bold text-xs bg-background/80">
+              {isOperation
+                ? "Project Documentation (Auto-Assigned)"
+                : "Existing System Categories"}
+            </Badge>
+          </div>
+        </div>
       </div>
 
-      {/* Filters & Action Bar: Institution, Category, Select Staff/Student, Documents Button */}
+      {/* Filters & Action Bar: Category, Select Client, Documents Button */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-card p-4 rounded-xl border border-border/60 shadow-xs">
-        {/* 0. Institution Selector */}
-        {institutions.length > 0 && (
-          <div className="md:col-span-3 space-y-1.5">
-            <Label className="text-xs font-bold flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5 text-primary" />
-              <span>Logged-in Institution</span>
-            </Label>
-            <Select
-              value={currentInstitutionId ? String(currentInstitutionId) : undefined}
-              onValueChange={(val) => {
-                const id = Number(val);
-                setActiveInstitutionId(id);
-                setSelectedPerson(null);
-                setPersonSearch("");
-              }}
-            >
-              <SelectTrigger className="h-9 text-xs bg-background font-medium">
-                <SelectValue placeholder="Select Institution" />
+        {/* 1. Category Filter */}
+        <div className="md:col-span-4 space-y-1.5">
+          <Label className="text-xs font-bold flex items-center gap-1.5">
+            <Filter className="w-3.5 h-3.5 text-primary" />
+            <span>Document Category</span>
+          </Label>
+          {isOperation ? (
+            <div className="h-9 px-3 rounded-md border border-primary/30 bg-primary/5 flex items-center text-xs font-bold text-primary">
+              Project Documentation
+            </div>
+          ) : (
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger className="h-9 text-xs bg-background">
+                <SelectValue placeholder="All Available Categories" />
               </SelectTrigger>
               <SelectContent className="max-h-64">
-                {institutions.map((inst) => (
-                  <SelectItem key={inst.id} value={String(inst.id)}>
-                    <span className="font-semibold">{inst.name}</span>
+                <SelectItem value="all">
+                  <span className="font-semibold">All Available Categories</span>
+                </SelectItem>
+                {availableCategories.map((cat) => (
+                  <SelectItem key={cat.id} value={String(cat.id)}>
+                    {cat.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </div>
-        )}
-
-        {/* 1. Category Filter */}
-        <div className={`${institutions.length > 0 ? "md:col-span-3" : "md:col-span-4"} space-y-1.5`}>
-          <Label className="text-xs font-bold flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-primary" />
-            <span>Card / Document Category</span>
-          </Label>
-          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-            <SelectTrigger className="h-9 text-xs bg-background">
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent className="max-h-64">
-              <SelectItem value="all">
-                <span className="font-semibold">All {audience === "student" ? "Student" : "Staff"} Categories</span>
-              </SelectItem>
-              {filteredCategories.map((cat) => (
-                <SelectItem key={cat.id} value={String(cat.id)}>
-                  {cat.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          )}
         </div>
 
-        {/* 2. Person (Staff Member / Student) Filter */}
-        <div className={`${institutions.length > 0 ? "md:col-span-4" : "md:col-span-5"} space-y-1.5 relative`}>
+        {/* 2. Client Selection (Exclusively Clients, never students or staff) */}
+        <div className="md:col-span-5 space-y-1.5 relative">
           <div className="flex items-center justify-between">
             <Label className="text-xs font-bold flex items-center gap-1.5">
               <UserCheck className="w-3.5 h-3.5 text-primary" />
-              <span>Select {audience === "student" ? "Student" : "Staff Member"} (Optional)</span>
+              <span>Select Client (Optional)</span>
             </Label>
-            {selectedPerson && (
+            {selectedClient && (
               <button
                 type="button"
                 onClick={() => {
-                  setSelectedPerson(null);
-                  setPersonSearch("");
+                  setSelectedClient(null);
+                  setClientSearch("");
                 }}
                 className="text-[10px] text-destructive hover:underline font-semibold"
               >
@@ -447,20 +394,22 @@ export default function AdminGenerateDocumentPage() {
             )}
           </div>
 
-          {selectedPerson ? (
+          {selectedClient ? (
             <div className="flex items-center justify-between h-9 px-3 rounded-md border border-primary/40 bg-primary/5 text-xs">
               <div className="flex items-center gap-2 truncate">
                 <div className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-[10px]">
-                  {selectedPerson.name.charAt(0)}
+                  {selectedClient.name.charAt(0)}
                 </div>
-                <span className="font-bold text-foreground truncate">{selectedPerson.name}</span>
-                <span className="text-[10px] text-muted-foreground font-mono">({selectedPerson.identifier})</span>
+                <span className="font-bold text-foreground truncate">{selectedClient.name}</span>
+                {selectedClient.company_name && (
+                  <span className="text-[10px] text-muted-foreground">({selectedClient.company_name})</span>
+                )}
               </div>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setSelectedPerson(null)}
-                className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                onClick={() => setSelectedClient(null)}
+                className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </Button>
@@ -468,48 +417,44 @@ export default function AdminGenerateDocumentPage() {
           ) : (
             <div className="relative">
               <Input
-                value={personSearch}
+                value={clientSearch}
                 onChange={(e) => {
-                  setPersonSearch(e.target.value);
-                  setPersonDropdownOpen(true);
+                  setClientSearch(e.target.value);
+                  setClientDropdownOpen(true);
                 }}
-                onFocus={() => setPersonDropdownOpen(true)}
-                onBlur={() => setTimeout(() => setPersonDropdownOpen(false), 250)}
-                placeholder={
-                  audience === "student"
-                    ? `Search student in ${currentInstitution?.name || "institution"}...`
-                    : `Search staff in ${currentInstitution?.name || "institution"}...`
-                }
+                onFocus={() => setClientDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setClientDropdownOpen(false), 250)}
+                placeholder="Search client by name, company, email..."
                 className="h-9 text-xs bg-background pr-8"
               />
-              {searchingPeople && (
+              {searchingClients && (
                 <div className="absolute right-2.5 top-2.5">
                   <RefreshCw className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
                 </div>
               )}
 
               {/* Autocomplete Dropdown */}
-              {personDropdownOpen && personSearchResults.length > 0 && (
+              {clientDropdownOpen && clientSearchResults.length > 0 && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 max-h-56 overflow-y-auto divide-y divide-border/40">
-                  {personSearchResults.map((person) => (
+                  {clientSearchResults.map((client) => (
                     <button
-                      key={person.id}
+                      key={client.id}
                       type="button"
                       onClick={() => {
-                        setSelectedPerson(person);
-                        setPersonSearch(person.name);
-                        setPersonDropdownOpen(false);
+                        setSelectedClient(client);
+                        setClientSearch(client.name);
+                        setClientDropdownOpen(false);
                       }}
                       className="w-full text-left p-2.5 hover:bg-muted/80 transition flex items-center justify-between text-xs cursor-pointer"
                     >
                       <div className="space-y-0.5">
-                        <div className="font-bold text-foreground">{person.name}</div>
+                        <div className="font-bold text-foreground">{client.name}</div>
                         <div className="text-[10px] text-muted-foreground">
-                          {person.identifier} • {person.subtext}
+                          {client.subtext}
                         </div>
                       </div>
                       <Badge variant="outline" className="text-[10px]">
-                        Select
+                        Select Client
                       </Badge>
                     </button>
                   ))}
@@ -520,7 +465,7 @@ export default function AdminGenerateDocumentPage() {
         </div>
 
         {/* 3. Documents Button */}
-        <div className={`${institutions.length > 0 ? "md:col-span-2" : "md:col-span-3"} space-y-1.5 flex flex-col justify-end`}>
+        <div className="md:col-span-3 space-y-1.5 flex flex-col justify-end">
           <Label className="text-xs font-bold flex items-center gap-1.5 opacity-0 pointer-events-none hidden md:flex">
             <span>Documents</span>
           </Label>
@@ -530,34 +475,35 @@ export default function AdminGenerateDocumentPage() {
             className="h-9 w-full text-xs font-bold gap-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs cursor-pointer"
           >
             <FileText className="w-4 h-4" />
-            <span>Documents</span>
+            <span>Generated Documents</span>
           </Button>
         </div>
       </div>
 
-      {/* Selected Person Banner if chosen */}
-      {selectedPerson && (
+      {/* Selected Client Banner if chosen */}
+      {selectedClient && (
         <div className="p-3.5 rounded-xl border border-primary/30 bg-primary/5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/20 text-primary flex items-center justify-center font-bold text-base shadow-2xs">
-              {selectedPerson.name.charAt(0)}
+              {selectedClient.name.charAt(0)}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-black text-sm text-foreground">{selectedPerson.name}</h3>
+                <h3 className="font-black text-sm text-foreground">{selectedClient.name}</h3>
                 <Badge className="text-[10px] h-4.5 bg-primary text-primary-foreground font-semibold">
-                  {selectedPerson.role || (audience === "student" ? "Student" : "Staff")}
+                  Client Partner
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
-                ID: <span className="font-mono font-bold text-foreground">{selectedPerson.identifier}</span> • {selectedPerson.subtext}
-                {selectedPerson.email ? ` • ${selectedPerson.email}` : ""}
+                Company: <span className="font-semibold text-foreground">{selectedClient.company_name || selectedClient.name}</span>
+                {selectedClient.email ? ` • ${selectedClient.email}` : ""}
+                {selectedClient.phone ? ` • ${selectedClient.phone}` : ""}
               </p>
             </div>
           </div>
 
           <div className="text-right">
-            <p className="text-[11px] font-semibold text-primary">Data will auto-fill into template</p>
+            <p className="text-[11px] font-semibold text-primary">Client details will auto-fill into template</p>
             <span className="text-[10px] text-muted-foreground">Choose any template below to generate</span>
           </div>
         </div>
@@ -570,11 +516,11 @@ export default function AdminGenerateDocumentPage() {
             <h2 className="text-lg font-black text-foreground flex items-center gap-2">
               <Layers className="w-4 h-4 text-primary" />
               <span>
-                Available {selectedCategoryObj ? `"${selectedCategoryObj.name}"` : (audience === "student" ? "Student" : "Staff")} Templates
+                Available Templates for Clients
               </span>
             </h2>
             <p className="text-xs text-muted-foreground">
-              Showing {displayedTemplates.length} document & card template{displayedTemplates.length === 1 ? "" : "s"} in {selectedCategoryObj ? selectedCategoryObj.name : "all categories"}
+              Showing {displayedTemplates.length} document template{displayedTemplates.length === 1 ? "" : "s"} ready for client document generation
             </p>
           </div>
         </div>
@@ -591,10 +537,10 @@ export default function AdminGenerateDocumentPage() {
           </div>
         ) : displayedTemplates.length === 0 ? (
           <div className="text-center py-16 px-4 bg-muted/20 border border-dashed rounded-2xl space-y-3">
-            <IdCard className="w-12 h-12 text-muted-foreground mx-auto stroke-[1.5]" />
+            <FileText className="w-12 h-12 text-muted-foreground mx-auto stroke-[1.5]" />
             <h3 className="font-bold text-sm text-foreground">No document templates found</h3>
             <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-              No active templates match the selected {audience} category. Try selecting "All Categories".
+              No active templates match the selected filter. Try selecting "All Categories".
             </p>
             <Button
               variant="outline"
@@ -629,7 +575,7 @@ export default function AdminGenerateDocumentPage() {
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center text-muted-foreground gap-1.5 p-4 text-center">
-                        <IdCard className="w-10 h-10 text-primary/40" />
+                        <FileText className="w-10 h-10 text-primary/40" />
                         <span className="text-[11px] font-medium text-foreground/80 line-clamp-1">{template.name}</span>
                         <span className="text-[9px] text-muted-foreground">Click to preview and generate</span>
                       </div>
@@ -637,16 +583,16 @@ export default function AdminGenerateDocumentPage() {
 
                     <div className="absolute top-2 left-2 flex items-center gap-1.5">
                       <Badge className="text-[9px] font-bold h-4.5 bg-background/90 text-foreground border border-border/80 shadow-2xs backdrop-blur-xs">
-                        {template.category_name || "General"}
+                        {isOperation ? "Project Documentation" : (template.category_name || "General")}
                       </Badge>
                     </div>
 
                     <div className="absolute top-2 right-2">
                       <Badge
-                        variant={template.category_target_audience === "staff" ? "secondary" : "default"}
-                        className="text-[9px] font-semibold h-4.5"
+                        variant="outline"
+                        className="text-[9px] font-bold h-4.5 bg-primary/10 text-primary border-primary/30"
                       >
-                        {template.category_target_audience === "staff" ? "Staff" : "Student"}
+                        Client
                       </Badge>
                     </div>
                   </div>
@@ -657,7 +603,7 @@ export default function AdminGenerateDocumentPage() {
                       {template.name}
                     </CardTitle>
                     <CardDescription className="text-[11px] text-muted-foreground line-clamp-1">
-                      {template.category_name} • {template.field_count || 0} fields
+                      {isOperation ? "Project Documentation" : template.category_name} • {template.field_count || 0} fields
                     </CardDescription>
                   </CardHeader>
                 </div>
@@ -689,8 +635,8 @@ export default function AdminGenerateDocumentPage() {
                   <span>Generate Document: {selectedTemplate?.name}</span>
                 </DialogTitle>
                 <DialogDescription className="text-xs">
-                  {selectedTemplate?.category_name} • {selectedTemplate?.category_target_audience === "staff" ? "Staff Document" : "Student Document"}
-                  {selectedPerson ? ` • Mapped to: ${selectedPerson.name} (${selectedPerson.identifier})` : ""}
+                  Category: {isOperation ? "Project Documentation" : (selectedTemplate?.category_name || "General")} • Document For: Client
+                  {selectedClient ? ` • Client: ${selectedClient.name} (${selectedClient.company_name || selectedClient.identifier})` : ""}
                 </DialogDescription>
               </div>
             </div>
@@ -703,9 +649,12 @@ export default function AdminGenerateDocumentPage() {
                 accessToken={accessToken}
                 institutionId={currentInstitutionId || undefined}
                 isInstitutionTryout={true}
-                initialStudentId={selectedPerson?.id}
-                initialStudentName={selectedPerson?.name}
+                initialStudentId={selectedClient?.id}
+                initialStudentName={selectedClient?.name}
                 lockStudentSelection={false}
+                recipientType="client"
+                sourceSection={section}
+                overrideCategoryId={isOperation ? (projDocCategory?.id || 70) : (selectedCategory !== "all" ? Number(selectedCategory) : null)}
               />
             )}
           </div>
@@ -717,7 +666,8 @@ export default function AdminGenerateDocumentPage() {
         open={documentsModalOpen}
         onOpenChange={setDocumentsModalOpen}
         accessToken={accessToken}
-        audience={audience}
+        audience="client"
+        sourceSection={section}
         categories={categories}
         institutionId={currentInstitutionId || undefined}
       />
