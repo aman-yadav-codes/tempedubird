@@ -317,11 +317,36 @@ export default function OperationsTasksPage() {
     return isStaffRole || Boolean(pathname?.startsWith("/staff"));
   }, [isStaffRole, pathname]);
 
-  const formatPriceDisplay = useCallback((price: number | string | null | undefined) => {
-    if (isStaffViewer) return "★★★★★";
+  const canUserSeeTaskPrice = useCallback((taskItem?: any | null) => {
+    if (!taskItem) return false;
+    const isOwnerOrAdmin = (user as any)?.role_codes?.some((r: string) =>
+      ["platform_admin", "super_admin", "institution_admin", "school_owner", "college_owner", "university_owner", "admin"].includes(r)
+    );
+    if (isOwnerOrAdmin) return true;
+    if (!user) return false;
+    const uid = String(user.id);
+    const leaderId = taskItem.project_leader_id ? String(taskItem.project_leader_id) : null;
+    const leaderName = taskItem.project_leader_name?.toLowerCase().trim();
+    const leaderEmail = taskItem.project_leader_email?.toLowerCase().trim();
+    const uName = ((user as any).full_name || (user as any).name || "").toLowerCase().trim();
+    const uEmail = (user.email || "").toLowerCase().trim();
+    return Boolean(
+      (leaderId && leaderId === uid) ||
+      (leaderName && uName && leaderName === uName) ||
+      (leaderEmail && uEmail && leaderEmail === uEmail)
+    );
+  }, [user]);
+
+  const formatPriceDisplay = useCallback((price: number | string | null | undefined, taskItem?: any) => {
+    if (price === null || price === undefined) return "★★★★★";
+    if (taskItem) {
+      if (!canUserSeeTaskPrice(taskItem)) return "★★★★★";
+    } else {
+      if (isStaffViewer) return "★★★★★";
+    }
     const num = typeof price === "number" ? price : parseFloat(String(price || 0));
     return `₹${num.toLocaleString("en-IN")}`;
-  }, [isStaffViewer]);
+  }, [isStaffViewer, canUserSeeTaskPrice]);
 
   const formatDateDisplay = useCallback((dateStr?: string | null) => {
     if (!dateStr) return null;
@@ -970,7 +995,7 @@ export default function OperationsTasksPage() {
       if (clientFilter && clientFilter !== "all") params.set("client_id", clientFilter);
       if (staffFilter && staffFilter !== "all") {
         params.set("employee_id", staffFilter);
-      } else if (isStaffContext || scopeFilter === "assigned_to_me") {
+      } else if (scopeFilter === "assigned_to_me") {
         params.set("employee_id", "me");
       }
 
@@ -2037,7 +2062,7 @@ export default function OperationsTasksPage() {
     const isStaffRoute = Boolean(pathname?.startsWith("/staff"));
     const isStaffContext = isStaffRole || isStaffRoute;
 
-    let pool = (scopeFilter === "assigned_to_me" || isStaffContext)
+    let pool = (scopeFilter === "assigned_to_me")
       ? tasks.filter((t) => isTaskAssignedToMe(t))
       : tasks;
 
@@ -2064,7 +2089,7 @@ export default function OperationsTasksPage() {
   const getTabCount = (tabId: string) => {
     const isStaffRoute = Boolean(pathname?.startsWith("/staff"));
     const isStaffContext = isStaffRole || isStaffRoute;
-    const pool = (scopeFilter === "assigned_to_me" || isStaffContext)
+    const pool = (scopeFilter === "assigned_to_me")
       ? tasks.filter((t) => isTaskAssignedToMe(t))
       : tasks;
 
@@ -2869,7 +2894,7 @@ export default function OperationsTasksPage() {
                     <div>
                       <span className="text-muted-foreground block text-[10px] font-medium uppercase">Total Cost</span>
                       <span className="font-bold text-foreground font-mono text-sm tracking-wider">
-                        {formatPriceDisplay(totalCost)}
+                        {formatPriceDisplay(totalCost, task)}
                       </span>
                     </div>
                     <div className="border-l pl-3">
@@ -4457,7 +4482,7 @@ export default function OperationsTasksPage() {
         task={selectedTaskForSubtasks}
         editingSubtask={editingSubtaskObject}
         staffOptions={subtaskAssigneeOptions}
-        isStaffViewer={isStaffViewer}
+        isStaffViewer={!canUserSeeTaskPrice(selectedTaskForSubtasks)}
         onSaved={fetchTasks}
         onOpenHistory={(t, s) => {
           setHistoryModalSubtask(s || null);

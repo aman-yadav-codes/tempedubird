@@ -280,6 +280,26 @@ export function MyProfileClient() {
     );
   }, [user, pathname]);
 
+  const canUserSeeTaskPrice = useCallback((taskItem?: any | null) => {
+    if (!taskItem) return false;
+    const isOwnerOrAdmin = (user as any)?.role_codes?.some((r: string) =>
+      ["platform_admin", "super_admin", "institution_admin", "school_owner", "college_owner", "university_owner", "admin"].includes(r)
+    );
+    if (isOwnerOrAdmin) return true;
+    if (!user) return false;
+    const uid = String(user.id);
+    const leaderId = taskItem.project_leader_id ? String(taskItem.project_leader_id) : null;
+    const leaderName = taskItem.project_leader_name?.toLowerCase().trim();
+    const leaderEmail = taskItem.project_leader_email?.toLowerCase().trim();
+    const uName = ((user as any).full_name || (user as any).name || "").toLowerCase().trim();
+    const uEmail = (user.email || "").toLowerCase().trim();
+    return Boolean(
+      (leaderId && leaderId === uid) ||
+      (leaderName && uName && leaderName === uName) ||
+      (leaderEmail && uEmail && leaderEmail === uEmail)
+    );
+  }, [user]);
+
   // Daily Geo Attendance History Dialog State
   const [geoHistoryDialogOpen, setGeoHistoryDialogOpen] = useState<boolean>(false);
   const [selectedGeoHistoryRow, setSelectedGeoHistoryRow] = useState<any | null>(null);
@@ -3639,7 +3659,7 @@ export function MyProfileClient() {
         task={subtaskModalTask}
         editingSubtask={subtaskModalEditingSub}
         staffOptions={subtaskModalTask ? getProjectStaffOptions(subtaskModalTask) : []}
-        isStaffViewer={false}
+        isStaffViewer={!canUserSeeTaskPrice(subtaskModalTask)}
         onSaved={handleRefreshMyProfileTasks}
         onOpenHistory={(t, s) => {
           setHistoryModalSubtask(s || null);

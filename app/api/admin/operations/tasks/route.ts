@@ -231,33 +231,43 @@ export async function GET(req: Request) {
       query += ` AND urgency = $${params.length}`;
     }
     const isClient = userRole === "client" || user?.role_codes?.includes("client") || (user as any)?.roles?.some((r: any) => String(r).toLowerCase() === "client");
-    let canManageAllTasks = false;
     if (isClient) {
-      const clientMatch = await db.query(
-        `SELECT id FROM clients WHERE user_id = $1 OR (email IS NOT NULL AND lower(email) = lower($2)) OR (phone IS NOT NULL AND phone = $3)`,
-        [user.id, user.email || "", user.phone || ""]
-      );
-      const matchedClientIds = clientMatch.rows.map((r: any) => r.id);
-      const allClientIds = Array.from(new Set([...matchedClientIds, Number(user.id)]));
-      params.push(allClientIds.length > 0 ? allClientIds : [-1]);
-      const clientIdsParam = params.length;
-      params.push(Number(user.id));
-      const userIdParam = params.length;
-      params.push((user.email || "").toLowerCase().trim());
-      const userEmailParam = params.length;
-
-      query += ` AND (
-        client_id = ANY($${clientIdsParam}::int[])
-        OR created_by = $${userIdParam}
-        OR EXISTS (
-          SELECT 1 FROM jsonb_array_elements(COALESCE(assigned_clients, '[]'::jsonb)) elem 
-          WHERE (
-            ((elem->>'id') ~ '^[0-9]+$' AND (elem->>'id')::int = ANY($${clientIdsParam}::int[]))
-            OR ((elem->>'user_id') ~ '^[0-9]+$' AND (elem->>'user_id')::int = $${userIdParam})
-            OR ($${userEmailParam} != '' AND lower(COALESCE(elem->>'email', '')) = $${userEmailParam})
+      if (clientId && clientId !== "all") {
+        params.push(clientId);
+        query += ` AND (
+          client_id = $${params.length}
+          OR EXISTS (
+            SELECT 1 FROM jsonb_array_elements(COALESCE(assigned_clients, '[]'::jsonb)) elem 
+            WHERE (elem->>'id')::int = $${params.length}
           )
-        )
-      )`;
+        )`;
+      } else if (isSelfScope) {
+        const clientMatch = await db.query(
+          `SELECT id FROM clients WHERE user_id = $1 OR (email IS NOT NULL AND lower(email) = lower($2)) OR (phone IS NOT NULL AND phone = $3)`,
+          [user.id, user.email || "", user.phone || ""]
+        );
+        const matchedClientIds = clientMatch.rows.map((r: any) => r.id);
+        const allClientIds = Array.from(new Set([...matchedClientIds, Number(user.id)]));
+        params.push(allClientIds.length > 0 ? allClientIds : [-1]);
+        const clientIdsParam = params.length;
+        params.push(Number(user.id));
+        const userIdParam = params.length;
+        params.push((user.email || "").toLowerCase().trim());
+        const userEmailParam = params.length;
+
+        query += ` AND (
+          client_id = ANY($${clientIdsParam}::int[])
+          OR created_by = $${userIdParam}
+          OR EXISTS (
+            SELECT 1 FROM jsonb_array_elements(COALESCE(assigned_clients, '[]'::jsonb)) elem 
+            WHERE (
+              ((elem->>'id') ~ '^[0-9]+$' AND (elem->>'id')::int = ANY($${clientIdsParam}::int[]))
+              OR ((elem->>'user_id') ~ '^[0-9]+$' AND (elem->>'user_id')::int = $${userIdParam})
+              OR ($${userEmailParam} != '' AND lower(COALESCE(elem->>'email', '')) = $${userEmailParam})
+            )
+          )
+        )`;
+      }
     } else {
       if (clientId && clientId !== "all") {
         params.push(clientId);
@@ -269,46 +279,40 @@ export async function GET(req: Request) {
           )
         )`;
       }
-      const isInstAdmin = user ? isInstitutionAdminUser(user) : false;
-      canManageAllTasks =
-        !isSelfScope &&
-        ((user && isPlatformAdminUser(user)) ||
-        isInstAdmin ||
-        (user && hasPermission(user, "operations.tasks.manage", { institutionId: targetInstId || undefined })) ||
-        (user && hasPermission(user, "operations.tasks.view_all", { institutionId: targetInstId || undefined })));
-      if (!canManageAllTasks && user?.id) {
-      const empId = effectiveEmployeeId || String(user.id);
-      params.push(empId);
-      const uidParam = params.length;
-      query += ` AND (
-        assigned_employee_id::text = $${uidParam}
-        OR created_by = $${uidParam}::int
-        OR project_leader_id = $${uidParam}::int
-        OR EXISTS (
-          SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) elem 
-          WHERE elem->>'assigned_employee_id' = $${uidParam}
-        )
-        OR EXISTS (
-          SELECT 1 FROM jsonb_array_elements(COALESCE(assigned_employees, '[]'::jsonb)) elem 
-          WHERE elem->>'id' = $${uidParam} OR elem->>'employee_id' = $${uidParam} OR elem #>> '{}' = $${uidParam} OR elem::text = $${uidParam}
-        )
-      )`;
-    } else if (effectiveEmployeeId && effectiveEmployeeId !== "all") {
-      params.push(effectiveEmployeeId);
-      const empParam = params.length;
-      query += ` AND (
-        assigned_employee_id::text = $${empParam}
-        OR created_by = $${empParam}::int
-        OR project_leader_id = $${empParam}::int
-        OR EXISTS (
-          SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) elem 
-          WHERE elem->>'assigned_employee_id' = $${empParam}
-        )
-        OR EXISTS (
-          SELECT 1 FROM jsonb_array_elements(COALESCE(assigned_employees, '[]'::jsonb)) elem 
-          WHERE elem->>'id' = $${empParam} OR elem->>'employee_id' = $${empParam} OR elem #>> '{}' = $${empParam} OR elem::text = $${empParam}
-        )
-      )`;
+      if (isSelfScope && user?.id) {
+        const empId = effectiveEmployeeId || String(user.id);
+        params.push(empId);
+        const uidParam = params.length;
+        query += ` AND (
+          assigned_employee_id::text = $${uidParam}
+          OR created_by = $${uidParam}::int
+          OR project_leader_id = $${uidParam}::int
+          OR EXISTS (
+            SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) elem 
+            WHERE elem->>'assigned_employee_id' = $${uidParam}
+          )
+          OR EXISTS (
+            SELECT 1 FROM jsonb_array_elements(COALESCE(assigned_employees, '[]'::jsonb)) elem 
+            WHERE elem->>'id' = $${uidParam} OR elem->>'employee_id' = $${uidParam} OR elem #>> '{}' = $${uidParam} OR elem::text = $${uidParam}
+          )
+        )`;
+      } else if (effectiveEmployeeId && effectiveEmployeeId !== "all") {
+        params.push(effectiveEmployeeId);
+        const empParam = params.length;
+        query += ` AND (
+          assigned_employee_id::text = $${empParam}
+          OR created_by = $${empParam}::int
+          OR project_leader_id = $${empParam}::int
+          OR EXISTS (
+            SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) elem 
+            WHERE elem->>'assigned_employee_id' = $${empParam}
+          )
+          OR EXISTS (
+            SELECT 1 FROM jsonb_array_elements(COALESCE(assigned_employees, '[]'::jsonb)) elem 
+            WHERE elem->>'id' = $${empParam} OR elem->>'employee_id' = $${empParam} OR elem #>> '{}' = $${empParam} OR elem::text = $${empParam}
+          )
+        )`;
+      }
     }
     query += ` ORDER BY 
       CASE urgency
@@ -320,7 +324,6 @@ export async function GET(req: Request) {
       END ASC,
       deadline ASC NULLS LAST,
       id DESC`;
-    }
     const res = await db.query(query, params);
     let tasks = res.rows;
     // Fetch list of clients for picker
@@ -492,16 +495,51 @@ export async function GET(req: Request) {
         tasks = seeded.rows;
       }
     }
+    // Check if requester is platform admin / institution admin
+    const isUserPlatformAdmin = Boolean(user && (
+      isPlatformAdminUser(user) ||
+      isInstitutionAdminUser(user) ||
+      (user as any)?.role_codes?.some((r: string) => ["platform_admin", "superadmin", "super_admin", "admin", "institution_admin"].includes(String(r).toLowerCase())) ||
+      hasPermission(user, "operations.tasks.manage", { institutionId: targetInstId || undefined })
+    ));
+    const currentUserIdStr = user?.id ? String(user.id) : "";
+    const currentUserNameLower = (user?.full_name || (user as any)?.name || "").toLowerCase().trim();
+    const currentUserEmailLower = (user?.email || "").toLowerCase().trim();
+
+    // Mask task prices for staff members who are NOT the project leader and NOT platform admin
+    const sanitizedTasks = tasks.map((t: any) => {
+      const isTaskLeader = Boolean(user && (
+        (t.project_leader_id && String(t.project_leader_id) === currentUserIdStr) ||
+        (t.project_leader_name && currentUserNameLower && t.project_leader_name.toLowerCase().trim() === currentUserNameLower) ||
+        (t.project_leader_email && currentUserEmailLower && t.project_leader_email.toLowerCase().trim() === currentUserEmailLower)
+      ));
+      const canSeePrice = isUserPlatformAdmin || isTaskLeader;
+      if (!canSeePrice) {
+        return {
+          ...t,
+          price: null,
+          cost: null,
+          base_price: null,
+          extra_cost: null,
+          sub_tasks: Array.isArray(t.sub_tasks)
+            ? t.sub_tasks.map((st: any) => ({ ...st, price: null }))
+            : t.sub_tasks,
+        };
+      }
+      return t;
+    });
+
     // Compute Metrics Summary
     const totalTasks = tasks.length;
     const pendingTasks = tasks.filter(t => t.status === "pending").length;
     const inProgressTasks = tasks.filter(t => t.status === "in_progress" || t.status === "under_review").length;
     const completedTasks = tasks.filter(t => t.status === "completed").length;
     const urgentTasks = tasks.filter(t => t.urgency === "urgent" || t.urgency === "high").length;
-    const totalRevenue = tasks.reduce((sum, t) => sum + (parseFloat(t.price) || 0), 0);
+    const totalRevenue = isUserPlatformAdmin
+      ? tasks.reduce((sum, t) => sum + (parseFloat(t.price) || 0), 0)
+      : null;
     const totalEstimatedHours = tasks.reduce((sum, t) => sum + (parseFloat(t.estimated_hours) || 0), 0);
     const totalLoggedHours = tasks.reduce((sum, t) => sum + (parseFloat(t.logged_hours) || 0), 0);
-    const currentUserIdStr = user?.id ? String(user.id) : "";
     const myAssignedTasks = currentUserIdStr ? tasks.filter(t => 
       String(t.assigned_employee_id) === currentUserIdStr ||
       String(t.created_by) === currentUserIdStr ||
@@ -509,7 +547,7 @@ export async function GET(req: Request) {
       (Array.isArray(t.sub_tasks) && t.sub_tasks.some((st: any) => String(st.assigned_employee_id) === currentUserIdStr))
     ).length : 0;
     return NextResponse.json({
-      tasks,
+      tasks: sanitizedTasks,
       clients: clientsRes.rows,
       staff: staffRes.rows,
       stats: {
@@ -1409,6 +1447,21 @@ export async function PUT(req: Request) {
         const existingSubs = Array.isArray(existingTask.sub_tasks) ? existingTask.sub_tasks : [];
         const existingMap = new Map<string, any>(existingSubs.map((s: any) => [String(s.id), s]));
 
+        const isUserPlatformAdmin = Boolean(user && (
+          isPlatformAdminUser(user) ||
+          isInstitutionAdminUser(user) ||
+          (user as any)?.role_codes?.some((r: string) => ["platform_admin", "superadmin", "super_admin", "admin", "institution_admin"].includes(String(r).toLowerCase()))
+        ));
+        const currentUserIdStr = user?.id ? String(user.id) : "";
+        const currentUserNameLower = (user?.full_name || (user as any)?.name || "").toLowerCase().trim();
+        const currentUserEmailLower = (user?.email || "").toLowerCase().trim();
+        const isTaskLeader = Boolean(user && (
+          (existingTask.project_leader_id && String(existingTask.project_leader_id) === currentUserIdStr) ||
+          (existingTask.project_leader_name && currentUserNameLower && existingTask.project_leader_name.toLowerCase().trim() === currentUserNameLower) ||
+          (existingTask.project_leader_email && currentUserEmailLower && existingTask.project_leader_email.toLowerCase().trim() === currentUserEmailLower)
+        ));
+        const canModifyPriceAndPoints = isUserPlatformAdmin || isTaskLeader;
+
         // Map subtasks preserving existing uploads/work updates and recording timer starts/stops
         subs = subs.map((s: any) => {
           const ex = existingMap.get(String(s.id));
@@ -1418,6 +1471,9 @@ export async function PUT(req: Request) {
             return {
               ...ex,
               ...s,
+              price: canModifyPriceAndPoints ? (s.price !== undefined ? s.price : ex.price) : ex.price,
+              points: canModifyPriceAndPoints ? (s.points !== undefined ? s.points : ex.points) : (ex.points !== undefined ? ex.points : 20),
+              penalty_points: canModifyPriceAndPoints ? (s.penalty_points !== undefined ? s.penalty_points : ex.penalty_points) : (ex.penalty_points !== undefined ? ex.penalty_points : 10),
               status: s.status || ex.status,
               uploads: s.uploads !== undefined ? s.uploads : ex.uploads || [],
               work_updates: s.work_updates !== undefined ? s.work_updates : ex.work_updates || [],
@@ -1440,7 +1496,7 @@ export async function PUT(req: Request) {
         });
         params.push(JSON.stringify(subs));
         updates.push(`sub_tasks = $${params.length}::jsonb`);
-        if (subs.length > 0) {
+        if (subs.length > 0 && canModifyPriceAndPoints) {
           const calcPrice = subs.reduce((sum: number, s: any) => sum + (parseFloat(s.price) || 0), 0);
           params.push(calcPrice);
           updates.push(`price = $${params.length}`);
