@@ -294,34 +294,7 @@ async function runPermissionRegistrySync(db: Queryable) {
     (code) => !isPlatformOnlyPermission(code)
   );
 
-  // Platform roles must not have institution-only permissions (exempting Administrator)
-  await db.query(
-    `
-      DELETE FROM role_permissions rp
-      USING roles r, scope_types st, permissions p
-      WHERE rp.role_id = r.id
-        AND r.scope_id = st.id
-        AND rp.permission_id = p.id
-        AND st.code = 'platform'
-        AND r.code NOT IN ('admin')
-        AND p.code = ANY($1::text[])
-    `,
-    [institutionOnlyPermissionCodes]
-  );
-
-  // Institution roles must not have platform-only permissions
-  await db.query(
-    `
-      DELETE FROM role_permissions rp
-      USING roles r, scope_types st, permissions p
-      WHERE rp.role_id = r.id
-        AND r.scope_id = st.id
-        AND rp.permission_id = p.id
-        AND st.code = 'institution'
-        AND p.code = ANY($1::text[])
-    `,
-    [platformOnlyPermissionCodes]
-  );
+  // Note: All roles are now unified across platform and institution (no scope partitioning)
 
   // Clean personal role namespaces (student.*, parent.*, driver.myinstitution.*) from wrong roles
   await db.query(`

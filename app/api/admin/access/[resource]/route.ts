@@ -206,9 +206,7 @@ function assertInstitutionAllowed(scope: AccessScope, institutionId: number | nu
 }
 
 async function assertInstitutionRole(roleId: number | null) {
-  if (!roleId) throw new Error("Institution role is required");
-  const scopeCode = await getRoleScopeCode(roleId);
-  if (scopeCode !== "institution") throw new Error("Select an institution role");
+  if (!roleId) throw new Error("Role is required");
 }
 
 async function assertMembershipRole(roleId: number | null) {
@@ -408,21 +406,7 @@ async function assertPermissionsAllowedForRole(roleId: number, permissionIds: nu
     );
   }
 
-  const blocked = result.rows
-    .map((row) => row.code)
-    .filter((code) =>
-      roleScope === "institution"
-        ? isPlatformOnlyPermission(code)
-        : !isPlatformOnlyPermission(code)
-    );
-
-  if (blocked.length) {
-    throw new Error(
-      roleScope === "institution"
-        ? `Platform-only permissions cannot be assigned to institution roles: ${blocked.join(", ")}`
-        : `Institution permissions cannot be assigned to platform roles: ${blocked.join(", ")}`
-    );
-  }
+  // Roles are combined and universal across platform and institution
 }
 
 async function assertInstitutionPermissionsAllowed(permissionIds: number[], scope: AccessScope) {
@@ -579,7 +563,6 @@ async function listResource(
         } else {
           whereParts.push(`r.institution_id IS NULL`);
         }
-        whereParts.push(`st.code = 'institution'`);
       } else if (filters.institutionId) {
         params.push(filters.institutionId);
         whereParts.push(`(r.institution_id IS NULL OR r.institution_id = $${params.length})`);
@@ -588,10 +571,6 @@ async function listResource(
       if (search) {
         params.push(like);
         whereParts.push(`(r.code ILIKE $${params.length} OR r.name ILIKE $${params.length} OR st.name ILIKE $${params.length} OR ip.name ILIKE $${params.length})`);
-      }
-      if (filters.scope) {
-        params.push(filters.scope);
-        whereParts.push(`st.code = $${params.length}`);
       }
       const where = `WHERE ${whereParts.join(" AND ")}`;
       return countAndRows(
@@ -605,13 +584,13 @@ async function listResource(
             r.institution_id,
             COALESCE(r.is_system, r.institution_id IS NULL) AS is_system,
             ip.name AS institution_name,
-            st.name AS scope_name,
-            st.code AS scope_code
+            'Platform & Institution' AS scope_name,
+            COALESCE(st.code, 'universal') AS scope_code
           FROM roles r
           LEFT JOIN scope_types st ON st.id = r.scope_id
           LEFT JOIN institution_profiles ip ON ip.id = r.institution_id
           ${where}
-          ORDER BY st.code ASC NULLS LAST, (r.institution_id IS NOT NULL) ASC, r.name ASC
+          ORDER BY (r.institution_id IS NOT NULL) ASC, r.name ASC
           LIMIT $${params.length + 1} OFFSET $${params.length + 2}
         `,
         params,
@@ -636,7 +615,6 @@ async function listResource(
         } else {
           whereParts.push(`r.institution_id IS NULL`);
         }
-        whereParts.push(`st.code = 'institution'`);
       } else if (filters.institutionId) {
         params.push(filters.institutionId);
         whereParts.push(`(r.institution_id IS NULL OR r.institution_id = $${params.length})`);
@@ -660,10 +638,7 @@ async function listResource(
           )
         `);
       }
-      if (filters.scope) {
-        params.push(filters.scope);
-        whereParts.push(`st.code = $${params.length}`);
-      }
+      // Scopes combined: all roles available
       const where = `
         WHERE ${whereParts.join(" AND ")}
       `;
@@ -772,7 +747,6 @@ async function listResource(
       const params: unknown[] = [...searchable];
       const conditions = [
         "COALESCE(ip.is_deleted, FALSE) = FALSE",
-        "st.code = 'institution'",
         "COALESCE(r.is_deleted, FALSE) = FALSE",
         "r.code <> 'institution_admin'",
       ];

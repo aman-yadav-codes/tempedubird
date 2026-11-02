@@ -79,10 +79,10 @@ function getOptionQuery(
             r.code,
             r.institution_id,
             COALESCE(r.is_system, r.institution_id IS NULL) AS is_system,
-            st.code AS scope_code,
+            COALESCE(st.code, 'universal') AS scope_code,
             COALESCE(default_permissions.permission_ids, '[]'::jsonb) AS default_permission_ids
           FROM roles r
-          INNER JOIN scope_types st ON st.id = r.scope_id
+          LEFT JOIN scope_types st ON st.id = r.scope_id
           LEFT JOIN LATERAL (
             SELECT jsonb_agg(rp.permission_id ORDER BY p.code ASC) AS permission_ids
             FROM role_permissions rp
@@ -90,8 +90,7 @@ function getOptionQuery(
             WHERE rp.role_id = r.id
               AND COALESCE(p.is_deleted, FALSE) = FALSE
           ) default_permissions ON TRUE
-          WHERE st.code = 'institution'
-            AND COALESCE(r.is_deleted, FALSE) = FALSE
+          WHERE COALESCE(r.is_deleted, FALSE) = FALSE
             AND ($3::int IS NULL OR r.institution_id IS NULL OR r.institution_id = $3)
             ${membershipOnly ? "AND r.code <> 'institution_admin'" : ""}
             AND ($1 = '' OR r.name ILIKE $2 OR r.code ILIKE $2)
@@ -320,10 +319,10 @@ function getScopedOptionQuery(
             r.id,
             r.name,
             r.code,
-            st.code AS scope_code,
+            COALESCE(st.code, 'universal') AS scope_code,
             COALESCE(default_permissions.permission_ids, '[]'::jsonb) AS default_permission_ids
           FROM roles r
-          INNER JOIN scope_types st ON st.id = r.scope_id
+          LEFT JOIN scope_types st ON st.id = r.scope_id
           LEFT JOIN LATERAL (
             SELECT jsonb_agg(rp.permission_id ORDER BY p.code ASC) AS permission_ids
             FROM role_permissions rp
@@ -331,8 +330,7 @@ function getScopedOptionQuery(
             WHERE rp.role_id = r.id
               AND COALESCE(p.is_deleted, FALSE) = FALSE
           ) default_permissions ON TRUE
-          WHERE st.code = 'institution'
-            AND COALESCE(r.is_deleted, FALSE) = FALSE
+          WHERE COALESCE(r.is_deleted, FALSE) = FALSE
             ${membershipOnly ? "AND r.code <> 'institution_admin'" : ""}
             AND ($1 = '' OR r.name ILIKE $2 OR r.code ILIKE $2)
           ORDER BY r.name ASC
@@ -526,7 +524,7 @@ export async function GET(req: Request) {
             r.code,
             COALESCE(default_permissions.permission_ids, '[]'::jsonb) AS default_permission_ids
           FROM roles r
-          INNER JOIN scope_types st ON st.id = r.scope_id
+          LEFT JOIN scope_types st ON st.id = r.scope_id
           LEFT JOIN LATERAL (
             SELECT jsonb_agg(rp.permission_id ORDER BY p.code ASC) AS permission_ids
             FROM role_permissions rp
@@ -534,8 +532,7 @@ export async function GET(req: Request) {
             WHERE rp.role_id = r.id
               AND COALESCE(p.is_deleted, FALSE) = FALSE
           ) default_permissions ON TRUE
-          WHERE st.code = 'institution'
-            AND COALESCE(r.is_deleted, FALSE) = FALSE
+          WHERE COALESCE(r.is_deleted, FALSE) = FALSE
           ORDER BY r.name ASC
         `),
         db.query(`

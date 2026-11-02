@@ -661,12 +661,9 @@ export function isPermissionAssignableToRole(permission: string, roleCode?: stri
   const permissionModule = getPermissionModule(permission);
   if (!permissionModule) return false;
 
-  if (permissionModule.scope === "platform") {
-    return roleCode === "platform_admin" || roleCode === "admin" || roleScope === "platform";
-  }
-
-  if (permissionModule.key.startsWith("finance.platform.")) {
-    return roleCode === "platform_admin" || roleCode === "admin" || roleScope === "platform";
+  if (permissionModule.scope === "platform" || permissionModule.key.startsWith("finance.platform.")) {
+    if (roleCode === "student" || roleCode === "parent" || roleCode === "driver") return false;
+    return true;
   }
 
   const roleOwnedPrefix = permissionModule.key.split(".")[0];
