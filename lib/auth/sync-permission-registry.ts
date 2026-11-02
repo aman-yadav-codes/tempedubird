@@ -341,18 +341,29 @@ async function runPermissionRegistrySync(db: Queryable) {
       permissionFilter: () => true,
     },
 
-    // --- Head of Operations (Full CRUD for all six Operations modules) ---
+    // --- Head of Operations (Full CRUD for all Operations, Finance, and Administration modules) ---
     {
       roleCodes: ["head_of_operations"],
       permissionFilter: (code) =>
         code === "dashboard.view" ||
         code.startsWith("managestaff.tasks.") ||
-        code.startsWith("operations.work_logs.") ||
-        code.startsWith("operations.project_types.") ||
-        code.startsWith("operations.project_pipelines.") ||
+        code.startsWith("operations.") ||
         code.startsWith("admin.generate.") ||
-        code.startsWith("operations.penalty_rules.") ||
-        code.startsWith("notifications.inbox."),
+        code.startsWith("finance.") ||
+        code.startsWith("sales.requests.") ||
+        code.startsWith("admin.vendors.") ||
+        code.startsWith("admin.inventory.") ||
+        code.startsWith("admin.team.") ||
+        code.startsWith("company.") ||
+        code.startsWith("settings.") ||
+        code.startsWith("notifications.") ||
+        code.startsWith("support.") ||
+        code.startsWith("institution.general_settings.") ||
+        code.startsWith("institution.ai_settings.") ||
+        code.startsWith("institution.noticeboard.") ||
+        code.startsWith("institution.calendar.") ||
+        code.startsWith("institution.complaints.") ||
+        code.startsWith("rolespermissions."),
     },
 
     // --- HR Head (Full CRUD for all HR & staff management modules) ---

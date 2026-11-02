@@ -621,18 +621,13 @@ export function isAdminPathVisibleForRole(
     normalized === "/admin/master-data/attendance-setup" ||
     normalized.startsWith("/admin/master-data/attendance-setup")
   ) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
-  }
-
-  if (
-    normalized === "/admin/master-data/institute-calendar" ||
-    normalized.startsWith("/admin/master-data/institute-calendar") ||
-    normalized === "/admin/master-data/timetable-setup" ||
-    normalized.startsWith("/admin/master-data/timetable-setup") ||
-    normalized === "/admin/master-data/attendance-setup" ||
-    normalized.startsWith("/admin/master-data/attendance-setup")
-  ) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    return (
+      isPlatformAdminUser(user) ||
+      isInstitutionAdminUser(user) ||
+      hasPermission(user, getPageViewPermission(normalized)) ||
+      Boolean(user?.role_codes?.includes("head_of_operations")) ||
+      Boolean(user?.role_codes?.includes("business_operations_manager"))
+    );
   }
 
   if (normalized === "/admin/master-data" || normalized.startsWith("/admin/master-data")) {
@@ -1416,11 +1411,24 @@ export function hasAdminPagePermission(
 
   if (normalized === "/admin/finance" || normalized.startsWith("/admin/finance/")) {
     if (isPlatformAdminUser(user) || isInstitutionAdminUser(user)) return true;
-    if (normalized === "/admin/finance/income") return hasPermission(user, "finance.platform.income.view");
-    if (normalized === "/admin/finance/expense") return hasPermission(user, "finance.platform.expense.view");
-    if (normalized === "/admin/finance/invoice") return hasPermission(user, "finance.platform.invoice.view");
-    if (normalized === "/admin/finance/recurring-expenses") return hasPermission(user, "finance.platform.recurring_expenses.view");
-    return false;
+    if (normalized === "/admin/finance/income") {
+      return hasPermission(user, "finance.platform.income.view") || hasPermission(user, "finance.income.view");
+    }
+    if (normalized === "/admin/finance/expense") {
+      return hasPermission(user, "finance.platform.expense.view") || hasPermission(user, "finance.expense.view");
+    }
+    if (normalized === "/admin/finance/invoice") {
+      return hasPermission(user, "finance.platform.invoice.view") || hasPermission(user, "finance.invoice.view");
+    }
+    if (normalized === "/admin/finance/recurring-expenses") {
+      return hasPermission(user, "finance.platform.recurring_expenses.view") || hasPermission(user, "finance.recurring_expenses.view");
+    }
+    return (
+      hasPermission(user, getPageViewPermission(normalized)) ||
+      Boolean(user?.role_codes?.includes("head_of_operations")) ||
+      Boolean(user?.role_codes?.includes("finance_head")) ||
+      Boolean(user?.role_codes?.includes("business_operations_manager"))
+    );
   }
 
   if (normalized === "/admin") {
@@ -1440,7 +1448,13 @@ export function hasAdminPagePermission(
     normalized === "/admin/master-data/attendance-setup" ||
     normalized.startsWith("/admin/master-data/attendance-setup")
   ) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    return (
+      isPlatformAdminUser(user) ||
+      isInstitutionAdminUser(user) ||
+      hasPermission(user, getPageViewPermission(normalized)) ||
+      Boolean(user?.role_codes?.includes("head_of_operations")) ||
+      Boolean(user?.role_codes?.includes("business_operations_manager"))
+    );
   }
 
   if (normalized === "/admin/master-data" || normalized.startsWith("/admin/master-data")) {
