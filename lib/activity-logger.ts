@@ -55,3 +55,4 @@ export async function logSystemActivity(params: LogActivityParams): Promise<void
     console.error("[logSystemActivity] Failed to insert activity log:", err);
   }
 }
+

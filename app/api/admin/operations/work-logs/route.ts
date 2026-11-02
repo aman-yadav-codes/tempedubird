@@ -624,3 +624,4 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: error.message || "Failed to fetch work logs" }, { status: 500 });
   }
 }
+

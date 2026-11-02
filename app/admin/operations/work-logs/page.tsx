@@ -844,3 +844,4 @@ export default function DailyWorkLogsPage() {
     </div>
   );
 }
+
