@@ -747,15 +747,25 @@ export default function OperationsTasksPage() {
 
   const dialogStaffList = useMemo(() => {
     const list = modalOrgStaffList.length > 0
-      ? modalOrgStaffList
-      : staffList;
+      ? [...modalOrgStaffList]
+      : [...staffList];
+    if (user?.id && !list.some((s) => s.id === user.id)) {
+      list.push({
+        id: user.id,
+        name: (user as any)?.full_name || (user as any)?.name || user.email || "Staff Member",
+        email: user.email,
+        phone: (user as any)?.phone || null,
+        role: (user as any)?.role_name || (user as any)?.role || "Staff Member",
+        role_code: (user as any)?.role_code || "staff",
+      });
+    }
     const seen = new Set<number>();
     return list.filter((s) => {
       if (!s.id || seen.has(s.id)) return false;
       seen.add(s.id);
       return true;
     });
-  }, [modalOrgStaffList, staffList]);
+  }, [modalOrgStaffList, staffList, user]);
 
   const addClientUrl = useMemo(() => {
     if (pathname?.startsWith("/platformadmin")) return "/platformadmin/sales/clients";
@@ -1082,11 +1092,12 @@ export default function OperationsTasksPage() {
   const handleOpenCreateTask = () => {
     setEditingTask(null);
     setFormTitle("");
+    const userInstId = (user as any)?.institution_id || (user as any)?.memberships?.[0]?.institution_id || activeInstitutionId || (institutions[0]?.id ? String(institutions[0].id) : "1");
     const initialInstId = isPlatformRoute
       ? "none"
       : ((orgFilter && orgFilter !== "all" && orgFilter !== "none")
         ? orgFilter
-        : (activeInstitutionId ? String(activeInstitutionId) : (institutions[0]?.id ? String(institutions[0].id) : "none")));
+        : (userInstId ? String(userInstId) : "1"));
     setFormInstitutionId(initialInstId);
     void fetchStaffForModal(initialInstId);
     setFormClientId("none");
@@ -1130,9 +1141,10 @@ export default function OperationsTasksPage() {
   const handleOpenEditTask = (t: OperationTask) => {
     setEditingTask(t);
     setFormTitle(t.title || "");
+    const userInstId = (user as any)?.institution_id || (user as any)?.memberships?.[0]?.institution_id || activeInstitutionId || (institutions[0]?.id ? String(institutions[0].id) : "1");
     const initialInstId = isPlatformRoute
       ? "none"
-      : (t.institution_id ? String(t.institution_id) : (activeInstitutionId ? String(activeInstitutionId) : "none"));
+      : (t.institution_id ? String(t.institution_id) : (userInstId ? String(userInstId) : "1"));
     setFormInstitutionId(initialInstId);
     void fetchStaffForModal(initialInstId);
     setFormClientId(t.client_id ? String(t.client_id) : "none");
@@ -3404,53 +3416,6 @@ export default function OperationsTasksPage() {
 
           <form onSubmit={handleSaveMainTask} className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-              {/* Organization / Institution Selection (if multiple) */}
-              {!isInstitutionAdmin && (
-                <div className="space-y-1.5 p-3 rounded-xl border bg-muted/20">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-semibold flex items-center gap-1.5">
-                      <Building2 className="w-3.5 h-3.5 text-primary" />
-                      Organization / Institution *
-                    </Label>
-                    <span className="text-[10px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                      {isPlatformRoute ? "EduBird Platform" : "Staff Dedicated to Organization"}
-                    </span>
-                  </div>
-                  {isPlatformRoute ? (
-                    <div className="flex items-center justify-between h-9 px-3 text-xs rounded-md border border-input bg-background/80 shadow-xs">
-                      <span className="font-semibold text-foreground truncate flex items-center gap-2">
-                        <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
-                        EduBird Organization
-                      </span>
-                      <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30 font-medium">
-                        EduBird Staff Only
-                      </Badge>
-                    </div>
-                  ) : institutions.length > 1 ? (
-                    <select
-                      value={formInstitutionId}
-                      onChange={(e) => handleFormInstitutionChange(e.target.value)}
-                      className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring font-medium text-foreground cursor-pointer"
-                    >
-                      {institutions.map((inst) => (
-                        <option key={inst.id} value={String(inst.id)}>
-                          {inst.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div className="flex items-center justify-between h-9 px-3 text-xs rounded-md border border-input bg-background/80">
-                      <span className="font-semibold text-foreground truncate">
-                        {activeInstitution?.name || institutions[0]?.name || "My Organization"}
-                      </span>
-                      <Badge variant="outline" className="text-[10px] bg-primary/5 text-primary border-primary/20">
-                        Active Organization
-                      </Badge>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Project Name */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold">Project Name *</Label>
@@ -4054,7 +4019,11 @@ export default function OperationsTasksPage() {
                           : formAssignedStaffIds.length === 1
                             ? (() => {
                               const s = dialogStaffList.find((st) => String(st.id) === formAssignedStaffIds[0]);
-                              return s ? `${s.name} (${s.role || "Staff Member"})` : "1 staff member selected";
+                              if (s) return `${s.name} (${s.role || "Staff Member"})`;
+                              if (user?.id && String(user.id) === formAssignedStaffIds[0]) {
+                                return `${(user as any)?.full_name || (user as any)?.name || user?.email} (${(user as any)?.role || "Staff"})`;
+                              }
+                              return "1 staff member selected";
                             })()
                             : `${formAssignedStaffIds.length} staff members selected`}
                       </span>
@@ -4189,52 +4158,6 @@ export default function OperationsTasksPage() {
                   className="text-xs min-h-[70px] resize-y"
                 />
               </div>
-
-              {/* Task Cadence / Frequency Selector */}
-              {!isInstitutionAdmin && (
-                <div className="space-y-2 p-3 rounded-xl border bg-muted/20">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-primary" />
-                      Project Cadence *
-                    </Label>
-                    <span className="text-[10px] text-muted-foreground font-medium">Daily vs One-Time</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setFormIsDailyRecurring(false)}
-                      className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all ${!formIsDailyRecurring
-                        ? "bg-background border-primary shadow-xs ring-1 ring-primary/40 text-foreground"
-                        : "bg-card/60 hover:bg-background/80 border-border text-muted-foreground"
-                        }`}
-                    >
-                      <span className="text-xs font-bold flex items-center gap-1.5 text-foreground">
-                        ⚡ Standard Project
-                      </span>
-                      <span className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
-                        Deliverable workflow with milestones and sub-tasks.
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setFormIsDailyRecurring(true)}
-                      className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all ${formIsDailyRecurring
-                        ? "bg-background border-primary shadow-xs ring-1 ring-primary/40 text-foreground"
-                        : "bg-card/60 hover:bg-background/80 border-border text-muted-foreground"
-                        }`}
-                    >
-                      <span className="text-xs font-bold flex items-center gap-1.5 text-foreground">
-                        🔁 Daily Recurring
-                      </span>
-                      <span className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
-                        Regenerates daily with routine checks.
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="flex items-center justify-between px-6 py-3.5 border-t bg-muted/20 shrink-0">
