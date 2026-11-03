@@ -62,6 +62,7 @@ export type SubTaskUploadComment = {
   comment: string;
   created_at: string;
   attachments?: SubTaskCommentAttachment[];
+  reply_to_comment_id?: string;
 };
 
 export type SubTaskUploadHistoryEntry = {
@@ -478,6 +479,7 @@ export function SubTaskUploadDialog({
         comment: text,
         created_at: new Date().toISOString(),
         attachments: [],
+        reply_to_comment_id: replyToCommentId,
       };
 
       const updatedUploads = uploadsList.map((upl) => {
@@ -2111,8 +2113,17 @@ export function SubTaskUploadDialog({
                     <p className="font-semibold text-foreground">No comments yet on this file</p>
                     <p className="text-[11px]">Be the first to leave feedback, paste screenshots, or attach documents below.</p>
                   </div>
-                ) : (
-                  activeFile.comments.map((comm) => (
+                ) : (() => {
+                  // Separate top-level comments from inline replies
+                  const topLevel = activeFile.comments.filter((c) => !c.reply_to_comment_id);
+                  const repliesMap: Record<string, SubTaskUploadComment[]> = {};
+                  activeFile.comments.forEach((c) => {
+                    if (c.reply_to_comment_id) {
+                      if (!repliesMap[c.reply_to_comment_id]) repliesMap[c.reply_to_comment_id] = [];
+                      repliesMap[c.reply_to_comment_id].push(c);
+                    }
+                  });
+                  return topLevel.map((comm) => (
                     <div key={comm.id} className="p-3.5 rounded-xl bg-card border shadow-2xs text-xs space-y-2">
                       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                         <span className="font-bold text-foreground flex items-center gap-1.5">
@@ -2270,12 +2281,38 @@ export function SubTaskUploadDialog({
                                 <span>Comment</span>
                               </Button>
                             </div>
+                            {/* Inline replies — shown just below this textbox */}
+                            {repliesMap[comm.id] && repliesMap[comm.id].length > 0 && (
+                              <div className="mt-2 space-y-1.5 pl-2 border-l-2 border-primary/20">
+                                {repliesMap[comm.id].map((reply) => (
+                                  <div key={reply.id} className="p-2.5 rounded-lg bg-muted/30 border border-border/40 text-xs space-y-1">
+                                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                                      <span className="font-bold text-foreground flex items-center gap-1">
+                                        <User className="w-3 h-3 text-primary" />
+                                        {reply.user_name} {reply.user_role ? `(${reply.user_role})` : ""}
+                                      </span>
+                                      <span className="font-mono text-[9px]">
+                                        {new Date(reply.created_at).toLocaleString("en-IN", {
+                                          day: "numeric",
+                                          month: "short",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </span>
+                                    </div>
+                                    {reply.comment && (
+                                      <p className="text-xs text-foreground whitespace-pre-wrap leading-relaxed">{reply.comment}</p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
                     </div>
-                  ))
-                )}
+                  ));
+                })()}
               </div>
 
 
