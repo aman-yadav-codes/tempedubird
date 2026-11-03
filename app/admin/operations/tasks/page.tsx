@@ -746,11 +746,9 @@ export default function OperationsTasksPage() {
   }, [formInstitutionId, institutions, activeInstitution, isPlatformRoute]);
 
   const dialogStaffList = useMemo(() => {
-    const list = modalOrgStaffList.length > 0
-      ? [...modalOrgStaffList]
-      : [...staffList];
-    if (user?.id && !list.some((s) => s.id === user.id)) {
-      list.push({
+    const combined = [...modalOrgStaffList, ...staffList];
+    if (user?.id && !combined.some((s) => String(s.id) === String(user.id))) {
+      combined.push({
         id: user.id,
         name: (user as any)?.full_name || (user as any)?.name || user.email || "Staff Member",
         email: user.email,
@@ -759,10 +757,11 @@ export default function OperationsTasksPage() {
         role_code: (user as any)?.role_code || "staff",
       });
     }
-    const seen = new Set<number>();
-    return list.filter((s) => {
-      if (!s.id || seen.has(s.id)) return false;
-      seen.add(s.id);
+    const seen = new Set<string>();
+    return combined.filter((s) => {
+      const sId = String(s.id);
+      if (!s.id || seen.has(sId)) return false;
+      seen.add(sId);
       return true;
     });
   }, [modalOrgStaffList, staffList, user]);
@@ -4039,6 +4038,7 @@ export default function OperationsTasksPage() {
                               if (user?.id && String(user.id) === formAssignedStaffIds[0]) {
                                 return `${(user as any)?.full_name || (user as any)?.name || user?.email} (${(user as any)?.role || "Staff"})`;
                               }
+                              if (loadingModalOrgStaff) return "Loading staff...";
                               return "1 staff member selected";
                             })()
                             : `${formAssignedStaffIds.length} staff members selected`}
@@ -4138,28 +4138,33 @@ export default function OperationsTasksPage() {
                 {/* Selected Staff Chips */}
                 {formAssignedStaffIds.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    {dialogStaffList
-                      .filter((s) => formAssignedStaffIds.includes(String(s.id)))
-                      .map((s) => (
+                    {formAssignedStaffIds.map((staffId) => {
+                      const s = dialogStaffList.find((st) => String(st.id) === staffId);
+                      const displayName = s?.name ||
+                        (user?.id && String(user.id) === staffId ? ((user as any)?.full_name || (user as any)?.name || user?.email) : null) ||
+                        (loadingModalOrgStaff ? "Loading..." : `Staff #${staffId}`);
+                      const displayRole = s?.role || (user?.id && String(user.id) === staffId ? ((user as any)?.role || "Staff") : "Staff");
+                      return (
                         <Badge
-                          key={s.id}
+                          key={staffId}
                           variant="secondary"
                           className="text-[11px] py-1 pl-2 pr-1.5 gap-1.5 font-medium bg-muted/60 hover:bg-muted"
                         >
                           <User className="w-3 h-3 text-primary" />
-                          <span className="truncate max-w-[150px]">{s.name}</span>
+                          <span className="truncate max-w-[150px]">{displayName}</span>
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setFormAssignedStaffIds(formAssignedStaffIds.filter((id) => id !== String(s.id)));
+                              setFormAssignedStaffIds(formAssignedStaffIds.filter((id) => id !== staffId));
                             }}
                             className="hover:bg-muted-foreground/20 rounded-full p-0.5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
                           >
                             <X className="w-3 h-3" />
                           </button>
                         </Badge>
-                      ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

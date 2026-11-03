@@ -1200,66 +1200,94 @@ export async function PUT(req: Request) {
           );
         }
 
-        // Enforce single active task per user: cannot start a new task/subtask without stopping existing in-progress task
+        // Enforce per-user active task limit: auto-stop this user's previously running task/subtask when starting a new one
         try {
-          const activeRunningRes = await db.query(
-            `SELECT id, title, status, sub_tasks, history, assigned_employee_id, client_id, assigned_employees, assigned_clients, created_by
+          const userActiveRes = await db.query(
+            `SELECT id, title, status, sub_tasks, history
              FROM operations_tasks
-             WHERE status = 'in_progress'
-                OR EXISTS (
-                  SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) elem
-                  WHERE elem->>'status' = 'in_progress'
-                )`
+             WHERE id != $1
+               AND (
+                 status = 'in_progress'
+                 OR EXISTS (
+                   SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) elem
+                   WHERE elem->>'status' = 'in_progress'
+                 )
+               )
+               AND (
+                 assigned_employee_id::text = $2
+                 OR client_id::text = $2
+                 OR created_by::text = $2
+                 OR assigned_employees::text LIKE $3
+                 OR assigned_clients::text LIKE $3
+                 OR EXISTS (
+                   SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) s
+                   WHERE s->>'assigned_employee_id' = $2
+                      OR s->>'assigned_staff_ids' LIKE $3
+                 )
+               )`,
+            [id, String(currentUserId), `%${String(currentUserId)}%`]
           );
 
-          for (const row of activeRunningRes.rows) {
+          for (const row of userActiveRes.rows) {
             const rowSubs = Array.isArray(row.sub_tasks) ? row.sub_tasks : [];
             const runningSubs = rowSubs.filter((s: any) => s.status === "in_progress");
 
-            const rowHist = Array.isArray(row.history) ? row.history : [];
-            const userStartedThis = rowHist.slice().reverse().find((h: any) =>
-              (h.action === "started" || h.action === "stopped") &&
-              (String(h.user_id) === String(currentUserId) || (user?.email && h.user_name === currentUserName))
-            )?.action === "started";
-
-            const isAssignedToUser =
-              String(row.assigned_employee_id) === String(currentUserId) ||
-              String(row.client_id) === String(currentUserId) ||
-              String(row.created_by) === String(currentUserId) ||
-              JSON.stringify(row.assigned_employees || []).includes(String(currentUserId)) ||
-              JSON.stringify(row.assigned_clients || []).includes(String(currentUserId)) ||
-              runningSubs.some((s: any) =>
-                String(s.assigned_employee_id) === String(currentUserId) ||
-                JSON.stringify(s.assigned_staff_ids || []).includes(String(currentUserId))
-              );
-
-            if (userStartedThis || isAssignedToUser) {
-              if (row.id !== id) {
-                const subTitle = runningSubs[0]?.title ? `"${runningSubs[0].title}" in "${row.title}"` : `"${row.title}"`;
-                return NextResponse.json(
-                  { error: `You already have a task in progress (${subTitle}). You cannot start a new task without stopping your active task first.` },
-                  { status: 400 }
-                );
-              }
-
-              if (body.subtask_id) {
-                const otherRunningSub = runningSubs.find((s: any) => String(s.id) !== String(body.subtask_id));
-                if (otherRunningSub) {
-                  return NextResponse.json(
-                    { error: `Deliverable "${otherRunningSub.title}" is already in progress. You must stop it before starting "${body.subtask_title || 'another deliverable'}".` },
-                    { status: 400 }
-                  );
-                }
-              } else if (runningSubs.length > 0) {
-                return NextResponse.json(
-                  { error: `Deliverable "${runningSubs[0].title}" is currently in progress. You must stop it before starting another task.` },
-                  { status: 400 }
-                );
+            // Auto-stop the user's previously running task/subtask
+            const stopTime = new Date().toISOString();
+            const stoppedHistory = Array.isArray(row.history) ? [...row.history] : [];
+            if (runningSubs.length > 0) {
+              for (const s of runningSubs) {
+                stoppedHistory.push({
+                  id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                  action: "stopped",
+                  timestamp: stopTime,
+                  user_id: currentUserId,
+                  user_name: currentUserName,
+                  user_role: currentUserRole,
+                  old_status: "in_progress",
+                  new_status: "pending",
+                  subtask_id: s.id || null,
+                  subtask_title: s.title || null,
+                  details: s.title ? `Deliverable "${s.title}" auto-stopped: user started a new task` : "Deliverable auto-stopped: user started a new task",
+                });
               }
             }
+            if (row.status === "in_progress") {
+              stoppedHistory.push({
+                id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                action: "stopped",
+                timestamp: stopTime,
+                user_id: currentUserId,
+                user_name: currentUserName,
+                user_role: currentUserRole,
+                old_status: row.status,
+                new_status: "pending",
+                details: "Task auto-stopped: user started a new task",
+              });
+            }
+
+            let newSubs = rowSubs;
+            if (runningSubs.length > 0) {
+              newSubs = rowSubs.map((s: any) => {
+                if (s.status !== "in_progress") return s;
+                return { ...s, status: "pending", stopped_at: stopTime, stopped_by_name: currentUserName };
+              });
+            }
+
+            const newStatus = runningSubs.length > 0
+              ? (newSubs.every((s: any) => s.status === "completed") ? "completed" : "pending")
+              : "pending";
+
+            await db.query(
+              `UPDATE operations_tasks
+               SET status = $1, stopped_at = NOW(), sub_tasks = $2::jsonb,
+                   history = $3::jsonb, updated_at = NOW()
+               WHERE id = $4`,
+              [newStatus, JSON.stringify(newSubs), JSON.stringify(stoppedHistory.slice(-100)), row.id]
+            );
           }
         } catch (checkErr) {
-          console.error("Error validating single active task concurrency:", checkErr);
+          console.error("Error auto-stopping previous user task:", checkErr);
         }
       }
 
@@ -1505,11 +1533,36 @@ export async function PUT(req: Request) {
         ));
         const canModifyPriceAndPoints = isUserPlatformAdmin || isTaskLeader;
 
+        // Determine which subtask is being started (if any) to auto-stop others
+        const startingSubId = Array.isArray(subs)
+          ? subs.find((s: any) => {
+              const ex = existingMap.get(String(s.id));
+              return s.status === "in_progress" && (!ex || ex.status !== "in_progress");
+            })?.id
+          : null;
+
         // Map subtasks preserving existing uploads/work updates and recording timer starts/stops
         subs = subs.map((s: any) => {
           const ex = existingMap.get(String(s.id));
           const isThisSubStarting = s.status === "in_progress" && (!ex || ex.status !== "in_progress");
-          const isThisSubStopping = s.status === "pending" && ex && ex.status === "in_progress";
+          // Auto-stop any OTHER in-progress subtask when a new one is starting
+          const isAutoStopped = startingSubId && String(s.id) !== String(startingSubId) && ex && ex.status === "in_progress" && s.status !== "in_progress";
+          const isThisSubStopping = isAutoStopped || (s.status === "pending" && ex && ex.status === "in_progress");
+          if (isAutoStopped) {
+            taskHistory.push({
+              id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+              action: "stopped",
+              timestamp: new Date().toISOString(),
+              user_id: currentUserId,
+              user_name: currentUserName,
+              user_role: currentUserRole,
+              old_status: "in_progress",
+              new_status: "pending",
+              subtask_id: s.id || null,
+              subtask_title: s.title || null,
+              details: s.title ? `Deliverable "${s.title}" auto-stopped: deliverable "${body.subtask_title || 'another'}" started` : "Deliverable auto-stopped",
+            });
+          }
           if (ex) {
             return {
               ...ex,
@@ -1517,7 +1570,7 @@ export async function PUT(req: Request) {
               price: canModifyPriceAndPoints ? (s.price !== undefined ? s.price : ex.price) : ex.price,
               points: canModifyPriceAndPoints ? (s.points !== undefined ? s.points : ex.points) : (ex.points !== undefined ? ex.points : 20),
               penalty_points: canModifyPriceAndPoints ? (s.penalty_points !== undefined ? s.penalty_points : ex.penalty_points) : (ex.penalty_points !== undefined ? ex.penalty_points : 10),
-              status: s.status || ex.status,
+              status: isAutoStopped ? "pending" : (s.status || ex.status),
               uploads: s.uploads !== undefined ? s.uploads : ex.uploads || [],
               work_updates: s.work_updates !== undefined ? s.work_updates : ex.work_updates || [],
               started_at: isThisSubStarting ? new Date().toISOString() : ex.started_at || null,
