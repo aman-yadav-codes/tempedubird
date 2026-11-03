@@ -63,6 +63,7 @@ export type SubTaskUploadComment = {
   created_at: string;
   attachments?: SubTaskCommentAttachment[];
   reply_to_comment_id?: string;
+  is_completed?: boolean;
 };
 
 export type SubTaskUploadHistoryEntry = {
@@ -454,6 +455,51 @@ export function SubTaskUploadDialog({
 
       if (!res.ok) throw new Error("Failed to update status");
       toast.success("Attachment status updated");
+      if (onSaved) onSaved();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update status");
+      setUploadsList(uploadsList);
+    }
+  };
+
+  // Toggle completion checkbox on text-only comment (default pending; green tick when completed)
+  const handleToggleCommentCompletion = async (uploadId: string, commentId: string) => {
+    if (!task || !subtask) return;
+
+    const updatedUploads = uploadsList.map((upl) => {
+      if (upl.id !== uploadId) return upl;
+
+      const updatedComments = (upl.comments || []).map((c) => {
+        if (c.id !== commentId) return c;
+        return { ...c, is_completed: !c.is_completed };
+      });
+
+      return { ...upl, comments: updatedComments };
+    });
+
+    setUploadsList(updatedUploads);
+
+    try {
+      const currentSubtasks = Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : [];
+      const subIndex = currentSubtasks.findIndex((s: any) => String(s.id) === String(subtask.id));
+      if (subIndex !== -1) {
+        currentSubtasks[subIndex] = {
+          ...currentSubtasks[subIndex],
+          uploads: updatedUploads,
+        };
+      }
+
+      const res = await fetch("/api/admin/operations/tasks", {
+        method: "PUT",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          id: task.id,
+          sub_tasks: currentSubtasks,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to update status");
+      toast.success("Comment status updated");
       if (onSaved) onSaved();
     } catch (err: any) {
       toast.error(err.message || "Failed to update status");
@@ -1782,18 +1828,6 @@ export function SubTaskUploadDialog({
                             >
                               <History className="w-3.5 h-3.5" />
                             </Button>
-
-                            {/* Edit Item Button */}
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="outline"
-                              onClick={() => handleOpenEditItem(upl)}
-                              className="h-7 w-7 border-border cursor-pointer shrink-0 transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
-                              title="Edit Deliverable / Task"
-                            >
-                              <Edit2 className="w-3.5 h-3.5 text-primary" />
-                            </Button>
                           </div>
                         </div>
 
@@ -1903,7 +1937,7 @@ export function SubTaskUploadDialog({
                                   allAttachedItems.push({ att, comm });
                                 });
                               }
-                              if (comm.comment && comm.comment.trim() && (!comm.attachments || comm.attachments.length === 0)) {
+                              if (comm.comment && comm.comment.trim() && (!comm.attachments || comm.attachments.length === 0) && !comm.reply_to_comment_id) {
                                 textOnlyComments.push(comm);
                               }
                             });
@@ -2006,24 +2040,99 @@ export function SubTaskUploadDialog({
 
                                 {/* Text-only comments / updates */}
                                 {textOnlyComments.length > 0 && (
-                                  <div className="space-y-1.5 pt-1">
+                                  <div className="space-y-2 pt-1">
                                     {textOnlyComments.map((comm) => (
-                                      <div key={comm.id} className="p-2 rounded-lg bg-muted/30 border text-xs space-y-0.5">
+                                      <div key={comm.id} className="p-2.5 rounded-lg bg-muted/30 border text-xs space-y-1.5">
                                         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                                           <span className="font-semibold text-foreground flex items-center gap-1">
                                             <User className="w-2.5 h-2.5 text-primary" />
                                             {comm.user_name} {comm.user_role ? `(${comm.user_role})` : ""}
                                           </span>
-                                          <span>
-                                            {new Date(comm.created_at).toLocaleString("en-IN", {
-                                              day: "numeric",
-                                              month: "short",
-                                              hour: "2-digit",
-                                              minute: "2-digit",
-                                            })}
-                                          </span>
+                                          <div className="flex items-center gap-1.5">
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleToggleCommentCompletion(upl.id, comm.id);
+                                              }}
+                                              className="cursor-pointer hover:scale-110 transition-transform p-0.5 rounded focus:outline-none"
+                                              title={comm.is_completed ? "Completed (click to mark pending)" : "Pending (click to mark completed)"}
+                                            >
+                                              {comm.is_completed ? (
+                                                <div className="w-3.5 h-3.5 rounded bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                                                  <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                                </div>
+                                              ) : (
+                                                <div className="w-3.5 h-3.5 rounded border border-muted-foreground/60 bg-background hover:border-emerald-500 transition-colors" />
+                                              )}
+                                            </button>
+                                            <span>
+                                              {new Date(comm.created_at).toLocaleString("en-IN", {
+                                                day: "numeric",
+                                                month: "short",
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                              })}
+                                            </span>
+                                          </div>
                                         </div>
                                         <p className="text-foreground leading-relaxed pl-3.5 font-medium">{comm.comment}</p>
+
+                                        {/* Quick comment option directly below text comment */}
+                                        <div className="pt-1.5 mt-1 border-t border-border/40">
+                                          <div className="flex items-center gap-1.5">
+                                            <Input
+                                              placeholder={`Comment on ${comm.user_name}'s update...`}
+                                              value={inlineCommentText[comm.id] || ""}
+                                              onChange={(e) => setInlineCommentText((prev) => ({ ...prev, [comm.id]: e.target.value }))}
+                                              onKeyDown={(e) => {
+                                                if (e.key === "Enter" && !e.shiftKey) {
+                                                  e.preventDefault();
+                                                  handlePostInlineComment(upl.id, comm.id, comm.user_name);
+                                                }
+                                              }}
+                                              className="h-6 text-[11px] bg-muted/25 rounded-md flex-1"
+                                            />
+                                            <Button
+                                              type="button"
+                                              size="sm"
+                                              disabled={!(inlineCommentText[comm.id] || "").trim() || postingCommentFor === upl.id}
+                                              onClick={() => handlePostInlineComment(upl.id, comm.id, comm.user_name)}
+                                              className="h-6 text-[11px] px-2 font-bold gap-1 bg-primary hover:bg-primary/90 text-primary-foreground shrink-0 cursor-pointer shadow-2xs"
+                                            >
+                                              <Send className="w-2.5 h-2.5" />
+                                              <span>Comment</span>
+                                            </Button>
+                                          </div>
+                                          {/* Nested replies for this text comment */}
+                                          {Array.isArray(upl.comments) && (() => {
+                                            const replies = upl.comments.filter((r) => r.reply_to_comment_id === comm.id);
+                                            if (replies.length === 0) return null;
+                                            return (
+                                              <div className="mt-1.5 space-y-1 pl-2 border-l-2 border-primary/20">
+                                                {replies.map((reply) => (
+                                                  <div key={reply.id} className="p-1.5 rounded-md bg-muted/40 text-[11px] space-y-0.5">
+                                                    <div className="flex items-center justify-between text-[9px] text-muted-foreground">
+                                                      <span className="font-semibold text-foreground flex items-center gap-1">
+                                                        <User className="w-2 h-2 text-primary" />
+                                                        {reply.user_name}
+                                                      </span>
+                                                      <span>
+                                                        {new Date(reply.created_at).toLocaleString("en-IN", {
+                                                          day: "numeric",
+                                                          month: "short",
+                                                          hour: "2-digit",
+                                                          minute: "2-digit",
+                                                        })}
+                                                      </span>
+                                                    </div>
+                                                    <p className="text-foreground leading-relaxed pl-3 font-medium">{reply.comment}</p>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
                                       </div>
                                     ))}
                                   </div>
@@ -2130,20 +2239,94 @@ export function SubTaskUploadDialog({
                           <User className="w-3 h-3 text-primary" />
                           {comm.user_name} {comm.user_role ? `(${comm.user_role})` : ""}
                         </span>
-                        <span className="font-mono text-[10px]">
-                          {new Date(comm.created_at).toLocaleString("en-IN", {
-                            day: "numeric",
-                            month: "short",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {(!comm.attachments || comm.attachments.length === 0) && (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleCommentCompletion(activeFile.id, comm.id)}
+                              className="cursor-pointer hover:scale-110 transition-transform p-0.5 rounded focus:outline-none"
+                              title={comm.is_completed ? "Completed (click to mark pending)" : "Pending (click to mark completed)"}
+                            >
+                              {comm.is_completed ? (
+                                <div className="w-3.5 h-3.5 rounded bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                                  <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                </div>
+                              ) : (
+                                <div className="w-3.5 h-3.5 rounded border border-muted-foreground/60 bg-background hover:border-emerald-500 transition-colors" />
+                              )}
+                            </button>
+                          )}
+                          <span className="font-mono text-[10px]">
+                            {new Date(comm.created_at).toLocaleString("en-IN", {
+                              day: "numeric",
+                              month: "short",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
                       </div>
 
                       {comm.comment && (
                         <p className="text-xs text-foreground whitespace-pre-wrap leading-relaxed">
                           {comm.comment}
                         </p>
+                      )}
+
+                      {/* Quick comment option directly below text comment */}
+                      {(!comm.attachments || comm.attachments.length === 0) && (
+                        <div className="pt-2 mt-1.5 border-t border-border/40">
+                          <div className="flex items-center gap-1.5">
+                            <Input
+                              placeholder={`Comment on ${comm.user_name}'s comment...`}
+                              value={inlineCommentText[comm.id] || ""}
+                              onChange={(e) => setInlineCommentText((prev) => ({ ...prev, [comm.id]: e.target.value }))}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                  e.preventDefault();
+                                  handlePostInlineComment(activeFile.id, comm.id, comm.user_name);
+                                }
+                              }}
+                              className="h-7 text-xs bg-muted/25 rounded-lg flex-1"
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={!(inlineCommentText[comm.id] || "").trim() || postingCommentFor === activeFile.id}
+                              onClick={() => handlePostInlineComment(activeFile.id, comm.id, comm.user_name)}
+                              className="h-7 text-xs px-2.5 font-bold gap-1 bg-primary hover:bg-primary/90 text-primary-foreground shrink-0 cursor-pointer shadow-2xs"
+                            >
+                              <Send className="w-3 h-3" />
+                              <span>Comment</span>
+                            </Button>
+                          </div>
+                          {/* Inline replies — shown just below this textbox */}
+                          {repliesMap[comm.id] && repliesMap[comm.id].length > 0 && (
+                            <div className="mt-2 space-y-1.5 pl-2 border-l-2 border-primary/20">
+                              {repliesMap[comm.id].map((reply) => (
+                                <div key={reply.id} className="p-2.5 rounded-lg bg-muted/30 border border-border/40 text-xs space-y-1">
+                                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                                    <span className="font-bold text-foreground flex items-center gap-1">
+                                      <User className="w-3 h-3 text-primary" />
+                                      {reply.user_name} {reply.user_role ? `(${reply.user_role})` : ""}
+                                    </span>
+                                    <span className="font-mono text-[9px]">
+                                      {new Date(reply.created_at).toLocaleString("en-IN", {
+                                        day: "numeric",
+                                        month: "short",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </span>
+                                  </div>
+                                  {reply.comment && (
+                                    <p className="text-xs text-foreground whitespace-pre-wrap leading-relaxed">{reply.comment}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       )}
 
                       {/* Attachments inside comment */}
