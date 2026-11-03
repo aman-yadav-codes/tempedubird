@@ -157,21 +157,39 @@ export function SubtaskCard({
   // Effective staff & client options strictly assigned to this project
   const effectiveStaffOptions: Array<{ id: number | string; name: string; role?: string | null }> = [];
   if (staffOptions && staffOptions.length > 0) {
-    effectiveStaffOptions.push(...staffOptions);
+    staffOptions.forEach((s) => {
+      const cleanName = s.name?.includes(",") ? s.name.split(",")[0].trim() : s.name;
+      const cleanRole = s.role && s.role.includes(",") ? s.role.split(",")[0].trim() : s.role;
+      if (!effectiveStaffOptions.some((existing) => String(existing.id) === String(s.id))) {
+        effectiveStaffOptions.push({
+          id: s.id,
+          name: cleanName,
+          role: cleanRole || null,
+        });
+      }
+    });
   } else {
     // Fallback: extract directly from project assigned employees and clients
     if (Array.isArray(task.assigned_employees)) {
       task.assigned_employees.forEach((e: any) => {
         if (e && e.id && !effectiveStaffOptions.some((s) => String(s.id) === String(e.id))) {
-          effectiveStaffOptions.push({ id: e.id, name: e.name || "Staff", role: e.role || null });
+          const rawName = e.name || e.full_name || "Staff";
+          const cleanName = rawName.includes(",") ? rawName.split(",")[0].trim() : rawName;
+          const rawRole = e.role || null;
+          const cleanRole = rawRole && rawRole.includes(",") ? rawRole.split(",")[0].trim() : rawRole;
+          effectiveStaffOptions.push({ id: e.id, name: cleanName, role: cleanRole });
         }
       });
     }
     if (task.assigned_employee_id && !effectiveStaffOptions.some((s) => String(s.id) === String(task.assigned_employee_id))) {
+      const rawName = task.assigned_employee_name || "Staff";
+      const cleanName = rawName.includes(",") ? rawName.split(",")[0].trim() : rawName;
+      const rawRole = task.assigned_employee_role || null;
+      const cleanRole = rawRole && rawRole.includes(",") ? rawRole.split(",")[0].trim() : rawRole;
       effectiveStaffOptions.push({
         id: task.assigned_employee_id,
-        name: task.assigned_employee_name || "Staff",
-        role: task.assigned_employee_role || null,
+        name: cleanName,
+        role: cleanRole,
       });
     }
     if (task.project_leader_id && !effectiveStaffOptions.some((s) => String(s.id) === String(task.project_leader_id))) {
@@ -202,15 +220,19 @@ export function SubtaskCard({
     }
   }
 
-  // Ensure current subtask assignee is preserved in options
+  // Ensure current subtask assignee is preserved in options (avoid adding comma-separated concatenated names)
   if (
     subtask.assigned_employee_id &&
     !effectiveStaffOptions.some((s) => String(s.id) === String(subtask.assigned_employee_id))
   ) {
+    const rawName = subtask.assigned_employee_name || "Assigned Member";
+    const cleanName = rawName.includes(",") ? rawName.split(",")[0].trim() : rawName;
+    const rawRole = subtask.assigned_employee_role || null;
+    const cleanRole = rawRole && rawRole.includes(",") ? rawRole.split(",")[0].trim() : rawRole;
     effectiveStaffOptions.push({
       id: subtask.assigned_employee_id,
-      name: subtask.assigned_employee_name || "Assigned Member",
-      role: subtask.assigned_employee_role || null,
+      name: cleanName,
+      role: cleanRole,
     });
   }
 

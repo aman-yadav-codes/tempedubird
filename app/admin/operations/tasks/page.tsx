@@ -850,22 +850,32 @@ export default function OperationsTasksPage() {
     if (Array.isArray(task.assigned_employees) && task.assigned_employees.length > 0) {
       task.assigned_employees.forEach((emp: any) => {
         if (emp?.id) {
+          const rawName = emp.name || emp.full_name || `Employee #${emp.id}`;
+          const cleanName = rawName.includes(",") ? rawName.split(",")[0].trim() : rawName;
+          const rawRole = emp.role || "Staff Member";
+          const cleanRole = rawRole.includes(",") ? rawRole.split(",")[0].trim() : rawRole;
           optionsMap.set(String(emp.id), {
             id: emp.id,
-            name: emp.name || emp.full_name || `Employee #${emp.id}`,
-            role: emp.role || "Staff Member",
+            name: cleanName,
+            role: cleanRole,
           });
         }
       });
     }
 
-    // 2. Staff: Project primary assigned employee
+    // 2. Staff: Project primary assigned employee (only if not already registered from assigned_employees)
     if (task.assigned_employee_id) {
-      optionsMap.set(String(task.assigned_employee_id), {
-        id: task.assigned_employee_id,
-        name: task.assigned_employee_name || "Assigned Staff",
-        role: task.assigned_employee_role || "Staff Member",
-      });
+      if (!optionsMap.has(String(task.assigned_employee_id))) {
+        const rawName = task.assigned_employee_name || "Assigned Staff";
+        const cleanName = rawName.includes(",") ? rawName.split(",")[0].trim() : rawName;
+        const rawRole = task.assigned_employee_role || "Staff Member";
+        const cleanRole = rawRole.includes(",") ? rawRole.split(",")[0].trim() : rawRole;
+        optionsMap.set(String(task.assigned_employee_id), {
+          id: task.assigned_employee_id,
+          name: cleanName,
+          role: cleanRole,
+        });
+      }
     }
 
     // 3. Staff: Project Leader
