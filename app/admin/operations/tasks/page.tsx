@@ -1011,14 +1011,17 @@ export default function OperationsTasksPage() {
     try {
       const isStaffRoute = Boolean(pathname?.startsWith("/staff"));
       const isStaffContext = isStaffRole || isStaffRoute;
+      const isClient = isClientRole || Boolean(pathname?.startsWith("/client"));
 
       const params = new URLSearchParams();
       if (isPlatformRoute) {
         params.set("institution_id", "none");
-      } else if (orgFilter && orgFilter !== "all") {
-        params.set("institution_id", orgFilter);
-      } else if (effectiveInstId) {
-        params.set("institution_id", String(effectiveInstId));
+      } else if (!isClient) {
+        if (orgFilter && orgFilter !== "all") {
+          params.set("institution_id", orgFilter);
+        } else if (effectiveInstId) {
+          params.set("institution_id", String(effectiveInstId));
+        }
       }
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
       if (urgencyFilter && urgencyFilter !== "all") params.set("urgency", urgencyFilter);
@@ -2122,9 +2125,11 @@ export default function OperationsTasksPage() {
     const isStaffContext = isStaffRole || isStaffRoute;
     const isClient = isClientRole || Boolean(pathname?.startsWith("/client"));
 
-    let pool = (scopeFilter === "assigned_to_me" || isClient)
-      ? tasks.filter((t) => isTaskAssignedToMe(t))
-      : tasks;
+    let pool = isClient
+      ? tasks
+      : scopeFilter === "assigned_to_me"
+        ? tasks.filter((t) => isTaskAssignedToMe(t))
+        : tasks;
 
     if (selectedStatusTab !== "all") {
       pool = pool.filter((t) => {
@@ -2139,20 +2144,23 @@ export default function OperationsTasksPage() {
     }
 
     return pool;
-  }, [tasks, scopeFilter, selectedStatusTab, isTaskAssignedToMe, isStaffRole, pathname]);
+  }, [tasks, scopeFilter, selectedStatusTab, isTaskAssignedToMe, isStaffRole, isClientRole, pathname]);
 
   const myAssignedTasksCount = useMemo(() => {
+    if (isClientRole || Boolean(pathname?.startsWith("/client"))) return tasks.length;
     return tasks.filter((t) => isTaskAssignedToMe(t)).length;
-  }, [tasks, isTaskAssignedToMe]);
+  }, [tasks, isTaskAssignedToMe, isClientRole, pathname]);
 
   // Get task count for tab across subtasks (Image 3)
   const getTabCount = (tabId: string) => {
     const isStaffRoute = Boolean(pathname?.startsWith("/staff"));
     const isStaffContext = isStaffRole || isStaffRoute;
     const isClient = isClientRole || Boolean(pathname?.startsWith("/client"));
-    const pool = (scopeFilter === "assigned_to_me" || isClient)
-      ? tasks.filter((t) => isTaskAssignedToMe(t))
-      : tasks;
+    const pool = isClient
+      ? tasks
+      : scopeFilter === "assigned_to_me"
+        ? tasks.filter((t) => isTaskAssignedToMe(t))
+        : tasks;
 
     let count = 0;
     for (const t of pool) {
@@ -2489,12 +2497,20 @@ export default function OperationsTasksPage() {
               <h3 className="text-lg font-bold text-foreground">
                 No tasks found in &quot;{STATUS_TABS.find((t) => t.id === selectedStatusTab)?.label}&quot;
               </h3>
-              <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                Click &quot;Create Task / Project&quot; to add a new project, then use the Action button to add and assign multiple sub-tasks.
-              </p>
-              <Button onClick={handleOpenCreateTask} size="sm" className="mt-2 font-bold">
-                <Plus className="w-4 h-4 mr-1.5" /> Create Task / Project
-              </Button>
+              {!(isClientRole || Boolean(pathname?.startsWith("/client"))) ? (
+                <>
+                  <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                    Click &quot;Create Task / Project&quot; to add a new project, then use the Action button to add and assign multiple sub-tasks.
+                  </p>
+                  <Button onClick={handleOpenCreateTask} size="sm" className="mt-2 font-bold">
+                    <Plus className="w-4 h-4 mr-1.5" /> Create Task / Project
+                  </Button>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                  Projects and tasks associated with your account will appear right here.
+                </p>
+              )}
             </>
           )}
         </div>

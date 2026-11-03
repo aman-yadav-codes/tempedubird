@@ -184,11 +184,16 @@ export async function GET(req: Request) {
         targetInstId = parsedInstId;
       }
     }
+    const referer = req.headers.get("referer") || "";
+    const isClientRoute = referer.includes("/client/") || referer.endsWith("/client");
+    const isClient = userRole === "client" || user?.role_codes?.includes("client") || (user as any)?.roles?.some((r: any) => String(r).toLowerCase() === "client") || isClientRoute;
+
     const isSelfScope = employeeId === "me" || scope === "me";
     const effectiveEmployeeId = isSelfScope ? (user?.id ? String(user.id) : "") : employeeId;
     // Organization scoping: institution staff only see their tasks, platform admin can see all or specific
     // When isSelfScope is true, user views their own assigned/created tasks across the system
-    if (!isSelfScope) {
+    // Clients must see all projects associated with their client account across the system without institution scoping
+    if (!isSelfScope && !isClient) {
       if (targetInstId && !isPlatform) {
         params.push(targetInstId);
         query += ` AND institution_id = $${params.length}`;
@@ -230,9 +235,6 @@ export async function GET(req: Request) {
       params.push(urgency);
       query += ` AND urgency = $${params.length}`;
     }
-    const referer = req.headers.get("referer") || "";
-    const isClientRoute = referer.includes("/client/") || referer.endsWith("/client");
-    const isClient = userRole === "client" || user?.role_codes?.includes("client") || (user as any)?.roles?.some((r: any) => String(r).toLowerCase() === "client") || isClientRoute;
 
     let allClientIds: number[] = [];
     if (isClient && user) {
@@ -273,6 +275,7 @@ export async function GET(req: Request) {
             OR (lower(COALESCE(elem->>'company_name', '')) = ANY($${clientNamesParam}::text[]))
           )
         )
+        OR (client_name IS NOT NULL AND lower(client_name) = ANY($${clientNamesParam}::text[]))
         OR EXISTS (
           SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) st
           WHERE (
