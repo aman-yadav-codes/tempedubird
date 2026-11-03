@@ -18,9 +18,14 @@ export type AdminPermissionModule = {
   page: string;
 };
 
-export const MANAGED_PLATFORM_ROLE_CODES = ["platform_admin", "accountant", "guest"] as const;
+export const MANAGED_PLATFORM_ROLE_CODES = ["platform_admin", "admin", "accountant", "guest"] as const;
 export const MANAGED_INSTITUTION_ROLE_CODES = [
   "institution_admin",
+  "hr_head",
+  "sales_head",
+  "finance_head",
+  "head_of_operations",
+  "business_operations_manager",
   "director",
   "principal",
   "vice_principal",
@@ -241,6 +246,35 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "admin.vendors", label: "Vendors & Suppliers", description: "manage vendors and suppliers", scope: "institution", page: "/admin/vendors" },
   { key: "admin.team", label: "Internal Admin Team", description: "manage internal admin team members", scope: "institution", page: "/admin/team" },
   { key: "admin.generate", label: "Document & Card Generator", description: "generate student and staff ID cards and documents", scope: "institution", page: "/admin/generate" },
+
+  // Operations modules
+  { key: "operations.work_logs", label: "Daily Work Logs", description: "daily employee work logs and activity history", scope: "institution", page: "/admin/operations/work-logs" },
+  { key: "operations.project_types", label: "Project Types", description: "manage project types and categories", scope: "institution", page: "/admin/operations/project-types" },
+  { key: "operations.project_pipelines", label: "Project Pipelines", description: "manage project pipelines and workflow stages", scope: "institution", page: "/admin/operations/project-pipelines" },
+  { key: "operations.penalty_rules", label: "Penalty Rules", description: "manage task delay penalty and bonus reward rules", scope: "institution", page: "/admin/operations/penalty-rules" },
+
+  // HR & Staff Management modules
+  { key: "managestaff.documents", label: "Staff Documents", description: "staff documents and verification files", scope: "institution", page: "/admin/staff/documents" },
+  { key: "managestaff.leaderboard", label: "Staff Leaderboard", description: "company and staff performance leaderboard", scope: "institution", page: "/admin/performance/leaderboard" },
+
+  // Sales modules
+  { key: "sales.requests", label: "Purchase & Sell Requests", description: "purchase and sell authorization requests", scope: "institution", page: "/admin/finance/requests" },
+  { key: "sales.clients", label: "Sales Clients", description: "client accounts and customer management", scope: "institution", page: "/admin/sales/clients" },
+
+  // Finance modules
+  { key: "finance.performance", label: "Financial Performance", description: "audit profit, loss, gross and net financial performance", scope: "institution", page: "/admin/finance/performance" },
+  { key: "finance.payment_methods", label: "Finance Payment Methods", description: "payment gateways and finance payment methods", scope: "institution", page: "/admin/finance/payment-methods" },
+  { key: "finance.categories", label: "Finance Categories", description: "income, expense, and transaction categories", scope: "institution", page: "/admin/finance/categories" },
+  { key: "finance.transportation_fee", label: "Transportation Fee", description: "transportation fee rules and distance slabs", scope: "institution", page: "/admin/finance/transportation-fee" },
+
+  // Administration & Settings modules
+  { key: "company.faqs", label: "Company FAQs", description: "frequently asked questions management", scope: "institution", page: "/admin/company" },
+  { key: "company.privacy_policy", label: "Privacy Policy", description: "company privacy policy configuration", scope: "institution", page: "/admin/company" },
+  { key: "company.terms_conditions", label: "Terms & Conditions", description: "company terms and conditions configuration", scope: "institution", page: "/admin/company" },
+  { key: "company.copyright_policy", label: "Copyright Policy", description: "copyright policy configuration", scope: "institution", page: "/admin/company" },
+  { key: "company.refund_policy", label: "Refund Policy", description: "refund policy configuration", scope: "institution", page: "/admin/company" },
+  { key: "company.social_links", label: "Social Media Links", description: "company social media profiles and links", scope: "institution", page: "/admin/company" },
+  { key: "settings.performance", label: "Performance Settings", description: "system performance and point evaluation settings", scope: "institution", page: "/admin/settings/performance" },
 ];
 
 export const LEGACY_PERMISSION_MODULE_MAP: Record<string, string> = {
@@ -552,15 +586,22 @@ export function isAdminPathVisibleForRole(
   }
 
   if (normalized === "/admin/operations" || normalized.startsWith("/admin/operations/")) {
-    if (normalized === "/admin/operations/tasks" || normalized === "/admin/operations/work-logs") {
-      return !isStudentUser(user) && !isParentUser(user);
+    if (isStudentUser(user) || isParentUser(user)) return false;
+    if (isPlatformAdminUser(user) || isInstitutionAdminUser(user)) return true;
+    if (
+      normalized === "/admin/operations" ||
+      normalized === "/admin/operations/tasks" ||
+      normalized === "/admin/operations/work-logs"
+    ) {
+      return true;
     }
     return (
-      isPlatformAdminUser(user) ||
-      isInstitutionAdminUser(user) ||
+      hasPermission(user, getPageViewPermission(normalized)) ||
       hasPermission(user, "operations.tasks.manage") ||
       hasPermission(user, "operations.tasks.view_all") ||
-      hasPermission(user, "managestaff.tasks")
+      hasPermission(user, "managestaff.tasks") ||
+      Boolean(user?.role_codes?.includes("head_of_operations")) ||
+      Boolean(user?.role_codes?.includes("business_operations_manager"))
     );
   }
 
@@ -568,8 +609,20 @@ export function isAdminPathVisibleForRole(
     return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || isTeacherUser(user);
   }
 
-  if (normalized === "/admin/generate" || normalized.startsWith("/admin/generate/")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, "admin.generate.view") || hasPermission(user, "admin.generate");
+  if (
+    normalized === "/admin/generate" ||
+    normalized.startsWith("/admin/generate/") ||
+    normalized === "/admin/operations/generate-documents" ||
+    normalized === "/admin/administration/generate-documents" ||
+    normalized === "/admin/sales/generate-documents"
+  ) {
+    return (
+      isPlatformAdminUser(user) ||
+      isInstitutionAdminUser(user) ||
+      hasPermission(user, "admin.generate.view") ||
+      hasPermission(user, "admin.generate") ||
+      Boolean(user?.role_codes?.includes("head_of_operations"))
+    );
   }
 
   if (
@@ -580,18 +633,13 @@ export function isAdminPathVisibleForRole(
     normalized === "/admin/master-data/attendance-setup" ||
     normalized.startsWith("/admin/master-data/attendance-setup")
   ) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
-  }
-
-  if (
-    normalized === "/admin/master-data/institute-calendar" ||
-    normalized.startsWith("/admin/master-data/institute-calendar") ||
-    normalized === "/admin/master-data/timetable-setup" ||
-    normalized.startsWith("/admin/master-data/timetable-setup") ||
-    normalized === "/admin/master-data/attendance-setup" ||
-    normalized.startsWith("/admin/master-data/attendance-setup")
-  ) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    return (
+      isPlatformAdminUser(user) ||
+      isInstitutionAdminUser(user) ||
+      hasPermission(user, getPageViewPermission(normalized)) ||
+      Boolean(user?.role_codes?.includes("head_of_operations")) ||
+      Boolean(user?.role_codes?.includes("business_operations_manager"))
+    );
   }
 
   if (normalized === "/admin/master-data" || normalized.startsWith("/admin/master-data")) {
@@ -621,18 +669,15 @@ export function isPlatformOnlyPermission(permission: string) {
 
 export function isPermissionAssignableToRole(permission: string, roleCode?: string | null, roleScope?: string | null) {
   if (permission === FULL_ACCESS_PERMISSION) {
-    return roleCode === "platform_admin";
+    return roleCode === "platform_admin" || roleCode === "admin";
   }
 
   const permissionModule = getPermissionModule(permission);
   if (!permissionModule) return false;
 
-  if (permissionModule.scope === "platform") {
-    return roleCode === "platform_admin" || roleScope === "platform";
-  }
-
-  if (permissionModule.key.startsWith("finance.platform.")) {
-    return roleCode === "platform_admin" || roleScope === "platform";
+  if (permissionModule.scope === "platform" || permissionModule.key.startsWith("finance.platform.")) {
+    if (roleCode === "student" || roleCode === "parent" || roleCode === "driver") return false;
+    return true;
   }
 
   const roleOwnedPrefix = permissionModule.key.split(".")[0];
@@ -660,6 +705,18 @@ export function isPermissionAssignableToRole(permission: string, roleCode?: stri
   if (roleCode === "teacher") {
     if (roleOwnedPrefix === "teacher") {
       return permissionModule.key.endsWith(".complaints") || permission.endsWith(".view");
+    }
+    if (
+      permission === "managestaff.tasks.create" ||
+      permission === "managestaff.tasks.view" ||
+      permission === "managestaff.tasks.edit" ||
+      permission === "operations.work_logs.view" ||
+      permission === "operations.project_types.view" ||
+      permission === "operations.project_pipelines.view" ||
+      permission === "admin.generate.view" ||
+      permission === "operations.penalty_rules.view"
+    ) {
+      return true;
     }
     return (
       permissionModule.key.startsWith("managestudents.") ||
@@ -878,8 +935,6 @@ export function hasPermission(
 
   const platformPermissions = new Set(user.permissions ?? []);
   if (permissionSetAllows(platformPermissions, permission)) return true;
-
-  if (!isInstitutionScopedPermission(permission)) return false;
 
   if (isInstitutionAdminUser(user)) {
     if (target.institutionId) {
@@ -1312,28 +1367,35 @@ export function hasAdminPagePermission(
     if (normalized === "/admin/staff") {
       return true;
     }
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized));
   }
 
   if (normalized === "/admin/operations" || normalized.startsWith("/admin/operations")) {
-    if (normalized === "/admin/operations/tasks" || normalized === "/admin/operations/work-logs") {
-      return !isStudentUser(user) && !isParentUser(user);
+    if (isStudentUser(user) || isParentUser(user)) return false;
+    if (isPlatformAdminUser(user) || isInstitutionAdminUser(user)) return true;
+    if (
+      normalized === "/admin/operations" ||
+      normalized === "/admin/operations/tasks" ||
+      normalized === "/admin/operations/work-logs"
+    ) {
+      return true;
     }
     return (
-      isPlatformAdminUser(user) ||
-      isInstitutionAdminUser(user) ||
+      hasPermission(user, getPageViewPermission(normalized)) ||
       hasPermission(user, "operations.tasks.manage") ||
       hasPermission(user, "operations.tasks.view_all") ||
-      hasPermission(user, "managestaff.tasks")
+      hasPermission(user, "managestaff.tasks") ||
+      Boolean(user?.role_codes?.includes("head_of_operations")) ||
+      Boolean(user?.role_codes?.includes("business_operations_manager"))
     );
   }
 
   if (normalized === "/admin/company" || normalized.startsWith("/admin/company")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized));
   }
 
   if (normalized === "/admin/analytics" || normalized.startsWith("/admin/analytics")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized));
   }
 
   if (normalized === "/admin/content" || normalized.startsWith("/admin/content")) {
@@ -1341,11 +1403,11 @@ export function hasAdminPagePermission(
   }
 
   if (normalized === "/admin/marketing" || normalized.startsWith("/admin/marketing")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized));
   }
 
   if (normalized === "/admin/sales" || normalized.startsWith("/admin/sales")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized));
   }
 
   if (normalized === "/admin/finance/allowance") {
@@ -1361,11 +1423,24 @@ export function hasAdminPagePermission(
 
   if (normalized === "/admin/finance" || normalized.startsWith("/admin/finance/")) {
     if (isPlatformAdminUser(user) || isInstitutionAdminUser(user)) return true;
-    if (normalized === "/admin/finance/income") return hasPermission(user, "finance.platform.income.view");
-    if (normalized === "/admin/finance/expense") return hasPermission(user, "finance.platform.expense.view");
-    if (normalized === "/admin/finance/invoice") return hasPermission(user, "finance.platform.invoice.view");
-    if (normalized === "/admin/finance/recurring-expenses") return hasPermission(user, "finance.platform.recurring_expenses.view");
-    return false;
+    if (normalized === "/admin/finance/income") {
+      return hasPermission(user, "finance.platform.income.view") || hasPermission(user, "finance.income.view");
+    }
+    if (normalized === "/admin/finance/expense") {
+      return hasPermission(user, "finance.platform.expense.view") || hasPermission(user, "finance.expense.view");
+    }
+    if (normalized === "/admin/finance/invoice") {
+      return hasPermission(user, "finance.platform.invoice.view") || hasPermission(user, "finance.invoice.view");
+    }
+    if (normalized === "/admin/finance/recurring-expenses") {
+      return hasPermission(user, "finance.platform.recurring_expenses.view") || hasPermission(user, "finance.recurring_expenses.view");
+    }
+    return (
+      hasPermission(user, getPageViewPermission(normalized)) ||
+      Boolean(user?.role_codes?.includes("head_of_operations")) ||
+      Boolean(user?.role_codes?.includes("finance_head")) ||
+      Boolean(user?.role_codes?.includes("business_operations_manager"))
+    );
   }
 
   if (normalized === "/admin") {
@@ -1385,7 +1460,13 @@ export function hasAdminPagePermission(
     normalized === "/admin/master-data/attendance-setup" ||
     normalized.startsWith("/admin/master-data/attendance-setup")
   ) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+    return (
+      isPlatformAdminUser(user) ||
+      isInstitutionAdminUser(user) ||
+      hasPermission(user, getPageViewPermission(normalized)) ||
+      Boolean(user?.role_codes?.includes("head_of_operations")) ||
+      Boolean(user?.role_codes?.includes("business_operations_manager"))
+    );
   }
 
   if (normalized === "/admin/master-data" || normalized.startsWith("/admin/master-data")) {

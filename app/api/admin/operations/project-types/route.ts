@@ -10,7 +10,13 @@ function canManageProjectTypes(user: any): boolean {
   return (
     hasPermission(user, "operations.tasks.manage") ||
     hasPermission(user, "operations.tasks.view_all") ||
-    hasPermission(user, "managestaff.tasks")
+    hasPermission(user, "managestaff.tasks") ||
+    hasPermission(user, "operations.project_types.view") ||
+    hasPermission(user, "operations.project_types.create") ||
+    hasPermission(user, "operations.project_types.edit") ||
+    hasPermission(user, "operations.project_types.delete") ||
+    Boolean(user?.role_codes?.includes("head_of_operations")) ||
+    Boolean(user?.role_codes?.includes("business_operations_manager"))
   );
 }
 

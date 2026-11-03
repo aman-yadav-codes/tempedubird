@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useAuthStore } from "@/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -72,6 +73,46 @@ export function SubtaskCard({
   const [priceInput, setPriceInput] = useState<string>(
     subtask.price !== undefined ? String(subtask.price) : "0"
   );
+
+  const currentUser = useAuthStore((state) => state.user);
+
+  const isLeader = useMemo(() => {
+    if (!currentUser) return false;
+    const roleCodes: string[] = Array.isArray((currentUser as any)?.role_codes)
+      ? (currentUser as any).role_codes
+      : [(currentUser as any)?.role || (currentUser as any)?.primary_role || ""].filter(Boolean);
+    const hasLeaderRole = roleCodes.some((r) =>
+      ["leader", "project_leader", "team_leader", "head_of_operations"].includes(String(r).toLowerCase())
+    );
+    if (hasLeaderRole) return true;
+
+    if (!task) return false;
+    const uid = String(currentUser.id);
+    const leaderId = task.project_leader_id ? String(task.project_leader_id) : null;
+    const leaderName = task.project_leader_name?.toLowerCase().trim();
+    const leaderEmail = task.project_leader_email?.toLowerCase().trim();
+    const uName = ((currentUser as any).full_name || (currentUser as any).name || "").toLowerCase().trim();
+    const uEmail = (currentUser.email || "").toLowerCase().trim();
+    return Boolean(
+      (leaderId && leaderId === uid) ||
+      (leaderName && uName && leaderName === uName) ||
+      (leaderEmail && uEmail && leaderEmail === uEmail)
+    );
+  }, [currentUser, task]);
+
+  const isPlatformAdmin = useMemo(() => {
+    if (!currentUser) return false;
+    const roleCodes: string[] = Array.isArray((currentUser as any)?.role_codes)
+      ? (currentUser as any).role_codes
+      : [(currentUser as any)?.role || (currentUser as any)?.primary_role || ""].filter(Boolean);
+    return roleCodes.some((r) =>
+      ["platform_admin", "superadmin", "super_admin", "admin", "platformadmin", "institution_admin", "head_of_operations"].includes(
+        String(r).toLowerCase()
+      )
+    );
+  }, [currentUser]);
+
+  const canSeePrice = isPlatformAdmin || isLeader;
 
   useEffect(() => {
     setPriceInput(subtask.price !== undefined ? String(subtask.price) : "0");
@@ -358,26 +399,28 @@ export function SubtaskCard({
 
       {/* ================= Line 2: Price, Cadence, Priority, Points, Assignee & Duration ================= */}
       <div className="flex items-center gap-2 flex-wrap text-[11px]">
-        {/* Directly Editable Price */}
-        <div
-          className="inline-flex items-center rounded-lg border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 text-xs font-bold text-rose-700 dark:text-rose-300 shadow-2xs shrink-0"
-          title="Directly edit subtask price and press Enter or blur to save"
-        >
-          <span className="mr-0.5 font-bold">₹</span>
-          <input
-            type="number"
-            min="0"
-            value={priceInput}
-            onChange={(e) => setPriceInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                (e.target as HTMLInputElement).blur();
-              }
-            }}
-            onBlur={handlePriceBlur}
-            className="w-14 bg-transparent font-mono outline-none text-rose-700 dark:text-rose-300 font-bold text-xs"
-          />
-        </div>
+        {/* Directly Editable Price - only visible to Leader or Platform Admin */}
+        {canSeePrice && (
+          <div
+            className="inline-flex items-center rounded-lg border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 text-xs font-bold text-rose-700 dark:text-rose-300 shadow-2xs shrink-0"
+            title="Directly edit subtask price and press Enter or blur to save"
+          >
+            <span className="mr-0.5 font-bold">₹</span>
+            <input
+              type="number"
+              min="0"
+              value={priceInput}
+              onChange={(e) => setPriceInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              onBlur={handlePriceBlur}
+              className="w-14 bg-transparent font-mono outline-none text-rose-700 dark:text-rose-300 font-bold text-xs"
+            />
+          </div>
+        )}
 
         {/* Directly Editable Cadence Dropdown Badge */}
         <select

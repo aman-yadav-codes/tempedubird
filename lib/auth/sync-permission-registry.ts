@@ -19,12 +19,18 @@ const SYNC_INTERVAL_MS = 10 * 60_000;
 
 export const MANAGED_PLATFORM_ROLE_NAMES: Record<string, string> = {
   platform_admin: "Platform Admin",
+  admin: "Administrator",
   accountant: "Accountant",
   guest: "Guest",
 };
 
 export const MANAGED_INSTITUTION_ROLE_NAMES: Record<string, string> = {
   institution_admin: "Institution Admin",
+  hr_head: "HR Head",
+  sales_head: "Sales Head",
+  finance_head: "Finance Head",
+  head_of_operations: "Head of Operations",
+  business_operations_manager: "Business Operations Manager",
   director: "Director",
   principal: "Principal",
   vice_principal: "Vice Principal",
@@ -288,33 +294,7 @@ async function runPermissionRegistrySync(db: Queryable) {
     (code) => !isPlatformOnlyPermission(code)
   );
 
-  // Platform roles must not have institution-only permissions
-  await db.query(
-    `
-      DELETE FROM role_permissions rp
-      USING roles r, scope_types st, permissions p
-      WHERE rp.role_id = r.id
-        AND r.scope_id = st.id
-        AND rp.permission_id = p.id
-        AND st.code = 'platform'
-        AND p.code = ANY($1::text[])
-    `,
-    [institutionOnlyPermissionCodes]
-  );
-
-  // Institution roles must not have platform-only permissions
-  await db.query(
-    `
-      DELETE FROM role_permissions rp
-      USING roles r, scope_types st, permissions p
-      WHERE rp.role_id = r.id
-        AND r.scope_id = st.id
-        AND rp.permission_id = p.id
-        AND st.code = 'institution'
-        AND p.code = ANY($1::text[])
-    `,
-    [platformOnlyPermissionCodes]
-  );
+  // Note: All roles are now unified across platform and institution (no scope partitioning)
 
   // Clean personal role namespaces (student.*, parent.*, driver.myinstitution.*) from wrong roles
   await db.query(`
@@ -355,6 +335,141 @@ async function runPermissionRegistrySync(db: Queryable) {
     roleCodes: string[];
     permissionFilter: (code: string) => boolean;
   }> = [
+    // --- Administrator (All existing and newly added permissions) ---
+    {
+      roleCodes: ["admin"],
+      permissionFilter: () => true,
+    },
+
+    // --- Head of Operations (Full CRUD for all Operations, Finance, and Administration modules) ---
+    {
+      roleCodes: ["head_of_operations"],
+      permissionFilter: (code) =>
+        code === "dashboard.view" ||
+        code.startsWith("managestaff.tasks.") ||
+        code.startsWith("operations.") ||
+        code.startsWith("admin.generate.") ||
+        code.startsWith("finance.") ||
+        code.startsWith("sales.requests.") ||
+        code.startsWith("admin.vendors.") ||
+        code.startsWith("admin.inventory.") ||
+        code.startsWith("admin.team.") ||
+        code.startsWith("company.") ||
+        code.startsWith("settings.") ||
+        code.startsWith("notifications.") ||
+        code.startsWith("support.") ||
+        code.startsWith("institution.general_settings.") ||
+        code.startsWith("institution.ai_settings.") ||
+        code.startsWith("institution.noticeboard.") ||
+        code.startsWith("institution.calendar.") ||
+        code.startsWith("institution.complaints.") ||
+        code.startsWith("rolespermissions."),
+    },
+
+    // --- HR Head (Full CRUD for all HR & staff management modules) ---
+    {
+      roleCodes: ["hr_head"],
+      permissionFilter: (code) =>
+        code === "dashboard.view" ||
+        code.startsWith("managestaff.documents.") ||
+        code.startsWith("managestaff.letters.") ||
+        code.startsWith("managestaff.offer_letters.") ||
+        code.startsWith("managestaff.experience_letters.") ||
+        code.startsWith("managestaff.certificates.") ||
+        code.startsWith("institution.complaints.") ||
+        code.startsWith("managestaff.allstaff.") ||
+        code.startsWith("managestaff.performance.") ||
+        code.startsWith("managestaff.leaderboard.") ||
+        code.startsWith("managestaff.attendance.") ||
+        code.startsWith("managestaff.queries.") ||
+        code.startsWith("managestaff.jobs.") ||
+        code.startsWith("managestaff.applicants.") ||
+        code.startsWith("managestaff.salary.") ||
+        code.startsWith("managestaff.salary_slips.") ||
+        code.startsWith("managestaff.holidays.") ||
+        code.startsWith("notifications.inbox."),
+    },
+
+    // --- Sales Head (Full CRUD for all Sales modules) ---
+    {
+      roleCodes: ["sales_head"],
+      permissionFilter: (code) =>
+        code === "dashboard.view" ||
+        code.startsWith("sales.requests.") ||
+        code.startsWith("sales.pipeline.") ||
+        code.startsWith("sales.proposals.") ||
+        code.startsWith("sales.clients.") ||
+        code.startsWith("sales.enquiries.") ||
+        code.startsWith("sales.leads.") ||
+        code.startsWith("sales.enrollments.") ||
+        code.startsWith("sales.orders.") ||
+        code.startsWith("sales.commissions.") ||
+        code.startsWith("notifications.inbox."),
+    },
+
+    // --- Finance Head (Full CRUD for all Finance modules) ---
+    {
+      roleCodes: ["finance_head"],
+      permissionFilter: (code) =>
+        code === "dashboard.view" ||
+        code.startsWith("finance.income.") ||
+        code.startsWith("finance.expense.") ||
+        code.startsWith("finance.invoice.") ||
+        code.startsWith("finance.allowance.") ||
+        code.startsWith("finance.recurring_expenses.") ||
+        code.startsWith("finance.performance.") ||
+        code.startsWith("finance.payment_methods.") ||
+        code.startsWith("company.payment_methods.") ||
+        code.startsWith("finance.categories.") ||
+        code.startsWith("finance.transportation_fee.") ||
+        code.startsWith("finance.platform.") ||
+        code.startsWith("settings.payments.") ||
+        code.startsWith("notifications.inbox."),
+    },
+
+    // --- Business Operations Manager (Combined permissions of HR Head, Sales Head, Finance Head, Administrator) ---
+    {
+      roleCodes: ["business_operations_manager"],
+      permissionFilter: (code) =>
+        !isPlatformOnlyPermission(code),
+    },
+
+    // --- Special Operations Permissions for All Employees / General Staff ---
+    {
+      roleCodes: [
+        "teacher",
+        "administrative_staff",
+        "faculty",
+        "tutor",
+        "teaching_assistant",
+        "doubt_expert",
+        "counselor",
+        "admission_counselor",
+        "telecaller",
+        "marketing_executive",
+        "institution_accountant",
+        "fee_collector",
+        "exam_controller",
+        "curriculum_developer",
+        "librarian",
+        "lab_assistant",
+        "it_support",
+        "placement_officer",
+        "hostel_warden",
+        "transport_coordinator",
+        "sports_coach",
+      ],
+      permissionFilter: (code) =>
+        code === "managestaff.tasks.create" ||
+        code === "managestaff.tasks.view" ||
+        code === "managestaff.tasks.edit" ||
+        code === "operations.work_logs.view" ||
+        code === "operations.project_types.view" ||
+        code === "operations.project_pipelines.view" ||
+        code === "admin.generate.view" ||
+        code === "operations.penalty_rules.view",
+    },
+
     // --- Full Institution Admin ---
     {
       roleCodes: ["institution_admin"],
@@ -371,7 +486,6 @@ async function runPermissionRegistrySync(db: Queryable) {
     // --- Leadership & Executive Roles (Director, Principal, Vice Principal, Dean, Center Head, Branch Manager, Academic Coordinator) ---
     {
       roleCodes: [
-        "admin",
         "owner",
         "director",
         "principal",

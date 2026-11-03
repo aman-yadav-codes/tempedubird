@@ -317,11 +317,56 @@ export default function OperationsTasksPage() {
     return isStaffRole || Boolean(pathname?.startsWith("/staff"));
   }, [isStaffRole, pathname]);
 
-  const formatPriceDisplay = useCallback((price: number | string | null | undefined) => {
-    if (isStaffViewer) return "★★★★★";
+  const canUserSeeTaskPrice = useCallback((taskItem?: any | null) => {
+    if (!user) return false;
+    const roleCodes: string[] = Array.isArray((user as any)?.role_codes)
+      ? (user as any).role_codes
+      : [(user as any)?.role || (user as any)?.primary_role || ""].filter(Boolean);
+    const isOwnerOrAdmin = roleCodes.some((r: string) =>
+      [
+        "platform_admin",
+        "super_admin",
+        "superadmin",
+        "institution_admin",
+        "school_owner",
+        "college_owner",
+        "university_owner",
+        "admin",
+        "platformadmin",
+        "head_of_operations",
+      ].includes(String(r).toLowerCase())
+    );
+    if (isOwnerOrAdmin) return true;
+
+    const isLeaderRole = roleCodes.some((r: string) =>
+      ["leader", "project_leader", "team_leader", "head_of_operations"].includes(String(r).toLowerCase())
+    );
+    if (isLeaderRole) return true;
+
+    if (!taskItem) return false;
+    const uid = String(user.id);
+    const leaderId = taskItem.project_leader_id ? String(taskItem.project_leader_id) : null;
+    const leaderName = taskItem.project_leader_name?.toLowerCase().trim();
+    const leaderEmail = taskItem.project_leader_email?.toLowerCase().trim();
+    const uName = ((user as any).full_name || (user as any).name || "").toLowerCase().trim();
+    const uEmail = (user.email || "").toLowerCase().trim();
+    return Boolean(
+      (leaderId && leaderId === uid) ||
+      (leaderName && uName && leaderName === uName) ||
+      (leaderEmail && uEmail && leaderEmail === uEmail)
+    );
+  }, [user]);
+
+  const formatPriceDisplay = useCallback((price: number | string | null | undefined, taskItem?: any) => {
+    if (price === null || price === undefined) return "★★★★★";
+    if (taskItem) {
+      if (!canUserSeeTaskPrice(taskItem)) return "★★★★★";
+    } else {
+      if (!canUserSeeTaskPrice(null)) return "★★★★★";
+    }
     const num = typeof price === "number" ? price : parseFloat(String(price || 0));
     return `₹${num.toLocaleString("en-IN")}`;
-  }, [isStaffViewer]);
+  }, [canUserSeeTaskPrice]);
 
   const formatDateDisplay = useCallback((dateStr?: string | null) => {
     if (!dateStr) return null;
@@ -334,7 +379,7 @@ export default function OperationsTasksPage() {
     }
   }, []);
 
-  const initialScope = searchParams.get("scope") === "me" || isStaffRole ? "assigned_to_me" : "all";
+  const initialScope = searchParams.get("scope") === "me" ? "assigned_to_me" : "all";
   const [scopeFilter, setScopeFilter] = useState<"all" | "assigned_to_me">(initialScope);
 
   const uniqueStaffList = useMemo(() => {
@@ -702,15 +747,25 @@ export default function OperationsTasksPage() {
 
   const dialogStaffList = useMemo(() => {
     const list = modalOrgStaffList.length > 0
-      ? modalOrgStaffList
-      : staffList;
+      ? [...modalOrgStaffList]
+      : [...staffList];
+    if (user?.id && !list.some((s) => s.id === user.id)) {
+      list.push({
+        id: user.id,
+        name: (user as any)?.full_name || (user as any)?.name || user.email || "Staff Member",
+        email: user.email,
+        phone: (user as any)?.phone || null,
+        role: (user as any)?.role_name || (user as any)?.role || "Staff Member",
+        role_code: (user as any)?.role_code || "staff",
+      });
+    }
     const seen = new Set<number>();
     return list.filter((s) => {
       if (!s.id || seen.has(s.id)) return false;
       seen.add(s.id);
       return true;
     });
-  }, [modalOrgStaffList, staffList]);
+  }, [modalOrgStaffList, staffList, user]);
 
   const addClientUrl = useMemo(() => {
     if (pathname?.startsWith("/platformadmin")) return "/platformadmin/sales/clients";
@@ -956,21 +1011,24 @@ export default function OperationsTasksPage() {
     try {
       const isStaffRoute = Boolean(pathname?.startsWith("/staff"));
       const isStaffContext = isStaffRole || isStaffRoute;
+      const isClient = isClientRole || Boolean(pathname?.startsWith("/client"));
 
       const params = new URLSearchParams();
       if (isPlatformRoute) {
         params.set("institution_id", "none");
-      } else if (orgFilter && orgFilter !== "all") {
-        params.set("institution_id", orgFilter);
-      } else if (effectiveInstId) {
-        params.set("institution_id", String(effectiveInstId));
+      } else if (!isClient) {
+        if (orgFilter && orgFilter !== "all") {
+          params.set("institution_id", orgFilter);
+        } else if (effectiveInstId) {
+          params.set("institution_id", String(effectiveInstId));
+        }
       }
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
       if (urgencyFilter && urgencyFilter !== "all") params.set("urgency", urgencyFilter);
       if (clientFilter && clientFilter !== "all") params.set("client_id", clientFilter);
       if (staffFilter && staffFilter !== "all") {
         params.set("employee_id", staffFilter);
-      } else if (isStaffContext || scopeFilter === "assigned_to_me") {
+      } else if (scopeFilter === "assigned_to_me") {
         params.set("employee_id", "me");
       }
 
@@ -1037,11 +1095,12 @@ export default function OperationsTasksPage() {
   const handleOpenCreateTask = () => {
     setEditingTask(null);
     setFormTitle("");
+    const userInstId = (user as any)?.institution_id || (user as any)?.memberships?.[0]?.institution_id || activeInstitutionId || (institutions[0]?.id ? String(institutions[0].id) : "1");
     const initialInstId = isPlatformRoute
       ? "none"
       : ((orgFilter && orgFilter !== "all" && orgFilter !== "none")
         ? orgFilter
-        : (activeInstitutionId ? String(activeInstitutionId) : (institutions[0]?.id ? String(institutions[0].id) : "none")));
+        : (userInstId ? String(userInstId) : "1"));
     setFormInstitutionId(initialInstId);
     void fetchStaffForModal(initialInstId);
     setFormClientId("none");
@@ -1085,9 +1144,10 @@ export default function OperationsTasksPage() {
   const handleOpenEditTask = (t: OperationTask) => {
     setEditingTask(t);
     setFormTitle(t.title || "");
+    const userInstId = (user as any)?.institution_id || (user as any)?.memberships?.[0]?.institution_id || activeInstitutionId || (institutions[0]?.id ? String(institutions[0].id) : "1");
     const initialInstId = isPlatformRoute
       ? "none"
-      : (t.institution_id ? String(t.institution_id) : (activeInstitutionId ? String(activeInstitutionId) : "none"));
+      : (t.institution_id ? String(t.institution_id) : (userInstId ? String(userInstId) : "1"));
     setFormInstitutionId(initialInstId);
     void fetchStaffForModal(initialInstId);
     setFormClientId(t.client_id ? String(t.client_id) : "none");
@@ -1965,7 +2025,34 @@ export default function OperationsTasksPage() {
   const isTaskDirectlyAssignedToMe = useCallback(
     (task: OperationTask) => {
       if (!user?.id) return false;
-      if (isClientRole) return true;
+      if (isClientRole) {
+        const currentUserId = Number(user.id);
+        const currentUserEmail = (user.email || "").toLowerCase().trim();
+        const currentUserName = ((user as any).full_name || (user as any).name || "").toLowerCase().trim();
+        if (task.created_by && Number(task.created_by) === currentUserId) return true;
+        if (task.client_id && Number(task.client_id) === currentUserId) return true;
+        if (task.client_name && currentUserName && task.client_name.toLowerCase().trim() === currentUserName) return true;
+        if (Array.isArray(task.assigned_clients)) {
+          const clientMatch = task.assigned_clients.some(
+            (c: any) =>
+              (c.id && Number(c.id) === currentUserId) ||
+              (c.user_id && Number(c.user_id) === currentUserId) ||
+              (currentUserEmail && c.email && c.email.toLowerCase().trim() === currentUserEmail) ||
+              (currentUserName && c.name && c.name.toLowerCase().trim() === currentUserName) ||
+              (currentUserName && c.company_name && c.company_name.toLowerCase().trim() === currentUserName)
+          );
+          if (clientMatch) return true;
+        }
+        if (Array.isArray(task.sub_tasks)) {
+          const subMatch = task.sub_tasks.some(
+            (st: any) =>
+              (st.client_id && Number(st.client_id) === currentUserId) ||
+              (Array.isArray(st.uploads) && st.uploads.some((up: any) => up.uploaded_by_id && Number(up.uploaded_by_id) === currentUserId))
+          );
+          if (subMatch) return true;
+        }
+        return false;
+      }
 
       const currentUserId = Number(user.id);
       const currentUserEmail = (user.email || "").toLowerCase().trim();
@@ -2036,10 +2123,13 @@ export default function OperationsTasksPage() {
   const displayedTasks = useMemo(() => {
     const isStaffRoute = Boolean(pathname?.startsWith("/staff"));
     const isStaffContext = isStaffRole || isStaffRoute;
+    const isClient = isClientRole || Boolean(pathname?.startsWith("/client"));
 
-    let pool = (scopeFilter === "assigned_to_me" || isStaffContext)
-      ? tasks.filter((t) => isTaskAssignedToMe(t))
-      : tasks;
+    let pool = isClient
+      ? tasks
+      : scopeFilter === "assigned_to_me"
+        ? tasks.filter((t) => isTaskAssignedToMe(t))
+        : tasks;
 
     if (selectedStatusTab !== "all") {
       pool = pool.filter((t) => {
@@ -2054,19 +2144,23 @@ export default function OperationsTasksPage() {
     }
 
     return pool;
-  }, [tasks, scopeFilter, selectedStatusTab, isTaskAssignedToMe, isStaffRole, pathname]);
+  }, [tasks, scopeFilter, selectedStatusTab, isTaskAssignedToMe, isStaffRole, isClientRole, pathname]);
 
   const myAssignedTasksCount = useMemo(() => {
+    if (isClientRole || Boolean(pathname?.startsWith("/client"))) return tasks.length;
     return tasks.filter((t) => isTaskAssignedToMe(t)).length;
-  }, [tasks, isTaskAssignedToMe]);
+  }, [tasks, isTaskAssignedToMe, isClientRole, pathname]);
 
   // Get task count for tab across subtasks (Image 3)
   const getTabCount = (tabId: string) => {
     const isStaffRoute = Boolean(pathname?.startsWith("/staff"));
     const isStaffContext = isStaffRole || isStaffRoute;
-    const pool = (scopeFilter === "assigned_to_me" || isStaffContext)
-      ? tasks.filter((t) => isTaskAssignedToMe(t))
-      : tasks;
+    const isClient = isClientRole || Boolean(pathname?.startsWith("/client"));
+    const pool = isClient
+      ? tasks
+      : scopeFilter === "assigned_to_me"
+        ? tasks.filter((t) => isTaskAssignedToMe(t))
+        : tasks;
 
     let count = 0;
     for (const t of pool) {
@@ -2162,46 +2256,35 @@ export default function OperationsTasksPage() {
       {!isInstitutionAdmin && !(isClientRole || Boolean(pathname?.startsWith("/client"))) && (
         <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-card rounded-2xl border shadow-xs">
           <div className="flex items-center gap-2">
-            {!(isStaffRole || pathname?.startsWith("/staff")) ? (
-              <>
-                <Button
-                  size="sm"
-                  variant={scopeFilter === "all" ? "default" : "outline"}
-                  onClick={() => setScopeFilter("all")}
-                  className="h-8 text-xs font-bold gap-1.5"
-                >
-                  <ClipboardList className="w-3.5 h-3.5" /> All Tasks
-                  <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
-                    {tasks.length}
-                  </Badge>
-                </Button>
+            <Button
+              size="sm"
+              variant={scopeFilter === "all" ? "default" : "outline"}
+              onClick={() => setScopeFilter("all")}
+              className="h-8 text-xs font-bold gap-1.5"
+            >
+              <ClipboardList className="w-3.5 h-3.5" /> All Tasks
+              <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
+                {tasks.length}
+              </Badge>
+            </Button>
 
-                <Button
-                  size="sm"
-                  variant={scopeFilter === "assigned_to_me" ? "default" : "outline"}
-                  onClick={() => setScopeFilter("assigned_to_me")}
-                  className={`h-8 text-xs font-bold gap-1.5 ${scopeFilter === "assigned_to_me"
-                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                    : "border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10"
-                    }`}
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Assigned to Me
-                  <Badge
-                    className={`ml-1 text-[10px] px-1.5 py-0 ${scopeFilter === "assigned_to_me" ? "bg-white text-emerald-800" : "bg-emerald-600 text-white"
-                      }`}
-                  >
-                    {myAssignedTasksCount}
-                  </Badge>
-                </Button>
-              </>
-            ) : (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-700 dark:text-emerald-300 text-xs font-bold">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" /> My Tasks (Assigned to You or Created by You)
-                <Badge className="bg-emerald-600 text-white text-[10px] px-1.5 py-0">
-                  {displayedTasks.length}
-                </Badge>
-              </div>
-            )}
+            <Button
+              size="sm"
+              variant={scopeFilter === "assigned_to_me" ? "default" : "outline"}
+              onClick={() => setScopeFilter("assigned_to_me")}
+              className={`h-8 text-xs font-bold gap-1.5 ${scopeFilter === "assigned_to_me"
+                ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                : "border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10"
+                }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Assigned to Me
+              <Badge
+                className={`ml-1 text-[10px] px-1.5 py-0 ${scopeFilter === "assigned_to_me" ? "bg-white text-emerald-800" : "bg-emerald-600 text-white"
+                  }`}
+              >
+                {myAssignedTasksCount}
+              </Badge>
+            </Button>
           </div>
 
           {user?.full_name && (
@@ -2355,7 +2438,7 @@ export default function OperationsTasksPage() {
         </div>
 
         {/* Client Filter */}
-        {!isInstitutionAdmin && (
+        {!isInstitutionAdmin && !(isClientRole || Boolean(pathname?.startsWith("/client"))) && (
           <div className="w-full sm:w-44">
             <select
               value={clientFilter}
@@ -2414,12 +2497,20 @@ export default function OperationsTasksPage() {
               <h3 className="text-lg font-bold text-foreground">
                 No tasks found in &quot;{STATUS_TABS.find((t) => t.id === selectedStatusTab)?.label}&quot;
               </h3>
-              <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                Click &quot;Create Task / Project&quot; to add a new project, then use the Action button to add and assign multiple sub-tasks.
-              </p>
-              <Button onClick={handleOpenCreateTask} size="sm" className="mt-2 font-bold">
-                <Plus className="w-4 h-4 mr-1.5" /> Create Task / Project
-              </Button>
+              {!(isClientRole || Boolean(pathname?.startsWith("/client"))) ? (
+                <>
+                  <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                    Click &quot;Create Task / Project&quot; to add a new project, then use the Action button to add and assign multiple sub-tasks.
+                  </p>
+                  <Button onClick={handleOpenCreateTask} size="sm" className="mt-2 font-bold">
+                    <Plus className="w-4 h-4 mr-1.5" /> Create Task / Project
+                  </Button>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                  Projects and tasks associated with your account will appear right here.
+                </p>
+              )}
             </>
           )}
         </div>
@@ -2869,7 +2960,7 @@ export default function OperationsTasksPage() {
                     <div>
                       <span className="text-muted-foreground block text-[10px] font-medium uppercase">Total Cost</span>
                       <span className="font-bold text-foreground font-mono text-sm tracking-wider">
-                        {formatPriceDisplay(totalCost)}
+                        {formatPriceDisplay(totalCost, task)}
                       </span>
                     </div>
                     <div className="border-l pl-3">
@@ -3341,53 +3432,6 @@ export default function OperationsTasksPage() {
 
           <form onSubmit={handleSaveMainTask} className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-              {/* Organization / Institution Selection (if multiple) */}
-              {!isInstitutionAdmin && (
-                <div className="space-y-1.5 p-3 rounded-xl border bg-muted/20">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-semibold flex items-center gap-1.5">
-                      <Building2 className="w-3.5 h-3.5 text-primary" />
-                      Organization / Institution *
-                    </Label>
-                    <span className="text-[10px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                      {isPlatformRoute ? "EduBird Platform" : "Staff Dedicated to Organization"}
-                    </span>
-                  </div>
-                  {isPlatformRoute ? (
-                    <div className="flex items-center justify-between h-9 px-3 text-xs rounded-md border border-input bg-background/80 shadow-xs">
-                      <span className="font-semibold text-foreground truncate flex items-center gap-2">
-                        <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
-                        EduBird Organization
-                      </span>
-                      <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30 font-medium">
-                        EduBird Staff Only
-                      </Badge>
-                    </div>
-                  ) : institutions.length > 1 ? (
-                    <select
-                      value={formInstitutionId}
-                      onChange={(e) => handleFormInstitutionChange(e.target.value)}
-                      className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring font-medium text-foreground cursor-pointer"
-                    >
-                      {institutions.map((inst) => (
-                        <option key={inst.id} value={String(inst.id)}>
-                          {inst.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div className="flex items-center justify-between h-9 px-3 text-xs rounded-md border border-input bg-background/80">
-                      <span className="font-semibold text-foreground truncate">
-                        {activeInstitution?.name || institutions[0]?.name || "My Organization"}
-                      </span>
-                      <Badge variant="outline" className="text-[10px] bg-primary/5 text-primary border-primary/20">
-                        Active Organization
-                      </Badge>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Project Name */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold">Project Name *</Label>
@@ -3991,7 +4035,11 @@ export default function OperationsTasksPage() {
                           : formAssignedStaffIds.length === 1
                             ? (() => {
                               const s = dialogStaffList.find((st) => String(st.id) === formAssignedStaffIds[0]);
-                              return s ? `${s.name} (${s.role || "Staff Member"})` : "1 staff member selected";
+                              if (s) return `${s.name} (${s.role || "Staff Member"})`;
+                              if (user?.id && String(user.id) === formAssignedStaffIds[0]) {
+                                return `${(user as any)?.full_name || (user as any)?.name || user?.email} (${(user as any)?.role || "Staff"})`;
+                              }
+                              return "1 staff member selected";
                             })()
                             : `${formAssignedStaffIds.length} staff members selected`}
                       </span>
@@ -4126,52 +4174,6 @@ export default function OperationsTasksPage() {
                   className="text-xs min-h-[70px] resize-y"
                 />
               </div>
-
-              {/* Task Cadence / Frequency Selector */}
-              {!isInstitutionAdmin && (
-                <div className="space-y-2 p-3 rounded-xl border bg-muted/20">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-primary" />
-                      Project Cadence *
-                    </Label>
-                    <span className="text-[10px] text-muted-foreground font-medium">Daily vs One-Time</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setFormIsDailyRecurring(false)}
-                      className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all ${!formIsDailyRecurring
-                        ? "bg-background border-primary shadow-xs ring-1 ring-primary/40 text-foreground"
-                        : "bg-card/60 hover:bg-background/80 border-border text-muted-foreground"
-                        }`}
-                    >
-                      <span className="text-xs font-bold flex items-center gap-1.5 text-foreground">
-                        ⚡ Standard Project
-                      </span>
-                      <span className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
-                        Deliverable workflow with milestones and sub-tasks.
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setFormIsDailyRecurring(true)}
-                      className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all ${formIsDailyRecurring
-                        ? "bg-background border-primary shadow-xs ring-1 ring-primary/40 text-foreground"
-                        : "bg-card/60 hover:bg-background/80 border-border text-muted-foreground"
-                        }`}
-                    >
-                      <span className="text-xs font-bold flex items-center gap-1.5 text-foreground">
-                        🔁 Daily Recurring
-                      </span>
-                      <span className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
-                        Regenerates daily with routine checks.
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="flex items-center justify-between px-6 py-3.5 border-t bg-muted/20 shrink-0">
@@ -4457,7 +4459,7 @@ export default function OperationsTasksPage() {
         task={selectedTaskForSubtasks}
         editingSubtask={editingSubtaskObject}
         staffOptions={subtaskAssigneeOptions}
-        isStaffViewer={isStaffViewer}
+        isStaffViewer={!canUserSeeTaskPrice(selectedTaskForSubtasks)}
         onSaved={fetchTasks}
         onOpenHistory={(t, s) => {
           setHistoryModalSubtask(s || null);

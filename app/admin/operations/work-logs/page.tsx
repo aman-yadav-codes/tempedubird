@@ -140,7 +140,7 @@ export default function DailyWorkLogsPage() {
   const [staffFilter, setStaffFilter] = useState<string>("all");
   const [clientFilter, setClientFilter] = useState<string>("all");
   const [search, setSearch] = useState<string>("");
-  const [viewMode, setViewMode] = useState<"stream" | "by_module" | "by_client">("stream");
+  const [viewMode, setViewMode] = useState<"stream" | "by_module" | "by_client">("by_module");
 
   const [loading, setLoading] = useState<boolean>(true);
   const [logs, setLogs] = useState<SystemWorkLogItem[]>([]);
@@ -382,9 +382,9 @@ export default function DailyWorkLogsPage() {
   return (
     <div className="space-y-6 pb-20">
       {/* Top Banner & Date Filter Bar */}
-      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/10 via-background to-blue-500/5 p-6 shadow-xs">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1">
+      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/10 via-background to-blue-500/5 p-5 sm:p-6 shadow-xs space-y-4">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+          <div className="space-y-1.5 max-w-3xl">
             <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-primary/15 text-primary text-xs font-bold">
               <Sparkles className="w-3.5 h-3.5" />
               <span>System-Wide Work Logs & Audit Hub</span>
@@ -392,13 +392,23 @@ export default function DailyWorkLogsPage() {
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
               Daily Work Logs & Activity Hub
             </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl">
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
               Track and audit all changes, tasks, subtask updates, deliverable files, income, expenses, sales leads, and staff punch-ins module-wise date by date.
             </p>
           </div>
 
-          {/* Date Range Selector Controls ("from to date needed as well") */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0 bg-background/90 p-2.5 rounded-xl border shadow-2xs backdrop-blur-xs">
+          <Link
+            href={tasksUrl}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border bg-background/90 hover:bg-background text-xs font-bold text-primary hover:underline shadow-2xs self-start shrink-0 transition-colors"
+          >
+            <span>Open Task Board</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        {/* Date Range Selector & Info Toolbar */}
+        <div className="pt-3 border-t border-border/40 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2 bg-background/90 p-2 rounded-xl border shadow-2xs backdrop-blur-xs">
             <div className="flex items-center gap-1.5">
               <Button
                 variant="outline"
@@ -449,7 +459,7 @@ export default function DailyWorkLogsPage() {
             </div>
 
             {/* Quick Presets */}
-            <div className="flex items-center gap-1 overflow-x-auto pt-1 sm:pt-0">
+            <div className="flex items-center gap-1 overflow-x-auto">
               <Button
                 variant={isToday ? "default" : "outline"}
                 size="sm"
@@ -495,15 +505,13 @@ export default function DailyWorkLogsPage() {
                 title="Print Work Logs Report"
               >
                 <Printer className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="hidden xl:inline">Print</span>
+                <span className="hidden sm:inline">Print</span>
               </Button>
             </div>
           </div>
-        </div>
 
-        {/* Date human display */}
-        <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between text-xs text-muted-foreground">
-          <div className="flex items-center gap-2 font-medium">
+          {/* Date Human Display */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
             <span>Viewing logs:</span>
             <span className="font-bold text-foreground">
               {fromDate === toDate
@@ -523,17 +531,10 @@ export default function DailyWorkLogsPage() {
                     year: "numeric",
                   })}`}
             </span>
-            <span className="text-muted-foreground text-[11px] font-mono">
-              (Times displayed in India Standard Time • IST)
+            <span className="text-muted-foreground text-[11px] font-mono hidden sm:inline">
+              (Times in IST)
             </span>
           </div>
-          <Link
-            href={tasksUrl}
-            className="inline-flex items-center gap-1 text-primary hover:underline font-semibold"
-          >
-            <span>Open Task Board</span>
-            <ExternalLink className="w-3 h-3" />
-          </Link>
         </div>
       </div>
 
@@ -613,62 +614,29 @@ export default function DailyWorkLogsPage() {
         </Card>
       </div>
 
-      {/* Filter and View Mode Control Strip */}
+      {/* Filter Strip */}
       <div className="bg-card p-4 rounded-xl border shadow-xs space-y-3">
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
           {/* Module Filter Tabs: All Logs, Operation, Finance, Sales, Manage Staff, Admin */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
-            {MODULE_TABS.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = moduleFilter === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setModuleFilter(tab.id)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                    isActive
-                      ? "bg-primary text-primary-foreground shadow-2xs"
-                      : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* View Mode Toggle: Timeline Stream | Group by Module | Group by Client (Group by Staff removed as requested) */}
-          <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border shrink-0">
-            <button
-              type="button"
-              onClick={() => setViewMode("stream")}
-              className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
-                viewMode === "stream" ? "bg-background shadow-xs text-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Timeline Stream
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("by_module")}
-              className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
-                viewMode === "by_module" ? "bg-background shadow-xs text-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Group by Module
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("by_client")}
-              className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
-                viewMode === "by_client" ? "bg-background shadow-xs text-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Group by Client
-            </button>
-          </div>
+          {MODULE_TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = moduleFilter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setModuleFilter(tab.id)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                  isActive
+                    ? "bg-primary text-primary-foreground shadow-2xs"
+                    : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Secondary Filters: Search, Staff Dropdown, Client Dropdown */}

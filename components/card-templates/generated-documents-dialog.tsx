@@ -44,7 +44,8 @@ import { ResponsiveHtmlCanvas } from "@/components/card-templates/responsive-htm
 
 export type GeneratedDocumentItem = {
   id: number;
-  target_audience: "staff" | "student";
+  target_audience: "staff" | "student" | "client";
+  source_section?: string | null;
   card_category_id: number;
   category_name: string;
   template_id: number;
@@ -70,8 +71,9 @@ type GeneratedDocumentsDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   accessToken: string | null;
-  audience?: "staff" | "student";
-  categories: Array<{ id: number; name: string; target_audience?: "staff" | "student" }>;
+  audience?: "staff" | "student" | "client";
+  sourceSection?: "operation" | "administration" | "sales";
+  categories: Array<{ id: number; name: string; target_audience?: "staff" | "student" | "client" }>;
   institutionId?: number | null;
 };
 
@@ -80,6 +82,7 @@ export function GeneratedDocumentsDialog({
   onOpenChange,
   accessToken,
   audience,
+  sourceSection,
   categories,
   institutionId,
 }: GeneratedDocumentsDialogProps) {
@@ -96,6 +99,7 @@ export function GeneratedDocumentsDialog({
     try {
       const params = new URLSearchParams();
       if (audience) params.set("audience", audience);
+      if (sourceSection) params.set("section", sourceSection);
       if (institutionId) params.set("institutionId", String(institutionId));
       if (selectedCategory !== "all") params.set("categoryId", selectedCategory);
       if (search.trim()) params.set("search", search.trim());
@@ -114,7 +118,7 @@ export function GeneratedDocumentsDialog({
     } finally {
       setLoading(false);
     }
-  }, [accessToken, audience, institutionId, selectedCategory, search]);
+  }, [accessToken, audience, sourceSection, institutionId, selectedCategory, search]);
 
   useEffect(() => {
     if (open) {
@@ -348,10 +352,10 @@ export function GeneratedDocumentsDialog({
 
                         <div className="absolute top-2 right-2">
                           <Badge
-                            variant={doc.target_audience === "staff" ? "secondary" : "default"}
+                            variant={doc.target_audience === "staff" ? "secondary" : doc.target_audience === "client" ? "outline" : "default"}
                             className="text-[9px] font-semibold h-4.5"
                           >
-                            {doc.target_audience === "staff" ? "Staff" : "Student"}
+                            {doc.target_audience === "staff" ? "Staff" : doc.target_audience === "client" ? "Client" : "Student"}
                           </Badge>
                         </div>
                       </div>

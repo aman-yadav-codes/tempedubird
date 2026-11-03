@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
@@ -279,6 +279,46 @@ export function MyProfileClient() {
       Boolean(pathname?.startsWith("/client"))
     );
   }, [user, pathname]);
+
+  const canUserSeeTaskPrice = useCallback((taskItem?: any | null) => {
+    if (!user) return false;
+    const roleCodes: string[] = Array.isArray((user as any)?.role_codes)
+      ? (user as any).role_codes
+      : [(user as any)?.role || (user as any)?.primary_role || ""].filter(Boolean);
+    const isOwnerOrAdmin = roleCodes.some((r: string) =>
+      [
+        "platform_admin",
+        "super_admin",
+        "superadmin",
+        "institution_admin",
+        "school_owner",
+        "college_owner",
+        "university_owner",
+        "admin",
+        "platformadmin",
+        "head_of_operations",
+      ].includes(String(r).toLowerCase())
+    );
+    if (isOwnerOrAdmin) return true;
+
+    const isLeaderRole = roleCodes.some((r: string) =>
+      ["leader", "project_leader", "team_leader", "head_of_operations"].includes(String(r).toLowerCase())
+    );
+    if (isLeaderRole) return true;
+
+    if (!taskItem) return false;
+    const uid = String(user.id);
+    const leaderId = taskItem.project_leader_id ? String(taskItem.project_leader_id) : null;
+    const leaderName = taskItem.project_leader_name?.toLowerCase().trim();
+    const leaderEmail = taskItem.project_leader_email?.toLowerCase().trim();
+    const uName = ((user as any).full_name || (user as any).name || "").toLowerCase().trim();
+    const uEmail = (user.email || "").toLowerCase().trim();
+    return Boolean(
+      (leaderId && leaderId === uid) ||
+      (leaderName && uName && leaderName === uName) ||
+      (leaderEmail && uEmail && leaderEmail === uEmail)
+    );
+  }, [user]);
 
   // Daily Geo Attendance History Dialog State
   const [geoHistoryDialogOpen, setGeoHistoryDialogOpen] = useState<boolean>(false);
@@ -3047,18 +3087,6 @@ export function MyProfileClient() {
                 );
               })}
             </div>
-
-            {Boolean(activeRunningTask) && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleStopCurrentTask}
-                className="h-8 px-3 text-xs font-bold gap-1.5 text-rose-600 dark:text-rose-400 border-rose-300 dark:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl cursor-pointer shrink-0 shadow-xs"
-              >
-                <Square className="w-3 h-3 fill-current text-rose-600 dark:text-rose-400" />
-                <span>Stop Current Task</span>
-              </Button>
-            )}
           </div>
 
           {filteredTasks.length === 0 ? (
@@ -3651,7 +3679,7 @@ export function MyProfileClient() {
         task={subtaskModalTask}
         editingSubtask={subtaskModalEditingSub}
         staffOptions={subtaskModalTask ? getProjectStaffOptions(subtaskModalTask) : []}
-        isStaffViewer={false}
+        isStaffViewer={!canUserSeeTaskPrice(subtaskModalTask)}
         onSaved={handleRefreshMyProfileTasks}
         onOpenHistory={(t, s) => {
           setHistoryModalSubtask(s || null);

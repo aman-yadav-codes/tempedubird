@@ -29,7 +29,7 @@ export type DocumentTemplateRow = {
   id: number;
   card_category_id: number;
   category_name: string;
-  category_target_audience?: "student" | "staff";
+  category_target_audience?: "student" | "staff" | "client";
   name: string;
   thumbnail_url: string | null;
   html_template?: string;
@@ -61,7 +61,7 @@ export type CardCategoryRow = {
   name: string;
   slug?: string;
   description?: string | null;
-  target_audience?: "student" | "staff";
+  target_audience?: "student" | "staff" | "client";
   is_active?: boolean;
   created_at?: string;
   updated_at?: string;

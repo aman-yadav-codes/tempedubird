@@ -172,7 +172,7 @@ const navItems: SidebarItem[] = [
             { title: "Daily Work Logs", url: "/admin/operations/work-logs", icon: Activity },
             { title: "Project Types", url: "/admin/operations/project-types", icon: FolderKanban },
             { title: "Project Pipelines", url: "/admin/operations/project-pipelines", icon: GitFork },
-            { title: "Generate Documents", url: "/admin/generate", icon: Sparkles },
+            { title: "Generate Documents", url: "/admin/operations/generate-documents", icon: Sparkles },
             { title: "Penalty Rules", url: "/admin/operations/penalty-rules", icon: AlertTriangle },
         ],
     },
@@ -349,6 +349,7 @@ const navItems: SidebarItem[] = [
             { title: "Clients", url: "/admin/sales/clients", icon: Building2 },
             { title: "Enquiry", url: "/admin/sales/enquiries", icon: Mail },
             { title: "Commissions", url: "/admin/sales/commissions", icon: Percent },
+            { title: "Generate Documents", url: "/admin/sales/generate-documents", icon: Sparkles },
         ],
     },
     {
@@ -433,6 +434,7 @@ const navItems: SidebarItem[] = [
             { title: "Attendance Setup", url: "/admin/master-data/attendance-setup", icon: ClipboardCheck },
             { title: "Noticeboard", url: "/admin/institutions/news", icon: Bell },
             { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
+            { title: "Generate Documents", url: "/admin/administration/generate-documents", icon: Sparkles },
         ],
     },
     {
@@ -651,6 +653,12 @@ export function AppSidebar() {
     const isTeacher = Boolean((user?.role_codes?.includes("teacher") || (user as { roles?: string[] })?.roles?.includes("teacher") || user?.primary_role === "teacher" || user?.primary_role?.toLowerCase() === "teacher") && !isPlatformAdmin && !isInstitutionAdmin);
     const isClient = Boolean((user?.role_codes?.includes("client") || (user as { roles?: string[] })?.roles?.includes("client") || user?.primary_role === "client") && !isPlatformAdmin && !isInstitutionAdmin);
     const isRoleInstitutionUser = Boolean(!isPlatformAdmin && !isInstitutionAdmin && user?.role_codes?.some((role) => ["student", "teacher", "parent", "driver"].includes(role)));
+    const isHeadOfOperations = Boolean(
+        user?.role_codes?.includes("head_of_operations") ||
+        (user as any)?.role === "head_of_operations" ||
+        user?.primary_role === "head_of_operations" ||
+        (user as any)?.roles?.includes("head_of_operations")
+    );
     const [activeInstitutionId, setActiveInstitutionId] = useState<number | null>(() => {
         return getStoredActiveInstitutionId();
     });
@@ -844,10 +852,10 @@ export function AppSidebar() {
                     return [item];
                 }
                 if (item.url === "/admin/vendors" && item.children) {
-                    if (!isPlatformAdmin && !isInstitutionAdmin) {
+                    if (!isPlatformAdmin && !isInstitutionAdmin && !isHeadOfOperations) {
                         return [];
                     }
-                    if (isPlatformAdmin) {
+                    if (isPlatformAdmin || isHeadOfOperations) {
                         return [{
                             ...item,
                             title: "Administration",

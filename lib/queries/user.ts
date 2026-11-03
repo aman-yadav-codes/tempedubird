@@ -448,7 +448,7 @@ export const getUserById = async (
       INNER JOIN roles r
         ON r.id = ur.role_id
         AND COALESCE(r.is_deleted, FALSE) = FALSE
-      INNER JOIN scope_types st ON st.id = r.scope_id
+      LEFT JOIN scope_types st ON st.id = r.scope_id
       LEFT JOIN role_permissions rp
         ON rp.role_id = r.id
       LEFT JOIN permissions p
@@ -547,7 +547,6 @@ export const getUserById = async (
         WHERE iup.institution_id = sm.institution_id
           AND iup.user_id = $1
       ) permission_codes ON TRUE
-      WHERE st.code = 'institution'
     `, [id]),
   ]);
 

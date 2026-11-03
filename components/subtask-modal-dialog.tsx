@@ -55,6 +55,48 @@ export function SubtaskModalDialog({
   const accessToken = useAuthStore((state) => state.accessToken);
   const currentUser = useAuthStore((state) => state.user);
 
+  // Check if currentUser is project leader or platform admin
+  const isLeader = useMemo(() => {
+    if (!currentUser) return false;
+    const roleCodes: string[] = Array.isArray((currentUser as any)?.role_codes)
+      ? (currentUser as any).role_codes
+      : [(currentUser as any)?.role || (currentUser as any)?.primary_role || ""].filter(Boolean);
+    const hasLeaderRole = roleCodes.some((r) =>
+      ["leader", "project_leader", "team_leader", "head_of_operations"].includes(String(r).toLowerCase())
+    );
+    if (hasLeaderRole) return true;
+
+    if (!task) return false;
+    const uid = String(currentUser.id);
+    const leaderId = task.project_leader_id ? String(task.project_leader_id) : null;
+    const leaderName = task.project_leader_name?.toLowerCase().trim();
+    const leaderEmail = task.project_leader_email?.toLowerCase().trim();
+    const uName = ((currentUser as any).full_name || (currentUser as any).name || "").toLowerCase().trim();
+    const uEmail = (currentUser.email || "").toLowerCase().trim();
+    return Boolean(
+      (leaderId && leaderId === uid) ||
+      (leaderName && uName && leaderName === uName) ||
+      (leaderEmail && uEmail && leaderEmail === uEmail)
+    );
+  }, [currentUser, task]);
+
+  const isPlatformAdmin = useMemo(() => {
+    if (!currentUser) return false;
+    const roleCodes: string[] = Array.isArray((currentUser as any)?.role_codes)
+      ? (currentUser as any).role_codes
+      : [(currentUser as any)?.role || (currentUser as any)?.primary_role || ""].filter(Boolean);
+    return roleCodes.some((r) =>
+      ["platform_admin", "superadmin", "super_admin", "admin", "platformadmin", "institution_admin", "head_of_operations"].includes(
+        String(r).toLowerCase()
+      )
+    );
+  }, [currentUser]);
+
+  // Price is only seen by leader or platform admin
+  const canSeePrice = isLeader || isPlatformAdmin;
+  // Leader and platform admin can modify price and points
+  const canModifyPriceAndPoints = isLeader || isPlatformAdmin;
+
   const isEditMode = Boolean(editingSubtask);
 
   // Mode switcher
@@ -364,7 +406,9 @@ export function SubtaskModalDialog({
           return {
             ...s,
             title: title.trim(),
-            price: parseFloat(price) || 0,
+            price: canModifyPriceAndPoints
+              ? (parseFloat(price) || 0)
+              : (editingSubtask?.price !== undefined ? parseFloat(String(editingSubtask.price)) || 0 : 0),
             assigned_employee_id: assignedStaff ? assignedStaff.id : null,
             assigned_employee_name: assignedStaff ? assignedStaff.name : null,
             assigned_employee_role: assignedStaff ? assignedStaff.role : null,
@@ -376,8 +420,12 @@ export function SubtaskModalDialog({
             deadline_date: isDaily ? null : (deadlineDate || null),
             deadline_time: isDaily ? (dailyTime || "10:00") : (deadlineTime || "18:00"),
             urgency,
-            points: parseFloat(points) || 20,
-            penalty_points: parseFloat(penaltyPoints) || 10,
+            points: canModifyPriceAndPoints
+              ? (parseFloat(points) || 20)
+              : (editingSubtask?.points !== undefined ? parseFloat(String(editingSubtask.points)) || 20 : 20),
+            penalty_points: canModifyPriceAndPoints
+              ? (parseFloat(penaltyPoints) || 10)
+              : (editingSubtask?.penalty_points !== undefined ? parseFloat(String(editingSubtask.penalty_points)) || 10 : 10),
             images,
           };
         });
@@ -448,13 +496,15 @@ export function SubtaskModalDialog({
             {/* Live Rollup Summary & History button (Done & Close removed per user request) */}
             <div className="flex items-center gap-2.5 flex-wrap">
               <div className="flex items-center gap-3 bg-muted/40 px-3 py-1.5 rounded-xl border text-xs">
-                <div>
-                  <span className="text-[10px] text-muted-foreground block">Total Cost</span>
-                  <span className="font-bold text-foreground font-mono tracking-wider">
-                    ₹{Math.round(totalCost).toLocaleString("en-IN")}
-                  </span>
-                </div>
-                <div className="border-l pl-3">
+                {canSeePrice && (
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block">Total Cost</span>
+                    <span className="font-bold text-foreground font-mono tracking-wider">
+                      ₹{Math.round(totalCost).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                )}
+                <div className={canSeePrice ? "border-l pl-3" : ""}>
                   <span className="text-[10px] text-muted-foreground block">Total Duration</span>
                   <span className="font-bold text-foreground font-mono">{totalDuration}</span>
                 </div>
@@ -607,7 +657,7 @@ export function SubtaskModalDialog({
                     <Label className="text-xs font-semibold truncate block">Task Cost / Price (₹)</Label>
                     <div className="relative">
                       <IndianRupee className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                      {isStaffViewer ? (
+                      {!canSeePrice ? (
                         <Input
                           type="text"
                           value="★★★★★"
@@ -619,6 +669,7 @@ export function SubtaskModalDialog({
                           type="number"
                           step="100"
                           value={price}
+                          disabled={!canModifyPriceAndPoints}
                           onChange={(e) => setPrice(e.target.value)}
                           placeholder="0.00"
                           className="pl-7 text-xs h-9 font-mono bg-background"
@@ -778,9 +829,9 @@ export function SubtaskModalDialog({
                             type="number"
                             value={points}
                             onChange={(e) => setPoints(e.target.value)}
-                            disabled={isStaffViewer}
+                            disabled={!canModifyPriceAndPoints}
                             placeholder="20"
-                            className={`text-xs h-9 font-mono bg-background pr-7 ${isStaffViewer ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
+                            className={`text-xs h-9 font-mono bg-background pr-7 ${!canModifyPriceAndPoints ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
                           />
                           <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-emerald-600 pointer-events-none">
                             +PTS
@@ -791,9 +842,9 @@ export function SubtaskModalDialog({
                             type="number"
                             value={penaltyPoints}
                             onChange={(e) => setPenaltyPoints(e.target.value)}
-                            disabled={isStaffViewer}
+                            disabled={!canModifyPriceAndPoints}
                             placeholder="10"
-                            className={`text-xs h-9 font-mono bg-background text-rose-600 pr-7 ${isStaffViewer ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
+                            className={`text-xs h-9 font-mono bg-background text-rose-600 pr-7 ${!canModifyPriceAndPoints ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
                           />
                           <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-rose-600 pointer-events-none">
                             -PTS
@@ -893,9 +944,9 @@ export function SubtaskModalDialog({
                             type="number"
                             value={points}
                             onChange={(e) => setPoints(e.target.value)}
-                            disabled={isStaffViewer}
+                            disabled={!canModifyPriceAndPoints}
                             placeholder="20"
-                            className={`text-xs h-9 font-mono bg-background pr-7 ${isStaffViewer ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
+                            className={`text-xs h-9 font-mono bg-background pr-7 ${!canModifyPriceAndPoints ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
                           />
                           <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-emerald-600 pointer-events-none">
                             +PTS
@@ -906,9 +957,9 @@ export function SubtaskModalDialog({
                             type="number"
                             value={penaltyPoints}
                             onChange={(e) => setPenaltyPoints(e.target.value)}
-                            disabled={isStaffViewer}
+                            disabled={!canModifyPriceAndPoints}
                             placeholder="10"
-                            className={`text-xs h-9 font-mono bg-background text-rose-600 pr-7 ${isStaffViewer ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
+                            className={`text-xs h-9 font-mono bg-background text-rose-600 pr-7 ${!canModifyPriceAndPoints ? "cursor-not-allowed opacity-80 bg-muted/40" : ""}`}
                           />
                           <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-rose-600 pointer-events-none">
                             -PTS

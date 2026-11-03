@@ -136,7 +136,7 @@ const resources: Record<ResourceKey, ResourceConfig> = {
     fields: [
       { name: "name", label: "Name", type: "text", required: true },
       { name: "code", label: "Code", type: "text", required: true },
-      { name: "scope_id", label: "Scope", type: "select", optionKey: "scopes", required: true },
+
     ],
     columns: [
       { key: "name", label: "Name" },
@@ -426,14 +426,9 @@ function filterPermissionsForRoleScope(
   roleScope: string | null,
   roleCode?: string | null
 ) {
-  if (!roleScope) return permissions;
-
   return permissions.filter((permission) => {
     const code = permission.code ? String(permission.code) : "";
-    if (!isPermissionAssignableToRole(code, roleCode, roleScope)) return false;
-    return roleScope === "institution"
-      ? !isPlatformOnlyPermission(code)
-      : isPlatformOnlyPermission(code);
+    return isPermissionAssignableToRole(code, roleCode, roleScope);
   });
 }
 
@@ -1025,7 +1020,7 @@ export default function AccessControlPage() {
   const canCreateRecord = isSuperAdmin || hasPermission(`${permissionModule}.create`);
   const canEditRecord = isSuperAdmin || hasPermission(`${permissionModule}.edit`);
   const canDeleteRecord = isSuperAdmin || hasPermission(`${permissionModule}.delete`);
-  const hasScopeFilter = resource === "permissions" || resource === "roles" || resource === "role-permissions";
+  const hasScopeFilter = resource === "permissions";
   const [rows, setRows] = useState<AccessRow[]>([]);
   const [remoteRows, setRemoteRows] = useState<AccessRow[] | null>(null);
   const [options, setOptions] = useState<AccessOptions>(defaultOptions);

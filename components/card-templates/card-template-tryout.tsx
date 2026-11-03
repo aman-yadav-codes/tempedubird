@@ -102,6 +102,9 @@ type CardTemplateTryoutProps = {
   initialStudentName?: string | null;
   initialFieldValues?: Record<string, string>;
   lockStudentSelection?: boolean;
+  recipientType?: "student" | "staff" | "client";
+  sourceSection?: "operation" | "administration" | "sales";
+  overrideCategoryId?: number | null;
 };
 
 type FieldMappingPayload = {
@@ -863,14 +866,18 @@ export function CardTemplateTryout({
   initialStudentName = null,
   initialFieldValues,
   lockStudentSelection = false,
+  recipientType,
+  sourceSection,
+  overrideCategoryId = null,
 }: CardTemplateTryoutProps) {
   const [editedTemplate, setEditedTemplate] = useState<DocumentTemplateRow | null>(null);
   const currentTemplate = editedTemplate ?? template;
   const [tryoutAcademicYearId, setTryoutAcademicYearId] = useState<number | null>(null);
   const fields = useMemo(() => currentTemplate.fields ?? [], [currentTemplate.fields]);
-  const targetAudience = currentTemplate.category_target_audience === "staff" ? "staff" : "student";
-  const recipientLabel = targetAudience === "staff" ? "Staff" : "Student";
-  const recipientNoun = targetAudience === "staff" ? "staff member" : "student";
+  const isClientTarget = recipientType === "client" || (currentTemplate.category_target_audience as string) === "client" || Boolean(sourceSection);
+  const targetAudience = isClientTarget ? "client" : (currentTemplate.category_target_audience === "staff" ? "staff" : "student");
+  const recipientLabel = targetAudience === "client" ? "Client" : targetAudience === "staff" ? "Staff" : "Student";
+  const recipientNoun = targetAudience === "client" ? "client" : targetAudience === "staff" ? "staff member" : "student";
   const saveDocumentLabel = getSaveDocumentLabel(currentTemplate);
   const saveButtonText = `Save ${saveDocumentLabel}`;
   const savingButtonText = `Saving ${saveDocumentLabel}...`;
@@ -1054,6 +1061,25 @@ export function CardTemplateTryout({
   const fetchStudents = useMemo(
     () => async (search: string) => {
       if (!accessToken) return { data: [], hasMore: false };
+      if (targetAudience === "client") {
+        const params = new URLSearchParams({ limit: "50" });
+        if (search) params.set("search", search);
+        if (institutionId) params.set("institution_id", String(institutionId));
+        const res = await fetch(`/api/admin/sales/clients?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const json = await readJson(res);
+        const list = Array.isArray(json.data) ? json.data : Array.isArray(json.clients) ? json.clients : [];
+        return {
+          data: list.map((c: any) => ({
+            id: c.id,
+            name: c.name || c.company_name || `Client #${c.id}`,
+            subtitle: c.company_name && c.company_name !== c.name ? `${c.company_name} • ${c.email || c.phone || ""}` : (c.email || c.phone || "Client"),
+            avatar_url: c.profile_image || null,
+          })),
+          hasMore: false,
+        };
+      }
       const params = new URLSearchParams({
         action: targetAudience === "staff" ? "staff" : "students",
         search,
@@ -1080,6 +1106,57 @@ export function CardTemplateTryout({
     if (!accessToken || !nextStudentId) return;
     setStudentLoading(true);
     try {
+      if (targetAudience === "client") {
+        const res = await fetch(`/api/admin/sales/clients?search=&limit=100`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const json = await readJson(res);
+        const list = Array.isArray(json.data) ? json.data : Array.isArray(json.clients) ? json.clients : [];
+        const client = list.find((c: any) => String(c.id) === String(nextStudentId)) || list[0] || {};
+
+        const clientValues: Record<string, string> = {
+          name: client.name || client.company_name || "",
+          student_name: client.name || client.company_name || "",
+          staff_name: client.name || client.company_name || "",
+          client_name: client.name || client.company_name || "",
+          company_name: client.company_name || client.name || "",
+          contact_person: client.contact_person || client.name || "",
+          father_name: client.contact_person || "",
+          email: client.email || "",
+          phone: client.phone || "",
+          mobile: client.phone || "",
+          address: client.address || "",
+          city: client.city || "",
+          state: client.state || "",
+          country: client.country || "",
+          pincode: client.pincode || "",
+          website: client.website || "",
+          photo: client.profile_image || "",
+          avatar_url: client.profile_image || "",
+          profile_image: client.profile_image || "",
+          date: new Date().toLocaleDateString("en-IN"),
+          issue_date: new Date().toLocaleDateString("en-IN"),
+          ref_no: `DOC-${Date.now().toString().slice(-6)}`,
+          registration_number: `CLI-${client.id || nextStudentId}`,
+          admission_number: `CLI-${client.id || nextStudentId}`,
+          roll_number: `CLI-${client.id || nextStudentId}`,
+          employee_id: `CLI-${client.id || nextStudentId}`,
+          designation: "Client Partner",
+          department: "Client Services",
+        };
+
+        const nextValues: Record<string, string> = {};
+        for (const field of fields) {
+          const fn = field.field_name.toLowerCase();
+          if (clientValues[fn] !== undefined && clientValues[fn] !== "") {
+            nextValues[field.field_name] = clientValues[fn];
+          } else {
+            nextValues[field.field_name] = "";
+          }
+        }
+        setValues(nextValues);
+        return;
+      }
       const params = new URLSearchParams({
         action: targetAudience === "staff" ? "staff-values" : "student-values",
       });
@@ -1395,6 +1472,33 @@ export function CardTemplateTryout({
       if (!saveImageUrl || !saveHtml) {
         toast.error("Generate the card before saving");
         return false;
+      }
+      if (targetAudience === "client") {
+        const response = await fetch("/api/admin/generate/documents", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            recipientType: "client",
+            clientId: Number(studentId),
+            templateId: currentTemplate.id,
+            cardCategoryId: overrideCategoryId || currentTemplate.card_category_id,
+            sourceSection: sourceSection || ((currentTemplate.category_target_audience as string) === "client" ? "operation" : "administration"),
+            title: currentTemplate.name,
+            renderedHtml: saveHtml,
+            fieldValues: values,
+            imageUrl: saveImageUrl,
+            canvasWidth: canvasExport ? canvasExport.width : null,
+            canvasHeight: canvasExport ? canvasExport.height : null,
+            institutionId,
+          }),
+        });
+        const json = await readJson(response);
+        if (!response.ok) throw new Error(json.error ?? "Document could not be saved");
+        toast.success(json.message || `${saveDocumentLabel} saved to client documents.`);
+        return true;
       }
       const response = await fetch(
         targetAudience === "staff" ? "/api/admin/staff/letters" : "/api/admin/students/cards",
