@@ -4,6 +4,7 @@ import path from "path";
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { canAccessAdminArea, hasPermission } from "@/lib/auth/permissions";
+import { isOpeninaryConfigured, isMediaSupportedByOpeninary, uploadToOpeninary } from "@/lib/uploads/openinary";
 
 const MAX_DOCUMENT_FILE_SIZE = 100 * 1024 * 1024; // 100MB for video/media support
 const ACCEPTED_DOCUMENT_TYPES = new Set([
@@ -98,6 +99,26 @@ export async function POST(req: Request) {
         { error: "File must be 100MB or smaller" },
         { status: 422 },
       );
+    }
+
+    const requestedFolder = String(formData.get("folder") ?? "crmtaskassets");
+    const targetFolder = requestedFolder || "crmtaskassets";
+
+    if (isOpeninaryConfigured() && isMediaSupportedByOpeninary(file.name, file.type)) {
+      try {
+        const result = await uploadToOpeninary(file, file.name, targetFolder, file.type);
+        return NextResponse.json({
+          data: {
+            url: result.fullUrl,
+            public_id: result.path,
+            resource_type: file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "raw",
+            file_type: file.type,
+            file_name: file.name,
+          },
+        });
+      } catch (openinaryErr) {
+        console.error("Openinary document upload failed, checking fallback:", openinaryErr);
+      }
     }
 
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;

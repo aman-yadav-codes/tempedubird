@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 
 import { getAuthenticatedUser } from "@/lib/auth/auth";
+import { isOpeninaryConfigured, isMediaSupportedByOpeninary, uploadToOpeninary } from "@/lib/uploads/openinary";
 import { canAccessInstitution } from "@/lib/auth/institution-scope";
 import { hasPermission, isInstitutionAdminUser, isPlatformAdminUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
@@ -42,6 +43,20 @@ async function uploadAttachment(file: File): Promise<UploadedAttachment> {
   if (!ACCEPTED_ATTACHMENT_TYPES.has(file.type)) throw new Error("Only images and PDF attachments are allowed");
   const maxSize = file.type === "application/pdf" ? 10 * 1024 * 1024 : 5 * 1024 * 1024;
   if (file.size > maxSize) throw new Error(file.type === "application/pdf" ? "PDF must be 10MB or smaller" : "Image must be 5MB or smaller");
+  if (isOpeninaryConfigured() && isMediaSupportedByOpeninary(file.name, file.type)) {
+    try {
+      const result = await uploadToOpeninary(file, file.name, "crmtaskassets", file.type);
+      return {
+        file_name: file.name,
+        file_url: result.fullUrl,
+        public_id: result.path,
+        resource_type: "image",
+      };
+    } catch (openinaryErr) {
+      console.error("Openinary complaint upload failed, checking fallback:", openinaryErr);
+    }
+  }
+
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   const apiKey = process.env.CLOUDINARY_API_KEY;
   const apiSecret = process.env.CLOUDINARY_API_SECRET;

@@ -1,3 +1,4 @@
+import { isOpeninaryConfigured, isMediaSupportedByOpeninary, uploadToOpeninary } from "@/lib/uploads/openinary";
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 
@@ -55,6 +56,20 @@ function validateAttachment(file: File) {
 
 async function uploadAttachment(file: File): Promise<UploadedAttachment> {
   validateAttachment(file);
+
+  if (isOpeninaryConfigured() && isMediaSupportedByOpeninary(file.name, file.type)) {
+    try {
+      const result = await uploadToOpeninary(file, file.name, "crmtaskassets", file.type);
+      return {
+        file_name: file.name,
+        file_url: result.fullUrl,
+        public_id: result.path,
+        resource_type: file.type.startsWith("image/") ? "image" : "raw",
+      };
+    } catch (openinaryErr) {
+      console.error("Openinary ticket attachment upload failed, checking fallback:", openinaryErr);
+    }
+  }
 
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   const apiKey = process.env.CLOUDINARY_API_KEY;

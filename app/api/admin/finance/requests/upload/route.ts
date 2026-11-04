@@ -3,6 +3,7 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth/auth";
+import { isOpeninaryConfigured, isMediaSupportedByOpeninary, uploadToOpeninary } from "@/lib/uploads/openinary";
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB
 
@@ -51,6 +52,20 @@ export async function POST(req: Request) {
         { error: "File size exceeds 15MB limit" },
         { status: 422 }
       );
+    }
+
+    if (isOpeninaryConfigured() && isMediaSupportedByOpeninary(file.name, file.type)) {
+      try {
+        const result = await uploadToOpeninary(file, file.name, "crmtaskassets", file.type);
+        return NextResponse.json({
+          url: result.fullUrl,
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+        });
+      } catch (openinaryErr) {
+        console.error("Openinary finance upload failed, checking fallback:", openinaryErr);
+      }
     }
 
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;

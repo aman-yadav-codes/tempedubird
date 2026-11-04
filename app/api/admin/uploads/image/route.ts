@@ -4,6 +4,7 @@ import path from "path";
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { canAccessAdminArea } from "@/lib/auth/permissions";
+import { isOpeninaryConfigured, isMediaSupportedByOpeninary, uploadToOpeninary } from "@/lib/uploads/openinary";
 
 const MAX_IMAGE_FILE_SIZE = 5 * 1024 * 1024;
 const MAX_VIDEO_FILE_SIZE = 100 * 1024 * 1024;
@@ -120,6 +121,27 @@ export async function POST(req: Request) {
       );
     }
 
+    const requestedFolder = String(formData.get("folder") ?? "crmtaskassets");
+    const targetFolder = requestedFolder || "crmtaskassets";
+
+    if (isOpeninaryConfigured() && isMediaSupportedByOpeninary(file.name, file.type)) {
+      try {
+        const result = await uploadToOpeninary(file, file.name, targetFolder, file.type);
+        return NextResponse.json({
+          data: {
+            url: result.fullUrl,
+            public_id: result.path,
+            resource_type: mediaKind === "file" ? "raw" : mediaKind,
+            media_type: mediaKind,
+            file_name: file.name,
+            file_type: file.type,
+          },
+        });
+      } catch (openinaryErr) {
+        console.error("Openinary upload failed, checking fallback:", openinaryErr);
+      }
+    }
+
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
     const apiKey = process.env.CLOUDINARY_API_KEY;
     const apiSecret = process.env.CLOUDINARY_API_SECRET;
@@ -146,7 +168,8 @@ export async function POST(req: Request) {
       });
     }
 
-    const requestedFolder = String(formData.get("folder") ?? "");
+    // reuse requestedFolder
+    // folder determination
     const timestamp = Math.round(Date.now() / 1000);
     const folder =
       requestedFolder === "document_templates"
