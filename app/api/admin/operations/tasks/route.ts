@@ -1223,6 +1223,7 @@ export async function PUT(req: Request) {
                    SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) s
                    WHERE s->>'assigned_employee_id' = $2
                       OR s->>'assigned_staff_ids' LIKE $3
+                      OR s::text LIKE $3
                  )
                )`,
             [id, String(currentUserId), `%${String(currentUserId)}%`]
@@ -1546,7 +1547,7 @@ export async function PUT(req: Request) {
           const ex = existingMap.get(String(s.id));
           const isThisSubStarting = s.status === "in_progress" && (!ex || ex.status !== "in_progress");
           // Auto-stop any OTHER in-progress subtask when a new one is starting
-          const isAutoStopped = startingSubId && String(s.id) !== String(startingSubId) && ex && ex.status === "in_progress" && s.status !== "in_progress";
+          const isAutoStopped = Boolean(startingSubId && String(s.id) !== String(startingSubId) && ex && ex.status === "in_progress");
           const isThisSubStopping = isAutoStopped || (s.status === "pending" && ex && ex.status === "in_progress");
           if (isAutoStopped) {
             taskHistory.push({

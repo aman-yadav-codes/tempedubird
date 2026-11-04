@@ -333,10 +333,6 @@ export function MyProfileClient() {
   } | null>(null);
 
   const requestStartTaskWithLocation = (task: any, subId?: string | number | null, subTitle?: string | null) => {
-    if (activeRunningTask && activeRunningTask.id !== task.id) {
-      toast.error("Only one task can be started at a time. Please stop your active task first.");
-      return;
-    }
     setPendingCheckInInfo({ task, subId, subTitle });
     setLocationCheckInOpen(true);
   };
@@ -510,11 +506,6 @@ export function MyProfileClient() {
 
     let startLoc = explicitLocation || null;
     if (newStatus === "in_progress") {
-      if (activeRunningTask && activeRunningTask.id !== taskId) {
-        toast.error(`Only one task can be started at a time. Please stop your active task ("${activeRunningTask.title}") first.`);
-        return;
-      }
-
       if (!startLoc) {
         try {
           toast.info("Requesting location to start task...");
@@ -581,21 +572,8 @@ export function MyProfileClient() {
   const handleSubtaskStatusUpdate = async (task: any, subId: string | number, newStatus: string, explicitLocation?: any) => {
     let startLoc = explicitLocation || null;
 
-    // Only one task can be in progress at a time
+    // Request browser location if starting
     if (newStatus === "in_progress") {
-      const isAnotherRunning = tasks.some(t => {
-        if (t.id !== task.id) {
-          return normalizeTaskStatus(t.status) === "in_progress" ||
-            (Array.isArray(t.sub_tasks) && t.sub_tasks.some((s: any) => normalizeTaskStatus(s.status) === "in_progress"));
-        }
-        return Array.isArray(t.sub_tasks) && t.sub_tasks.some((s: any) => String(s.id) !== String(subId) && normalizeTaskStatus(s.status) === "in_progress");
-      });
-
-      if (isAnotherRunning) {
-        toast.error("Only one task can be started at a time. Please stop or complete your active task first.");
-        return;
-      }
-
       if (!startLoc) {
         try {
           toast.info("Requesting location to start deliverable...");
@@ -608,9 +586,20 @@ export function MyProfileClient() {
     }
 
     const currentSubs = Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : [];
-    const updatedSubs = currentSubs.map((s: any) =>
-      s.id === subId ? { ...s, status: newStatus } : s
-    );
+    const updatedSubs = currentSubs.map((s: any) => {
+      if (String(s.id) !== String(subId)) {
+        if (newStatus === "in_progress" && normalizeTaskStatus(s.status) === "in_progress") {
+          return { ...s, status: "pending", stopped_at: new Date().toISOString() };
+        }
+        return s;
+      }
+      return {
+        ...s,
+        status: newStatus,
+        started_at: newStatus === "in_progress" ? new Date().toISOString() : s.started_at,
+        stopped_at: newStatus !== "in_progress" ? new Date().toISOString() : null,
+      };
+    });
 
     // Compute parent status
     const allCompleted = updatedSubs.length > 0 && updatedSubs.every((s: any) => normalizeTaskStatus(s.status) === "completed");

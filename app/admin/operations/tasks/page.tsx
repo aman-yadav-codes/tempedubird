@@ -1623,24 +1623,6 @@ export default function OperationsTasksPage() {
     let startLoc: any = null;
 
     if (newStatus === "in_progress") {
-      const isAnotherRunning = tasks.some((t) => {
-        if (t.id !== task.id) {
-          return (
-            t.status === "in_progress" ||
-            (Array.isArray(t.sub_tasks) && t.sub_tasks.some((s) => s.status === "in_progress"))
-          );
-        }
-        return (
-          Array.isArray(t.sub_tasks) &&
-          t.sub_tasks.some((s) => String(s.id) !== String(subId) && s.status === "in_progress")
-        );
-      });
-
-      if (isAnotherRunning) {
-        toast.error("Only one task can be started at a time. Please stop your active task before starting a new one.");
-        return;
-      }
-
       try {
         toast.info("Requesting location to start deliverable...");
         startLoc = await requireBrowserLocation();
@@ -1653,7 +1635,17 @@ export default function OperationsTasksPage() {
     const currentSubs = Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : [];
     const targetSub = currentSubs.find((s) => s.id === subId);
     const updatedSubs = currentSubs.map((s) => {
-      if (s.id !== subId) return s;
+      if (s.id !== subId) {
+        // If starting this subtask, auto-stop any previously in-progress subtask in the same task
+        if (newStatus === "in_progress" && s.status === "in_progress") {
+          return {
+            ...s,
+            status: "pending",
+            stopped_at: new Date().toISOString(),
+          };
+        }
+        return s;
+      }
       const updates: any = { ...s, status: newStatus };
       if (newStatus === "in_progress") {
         updates.started_at = new Date().toISOString();
@@ -1719,21 +1711,6 @@ export default function OperationsTasksPage() {
 
     let startLoc: any = null;
     if (newStatus === "in_progress") {
-      const isAnotherRunning = tasks.some((t) => {
-        if (t.id !== taskId) {
-          return (
-            t.status === "in_progress" ||
-            (Array.isArray(t.sub_tasks) && t.sub_tasks.some((s) => s.status === "in_progress"))
-          );
-        }
-        return false;
-      });
-
-      if (isAnotherRunning) {
-        toast.error("Only one task can be started at a time. Please stop your active task before starting a new one.");
-        return;
-      }
-
       try {
         toast.info("Requesting location to start task...");
         startLoc = await requireBrowserLocation();
