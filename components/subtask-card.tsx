@@ -73,6 +73,50 @@ export function SubtaskCard({
   const [priceInput, setPriceInput] = useState<string>(
     subtask.price !== undefined ? String(subtask.price) : "0"
   );
+  const [isEditingDeliverable, setIsEditingDeliverable] = useState(false);
+  const [deliverableInput, setDeliverableInput] = useState(subtask.deliverable || "");
+
+  useEffect(() => {
+    setDeliverableInput(subtask.deliverable || "");
+  }, [subtask.deliverable]);
+
+  const deliverableDisplay = useMemo(() => {
+    // 1. Explicit deliverable field on subtask
+    if (subtask.deliverable && typeof subtask.deliverable === "string" && subtask.deliverable.trim().length > 0) {
+      return subtask.deliverable.trim();
+    }
+    // 2. Deliverables from uploads / deliverables list
+    if (Array.isArray(subtask.uploads) && subtask.uploads.length > 0) {
+      const names = subtask.uploads
+        .map((u: any) => u.file_name || u.name || u.notes || u.title)
+        .filter((n: any) => Boolean(n) && typeof n === "string" && !n.startsWith("http"));
+      if (names.length === 1) return names[0];
+      if (names.length > 1) return `${names[0]} (+${names.length - 1} more)`;
+    }
+    // 3. Fallback to subtask.notes if available
+    if (subtask.notes && typeof subtask.notes === "string" && subtask.notes.trim().length > 0) {
+      return subtask.notes.trim();
+    }
+    return null;
+  }, [subtask.deliverable, subtask.uploads, subtask.notes]);
+
+  const deliverableTooltip = useMemo(() => {
+    const list: string[] = [];
+    if (subtask.deliverable) list.push(`Deliverable: ${subtask.deliverable}`);
+    if (Array.isArray(subtask.uploads) && subtask.uploads.length > 0) {
+      const uplNames = subtask.uploads.map((u: any, idx: number) => `${idx + 1}. ${u.file_name || u.notes || "Upload"}`);
+      list.push(`Uploaded Deliverables (${subtask.uploads.length}):\n${uplNames.join("\n")}`);
+    }
+    return list.join("\n\n");
+  }, [subtask.deliverable, subtask.uploads]);
+
+  const handleDeliverableBlur = () => {
+    setIsEditingDeliverable(false);
+    const val = deliverableInput.trim();
+    if (val !== (subtask.deliverable || "").trim()) {
+      onUpdateSubtask(task, subtask.id, { deliverable: val || null });
+    }
+  };
 
   const currentUser = useAuthStore((state) => state.user);
 
@@ -607,6 +651,60 @@ export function SubtaskCard({
               <span>Start</span>
             </Button>
           ) : null}
+        </div>
+
+        {/* Deliverable : show here */}
+        <div className="flex items-center gap-1.5 min-w-0 max-w-[280px] sm:max-w-xs md:max-w-md">
+          <span className="font-semibold text-muted-foreground text-[11px] shrink-0">
+            Deliverable :
+          </span>
+          {isEditingDeliverable ? (
+            <input
+              type="text"
+              autoFocus
+              value={deliverableInput}
+              onChange={(e) => setDeliverableInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  (e.target as HTMLInputElement).blur();
+                } else if (e.key === "Escape") {
+                  setDeliverableInput(subtask.deliverable || "");
+                  setIsEditingDeliverable(false);
+                }
+              }}
+              onBlur={handleDeliverableBlur}
+              placeholder="e.g. Event home page"
+              className="h-6 text-[11px] font-medium px-2 py-0.5 rounded border border-primary bg-background text-foreground outline-none w-full"
+            />
+          ) : (
+            <div className="flex items-center gap-1 min-w-0 truncate">
+              <button
+                type="button"
+                onClick={() => onOpenUploads(task, subtask)}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/40 hover:bg-muted/70 border border-border/60 transition-colors cursor-pointer truncate text-[11px] group shadow-2xs"
+                title={deliverableTooltip || "Click to view / upload deliverables in dialog"}
+              >
+                {deliverableDisplay ? (
+                  <span className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                    {deliverableDisplay}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground/70 italic">None</span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsEditingDeliverable(true);
+                }}
+                className="text-muted-foreground hover:text-primary p-0.5 rounded hover:bg-muted cursor-pointer shrink-0"
+                title="Edit deliverable requirement"
+              >
+                <Edit2 className="w-2.5 h-2.5" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Deadline & Task and updates button */}

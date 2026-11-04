@@ -141,6 +141,7 @@ export type SubTask = {
   urgency: "low" | "medium" | "high" | "urgent";
   status: TaskStatus;
   notes?: string | null;
+  deliverable?: string | null;
   uploads?: any[];
   work_updates?: any[];
 };

@@ -104,6 +104,7 @@ export function SubtaskModalDialog({
 
   // Single / Edit mode state
   const [title, setTitle] = useState("");
+  const [deliverable, setDeliverable] = useState("");
   const [price, setPrice] = useState("5000");
   const [staffId, setStaffId] = useState("none");
   const [cadence, setCadence] = useState("once");
@@ -181,6 +182,7 @@ export function SubtaskModalDialog({
     if (editingSubtask) {
       setCreationMode("single");
       setTitle(editingSubtask.title || "");
+      setDeliverable(editingSubtask.deliverable || "");
       setPrice(
         editingSubtask.price !== undefined && editingSubtask.price !== null
           ? String(editingSubtask.price)
@@ -222,6 +224,7 @@ export function SubtaskModalDialog({
       // Adding new
       setCreationMode("single");
       setTitle("");
+      setDeliverable("");
       setPrice("5000");
       const defaultStaff = effectiveStaffOptions.length === 1 ? String(effectiveStaffOptions[0].id) : "none";
       setStaffId(defaultStaff);
@@ -406,6 +409,7 @@ export function SubtaskModalDialog({
           return {
             ...s,
             title: title.trim(),
+            deliverable: deliverable.trim() || null,
             price: canModifyPriceAndPoints
               ? (parseFloat(price) || 0)
               : (editingSubtask?.price !== undefined ? parseFloat(String(editingSubtask.price)) || 0 : 0),
@@ -433,6 +437,7 @@ export function SubtaskModalDialog({
         const newSub = {
           id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
           title: title.trim(),
+          deliverable: deliverable.trim() || null,
           price: parseFloat(price) || 0,
           assigned_employee_id: assignedStaff ? assignedStaff.id : (task.assigned_employee_id || currentUser?.id),
           assigned_employee_name: assignedStaff ? assignedStaff.name : (task.assigned_employee_name || currentUser?.full_name),
@@ -717,6 +722,20 @@ export function SubtaskModalDialog({
                       <option value="monthly">🗓️ Monthly Basis</option>
                     </select>
                   </div>
+                </div>
+
+                {/* Deliverable Details / Requirement */}
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold flex items-center justify-between">
+                    <span>Deliverable Details / Requirement</span>
+                    <span className="text-[10px] text-muted-foreground font-normal">Shown on sub-task card</span>
+                  </Label>
+                  <Input
+                    value={deliverable}
+                    onChange={(e) => setDeliverable(e.target.value)}
+                    placeholder="e.g. Event home page, Wireframes, Mobile responsive test"
+                    className="text-xs h-9 bg-background"
+                  />
                 </div>
 
                 {/* Uploaded Images Preview */}
