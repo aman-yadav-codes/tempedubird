@@ -729,9 +729,67 @@ export function MyProfileClient() {
     toast.success("Active task stopped and moved back to Pending.");
   };
 
+  const isTaskAssignedToMe = useCallback(
+    (task: any) => {
+      if (!user?.id) return false;
+      const currentUserId = Number(user.id);
+      const currentUserEmail = (user.email || "").toLowerCase().trim();
+      const currentUserName = ((user as any).full_name || (user as any).name || "").toLowerCase().trim();
+
+      // Direct assignment on task
+      if (task.assigned_employee_id && Number(task.assigned_employee_id) === currentUserId) return true;
+      if (task.assigned_employee_email && currentUserEmail && task.assigned_employee_email.toLowerCase().trim() === currentUserEmail) return true;
+      if (task.project_leader_id && Number(task.project_leader_id) === currentUserId) return true;
+
+      // Client assignment
+      if (task.client_id && Number(task.client_id) === currentUserId) return true;
+      if (Array.isArray(task.assigned_clients)) {
+        const clientMatch = task.assigned_clients.some(
+          (c: any) =>
+            (c.id && Number(c.id) === currentUserId) ||
+            (c.user_id && Number(c.user_id) === currentUserId) ||
+            (currentUserEmail && c.email && c.email.toLowerCase().trim() === currentUserEmail)
+        );
+        if (clientMatch) return true;
+      }
+
+      // Multi-employees array on task
+      if (Array.isArray(task.assigned_employees)) {
+        const match = task.assigned_employees.some(
+          (emp: any) =>
+            (emp.id && Number(emp.id) === currentUserId) ||
+            (emp.employee_id && Number(emp.employee_id) === currentUserId) ||
+            (currentUserEmail && emp.email && emp.email.toLowerCase().trim() === currentUserEmail) ||
+            (currentUserName && currentUserName.length > 2 && currentUserName !== "admin" && emp.name && emp.name.toLowerCase().trim() === currentUserName)
+        );
+        if (match) return true;
+      }
+
+      // Subtasks assignment
+      if (Array.isArray(task.sub_tasks)) {
+        return task.sub_tasks.some((st: any) => {
+          if (st.assigned_employee_id && Number(st.assigned_employee_id) === currentUserId) return true;
+          if (currentUserEmail && st.assigned_employee_email && st.assigned_employee_email.toLowerCase().trim() === currentUserEmail) return true;
+          if (currentUserName && currentUserName.length > 2 && currentUserName !== "admin" && st.assigned_employee_name && st.assigned_employee_name.toLowerCase().trim() === currentUserName) return true;
+          if (Array.isArray(st.assigned_employees) && st.assigned_employees.some((e: any) => Number(e.id) === currentUserId || (currentUserEmail && e.email && e.email.toLowerCase().trim() === currentUserEmail))) return true;
+          if (typeof st.assigned_staff_ids === "string" && st.assigned_staff_ids.split(",").map((s: string) => s.trim()).includes(String(currentUserId))) return true;
+          if (st.client_id && Number(st.client_id) === currentUserId) return true;
+          return false;
+        });
+      }
+
+      return false;
+    },
+    [user]
+  );
+
+  const myAssignedTasks = useMemo(() => {
+    return tasks.filter((t) => isTaskAssignedToMe(t));
+  }, [tasks, isTaskAssignedToMe]);
+
   const getTaskTabCount = (tabId: string) => {
     let count = 0;
-    for (const t of tasks) {
+    for (const t of myAssignedTasks) {
       const subs: any[] = Array.isArray(t.sub_tasks) ? t.sub_tasks : [];
       if (subs.length > 0) {
         if (tabId === "all") {
@@ -749,15 +807,15 @@ export function MyProfileClient() {
   };
 
   const filteredTasks = useMemo(() => {
-    if (taskStatusTab === "all") return tasks;
-    return tasks.filter((t) => {
+    if (taskStatusTab === "all") return myAssignedTasks;
+    return myAssignedTasks.filter((t) => {
       const subs: any[] = Array.isArray(t.sub_tasks) ? t.sub_tasks : [];
       if (subs.length > 0) {
         return subs.some((s: any) => normalizeTaskStatus(s.status) === taskStatusTab);
       }
       return normalizeTaskStatus(t.status) === taskStatusTab;
     });
-  }, [tasks, taskStatusTab]);
+  }, [myAssignedTasks, taskStatusTab]);
 
   const [performance, setPerformance] = useState<any>(null);
   const [queries, setQueries] = useState<any[]>([]);

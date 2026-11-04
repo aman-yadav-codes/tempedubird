@@ -186,7 +186,8 @@ export async function GET(req: Request) {
     }
     const referer = req.headers.get("referer") || "";
     const isClientRoute = referer.includes("/client/") || referer.endsWith("/client");
-    const isClient = userRole === "client" || user?.role_codes?.includes("client") || (user as any)?.roles?.some((r: any) => String(r).toLowerCase() === "client") || isClientRoute;
+    const isTaskManagementPage = referer.includes("/admin/operations/tasks");
+    const isClient = !isTaskManagementPage && (userRole === "client" || user?.role_codes?.includes("client") || (user as any)?.roles?.some((r: any) => String(r).toLowerCase() === "client") || isClientRoute);
 
     const isSelfScope = employeeId === "me" || scope === "me";
     const effectiveEmployeeId = isSelfScope ? (user?.id ? String(user.id) : "") : employeeId;
@@ -315,15 +316,18 @@ export async function GET(req: Request) {
         const uidParam = params.length;
         query += ` AND (
           assigned_employee_id::text = $${uidParam}
-          OR created_by = $${uidParam}::int
           OR project_leader_id = $${uidParam}::int
           OR EXISTS (
             SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) elem 
             WHERE elem->>'assigned_employee_id' = $${uidParam}
+               OR elem::text LIKE '%"id":' || $${uidParam} || '%'
+               OR elem::text LIKE '%"id": ' || $${uidParam} || '%'
+               OR elem::text LIKE '%"user_id":' || $${uidParam} || '%'
+               OR elem->>'assigned_staff_ids' LIKE '%' || $${uidParam} || '%'
           )
           OR EXISTS (
             SELECT 1 FROM jsonb_array_elements(COALESCE(assigned_employees, '[]'::jsonb)) elem 
-            WHERE elem->>'id' = $${uidParam} OR elem->>'employee_id' = $${uidParam} OR elem #>> '{}' = $${uidParam} OR elem::text = $${uidParam}
+            WHERE elem->>'id' = $${uidParam} OR elem->>'employee_id' = $${uidParam} OR elem #>> '{}' = $${uidParam} OR elem::text = $${uidParam} OR elem::text LIKE '%"id":' || $${uidParam} || '%'
           )
         )`;
       } else if (effectiveEmployeeId && effectiveEmployeeId !== "all") {
@@ -336,10 +340,14 @@ export async function GET(req: Request) {
           OR EXISTS (
             SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) elem 
             WHERE elem->>'assigned_employee_id' = $${empParam}
+               OR elem::text LIKE '%"id":' || $${empParam} || '%'
+               OR elem::text LIKE '%"id": ' || $${empParam} || '%'
+               OR elem::text LIKE '%"user_id":' || $${empParam} || '%'
+               OR elem->>'assigned_staff_ids' LIKE '%' || $${empParam} || '%'
           )
           OR EXISTS (
             SELECT 1 FROM jsonb_array_elements(COALESCE(assigned_employees, '[]'::jsonb)) elem 
-            WHERE elem->>'id' = $${empParam} OR elem->>'employee_id' = $${empParam} OR elem #>> '{}' = $${empParam} OR elem::text = $${empParam}
+            WHERE elem->>'id' = $${empParam} OR elem->>'employee_id' = $${empParam} OR elem #>> '{}' = $${empParam} OR elem::text = $${empParam} OR elem::text LIKE '%"id":' || $${empParam} || '%'
           )
         )`;
       }

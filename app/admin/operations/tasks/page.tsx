@@ -379,9 +379,6 @@ export default function OperationsTasksPage() {
     }
   }, []);
 
-  const initialScope = searchParams.get("scope") === "me" ? "assigned_to_me" : "all";
-  const [scopeFilter, setScopeFilter] = useState<"all" | "assigned_to_me">(initialScope);
-
   const uniqueStaffList = useMemo(() => {
     const seen = new Set<number>();
     return staffList.filter((s) => {
@@ -1037,8 +1034,6 @@ export default function OperationsTasksPage() {
       if (clientFilter && clientFilter !== "all") params.set("client_id", clientFilter);
       if (staffFilter && staffFilter !== "all") {
         params.set("employee_id", staffFilter);
-      } else if (scopeFilter === "assigned_to_me") {
-        params.set("employee_id", "me");
       }
 
       const headers: Record<string, string> = {};
@@ -1062,7 +1057,7 @@ export default function OperationsTasksPage() {
         setLoading(false);
       }
     }
-  }, [effectiveInstId, orgFilter, searchQuery, urgencyFilter, clientFilter, staffFilter, accessToken, pathname, isStaffRole, scopeFilter, isPlatformRoute]);
+  }, [effectiveInstId, orgFilter, searchQuery, urgencyFilter, clientFilter, staffFilter, accessToken, pathname, isStaffRole, isPlatformRoute]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -2111,11 +2106,7 @@ export default function OperationsTasksPage() {
     const isStaffContext = isStaffRole || isStaffRoute;
     const isClient = isClientRole || Boolean(pathname?.startsWith("/client"));
 
-    let pool = isClient
-      ? tasks
-      : scopeFilter === "assigned_to_me"
-        ? tasks.filter((t) => isTaskAssignedToMe(t))
-        : tasks;
+    let pool = tasks;
 
     if (selectedStatusTab !== "all") {
       pool = pool.filter((t) => {
@@ -2130,7 +2121,7 @@ export default function OperationsTasksPage() {
     }
 
     return pool;
-  }, [tasks, scopeFilter, selectedStatusTab, isTaskAssignedToMe, isStaffRole, isClientRole, pathname]);
+  }, [tasks, selectedStatusTab, isStaffRole, isClientRole, pathname]);
 
   const myAssignedTasksCount = useMemo(() => {
     if (isClientRole || Boolean(pathname?.startsWith("/client"))) return tasks.length;
@@ -2139,14 +2130,7 @@ export default function OperationsTasksPage() {
 
   // Get task count for tab across subtasks (Image 3)
   const getTabCount = (tabId: string) => {
-    const isStaffRoute = Boolean(pathname?.startsWith("/staff"));
-    const isStaffContext = isStaffRole || isStaffRoute;
-    const isClient = isClientRole || Boolean(pathname?.startsWith("/client"));
-    const pool = isClient
-      ? tasks
-      : scopeFilter === "assigned_to_me"
-        ? tasks.filter((t) => isTaskAssignedToMe(t))
-        : tasks;
+    const pool = tasks;
 
     let count = 0;
     for (const t of pool) {
@@ -2237,55 +2221,6 @@ export default function OperationsTasksPage() {
           );
         })()}
       </div>
-
-      {/* Scope Switcher: Hidden on Institution Admin & Client side */}
-      {!isInstitutionAdmin && !(isClientRole || Boolean(pathname?.startsWith("/client"))) && (
-        <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-card rounded-2xl border shadow-xs">
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant={scopeFilter === "all" ? "default" : "outline"}
-              onClick={() => setScopeFilter("all")}
-              className="h-8 text-xs font-bold gap-1.5"
-            >
-              <ClipboardList className="w-3.5 h-3.5" /> All Tasks
-              <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
-                {tasks.length}
-              </Badge>
-            </Button>
-
-            <Button
-              size="sm"
-              variant={scopeFilter === "assigned_to_me" ? "default" : "outline"}
-              onClick={() => setScopeFilter("assigned_to_me")}
-              className={`h-8 text-xs font-bold gap-1.5 ${scopeFilter === "assigned_to_me"
-                ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                : "border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10"
-                }`}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Assigned to Me
-              <Badge
-                className={`ml-1 text-[10px] px-1.5 py-0 ${scopeFilter === "assigned_to_me" ? "bg-white text-emerald-800" : "bg-emerald-600 text-white"
-                  }`}
-              >
-                {myAssignedTasksCount}
-              </Badge>
-            </Button>
-          </div>
-
-          {user?.full_name && (
-            <div className="text-xs text-muted-foreground flex items-center gap-1.5 font-medium">
-              <span>Staff Account:</span>
-              <span className="font-bold text-foreground">{user.full_name}</span>
-              {isStaffRole && (
-                <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30">
-                  Staff Mode
-                </Badge>
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Metrics Row */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -2466,38 +2401,23 @@ export default function OperationsTasksPage() {
         </div>
       ) : displayedTasks.length === 0 ? (
         <div className="text-center py-20 border rounded-3xl bg-muted/10 space-y-3">
-          {scopeFilter === "assigned_to_me" ? (
+          <ClipboardCheck className="w-12 h-12 text-muted-foreground/40 mx-auto" />
+          <h3 className="text-lg font-bold text-foreground">
+            No tasks found in &quot;{STATUS_TABS.find((t) => t.id === selectedStatusTab)?.label}&quot;
+          </h3>
+          {!(isClientRole || Boolean(pathname?.startsWith("/client"))) ? (
             <>
-              <Sparkles className="w-12 h-12 text-emerald-500/60 mx-auto" />
-              <h3 className="text-lg font-bold text-foreground">No Tasks Assigned to You</h3>
               <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                When your institution administrator assigns tasks or deliverables to you, they will appear right here.
+                Click &quot;Create Task / Project&quot; to add a new project, then use the Action button to add and assign multiple sub-tasks.
               </p>
-              <Button variant="outline" size="sm" onClick={() => setScopeFilter("all")} className="mt-2 text-xs font-bold">
-                View All Tasks
+              <Button onClick={handleOpenCreateTask} size="sm" className="mt-2 font-bold">
+                <Plus className="w-4 h-4 mr-1.5" /> Create Task / Project
               </Button>
             </>
           ) : (
-            <>
-              <ClipboardCheck className="w-12 h-12 text-muted-foreground/40 mx-auto" />
-              <h3 className="text-lg font-bold text-foreground">
-                No tasks found in &quot;{STATUS_TABS.find((t) => t.id === selectedStatusTab)?.label}&quot;
-              </h3>
-              {!(isClientRole || Boolean(pathname?.startsWith("/client"))) ? (
-                <>
-                  <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                    Click &quot;Create Task / Project&quot; to add a new project, then use the Action button to add and assign multiple sub-tasks.
-                  </p>
-                  <Button onClick={handleOpenCreateTask} size="sm" className="mt-2 font-bold">
-                    <Plus className="w-4 h-4 mr-1.5" /> Create Task / Project
-                  </Button>
-                </>
-              ) : (
-                <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                  Projects and tasks associated with your account will appear right here.
-                </p>
-              )}
-            </>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+              Projects and tasks associated with your account will appear right here.
+            </p>
           )}
         </div>
       ) : (
