@@ -770,29 +770,16 @@ export function AppSidebar() {
                     if (isStudent || isParent) return [];
                     return [item];
                 }
+                if (item.url === "/admin/users") {
+                    if (isInstitutionAdmin) return [];
+                    return [item];
+                }
                 if (!isStudent && item.url === "/admin/my-program") {
                     return [];
                 }
                 if (item.url === "/admin/students") {
-                    if (isTeacher) {
+                    if (isTeacher || isInstitutionAdmin) {
                         return [];
-                    }
-                    if (isInstitutionAdmin) {
-                        return [{
-                            title: "My Classroom",
-                            url: "/admin/students",
-                            icon: School,
-                            children: [
-                                { title: "All Students", url: "/admin/students", icon: UsersRound },
-                                { title: "Attendance", url: "/admin/students/attendance", icon: ClipboardCheck },
-                                { title: "Assignments", url: "/admin/content/assignments", icon: ClipboardList },
-                                { title: "Practice Exams", url: "/admin/content/practice-exams", icon: BookCheck },
-                                { title: "Exams", url: "/admin/content/exams", icon: FileText },
-                                { title: "Lecture Notes", url: "/admin/content/notes", icon: StickyNote },
-                                { title: "My Timetable", url: "/admin/classroom/my-timetable", icon: CalendarDays },
-                                { title: "Growth Chart", url: "/admin/content/growth-chart", icon: TrendingUp },
-                            ],
-                        }];
                     }
                     return [item];
                 }
@@ -851,7 +838,7 @@ export function AppSidebar() {
                     return [item];
                 }
                 if ((item.url === "/admin/content" || item.url === "/admin/content/notes" || item.title === "Academics") && item.children) {
-                    if (isPlatformAdmin || isStudent || isParent || isTeacher) return [];
+                    if (isPlatformAdmin || isStudent || isParent || isTeacher || isInstitutionAdmin) return [];
                     return [item];
                 }
                 if (item.url === "/admin/vendors" && item.children) {
@@ -966,6 +953,7 @@ export function AppSidebar() {
                     }];
                 }
                 if (item.url === "/admin/institutions" && item.children) {
+                    if (isInstitutionAdmin) return [];
                     return [{
                         ...item,
                         children: item.children.filter((child) => {

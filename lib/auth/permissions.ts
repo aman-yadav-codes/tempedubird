@@ -559,10 +559,19 @@ export function isAdminPathVisibleForRole(
     return !isStudentUser(user) && !isParentUser(user);
   }
   if (normalized === "/admin/affiliate" || normalized.startsWith("/admin/affiliate")) return true;
+  if (normalized === "/admin/users" || normalized.startsWith("/admin/users/")) {
+    if (isInstitutionAdminUser(user)) return false;
+  }
+
+  if (normalized === "/admin/students" || normalized.startsWith("/admin/students/")) {
+    if (isInstitutionAdminUser(user)) return false;
+  }
+
+  if (normalized === "/admin/institutions" || normalized.startsWith("/admin/institutions/")) {
+    if (isInstitutionAdminUser(user)) return false;
+  }
+
   if (normalized === "/admin/classroom" || normalized.startsWith("/admin/classroom/")) {
-    if (normalized === "/admin/classroom/my-timetable" && (isInstitutionAdminUser(user) || isPlatformAdminUser(user))) {
-      return true;
-    }
     return (
       !isInstitutionAdminUser(user) &&
       (isStudentUser(user) || isTeacherUser(user) || isParentUser(user))
@@ -606,7 +615,8 @@ export function isAdminPathVisibleForRole(
   }
 
   if (normalized === "/admin/content" || normalized.startsWith("/admin/content/")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || isTeacherUser(user);
+    if (isInstitutionAdminUser(user)) return false;
+    return isPlatformAdminUser(user) || isTeacherUser(user);
   }
 
   if (

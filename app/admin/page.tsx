@@ -27,6 +27,7 @@ import {
   School,
   Phone,
   ClipboardList,
+  Briefcase,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -56,6 +57,7 @@ type DashboardInstitution = {
   location_name?: string | null;
   student_count: number;
   program_count: number;
+  staff_count?: number;
 };
 
 type DashboardBranch = {
@@ -702,63 +704,54 @@ export default function AdminPage() {
 
   // DYNAMIC INSTITUTION ADMIN ROLE
   let instContexts: ContextOption[] = [];
-  if (dashboard?.branches && dashboard.branches.length > 0) {
-    instContexts = dashboard.branches.map((branch, idx) => ({
-      id: branch.id,
-      category: branch.is_primary ? "Main Campus" : "Branch Campus",
-      title: branch.branch_name,
-      subtitle: [branch.city, branch.state].filter(Boolean).join(", ") || dashboard?.institutions?.[0]?.name || "Campus Location",
-      code: `BRANCH-${String(idx + 1).padStart(2, "0")}`,
-      metric: "Active Branch",
-    }));
-  } else if (dashboard?.institutions && dashboard.institutions.length > 0) {
+  if (dashboard?.institutions && dashboard.institutions.length > 0) {
     instContexts = dashboard.institutions.map((inst, idx) => ({
       id: inst.id,
-      category: "Registered Institution",
+      category: "Organization Workspace",
       title: inst.name,
-      subtitle: inst.location_name || "Main Campus",
-      code: `CAMPUS-${String(idx + 1).padStart(2, "0")}`,
-      metric: `${inst.student_count || 0} Students`,
+      subtitle: inst.location_name || "Main Workspace",
+      code: `BIZ-${String(idx + 1).padStart(2, "0")}`,
+      metric: `${inst.staff_count || 0} Staff Members`,
     }));
   } else {
     instContexts = [
       {
         id: 1,
-        category: "Institution Campus",
-        title: dashboard?.institutions?.[0]?.name || "My Institution Campus",
-        subtitle: "Main Operational Campus",
-        code: "CAMPUS-01",
-        metric: `${getCardValue(0, "0")} Students`,
+        category: "Organization Workspace",
+        title: dashboard?.institutions?.[0]?.name || "My Organization",
+        subtitle: "Main Workspace",
+        code: "BIZ-01",
+        metric: `${getCardValue(1, "0")} Staff Members`,
       },
     ];
   }
 
   const instMetrics: DashboardMetricCard[] = [
     {
-      label: getCardLabel(0, "Enrolled Students"),
-      value: getCardValue(0, "0"),
-      hint: getCardHint(0, "Active student registrations"),
-      color: "emerald",
-      icon: Users,
-    },
-    {
-      label: getCardLabel(1, "Faculty & Staff"),
+      label: getCardLabel(1, "Team & Staff"),
       value: getCardValue(1, "0"),
-      hint: getCardHint(1, "Teaching staff members"),
+      hint: getCardHint(1, "Active staff members"),
       color: "primary",
       icon: UserCheck,
     },
     {
-      label: getCardLabel(2, "Live Programs"),
+      label: getCardLabel(0, "Active Tasks / Work"),
+      value: getCardValue(0, "0"),
+      hint: getCardHint(0, "Current operations and work items"),
+      color: "emerald",
+      icon: Briefcase,
+    },
+    {
+      label: getCardLabel(2, "Invoices & Finance"),
       value: getCardValue(2, "0"),
-      hint: getCardHint(2, "Offered degree & courses"),
+      hint: getCardHint(2, "Billed accounts & invoices"),
       color: "blue",
-      icon: BookOpen,
+      icon: CreditCard,
     },
     {
       label: getCardLabel(3, "Open Enquiries"),
       value: getCardValue(3, "0"),
-      hint: getCardHint(3, "Website leads awaiting response"),
+      hint: getCardHint(3, "Website leads & client pipeline"),
       color: "amber",
       icon: AlertCircle,
     },
@@ -768,48 +761,48 @@ export default function AdminPage() {
   if (dashboard?.programs && dashboard.programs.length > 0) {
     instActiveModules = dashboard.programs.map((prog) => ({
       id: prog.id,
-      code: prog.code || `PROG-${prog.id}`,
+      code: prog.code || `WORK-${prog.id}`,
       title: prog.title,
-      subtitle: `${prog.student_count || 0} Enrolled Students`,
-      statusBadge: "Active Course",
+      subtitle: "Active Operations Item",
+      statusBadge: "Operational",
       progress: Math.min(100, Math.max(25, (prog.student_count || 1) * 12)),
-      dueDate: "Session 2025-2026",
-      primaryActionLabel: "Manage Students",
-      primaryActionHref: `/admin/students?programId=${prog.id}`,
-      secondaryActionLabel: "Course Details",
-      secondaryActionHref: "/admin/institutions/programs",
+      dueDate: "Active",
+      primaryActionLabel: "View Work",
+      primaryActionHref: "/admin/operations/tasks",
+      secondaryActionLabel: "Work Logs",
+      secondaryActionHref: "/admin/operations/work-logs",
     }));
   }
 
   const instQuickShortcuts: QuickShortcut[] = [
     {
-      title: "Student Admissions & Records",
-      description: "Register students, assign roll numbers, upload documents, and track enrollments.",
-      href: "/admin/students",
-      icon: Users,
+      title: "Task & Work Management",
+      description: "Assign work, track employee deliverables, and review milestones.",
+      href: "/admin/operations/tasks",
+      icon: Briefcase,
       colorBg: "bg-blue-500/10",
       colorText: "text-blue-600 dark:text-blue-400",
     },
     {
-      title: "Programs & Courses",
-      description: "Manage offered degree courses, streams, syllabus details, and intake capacity.",
-      href: "/admin/institutions/programs",
-      icon: BookOpen,
+      title: "Staff & Team Directory",
+      description: "Manage staff profiles, assign permissions, and track attendance.",
+      href: "/admin/staff",
+      icon: Users,
       colorBg: "bg-emerald-500/10",
       colorText: "text-emerald-600 dark:text-emerald-400",
     },
     {
-      title: "Course Inquiries & Leads",
-      description: "Respond to incoming student inquiries, contact admission leads, and track pipeline.",
-      href: "/admin/sales/leads",
-      icon: Phone,
+      title: "Sales Pipeline & Leads",
+      description: "Track prospective clients, proposals, and pipeline conversions.",
+      href: "/admin/sales/pipeline",
+      icon: TrendingUp,
       colorBg: "bg-amber-500/10",
       colorText: "text-amber-600 dark:text-amber-400",
     },
     {
-      title: "Fee & Payment Management",
-      description: "Collect tuition fees, generate invoice receipts, and track defaulters.",
-      href: "/admin/students/fee-management",
+      title: "Finance & Invoices",
+      description: "Track work billing, invoices, expenses, and payments.",
+      href: "/admin/finance/invoice",
       icon: CreditCard,
       colorBg: "bg-rose-500/10",
       colorText: "text-rose-600 dark:text-rose-400",
@@ -819,27 +812,26 @@ export default function AdminPage() {
   return (
     <UnifiedDashboardView
       role="institution_admin"
-      statusBadgeText="Campus Operational • Active Session"
-      idBadgeText="INST-CAMPUS"
-      greetingSubtitle="Managing your campus programs, faculty, student admissions, fee collections, and website leads."
-      primaryButtonText="Add New Student"
-      primaryButtonHref="/admin/students"
-      primaryButtonIcon={Plus}
-      secondaryButtonText="Course Inquiries"
-      secondaryButtonHref="/admin/sales/leads"
-      secondaryButtonIcon={Phone}
-      contextLabel="SWITCH ACTIVE CAMPUS VIEW"
+      statusBadgeText="Workspace Operational • Active Session"
+      idBadgeText="INST-BIZ"
+      greetingSubtitle="Managing your operations, staff workflow, tasks, finances, and client leads."
+      primaryButtonText="Create Task / Work"
+      primaryButtonHref="/admin/operations/tasks"
+      primaryButtonIcon={Briefcase}
+      secondaryButtonText="Leads & Sales"
+      secondaryButtonHref="/admin/sales/pipeline"
+      secondaryButtonIcon={TrendingUp}
+      contextLabel="SWITCH ACTIVE WORKSPACE VIEW"
       contexts={instContexts}
-      metricsTitle="Campus Performance & Attendance Metrics"
+      metricsTitle="Performance & Operations Metrics"
       metrics={instMetrics}
       actionRequired={dashboard?.actionRequired}
       latestRecords={dashboard?.latestRecords}
-      activeSectionTitle="Active Campus Academic Programs"
-      activeSectionSubtitle="Programs and student enrollment numbers configured for your institution."
+      activeSectionTitle="Active Team Operations & Workflows"
+      activeSectionSubtitle="Operations and tasks currently tracked across your organization."
       activeModules={instActiveModules}
       quickShortcuts={instQuickShortcuts}
       notifications={notifications}
     />
   );
 }
-
