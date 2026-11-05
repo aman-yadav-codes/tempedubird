@@ -275,6 +275,11 @@ export default function OperationsTasksPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const { institutions, activeInstitution, activeInstitutionId } = useActiveInstitution();
   const isPlatformRoute = Boolean(pathname?.startsWith("/platformadmin"));
+  const isPlatformAdmin = useMemo(() => {
+    if (isPlatformRoute) return true;
+    const codes = (user as any)?.role_codes || [(user as any)?.role || (user as any)?.primary_role || ""];
+    return codes.some((r: string) => ["platform_admin", "superadmin", "super_admin", "platformadmin"].includes(String(r).toLowerCase()));
+  }, [isPlatformRoute, user]);
   const isInstitutionAdmin = useMemo(() => {
     // Platform admin and institution admin share the same simplified UI
     if (pathname?.startsWith("/instituteadmin") || isPlatformRoute) return true;
@@ -1617,6 +1622,27 @@ export default function OperationsTasksPage() {
   // 1-Click direct sub-task status toggle
   const handleSubTaskStatusDirectUpdate = async (task: OperationTask, subId: string, newStatus: any) => {
     let startLoc: any = null;
+
+    // Check permission to stop or change status of another user's running subtask
+    const currentSubs = Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : [];
+    const targetSub = currentSubs.find((s) => String(s.id) === String(subId));
+    if (targetSub && targetSub.status === "in_progress" && newStatus !== "in_progress") {
+      const uidStr = String(user?.id);
+      const uName = (((user as any)?.full_name || (user as any)?.name) || "").toLowerCase().trim();
+      const isStartedByMe =
+        (targetSub as any).started_by_id
+          ? String((targetSub as any).started_by_id) === uidStr
+          : (targetSub as any).started_by_name && uName
+          ? String((targetSub as any).started_by_name).toLowerCase().trim() === uName
+          : (targetSub as any).assigned_employee_id
+          ? String((targetSub as any).assigned_employee_id) === uidStr
+          : false;
+
+      if (!isPlatformAdmin && !isStartedByMe) {
+        toast.error(`You can only stop your own task. This task was started by ${(targetSub as any)?.started_by_name || 'another user'}.`);
+        return;
+      }
+    }
 
     if (newStatus === "in_progress") {
       try {

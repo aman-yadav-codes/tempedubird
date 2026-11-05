@@ -1548,7 +1548,28 @@ export async function PUT(req: Request) {
             (!ex.started_by_id && ex.assigned_employee_id && String(ex.assigned_employee_id) === String(currentUserId))
           );
           const isAutoStopped = Boolean(startingSubId && String(s.id) !== String(startingSubId) && ex && ex.status === "in_progress" && wasStartedByCurrentUser);
-          const isThisSubStopping = isAutoStopped || (s.status === "pending" && ex && ex.status === "in_progress");
+
+          // Prevent non-owner from stopping someone else's running subtask
+          const isOwnedByCurrentUser = ex && (
+            (ex.started_by_id && String(ex.started_by_id) === String(currentUserId)) ||
+            (!ex.started_by_id && ex.assigned_employee_id && String(ex.assigned_employee_id) === String(currentUserId))
+          );
+          const isTryingToStopOthersSubtask =
+            !isUserPlatformAdmin &&
+            ex &&
+            ex.status === "in_progress" &&
+            s.status !== "in_progress" &&
+            !isOwnedByCurrentUser;
+
+          if (isTryingToStopOthersSubtask) {
+            // Keep existing running subtask state intact!
+            s.status = "in_progress";
+            s.started_at = ex.started_at;
+            s.started_by_id = ex.started_by_id;
+            s.started_by_name = ex.started_by_name;
+          }
+
+          const isThisSubStopping = isAutoStopped || (s.status === "pending" && ex && ex.status === "in_progress" && !isTryingToStopOthersSubtask);
           if (isAutoStopped) {
             taskHistory.push({
               id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,

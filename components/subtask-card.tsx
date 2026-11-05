@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { toast } from "sonner";
 import { useAuthStore } from "@/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -164,6 +165,28 @@ export function SubtaskCard({
 
   const isSubDone = subtask.status === "completed";
   const isRunning = subtask.status === "in_progress";
+
+  const isStartedByMe = useMemo(() => {
+    if (!currentUser) return false;
+    const uidStr = String(currentUser.id);
+    const uName = (((currentUser as any).full_name || (currentUser as any).name) || "").toLowerCase().trim();
+
+    if (subtask.started_by_id) {
+      return String(subtask.started_by_id) === uidStr;
+    }
+    if (subtask.started_by_name && uName) {
+      return String(subtask.started_by_name).toLowerCase().trim() === uName;
+    }
+    if (subtask.assigned_employee_id) {
+      return String(subtask.assigned_employee_id) === uidStr;
+    }
+    if (Array.isArray(subtask.assigned_staff_ids) && subtask.assigned_staff_ids.some((id: any) => String(id) === uidStr)) {
+      return true;
+    }
+    return false;
+  }, [currentUser, subtask.started_by_id, subtask.started_by_name, subtask.assigned_employee_id, subtask.assigned_staff_ids]);
+
+  const canStopSubtask = isStartedByMe || isPlatformAdmin;
 
   // Collect images from uploads / image_url
   const subImages: Array<{ url: string; name?: string }> = [];
@@ -350,6 +373,10 @@ export function SubtaskCard({
   };
 
   const handleStatusSelect = (val: string) => {
+    if (isRunning && val !== "in_progress" && !canStopSubtask) {
+      toast.error(`You can only stop your own task. This task was started by ${subtask.started_by_name || 'another user'}.`);
+      return;
+    }
     if (onStatusChange) {
       onStatusChange(task, subtask.id, val);
     } else {
@@ -611,9 +638,11 @@ export function SubtaskCard({
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[11px] font-semibold text-muted-foreground">Status:</span>
           <select
+            disabled={isRunning && !canStopSubtask}
             value={subtask.status || "pending"}
             onChange={(e) => handleStatusSelect(e.target.value)}
-            className="h-7 text-xs font-semibold w-28 bg-muted/20 rounded-md border border-input px-2 outline-none cursor-pointer text-foreground shadow-2xs"
+            className="h-7 text-xs font-semibold w-28 bg-muted/20 rounded-md border border-input px-2 outline-none cursor-pointer text-foreground shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+            title={isRunning && !canStopSubtask ? `Running by ${subtask.started_by_name || 'another user'}. Only they can stop it.` : undefined}
           >
             {allowedStatuses.map((s) => (
               <option key={s.id} value={s.id}>
@@ -622,31 +651,46 @@ export function SubtaskCard({
             ))}
           </select>
 
-          {/* Start / Stop Button: available for both staff and client */}
+          {/* Start / Stop Button: only owner (or platform admin) can stop */}
           {isRunning ? (
-            <div className="flex items-center gap-1">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  if (onStop) onStop(task, subtask);
-                  else handleStatusSelect("pending");
-                }}
-                className="h-7 px-2.5 text-xs font-bold gap-1 text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer shadow-2xs rounded-md"
-              >
-                <Square className="w-3 h-3 fill-current text-rose-600" />
-                <span>Stop</span>
-              </Button>
-              {subtask.started_by_name && (
-                <span
-                  className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.5 rounded truncate max-w-[120px]"
-                  title={`Running by ${subtask.started_by_name}`}
+            canStopSubtask ? (
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (onStop) onStop(task, subtask);
+                    else handleStatusSelect("pending");
+                  }}
+                  className="h-7 px-2.5 text-xs font-bold gap-1 text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer shadow-2xs rounded-md"
                 >
-                  {subtask.started_by_name}
+                  <Square className="w-3 h-3 fill-current text-rose-600" />
+                  <span>Stop</span>
+                </Button>
+                {subtask.started_by_name && (
+                  <span
+                    className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.5 rounded truncate max-w-[120px]"
+                    title={`Running by ${subtask.started_by_name}`}
+                  >
+                    {subtask.started_by_name}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div
+                className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 shadow-2xs select-none"
+                title={`Running by ${subtask.started_by_name || 'team member'}. Only they can stop it.`}
+              >
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
-              )}
-            </div>
+                <span className="text-[11px] font-semibold truncate max-w-[150px]">
+                  {subtask.started_by_name ? `Running (${subtask.started_by_name})` : "In Progress"}
+                </span>
+              </div>
+            )
           ) : !isSubDone ? (
             <Button
               type="button"

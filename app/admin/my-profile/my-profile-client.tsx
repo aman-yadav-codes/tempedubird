@@ -255,6 +255,17 @@ export function MyProfileClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const isPlatformAdmin = useMemo(() => {
+    if (pathname?.startsWith("/platformadmin")) return true;
+    const codes = Array.isArray((user as any)?.role_codes)
+      ? (user as any).role_codes
+      : [(user as any)?.role || (user as any)?.primary_role || ""].filter(Boolean);
+    return codes.some((r: string) =>
+      ["platform_admin", "superadmin", "super_admin", "admin", "platformadmin", "institution_admin", "head_of_operations"].includes(
+        String(r).toLowerCase()
+      )
+    );
+  }, [pathname, user]);
 
   const activeTab = searchParams.get("tab") || "my-data";
   const setActiveTab = (tab: string) => {
@@ -572,6 +583,27 @@ export function MyProfileClient() {
   const handleSubtaskStatusUpdate = async (task: any, subId: string | number, newStatus: string, explicitLocation?: any) => {
     let startLoc = explicitLocation || null;
 
+    // Check permission to stop or change status of another user's running subtask
+    const currentSubs = Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : [];
+    const targetSub = currentSubs.find((s: any) => String(s.id) === String(subId));
+    if (targetSub && targetSub.status === "in_progress" && newStatus !== "in_progress") {
+      const uidStr = String(user?.id);
+      const uName = (((user as any)?.full_name || (user as any)?.name) || "").toLowerCase().trim();
+      const isStartedByMe =
+        targetSub.started_by_id
+          ? String(targetSub.started_by_id) === uidStr
+          : targetSub.started_by_name && uName
+          ? String(targetSub.started_by_name).toLowerCase().trim() === uName
+          : targetSub.assigned_employee_id
+          ? String(targetSub.assigned_employee_id) === uidStr
+          : false;
+
+      if (!isPlatformAdmin && !isStartedByMe) {
+        toast.error(`You can only stop your own task. This task was started by ${targetSub?.started_by_name || 'another user'}.`);
+        return;
+      }
+    }
+
     // Request browser location if starting
     if (newStatus === "in_progress") {
       if (!startLoc) {
@@ -585,7 +617,6 @@ export function MyProfileClient() {
       }
     }
 
-    const currentSubs = Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : [];
     const updatedSubs = currentSubs.map((s: any) => {
       if (String(s.id) !== String(subId)) {
         if (newStatus === "in_progress" && normalizeTaskStatus(s.status) === "in_progress") {
