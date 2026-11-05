@@ -329,14 +329,6 @@ export function AuthModalDialog({
     try {
       const payloadEmail = signUpEmail.trim() || null;
       const derivedFullName = signUpFullName.trim() || (payloadEmail ? payloadEmail.split("@")[0] : `User ${cleanPhone.slice(-4)}`);
-      const resolvedInstId =
-        institutionId ||
-        urlInstId ||
-        activeInstitutionId ||
-        defaultEnvInstitutionId ||
-        (envInstId && /^\d+$/.test(envInstId) ? Number(envInstId) : null) ||
-        null;
-
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -346,7 +338,7 @@ export function AuthModalDialog({
           phone: cleanPhone,
           address: signUpCity.trim(),
           role_code: "institution_admin",
-          institution_id: resolvedInstId,
+          institution_id: null,
           referral_code: signUpReferralCode.trim() || null,
           password: signUpPassword,
           confirmPassword: signUpConfirmPassword || signUpPassword,
