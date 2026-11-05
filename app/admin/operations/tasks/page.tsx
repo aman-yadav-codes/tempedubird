@@ -2481,7 +2481,9 @@ export default function OperationsTasksPage() {
               ? rawSubTasksList
               : rawSubTasksList.filter((s) => normalizeStatus(s.status) === selectedStatusTab);
             const completedSubs = rawSubTasksList.filter((s) => normalizeStatus(s.status) === "completed").length;
-            const totalCost = rawSubTasksList.reduce((sum, s) => sum + (parseFloat(String(s.price)) || 0), 0) || parseFloat(String(task.price || 0));
+            const workCost = parseFloat(String(task.cost ?? task.price ?? 0)) || 0;
+            const allTasksCost = rawSubTasksList.reduce((sum, s) => sum + (parseFloat(String(s.price ?? (s as any).cost ?? 0)) || 0), 0);
+            const totalCost = workCost + allTasksCost;
             const totalMinutes = rawSubTasksList.reduce((sum, s) => {
               const h = parseFloat(String(s.duration_hours)) || 0;
               const m = parseFloat(String(s.duration_minutes)) || 0;
@@ -2920,6 +2922,11 @@ export default function OperationsTasksPage() {
                       <span className="font-bold text-foreground font-mono text-sm tracking-wider">
                         {formatPriceDisplay(totalCost, task)}
                       </span>
+                      {allTasksCost > 0 && workCost > 0 && (
+                        <span className="text-[10px] text-muted-foreground block font-mono">
+                          ({formatPriceDisplay(workCost, task)} + {formatPriceDisplay(allTasksCost, task)})
+                        </span>
+                      )}
                     </div>
                     <div className="border-l pl-3">
                       <span className="text-muted-foreground block text-[10px] font-medium uppercase">Expected Duration</span>

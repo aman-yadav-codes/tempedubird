@@ -269,7 +269,9 @@ export function SubtaskModalDialog({
 
   // Rollups
   const subTasks: any[] = Array.isArray(task?.sub_tasks) ? task.sub_tasks : [];
-  const totalCost = subTasks.reduce((sum, s) => sum + (parseFloat(String(s.price)) || 0), 0) || parseFloat(String(task?.price || 0));
+  const workCost = parseFloat(String(task?.cost ?? task?.price ?? 0)) || 0;
+  const allTasksCost = subTasks.reduce((sum, s) => sum + (parseFloat(String(s.price ?? s.cost ?? 0)) || 0), 0);
+  const totalCost = workCost + allTasksCost;
   const totalMinutes = subTasks.reduce((sum, s) => {
     const h = parseFloat(String(s.duration_hours)) || 0;
     const m = parseFloat(String(s.duration_minutes)) || 0;
@@ -507,6 +509,11 @@ export function SubtaskModalDialog({
                     <span className="font-bold text-foreground font-mono tracking-wider">
                       ₹{Math.round(totalCost).toLocaleString("en-IN")}
                     </span>
+                    {workCost > 0 && allTasksCost > 0 && (
+                      <span className="text-[10px] text-muted-foreground block font-mono">
+                        (₹{Math.round(workCost).toLocaleString("en-IN")} + ₹{Math.round(allTasksCost).toLocaleString("en-IN")})
+                      </span>
+                    )}
                   </div>
                 )}
                 <div className={canSeePrice ? "border-l pl-3" : ""}>

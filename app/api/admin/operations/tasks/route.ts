@@ -592,7 +592,13 @@ export async function GET(req: Request) {
     const completedTasks = tasks.filter(t => t.status === "completed").length;
     const urgentTasks = tasks.filter(t => t.urgency === "urgent" || t.urgency === "high").length;
     const totalRevenue = isUserPlatformAdmin
-      ? tasks.reduce((sum, t) => sum + (parseFloat(t.price) || 0), 0)
+      ? tasks.reduce((sum, t) => {
+          const taskCost = parseFloat(t.cost || t.price || 0) || 0;
+          const subtasksCost = Array.isArray(t.sub_tasks)
+            ? t.sub_tasks.reduce((sSum: number, st: any) => sSum + (parseFloat(st.price || st.cost || 0) || 0), 0)
+            : 0;
+          return sum + taskCost + subtasksCost;
+        }, 0)
       : null;
     const totalEstimatedHours = tasks.reduce((sum, t) => sum + (parseFloat(t.estimated_hours) || 0), 0);
     const totalLoggedHours = tasks.reduce((sum, t) => sum + (parseFloat(t.logged_hours) || 0), 0);
