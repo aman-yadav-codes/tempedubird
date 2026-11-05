@@ -53,7 +53,7 @@ function toMetadata(files: UploadedDocumentFile[]): FileMetadata[] {
   }));
 }
 
-async function deleteCloudinaryDocument(accessToken: string | null, publicId?: string, resourceType?: string) {
+async function deleteUploadedDocument(accessToken: string | null, publicId?: string, resourceType?: string) {
   if (!accessToken || !publicId) return;
   await fetch("/api/admin/uploads/documents/delete", {
     method: "POST",
@@ -213,7 +213,7 @@ export function DocumentFileUpload({
                     const fileId = file.publicId || file.url;
                     setDeletingFileId(fileId);
                     try {
-                      await deleteCloudinaryDocument(accessToken, file.publicId, file.resourceType);
+                      await deleteUploadedDocument(accessToken, file.publicId, file.resourceType);
                       removeFile(fileId);
                       onFilesChange(files.filter((item) => (item.publicId || item.url) !== fileId));
                     } finally {

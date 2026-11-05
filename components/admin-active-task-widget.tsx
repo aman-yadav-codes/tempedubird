@@ -118,32 +118,78 @@ export function AdminActiveTaskWidget() {
     };
   }, [fetchTasks]);
 
-  // Find currently running active subtask or task
+  // Find currently running active subtask or task for the CURRENT USER ONLY
   const activeInfo = useMemo(() => {
-    // 1. Priority 1: Any subtask explicitly in_progress or with started_at and no stopped_at
+    if (!user?.id) return null;
+    const currentUserIdStr = String(user.id);
+    const currentUserNameLower = (((user as any)?.name || (user as any)?.full_name) || "").toLowerCase().trim();
+
+    const isRunningForMe = (sub: SubTask, t: TaskItem) => {
+      const isSubRunning = normalizeStatus(sub.status) === "in_progress" || Boolean(sub.started_at && !sub.stopped_at);
+      if (!isSubRunning) return false;
+
+      // 1. Explicit started_by_id check
+      if ((sub as any).started_by_id) {
+        return String((sub as any).started_by_id) === currentUserIdStr;
+      }
+
+      // 2. Explicit started_by_name check
+      if ((sub as any).started_by_name && currentUserNameLower) {
+        return String((sub as any).started_by_name).toLowerCase().trim() === currentUserNameLower;
+      }
+
+      // 3. Check history of the task for latest start action on this subtask
+      if (Array.isArray(t.history)) {
+        const events = t.history
+          .filter((h: any) => (h.action === "started" || h.action === "stopped") && String(h.subtask_id) === String(sub.id))
+          .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        if (events[0] && events[0].action === "started") {
+          if (events[0].user_id) return String(events[0].user_id) === currentUserIdStr;
+          if (events[0].user_name && currentUserNameLower) {
+            return String(events[0].user_name).toLowerCase().trim() === currentUserNameLower;
+          }
+        }
+      }
+
+      // 4. Assigned employee matching
+      if (sub.assigned_employee_id) {
+        return String(sub.assigned_employee_id) === currentUserIdStr;
+      }
+      if (Array.isArray((sub as any).assigned_staff_ids)) {
+        return (sub as any).assigned_staff_ids.some((id: any) => String(id) === currentUserIdStr);
+      }
+
+      // 5. If client: check client assignment
+      if (isClientRole) {
+        if ((sub as any).client_id && String((sub as any).client_id) === currentUserIdStr) return true;
+        if (String((t as any).client_id) === currentUserIdStr) return true;
+      }
+
+      return false;
+    };
+
+    // 1. Priority 1: Subtask in_progress running for THIS user
     for (const t of tasks) {
       const subs = Array.isArray(t.sub_tasks) ? t.sub_tasks : [];
-      const runningSub = subs.find(
-        (s) => normalizeStatus(s.status) === "in_progress" || Boolean(s.started_at && !s.stopped_at)
-      );
-      if (runningSub) {
+      const myRunningSub = subs.find((s) => isRunningForMe(s, t));
+      if (myRunningSub) {
         return {
           task: t,
-          subtask: runningSub,
+          subtask: myRunningSub,
         };
       }
     }
 
-    // 2. Priority 2: Task history where latest start/stop action was "started" with subtask_id
+    // 2. Priority 2: Task history where latest start action was for THIS user
     for (const t of tasks) {
       const hist = Array.isArray(t.history) ? t.history : [];
       const lastEvent = [...hist]
         .reverse()
         .find((h) => h.action === "started" || h.action === "stopped");
-      if (lastEvent && lastEvent.action === "started" && lastEvent.subtask_id) {
+      if (lastEvent && lastEvent.action === "started" && String(lastEvent.user_id) === currentUserIdStr && lastEvent.subtask_id) {
         const subs = Array.isArray(t.sub_tasks) ? t.sub_tasks : [];
         const matchSub = subs.find((s) => String(s.id) === String(lastEvent.subtask_id));
-        if (matchSub) {
+        if (matchSub && normalizeStatus(matchSub.status) === "in_progress") {
           return {
             task: t,
             subtask: matchSub,
@@ -152,19 +198,26 @@ export function AdminActiveTaskWidget() {
       }
     }
 
-    // 3. Priority 3: Parent task in_progress
+    // 3. Priority 3: Parent task in_progress explicitly started by or assigned to THIS user
     for (const t of tasks) {
       if (normalizeStatus(t.status) === "in_progress") {
-        const subs = Array.isArray(t.sub_tasks) ? t.sub_tasks : [];
-        return {
-          task: t,
-          subtask: subs[0] || null,
-        };
+        const isMyTask =
+          (t as any).started_by_id ? String((t as any).started_by_id) === currentUserIdStr
+          : t.assigned_employee_id ? String(t.assigned_employee_id) === currentUserIdStr
+          : isClientRole && String((t as any).client_id) === currentUserIdStr;
+        if (isMyTask) {
+          const subs = Array.isArray(t.sub_tasks) ? t.sub_tasks : [];
+          const mySub = subs.find((s) => isRunningForMe(s, t)) || subs[0] || null;
+          return {
+            task: t,
+            subtask: mySub,
+          };
+        }
       }
     }
 
     return null;
-  }, [tasks]);
+  }, [tasks, user, isClientRole]);
 
   const activeTask = activeInfo?.task ?? null;
   const activeSubtask = activeInfo?.subtask ?? null;
@@ -230,14 +283,16 @@ export function AdminActiveTaskWidget() {
         ? activeTask.sub_tasks.map((s) => {
             const isMatch = activeSubtask ? String(s.id) === String(activeSubtask.id) : normalizeStatus(s.status) === "in_progress";
             return isMatch
-              ? { ...s, status: "pending", stopped_at: new Date().toISOString() }
+              ? { ...s, status: "pending", stopped_at: new Date().toISOString(), stopped_by_id: user?.id, stopped_by_name: (user as any)?.name || (user as any)?.full_name }
               : s;
           })
         : [];
 
+      const hasOtherRunningSubs = updatedSubs.some((s) => normalizeStatus(s.status) === "in_progress");
+
       const payload: any = {
         id: activeTask.id,
-        status: "pending",
+        status: hasOtherRunningSubs ? "in_progress" : "pending",
         action: "stop_task",
         sub_tasks: updatedSubs,
         stop_location: stopLoc && stopLoc.latitude ? stopLoc : undefined,

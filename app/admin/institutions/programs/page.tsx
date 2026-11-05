@@ -1558,7 +1558,7 @@ export default function ProgramsAdminPage() {
         }
     }
 
-    // Upload a single media file → returns Cloudinary payload
+    // Upload a single media file → returns upload payload
     async function uploadMediaFile(file: File): Promise<{ url: string; mediaType: "image" | "video" }> {
         const fd = new FormData();
         fd.append("file", file);

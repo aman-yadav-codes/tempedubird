@@ -1,9 +1,10 @@
-import { createHash, randomBytes } from "crypto";
+import { randomBytes } from "crypto";
 import fs from "fs/promises";
 import path from "path";
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { canAccessAdminArea, hasPermission } from "@/lib/auth/permissions";
+import { isOpeninaryConfigured, isMediaSupportedByOpeninary, uploadToOpeninary } from "@/lib/uploads/openinary";
 
 const MAX_DOCUMENT_FILE_SIZE = 100 * 1024 * 1024; // 100MB for video/media support
 const ACCEPTED_DOCUMENT_TYPES = new Set([
@@ -40,7 +41,6 @@ const ALLOWED_EXTENSIONS = new Set([
   ".xls", ".xlsx", ".csv",
   ".mp4", ".mov", ".webm", ".avi", ".mkv", ".mpeg"
 ]);
-const CLOUDINARY_UPLOAD_URL = "https://api.cloudinary.com/v1_1";
 
 function canUploadAdminFile(
   user: Awaited<ReturnType<typeof getAuthenticatedUser>>,
@@ -52,18 +52,6 @@ function canUploadAdminFile(
     user.role_codes.includes("platform_admin") ||
     hasPermission(user, "student.myclassroom.assignments.view")
   );
-}
-
-function createSignature(
-  params: Record<string, string | number>,
-  apiSecret: string,
-) {
-  const serialized = Object.keys(params)
-    .sort()
-    .map((key) => `${key}=${params[key]}`)
-    .join("&");
-
-  return createHash("sha1").update(`${serialized}${apiSecret}`).digest("hex");
 }
 
 export async function POST(req: Request) {
@@ -100,68 +88,48 @@ export async function POST(req: Request) {
       );
     }
 
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    const apiKey = process.env.CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    const requestedFolder = String(formData.get("folder") ?? "crmtaskassets");
+    const targetFolder = requestedFolder || "crmtaskassets";
 
-    // Fallback to local file storage when Cloudinary is not configured
-    if (!cloudName || !apiKey || !apiSecret) {
-      const bytes = await file.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-      const fileExt = ext || (file.type.startsWith("video/") ? ".mp4" : file.type === "application/pdf" ? ".pdf" : ".png");
-      const safeBaseName = path.basename(file.name, fileExt).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
-      const uniqueFileName = `${Date.now()}_${safeBaseName}_${randomBytes(4).toString("hex")}${fileExt}`;
-      const uploadDir = path.join(process.cwd(), "public", "uploads", "documents");
-      await fs.mkdir(uploadDir, { recursive: true });
-      await fs.writeFile(path.join(uploadDir, uniqueFileName), buffer);
-
-      let resourceType = "raw";
-      if (file.type.startsWith("image/")) resourceType = "image";
-      else if (file.type.startsWith("video/")) resourceType = "video";
-
-      return NextResponse.json({
-        data: {
-          url: `/uploads/documents/${uniqueFileName}`,
-          public_id: `local_documents_${uniqueFileName}`,
-          resource_type: resourceType,
-          file_type: file.type,
-          file_name: file.name,
-        },
-      });
+    // Primary: Upload to Openinary self-hosted media service
+    if (isOpeninaryConfigured() && isMediaSupportedByOpeninary(file.name, file.type)) {
+      try {
+        const result = await uploadToOpeninary(file, file.name, targetFolder, file.type);
+        return NextResponse.json({
+          data: {
+            url: result.fullUrl,
+            public_id: result.path,
+            resource_type: file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "raw",
+            file_type: file.type,
+            file_name: file.name,
+          },
+        });
+      } catch (openinaryErr) {
+        console.error("Openinary document upload failed, falling back to local storage:", openinaryErr);
+      }
     }
 
-    const timestamp = Math.round(Date.now() / 1000);
-    const folder = "documents";
-    const signature = createSignature({ folder, timestamp }, apiSecret);
-    const uploadFormData = new FormData();
+    // Fallback: Local file storage
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    const fileExt = ext || (file.type.startsWith("video/") ? ".mp4" : file.type === "application/pdf" ? ".pdf" : ".png");
+    const safeBaseName = path.basename(file.name, fileExt).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
+    const uniqueFileName = `${Date.now()}_${safeBaseName}_${randomBytes(4).toString("hex")}${fileExt}`;
+    const uploadDir = path.join(process.cwd(), "public", "uploads", "documents");
+    await fs.mkdir(uploadDir, { recursive: true });
+    await fs.writeFile(path.join(uploadDir, uniqueFileName), buffer);
 
-    uploadFormData.append("file", file);
-    uploadFormData.append("api_key", apiKey);
-    uploadFormData.append("timestamp", String(timestamp));
-    uploadFormData.append("folder", folder);
-    uploadFormData.append("signature", signature);
-
-    const uploadRes = await fetch(
-      `${CLOUDINARY_UPLOAD_URL}/${cloudName}/auto/upload`,
-      {
-        method: "POST",
-        body: uploadFormData,
-      },
-    );
-    const uploadJson = await uploadRes.json();
-    if (!uploadRes.ok) {
-      return NextResponse.json(
-        { error: uploadJson.error?.message ?? "Document upload failed" },
-        { status: 502 },
-      );
-    }
+    let resourceType = "raw";
+    if (file.type.startsWith("image/")) resourceType = "image";
+    else if (file.type.startsWith("video/")) resourceType = "video";
 
     return NextResponse.json({
       data: {
-        url: uploadJson.secure_url,
-        public_id: uploadJson.public_id,
-        resource_type: uploadJson.resource_type,
+        url: `/uploads/documents/${uniqueFileName}`,
+        public_id: `local_documents_${uniqueFileName}`,
+        resource_type: resourceType,
         file_type: file.type,
+        file_name: file.name,
       },
     });
   } catch (err: unknown) {

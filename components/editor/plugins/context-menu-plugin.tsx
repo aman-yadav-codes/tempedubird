@@ -104,12 +104,12 @@ async function copyImageToClipboard(src: string) {
   await navigator.clipboard.writeText(src);
 }
 
-type CloudinaryAsset = {
+type MediaAsset = {
   publicId: string;
   resourceType: string;
 };
 
-function parseCloudinaryTitle(value: unknown): CloudinaryAsset | null {
+function parseMediaTitle(value: unknown): MediaAsset | null {
   if (typeof value !== "string" || !value.trim().startsWith("{")) return null;
   try {
     const parsed = JSON.parse(value);
@@ -123,30 +123,32 @@ function parseCloudinaryTitle(value: unknown): CloudinaryAsset | null {
   }
 }
 
-function cloudinaryAssetFromUrl(value: unknown): CloudinaryAsset | null {
-  if (typeof value !== "string" || !value.includes("res.cloudinary.com")) return null;
+function mediaAssetFromUrl(value: unknown): MediaAsset | null {
+  if (typeof value !== "string") return null;
   try {
+    if (value.startsWith("/uploads/")) {
+      const parts = value.split("/").filter(Boolean);
+      const fileName = parts.pop() || "";
+      const resourceType = parts[1] || "image";
+      return { publicId: `local_${resourceType}_${fileName}`, resourceType };
+    }
     const url = new URL(value);
     const parts = url.pathname.split("/").filter(Boolean);
-    const uploadIndex = parts.findIndex((part) => part === "upload");
-    const resourceType = parts[0] || "image";
-    if (uploadIndex < 0) return null;
-    const publicParts = parts.slice(uploadIndex + 1).filter((part) => !/^v\d+$/.test(part));
-    const publicId = publicParts.join("/").replace(/\.[^.]+$/, "");
-    return publicId ? { publicId, resourceType } : null;
+    const publicId = parts.slice(1).join("/").replace(/\.[^.]+$/, "");
+    return publicId ? { publicId, resourceType: "image" } : null;
   } catch {
     return null;
   }
 }
 
-function collectCloudinaryAssets(node: LexicalNode, found = new Map<string, CloudinaryAsset>()) {
-  let asset: CloudinaryAsset | null = null;
+function collectMediaAssets(node: LexicalNode, found = new Map<string, MediaAsset>()) {
+  let asset: MediaAsset | null = null;
 
   if ($isImageNode(node)) {
     const publicId = node.getPublicId();
     asset = publicId
       ? { publicId, resourceType: node.getResourceType() || "image" }
-      : cloudinaryAssetFromUrl(node.getSrc());
+      : mediaAssetFromUrl(node.getSrc());
   } else if ($isLinkNode(node)) {
     const linkNode = node as unknown as {
       getTitle?: () => string | null;
@@ -155,8 +157,8 @@ function collectCloudinaryAssets(node: LexicalNode, found = new Map<string, Clou
       __url?: string;
     };
     asset =
-      parseCloudinaryTitle(linkNode.getTitle?.() ?? linkNode.__title) ??
-      cloudinaryAssetFromUrl(linkNode.getURL?.() ?? linkNode.__url);
+      parseMediaTitle(linkNode.getTitle?.() ?? linkNode.__title) ??
+      mediaAssetFromUrl(linkNode.getURL?.() ?? linkNode.__url);
   }
 
   if (asset?.publicId) {
@@ -164,13 +166,13 @@ function collectCloudinaryAssets(node: LexicalNode, found = new Map<string, Clou
   }
 
   if ($isElementNode(node)) {
-    node.getChildren().forEach((child) => collectCloudinaryAssets(child, found));
+    node.getChildren().forEach((child) => collectMediaAssets(child, found));
   }
 
   return found;
 }
 
-async function deleteCloudinaryAssets(assets: CloudinaryAsset[]) {
+async function deleteMediaAssets(assets: MediaAsset[]) {
   if (!assets.length) return;
   const accessToken = useAuthStore.getState().accessToken;
   if (!accessToken) return;
@@ -192,9 +194,9 @@ async function deleteCloudinaryAssets(assets: CloudinaryAsset[]) {
   );
   const failed = results.some((result) => result.status === "rejected");
   if (failed) {
-    toast.error("Removed from note, but Cloudinary cleanup failed");
+    toast.error("Removed from note, but remote cleanup failed");
   } else {
-    toast.success("Deleted from note and Cloudinary");
+    toast.success("Deleted from note and media service");
   }
 }
 
@@ -300,7 +302,7 @@ export function ContextMenuPlugin(): JSX.Element {
       new NodeContextMenuOption(`Delete Node`, {
         $onSelect: () => {
           const selection = $getSelection();
-          const assets = new Map<string, CloudinaryAsset>();
+          const assets = new Map<string, MediaAsset>();
           if ($isRangeSelection(selection)) {
             const currentNode = selection.anchor.getNode();
             const ancestorNodeWithRootAsParent = currentNode
@@ -308,19 +310,19 @@ export function ContextMenuPlugin(): JSX.Element {
               .at(-2);
 
             if (ancestorNodeWithRootAsParent) {
-              collectCloudinaryAssets(ancestorNodeWithRootAsParent, assets);
+              collectMediaAssets(ancestorNodeWithRootAsParent, assets);
               ancestorNodeWithRootAsParent.remove();
             }
           } else if ($isNodeSelection(selection)) {
             const selectedNodes = selection.getNodes();
             selectedNodes.forEach((node) => {
               if ($isDecoratorNode(node)) {
-                collectCloudinaryAssets(node, assets);
+                collectMediaAssets(node, assets);
                 node.remove();
               }
             });
           }
-          void deleteCloudinaryAssets(Array.from(assets.values()));
+          void deleteMediaAssets(Array.from(assets.values()));
         },
         disabled: false,
         icon: <Trash2 className="size-4" />,

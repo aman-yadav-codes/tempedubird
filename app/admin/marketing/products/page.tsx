@@ -1178,7 +1178,7 @@ export default function AdminProductsPage() {
                     <Input
                       value={formImage}
                       onChange={(e) => setFormImage(e.target.value)}
-                      placeholder="https://images.unsplash.com/... or uploaded Cloudinary URL"
+                      placeholder="https://images.unsplash.com/... or uploaded Openinary URL"
                       className="text-xs h-9"
                     />
                     <div className="flex flex-wrap items-center gap-1.5 pt-1">

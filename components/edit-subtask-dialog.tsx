@@ -34,6 +34,7 @@ export function EditSubtaskDialog({
   accessToken,
 }: EditSubtaskDialogProps) {
   const [title, setTitle] = useState("");
+  const [deliverable, setDeliverable] = useState("");
   const [price, setPrice] = useState("0");
   const [assignedStaffId, setAssignedStaffId] = useState("none");
   const [cadence, setCadence] = useState("once");
@@ -49,6 +50,7 @@ export function EditSubtaskDialog({
   useEffect(() => {
     if (subtask) {
       setTitle(subtask.title || "");
+      setDeliverable(subtask.deliverable || "");
       setPrice(subtask.price !== undefined ? String(subtask.price) : "0");
       setAssignedStaffId(subtask.assigned_employee_id ? String(subtask.assigned_employee_id) : "none");
       const cad = subtask.cadence || (subtask.is_daily_recurring ? "daily" : "once");
@@ -83,6 +85,7 @@ export function EditSubtaskDialog({
       const newSubData = {
         id: subtask.id,
         title: title.trim(),
+        deliverable: deliverable.trim() || null,
         price: parseFloat(price) || 0,
         assigned_employee_id: assignedStaffId !== "none" ? parseInt(assignedStaffId) : null,
         assigned_employee_name: selectedStaff ? selectedStaff.name : null,
@@ -167,6 +170,20 @@ export function EditSubtaskDialog({
               placeholder="e.g. Curriculum Design, Lab Environment Setup"
               className="text-xs h-9"
               required
+            />
+          </div>
+
+          {/* Deliverable Details / Item */}
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold flex items-center justify-between">
+              <span>Deliverable Details / Requirement</span>
+              <span className="text-[10px] text-muted-foreground font-normal">Shown on sub-task card</span>
+            </Label>
+            <Input
+              value={deliverable}
+              onChange={(e) => setDeliverable(e.target.value)}
+              placeholder="e.g. Event home page, Wireframes, Final Report"
+              className="text-xs h-9"
             />
           </div>
 

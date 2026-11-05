@@ -1,7 +1,10 @@
-import { createHash } from "crypto";
+import { randomBytes } from "crypto";
+import fsPromises from "fs/promises";
+import path from "path";
 import { NextResponse } from "next/server";
 
 import { getAuthenticatedUser } from "@/lib/auth/auth";
+import { isOpeninaryConfigured, isMediaSupportedByOpeninary, uploadToOpeninary } from "@/lib/uploads/openinary";
 import { canAccessInstitution } from "@/lib/auth/institution-scope";
 import { hasPermission, isInstitutionAdminUser, isPlatformAdminUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
@@ -33,28 +36,40 @@ const ACCEPTED_ATTACHMENT_TYPES = new Set(["image/jpeg", "image/png", "image/web
 const COMPLAINT_STATUSES = new Set(["open", "in_progress", "resolved", "closed"]);
 type UploadedAttachment = { file_name: string; file_url: string; public_id: string; resource_type: string };
 
-function createSignature(params: Record<string, string | number>, secret: string) {
-  const serialized = Object.keys(params).sort().map((key) => `${key}=${params[key]}`).join("&");
-  return createHash("sha1").update(`${serialized}${secret}`).digest("hex");
-}
-
 async function uploadAttachment(file: File): Promise<UploadedAttachment> {
   if (!ACCEPTED_ATTACHMENT_TYPES.has(file.type)) throw new Error("Only images and PDF attachments are allowed");
   const maxSize = file.type === "application/pdf" ? 10 * 1024 * 1024 : 5 * 1024 * 1024;
   if (file.size > maxSize) throw new Error(file.type === "application/pdf" ? "PDF must be 10MB or smaller" : "Image must be 5MB or smaller");
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  const apiKey = process.env.CLOUDINARY_API_KEY;
-  const apiSecret = process.env.CLOUDINARY_API_SECRET;
-  if (!cloudName || !apiKey || !apiSecret) throw new Error("Cloudinary is not configured");
-  const timestamp = Math.round(Date.now() / 1000);
-  const folder = "institution_complaint_attachments";
-  const form = new FormData();
-  form.append("file", file); form.append("api_key", apiKey); form.append("timestamp", String(timestamp));
-  form.append("folder", folder); form.append("signature", createSignature({ folder, timestamp }, apiSecret));
-  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, { method: "POST", body: form });
-  const json = await response.json();
-  if (!response.ok) throw new Error(json.error?.message ?? `Failed to upload ${file.name}`);
-  return { file_name: file.name.slice(0, 255), file_url: json.secure_url, public_id: json.public_id, resource_type: json.resource_type };
+
+  if (isOpeninaryConfigured() && isMediaSupportedByOpeninary(file.name, file.type)) {
+    try {
+      const result = await uploadToOpeninary(file, file.name, "crmtaskassets", file.type);
+      return {
+        file_name: file.name,
+        file_url: result.fullUrl,
+        public_id: result.path,
+        resource_type: file.type === "application/pdf" ? "raw" : "image",
+      };
+    } catch (openinaryErr) {
+      console.error("Openinary complaint upload failed, falling back to local storage:", openinaryErr);
+    }
+  }
+
+  const bytes = await file.arrayBuffer();
+  const buffer = Buffer.from(bytes);
+  const ext = path.extname(file.name) || (file.type === "application/pdf" ? ".pdf" : ".png");
+  const safeBaseName = path.basename(file.name, ext).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
+  const uniqueFileName = `${Date.now()}_${safeBaseName}_${randomBytes(4).toString("hex")}${ext}`;
+  const uploadDir = path.join(process.cwd(), "public", "uploads", "complaints");
+  await fsPromises.mkdir(uploadDir, { recursive: true });
+  await fsPromises.writeFile(path.join(uploadDir, uniqueFileName), buffer);
+
+  return {
+    file_name: file.name.slice(0, 255),
+    file_url: `/uploads/complaints/${uniqueFileName}`,
+    public_id: `local_complaints_${uniqueFileName}`,
+    resource_type: file.type === "application/pdf" ? "raw" : "image",
+  };
 }
 
 function responseError(error: unknown) {

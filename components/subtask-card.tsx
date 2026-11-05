@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { toast } from "sonner";
 import { useAuthStore } from "@/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,50 @@ export function SubtaskCard({
   const [priceInput, setPriceInput] = useState<string>(
     subtask.price !== undefined ? String(subtask.price) : "0"
   );
+  const [isEditingDeliverable, setIsEditingDeliverable] = useState(false);
+  const [deliverableInput, setDeliverableInput] = useState(subtask.deliverable || "");
+
+  useEffect(() => {
+    setDeliverableInput(subtask.deliverable || "");
+  }, [subtask.deliverable]);
+
+  const deliverableDisplay = useMemo(() => {
+    // 1. Explicit deliverable field on subtask
+    if (subtask.deliverable && typeof subtask.deliverable === "string" && subtask.deliverable.trim().length > 0) {
+      return subtask.deliverable.trim();
+    }
+    // 2. Deliverables from uploads / deliverables list
+    if (Array.isArray(subtask.uploads) && subtask.uploads.length > 0) {
+      const names = subtask.uploads
+        .map((u: any) => u.file_name || u.name || u.notes || u.title)
+        .filter((n: any) => Boolean(n) && typeof n === "string" && !n.startsWith("http"));
+      if (names.length === 1) return names[0];
+      if (names.length > 1) return `${names[0]} (+${names.length - 1} more)`;
+    }
+    // 3. Fallback to subtask.notes if available
+    if (subtask.notes && typeof subtask.notes === "string" && subtask.notes.trim().length > 0) {
+      return subtask.notes.trim();
+    }
+    return null;
+  }, [subtask.deliverable, subtask.uploads, subtask.notes]);
+
+  const deliverableTooltip = useMemo(() => {
+    const list: string[] = [];
+    if (subtask.deliverable) list.push(`Deliverable: ${subtask.deliverable}`);
+    if (Array.isArray(subtask.uploads) && subtask.uploads.length > 0) {
+      const uplNames = subtask.uploads.map((u: any, idx: number) => `${idx + 1}. ${u.file_name || u.notes || "Upload"}`);
+      list.push(`Uploaded Deliverables (${subtask.uploads.length}):\n${uplNames.join("\n")}`);
+    }
+    return list.join("\n\n");
+  }, [subtask.deliverable, subtask.uploads]);
+
+  const handleDeliverableBlur = () => {
+    setIsEditingDeliverable(false);
+    const val = deliverableInput.trim();
+    if (val !== (subtask.deliverable || "").trim()) {
+      onUpdateSubtask(task, subtask.id, { deliverable: val || null });
+    }
+  };
 
   const currentUser = useAuthStore((state) => state.user);
 
@@ -120,6 +165,28 @@ export function SubtaskCard({
 
   const isSubDone = subtask.status === "completed";
   const isRunning = subtask.status === "in_progress";
+
+  const isStartedByMe = useMemo(() => {
+    if (!currentUser) return false;
+    const uidStr = String(currentUser.id);
+    const uName = (((currentUser as any).full_name || (currentUser as any).name) || "").toLowerCase().trim();
+
+    if (subtask.started_by_id) {
+      return String(subtask.started_by_id) === uidStr;
+    }
+    if (subtask.started_by_name && uName) {
+      return String(subtask.started_by_name).toLowerCase().trim() === uName;
+    }
+    if (subtask.assigned_employee_id) {
+      return String(subtask.assigned_employee_id) === uidStr;
+    }
+    if (Array.isArray(subtask.assigned_staff_ids) && subtask.assigned_staff_ids.some((id: any) => String(id) === uidStr)) {
+      return true;
+    }
+    return false;
+  }, [currentUser, subtask.started_by_id, subtask.started_by_name, subtask.assigned_employee_id, subtask.assigned_staff_ids]);
+
+  const canStopSubtask = isStartedByMe || isPlatformAdmin;
 
   // Collect images from uploads / image_url
   const subImages: Array<{ url: string; name?: string }> = [];
@@ -306,6 +373,10 @@ export function SubtaskCard({
   };
 
   const handleStatusSelect = (val: string) => {
+    if (isRunning && val !== "in_progress" && !canStopSubtask) {
+      toast.error(`You can only stop your own task. This task was started by ${subtask.started_by_name || 'another user'}.`);
+      return;
+    }
     if (onStatusChange) {
       onStatusChange(task, subtask.id, val);
     } else {
@@ -567,9 +638,11 @@ export function SubtaskCard({
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[11px] font-semibold text-muted-foreground">Status:</span>
           <select
+            disabled={isRunning && !canStopSubtask}
             value={subtask.status || "pending"}
             onChange={(e) => handleStatusSelect(e.target.value)}
-            className="h-7 text-xs font-semibold w-28 bg-muted/20 rounded-md border border-input px-2 outline-none cursor-pointer text-foreground shadow-2xs"
+            className="h-7 text-xs font-semibold w-28 bg-muted/20 rounded-md border border-input px-2 outline-none cursor-pointer text-foreground shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+            title={isRunning && !canStopSubtask ? `Running by ${subtask.started_by_name || 'another user'}. Only they can stop it.` : undefined}
           >
             {allowedStatuses.map((s) => (
               <option key={s.id} value={s.id}>
@@ -578,21 +651,46 @@ export function SubtaskCard({
             ))}
           </select>
 
-          {/* Start / Stop Button: available for both staff and client */}
+          {/* Start / Stop Button: only owner (or platform admin) can stop */}
           {isRunning ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                if (onStop) onStop(task, subtask);
-                else handleStatusSelect("pending");
-              }}
-              className="h-7 px-2.5 text-xs font-bold gap-1 text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer shadow-2xs rounded-md"
-            >
-              <Square className="w-3 h-3 fill-current text-rose-600" />
-              <span>Stop</span>
-            </Button>
+            canStopSubtask ? (
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (onStop) onStop(task, subtask);
+                    else handleStatusSelect("pending");
+                  }}
+                  className="h-7 px-2.5 text-xs font-bold gap-1 text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer shadow-2xs rounded-md"
+                >
+                  <Square className="w-3 h-3 fill-current text-rose-600" />
+                  <span>Stop</span>
+                </Button>
+                {subtask.started_by_name && (
+                  <span
+                    className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.5 rounded truncate max-w-[120px]"
+                    title={`Running by ${subtask.started_by_name}`}
+                  >
+                    {subtask.started_by_name}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div
+                className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 shadow-2xs select-none"
+                title={`Running by ${subtask.started_by_name || 'team member'}. Only they can stop it.`}
+              >
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span className="text-[11px] font-semibold truncate max-w-[150px]">
+                  {subtask.started_by_name ? `Running (${subtask.started_by_name})` : "In Progress"}
+                </span>
+              </div>
+            )
           ) : !isSubDone ? (
             <Button
               type="button"
@@ -607,6 +705,60 @@ export function SubtaskCard({
               <span>Start</span>
             </Button>
           ) : null}
+        </div>
+
+        {/* Deliverable : show here */}
+        <div className="flex items-center gap-1.5 min-w-0 max-w-[280px] sm:max-w-xs md:max-w-md">
+          <span className="font-semibold text-muted-foreground text-[11px] shrink-0">
+            Deliverable :
+          </span>
+          {isEditingDeliverable ? (
+            <input
+              type="text"
+              autoFocus
+              value={deliverableInput}
+              onChange={(e) => setDeliverableInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  (e.target as HTMLInputElement).blur();
+                } else if (e.key === "Escape") {
+                  setDeliverableInput(subtask.deliverable || "");
+                  setIsEditingDeliverable(false);
+                }
+              }}
+              onBlur={handleDeliverableBlur}
+              placeholder="e.g. Event home page"
+              className="h-6 text-[11px] font-medium px-2 py-0.5 rounded border border-primary bg-background text-foreground outline-none w-full"
+            />
+          ) : (
+            <div className="flex items-center gap-1 min-w-0 truncate">
+              <button
+                type="button"
+                onClick={() => onOpenUploads(task, subtask)}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/40 hover:bg-muted/70 border border-border/60 transition-colors cursor-pointer truncate text-[11px] group shadow-2xs"
+                title={deliverableTooltip || "Click to view / upload deliverables in dialog"}
+              >
+                {deliverableDisplay ? (
+                  <span className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                    {deliverableDisplay}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground/70 italic">None</span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsEditingDeliverable(true);
+                }}
+                className="text-muted-foreground hover:text-primary p-0.5 rounded hover:bg-muted cursor-pointer shrink-0"
+                title="Edit deliverable requirement"
+              >
+                <Edit2 className="w-2.5 h-2.5" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Deadline & Task and updates button */}
