@@ -18,8 +18,10 @@ export const registerSchema = z
   .object({
     full_name: z
       .string()
-      .min(2, "Full name must be at least 2 characters")
-      .max(100, "Full name too long"),
+      .max(100, "Full name too long")
+      .optional()
+      .nullable()
+      .or(z.literal("")),
     email: z
       .union([z.string().email("Invalid email address"), z.literal(""), z.null()])
       .optional()
@@ -31,7 +33,7 @@ export const registerSchema = z
       .string()
       .min(6, "Password must be at least 6 characters")
       .max(100, "Password too long"),
-    confirmPassword: z.string().min(1, "Please confirm your password"),
+    confirmPassword: z.string().optional().nullable().or(z.literal("")),
     role_id: z.coerce.number().int().positive().optional().nullable(),
     role_code: z.string().trim().min(1).max(80).optional().nullable(),
     referral_code: z.string().trim().optional().nullable(),
@@ -41,7 +43,7 @@ export const registerSchema = z
     institution_id: z.coerce.number().int().positive().optional().nullable(),
     under_institution_id: z.coerce.number().int().positive().optional().nullable(),
   })
-  .refine((data) => data.password === data.confirmPassword, {
+  .refine((data) => !data.confirmPassword || data.password === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
   });

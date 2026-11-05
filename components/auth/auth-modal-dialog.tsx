@@ -316,10 +316,6 @@ export function AuthModalDialog({
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!signUpFullName.trim()) {
-      toast.error("Please enter your full name.");
-      return;
-    }
     const cleanPhone = signUpPhone.replace(/\D/g, "").slice(-10);
     if (!cleanPhone || cleanPhone.length !== 10) {
       toast.error("Phone number must be exactly 10 digits.");
@@ -329,7 +325,7 @@ export function AuthModalDialog({
       toast.error("Password must be at least 6 characters.");
       return;
     }
-    if (signUpPassword !== signUpConfirmPassword) {
+    if (signUpConfirmPassword && signUpPassword !== signUpConfirmPassword) {
       toast.error("Passwords do not match.");
       return;
     }
@@ -341,18 +337,19 @@ export function AuthModalDialog({
     setSubmitting(true);
     try {
       const payloadEmail = signUpEmail.trim() || null;
+      const derivedFullName = signUpFullName.trim() || (payloadEmail ? payloadEmail.split("@")[0] : `User ${cleanPhone.slice(-4)}`);
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          full_name: signUpFullName.trim(),
+          full_name: derivedFullName,
           email: payloadEmail,
           phone: cleanPhone,
           address: signUpCity.trim(),
           role_code: signUpRole,
           referral_code: signUpReferralCode.trim() || null,
           password: signUpPassword,
-          confirmPassword: signUpConfirmPassword,
+          confirmPassword: signUpConfirmPassword || signUpPassword,
         }),
       });
 
@@ -422,7 +419,7 @@ export function AuthModalDialog({
             <DialogTitle className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-snug">
               {activeTab === "signup" ? (
                 <>
-                  Create Your <span className="text-[#D91B1B]">EduBird</span> Account
+                  Create <span className="text-[#D91B1B]">Profile</span>
                 </>
               ) : (
                 <>
@@ -432,12 +429,40 @@ export function AuthModalDialog({
             </DialogTitle>
             <p className="text-xs text-slate-500 mt-0.5 font-medium">
               {activeTab === "signup"
-                ? "Join thousands of learners and start your learning journey"
-                : "Sign in to access your courses, tests & dashboard"}
+                ? "Enter your phone number, optional email, and password to create your profile"
+                : "Sign in to access your account & dashboard"}
             </p>
+
+            {/* Segmented Switcher for Sign In & Create Profile */}
+            <div className="flex p-1 bg-slate-100 rounded-xl max-w-xs mx-auto mt-2.5">
+              <button
+                type="button"
+                onClick={() => setActiveTab("signin")}
+                className={cn(
+                  "flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer",
+                  activeTab === "signin"
+                    ? "bg-white text-slate-900 shadow-xs"
+                    : "text-slate-500 hover:text-slate-900"
+                )}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("signup")}
+                className={cn(
+                  "flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer",
+                  activeTab === "signup"
+                    ? "bg-white text-slate-900 shadow-xs"
+                    : "text-slate-500 hover:text-slate-900"
+                )}
+              >
+                Create Profile
+              </button>
+            </div>
           </div>
           {activeTab === "signup" && (
-            <div className="mt-1.5 flex justify-center">
+            <div className="mt-1 flex justify-center">
               <ProgressiveSaveIndicator status={saveStatus} />
             </div>
           )}
@@ -511,56 +536,7 @@ export function AuthModalDialog({
                 </div>
               )}
 
-              {/* Row 1: Full Name & Email Address */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {/* Full Name */}
-                <div
-                  onBlur={() => handleBlur()}
-                  className="flex items-center gap-2.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus-within:border-[#D91B1B] focus-within:ring-2 focus-within:ring-rose-500/10 transition-all shadow-2xs"
-                >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-[#D91B1B]">
-                    <User className="h-3.5 w-3.5" />
-                  </div>
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">
-                      Full Name <span className="text-[#D91B1B]">*</span>
-                    </span>
-                    <input
-                      type="text"
-                      placeholder="e.g. Riya Sharma"
-                      value={signUpFullName}
-                      onChange={(e) => setSignUpFullName(e.target.value)}
-                      disabled={submitting}
-                      className="w-full text-xs font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal bg-transparent outline-none border-none p-0 focus:ring-0"
-                    />
-                  </div>
-                </div>
-
-                {/* Email Address (Optional) */}
-                <div
-                  onBlur={() => handleBlur()}
-                  className="flex items-center gap-2.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus-within:border-[#D91B1B] focus-within:ring-2 focus-within:ring-rose-500/10 transition-all shadow-2xs"
-                >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-[#D91B1B]">
-                    <Mail className="h-3.5 w-3.5" />
-                  </div>
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <span className="text-[9px] font-extrabold text-slate-500 uppercase tracking-wider">
-                      Email Address <span className="text-slate-400 font-normal">(Optional)</span>
-                    </span>
-                    <input
-                      type="email"
-                      placeholder="name@example.com (optional)"
-                      value={signUpEmail}
-                      onChange={(e) => setSignUpEmail(e.target.value)}
-                      disabled={submitting}
-                      className="w-full text-xs font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal bg-transparent outline-none border-none p-0 focus:ring-0"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 2: Phone Number & Register As */}
+              {/* Row 1: Phone Number & Email Address */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {/* Phone Number */}
                 <div
@@ -594,65 +570,31 @@ export function AuthModalDialog({
                   )}
                 </div>
 
-                {/* Register As */}
+                {/* Email Address (Optional) */}
                 <div
                   onBlur={() => handleBlur()}
                   className="flex items-center gap-2.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus-within:border-[#D91B1B] focus-within:ring-2 focus-within:ring-rose-500/10 transition-all shadow-2xs"
                 >
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-[#D91B1B]">
-                    <GraduationCap className="h-3.5 w-3.5" />
+                    <Mail className="h-3.5 w-3.5" />
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
-                    <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">
-                      Register As <span className="text-[#D91B1B]">*</span>
+                    <span className="text-[9px] font-extrabold text-slate-500 uppercase tracking-wider">
+                      Email Address <span className="text-slate-400 font-normal">(Optional)</span>
                     </span>
-                    <select
-                      value={signUpRole}
-                      onChange={(e) => setSignUpRole(e.target.value)}
+                    <input
+                      type="email"
+                      placeholder="name@example.com (optional)"
+                      value={signUpEmail}
+                      onChange={(e) => setSignUpEmail(e.target.value)}
                       disabled={submitting}
-                      className="w-full text-xs font-semibold text-slate-900 bg-transparent outline-none border-none p-0 focus:ring-0 cursor-pointer truncate"
-                    >
-                      {availableRegisterRoles.map((r) => (
-                        <option key={r.value} value={r.value}>
-                          {r.label}
-                        </option>
-                      ))}
-                    </select>
+                      className="w-full text-xs font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal bg-transparent outline-none border-none p-0 focus:ring-0"
+                    />
                   </div>
                 </div>
               </div>
 
-              {/* Row 3: Referral / Affiliate Code (Optional) */}
-              <div
-                onBlur={() => handleBlur()}
-                className="flex items-center gap-2.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus-within:border-[#D91B1B] focus-within:ring-2 focus-within:ring-rose-500/10 transition-all shadow-2xs"
-              >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-                  <Sparkles className="h-3.5 w-3.5" />
-                </div>
-                <div className="flex flex-col min-w-0 flex-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">
-                      Referral / Affiliate Code <span className="text-slate-400 font-normal">(Optional)</span>
-                    </span>
-                    {signUpReferralCode && (
-                      <span className="text-[9px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.5 rounded">
-                        Applied
-                      </span>
-                    )}
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Referrer's 10-digit mobile number"
-                    value={signUpReferralCode}
-                    onChange={(e) => setSignUpReferralCode(e.target.value)}
-                    disabled={submitting}
-                    className="w-full text-xs font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal bg-transparent outline-none border-none p-0 focus:ring-0"
-                  />
-                </div>
-              </div>
-
-              {/* Row 4: Password & Confirm Password */}
+              {/* Row 2: Password & Confirm Password */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {/* Password */}
                 <div className="flex items-center gap-2.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus-within:border-[#D91B1B] focus-within:ring-2 focus-within:ring-rose-500/10 transition-all shadow-2xs relative">
@@ -688,7 +630,7 @@ export function AuthModalDialog({
                   </div>
                   <div className="flex flex-col min-w-0 flex-1 pr-5">
                     <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">
-                      Confirm Password <span className="text-[#D91B1B]">*</span>
+                      Confirm Password <span className="text-slate-400 font-normal">(Optional)</span>
                     </span>
                     <input
                       type={showConfirmPassword ? "text" : "password"}
@@ -706,6 +648,89 @@ export function AuthModalDialog({
                   >
                     {showConfirmPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                   </button>
+                </div>
+              </div>
+
+              {/* Row 3: Full Name (Optional) & Register As */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* Full Name */}
+                <div
+                  onBlur={() => handleBlur()}
+                  className="flex items-center gap-2.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus-within:border-[#D91B1B] focus-within:ring-2 focus-within:ring-rose-500/10 transition-all shadow-2xs"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-[#D91B1B]">
+                    <User className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="text-[9px] font-extrabold text-slate-500 uppercase tracking-wider">
+                      Full Name <span className="text-slate-400 font-normal">(Optional)</span>
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="e.g. Riya Sharma (optional)"
+                      value={signUpFullName}
+                      onChange={(e) => setSignUpFullName(e.target.value)}
+                      disabled={submitting}
+                      className="w-full text-xs font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal bg-transparent outline-none border-none p-0 focus:ring-0"
+                    />
+                  </div>
+                </div>
+
+                {/* Register As */}
+                <div
+                  onBlur={() => handleBlur()}
+                  className="flex items-center gap-2.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus-within:border-[#D91B1B] focus-within:ring-2 focus-within:ring-rose-500/10 transition-all shadow-2xs"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-[#D91B1B]">
+                    <GraduationCap className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">
+                      Register As <span className="text-[#D91B1B]">*</span>
+                    </span>
+                    <select
+                      value={signUpRole}
+                      onChange={(e) => setSignUpRole(e.target.value)}
+                      disabled={submitting}
+                      className="w-full text-xs font-semibold text-slate-900 bg-transparent outline-none border-none p-0 focus:ring-0 cursor-pointer truncate"
+                    >
+                      {availableRegisterRoles.map((r) => (
+                        <option key={r.value} value={r.value}>
+                          {r.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 4: Referral / Affiliate Code (Optional) */}
+              <div
+                onBlur={() => handleBlur()}
+                className="flex items-center gap-2.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus-within:border-[#D91B1B] focus-within:ring-2 focus-within:ring-rose-500/10 transition-all shadow-2xs"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                  <Sparkles className="h-3.5 w-3.5" />
+                </div>
+                <div className="flex flex-col min-w-0 flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">
+                      Referral / Affiliate Code <span className="text-slate-400 font-normal">(Optional)</span>
+                    </span>
+                    {signUpReferralCode && (
+                      <span className="text-[9px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.5 rounded">
+                        Applied
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Referrer's 10-digit mobile number"
+                    value={signUpReferralCode}
+                    onChange={(e) => setSignUpReferralCode(e.target.value)}
+                    disabled={submitting}
+                    className="w-full text-xs font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal bg-transparent outline-none border-none p-0 focus:ring-0"
+                  />
                 </div>
               </div>
 
@@ -738,11 +763,11 @@ export function AuthModalDialog({
                 {submitting ? (
                   <>
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Creating Account...
+                    Creating Profile...
                   </>
                 ) : (
                   <>
-                    Create Account <ArrowRight className="h-3.5 w-3.5" />
+                    Create Profile <ArrowRight className="h-3.5 w-3.5" />
                   </>
                 )}
               </Button>
@@ -844,13 +869,13 @@ export function AuthModalDialog({
 
               {/* Footer Switcher */}
               <div className="text-center pt-1 text-xs text-slate-500">
-                Don't have an account?{" "}
+                Don&apos;t have an account?{" "}
                 <button
                   type="button"
                   onClick={() => setActiveTab("signup")}
                   className="font-bold text-[#D91B1B] hover:underline cursor-pointer ml-1"
                 >
-                  Create Account
+                  Create Profile
                 </button>
               </div>
             </form>

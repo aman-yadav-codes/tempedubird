@@ -1,13 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Shield, LayoutDashboard, LogIn, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
 
 export function PlatformAdminHeader() {
   const { user } = useAuthStore();
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [authDialogTab, setAuthDialogTab] = useState<"signin" | "signup">("signin");
+
   const isPlatformUser = Boolean(
     user?.is_super_admin || user?.role_codes?.includes("platform_admin")
   );
@@ -55,15 +60,27 @@ export function PlatformAdminHeader() {
               </Link>
             </div>
           ) : (
-            <Link href="/admin/login">
-              <Button size="sm" className="gap-1.5 text-xs h-9">
-                <LogIn className="size-3.5" />
-                Sign In
-              </Button>
-            </Link>
+            <Button
+              size="sm"
+              onClick={() => {
+                setAuthDialogTab("signin");
+                setAuthDialogOpen(true);
+              }}
+              className="gap-1.5 text-xs h-9 cursor-pointer"
+            >
+              <LogIn className="size-3.5" />
+              Sign In
+            </Button>
           )}
         </div>
       </div>
+
+      {/* Login & Create Profile Dialog */}
+      <AuthModalDialog
+        open={authDialogOpen}
+        onOpenChange={setAuthDialogOpen}
+        defaultTab={authDialogTab}
+      />
     </header>
   );
 }

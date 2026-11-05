@@ -11,7 +11,8 @@ import { getUserByPhoneQuery } from "@/lib/queries/user";
 import { ensureAffiliateProfile, processAffiliateReferral } from "@/lib/queries/affiliates";
 
 export const registerUser = async (
-  data: User & {
+  data: Omit<User, "full_name"> & {
+    full_name?: string | null;
     role_id?: number | null;
     role_code?: string | null;
     referral_code?: string | null;
@@ -40,8 +41,15 @@ export const registerUser = async (
   const plainPassword = data.password;
   const hashed = await hashPassword(plainPassword);
 
+  const fallbackFullName = data.full_name && data.full_name.trim().length > 0
+    ? data.full_name.trim()
+    : cleanEmail
+    ? cleanEmail.split("@")[0]
+    : `User ${cleanPhone ? cleanPhone.slice(-4) : "Member"}`.trim();
+
   const user = await createUser({
     ...data,
+    full_name: fallbackFullName,
     email: cleanEmail ?? undefined,
     phone: cleanPhone ?? undefined,
     password: hashed,
