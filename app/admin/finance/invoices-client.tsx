@@ -191,6 +191,23 @@ export function InvoicesClient() {
     }
   }
 
+  async function updateInvoiceStatus(invoice: FinanceInvoiceRow, newStatus: string) {
+    if (!accessToken) return;
+    try {
+      const res = await fetch(`/api/admin/finance/invoices/${invoice.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to update invoice status");
+      toast.success(`Invoice marked as ${newStatus}`);
+      void fetchInvoices();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update invoice status");
+    }
+  }
+
   const columns = useMemo<ColumnDef<FinanceInvoiceRow>[]>(() => [
     {
       accessorKey: "invoice_number",
@@ -223,7 +240,14 @@ export function InvoicesClient() {
       header: "Billed To / Payer",
       cell: ({ row }) => (
         <div>
-          <p className="font-medium text-xs text-foreground">{row.original.payer_name}</p>
+          <p className="font-medium text-xs text-foreground flex items-center gap-1.5 flex-wrap">
+            <span>{row.original.payer_name}</span>
+            {row.original.source_type === "work" && (
+              <Badge variant="outline" className="text-[9px] py-0 px-1 font-semibold text-blue-600 bg-blue-500/10 border-blue-500/30">
+                Work
+              </Badge>
+            )}
+          </p>
           <p className="text-[11px] text-muted-foreground">{row.original.category_name}</p>
         </div>
       ),
@@ -304,6 +328,23 @@ export function InvoicesClient() {
               <FileText className="size-4" />
               View &amp; Print Receipt
             </DropdownMenuItem>
+            {row.original.status !== "paid" ? (
+              <DropdownMenuItem
+                className="gap-2 text-emerald-600 font-medium cursor-pointer"
+                onClick={() => updateInvoiceStatus(row.original, "paid")}
+              >
+                <CheckCircle2 className="size-4" />
+                Mark as Paid
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem
+                className="gap-2 text-amber-600 font-medium cursor-pointer"
+                onClick={() => updateInvoiceStatus(row.original, "unpaid")}
+              >
+                <Clock className="size-4" />
+                Mark as Unpaid
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem
               className="gap-2 text-rose-600 font-medium cursor-pointer"
               onClick={() => {
@@ -487,7 +528,15 @@ export function InvoicesClient() {
                 <p className="text-xs text-muted-foreground mt-0.5">Official Payment Receipt &amp; Invoice</p>
               </div>
               <div className="text-right">
-                <Badge variant="outline" className="font-mono text-xs font-semibold uppercase bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "font-mono text-xs font-semibold uppercase",
+                    selectedInvoice?.status === "paid"
+                      ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                      : "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                  )}
+                >
                   {selectedInvoice?.status || "PAID"}
                 </Badge>
                 <p className="font-mono text-xs font-bold text-foreground mt-1.5">{selectedInvoice?.invoice_number}</p>
@@ -531,7 +580,7 @@ export function InvoicesClient() {
                     <td className="p-2.5 text-right font-mono font-medium">{currency(selectedInvoice?.amount)}</td>
                   </tr>
                   <tr className="bg-muted/20 font-bold">
-                    <td className="p-2.5 text-foreground">Total Paid</td>
+                    <td className="p-2.5 text-foreground">{selectedInvoice?.status === "paid" ? "Total Paid" : "Total Amount"}</td>
                     <td className="p-2.5 text-right font-mono text-emerald-600 text-sm">{currency(selectedInvoice?.total_amount)}</td>
                   </tr>
                 </tbody>

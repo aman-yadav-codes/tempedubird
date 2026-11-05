@@ -69,3 +69,47 @@ export async function DELETE(
     return jsonError(error, error instanceof Error && error.message.includes("Forbidden") ? 403 : 400);
   }
 }
+
+export async function PATCH(
+  req: Request,
+  props: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await props.params;
+    await getAuthenticatedUser(req);
+    const body = await req.json();
+    const { status } = body;
+    if (!status) return jsonError("status is required");
+
+    const invRes = await db.query<{ id: number; invoice_number: string; source_type: string }>(
+      `SELECT id, invoice_number, source_type FROM finance_invoices WHERE id = $1`,
+      [id]
+    );
+    if (invRes.rows.length === 0) return jsonError("Invoice not found", 404);
+
+    const inv = invRes.rows[0];
+    await db.query(`UPDATE finance_invoices SET status = $1, updated_at = NOW() WHERE id = $2`, [status, id]);
+
+    if (inv.source_type === "work") {
+      await db.query(
+        `UPDATE operations_tasks
+         SET invoices = (
+           SELECT COALESCE(jsonb_agg(
+             CASE 
+               WHEN elem->>'invoice_number' = $1 THEN jsonb_set(elem, '{status}', to_jsonb($2::text))
+               ELSE elem
+             END
+           ), '[]'::jsonb)
+           FROM jsonb_array_elements(COALESCE(invoices, '[]'::jsonb)) elem
+         ),
+         updated_at = NOW()
+         WHERE invoices IS NOT NULL AND invoices::text LIKE $3`,
+        [inv.invoice_number, status, `%${inv.invoice_number}%`]
+      );
+    }
+
+    return NextResponse.json({ success: true, status });
+  } catch (error) {
+    return jsonError(error, error instanceof Error && error.message.includes("Forbidden") ? 403 : 400);
+  }
+}

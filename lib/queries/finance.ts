@@ -747,6 +747,8 @@ export async function ensureFinanceIncomeSchema(db: Queryable) {
 
         ALTER TABLE finance_invoices ADD COLUMN IF NOT EXISTS staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
         ALTER TABLE finance_invoices ADD COLUMN IF NOT EXISTS created_by_role VARCHAR(50);
+        ALTER TABLE finance_invoices DROP CONSTRAINT IF EXISTS finance_invoices_status_check;
+        ALTER TABLE finance_invoices DROP CONSTRAINT IF EXISTS finance_invoices_payment_method_check;
 
         CREATE INDEX IF NOT EXISTS idx_finance_income_entries_creator ON finance_income_entries(created_by);
         CREATE INDEX IF NOT EXISTS idx_finance_expense_entries_creator ON finance_expense_entries(created_by);
@@ -4042,6 +4044,120 @@ export type FinanceInvoiceListOptions = {
   offset?: number;
 };
 
+export async function syncWorkInvoicesToFinance(dbRunner: Queryable): Promise<void> {
+  try {
+    await ensureFinanceIncomeSchema(dbRunner);
+
+    try {
+      await dbRunner.query(`ALTER TABLE finance_invoices DROP CONSTRAINT IF EXISTS finance_invoices_status_check;`);
+      await dbRunner.query(`ALTER TABLE finance_invoices DROP CONSTRAINT IF EXISTS finance_invoices_payment_method_check;`);
+    } catch {
+      // Ignore if table or constraints don't exist
+    }
+
+    const tasksRes = await dbRunner.query<{
+      id: number;
+      title: string;
+      institution_id: number | null;
+      client_name: string | null;
+      company_name: string | null;
+      created_by: number | null;
+      invoices: any;
+    }>(
+      `SELECT id, title, institution_id, client_name, company_name, created_by, invoices 
+       FROM operations_tasks 
+       WHERE invoices IS NOT NULL AND jsonb_typeof(invoices) = 'array' AND jsonb_array_length(invoices) > 0`
+    );
+
+    const activeInvoiceNumbers = new Set<string>();
+
+    for (const task of tasksRes.rows) {
+      const invArray = Array.isArray(task.invoices) ? task.invoices : [];
+      for (let idx = 0; idx < invArray.length; idx++) {
+        const inv = invArray[idx];
+        if (!inv) continue;
+
+        const invNumber = String(inv.invoice_number || `INV-${task.id}-${String(idx + 1).padStart(3, "0")}`).trim();
+        if (!invNumber) continue;
+        activeInvoiceNumbers.add(invNumber);
+
+        const totalAmount = parseFloat(inv.total_amount) || 0;
+        const taxAmount = parseFloat(inv.tax_amount) || 0;
+        const amount = parseFloat(inv.subtotal) || (totalAmount - taxAmount > 0 ? totalAmount - taxAmount : totalAmount);
+        const status = String(inv.status || "unpaid").toLowerCase();
+        const payerName = String(inv.client_company || inv.client_name || task.client_name || "Client").trim();
+        const receiverName = String(task.company_name || "EduBird").trim();
+        const categoryName = task.title ? `Work: ${task.title}` : "Work Deliverables";
+        const invoiceDate = inv.issue_date || (inv.created_at ? String(inv.created_at).substring(0, 10) : new Date().toISOString().substring(0, 10));
+        const scopeType = task.institution_id ? "institution" : "platform";
+        const institutionId = task.institution_id ? Number(task.institution_id) : null;
+        const notes = inv.notes || (Array.isArray(inv.items) && inv.items.length > 0
+          ? inv.items.map((it: any) => `${it.description || it.deliverable || "Deliverable"}: ₹${it.amount}`).join("; ")
+          : `Work Invoice #${invNumber} for ${task.title}`);
+        const createdBy = inv.created_by_id ? Number(inv.created_by_id) : (task.created_by ? Number(task.created_by) : null);
+        const createdByRole = "Work Owner";
+        const staffId = inv.created_by_id ? Number(inv.created_by_id) : null;
+        const createdAt = inv.created_at ? new Date(inv.created_at) : new Date();
+
+        await dbRunner.query(
+          `INSERT INTO finance_invoices (
+            invoice_number, scope_type, institution_id, source_type, payer_name, receiver_name,
+            category_name, payment_method, amount, tax_amount, total_amount, invoice_date,
+            status, notes, created_by, created_by_role, staff_id, created_at, updated_at
+          ) VALUES (
+            $1, $2, $3, 'work', $4, $5, $6, 'net_banking', $7, $8, $9, $10,
+            $11, $12, $13, $14, $15, $16, NOW()
+          )
+          ON CONFLICT (invoice_number) DO UPDATE SET
+            scope_type = EXCLUDED.scope_type,
+            institution_id = EXCLUDED.institution_id,
+            source_type = 'work',
+            payer_name = EXCLUDED.payer_name,
+            receiver_name = EXCLUDED.receiver_name,
+            category_name = EXCLUDED.category_name,
+            amount = EXCLUDED.amount,
+            tax_amount = EXCLUDED.tax_amount,
+            total_amount = EXCLUDED.total_amount,
+            invoice_date = EXCLUDED.invoice_date,
+            status = EXCLUDED.status,
+            notes = EXCLUDED.notes,
+            updated_at = NOW()`,
+          [
+            invNumber,
+            scopeType,
+            institutionId,
+            payerName,
+            receiverName,
+            categoryName,
+            amount > 0 ? amount : totalAmount,
+            taxAmount,
+            totalAmount > 0 ? totalAmount : 1,
+            invoiceDate,
+            status,
+            notes,
+            createdBy,
+            createdByRole,
+            staffId,
+            createdAt,
+          ]
+        );
+      }
+    }
+
+    if (activeInvoiceNumbers.size > 0) {
+      const invNumList = Array.from(activeInvoiceNumbers);
+      await dbRunner.query(
+        `DELETE FROM finance_invoices WHERE source_type = 'work' AND NOT (invoice_number = ANY($1))`,
+        [invNumList]
+      );
+    } else {
+      await dbRunner.query(`DELETE FROM finance_invoices WHERE source_type = 'work'`);
+    }
+  } catch (err) {
+    console.warn("[syncWorkInvoicesToFinance] Warning:", err);
+  }
+}
+
 export async function listFinanceInvoices(
   dbRunner: Queryable,
   options: FinanceInvoiceListOptions
@@ -4052,14 +4168,18 @@ export async function listFinanceInvoices(
   this_month_total: string | number;
 }> {
   await ensureFinanceIncomeSchema(dbRunner);
+  await syncWorkInvoicesToFinance(dbRunner);
   const conditions: string[] = [];
   const params: unknown[] = [];
   let paramIdx = 1;
 
   if (options.scope_type === "platform") {
-    conditions.push(`fi.scope_type = 'platform'`);
+    if (options.institution_id) {
+      conditions.push(`(fi.scope_type = 'platform' OR fi.institution_id = $${paramIdx++})`);
+      params.push(options.institution_id);
+    }
   } else {
-    conditions.push(`fi.scope_type = 'institution' AND fi.institution_id = $${paramIdx++}`);
+    conditions.push(`(fi.institution_id = $${paramIdx++} OR (fi.scope_type = 'platform' AND fi.institution_id IS NULL))`);
     params.push(options.institution_id);
   }
 
@@ -4155,13 +4275,37 @@ export async function deleteFinanceInvoice(
   institutionId: number | null
 ) {
   await ensureFinanceIncomeSchema(dbRunner);
+
+  try {
+    const invRes = await dbRunner.query<{ invoice_number: string; source_type: string }>(
+      `SELECT invoice_number, source_type FROM finance_invoices WHERE id = $1`,
+      [id]
+    );
+    if (invRes.rows.length > 0 && invRes.rows[0].source_type === "work") {
+      const invNumber = invRes.rows[0].invoice_number;
+      await dbRunner.query(
+        `UPDATE operations_tasks 
+         SET invoices = (
+           SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb)
+           FROM jsonb_array_elements(COALESCE(invoices, '[]'::jsonb)) elem
+           WHERE elem->>'invoice_number' != $1
+         ),
+         updated_at = NOW()
+         WHERE invoices IS NOT NULL AND invoices::text LIKE $2`,
+        [invNumber, `%${invNumber}%`]
+      );
+    }
+  } catch (e) {
+    console.warn("[deleteFinanceInvoice] Task sync warning:", e);
+  }
+
   const conditions = ["id = $1"];
   const params: unknown[] = [id];
 
   if (scope === "platform") {
-    conditions.push("scope_type = 'platform'");
+    // Platform admin can delete any invoice
   } else {
-    conditions.push("scope_type = 'institution' AND institution_id = $2");
+    conditions.push("institution_id = $2");
     params.push(institutionId);
   }
 

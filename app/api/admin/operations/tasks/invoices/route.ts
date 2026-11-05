@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
 import { ensureFeatureSchema } from "@/lib/db/ensure-feature-schema";
+import { syncWorkInvoicesToFinance } from "@/lib/queries/finance";
 
 export async function GET(req: Request) {
   try {
@@ -111,6 +112,12 @@ export async function POST(req: Request) {
     );
 
     try {
+      await syncWorkInvoicesToFinance(db);
+    } catch (e) {
+      console.warn("[Project Invoice POST] Finance sync warning:", e);
+    }
+
+    try {
       await recordPerformancePoints({
         employeeId: user.id,
         activityType: "finance_invoice",
@@ -193,6 +200,12 @@ export async function PUT(req: Request) {
       [JSON.stringify(currentInvoices), JSON.stringify(history), Number(task_id)]
     );
 
+    try {
+      await syncWorkInvoicesToFinance(db);
+    } catch (e) {
+      console.warn("[Project Invoice PUT] Finance sync warning:", e);
+    }
+
     return NextResponse.json({
       message: "Invoice updated successfully",
       invoice: updatedInvoice,
@@ -250,6 +263,12 @@ export async function DELETE(req: Request) {
        WHERE id = $3`,
       [JSON.stringify(filteredInvoices), JSON.stringify(history), Number(taskId)]
     );
+
+    try {
+      await syncWorkInvoicesToFinance(db);
+    } catch (e) {
+      console.warn("[Project Invoice DELETE] Finance sync warning:", e);
+    }
 
     return NextResponse.json({
       message: "Invoice deleted successfully",
