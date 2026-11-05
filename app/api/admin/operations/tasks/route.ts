@@ -167,10 +167,10 @@ export async function GET(req: Request) {
     const userInstId = (user as any)?.institution_id || user?.memberships?.[0]?.institution_id || null;
     const isPlatform = !userInstId || (user && isPlatformAdminUser(user));
     const envInstRaw = String(
-      process.env.DEFAULT_INSTITUTION_ID ??
-      process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ??
       process.env.INSTITUTION_ID ??
       process.env.NEXT_PUBLIC_INSTITUTION_ID ??
+      process.env.DEFAULT_INSTITUTION_ID ??
+      process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ??
       process.env.TENANT_INSTITUTION_ID ??
       process.env.NEXT_PUBLIC_TENANT_INSTITUTION_ID ??
       process.env.INSTITUTION_PROFILE_ID ??
@@ -212,12 +212,13 @@ export async function GET(req: Request) {
     // Organization scoping: institution staff only see their tasks, platform admin can see all or specific
     // When isSelfScope is true, user views their own assigned/created tasks across the system
     // Clients must see all projects associated with their client account across the system without institution scoping
+    const defaultScopedInstId = targetInstId || envDefaultInstId || 1;
     if (!isSelfScope && !isClient) {
       if (targetInstId && !isPlatform) {
         params.push(targetInstId);
         query += ` AND institution_id = $${params.length}`;
       } else if (requestedInstParam === "none" || (isPlatform && requestedInstParam !== "all")) {
-        query += ` AND (institution_id = 1 OR institution_id IS NULL)`;
+        query += ` AND (institution_id = ${defaultScopedInstId} OR institution_id IS NULL)`;
       }
     }
     if (search) {
@@ -446,13 +447,15 @@ export async function GET(req: Request) {
             )
             -- Exclude students, parents/guardians, drivers, and clients from the staff picker
             AND LOWER(COALESCE(r.code, '')) NOT IN ('student', 'guardian', 'parent', 'client', 'driver')
+            AND LOWER(COALESCE(r.name, '')) NOT IN ('student', 'guardian', 'parent', 'client', 'driver')
+            AND LOWER(COALESCE(d.name, '')) NOT IN ('student', 'guardian', 'parent', 'client', 'driver')
             AND NOT EXISTS (
               SELECT 1 FROM user_roles sur JOIN roles sr ON sr.id = sur.role_id
-              WHERE sur.user_id = u.id AND LOWER(sr.code) IN ('student', 'guardian', 'parent', 'client', 'driver')
+              WHERE sur.user_id = u.id AND (LOWER(sr.code) IN ('student', 'guardian', 'parent', 'client', 'driver') OR LOWER(sr.name) IN ('student', 'guardian', 'parent', 'client', 'driver'))
             )
             AND NOT EXISTS (
               SELECT 1 FROM institution_memberships sim JOIN roles sr ON sr.id = sim.role_id
-              WHERE sim.user_id = u.id AND LOWER(sr.code) IN ('student', 'guardian', 'parent', 'client', 'driver')
+              WHERE sim.user_id = u.id AND (LOWER(sr.code) IN ('student', 'guardian', 'parent', 'client', 'driver') OR LOWER(sr.name) IN ('student', 'guardian', 'parent', 'client', 'driver'))
             )
           ORDER BY u.id, 
             CASE 
@@ -464,7 +467,7 @@ export async function GET(req: Request) {
         )
         SELECT * FROM staff_members ORDER BY name ASC;
       `,
-      [targetInstId]
+      [targetInstId || envDefaultInstId || null]
     );
     // Auto-seed sample tasks ONLY if table is completely empty and requester is an admin
     const canManageAllTasks = Boolean(user && (

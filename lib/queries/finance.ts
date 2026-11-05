@@ -4046,13 +4046,18 @@ export type FinanceInvoiceListOptions = {
 
 export async function syncWorkInvoicesToFinance(dbRunner: Queryable): Promise<void> {
   try {
-    await ensureFinanceIncomeSchema(dbRunner);
-
     try {
       await dbRunner.query(`ALTER TABLE finance_invoices DROP CONSTRAINT IF EXISTS finance_invoices_status_check;`);
       await dbRunner.query(`ALTER TABLE finance_invoices DROP CONSTRAINT IF EXISTS finance_invoices_payment_method_check;`);
     } catch {
-      // Ignore if table or constraints don't exist
+      // Ignore
+    }
+    await ensureFinanceIncomeSchema(dbRunner);
+    try {
+      await dbRunner.query(`ALTER TABLE finance_invoices DROP CONSTRAINT IF EXISTS finance_invoices_status_check;`);
+      await dbRunner.query(`ALTER TABLE finance_invoices DROP CONSTRAINT IF EXISTS finance_invoices_payment_method_check;`);
+    } catch {
+      // Ignore
     }
 
     const tasksRes = await dbRunner.query<{

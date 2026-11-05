@@ -19,14 +19,16 @@ const InstitutionalAdminLanding = dynamic(
 
 type HomeLandingContainerProps = {
   initialIsInstitutionEdition?: boolean;
+  configuredInstitutionId?: number | null;
 };
 
 export function HomeLandingContainer({
   initialIsInstitutionEdition,
+  configuredInstitutionId,
 }: HomeLandingContainerProps = {}) {
   const searchParams = useSearchParams();
 
-  // Only show institution landing if explicitly requested via URL parameter
+  // URL parameter override if present
   const paramInstId =
     searchParams?.get("institution_id") ||
     searchParams?.get("institute_id") ||
@@ -39,21 +41,25 @@ export function HomeLandingContainer({
     ? Number(paramInstId)
     : null;
 
-  const envDefaultInstId = process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
-    ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
-    : null;
+  const envInstId =
+    configuredInstitutionId ??
+    (process.env.NEXT_PUBLIC_INSTITUTION_ID
+      ? Number(process.env.NEXT_PUBLIC_INSTITUTION_ID)
+      : process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
+        ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
+        : null);
 
   const isInstitutionEdition = Boolean(
     initialIsInstitutionEdition ||
     (urlInstId && urlInstId > 0) ||
-    (envDefaultInstId && envDefaultInstId > 0)
+    (envInstId && envInstId > 0)
   );
 
   return (
     <div className="flex flex-col min-h-full">
       <div className="flex-1">
         {isInstitutionEdition ? (
-          <InstitutionalAdminLanding />
+          <InstitutionalAdminLanding configuredInstitutionId={urlInstId ?? envInstId} />
         ) : (
           <PlatformAdminLanding />
         )}
@@ -61,4 +67,3 @@ export function HomeLandingContainer({
     </div>
   );
 }
-

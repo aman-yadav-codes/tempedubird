@@ -1,3 +1,4 @@
+import { getFrontendConfig, isPlatformAdminMode } from "@/lib/config/frontend-config";
 import type { SessionUser } from "@/lib/auth/session-user";
 
 export const ACTIVE_INSTITUTION_STORAGE_KEY = "edubird.activeInstitutionId";
@@ -72,10 +73,18 @@ export function getUserInstitutionOptions(user: SessionUser | null | undefined):
 }
 
 export function getDefaultInstitutionId(): number | null {
+  if (isPlatformAdminMode()) {
+    return null;
+  }
+  const config = getFrontendConfig();
+  if (config.isValid && config.mode === "institution") {
+    return config.institutionId;
+  }
   return parseActiveInstitutionId(
-    process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ||
+    process.env.INSTITUTION_ID ||
     process.env.NEXT_PUBLIC_INSTITUTION_ID ||
-    process.env.DEFAULT_INSTITUTION_ID
+    process.env.DEFAULT_INSTITUTION_ID ||
+    process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
   );
 }
 

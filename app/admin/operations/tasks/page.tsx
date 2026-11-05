@@ -276,8 +276,8 @@ export default function OperationsTasksPage() {
   const { institutions, activeInstitution, activeInstitutionId } = useActiveInstitution();
   const isPlatformRoute = Boolean(pathname?.startsWith("/platformadmin"));
   const envDefaultInstId = (
-    process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ||
     process.env.NEXT_PUBLIC_INSTITUTION_ID ||
+    process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ||
     process.env.NEXT_PUBLIC_TENANT_INSTITUTION_ID ||
     ""
   ).trim();

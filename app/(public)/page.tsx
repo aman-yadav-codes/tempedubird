@@ -2,6 +2,9 @@ import { Suspense } from "react";
 import { headers } from "next/headers";
 import type { Metadata } from "next";
 import { HomeLandingContainer } from "@/components/home/home-landing-container";
+import { PlatformAdminHome } from "@/components/platform-admin/platform-admin-home";
+import { ConfigurationErrorScreen } from "@/components/configuration-error-screen";
+import { getFrontendConfig } from "@/lib/config/frontend-config";
 import { getInstitutionTenantByHost } from "@/lib/tenancy/institution-domain";
 import { db } from "@/lib/db/db";
 import { resolvePageMetadata } from "@/lib/seo/metadata";
@@ -12,6 +15,14 @@ async function getHost() {
 }
 
 export async function generateMetadata(): Promise<Metadata> {
+  const config = getFrontendConfig();
+  if (config.mode === "platform_admin") {
+    return {
+      title: "EduBird Platform — Platform Management & Operations",
+      description: "Centralized administration and platform governance for multi-institution infrastructure.",
+    };
+  }
+
   const host = await getHost();
   let tenant = null;
   try {
@@ -19,10 +30,23 @@ export async function generateMetadata(): Promise<Metadata> {
   } catch {
     tenant = null;
   }
-  return resolvePageMetadata("/", tenant?.institution_id);
+  return resolvePageMetadata("/", tenant?.institution_id ?? config.institutionId ?? undefined);
 }
 
 export default async function HomePage() {
+  const config = getFrontendConfig();
+
+  // 1. Invalid configuration
+  if (!config.isValid) {
+    return <ConfigurationErrorScreen config={config} />;
+  }
+
+  // 2. Scenario B: Platform Admin Mode
+  if (config.mode === "platform_admin") {
+    return <PlatformAdminHome />;
+  }
+
+  // 3. Scenario A: Institution Mode
   const host = await getHost();
   let tenant = null;
   try {
@@ -30,10 +54,9 @@ export default async function HomePage() {
   } catch {
     tenant = null;
   }
-  const envDefaultInstId = process.env.DEFAULT_INSTITUTION_ID || process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID;
   const isInstitutionMode = Boolean(
     tenant?.institution_id ||
-    (envDefaultInstId && /^\d+$/.test(envDefaultInstId.trim()) && Number(envDefaultInstId.trim()) > 0)
+    (config.institutionId && config.institutionId > 0)
   );
 
   return (
@@ -42,7 +65,10 @@ export default async function HomePage() {
         <div className="min-h-screen bg-background animate-pulse" />
       }
     >
-      <HomeLandingContainer initialIsInstitutionEdition={isInstitutionMode} />
+      <HomeLandingContainer
+        initialIsInstitutionEdition={isInstitutionMode}
+        configuredInstitutionId={config.institutionId}
+      />
     </Suspense>
   );
 }

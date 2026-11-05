@@ -35,7 +35,11 @@ import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { useAuthStore } from "@/store";
 import { toast } from "sonner";
 
-export function InstitutionalAdminLanding() {
+export function InstitutionalAdminLanding({
+  configuredInstitutionId,
+}: {
+  configuredInstitutionId?: number | null;
+} = {}) {
   const { user } = useAuthStore();
   const { activeInstitution, activeInstitutionId, defaultEnvInstitutionId } = useActiveInstitution();
   const [institutionData, setInstitutionData] = useState<any>(null);
@@ -53,7 +57,7 @@ export function InstitutionalAdminLanding() {
   const [enqMessage, setEnqMessage] = useState("");
   const [submittingEnq, setSubmittingEnq] = useState(false);
 
-  const resolvedInstId = activeInstitutionId || user?.memberships?.[0]?.institution_id || defaultEnvInstitutionId;
+  const resolvedInstId = configuredInstitutionId || activeInstitutionId || user?.memberships?.[0]?.institution_id || defaultEnvInstitutionId;
 
   useEffect(() => {
     async function loadInstituteHome() {

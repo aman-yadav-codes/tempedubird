@@ -4,6 +4,9 @@ import { Suspense } from "react";
 import { PublicNavbar } from "@/components/public/public-navbar";
 import { PublicFooter } from "@/components/public/public-footer";
 import { LeadTrackerProvider } from "@/components/public/lead-tracker-provider";
+import { PlatformAdminLayout } from "@/components/platform-admin/platform-admin-layout";
+import { ConfigurationErrorScreen } from "@/components/configuration-error-screen";
+import { getFrontendConfig } from "@/lib/config/frontend-config";
 import { db } from "@/lib/db/db";
 import {
   getPublicInstitutionNavItems,
@@ -14,6 +17,19 @@ import {
 import { getInstitutionTenantByHost } from "@/lib/tenancy/institution-domain";
 
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
+  const frontendConfig = getFrontendConfig();
+
+  // 1. Invalid configuration
+  if (!frontendConfig.isValid) {
+    return <ConfigurationErrorScreen config={frontendConfig} />;
+  }
+
+  // 2. Scenario B: Platform Admin Mode
+  if (frontendConfig.mode === "platform_admin") {
+    return <PlatformAdminLayout>{children}</PlatformAdminLayout>;
+  }
+
+  // 3. Scenario A: Institution Mode (or legacy fallback)
   const headerStore = await headers();
   const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host") ?? "";
   let tenant = null;
@@ -24,13 +40,13 @@ export default async function PublicLayout({ children }: { children: React.React
     isInstitution: false,
   };
 
-  const envDefaultInstId = process.env.DEFAULT_INSTITUTION_ID || process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID;
+  const configuredInstId = frontendConfig.institutionId;
 
   try {
     tenant = await getInstitutionTenantByHost(db, host);
-    if (!tenant && envDefaultInstId && /^\d+$/.test(envDefaultInstId.trim()) && Number(envDefaultInstId.trim()) > 0) {
+    if (!tenant && configuredInstId) {
       tenant = {
-        institution_id: Number(envDefaultInstId.trim()),
+        institution_id: configuredInstId,
         institution_name: "Institution",
         institution_slug: null,
         domain: host || null,

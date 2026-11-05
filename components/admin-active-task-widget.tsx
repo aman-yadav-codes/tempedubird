@@ -316,7 +316,7 @@ export function AdminActiveTaskWidget() {
       });
 
       if (res.ok) {
-        const titleLabel = activeSubtask ? `Sub-task: "${activeSubtask.title}"` : `Task: "${activeTask.title}"`;
+        const titleLabel = activeSubtask ? `Task: "${activeSubtask.title}"` : `Task: "${activeTask.title}"`;
         toast.success(`${titleLabel} stopped.`);
         await fetchTasks();
         window.dispatchEvent(
@@ -326,11 +326,11 @@ export function AdminActiveTaskWidget() {
         );
       } else {
         const errData = await res.json().catch(() => ({}));
-        toast.error(errData.error || "Failed to stop sub-task.");
+        toast.error(errData.error || "Failed to stop task.");
       }
     } catch (err) {
       console.error("[AdminActiveTaskWidget] Stop error:", err);
-      toast.error("Error stopping sub-task.");
+      toast.error("Error stopping task.");
     } finally {
       setIsOperating(false);
     }
@@ -347,18 +347,18 @@ export function AdminActiveTaskWidget() {
   return (
     <div className="flex items-center gap-2">
       {activeTask ? (
-        // ================= ACTIVE RUNNING STATE (SHOWS SUB-TASK NAME) =================
+        // ================= ACTIVE RUNNING STATE (SHOWS TASK NAME) =================
         <div className="flex items-center gap-2 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-2.5 sm:px-3 py-1 shadow-2xs">
           {/* Pulsing live status indicator */}
-          <span className="relative flex h-2.5 w-2.5 shrink-0" title="Sub-task in progress">
+          <span className="relative flex h-2.5 w-2.5 shrink-0" title="Task in progress">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
           </span>
 
-          {/* Sub-task Name (Prominently displayed as requested) */}
+          {/* Task Name (Prominently displayed) */}
           <div className="flex items-center gap-1.5 min-w-0 pr-1">
             <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 shrink-0">
-              Sub-task:
+              Task:
             </span>
             <span
               className="font-bold text-xs sm:text-sm text-foreground truncate max-w-[130px] sm:max-w-[200px] md:max-w-[300px]"
@@ -388,7 +388,7 @@ export function AdminActiveTaskWidget() {
             variant="destructive"
             disabled={isOperating}
             onClick={handleStopTask}
-            title="Stop sub-task timer and record duration"
+            title="Stop task timer and record duration"
             className="h-7 sm:h-8 px-2.5 text-xs font-bold gap-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-2xs shrink-0 cursor-pointer transition-all ml-1"
           >
             <Square className="w-3 h-3 fill-current" />
@@ -396,14 +396,14 @@ export function AdminActiveTaskWidget() {
           </Button>
         </div>
       ) : (
-        // ================= IDLE STATE (NO DROPDOWN AS REQUESTED) =================
+        // ================= IDLE STATE =================
         <Link
           href={tasksUrl}
           className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-semibold text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted/70 rounded-xl border border-dashed transition-all cursor-pointer"
-          title="No sub-task currently in progress. Click to open Task Management"
+          title="No task currently in progress. Click to open Task Management"
         >
           <span className="w-2 h-2 rounded-full bg-zinc-400 shrink-0" />
-          <span>No Active Sub-task</span>
+          <span>No Active Task</span>
         </Link>
       )}
     </div>

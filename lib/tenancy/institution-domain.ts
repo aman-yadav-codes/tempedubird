@@ -1,3 +1,4 @@
+import { getFrontendConfig, isPlatformAdminMode } from "@/lib/config/frontend-config";
 import type { Pool } from "pg";
 
 export type InstitutionTenant = {
@@ -74,11 +75,18 @@ function getPlatformHosts() {
 }
 
 export function getConfiguredInstitutionId() {
+  if (isPlatformAdminMode()) {
+    return null; // Platform admin mode must never require or leak an institution ID
+  }
+  const config = getFrontendConfig();
+  if (config.isValid && config.mode === "institution") {
+    return config.institutionId;
+  }
   const rawId = String(
-    process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ??
-      process.env.DEFAULT_INSTITUTION_ID ??
-      process.env.INSTITUTION_ID ??
+    process.env.INSTITUTION_ID ??
       process.env.NEXT_PUBLIC_INSTITUTION_ID ??
+      process.env.DEFAULT_INSTITUTION_ID ??
+      process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ??
       process.env.TENANT_INSTITUTION_ID ??
       process.env.NEXT_PUBLIC_TENANT_INSTITUTION_ID ??
       process.env.INSTITUTION_PROFILE_ID ??
