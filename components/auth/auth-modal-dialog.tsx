@@ -11,7 +11,6 @@ import {
   User,
   Phone,
   MapPin,
-  GraduationCap,
   ArrowRight,
   Loader2,
   X,
@@ -89,7 +88,7 @@ export function AuthModalDialog({
           setIsTenantInstitution(true);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       isCancelled = true;
     };
@@ -119,19 +118,12 @@ export function AuthModalDialog({
 
   const hasInstitutionId = Boolean(
     institutionId ||
-      urlInstId ||
-      activeInstitutionId ||
-      defaultEnvInstitutionId ||
-      isTenantInstitution ||
-      (envInstId && /^\d+$/.test(envInstId) && Number(envInstId) > 0)
+    urlInstId ||
+    activeInstitutionId ||
+    defaultEnvInstitutionId ||
+    isTenantInstitution ||
+    (envInstId && /^\d+$/.test(envInstId) && Number(envInstId) > 0)
   );
-
-  const availableRegisterRoles = useMemo(() => {
-    if (hasInstitutionId) {
-      return REGISTER_ROLES.filter((r) => r.value === "student" || r.value === "guardian");
-    }
-    return REGISTER_ROLES;
-  }, [hasInstitutionId]);
 
   const [activeTab, setActiveTab] = useState<"signin" | "signup">(defaultTab);
 
@@ -155,7 +147,7 @@ export function AuthModalDialog({
   const [signUpEmail, setSignUpEmail] = useState("");
   const [signUpPhone, setSignUpPhone] = useState("");
   const [signUpCity, setSignUpCity] = useState("");
-  const [signUpRole, setSignUpRole] = useState("student");
+  const [signUpRole, setSignUpRole] = useState("institution_admin");
   const [signUpReferralCode, setSignUpReferralCode] = useState("");
 
   useEffect(() => {
@@ -168,7 +160,7 @@ export function AuthModalDialog({
     if (refCode) {
       try {
         localStorage.setItem("edubird_referral_code", refCode);
-      } catch {}
+      } catch { }
       if (!signUpReferralCode) {
         setSignUpReferralCode(refCode);
       }
@@ -176,15 +168,9 @@ export function AuthModalDialog({
       try {
         const stored = localStorage.getItem("edubird_referral_code");
         if (stored) setSignUpReferralCode(stored);
-      } catch {}
+      } catch { }
     }
   }, [searchParams, signUpReferralCode]);
-
-  useEffect(() => {
-    if (hasInstitutionId && signUpRole === "institution_admin") {
-      setSignUpRole("student");
-    }
-  }, [hasInstitutionId, signUpRole]);
 
   const [signUpPassword, setSignUpPassword] = useState("");
   const [signUpConfirmPassword, setSignUpConfirmPassword] = useState("");
@@ -298,10 +284,10 @@ export function AuthModalDialog({
         role === "student"
           ? "Student"
           : role === "guardian"
-          ? "Guardian"
-          : role === "professional"
-          ? "Professional"
-          : "Platform Admin";
+            ? "Guardian"
+            : role === "professional"
+              ? "Professional"
+              : "Platform Admin";
       toast.success(`Signed in with Demo ${roleLabel} Account!`);
       onOpenChange(false);
 
@@ -338,6 +324,14 @@ export function AuthModalDialog({
     try {
       const payloadEmail = signUpEmail.trim() || null;
       const derivedFullName = signUpFullName.trim() || (payloadEmail ? payloadEmail.split("@")[0] : `User ${cleanPhone.slice(-4)}`);
+      const resolvedInstId =
+        institutionId ||
+        urlInstId ||
+        activeInstitutionId ||
+        defaultEnvInstitutionId ||
+        (envInstId && /^\d+$/.test(envInstId) ? Number(envInstId) : null) ||
+        null;
+
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -346,7 +340,8 @@ export function AuthModalDialog({
           email: payloadEmail,
           phone: cleanPhone,
           address: signUpCity.trim(),
-          role_code: signUpRole,
+          role_code: "institution_admin",
+          institution_id: resolvedInstId,
           referral_code: signUpReferralCode.trim() || null,
           password: signUpPassword,
           confirmPassword: signUpConfirmPassword || signUpPassword,
@@ -651,7 +646,7 @@ export function AuthModalDialog({
                 </div>
               </div>
 
-              {/* Row 3: Full Name (Optional) & Register As */}
+              {/* Row 3: Full Name (Optional) & Referral / Affiliate Code (Optional) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {/* Full Name */}
                 <div
@@ -676,61 +671,34 @@ export function AuthModalDialog({
                   </div>
                 </div>
 
-                {/* Register As */}
+                {/* Referral / Affiliate Code (Optional) */}
                 <div
                   onBlur={() => handleBlur()}
                   className="flex items-center gap-2.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus-within:border-[#D91B1B] focus-within:ring-2 focus-within:ring-rose-500/10 transition-all shadow-2xs"
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-[#D91B1B]">
-                    <GraduationCap className="h-3.5 w-3.5" />
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                    <Sparkles className="h-3.5 w-3.5" />
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
-                    <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">
-                      Register As <span className="text-[#D91B1B]">*</span>
-                    </span>
-                    <select
-                      value={signUpRole}
-                      onChange={(e) => setSignUpRole(e.target.value)}
-                      disabled={submitting}
-                      className="w-full text-xs font-semibold text-slate-900 bg-transparent outline-none border-none p-0 focus:ring-0 cursor-pointer truncate"
-                    >
-                      {availableRegisterRoles.map((r) => (
-                        <option key={r.value} value={r.value}>
-                          {r.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 4: Referral / Affiliate Code (Optional) */}
-              <div
-                onBlur={() => handleBlur()}
-                className="flex items-center gap-2.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus-within:border-[#D91B1B] focus-within:ring-2 focus-within:ring-rose-500/10 transition-all shadow-2xs"
-              >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-                  <Sparkles className="h-3.5 w-3.5" />
-                </div>
-                <div className="flex flex-col min-w-0 flex-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">
-                      Referral / Affiliate Code <span className="text-slate-400 font-normal">(Optional)</span>
-                    </span>
-                    {signUpReferralCode && (
-                      <span className="text-[9px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.5 rounded">
-                        Applied
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">
+                        Referral / Affiliate Code <span className="text-slate-400 font-normal">(Optional)</span>
                       </span>
-                    )}
+                      {signUpReferralCode && (
+                        <span className="text-[9px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.5 rounded">
+                          Applied
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Referrer's 10-digit mobile number"
+                      value={signUpReferralCode}
+                      onChange={(e) => setSignUpReferralCode(e.target.value)}
+                      disabled={submitting}
+                      className="w-full text-xs font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal bg-transparent outline-none border-none p-0 focus:ring-0"
+                    />
                   </div>
-                  <input
-                    type="text"
-                    placeholder="Referrer's 10-digit mobile number"
-                    value={signUpReferralCode}
-                    onChange={(e) => setSignUpReferralCode(e.target.value)}
-                    disabled={submitting}
-                    className="w-full text-xs font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal bg-transparent outline-none border-none p-0 focus:ring-0"
-                  />
                 </div>
               </div>
 

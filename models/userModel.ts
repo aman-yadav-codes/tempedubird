@@ -38,9 +38,10 @@ export const createUser = async (data: User & {
   try {
     await client.query("BEGIN");
 
+    const isInstitutionAdmin = role?.code === "institution_admin";
     const user = await insertUser(client, {
       ...data,
-      is_active: hasInstitutionClaim ? false : (data.is_active ?? true),
+      is_active: isInstitutionAdmin ? true : (hasInstitutionClaim ? false : (data.is_active ?? true)),
     });
 
     if (hasInstitutionClaim) {
@@ -54,6 +55,9 @@ export const createUser = async (data: User & {
         `,
         [institutionId, user.id!, role.id]
       );
+      if (isInstitutionAdmin) {
+        await insertUserRole(client, user.id!, role.id).catch(() => {});
+      }
     } else if (role) {
       await insertUserRole(client, user.id!, role.id);
     }
