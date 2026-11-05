@@ -78,7 +78,7 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "student.dashboard", label: "Student Dashboard", description: "student dashboard", scope: "institution", page: "/admin/my-program" },
   { key: "parent.dashboard", label: "Parent Dashboard", description: "parent dashboard", scope: "institution", page: "/admin" },
   { key: "teacher.dashboard", label: "Teacher Dashboard", description: "teacher dashboard", scope: "institution", page: "/admin" },
-  { key: "users.allusers", label: "All Users", description: "admin users", scope: "platform", page: "/admin/users" },
+  { key: "users.allusers", label: "All Users", description: "admin users", scope: "institution", page: "/admin/users" },
   { key: "affiliate", label: "Affiliate", description: "affiliate program, referrals and earnings", scope: "institution", page: "/admin/affiliate" },
   { key: "managestaff.allstaff", label: "All Staff", description: "teacher and driver profiles", scope: "institution", page: "/admin/staff" },
   { key: "managestaff.attendance", label: "Staff Attendance", description: "staff attendance", scope: "institution", page: "/admin/staff/attendance" },
@@ -94,8 +94,8 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "managestaff.performance", label: "Staff Performance", description: "staff performance, deliverables, and ROI", scope: "institution", page: "/admin/staff/performance" },
   { key: "managestaff.tasks", label: "Task Management", description: "staff task and deliverable operations", scope: "institution", page: "/admin/operations/tasks" },
   { key: "managestaff.letters", label: "Staff Letters", description: "staff joining and experience letters", scope: "institution", page: "/admin/staff/letters" },
-  { key: "rolespermissions.scopetypes", label: "Scope Types", description: "scope types", scope: "platform", page: "/admin/access-control/scope-types" },
-  { key: "rolespermissions.permissions", label: "Permissions", description: "permission codes", scope: "platform", page: "/admin/access-control/permissions" },
+  { key: "rolespermissions.scopetypes", label: "Scope Types", description: "scope types", scope: "institution", page: "/admin/access-control/scope-types" },
+  { key: "rolespermissions.permissions", label: "Permissions", description: "permission codes", scope: "institution", page: "/admin/access-control/permissions" },
   { key: "rolespermissions.roles", label: "Roles", description: "roles", scope: "institution", page: "/admin/access-control/roles" },
   { key: "rolespermissions.rolepermissions", label: "Role Permissions", description: "default role permissions", scope: "institution", page: "/admin/access-control/role-permissions" },
   { key: "rolespermissions.institutionmemberships", label: "Institution Memberships", description: "institution memberships", scope: "institution", page: "/admin/access-control/institution-memberships" },
@@ -149,19 +149,14 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "teacher.myinstitution.myletters", label: "Teacher My Letters", description: "letters generated for the teacher", scope: "institution", page: "/admin/institution/my-letters" },
   { key: "driver.myinstitution.myletters", label: "Driver My Letters", description: "letters generated for the driver", scope: "institution", page: "/admin/institution/my-letters" },
   { key: "analytics.overview", label: "Analytics Overview", description: "analytics overview", scope: "institution", page: "/admin/analytics" },
-  { key: "analytics.leads", label: "Leads", description: "analytics leads", scope: "platform", page: "/admin/users/leads" },
-  { key: "analytics.sales", label: "Sales", description: "analytics sales", scope: "platform", page: "/admin/analytics/sales" },
-  { key: "analytics.reports", label: "Analytics Reports", description: "analytics reports", scope: "platform", page: "/admin/analytics/reports" },
-  { key: "finance.platform.income", label: "Platform Finance Income", description: "platform-scoped finance income", scope: "platform", page: "/admin/finance/income" },
-  { key: "finance.platform.expense", label: "Platform Finance Expense", description: "platform-scoped finance expenses", scope: "platform", page: "/admin/finance/expense" },
-  { key: "finance.platform.invoice", label: "Platform Finance Invoice", description: "platform-scoped finance invoices", scope: "platform", page: "/admin/finance/invoice" },
-  { key: "finance.platform.allowance", label: "Platform Finance Allowance", description: "platform-scoped finance allowances", scope: "platform", page: "/admin/finance/allowance" },
-  { key: "finance.platform.recurring_expenses", label: "Platform Recurring Expenses", description: "platform-scoped recurring expenses", scope: "platform", page: "/admin/finance/recurring-expenses" },
-  { key: "finance.income", label: "Finance Income", description: "institution-scoped finance income", scope: "institution", page: "/admin/finance/income" },
-  { key: "finance.expense", label: "Finance Expense", description: "institution-scoped finance expenses", scope: "institution", page: "/admin/finance/expense" },
-  { key: "finance.invoice", label: "Finance Invoice", description: "institution-scoped finance invoices", scope: "institution", page: "/admin/finance/invoice" },
-  { key: "finance.allowance", label: "Finance Allowance", description: "institution-scoped finance allowances", scope: "institution", page: "/admin/finance/allowance" },
-  { key: "finance.recurring_expenses", label: "Recurring Expenses", description: "institution-scoped recurring expenses", scope: "institution", page: "/admin/finance/recurring-expenses" },
+  { key: "analytics.leads", label: "Leads", description: "analytics leads", scope: "institution", page: "/admin/users/leads" },
+  { key: "analytics.sales", label: "Sales", description: "analytics sales", scope: "institution", page: "/admin/analytics/sales" },
+  { key: "analytics.reports", label: "Analytics Reports", description: "analytics reports", scope: "institution", page: "/admin/analytics/reports" },
+  { key: "finance.income", label: "Finance Income", description: "finance income", scope: "institution", page: "/admin/finance/income" },
+  { key: "finance.expense", label: "Finance Expense", description: "finance expenses", scope: "institution", page: "/admin/finance/expense" },
+  { key: "finance.invoice", label: "Finance Invoice", description: "finance invoices", scope: "institution", page: "/admin/finance/invoice" },
+  { key: "finance.allowance", label: "Finance Allowance", description: "finance allowances", scope: "institution", page: "/admin/finance/allowance" },
+  { key: "finance.recurring_expenses", label: "Recurring Expenses", description: "recurring expenses", scope: "institution", page: "/admin/finance/recurring-expenses" },
   { key: "sales.leads", label: "Sales Lead", description: "sales leads", scope: "institution", page: "/admin/sales/leads" },
   { key: "sales.pipeline", label: "Sales Pipeline", description: "sales pipeline", scope: "institution", page: "/admin/sales/pipeline" },
   { key: "sales.proposals", label: "Sales Proposals", description: "commercial course proposals and custom quotes", scope: "institution", page: "/admin/sales/proposals" },
@@ -176,29 +171,29 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "content.certifications", label: "Affiliated By / Certifications", description: "certification providers and university affiliations", scope: "institution", page: "/admin/content/certifications" },
   { key: "content.subjects", label: "Subjects", description: "content subjects", scope: "institution", page: "/admin/content/subjects" },
   { key: "content.courses", label: "Courses & Programs", description: "courses and program catalog", scope: "institution", page: "/admin/content/courses" },
-  { key: "content.skills", label: "Skills", description: "content skills", scope: "platform", page: "/admin/master-data/skills" },
-  { key: "content.designations", label: "Designations", description: "content designations", scope: "platform", page: "/admin/master-data/designations" },
-  { key: "content.locations", label: "Locations", description: "content locations", scope: "platform", page: "/admin/master-data/locations" },
+  { key: "content.skills", label: "Skills", description: "content skills", scope: "institution", page: "/admin/master-data/skills" },
+  { key: "content.designations", label: "Designations", description: "content designations", scope: "institution", page: "/admin/master-data/designations" },
+  { key: "content.locations", label: "Locations", description: "content locations", scope: "institution", page: "/admin/master-data/locations" },
   { key: "content.syllabus", label: "Syllabus", description: "universal and institution syllabi", scope: "institution", page: "/admin/content/syllabus" },
-  { key: "content.card_categories", label: "Card Categories", description: "global card and document categories", scope: "platform", page: "/admin/master-data/card-categories" },
+  { key: "content.card_categories", label: "Card Categories", description: "global card and document categories", scope: "institution", page: "/admin/master-data/card-categories" },
   { key: "content.card_templates", label: "Card Templates", description: "assigned and marketplace card templates", scope: "institution", page: "/admin/content/card-templates" },
   { key: "content.assignments", label: "Assignments", description: "institution assignment templates", scope: "institution", page: "/admin/content/assignments" },
   { key: "content.exams", label: "Exams", description: "institution exam templates", scope: "institution", page: "/admin/content/exams" },
   { key: "content.notes", label: "Notes", description: "institution study notes", scope: "institution", page: "/admin/content/notes" },
-  { key: "content.default_calendar", label: "Default Calendar", description: "platform default holidays, notices, and academic events", scope: "platform", page: "/admin/master-data/default-calendar" },
-  { key: "content.exam_reviews", label: "Exam Reviews", description: "exam marketplace reviews", scope: "platform", page: "/admin/master-data/exams" },
+  { key: "content.default_calendar", label: "Default Calendar", description: "platform default holidays, notices, and academic events", scope: "institution", page: "/admin/master-data/default-calendar" },
+  { key: "content.exam_reviews", label: "Exam Reviews", description: "exam marketplace reviews", scope: "institution", page: "/admin/master-data/exams" },
   { key: "content.practice_exams", label: "Practice Exams", description: "institution practice exam templates", scope: "institution", page: "/admin/content/practice-exams" },
-  { key: "content.practice_exam_reviews", label: "Practice Exam Reviews", description: "practice exam marketplace reviews", scope: "platform", page: "/admin/master-data/practice-exams" },
+  { key: "content.practice_exam_reviews", label: "Practice Exam Reviews", description: "practice exam marketplace reviews", scope: "institution", page: "/admin/master-data/practice-exams" },
   { key: "content.institute_calendar", label: "Institute Calendar", description: "institution holidays, notices, and events", scope: "institution", page: "/admin/master-data/institute-calendar" },
   { key: "content.timetable_setup", label: "Timetable Setup", description: "subject teacher mappings and timetable slots", scope: "institution", page: "/admin/master-data/timetable-setup" },
   { key: "content.attendance_setup", label: "Attendance Setup", description: "attendance rules and shift settings", scope: "institution", page: "/admin/master-data/attendance-setup" },
   { key: "content.blog", label: "Blog", description: "institution website blog posts", scope: "institution", page: "/admin/content/blog" },
   { key: "content.media", label: "Media", description: "content media", scope: "institution", page: "/admin/content/media" },
-  { key: "institution.types", label: "Institution Types", description: "institution types", scope: "platform", page: "/admin/institutions/types" },
-  { key: "institution.subtypes", label: "Institution Subtypes", description: "institution subtypes", scope: "platform", page: "/admin/institutions/subtypes" },
-  { key: "institution.program_types", label: "Program Types", description: "program types", scope: "platform", page: "/admin/institutions/program-types" },
-  { key: "institution.facility_types", label: "Facility Types", description: "facility types", scope: "platform", page: "/admin/institutions/facility-types" },
-  { key: "institution.languages", label: "Languages", description: "institution languages", scope: "platform", page: "/admin/institutions/languages" },
+  { key: "institution.types", label: "Institution Types", description: "institution types", scope: "institution", page: "/admin/institutions/types" },
+  { key: "institution.subtypes", label: "Institution Subtypes", description: "institution subtypes", scope: "institution", page: "/admin/institutions/subtypes" },
+  { key: "institution.program_types", label: "Program Types", description: "program types", scope: "institution", page: "/admin/institutions/program-types" },
+  { key: "institution.facility_types", label: "Facility Types", description: "facility types", scope: "institution", page: "/admin/institutions/facility-types" },
+  { key: "institution.languages", label: "Languages", description: "institution languages", scope: "institution", page: "/admin/institutions/languages" },
   { key: "institution.institutions", label: "Institutions", description: "institutions", scope: "institution", page: "/admin/institutions/list" },
   { key: "institution.programs", label: "Programs", description: "institution programs", scope: "institution", page: "/admin/institutions/programs" },
   { key: "institution.placements", label: "Placements", description: "institution placements", scope: "institution", page: "/admin/institutions/placements" },
@@ -215,7 +210,7 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "teacher.myinstitution.noticeboard", label: "Teacher Noticeboard", description: "institution noticeboard notices managed by teachers", scope: "institution", page: "/admin/institutions/news" },
   { key: "parent.myinstitution.noticeboard", label: "Parent Noticeboard", description: "institution noticeboard notices for parents", scope: "institution", page: "/admin/institutions/news" },
   { key: "driver.myinstitution.noticeboard", label: "Driver Noticeboard", description: "institution noticeboard notices for drivers", scope: "institution", page: "/admin/institutions/news" },
-  { key: "settings.academic_sessions", label: "Academic Sessions", description: "global reusable academic sessions", scope: "platform", page: "/admin/institutions/academic-years" },
+  { key: "settings.academic_sessions", label: "Academic Sessions", description: "global reusable academic sessions", scope: "institution", page: "/admin/institutions/academic-years" },
   { key: "institution.ai_settings", label: "Institution AI Settings", description: "institution AI settings", scope: "institution", page: "/admin/ai-settings" },
   { key: "notifications.inbox", label: "Notifications", description: "notification inbox", scope: "institution", page: "/admin/notifications" },
   { key: "notifications.muted", label: "Muted Notifications", description: "muted notification preferences", scope: "institution", page: "/admin/notifications/muted" },
@@ -225,23 +220,23 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "teacher.support", label: "Teacher Support", description: "teacher support with the institution admin", scope: "institution", page: "/admin/support" },
   { key: "parents.support", label: "Parent Support", description: "parent support with the institution admin", scope: "institution", page: "/admin/support" },
   { key: "driver.support", label: "Driver Support", description: "driver support with the institution admin", scope: "institution", page: "/admin/support" },
-  { key: "tracker.history", label: "Tracker History", description: "tracker history", scope: "platform", page: "/admin/tracker" },
-  { key: "settings.general", label: "General Settings", description: "general settings", scope: "platform", page: "/admin/settings" },
+  { key: "tracker.history", label: "Tracker History", description: "tracker history", scope: "institution", page: "/admin/tracker" },
+  { key: "settings.general", label: "General Settings", description: "general settings", scope: "institution", page: "/admin/settings" },
   { key: "company.pages", label: "Company Pages", description: "company pages and footer content", scope: "institution", page: "/admin/company" },
   { key: "company.payment_methods", label: "Company Payment Methods", description: "payment methods, UPI, and bank accounts", scope: "institution", page: "/admin/company" },
-  { key: "settings.tracker", label: "Tracker Settings", description: "tracker settings", scope: "platform", page: "/admin/settings/tracker" },
-  { key: "settings.notifications", label: "Notification Settings", description: "notification types and templates", scope: "platform", page: "/admin/settings/notifications" },
+  { key: "settings.tracker", label: "Tracker Settings", description: "tracker settings", scope: "institution", page: "/admin/settings/tracker" },
+  { key: "settings.notifications", label: "Notification Settings", description: "notification types and templates", scope: "institution", page: "/admin/settings/notifications" },
   { key: "settings.payments", label: "Payment Settings", description: "student payment collection settings", scope: "institution", page: "/admin/settings/payments" },
   { key: "settings.subscription", label: "Subscription", description: "institution subscription plans and status", scope: "institution", page: "/admin/settings/subscription" },
-  { key: "settings.ai", label: "AI Settings", description: "AI settings", scope: "platform", page: "/admin/ai-settings" },
-  { key: "settings.security", label: "Security Settings", description: "security settings", scope: "platform", page: "/admin/settings/security" },
+  { key: "settings.ai", label: "AI Settings", description: "AI settings", scope: "institution", page: "/admin/ai-settings" },
+  { key: "settings.security", label: "Security Settings", description: "security settings", scope: "institution", page: "/admin/settings/security" },
   { key: "settings.logs", label: "System & Data Logs", description: "system audit trail and record modification history", scope: "institution", page: "/admin/settings/logs" },
   { key: "settings.recycle_bin", label: "Recycle Bin", description: "recoverable deleted records", scope: "institution", page: "/admin/settings/recycle-bin" },
-  { key: "settings.help_center", label: "Help Center Settings", description: "help center overview", scope: "platform", page: "/admin/settings/help-center" },
-  { key: "settings.help_center_categories", label: "Help Center Categories", description: "help center categories", scope: "platform", page: "/admin/settings/help-center/categories" },
-  { key: "settings.help_center_articles", label: "Help Center Articles", description: "help center articles", scope: "platform", page: "/admin/settings/help-center/articles" },
-  { key: "settings.help_center_updates", label: "Help Center Updates", description: "help center recent updates", scope: "platform", page: "/admin/settings/help-center/updates" },
-  { key: "settings.help_center_analytics", label: "Help Center Analytics", description: "help center analytics", scope: "platform", page: "/admin/settings/help-center/analytics" },
+  { key: "settings.help_center", label: "Help Center Settings", description: "help center overview", scope: "institution", page: "/admin/settings/help-center" },
+  { key: "settings.help_center_categories", label: "Help Center Categories", description: "help center categories", scope: "institution", page: "/admin/settings/help-center/categories" },
+  { key: "settings.help_center_articles", label: "Help Center Articles", description: "help center articles", scope: "institution", page: "/admin/settings/help-center/articles" },
+  { key: "settings.help_center_updates", label: "Help Center Updates", description: "help center recent updates", scope: "institution", page: "/admin/settings/help-center/updates" },
+  { key: "settings.help_center_analytics", label: "Help Center Analytics", description: "help center analytics", scope: "institution", page: "/admin/settings/help-center/analytics" },
   { key: "admin.inventory", label: "Inventory Management", description: "manage inventory, products, stock levels and assets", scope: "institution", page: "/admin/inventory" },
   { key: "admin.vendors", label: "Vendors & Suppliers", description: "manage vendors and suppliers", scope: "institution", page: "/admin/vendors" },
   { key: "admin.team", label: "Internal Admin Team", description: "manage internal admin team members", scope: "institution", page: "/admin/team" },
@@ -395,7 +390,12 @@ export const LEGACY_PERMISSION_MODULE_MAP: Record<string, string> = {
   "notifications.all": "notifications.inbox",
   "notifications.muted": "notifications.muted",
   "finance.recurring_expense": "finance.recurring_expenses",
-  "finance.platform.recurring_expense": "finance.platform.recurring_expenses",
+  "finance.platform.recurring_expense": "finance.recurring_expenses",
+  "finance.platform.recurring_expenses": "finance.recurring_expenses",
+  "finance.platform.income": "finance.income",
+  "finance.platform.expense": "finance.expense",
+  "finance.platform.invoice": "finance.invoice",
+  "finance.platform.allowance": "finance.allowance",
   "settings.payment": "settings.payments",
   "settings.payment_settings": "settings.payments",
   "settings.payments_settings": "settings.payments",
@@ -657,14 +657,19 @@ export function isAdminPathVisibleForRole(
   );
 }
 
+export function normalizePermissionCode(code: string): string {
+  if (code.startsWith("finance.platform.")) {
+    return code.replace(/^finance\.platform\./, "finance.");
+  }
+  return code;
+}
+
 export function isInstitutionScopedPermission(permission: string) {
-  if (permission === FULL_ACCESS_PERMISSION) return true;
-  return getPermissionModule(permission)?.scope === "institution";
+  return true;
 }
 
 export function isPlatformOnlyPermission(permission: string) {
-  if (permission === FULL_ACCESS_PERMISSION) return true;
-  return getPermissionModule(permission)?.scope === "platform";
+  return false;
 }
 
 export function isPermissionAssignableToRole(permission: string, roleCode?: string | null, roleScope?: string | null) {
@@ -675,10 +680,6 @@ export function isPermissionAssignableToRole(permission: string, roleCode?: stri
   const permissionModule = getPermissionModule(permission);
   if (!permissionModule) return false;
 
-  if (permissionModule.scope === "platform" || permissionModule.key.startsWith("finance.platform.")) {
-    if (roleCode === "student" || roleCode === "parent" || roleCode === "driver") return false;
-    return true;
-  }
 
   const roleOwnedPrefix = permissionModule.key.split(".")[0];
   if (permissionModule.key === "teacher.myinstitution.noticeboard") {
@@ -907,9 +908,19 @@ type PermissionTarget = {
 
 function permissionSetAllows(permissionSet: Set<string>, permission: string) {
   if (permissionSet.has(FULL_ACCESS_PERMISSION) || permissionSet.has(permission)) return true;
-  return getLegacyPermissionCodeEntries().some(
-    ([legacy, current]) => current === permission && permissionSet.has(legacy)
-  );
+  const normalized = normalizePermissionCode(permission);
+  if (permissionSet.has(normalized)) return true;
+  for (const p of permissionSet) {
+    if (normalizePermissionCode(p) === normalized) return true;
+  }
+  return getLegacyPermissionCodeEntries().some(([legacy, current]) => {
+    const normCurrent = normalizePermissionCode(current);
+    const normLegacy = normalizePermissionCode(legacy);
+    return (
+      (normCurrent === normalized || normLegacy === normalized) &&
+      (permissionSet.has(legacy) || permissionSet.has(current))
+    );
+  });
 }
 
 export function hasPermission(

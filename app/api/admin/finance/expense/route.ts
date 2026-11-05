@@ -37,7 +37,7 @@ function userInstitutionIds(user: CurrentUser) {
 }
 
 function resolveScope(user: CurrentUser, requestedInstitutionId?: number | null): { scope: FinanceScope; institutionId: number | null } {
-  const isPlatform = isPlatformAdminUser(user) || hasPermission(user, "finance.platform.expense.view");
+  const isPlatform = isPlatformAdminUser(user) || hasPermission(user, "finance.expense.view") || hasPermission(user, "finance.platform.expense.view");
   const isInstitution = isInstitutionAdminUser(user) || hasPermission(user, "finance.expense.view");
   const institutionIds = userInstitutionIds(user);
 
@@ -244,7 +244,7 @@ export async function POST(req: Request) {
       : null;
     const { scope, institutionId } = resolveScope(user, requestedInstitutionId);
 
-    const permission = scope === "platform" ? "finance.platform.expense.create" : "finance.expense.create";
+    const permission = "finance.expense.create";
     if (!hasPermission(user, permission, { institutionId })) {
       throw new Error("Forbidden: You do not have permission to add expense");
     }

@@ -43,7 +43,7 @@ function userInstitutionIds(user: CurrentUser) {
 }
 
 function resolveScope(user: CurrentUser, requestedInstitutionId?: number | null): { scope: FinanceScope; institutionId: number | null } {
-  const isPlatform = isPlatformAdminUser(user) || hasPermission(user, "finance.platform.income.view");
+  const isPlatform = isPlatformAdminUser(user) || hasPermission(user, "finance.income.view") || hasPermission(user, "finance.platform.income.view");
   const isInstitution = isInstitutionAdminUser(user) || (user as any)?.role === "institution_admin" || hasPermission(user, "finance.income.view");
   const institutionIds = userInstitutionIds(user);
 
@@ -174,7 +174,7 @@ export async function POST(req: Request) {
 
     const isPlatform = isPlatformAdminUser(user);
     const isInstAdmin = isInstitutionAdminUser(user) || (user as any)?.role === "institution_admin";
-    const permission = scope === "platform" ? "finance.platform.income.create" : "finance.income.create";
+    const permission = "finance.income.create";
     if (!isPlatform && !isInstAdmin && !hasPermission(user, permission, { institutionId })) {
       throw new Error("Forbidden: You do not have permission to add income");
     }

@@ -320,12 +320,10 @@ async function runPermissionRegistrySync(db: Queryable) {
       SELECT r.id, p.id
       FROM roles r
       INNER JOIN permissions p
-        ON p.code = ANY($1::text[])
-       AND COALESCE(p.is_deleted, FALSE) = FALSE
+        ON COALESCE(p.is_deleted, FALSE) = FALSE
       WHERE r.code = 'platform_admin'
       ON CONFLICT DO NOTHING
-    `,
-    [platformOnlyPermissionCodes]
+    `
   );
 
   // 7. Seed comprehensive default permissions for all standard Institution Roles
@@ -422,8 +420,7 @@ async function runPermissionRegistrySync(db: Queryable) {
         code.startsWith("company.payment_methods.") ||
         code.startsWith("finance.categories.") ||
         code.startsWith("finance.transportation_fee.") ||
-        code.startsWith("finance.platform.") ||
-        code.startsWith("settings.payments.") ||
+                code.startsWith("settings.payments.") ||
         code.startsWith("notifications.inbox."),
     },
 

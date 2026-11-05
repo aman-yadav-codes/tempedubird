@@ -373,7 +373,7 @@ export function RecurringExpensesClient() {
   const { activeInstitutionId, activeInstitution } = useActiveInstitution();
   const isMobile = useIsMobile();
   const isPlatformAdmin = isPlatformAdminUser(user);
-  const isPlatformScope = isPlatformAdmin || hasPermission(user, "finance.platform.recurring_expenses.view");
+  const isPlatformScope = isPlatformAdmin || hasPermission(user, "finance.recurring_expenses.view") || hasPermission(user, "finance.platform.recurring_expenses.view");
   const targetInstitutionId = isPlatformScope ? null : activeInstitutionId;
   const authHeader = useMemo(
     () => (accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
@@ -444,7 +444,7 @@ export function RecurringExpensesClient() {
   const isInstitutionAdmin = isInstitutionAdminUser(user);
   const canCreate = isPlatformAdmin || isInstitutionAdmin || Boolean(targetInstitutionId) || (
     isPlatformScope
-      ? hasPermission(user, "finance.platform.recurring_expenses.create") || hasPermission(user, "finance.platform.recurring_expenses")
+      ? hasPermission(user, "finance.recurring_expenses.create") || hasPermission(user, "finance.recurring_expenses") || hasPermission(user, "finance.platform.recurring_expenses.create")
       : Boolean(
           targetInstitutionId &&
             (hasPermission(user, "finance.recurring_expenses.create", { institutionId: targetInstitutionId }) ||
@@ -453,7 +453,7 @@ export function RecurringExpensesClient() {
   );
   const canEdit = isPlatformAdmin || isInstitutionAdmin || Boolean(targetInstitutionId) || (
     isPlatformScope
-      ? hasPermission(user, "finance.platform.recurring_expenses.edit") || hasPermission(user, "finance.platform.recurring_expenses")
+      ? hasPermission(user, "finance.recurring_expenses.edit") || hasPermission(user, "finance.recurring_expenses") || hasPermission(user, "finance.platform.recurring_expenses.edit")
       : Boolean(
           targetInstitutionId &&
             (hasPermission(user, "finance.recurring_expenses.edit", { institutionId: targetInstitutionId }) ||

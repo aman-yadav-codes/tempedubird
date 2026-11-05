@@ -703,7 +703,7 @@ function AdminAllowanceClient() {
   const isMobile = useIsMobile();
   const isPlatformAdmin = isPlatformAdminUser(user);
   const isPlatformSection = pathname?.startsWith("/platformadmin");
-  const isPlatformScope = isPlatformSection || (!activeInstitutionId && (isPlatformAdmin || hasPermission(user, "finance.platform.allowance.view")));
+  const isPlatformScope = isPlatformSection || (!activeInstitutionId && (isPlatformAdmin || hasPermission(user, "finance.allowance.view") || hasPermission(user, "finance.platform.allowance.view")));
   const targetInstitutionId = isPlatformSection ? null : (activeInstitutionId ?? null);
   const authHeader = useMemo(() => (accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), [accessToken]);
 
@@ -749,7 +749,7 @@ function AdminAllowanceClient() {
   const isInstitutionAdmin = isInstitutionAdminUser(user);
   const canCreate = isPlatformAdmin || isInstitutionAdmin || Boolean(targetInstitutionId) || (
     isPlatformScope
-      ? hasPermission(user, "finance.platform.allowance.create") || hasPermission(user, "finance.platform.allowance")
+      ? hasPermission(user, "finance.allowance.create") || hasPermission(user, "finance.allowance") || hasPermission(user, "finance.platform.allowance.create") || hasPermission(user, "finance.platform.allowance")
       : Boolean(
           targetInstitutionId &&
             (hasPermission(user, "finance.allowance.create", { institutionId: targetInstitutionId }) ||

@@ -26,7 +26,7 @@ function userInstitutionIds(user: CurrentUser) {
 }
 
 function resolveScope(user: CurrentUser, requestedInstitutionId?: number | null): { scope: FinanceScope; institutionId: number | null } {
-  const isPlatform = isPlatformAdminUser(user) || hasPermission(user, "finance.platform.income.view");
+  const isPlatform = isPlatformAdminUser(user) || hasPermission(user, "finance.income.view") || hasPermission(user, "finance.platform.income.view");
   const isInstitution = isInstitutionAdminUser(user) || hasPermission(user, "finance.income.view");
   const institutionIds = userInstitutionIds(user);
 

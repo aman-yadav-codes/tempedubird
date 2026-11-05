@@ -380,22 +380,18 @@ function getRoleDefaultPermissionIdSet(
   return new Set(optionDefaultPermissionIds(findRoleOption(options, roleId)));
 }
 
-function getPermissionScopeLabel(code: string, roleScope?: string | null) {
-  if (code === FULL_ACCESS_PERMISSION) {
-    return roleScope === "institution" ? "Full institution access" : "Full system access";
-  }
-  return isInstitutionScopedPermission(code) ? "Institution" : "Platform";
+function getPermissionScopeLabel(_code: string, _roleScope?: string | null): string | null {
+  return null;
 }
 
-function toMultiSelectOption(option: Option, roleScope?: string | null): MultiSelectOption {
+function toMultiSelectOption(option: Option, _roleScope?: string | null): MultiSelectOption {
   const code = option.code ? String(option.code) : "";
-  const scopeLabel = code ? getPermissionScopeLabel(code, roleScope) : null;
 
   return {
     value: String(option.id),
     label: code ? getPermissionName(code) : optionLabel(option),
     description: code,
-    badge: scopeLabel,
+    badge: undefined,
   };
 }
 
@@ -487,7 +483,7 @@ function getSelectedPermissionOptions(
     value: String(permission.permission_id),
     label: getPermissionName(permission.permission_code),
     description: permission.permission_code,
-    badge: getPermissionScopeLabel(permission.permission_code, roleScope),
+    badge: undefined,
   }));
   const optionMap = new Map<string, MultiSelectOption>();
 
@@ -569,11 +565,7 @@ function buildInitialForm(config: ResourceConfig, row: AccessRow | null) {
             typeof row?.role_code === "string" ? row.role_code : null,
             typeof row?.scope_code === "string" ? row.scope_code : null
           ) &&
-          (
-            row?.scope_code === "institution"
-              ? !isPlatformOnlyPermission(permission.permission_code)
-              : true
-          )
+          true
         )
         .map((permission) => String(permission.permission_id));
     } else {
@@ -1020,7 +1012,7 @@ export default function AccessControlPage() {
   const canCreateRecord = isSuperAdmin || hasPermission(`${permissionModule}.create`);
   const canEditRecord = isSuperAdmin || hasPermission(`${permissionModule}.edit`);
   const canDeleteRecord = isSuperAdmin || hasPermission(`${permissionModule}.delete`);
-  const hasScopeFilter = resource === "permissions";
+  const hasScopeFilter = false;
   const [rows, setRows] = useState<AccessRow[]>([]);
   const [remoteRows, setRemoteRows] = useState<AccessRow[] | null>(null);
   const [options, setOptions] = useState<AccessOptions>(defaultOptions);

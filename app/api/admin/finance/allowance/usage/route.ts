@@ -107,7 +107,7 @@ export async function GET(req: Request) {
       const canViewSelectedAllowance = selectedAllowance.user_id === user.id ||
         (
           selectedAllowance.scope_type === "platform"
-            ? hasPermission(user, "finance.platform.allowance.view")
+            ? (hasPermission(user, "finance.allowance.view") || hasPermission(user, "finance.platform.allowance.view"))
             : hasPermission(user, "finance.allowance.view", {
                 institutionId: selectedAllowance.institution_id ?? undefined,
               })
@@ -227,9 +227,7 @@ export async function POST(req: Request) {
     const scopeRow = allowanceScope.rows[0];
     if (!scopeRow) throw new Error("Select a valid allowance");
 
-    const permission = scopeRow.scope_type === "platform"
-      ? "finance.platform.allowance.create"
-      : "finance.allowance.create";
+    const permission = "finance.allowance.create";
     if (!hasPermission(user, permission, { institutionId: scopeRow.institution_id ?? undefined })) {
       throw new Error("Forbidden: You do not have permission to add expenditure");
     }

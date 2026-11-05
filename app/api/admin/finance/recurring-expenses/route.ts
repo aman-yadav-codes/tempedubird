@@ -39,7 +39,7 @@ function userInstitutionIds(user: CurrentUser) {
 }
 
 function resolveScope(user: CurrentUser, requestedInstitutionId?: number | null): { scope: FinanceScope; institutionId: number | null } {
-  const isPlatform = isPlatformAdminUser(user) || hasPermission(user, "finance.platform.recurring_expenses.view");
+  const isPlatform = isPlatformAdminUser(user) || hasPermission(user, "finance.recurring_expenses.view") || hasPermission(user, "finance.platform.recurring_expenses.view");
   const isInstitution = isInstitutionAdminUser(user) || hasPermission(user, "finance.recurring_expenses.view");
   const institutionIds = userInstitutionIds(user);
 
@@ -247,9 +247,7 @@ export async function POST(req: Request) {
       ? institutionIdRaw
       : null;
     const { scope, institutionId } = resolveScope(user, requestedInstitutionId);
-    const permission = scope === "platform"
-      ? "finance.platform.recurring_expenses.create"
-      : "finance.recurring_expenses.create";
+    const permission = "finance.recurring_expenses.create";
     if (!hasPermission(user, permission, { institutionId })) {
       throw new Error("Forbidden: You do not have permission to add recurring expenses");
     }
@@ -281,9 +279,7 @@ export async function PATCH(req: Request) {
       ? institutionIdRaw
       : null;
     const { scope, institutionId } = resolveScope(user, requestedInstitutionId);
-    const permission = scope === "platform"
-      ? "finance.platform.recurring_expenses.edit"
-      : "finance.recurring_expenses.edit";
+    const permission = "finance.recurring_expenses.edit";
     if (!hasPermission(user, permission, { institutionId })) {
       throw new Error("Forbidden: You do not have permission to update recurring expenses");
     }

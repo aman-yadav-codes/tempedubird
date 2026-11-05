@@ -501,14 +501,9 @@ async function listResource(
       );
     }
     case "permissions": {
-      const platformPermissionCodes = [
-        FULL_ACCESS_PERMISSION,
-        ...getManagedPermissionCodes().filter(isPlatformOnlyPermission),
-      ];
-      const params: unknown[] = [platformPermissionCodes];
+      const params: unknown[] = [];
       const whereParts = [
         "COALESCE(is_deleted, FALSE) = FALSE",
-        "$1::text[] IS NOT NULL",
       ];
 
       if (search) {
@@ -516,12 +511,6 @@ async function listResource(
         whereParts.push(
           `(code ILIKE $${params.length} OR name ILIKE $${params.length} OR description ILIKE $${params.length})`
         );
-      }
-
-      if (filters.scope === "platform") {
-        whereParts.push("code = ANY($1::text[])");
-      } else if (filters.scope === "institution") {
-        whereParts.push("NOT (code = ANY($1::text[]))");
       }
 
       const where = `WHERE ${whereParts.join(" AND ")}`;
@@ -533,10 +522,7 @@ async function listResource(
             code,
             name,
             description,
-            CASE
-              WHEN code = ANY($1::text[]) THEN 'platform'
-              ELSE 'institution'
-            END AS scope_code,
+            'common' AS scope_code,
             created_at
           FROM permissions
           ${where}

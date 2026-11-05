@@ -216,13 +216,9 @@ function isInstitutionGrantablePermission(code: string) {
 
 function filterPermissionRows<T extends { code?: string | null }>(
   rows: T[],
-  canUsePlatformAccess: boolean,
+  _canUsePlatformAccess?: boolean,
 ) {
-  return canUsePlatformAccess
-    ? rows
-    : rows.filter((row) =>
-        isInstitutionGrantablePermission(String(row.code ?? "")),
-      );
+  return rows;
 }
 
 function canUsePlatformAccessOptions(user: PermissionUser) {
@@ -344,12 +340,11 @@ function getScopedOptionQuery(
           SELECT id, name, code
           FROM permissions
           WHERE COALESCE(is_deleted, FALSE) = FALSE
-            AND NOT (code = ANY($3::text[]))
             AND ($1 = '' OR name ILIKE $2 OR code ILIKE $2)
           ORDER BY code ASC
-          LIMIT $4 OFFSET $5
+          LIMIT $3 OFFSET $4
         `,
-        params: [search, like, platformOnlyCodes],
+        params: [search, like],
       };
     case "institutions":
       return {
@@ -592,7 +587,7 @@ export async function GET(req: Request) {
         ? roles.rows
         : roles.rows.filter((row) => row.scope_code === "institution"),
       institutionRoles: institutionRoles.rows,
-      permissions: filterPermissionRows(permissions.rows, canUsePlatformAccess),
+      permissions: permissions.rows,
       institutions: institutions.rows,
       users: users.rows,
     });

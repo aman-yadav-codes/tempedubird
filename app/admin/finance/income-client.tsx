@@ -340,11 +340,11 @@ export function IncomeClient() {
   const isPlatformAdmin = isPlatformAdminUser(user);
   const isInstitutionAdmin = isInstitutionAdminUser(user) || (user as any)?.role === "institution_admin";
   const isPlatformSection = pathname?.startsWith("/platformadmin");
-  const isPlatformScope = isPlatformSection || (!activeInstitutionId && (isPlatformAdmin || hasPermission(user, "finance.platform.income.view")));
+  const isPlatformScope = isPlatformSection || (!activeInstitutionId && (isPlatformAdmin || hasPermission(user, "finance.income.view") || hasPermission(user, "finance.platform.income.view")));
   const targetInstitutionId = isPlatformSection ? null : (activeInstitutionId ?? (user as any)?.institution_id ?? user?.memberships?.[0]?.institution_id ?? (user as any)?.under_institution_id ?? null);
   const canCreate = isPlatformAdmin || isInstitutionAdmin || Boolean(targetInstitutionId) || (
     isPlatformScope
-      ? hasPermission(user, "finance.platform.income.create") || hasPermission(user, "finance.platform.income")
+      ? hasPermission(user, "finance.income.create") || hasPermission(user, "finance.income") || hasPermission(user, "finance.platform.income.create") || hasPermission(user, "finance.platform.income")
       : Boolean(
           targetInstitutionId &&
             (hasPermission(user, "finance.income.create", { institutionId: targetInstitutionId }) ||

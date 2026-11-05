@@ -308,7 +308,7 @@ export function ExpenseClient() {
   const isMobile = useIsMobile();
   const isPlatformAdmin = isPlatformAdminUser(user);
   const isPlatformSection = pathname?.startsWith("/platformadmin");
-  const isPlatformScope = isPlatformSection || (!activeInstitutionId && (isPlatformAdmin || hasPermission(user, "finance.platform.expense.view")));
+  const isPlatformScope = isPlatformSection || (!activeInstitutionId && (isPlatformAdmin || hasPermission(user, "finance.expense.view") || hasPermission(user, "finance.platform.expense.view")));
   const targetInstitutionId = isPlatformSection ? null : (activeInstitutionId ?? null);
   const authHeader = useMemo(() => (accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), [accessToken]);
 
@@ -535,7 +535,7 @@ export function ExpenseClient() {
   const isInstitutionAdmin = isInstitutionAdminUser(user);
   const canCreate = isPlatformAdmin || isInstitutionAdmin || Boolean(targetInstitutionId) || (
     isPlatformScope
-      ? hasPermission(user, "finance.platform.expense.create") || hasPermission(user, "finance.platform.expense")
+      ? hasPermission(user, "finance.expense.create") || hasPermission(user, "finance.expense") || hasPermission(user, "finance.platform.expense.create") || hasPermission(user, "finance.platform.expense")
       : Boolean(
           targetInstitutionId &&
             (hasPermission(user, "finance.expense.create", { institutionId: targetInstitutionId }) ||

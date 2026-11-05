@@ -27,7 +27,7 @@ function userInstitutionIds(user: CurrentUser) {
 }
 
 function resolveScope(user: CurrentUser, institutionId: number | null): { scope: FinanceScope; institutionId: number | null } {
-  if (isPlatformAdminUser(user) || hasPermission(user, "finance.platform.income.view")) {
+  if (isPlatformAdminUser(user) || hasPermission(user, "finance.income.view") || hasPermission(user, "finance.platform.income.view")) {
     return { scope: "platform", institutionId: null };
   }
 

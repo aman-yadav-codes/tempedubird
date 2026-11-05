@@ -85,7 +85,7 @@ export function InvoicesClient() {
   const { accessToken, user } = useAuthStore();
   const { activeInstitutionId, activeInstitution } = useActiveInstitution();
   const isPlatformAdmin = isPlatformAdminUser(user);
-  const isPlatformScope = isPlatformAdmin || hasPermission(user, "finance.platform.income.view");
+  const isPlatformScope = isPlatformAdmin || hasPermission(user, "finance.income.view") || hasPermission(user, "finance.platform.income.view");
   const targetInstitutionId = isPlatformScope ? null : activeInstitutionId;
 
   const authHeader = useMemo(
