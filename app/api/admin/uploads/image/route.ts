@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "crypto";
+import { randomBytes } from "crypto";
 import fs from "fs/promises";
 import path from "path";
 import { NextResponse } from "next/server";
@@ -35,7 +35,6 @@ const ACCEPTED_DOCUMENT_TYPES = new Set([
   "text/csv",
   "text/plain",
 ]);
-const CLOUDINARY_UPLOAD_URL = "https://api.cloudinary.com/v1_1";
 
 function canUploadAdminFile(
   user: Awaited<ReturnType<typeof getAuthenticatedUser>>,
@@ -50,18 +49,6 @@ function canUploadAdminFile(
 
 function getErrorMessage(err: unknown) {
   return err instanceof Error ? err.message : "Something went wrong";
-}
-
-function createSignature(
-  params: Record<string, string | number>,
-  apiSecret: string,
-) {
-  const serialized = Object.keys(params)
-    .sort()
-    .map((key) => `${key}=${params[key]}`)
-    .join("&");
-
-  return createHash("sha1").update(`${serialized}${apiSecret}`).digest("hex");
 }
 
 function getMediaKind(file: File) {
@@ -124,6 +111,7 @@ export async function POST(req: Request) {
     const requestedFolder = String(formData.get("folder") ?? "crmtaskassets");
     const targetFolder = requestedFolder || "crmtaskassets";
 
+    // Primary: Upload to Openinary self-hosted media service
     if (isOpeninaryConfigured() && isMediaSupportedByOpeninary(file.name, file.type)) {
       try {
         const result = await uploadToOpeninary(file, file.name, targetFolder, file.type);
@@ -138,76 +126,25 @@ export async function POST(req: Request) {
           },
         });
       } catch (openinaryErr) {
-        console.error("Openinary upload failed, checking fallback:", openinaryErr);
+        console.error("Openinary upload failed, falling back to local storage:", openinaryErr);
       }
     }
 
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    const apiKey = process.env.CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
-
-    if (!cloudName || !apiKey || !apiSecret) {
-      const bytes = await file.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-      const ext = path.extname(file.name) || ".png";
-      const safeBaseName = path.basename(file.name, ext).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
-      const uniqueFileName = `${Date.now()}_${safeBaseName}_${randomBytes(4).toString("hex")}${ext}`;
-      const uploadDir = path.join(process.cwd(), "public", "uploads", "media");
-      await fs.mkdir(uploadDir, { recursive: true });
-      await fs.writeFile(path.join(uploadDir, uniqueFileName), buffer);
-
-      return NextResponse.json({
-        data: {
-          url: `/uploads/media/${uniqueFileName}`,
-          public_id: `local_media_${uniqueFileName}`,
-          resource_type: mediaKind === "file" ? "raw" : mediaKind,
-          media_type: mediaKind,
-          file_name: file.name,
-          file_type: file.type,
-        },
-      });
-    }
-
-    // reuse requestedFolder
-    // folder determination
-    const timestamp = Math.round(Date.now() / 1000);
-    const folder =
-      requestedFolder === "document_templates"
-        ? "document_templates"
-        : requestedFolder === "notes"
-          ? "notes"
-        : "program_media";
-    const signature = createSignature({ folder, timestamp }, apiSecret);
-    const uploadFormData = new FormData();
-
-    uploadFormData.append("file", file);
-    uploadFormData.append("api_key", apiKey);
-    uploadFormData.append("timestamp", String(timestamp));
-    uploadFormData.append("folder", folder);
-    uploadFormData.append("signature", signature);
-
-    const uploadRes = await fetch(
-      `${CLOUDINARY_UPLOAD_URL}/${cloudName}/auto/upload`,
-      {
-        method: "POST",
-        body: uploadFormData,
-      },
-    );
-
-    const uploadJson = await uploadRes.json();
-
-    if (!uploadRes.ok) {
-      return NextResponse.json(
-        { error: uploadJson.error?.message ?? "Image upload failed" },
-        { status: 502 },
-      );
-    }
+    // Fallback: Local storage
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    const ext = path.extname(file.name) || ".png";
+    const safeBaseName = path.basename(file.name, ext).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
+    const uniqueFileName = `${Date.now()}_${safeBaseName}_${randomBytes(4).toString("hex")}${ext}`;
+    const uploadDir = path.join(process.cwd(), "public", "uploads", "media");
+    await fs.mkdir(uploadDir, { recursive: true });
+    await fs.writeFile(path.join(uploadDir, uniqueFileName), buffer);
 
     return NextResponse.json({
       data: {
-        url: uploadJson.secure_url,
-        public_id: uploadJson.public_id,
-        resource_type: uploadJson.resource_type,
+        url: `/uploads/media/${uniqueFileName}`,
+        public_id: `local_media_${uniqueFileName}`,
+        resource_type: mediaKind === "file" ? "raw" : mediaKind,
         media_type: mediaKind,
         file_name: file.name,
         file_type: file.type,

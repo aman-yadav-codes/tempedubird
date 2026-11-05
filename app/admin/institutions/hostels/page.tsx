@@ -1272,7 +1272,7 @@ export default function AdminHostelsPage() {
                   <div className="space-y-1.5">
                     <Label className="text-xs font-semibold text-foreground">Or Paste Direct Video URLs (separated by new line or comma)</Label>
                     <Textarea
-                      placeholder="https://res.cloudinary.com/... or https://cdn.../video.mp4"
+                      placeholder="https://media.143gb.com/... or https://cdn.../video.mp4"
                       value={editingHostel.video_urls || ""}
                       onChange={(e) => setEditingHostel((prev) => ({ ...prev, video_urls: e.target.value }))}
                       rows={2}

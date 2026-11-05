@@ -350,7 +350,7 @@ export default function PaymentSettingsPage() {
                 <div>
                   <Label>QR Code Image</Label>
                   <p className="text-xs text-muted-foreground">
-                    Upload one payment QR image. The file is stored in Cloudinary.
+                    Upload one payment QR image. The file is stored in Openinary media service.
                   </p>
                 </div>
                 <DocumentFileUpload

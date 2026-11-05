@@ -1,4 +1,3 @@
-import { createHash } from "crypto";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { NextResponse } from "next/server";
@@ -15,16 +14,6 @@ const ACCEPTED_TYPES = new Set([
   "image/gif",
   "image/svg+xml",
 ]);
-
-const CLOUDINARY_UPLOAD_URL = "https://api.cloudinary.com/v1_1";
-
-function createSignature(params: Record<string, string | number>, apiSecret: string) {
-  const serialized = Object.keys(params)
-    .sort()
-    .map((key) => `${key}=${params[key]}`)
-    .join("&");
-  return createHash("sha1").update(`${serialized}${apiSecret}`).digest("hex");
-}
 
 export async function POST(req: Request) {
   try {
@@ -54,6 +43,7 @@ export async function POST(req: Request) {
       );
     }
 
+    // Primary: Upload to Openinary self-hosted media service
     if (isOpeninaryConfigured() && isMediaSupportedByOpeninary(file.name, file.type)) {
       try {
         const result = await uploadToOpeninary(file, file.name, "crmtaskassets", file.type);
@@ -64,46 +54,11 @@ export async function POST(req: Request) {
           fileType: file.type,
         });
       } catch (openinaryErr) {
-        console.error("Openinary finance upload failed, checking fallback:", openinaryErr);
+        console.error("Openinary finance upload failed, falling back to local storage:", openinaryErr);
       }
     }
 
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    const apiKey = process.env.CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
-
-    // Option 1: Use Cloudinary if configured
-    if (cloudName && apiKey && apiSecret) {
-      const timestamp = Math.round(Date.now() / 1000);
-      const folder = "finance_requests";
-      const signature = createSignature({ folder, timestamp }, apiSecret);
-
-      const uploadFormData = new FormData();
-      uploadFormData.append("file", file);
-      uploadFormData.append("api_key", apiKey);
-      uploadFormData.append("timestamp", String(timestamp));
-      uploadFormData.append("folder", folder);
-      uploadFormData.append("signature", signature);
-
-      const uploadRes = await fetch(`${CLOUDINARY_UPLOAD_URL}/${cloudName}/auto/upload`, {
-        method: "POST",
-        body: uploadFormData,
-      });
-
-      const uploadJson = await uploadRes.json();
-      if (!uploadRes.ok) {
-        throw new Error(uploadJson.error?.message || "Cloudinary upload failed");
-      }
-
-      return NextResponse.json({
-        url: uploadJson.secure_url,
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
-      });
-    }
-
-    // Option 2: Fallback to local storage in public/uploads/finance
+    // Fallback: Local storage in public/uploads/finance
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 

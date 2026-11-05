@@ -1,5 +1,7 @@
 import { isOpeninaryConfigured, isMediaSupportedByOpeninary, uploadToOpeninary } from "@/lib/uploads/openinary";
-import { createHash } from "crypto";
+import { randomBytes } from "crypto";
+import fsPromises from "fs/promises";
+import path from "path";
 import { NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/auth/auth";
@@ -12,7 +14,6 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-const CLOUDINARY_UPLOAD_URL = "https://api.cloudinary.com/v1_1";
 const MAX_ATTACHMENTS = 5;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const MAX_PDF_SIZE = 10 * 1024 * 1024;
@@ -30,15 +31,6 @@ type UploadedAttachment = {
   public_id: string;
   resource_type: string;
 };
-
-function createSignature(params: Record<string, string | number>, apiSecret: string) {
-  const serialized = Object.keys(params)
-    .sort()
-    .map((key) => `${key}=${params[key]}`)
-    .join("&");
-
-  return createHash("sha1").update(`${serialized}${apiSecret}`).digest("hex");
-}
 
 function validateAttachment(file: File) {
   if (!ACCEPTED_ATTACHMENT_TYPES.has(file.type)) {
@@ -67,65 +59,37 @@ async function uploadAttachment(file: File): Promise<UploadedAttachment> {
         resource_type: file.type.startsWith("image/") ? "image" : "raw",
       };
     } catch (openinaryErr) {
-      console.error("Openinary ticket attachment upload failed, checking fallback:", openinaryErr);
+      console.error("Openinary ticket attachment upload failed, falling back to local storage:", openinaryErr);
     }
   }
 
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  const apiKey = process.env.CLOUDINARY_API_KEY;
-  const apiSecret = process.env.CLOUDINARY_API_SECRET;
-  if (!cloudName || !apiKey || !apiSecret) {
-    throw new Error("Cloudinary is not configured");
-  }
-
-  const timestamp = Math.round(Date.now() / 1000);
-  const folder = "support_ticket_attachments";
-  const signature = createSignature({ folder, timestamp }, apiSecret);
-  const uploadFormData = new FormData();
-  uploadFormData.append("file", file);
-  uploadFormData.append("api_key", apiKey);
-  uploadFormData.append("timestamp", String(timestamp));
-  uploadFormData.append("folder", folder);
-  uploadFormData.append("signature", signature);
-
-  const uploadResponse = await fetch(
-    `${CLOUDINARY_UPLOAD_URL}/${cloudName}/auto/upload`,
-    { method: "POST", body: uploadFormData }
-  );
-  const uploadJson = await uploadResponse.json();
-  if (!uploadResponse.ok) {
-    throw new Error(uploadJson.error?.message ?? `Failed to upload ${file.name}`);
-  }
+  // Fallback: Local storage
+  const bytes = await file.arrayBuffer();
+  const buffer = Buffer.from(bytes);
+  const ext = path.extname(file.name) || (file.type === "application/pdf" ? ".pdf" : ".png");
+  const safeBaseName = path.basename(file.name, ext).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
+  const uniqueFileName = `${Date.now()}_${safeBaseName}_${randomBytes(4).toString("hex")}${ext}`;
+  const uploadDir = path.join(process.cwd(), "public", "uploads", "tickets");
+  await fsPromises.mkdir(uploadDir, { recursive: true });
+  await fsPromises.writeFile(path.join(uploadDir, uniqueFileName), buffer);
 
   return {
     file_name: file.name.slice(0, 255),
-    file_url: uploadJson.secure_url,
-    public_id: uploadJson.public_id,
-    resource_type: uploadJson.resource_type,
+    file_url: `/uploads/tickets/${uniqueFileName}`,
+    public_id: `local_tickets_${uniqueFileName}`,
+    resource_type: file.type.startsWith("image/") ? "image" : "raw",
   };
 }
 
 async function deleteUploadedAttachment(attachment: UploadedAttachment) {
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  const apiKey = process.env.CLOUDINARY_API_KEY;
-  const apiSecret = process.env.CLOUDINARY_API_SECRET;
-  if (!cloudName || !apiKey || !apiSecret || !attachment.public_id) return;
-
-  const timestamp = Math.round(Date.now() / 1000);
-  const signature = createSignature(
-    { public_id: attachment.public_id, timestamp },
-    apiSecret
-  );
-  const formData = new FormData();
-  formData.append("public_id", attachment.public_id);
-  formData.append("api_key", apiKey);
-  formData.append("timestamp", String(timestamp));
-  formData.append("signature", signature);
-
-  await fetch(
-    `${CLOUDINARY_UPLOAD_URL}/${cloudName}/${attachment.resource_type}/destroy`,
-    { method: "POST", body: formData }
-  ).catch(() => undefined);
+  if (!attachment.public_id) return;
+  if (attachment.public_id.startsWith("local_tickets_")) {
+    const fileName = attachment.public_id.replace("local_tickets_", "");
+    const filePath = path.join(process.cwd(), "public", "uploads", "tickets", fileName);
+    try {
+      await fsPromises.unlink(filePath);
+    } catch {}
+  }
 }
 
 async function getTicketId(ctx: RouteContext) {

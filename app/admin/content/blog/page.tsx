@@ -1422,7 +1422,7 @@ export default function AdminBlogStudioPage() {
                       <Input
                         value={formData.videoUrl}
                         onChange={(e) => setFormData((prev) => ({ ...prev, videoUrl: e.target.value }))}
-                        placeholder="https://www.youtube.com/watch?v=... or https://res.cloudinary.com/..."
+                        placeholder="https://www.youtube.com/watch?v=... or https://media.143gb.com/..."
                         className="text-xs h-9"
                       />
                       <p className="text-[11px] text-muted-foreground">
