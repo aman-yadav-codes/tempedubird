@@ -275,6 +275,7 @@ export default function OperationsTasksPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const { institutions, activeInstitution, activeInstitutionId } = useActiveInstitution();
   const isPlatformRoute = Boolean(pathname?.startsWith("/platformadmin"));
+  const envDefaultInstId = process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ? String(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID).trim() : "";
   const isPlatformAdmin = useMemo(() => {
     if (isPlatformRoute) return true;
     const codes = (user as any)?.role_codes || [(user as any)?.role || (user as any)?.primary_role || ""];
@@ -719,11 +720,15 @@ export default function OperationsTasksPage() {
     setLoadingModalOrgStaff(true);
     try {
       const params = new URLSearchParams();
-      if (isPlatformRoute) {
-        params.set("institution_id", "none");
-      } else if (instId && instId !== "none" && instId !== "all") {
-        params.set("institution_id", instId);
-      } else if (instId === "none") {
+      const effectiveId = (instId && instId !== "none" && instId !== "all")
+        ? instId
+        : (envDefaultInstId && envDefaultInstId !== "none" && envDefaultInstId !== "all"
+          ? envDefaultInstId
+          : (effectiveInstId ? String(effectiveInstId) : ""));
+
+      if (effectiveId) {
+        params.set("institution_id", effectiveId);
+      } else if (isPlatformRoute) {
         params.set("institution_id", "none");
       }
       const headers: Record<string, string> = {};
@@ -738,7 +743,7 @@ export default function OperationsTasksPage() {
     } finally {
       setLoadingModalOrgStaff(false);
     }
-  }, [accessToken, isPlatformRoute]);
+  }, [accessToken, isPlatformRoute, effectiveInstId, envDefaultInstId]);
 
   const selectedOrgName = useMemo(() => {
     if (isPlatformRoute || formInstitutionId === "none") return "EduBird Organization";
@@ -749,7 +754,8 @@ export default function OperationsTasksPage() {
   }, [formInstitutionId, institutions, activeInstitution, isPlatformRoute]);
 
   const dialogStaffList = useMemo(() => {
-    const combined = [...modalOrgStaffList, ...staffList];
+    const list = modalOrgStaffList.length > 0 ? modalOrgStaffList : staffList;
+    const combined = [...list];
     if (user?.id && !combined.some((s) => String(s.id) === String(user.id))) {
       combined.push({
         id: user.id,
@@ -1027,12 +1033,18 @@ export default function OperationsTasksPage() {
 
       const params = new URLSearchParams();
       if (isPlatformRoute) {
-        params.set("institution_id", "none");
+        if (envDefaultInstId && envDefaultInstId !== "none" && envDefaultInstId !== "all") {
+          params.set("institution_id", envDefaultInstId);
+        } else {
+          params.set("institution_id", "none");
+        }
       } else if (!isClient) {
         if (orgFilter && orgFilter !== "all") {
           params.set("institution_id", orgFilter);
         } else if (effectiveInstId) {
           params.set("institution_id", String(effectiveInstId));
+        } else if (envDefaultInstId && envDefaultInstId !== "none" && envDefaultInstId !== "all") {
+          params.set("institution_id", envDefaultInstId);
         }
       }
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
@@ -1107,10 +1119,10 @@ export default function OperationsTasksPage() {
     setFormTitle("");
     const userInstId = (user as any)?.institution_id || (user as any)?.memberships?.[0]?.institution_id || activeInstitutionId || (institutions[0]?.id ? String(institutions[0].id) : "1");
     const initialInstId = isPlatformRoute
-      ? "none"
+      ? (envDefaultInstId || "none")
       : ((orgFilter && orgFilter !== "all" && orgFilter !== "none")
         ? orgFilter
-        : (userInstId ? String(userInstId) : "1"));
+        : (userInstId ? String(userInstId) : (envDefaultInstId || "1")));
     setFormInstitutionId(initialInstId);
     void fetchStaffForModal(initialInstId);
     setFormClientId("none");
@@ -1156,8 +1168,8 @@ export default function OperationsTasksPage() {
     setFormTitle(t.title || "");
     const userInstId = (user as any)?.institution_id || (user as any)?.memberships?.[0]?.institution_id || activeInstitutionId || (institutions[0]?.id ? String(institutions[0].id) : "1");
     const initialInstId = isPlatformRoute
-      ? "none"
-      : (t.institution_id ? String(t.institution_id) : (userInstId ? String(userInstId) : "1"));
+      ? (t.institution_id ? String(t.institution_id) : (envDefaultInstId || "none"))
+      : (t.institution_id ? String(t.institution_id) : (userInstId ? String(userInstId) : (envDefaultInstId || "1")));
     setFormInstitutionId(initialInstId);
     void fetchStaffForModal(initialInstId);
     setFormClientId(t.client_id ? String(t.client_id) : "none");

@@ -166,15 +166,20 @@ export async function GET(req: Request) {
     const userRole = (user as any)?.role || (user as any)?.role_code || "";
     const userInstId = (user as any)?.institution_id || user?.memberships?.[0]?.institution_id || null;
     const isPlatform = !userInstId || (user && isPlatformAdminUser(user));
+    const envInstRaw = (process.env.DEFAULT_INSTITUTION_ID || process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID || "").trim();
+    const envDefaultInstId = envInstRaw && !isNaN(Number(envInstRaw)) && Number(envInstRaw) > 0 ? Number(envInstRaw) : null;
+
     const requestedInstParam = url.searchParams.get("institution_id");
     let targetInstId: number | null = null;
-    if (requestedInstParam !== null && requestedInstParam !== "" && requestedInstParam !== "all") {
+    if (requestedInstParam !== null && requestedInstParam !== "" && requestedInstParam !== "all" && requestedInstParam !== "none") {
       const p = Number(requestedInstParam);
       if (Number.isInteger(p) && p > 0) {
         targetInstId = p;
       }
     } else if (requestedInstParam === "all") {
       targetInstId = null;
+    } else if (requestedInstParam === "none") {
+      targetInstId = envDefaultInstId || userInstId || null;
     } else if (userInstId) {
       targetInstId = userInstId;
     } else if (isPlatform) {
@@ -182,7 +187,11 @@ export async function GET(req: Request) {
       const parsedInstId = headerInstId ? Number(headerInstId) : null;
       if (Number.isInteger(parsedInstId) && (parsedInstId as number) > 0) {
         targetInstId = parsedInstId;
+      } else if (envDefaultInstId) {
+        targetInstId = envDefaultInstId;
       }
+    } else if (envDefaultInstId) {
+      targetInstId = envDefaultInstId;
     }
     const referer = req.headers.get("referer") || "";
     const isClientRoute = referer.includes("/client/") || referer.endsWith("/client");
@@ -410,7 +419,7 @@ export async function GET(req: Request) {
             COALESCE(d.name, r.name, r.code, 'Staff Member') AS role,
             COALESCE(r.code, 'staff') AS role_code
           FROM users u
-          LEFT JOIN institution_memberships im ON im.user_id = u.id AND im.is_active = TRUE AND COALESCE(im.is_deleted, FALSE) = FALSE
+          JOIN institution_memberships im ON im.user_id = u.id AND im.is_active = TRUE AND COALESCE(im.is_deleted, FALSE) = FALSE
           LEFT JOIN user_roles ur ON ur.user_id = u.id
           LEFT JOIN roles r ON r.id = COALESCE(im.role_id, ur.role_id)
           LEFT JOIN user_profiles up ON up.user_id = u.id
@@ -418,25 +427,22 @@ export async function GET(req: Request) {
           LEFT JOIN scope_types st ON st.id = r.scope_id
           WHERE COALESCE(u.is_deleted, FALSE) = FALSE
             AND (
-              -- If targetInstId is provided, include staff belonging to that institution
+              -- If targetInstId is provided (from query param or env), strictly include staff belonging to that institution
               ($1::int IS NOT NULL AND (im.institution_id = $1::int OR up.under_institution_id = $1::int))
-              -- If no targetInstId (platform scope), include platform staff and main organization staff
+              -- If no targetInstId (platform scope), fallback to platform staff
               OR ($1::int IS NULL AND (
-                im.institution_id = 1 
-                OR r.code IN ('platform_admin', 'super_admin', 'admin', 'platform_staff', 'accountant', 'head_of_operations')
+                r.code IN ('platform_admin', 'super_admin', 'admin', 'platform_staff', 'accountant', 'head_of_operations')
                 OR st.code = 'platform'
-                OR u.id = 1
-                OR u.created_by = 1
               ))
             )
-            -- Exclude students, parents/guardians, and clients from the staff picker
+            -- Exclude students, parents/guardians, drivers, and clients from the staff picker
             AND NOT EXISTS (
               SELECT 1 FROM user_roles sur JOIN roles sr ON sr.id = sur.role_id
-              WHERE sur.user_id = u.id AND LOWER(sr.code) IN ('student', 'guardian', 'parent', 'client')
+              WHERE sur.user_id = u.id AND LOWER(sr.code) IN ('student', 'guardian', 'parent', 'client', 'driver')
             )
             AND NOT EXISTS (
               SELECT 1 FROM institution_memberships sim JOIN roles sr ON sr.id = sim.role_id
-              WHERE sim.user_id = u.id AND LOWER(sr.code) IN ('student', 'guardian', 'parent', 'client')
+              WHERE sim.user_id = u.id AND LOWER(sr.code) IN ('student', 'guardian', 'parent', 'client', 'driver')
             )
           ORDER BY u.id, 
             CASE 
