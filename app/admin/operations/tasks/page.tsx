@@ -1654,8 +1654,6 @@ export default function OperationsTasksPage() {
       }
     }
 
-    const currentSubs = Array.isArray(task.sub_tasks) ? [...task.sub_tasks] : [];
-    const targetSub = currentSubs.find((s) => s.id === subId);
     const updatedSubs = currentSubs.map((s) => {
       if (s.id !== subId) {
         // If starting this subtask, auto-stop ONLY this user's own previously running subtask in the same task
