@@ -85,7 +85,9 @@ import {
     History,
     Boxes,
     Store,
+    Plus,
 } from "lucide-react";
+import { CreateBusinessProfileDialog } from "@/components/business/create-business-profile-dialog";
 import { toast } from "sonner";
 import { readJsonResponse } from "@/lib/api/read-json-response";
 import { AccountSwitcherDialog } from "@/components/auth/account-switcher-dialog";
@@ -646,6 +648,7 @@ export function AppSidebar() {
     const [logoutOpen, setLogoutOpen] = useState(false);
     const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
+    const [createBusinessOpen, setCreateBusinessOpen] = useState(false);
     const isPlatformAdmin = Boolean(user?.role_codes?.includes("platform_admin") || user?.is_super_admin);
     const isInstitutionAdmin = Boolean((user?.role_codes?.includes("institution_admin") || isInstitutionAdminUser(user)) && !isPlatformAdmin);
     const isParent = Boolean(user?.role_codes?.includes("parent") && !isPlatformAdmin && !isInstitutionAdmin);
@@ -1038,7 +1041,7 @@ export function AppSidebar() {
                 ? activeChild?.name ?? "EduBird"
                 : isStudent
                     ? activeStudentEnrollment?.institutionName ?? studentInstitution?.institution_name ?? "EduBird"
-                    : staffInstitution?.name ?? activeInstitution?.name ?? "EduBird";
+                    : staffInstitution?.name ?? activeInstitution?.name ?? (isInstitutionAdmin ? (user?.full_name ? `${user.full_name} (Personal)` : "Personal Profile") : "EduBird");
 
     const activeWorkspaceRole = isPlatformAdmin
         ? "Platform Admin"
@@ -1053,7 +1056,7 @@ export function AppSidebar() {
                     : staffInstitution?.roleName ?? activeInstitution?.roleName ?? user?.primary_role ?? (user?.role_codes?.[0] ? formatStaffRole(user.role_codes[0]) : "Staff");
 
     const activeWorkspaceInitial = isPlatformAdmin ? "E" : (activeWorkspaceName[0] ?? "E").toUpperCase();
-    const canSwitchInstitution = isInstitutionAdmin && !isPlatformAdmin && institutionTeams.length > 1;
+    const canSwitchInstitution = isInstitutionAdmin && !isPlatformAdmin;
     const canSwitchChild = isParent && parentChildren.length > 1;
     const canSwitchStudentEnrollment = isStudent && studentEnrollments.length > 1;
 
@@ -1281,24 +1284,46 @@ export function AppSidebar() {
                                                         </div>
                                                     </DropdownMenuCheckboxItem>
                                                 ))
-                                                : institutionTeams.map((institution) => (
-                                                    <DropdownMenuCheckboxItem
-                                                        key={institution.id}
-                                                        checked={institution.id === activeInstitutionStorageId}
-                                                        onCheckedChange={() => selectActiveInstitution(institution.id)}
-                                                        onSelect={(event) => event.preventDefault()}
-                                                        className="min-w-0 gap-2 p-2"
-                                                    >
-                                                        <div className="flex w-full min-w-0 flex-col pl-1">
-                                                            <span className="truncate text-sm font-medium">
-                                                                {institution.name}
-                                                            </span>
-                                                            <span className="truncate text-xs text-muted-foreground">
-                                                                {institution.roleName ?? "Institution"}
-                                                            </span>
-                                                        </div>
-                                                    </DropdownMenuCheckboxItem>
-                                                ))}
+                                                : (
+                                                    <>
+                                                        {institutionTeams.length === 0 ? (
+                                                            <div className="px-2 py-2 text-xs text-muted-foreground">
+                                                                No business profile linked yet.
+                                                            </div>
+                                                        ) : (
+                                                            institutionTeams.map((institution) => (
+                                                                <DropdownMenuCheckboxItem
+                                                                    key={institution.id}
+                                                                    checked={institution.id === activeInstitutionStorageId}
+                                                                    onCheckedChange={() => selectActiveInstitution(institution.id)}
+                                                                    onSelect={(event) => event.preventDefault()}
+                                                                    className="min-w-0 gap-2 p-2"
+                                                                >
+                                                                    <div className="flex w-full min-w-0 flex-col pl-1">
+                                                                        <span className="truncate text-sm font-medium">
+                                                                            {institution.name}
+                                                                        </span>
+                                                                        <span className="truncate text-xs text-muted-foreground">
+                                                                            {institution.roleName ?? "Institution"}
+                                                                        </span>
+                                                                    </div>
+                                                                </DropdownMenuCheckboxItem>
+                                                            ))
+                                                        )}
+                                                        {isInstitutionAdmin && (
+                                                            <>
+                                                                <DropdownMenuSeparator />
+                                                                <DropdownMenuItem
+                                                                    onClick={() => setCreateBusinessOpen(true)}
+                                                                    className="gap-2 p-2 text-primary font-medium cursor-pointer"
+                                                                >
+                                                                    <Plus className="size-4" />
+                                                                    <span>Add Business Profile</span>
+                                                                </DropdownMenuItem>
+                                                            </>
+                                                        )}
+                                                    </>
+                                                )}
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                             ) : (
@@ -1453,6 +1478,8 @@ export function AppSidebar() {
             </Sidebar>
 
             {/* Multi-Role Account Switcher Dialog */}
+            <CreateBusinessProfileDialog open={createBusinessOpen} onOpenChange={setCreateBusinessOpen} />
+
             <AccountSwitcherDialog
                 open={switchAccountOpen}
                 onOpenChange={setSwitchAccountOpen}

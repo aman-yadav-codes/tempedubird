@@ -41,7 +41,7 @@ import { toRoleRoutePath } from "@/lib/auth/role-routes";
 
 import { useSearchParams } from "next/navigation";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
-import { setStoredActiveInstitutionId } from "@/lib/auth/active-institution";
+import { setStoredActiveInstitutionId, clearStoredActiveInstitution } from "@/lib/auth/active-institution";
 
 type AuthModalDialogProps = {
   open: boolean;
@@ -257,6 +257,8 @@ export function AuthModalDialog({
       const userInstId = json.user?.memberships?.[0]?.institution_id || (json.user as any)?.under_institution_id;
       if (userInstId && typeof window !== "undefined") {
         setStoredActiveInstitutionId(Number(userInstId));
+      } else if (typeof window !== "undefined") {
+        clearStoredActiveInstitution();
       }
       toast.success(`Welcome back, ${json.user.full_name}!`);
       onOpenChange(false);
@@ -379,6 +381,8 @@ export function AuthModalDialog({
         const userInstId = loginJson.user?.memberships?.[0]?.institution_id || (loginJson.user as any)?.under_institution_id;
         if (userInstId && typeof window !== "undefined") {
           setStoredActiveInstitutionId(Number(userInstId));
+        } else if (typeof window !== "undefined") {
+          clearStoredActiveInstitution();
         }
         toast.success(`Welcome to EduBird, ${signUpFullName.trim() || loginJson.user.full_name}!`);
         onOpenChange(false);

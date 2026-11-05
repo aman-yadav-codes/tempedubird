@@ -1221,6 +1221,7 @@ export function getRequestPermission(method: string, url: string) {
   if (pathname.includes("/api/admin/sales/pipeline")) return permissionForAction("sales.pipeline", verb);
   if (pathname.includes("/api/admin/sales/enrollments")) return permissionForAction("sales.enrollments", verb);
   if (pathname.includes("/api/admin/sales/leads")) return permissionForAction("sales.leads", verb);
+  if (pathname.includes("/api/admin/institutions/create-business")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/institutions/profiles")) return permissionForAction("institution.institutions", verb);
   if (pathname.includes("/api/admin/institutions")) return permissionForAction("institution.institutions", verb);
   if (pathname.includes("/api/admin/institution-notification-settings")) return permissionForAction("notifications.controls", verb);

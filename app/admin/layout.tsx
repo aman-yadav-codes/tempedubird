@@ -13,6 +13,7 @@ import { AdminUserProfileMenu } from "@/components/admin-user-profile-menu";
 import { AdminNotificationCenter } from "@/components/admin-notification-center";
 import { AdminAcademicSessionSelector } from "@/components/admin-academic-session-selector";
 import { AdminActiveTaskWidget } from "@/components/admin-active-task-widget";
+import { AddBusinessProfileButton } from "@/components/business/add-business-profile-button";
 import { AdminFetchScope } from "@/components/admin-fetch-scope";
 import { InstitutionSubscriptionGate } from "@/components/institution-subscription-gate";
 import { TenantDeploymentScope } from "@/components/tenant-deployment-scope";
@@ -77,6 +78,8 @@ export default function AdminLayout({
               <AdminAcademicSessionSelector />
               <div className="w-px h-5 bg-border/60 hidden sm:block" />
               <AdminActiveTaskWidget />
+              <div className="w-px h-5 bg-border/60 hidden sm:block" />
+              <AddBusinessProfileButton />
 
               <div className="ml-auto flex items-center gap-2 shrink-0">
                 <button

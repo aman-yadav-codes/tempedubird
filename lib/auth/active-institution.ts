@@ -141,3 +141,15 @@ export function setStoredActiveInstitutionId(institutionId: number, summary?: Pa
     })
   );
 }
+
+
+export function clearStoredActiveInstitution() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(ACTIVE_INSTITUTION_STORAGE_KEY);
+  window.localStorage.removeItem(ACTIVE_INSTITUTION_DATA_STORAGE_KEY);
+  window.dispatchEvent(
+    new CustomEvent(ACTIVE_INSTITUTION_CHANGE_EVENT, {
+      detail: { institutionId: null, summary: null },
+    })
+  );
+}
