@@ -1208,10 +1208,10 @@ export async function PUT(req: Request) {
           );
         }
 
-        // Enforce per-user active task limit: auto-stop this user's previously running task/subtask when starting a new one
+        // Enforce per-user active task limit: auto-stop ONLY this specific user's previously running subtask/task
         try {
           const userActiveRes = await db.query(
-            `SELECT id, title, status, sub_tasks, history
+            `SELECT id, title, status, sub_tasks, history, assigned_employee_id
              FROM operations_tasks
              WHERE id != $1
                AND (
@@ -1220,48 +1220,34 @@ export async function PUT(req: Request) {
                    SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) elem
                    WHERE elem->>'status' = 'in_progress'
                  )
-               )
-               AND (
-                 assigned_employee_id::text = $2
-                 OR client_id::text = $2
-                 OR created_by::text = $2
-                 OR assigned_employees::text LIKE $3
-                 OR assigned_clients::text LIKE $3
-                 OR EXISTS (
-                   SELECT 1 FROM jsonb_array_elements(COALESCE(sub_tasks, '[]'::jsonb)) s
-                   WHERE s->>'assigned_employee_id' = $2
-                      OR s->>'assigned_staff_ids' LIKE $3
-                      OR s::text LIKE $3
-                 )
                )`,
-            [id, String(currentUserId), `%${String(currentUserId)}%`]
+            [id]
           );
 
           for (const row of userActiveRes.rows) {
             const rowSubs = Array.isArray(row.sub_tasks) ? row.sub_tasks : [];
-            const runningSubs = rowSubs.filter((s: any) => s.status === "in_progress");
+            // Find only subtasks that were started by this specific user
+            const runningSubsOfThisUser = rowSubs.filter((s: any) =>
+              s.status === "in_progress" && (
+                String(s.started_by_id) === String(currentUserId) ||
+                (!s.started_by_id && String(s.assigned_employee_id) === String(currentUserId))
+              )
+            );
 
-            // Auto-stop the user's previously running task/subtask
+            // Is the parent task itself directly started by this specific user?
+            const isParentTaskOfThisUser = row.status === "in_progress" && (
+              String(row.started_by_id) === String(currentUserId) ||
+              (!row.started_by_id && String(row.assigned_employee_id) === String(currentUserId))
+            );
+
+            // If nothing is running by THIS user in this task, do NOT touch this task (other users are working in parallel)
+            if (runningSubsOfThisUser.length === 0 && !isParentTaskOfThisUser) {
+              continue;
+            }
+
             const stopTime = new Date().toISOString();
             const stoppedHistory = Array.isArray(row.history) ? [...row.history] : [];
-            if (runningSubs.length > 0) {
-              for (const s of runningSubs) {
-                stoppedHistory.push({
-                  id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-                  action: "stopped",
-                  timestamp: stopTime,
-                  user_id: currentUserId,
-                  user_name: currentUserName,
-                  user_role: currentUserRole,
-                  old_status: "in_progress",
-                  new_status: "pending",
-                  subtask_id: s.id || null,
-                  subtask_title: s.title || null,
-                  details: s.title ? `Deliverable "${s.title}" auto-stopped: user started a new task` : "Deliverable auto-stopped: user started a new task",
-                });
-              }
-            }
-            if (row.status === "in_progress") {
+            for (const s of runningSubsOfThisUser) {
               stoppedHistory.push({
                 id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
                 action: "stopped",
@@ -1269,27 +1255,29 @@ export async function PUT(req: Request) {
                 user_id: currentUserId,
                 user_name: currentUserName,
                 user_role: currentUserRole,
-                old_status: row.status,
+                old_status: "in_progress",
                 new_status: "pending",
-                details: "Task auto-stopped: user started a new task",
+                subtask_id: s.id || null,
+                subtask_title: s.title || null,
+                details: s.title ? `Deliverable "${s.title}" auto-stopped: user started a new task` : "Deliverable auto-stopped: user started a new task",
               });
             }
 
-            let newSubs = rowSubs;
-            if (runningSubs.length > 0) {
-              newSubs = rowSubs.map((s: any) => {
-                if (s.status !== "in_progress") return s;
-                return { ...s, status: "pending", stopped_at: stopTime, stopped_by_name: currentUserName };
-              });
-            }
+            // Only stop the subtasks that belong to THIS user! Leave other users' running subtasks untouched!
+            const newSubs = rowSubs.map((s: any) => {
+              const belongsToThisUser = runningSubsOfThisUser.some((us: any) => String(us.id) === String(s.id));
+              if (!belongsToThisUser) return s;
+              return { ...s, status: "pending", stopped_at: stopTime, stopped_by_name: currentUserName, stopped_by_id: currentUserId };
+            });
 
-            const newStatus = runningSubs.length > 0
-              ? (newSubs.every((s: any) => s.status === "completed") ? "completed" : "pending")
-              : "pending";
+            // The parent task status stays 'in_progress' if ANY subtask from ANY user is still in_progress!
+            const stillHasRunningSubs = newSubs.some((s: any) => s.status === "in_progress");
+            const allSubsDone = newSubs.length > 0 && newSubs.every((s: any) => s.status === "completed");
+            const newStatus = stillHasRunningSubs ? "in_progress" : allSubsDone ? "completed" : "pending";
 
             await db.query(
               `UPDATE operations_tasks
-               SET status = $1, stopped_at = NOW(), sub_tasks = $2::jsonb,
+               SET status = $1, sub_tasks = $2::jsonb,
                    history = $3::jsonb, updated_at = NOW()
                WHERE id = $4`,
               [newStatus, JSON.stringify(newSubs), JSON.stringify(stoppedHistory.slice(-100)), row.id]
@@ -1554,8 +1542,12 @@ export async function PUT(req: Request) {
         subs = subs.map((s: any) => {
           const ex = existingMap.get(String(s.id));
           const isThisSubStarting = s.status === "in_progress" && (!ex || ex.status !== "in_progress");
-          // Auto-stop any OTHER in-progress subtask when a new one is starting
-          const isAutoStopped = Boolean(startingSubId && String(s.id) !== String(startingSubId) && ex && ex.status === "in_progress");
+          // Only auto-stop another subtask if it was started by or assigned to the SAME current user
+          const wasStartedByCurrentUser = ex && (
+            (ex.started_by_id && String(ex.started_by_id) === String(currentUserId)) ||
+            (!ex.started_by_id && ex.assigned_employee_id && String(ex.assigned_employee_id) === String(currentUserId))
+          );
+          const isAutoStopped = Boolean(startingSubId && String(s.id) !== String(startingSubId) && ex && ex.status === "in_progress" && wasStartedByCurrentUser);
           const isThisSubStopping = isAutoStopped || (s.status === "pending" && ex && ex.status === "in_progress");
           if (isAutoStopped) {
             taskHistory.push({

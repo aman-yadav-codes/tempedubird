@@ -624,19 +624,29 @@ export function SubtaskCard({
 
           {/* Start / Stop Button: available for both staff and client */}
           {isRunning ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                if (onStop) onStop(task, subtask);
-                else handleStatusSelect("pending");
-              }}
-              className="h-7 px-2.5 text-xs font-bold gap-1 text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer shadow-2xs rounded-md"
-            >
-              <Square className="w-3 h-3 fill-current text-rose-600" />
-              <span>Stop</span>
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  if (onStop) onStop(task, subtask);
+                  else handleStatusSelect("pending");
+                }}
+                className="h-7 px-2.5 text-xs font-bold gap-1 text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer shadow-2xs rounded-md"
+              >
+                <Square className="w-3 h-3 fill-current text-rose-600" />
+                <span>Stop</span>
+              </Button>
+              {subtask.started_by_name && (
+                <span
+                  className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.5 rounded truncate max-w-[120px]"
+                  title={`Running by ${subtask.started_by_name}`}
+                >
+                  {subtask.started_by_name}
+                </span>
+              )}
+            </div>
           ) : !isSubDone ? (
             <Button
               type="button"

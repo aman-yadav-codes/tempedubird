@@ -589,7 +589,17 @@ export function MyProfileClient() {
     const updatedSubs = currentSubs.map((s: any) => {
       if (String(s.id) !== String(subId)) {
         if (newStatus === "in_progress" && normalizeTaskStatus(s.status) === "in_progress") {
-          return { ...s, status: "pending", stopped_at: new Date().toISOString() };
+          const isStartedByMe = s.started_by_id && String(s.started_by_id) === String(user?.id);
+          const isAssignedToMe = s.assigned_employee_id && String(s.assigned_employee_id) === String(user?.id);
+          if (isStartedByMe || (!s.started_by_id && isAssignedToMe)) {
+            return {
+              ...s,
+              status: "pending",
+              stopped_at: new Date().toISOString(),
+              stopped_by_id: user?.id,
+              stopped_by_name: (user as any)?.name || (user as any)?.full_name || "Staff",
+            };
+          }
         }
         return s;
       }
@@ -597,6 +607,8 @@ export function MyProfileClient() {
         ...s,
         status: newStatus,
         started_at: newStatus === "in_progress" ? new Date().toISOString() : s.started_at,
+        started_by_id: newStatus === "in_progress" ? user?.id : s.started_by_id,
+        started_by_name: newStatus === "in_progress" ? ((user as any)?.name || (user as any)?.full_name || "Staff") : s.started_by_name,
         stopped_at: newStatus !== "in_progress" ? new Date().toISOString() : null,
       };
     });

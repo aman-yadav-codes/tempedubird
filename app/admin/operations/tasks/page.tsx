@@ -1632,22 +1632,32 @@ export default function OperationsTasksPage() {
     const targetSub = currentSubs.find((s) => s.id === subId);
     const updatedSubs = currentSubs.map((s) => {
       if (s.id !== subId) {
-        // If starting this subtask, auto-stop any previously in-progress subtask in the same task
+        // If starting this subtask, auto-stop ONLY this user's own previously running subtask in the same task
         if (newStatus === "in_progress" && s.status === "in_progress") {
-          return {
-            ...s,
-            status: "pending",
-            stopped_at: new Date().toISOString(),
-          };
+          const isStartedByMe = (s as any).started_by_id && String((s as any).started_by_id) === String(user?.id);
+          const isAssignedToMe = (s as any).assigned_employee_id && String((s as any).assigned_employee_id) === String(user?.id);
+          if (isStartedByMe || (!((s as any).started_by_id) && isAssignedToMe)) {
+            return {
+              ...s,
+              status: "pending",
+              stopped_at: new Date().toISOString(),
+              stopped_by_id: user?.id,
+              stopped_by_name: (user as any)?.name || (user as any)?.full_name || "Staff",
+            };
+          }
         }
         return s;
       }
       const updates: any = { ...s, status: newStatus };
       if (newStatus === "in_progress") {
         updates.started_at = new Date().toISOString();
+        updates.started_by_id = user?.id;
+        updates.started_by_name = (user as any)?.name || (user as any)?.full_name || "Staff";
         updates.stopped_at = null;
       } else if (newStatus === "pending" || newStatus === "completed") {
         updates.stopped_at = new Date().toISOString();
+        updates.stopped_by_id = user?.id;
+        updates.stopped_by_name = (user as any)?.name || (user as any)?.full_name || "Staff";
       }
       return updates;
     });
