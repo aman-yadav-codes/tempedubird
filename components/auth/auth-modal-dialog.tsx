@@ -41,6 +41,7 @@ import { toRoleRoutePath } from "@/lib/auth/role-routes";
 
 import { useSearchParams } from "next/navigation";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
+import { setStoredActiveInstitutionId } from "@/lib/auth/active-institution";
 
 type AuthModalDialogProps = {
   open: boolean;
@@ -253,10 +254,14 @@ export function AuthModalDialog({
       }
 
       setAuth(json.user, json.accessToken);
+      const userInstId = json.user?.memberships?.[0]?.institution_id || (json.user as any)?.under_institution_id;
+      if (userInstId && typeof window !== "undefined") {
+        setStoredActiveInstitutionId(Number(userInstId));
+      }
       toast.success(`Welcome back, ${json.user.full_name}!`);
       onOpenChange(false);
 
-      const redirectPath = toRoleRoutePath("/admin", json.user);
+      const redirectPath = json.redirectTo || toRoleRoutePath("/admin", json.user);
       router.push(redirectPath);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sign in failed");
@@ -379,9 +384,13 @@ export function AuthModalDialog({
       const loginJson = await parseJsonResponse(loginRes);
       if (loginRes.ok && loginJson.user) {
         setAuth(loginJson.user, loginJson.accessToken);
-        toast.success(`Welcome to EduBird, ${signUpFullName.trim()}!`);
+        const userInstId = loginJson.user?.memberships?.[0]?.institution_id || (loginJson.user as any)?.under_institution_id;
+        if (userInstId && typeof window !== "undefined") {
+          setStoredActiveInstitutionId(Number(userInstId));
+        }
+        toast.success(`Welcome to EduBird, ${signUpFullName.trim() || loginJson.user.full_name}!`);
         onOpenChange(false);
-        const redirectPath = toRoleRoutePath("/admin", loginJson.user);
+        const redirectPath = loginJson.redirectTo || toRoleRoutePath("/admin", loginJson.user);
         router.push(redirectPath);
       } else {
         toast.success("Account created successfully! Please sign in.");

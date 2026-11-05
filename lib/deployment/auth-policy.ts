@@ -38,7 +38,7 @@ export function checkDeploymentAccess(
 ): DeploymentAccessResult {
   const mode = getAppModeForHost(host);
 
-  if (mode === "all") {
+  if (mode === "all" || mode === "platform_admin") {
     return { allowed: true };
   }
 
