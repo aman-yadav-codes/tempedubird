@@ -1183,6 +1183,9 @@ export async function PUT(req: Request) {
         params.push(JSON.stringify(body.stop_location));
         updates.push(`stop_location = $${params.length}::jsonb`);
       }
+      const isExplicitStop = body.action === "stop_task";
+      const isExplicitStart = body.action === "start_task";
+
       const hasSubtaskStarting = Array.isArray(sub_tasks) && sub_tasks.some((s: any) => {
         if (s.status !== "in_progress") return false;
         const prevSubs = Array.isArray(existingTask.sub_tasks) ? existingTask.sub_tasks : [];
@@ -1195,8 +1198,13 @@ export async function PUT(req: Request) {
         const prev = prevSubs.find((es: any) => String(es.id) === String(s.id));
         return prev && prev.status === "in_progress";
       });
-      const isStarting = status === "in_progress" || body.action === "start_task" || hasSubtaskStarting;
-      const isStopping = body.action === "stop_task" || (status === "pending" && existingTask.status === "in_progress") || hasSubtaskStopping;
+
+      const isStarting = !isExplicitStop && (
+        isExplicitStart ||
+        hasSubtaskStarting ||
+        (status === "in_progress" && existingTask.status !== "in_progress")
+      );
+      const isStopping = isExplicitStop || (status === "pending" && existingTask.status === "in_progress") || (!hasSubtaskStarting && hasSubtaskStopping);
 
       if (isStarting) {
         // Enforce mandatory location sharing for any role across the entire system
