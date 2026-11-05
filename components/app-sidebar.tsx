@@ -170,8 +170,8 @@ const navItems: SidebarItem[] = [
         children: [
             { title: "Task Management", url: "/admin/operations/tasks", icon: ClipboardList },
             { title: "Daily Work Logs", url: "/admin/operations/work-logs", icon: Activity },
-            { title: "Project Types", url: "/admin/operations/project-types", icon: FolderKanban },
-            { title: "Project Pipelines", url: "/admin/operations/project-pipelines", icon: GitFork },
+            { title: "Work Types", url: "/admin/operations/project-types", icon: FolderKanban },
+            { title: "Work Pipelines", url: "/admin/operations/project-pipelines", icon: GitFork },
             { title: "Generate Documents", url: "/admin/operations/generate-documents", icon: Sparkles },
             { title: "Penalty Rules", url: "/admin/operations/penalty-rules", icon: AlertTriangle },
         ],
@@ -751,7 +751,7 @@ export function AppSidebar() {
             if (isClient) {
                 return [
                     {
-                        title: "My Projects & Tasks",
+                        title: "My Work & Tasks",
                         url: "/admin/operations/tasks",
                         icon: Briefcase,
                     },

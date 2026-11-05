@@ -237,14 +237,14 @@ export default function ProjectTypesPage() {
         if (json.action === "deactivated") {
           toast.info(json.message || "Project type deactivated to protect existing project records.");
         } else {
-          toast.success("Project type deleted successfully");
+          toast.success("Work type deleted successfully");
         }
         fetchProjectTypes();
       } else {
-        toast.error(json.error || "Failed to delete project type");
+        toast.error(json.error || "Failed to delete work type");
       }
     } catch {
-      toast.error("Network error deleting project type");
+      toast.error("Network error deleting work type");
     }
   };
 
@@ -259,10 +259,10 @@ export default function ProjectTypesPage() {
               <span>Operations Configuration</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-              Project Type Management
+              Work Type Management
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl">
-              Define the classification of projects your organization handles. Each project type can be linked with specialized workflow pipelines.
+              Define the classification of work your organization handles. Each work type can be linked with specialized workflow pipelines.
             </p>
           </div>
 
@@ -279,7 +279,7 @@ export default function ProjectTypesPage() {
               className="text-xs font-bold gap-1.5 bg-primary text-primary-foreground shadow-xs cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>Create Project Type</span>
+              <span>Create Work Type</span>
             </Button>
           </div>
         </div>
@@ -292,7 +292,7 @@ export default function ProjectTypesPage() {
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search project types by name or description..."
+            placeholder="Search work types by name or description..."
             className="pl-9 text-xs h-9 bg-background"
           />
         </div>
@@ -350,7 +350,7 @@ export default function ProjectTypesPage() {
       ) : filteredTypes.length === 0 ? (
         <div className="text-center py-16 px-4 bg-muted/10 border border-dashed rounded-2xl space-y-3">
           <FolderKanban className="w-12 h-12 text-muted-foreground/50 mx-auto" />
-          <h3 className="font-bold text-sm text-foreground">No project types found</h3>
+          <h3 className="font-bold text-sm text-foreground">No work types found</h3>
           <p className="text-xs text-muted-foreground max-w-sm mx-auto">
             {searchQuery
               ? `No project types match "${searchQuery}". Try clearing the search.`
@@ -479,13 +479,13 @@ export default function ProjectTypesPage() {
           <DialogHeader className="px-6 pt-5 pb-4 border-b bg-muted/20">
             <DialogTitle className="text-base font-bold flex items-center gap-2">
               <FolderKanban className="w-4 h-4 text-primary" />
-              <span>{editingType ? "Edit Project Type" : "Create New Project Type"}</span>
+              <span>{editingType ? "Edit Work Type" : "Create New Work Type"}</span>
             </DialogTitle>
           </DialogHeader>
 
           <form onSubmit={handleSave} className="p-6 space-y-4">
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Project Type Name *</Label>
+              <Label className="text-xs font-semibold">Work Type Name *</Label>
               <Input
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
@@ -525,7 +525,7 @@ export default function ProjectTypesPage() {
               <Textarea
                 value={formDescription}
                 onChange={(e) => setFormDescription(e.target.value)}
-                placeholder="Briefly describe what kind of deliverables and projects fall under this category..."
+                placeholder="Briefly describe what kind of deliverables and work fall under this category..."
                 rows={3}
                 className="text-xs bg-background resize-none"
               />

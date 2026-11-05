@@ -264,8 +264,8 @@ export function SubtaskCard({
     if (task.project_leader_id && !effectiveStaffOptions.some((s) => String(s.id) === String(task.project_leader_id))) {
       effectiveStaffOptions.push({
         id: task.project_leader_id,
-        name: task.project_leader_name || "Project Leader",
-        role: "Project Leader",
+        name: task.project_leader_name || "Work Leader",
+        role: "Work Leader",
       });
     }
     if (Array.isArray(task.assigned_clients)) {
@@ -581,7 +581,7 @@ export function SubtaskCard({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-64 p-2 space-y-1.5 z-50">
             <div className="flex items-center justify-between border-b pb-1 px-1">
-              <span className="text-[11px] font-bold text-foreground">Assign Project Team</span>
+              <span className="text-[11px] font-bold text-foreground">Assign Work Team</span>
               {currentAssignedIds.length > 0 && (
                 <button
                   type="button"
@@ -594,7 +594,7 @@ export function SubtaskCard({
             </div>
             <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
               {effectiveStaffOptions.length === 0 ? (
-                <div className="text-center py-2 text-xs text-muted-foreground">No project team members found</div>
+                <div className="text-center py-2 text-xs text-muted-foreground">No work team members found</div>
               ) : (
                 effectiveStaffOptions.map((emp) => {
                   const isChecked = currentAssignedIds.includes(String(emp.id));

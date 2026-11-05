@@ -354,7 +354,7 @@ export function ProjectInvoicesDialog({
           <div className="space-y-1">
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Receipt className="w-5 h-5 text-primary" />
-              <span>Project Invoices</span>
+              <span>Work Invoices</span>
               <Badge variant="outline" className="text-xs font-mono ml-1 font-bold">
                 {task?.title}
               </Badge>
@@ -428,7 +428,7 @@ export function ProjectInvoicesDialog({
               {loading ? (
                 <div className="py-16 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                  <span>Loading project invoices...</span>
+                  <span>Loading work invoices...</span>
                 </div>
               ) : invoices.length === 0 ? (
                 <div className="py-16 text-center space-y-3 rounded-2xl border border-dashed bg-muted/10 p-6">
@@ -436,7 +436,7 @@ export function ProjectInvoicesDialog({
                   <div>
                     <h4 className="text-sm font-bold text-foreground">No Invoices Created Yet</h4>
                     <p className="text-xs text-muted-foreground max-w-sm mx-auto mt-1">
-                      Generate an invoice for base project deliverables or extra client scope additions.
+                      Generate an invoice for base work deliverables or extra client scope additions.
                     </p>
                   </div>
                   <Button onClick={handleOpenCreateInvoice} size="sm" className="font-bold gap-1.5">
@@ -781,7 +781,7 @@ export function ProjectInvoicesDialog({
                     {previewInvoice.client_company && (
                       <p className="text-muted-foreground">{previewInvoice.client_company}</p>
                     )}
-                    <p className="text-muted-foreground">Project: {task?.title}</p>
+                    <p className="text-muted-foreground">Work: {task?.title}</p>
                   </div>
                   <div className="text-right">
                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">STATUS:</span>

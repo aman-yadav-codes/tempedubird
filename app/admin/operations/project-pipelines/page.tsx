@@ -438,17 +438,17 @@ export default function ProjectPipelinesPage() {
             </Link>
             <ChevronRight className="w-3.5 h-3.5" />
             <Link href="/admin/operations/project-types" className="hover:underline flex items-center gap-1">
-              Project Types
+              Work Types
             </Link>
             <ChevronRight className="w-3.5 h-3.5" />
-            <span className="text-foreground font-semibold">Project Pipelines</span>
+            <span className="text-foreground font-semibold">Work Pipelines</span>
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-2.5">
             <GitFork className="w-7 h-7 text-primary" />
-            Project Pipelines
+            Work Pipelines
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Design multi-phase production workflows and assign default milestone templates per project type.
+            Design multi-phase production workflows and assign default milestone templates per work type.
           </p>
         </div>
 
@@ -491,7 +491,7 @@ export default function ProjectPipelinesPage() {
               onChange={(e) => setTypeFilter(e.target.value)}
               className="h-9 text-xs rounded-lg border bg-background px-2.5 outline-none font-medium cursor-pointer"
             >
-              <option value="all">All Project Types</option>
+              <option value="all">All Work Types</option>
               {projectTypes.map((pt) => (
                 <option key={pt.id} value={pt.id}>
                   {pt.name}
@@ -535,7 +535,7 @@ export default function ProjectPipelinesPage() {
       ) : pipelines.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center bg-card rounded-2xl border border-dashed p-8">
           <GitFork className="w-12 h-12 text-muted-foreground/40 mb-3" />
-          <h3 className="text-base font-bold text-foreground">No Project Pipelines Found</h3>
+          <h3 className="text-base font-bold text-foreground">No Work Pipelines Found</h3>
           <p className="text-xs text-muted-foreground max-w-sm mt-1 mb-4">
             {search || typeFilter !== "all" || statusFilter !== "all"
               ? "No pipelines match your current filters. Try resetting the filters."
@@ -743,7 +743,7 @@ export default function ProjectPipelinesPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold">Project Type *</Label>
+                <Label className="text-xs font-bold">Work Type *</Label>
                 <select
                   value={formProjectTypeId}
                   onChange={(e) => setFormProjectTypeId(Number(e.target.value))}
@@ -751,7 +751,7 @@ export default function ProjectPipelinesPage() {
                   required
                 >
                   <option value="" disabled>
-                    Select Project Type
+                    Select Work Type
                   </option>
                   {projectTypes.map((pt) => (
                     <option key={pt.id} value={pt.id}>
@@ -780,7 +780,7 @@ export default function ProjectPipelinesPage() {
                     onChange={(e) => setFormIsDefault(e.target.checked)}
                     className="rounded border-input text-primary focus:ring-primary h-4 w-4"
                   />
-                  <span>Set as Default Pipeline for this Project Type</span>
+                  <span>Set as Default Pipeline for this Work Type</span>
                 </label>
 
                 <div className="flex items-center gap-2 ml-auto">

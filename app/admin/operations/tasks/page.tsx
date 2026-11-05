@@ -249,7 +249,7 @@ const SUBTASK_URGENCIES = [
 ];
 
 const STATUS_TABS = [
-  { id: "pending", label: "Pending", badgeColor: "bg-slate-100 text-slate-700 border-slate-300" },
+  { id: "pending", label: "Pending Tasks", badgeColor: "bg-slate-100 text-slate-700 border-slate-300" },
   { id: "in_progress", label: "In Progress", badgeColor: "bg-blue-100 text-blue-800 border-blue-300" },
   { id: "under_review", label: "Under Review", badgeColor: "bg-amber-100 text-amber-800 border-amber-300" },
   { id: "rework", label: "Rework", badgeColor: "bg-rose-100 text-rose-800 border-rose-300" },
@@ -666,7 +666,7 @@ export default function OperationsTasksPage() {
         },
         body: JSON.stringify({
           id: taskId,
-          title: targetTask?.title || "Project",
+          title: targetTask?.title || "Work",
           agreement_document_url: fileUrl,
           agreement_document_name: fileName,
         }),
@@ -674,7 +674,7 @@ export default function OperationsTasksPage() {
 
       if (!updateRes.ok) {
         const d = await updateRes.json();
-        throw new Error(d.error || "Failed to update project with agreement document");
+        throw new Error(d.error || "Failed to update work with agreement document");
       }
 
       setTasks((prev) =>
@@ -895,8 +895,8 @@ export default function OperationsTasksPage() {
       if (!optionsMap.has(String(task.project_leader_id))) {
         optionsMap.set(String(task.project_leader_id), {
           id: task.project_leader_id,
-          name: task.project_leader_name || "Project Leader",
-          role: "Project Leader",
+          name: task.project_leader_name || "Work Leader",
+          role: "Work Leader",
         });
       }
     }
@@ -1238,7 +1238,7 @@ export default function OperationsTasksPage() {
   const handleSaveMainTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim()) {
-      toast.error("Please enter Task / Project Name");
+      toast.error("Please enter Work Name");
       return;
     }
 
@@ -1325,7 +1325,7 @@ export default function OperationsTasksPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save task");
 
-      toast.success(editingTask ? "Task updated successfully!" : "Task / Project created successfully!");
+      toast.success(editingTask ? "Work updated successfully!" : "Work created successfully!");
       setTaskDialogOpen(false);
       await fetchTasks();
 
@@ -2244,10 +2244,10 @@ export default function OperationsTasksPage() {
                   variant="outline"
                   size="sm"
                   className="h-9 text-xs font-semibold gap-1.5 border hover:bg-muted/60 transition-colors shadow-2xs"
-                  title="Configure and manage project types"
+                  title="Configure and manage work types"
                 >
                   <FolderKanban className="w-4 h-4 text-primary" />
-                  <span>Project Types</span>
+                  <span>Work Types</span>
                 </Button>
               </Link>
 
@@ -2256,10 +2256,10 @@ export default function OperationsTasksPage() {
                   variant="outline"
                   size="sm"
                   className="h-9 text-xs font-semibold gap-1.5 border hover:bg-muted/60 transition-colors shadow-2xs"
-                  title="Design and manage project pipeline templates"
+                  title="Design and manage work pipeline templates"
                 >
                   <GitFork className="w-4 h-4 text-primary" />
-                  <span>Project Pipelines</span>
+                  <span>Work Pipelines</span>
                 </Button>
               </Link>
 
@@ -2267,7 +2267,7 @@ export default function OperationsTasksPage() {
                 onClick={handleOpenCreateTask}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md gap-1.5 h-9 cursor-pointer"
               >
-                <Plus className="w-4 h-4" /> Create Task / Project
+                <Plus className="w-4 h-4" /> Create Work
               </Button>
             </div>
           );
@@ -2294,7 +2294,7 @@ export default function OperationsTasksPage() {
               <Clock className="w-4.5 h-4.5" />
             </div>
             <div>
-              <p className="text-[11px] text-muted-foreground font-medium">In Progress</p>
+              <p className="text-[11px] text-muted-foreground font-medium">Work In Progress</p>
               <h3 className="text-lg font-bold">{stats.inProgressTasks}</h3>
             </div>
           </CardContent>
@@ -2318,7 +2318,7 @@ export default function OperationsTasksPage() {
               <CheckCircle2 className="w-4.5 h-4.5" />
             </div>
             <div>
-              <p className="text-[11px] text-muted-foreground font-medium">Completed</p>
+              <p className="text-[11px] text-muted-foreground font-medium">Work Completed</p>
               <h3 className="text-lg font-bold">{stats.completedTasks}</h3>
             </div>
           </CardContent>
@@ -2460,15 +2460,15 @@ export default function OperationsTasksPage() {
           {!(isClientRole || Boolean(pathname?.startsWith("/client"))) ? (
             <>
               <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                Click &quot;Create Task / Project&quot; to add a new project, then use the Action button to add and assign multiple sub-tasks.
+                Click &quot;Create Work&quot; to add a new work, then use the Action button to add and assign multiple tasks.
               </p>
               <Button onClick={handleOpenCreateTask} size="sm" className="mt-2 font-bold">
-                <Plus className="w-4 h-4 mr-1.5" /> Create Task / Project
+                <Plus className="w-4 h-4 mr-1.5" /> Create Work
               </Button>
             </>
           ) : (
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
-              Projects and tasks associated with your account will appear right here.
+              Work and tasks associated with your account will appear right here.
             </p>
           )}
         </div>
@@ -2609,10 +2609,10 @@ export default function OperationsTasksPage() {
                           size="sm"
                           onClick={() => handleOpenSubtasksModal(task)}
                           className="h-8 text-xs font-bold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-2xs cursor-pointer px-3"
-                          title="Add sub-task"
+                          title="Add task"
                         >
                           <Plus className="w-3.5 h-3.5" />
-                          <span>Add Sub-Task</span>
+                          <span>Add Task</span>
                         </Button>
                       )}
 
@@ -2621,7 +2621,7 @@ export default function OperationsTasksPage() {
                         value={task.status === "recheck" ? "rework" : task.status || "pending"}
                         onChange={(e) => handleQuickTaskStatusChange(task.id, e.target.value)}
                         className="h-8 text-xs font-bold w-32 bg-muted/30 rounded-lg border border-input px-2 outline-none focus:ring-1 focus:ring-primary/40 cursor-pointer text-foreground capitalize"
-                        title="Change project status"
+                        title="Change work status"
                       >
                         <option value="pending">Pending</option>
                         <option value="in_progress">In progress</option>
@@ -2639,7 +2639,7 @@ export default function OperationsTasksPage() {
                             size="icon"
                             variant="ghost"
                             className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg cursor-pointer transition-colors"
-                            title="More project actions"
+                            title="More work actions"
                           >
                             <MoreVertical className="w-4 h-4 fill-current text-red-600" />
                           </Button>
@@ -2851,11 +2851,11 @@ export default function OperationsTasksPage() {
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-violet-500/10 text-violet-800 dark:text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 transition-all group shadow-2xs"
-                                title={`View/Download Agreement: ${task.agreement_document_name || "Agreement Document"}`}
+                                title={`View/Download Agreement: ${task.agreement_document_name || "Work Agreement Document"}`}
                               >
                                 <FileText className="w-3.5 h-3.5 text-violet-600 group-hover:scale-110 transition-transform shrink-0" />
                                 <span className="truncate max-w-[220px]">
-                                  {task.agreement_document_name || "Project Agreement Document"}
+                                  {task.agreement_document_name || "Work Agreement Document"}
                                 </span>
                                 <ExternalLink className="w-2.5 h-2.5 opacity-70" />
                               </a>
@@ -2934,7 +2934,7 @@ export default function OperationsTasksPage() {
                       </span>
                     </div>
                     <div className="border-l pl-3">
-                      <span className="text-muted-foreground block text-[10px] font-medium uppercase">Sub-Tasks</span>
+                      <span className="text-muted-foreground block text-[10px] font-medium uppercase">Tasks</span>
                       <span className="font-bold text-foreground font-mono text-sm">
                         {completedSubs}/{subTasksList.length} Done
                       </span>
@@ -3279,7 +3279,7 @@ export default function OperationsTasksPage() {
                     <div className="flex items-center justify-between p-2.5 bg-muted/20 rounded-xl border border-dashed text-xs">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <GitFork className="w-4 h-4 text-primary opacity-60" />
-                        <span>No pipeline workflow assigned to this project yet.</span>
+                        <span>No pipeline workflow assigned to this work yet.</span>
                       </div>
                       <Button
                         size="sm"
@@ -3312,7 +3312,7 @@ export default function OperationsTasksPage() {
                       <div className="flex items-center gap-1.5">
                         <Layers className="w-4 h-4 text-primary" />
                         <span>
-                          Sub-Tasks & Assignees ({subTasksList.length}
+                          Tasks & Assignees ({subTasksList.length}
                           {rawSubTasksList.length !== subTasksList.length ? ` of ${rawSubTasksList.length}` : ""})
                         </span>
                       </div>
@@ -3328,7 +3328,7 @@ export default function OperationsTasksPage() {
                             className="h-6 text-[11px] font-semibold gap-1 text-primary hover:bg-primary/10 border-primary/30 py-0 px-2 cursor-pointer"
                           >
                             <Plus className="w-3 h-3" />
-                            <span>add sub task</span>
+                            <span>Add Task</span>
                           </Button>
                         )}
                         <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -3381,10 +3381,10 @@ export default function OperationsTasksPage() {
           <DialogHeader className="px-6 pt-5 pb-4 border-b shrink-0 bg-background/95 backdrop-blur-xs">
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <FolderPlus className="w-5 h-5 text-primary" />
-              <span>{editingTask ? "Edit Project" : "Create Project"}</span>
+              <span>{editingTask ? "Edit Work" : "Create Work"}</span>
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Provide project details, ownership, timeline, budget currency, project leader, and agreement document.
+              Provide work details, ownership, timeline, budget currency, work leader, and agreement document.
             </DialogDescription>
           </DialogHeader>
 
@@ -3392,7 +3392,7 @@ export default function OperationsTasksPage() {
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
               {/* Project Name */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Project Name *</Label>
+                <Label className="text-xs font-semibold">Work Name *</Label>
                 <Input
                   required
                   value={formTitle}
@@ -3408,7 +3408,7 @@ export default function OperationsTasksPage() {
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-semibold flex items-center gap-1.5">
                       <FolderKanban className="w-3.5 h-3.5 text-primary" />
-                      Project Type
+                      Work Type
                     </Label>
                     <Link
                       href="/admin/operations/project-types"
@@ -3423,7 +3423,7 @@ export default function OperationsTasksPage() {
                     onChange={(e) => handleSelectProjectType(e.target.value)}
                     className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring font-medium text-foreground cursor-pointer"
                   >
-                    <option value="none">-- Select Project Type --</option>
+                    <option value="none">-- Select Work Type --</option>
                     {projectTypesList.map((pt) => (
                       <option key={pt.id} value={String(pt.id)}>
                         {pt.name}
@@ -3454,7 +3454,7 @@ export default function OperationsTasksPage() {
                   >
                     <option value="none">
                       {formProjectTypeId === "none"
-                        ? "-- Select Project Type First --"
+                        ? "-- Select Work Type First --"
                         : availablePipelines.length === 0
                           ? "-- No Active Pipelines for this Type --"
                           : "-- Select Pipeline Template --"}
@@ -3506,7 +3506,7 @@ export default function OperationsTasksPage() {
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-semibold flex items-center gap-1.5">
                     <Building2 className="w-3.5 h-3.5 text-primary" />
-                    Project For *
+                    Work For *
                   </Label>
                   <span className="text-[10px] text-muted-foreground font-medium">Select internal company or sales client</span>
                 </div>
@@ -3560,7 +3560,7 @@ export default function OperationsTasksPage() {
                 {formProjectFor === "own_company" ? (
                   <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20 text-xs text-primary font-medium">
                     <Building2 className="w-4 h-4 shrink-0" />
-                    <span>This project will be assigned for internal company: <strong>EduBird</strong></span>
+                    <span>This work will be assigned for internal company: <strong>EduBird</strong></span>
                   </div>
                 ) : (
                   <div className="space-y-1.5 pt-1">
@@ -3835,7 +3835,7 @@ export default function OperationsTasksPage() {
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold flex items-center gap-1.5">
                     <IndianRupee className="w-3.5 h-3.5 text-emerald-600" />
-                    Project Cost ({formCurrency === "INR" ? "₹" : formCurrency})
+                    Work Cost ({formCurrency === "INR" ? "₹" : formCurrency})
                   </Label>
                   <Input
                     type="number"
@@ -3884,7 +3884,7 @@ export default function OperationsTasksPage() {
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-semibold flex items-center gap-1.5">
                     <FileText className="w-3.5 h-3.5 text-primary" />
-                    Project Agreement / Contract Document
+                    Work Agreement / Contract Document
                   </Label>
                   {formAgreementDocUrl && (
                     <a
@@ -3929,7 +3929,7 @@ export default function OperationsTasksPage() {
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold flex items-center gap-1.5">
                   <UserCheck className="w-3.5 h-3.5 text-primary" />
-                  Project Leader (Responsible Owner)
+                  Work Leader (Responsible Owner)
                 </Label>
                 <select
                   value={formProjectLeaderId}
@@ -3940,7 +3940,7 @@ export default function OperationsTasksPage() {
                   }}
                   className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring font-medium"
                 >
-                  <option value="none">-- Select Project Leader (Optional) --</option>
+                  <option value="none">-- Select Work Leader (Optional) --</option>
                   {dialogStaffList.map((s) => (
                     <option key={s.id} value={String(s.id)}>
                       {s.name} ({s.role || "Staff Member"})
@@ -4130,11 +4130,11 @@ export default function OperationsTasksPage() {
 
               {/* Project Scope / Description */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Project Scope & Deliverables (Optional)</Label>
+                <Label className="text-xs font-semibold">Work Scope & Deliverables (Optional)</Label>
                 <Textarea
                   value={formDetails}
                   onChange={(e) => setFormDetails(e.target.value)}
-                  placeholder="Describe project requirements, milestones, client specifications..."
+                  placeholder="Describe work requirements, milestones, client specifications..."
                   className="text-xs min-h-[70px] resize-y"
                 />
               </div>
@@ -4155,7 +4155,7 @@ export default function OperationsTasksPage() {
                 </Button>
                 <Button type="submit" disabled={savingTask || uploadingAgreement} className="bg-primary font-bold">
                   {savingTask && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  {editingTask ? "Save Project Changes" : "Create Project & Continue to Sub-Tasks"}
+                  {editingTask ? "Save Work Changes" : "Create Work & Continue to Tasks"}
                 </Button>
               </div>
             </div>
@@ -4172,7 +4172,7 @@ export default function OperationsTasksPage() {
               <span>Change Phase Status & Notes</span>
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Project: <strong>{phaseModalState?.task.title}</strong>
+              Work: <strong>{phaseModalState?.task.title}</strong>
               <span className="block text-[11px] text-muted-foreground mt-0.5">
                 Phase #{Number(phaseModalState?.phaseIndex ?? 0) + 1}: {phaseModalState?.phase?.name}
               </span>
@@ -4231,7 +4231,7 @@ export default function OperationsTasksPage() {
                     onChange={(e) => setPhaseModalAdvanceNext(e.target.checked)}
                     className="rounded border-input text-primary h-4 w-4"
                   />
-                  <span>Automatically advance project to next phase</span>
+                  <span>Automatically advance work to next phase</span>
                 </label>
               )}
             </div>
@@ -4281,13 +4281,13 @@ export default function OperationsTasksPage() {
               <span>Assign Pipeline Workflow</span>
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Project: <strong>{attachPipelineTask?.title}</strong>
+              Work: <strong>{attachPipelineTask?.title}</strong>
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 py-2 text-xs">
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold">Select Project Type</Label>
+              <Label className="text-xs font-bold">Select Work Type</Label>
               <select
                 value={attachTypeId}
                 onChange={async (e) => {
@@ -4313,7 +4313,7 @@ export default function OperationsTasksPage() {
                 }}
                 className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background font-medium cursor-pointer"
               >
-                <option value="none">-- Select Project Type --</option>
+                <option value="none">-- Select Work Type --</option>
                 {projectTypesList.map((pt) => (
                   <option key={pt.id} value={String(pt.id)}>
                     {pt.name}
@@ -4332,7 +4332,7 @@ export default function OperationsTasksPage() {
               >
                 <option value="none">
                   {attachTypeId === "none"
-                    ? "-- Select Project Type First --"
+                    ? "-- Select Work Type First --"
                     : attachAvailablePipelines.length === 0
                     ? "-- No active pipelines --"
                     : "-- Select Pipeline Template --"}
@@ -4394,7 +4394,7 @@ export default function OperationsTasksPage() {
 
                   const resData = await res.json().catch(() => ({}));
                   if (!res.ok) throw new Error(resData.error || "Failed to assign pipeline");
-                  toast.success(`Pipeline "${selPl?.name}" assigned to project!`);
+                  toast.success(`Pipeline "${selPl?.name}" assigned to work!`);
                   setAttachPipelineTask(null);
                   await fetchTasks();
                 } catch (err: any) {
