@@ -594,7 +594,7 @@ export function MyProfileClient() {
           ? String(targetSub.started_by_id) === uidStr
           : targetSub.started_by_name && uName
           ? String(targetSub.started_by_name).toLowerCase().trim() === uName
-          : targetSub.assigned_employee_id
+          : (!targetSub.started_by_id && !targetSub.started_by_name && targetSub.assigned_employee_id)
           ? String(targetSub.assigned_employee_id) === uidStr
           : false;
 

@@ -151,12 +151,14 @@ export function AdminActiveTaskWidget() {
         }
       }
 
-      // 4. Assigned employee matching
-      if (sub.assigned_employee_id) {
-        return String(sub.assigned_employee_id) === currentUserIdStr;
-      }
-      if (Array.isArray((sub as any).assigned_staff_ids)) {
-        return (sub as any).assigned_staff_ids.some((id: any) => String(id) === currentUserIdStr);
+      // 4. Assigned employee matching (only if neither started_by_id nor started_by_name is present)
+      if (!(sub as any).started_by_id && !(sub as any).started_by_name) {
+        if (sub.assigned_employee_id) {
+          return String(sub.assigned_employee_id) === currentUserIdStr;
+        }
+        if (Array.isArray((sub as any).assigned_staff_ids)) {
+          return (sub as any).assigned_staff_ids.some((id: any) => String(id) === currentUserIdStr);
+        }
       }
 
       // 5. If client: check client assignment
@@ -203,7 +205,8 @@ export function AdminActiveTaskWidget() {
       if (normalizeStatus(t.status) === "in_progress") {
         const isMyTask =
           (t as any).started_by_id ? String((t as any).started_by_id) === currentUserIdStr
-          : t.assigned_employee_id ? String(t.assigned_employee_id) === currentUserIdStr
+          : (t as any).started_by_name ? String((t as any).started_by_name).toLowerCase().trim() === currentUserNameLower
+          : (!(t as any).started_by_id && !(t as any).started_by_name && t.assigned_employee_id) ? String(t.assigned_employee_id) === currentUserIdStr
           : isClientRole && String((t as any).client_id) === currentUserIdStr;
         if (isMyTask) {
           const subs = Array.isArray(t.sub_tasks) ? t.sub_tasks : [];

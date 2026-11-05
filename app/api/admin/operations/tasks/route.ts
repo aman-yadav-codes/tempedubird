@@ -166,7 +166,16 @@ export async function GET(req: Request) {
     const userRole = (user as any)?.role || (user as any)?.role_code || "";
     const userInstId = (user as any)?.institution_id || user?.memberships?.[0]?.institution_id || null;
     const isPlatform = !userInstId || (user && isPlatformAdminUser(user));
-    const envInstRaw = (process.env.DEFAULT_INSTITUTION_ID || process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID || "").trim();
+    const envInstRaw = String(
+      process.env.DEFAULT_INSTITUTION_ID ??
+      process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ??
+      process.env.INSTITUTION_ID ??
+      process.env.NEXT_PUBLIC_INSTITUTION_ID ??
+      process.env.TENANT_INSTITUTION_ID ??
+      process.env.NEXT_PUBLIC_TENANT_INSTITUTION_ID ??
+      process.env.INSTITUTION_PROFILE_ID ??
+      ""
+    ).trim().replace(/^['"]|['"]$/g, "");
     const envDefaultInstId = envInstRaw && !isNaN(Number(envInstRaw)) && Number(envInstRaw) > 0 ? Number(envInstRaw) : null;
 
     const requestedInstParam = url.searchParams.get("institution_id");
@@ -436,6 +445,7 @@ export async function GET(req: Request) {
               ))
             )
             -- Exclude students, parents/guardians, drivers, and clients from the staff picker
+            AND LOWER(COALESCE(r.code, '')) NOT IN ('student', 'guardian', 'parent', 'client', 'driver')
             AND NOT EXISTS (
               SELECT 1 FROM user_roles sur JOIN roles sr ON sr.id = sur.role_id
               WHERE sur.user_id = u.id AND LOWER(sr.code) IN ('student', 'guardian', 'parent', 'client', 'driver')
@@ -596,6 +606,7 @@ export async function GET(req: Request) {
       tasks: sanitizedTasks,
       clients: clientsRes.rows,
       staff: staffRes.rows,
+      configured_institution_id: targetInstId || envDefaultInstId || null,
       stats: {
         totalTasks,
         pendingTasks,

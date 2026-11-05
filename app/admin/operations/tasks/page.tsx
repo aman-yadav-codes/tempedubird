@@ -275,8 +275,14 @@ export default function OperationsTasksPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const { institutions, activeInstitution, activeInstitutionId } = useActiveInstitution();
   const isPlatformRoute = Boolean(pathname?.startsWith("/platformadmin"));
-  const envDefaultInstId = process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ? String(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID).trim() : "";
-  const isPlatformAdmin = useMemo(() => {
+  const envDefaultInstId = (
+    process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ||
+    process.env.NEXT_PUBLIC_INSTITUTION_ID ||
+    process.env.NEXT_PUBLIC_TENANT_INSTITUTION_ID ||
+    ""
+  ).trim();
+  const [serverConfiguredInstId, setServerConfiguredInstId] = useState<string>("");
+    const isPlatformAdmin = useMemo(() => {
     if (isPlatformRoute) return true;
     const codes = (user as any)?.role_codes || [(user as any)?.role || (user as any)?.primary_role || ""];
     return codes.some((r: string) => ["platform_admin", "superadmin", "super_admin", "platformadmin"].includes(String(r).toLowerCase()));
@@ -298,6 +304,7 @@ export default function OperationsTasksPage() {
     }
     return Number(orgFilter) || null;
   }, [orgFilter, isPlatformRoute, activeInstitutionId]);
+  const effectiveEnvInstId = serverConfiguredInstId || envDefaultInstId || (effectiveInstId ? String(effectiveInstId) : "");
   const fetchSeqRef = React.useRef(0);
   const [tasks, setTasks] = useState<OperationTask[]>([]);
   const [clients, setClients] = useState<any[]>([]);
@@ -716,25 +723,32 @@ export default function OperationsTasksPage() {
   const [formPoints, setFormPoints] = useState("20");
   const [formPenaltyPoints, setFormPenaltyPoints] = useState("10");
 
-  const fetchStaffForModal = useCallback(async (instId: string) => {
+  const fetchStaffForModal = useCallback(async (instId?: string) => {
     setLoadingModalOrgStaff(true);
     try {
       const params = new URLSearchParams();
       const effectiveId = (instId && instId !== "none" && instId !== "all")
         ? instId
-        : (envDefaultInstId && envDefaultInstId !== "none" && envDefaultInstId !== "all"
-          ? envDefaultInstId
-          : (effectiveInstId ? String(effectiveInstId) : ""));
+        : (effectiveEnvInstId && effectiveEnvInstId !== "none" && effectiveEnvInstId !== "all"
+          ? effectiveEnvInstId
+          : "");
 
       if (effectiveId) {
         params.set("institution_id", effectiveId);
       } else if (isPlatformRoute) {
-        params.set("institution_id", "none");
+        if (effectiveEnvInstId && effectiveEnvInstId !== "none" && effectiveEnvInstId !== "all") {
+          params.set("institution_id", effectiveEnvInstId);
+        } else {
+          params.set("institution_id", "none");
+        }
       }
       const headers: Record<string, string> = {};
       if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
       const res = await fetch(`/api/admin/operations/tasks?${params.toString()}`, { headers });
       const data = await res.json();
+      if (data.configured_institution_id && !serverConfiguredInstId) {
+        setServerConfiguredInstId(String(data.configured_institution_id));
+      }
       if (Array.isArray(data.staff)) {
         setModalOrgStaffList(data.staff);
       }
@@ -743,7 +757,7 @@ export default function OperationsTasksPage() {
     } finally {
       setLoadingModalOrgStaff(false);
     }
-  }, [accessToken, isPlatformRoute, effectiveInstId, envDefaultInstId]);
+  }, [accessToken, isPlatformRoute, effectiveEnvInstId, serverConfiguredInstId]);
 
   const selectedOrgName = useMemo(() => {
     if (isPlatformRoute || formInstitutionId === "none") return "EduBird Organization";
@@ -755,25 +769,14 @@ export default function OperationsTasksPage() {
 
   const dialogStaffList = useMemo(() => {
     const list = modalOrgStaffList.length > 0 ? modalOrgStaffList : staffList;
-    const combined = [...list];
-    if (user?.id && !combined.some((s) => String(s.id) === String(user.id))) {
-      combined.push({
-        id: user.id,
-        name: (user as any)?.full_name || (user as any)?.name || user.email || "Staff Member",
-        email: user.email,
-        phone: (user as any)?.phone || null,
-        role: (user as any)?.role_name || (user as any)?.role || "Staff Member",
-        role_code: (user as any)?.role_code || "staff",
-      });
-    }
     const seen = new Set<string>();
-    return combined.filter((s) => {
+    return list.filter((s) => {
       const sId = String(s.id);
       if (!s.id || seen.has(sId)) return false;
       seen.add(sId);
       return true;
     });
-  }, [modalOrgStaffList, staffList, user]);
+  }, [modalOrgStaffList, staffList]);
 
   const addClientUrl = useMemo(() => {
     if (pathname?.startsWith("/platformadmin")) return "/platformadmin/sales/clients";
@@ -1065,6 +1068,7 @@ export default function OperationsTasksPage() {
       setTasks(data.tasks || []);
       if (Array.isArray(data.clients)) setClients(data.clients);
       if (Array.isArray(data.staff)) setStaffList(data.staff);
+      if (data.configured_institution_id) setServerConfiguredInstId(String(data.configured_institution_id));
       if (data.stats) setStats(data.stats);
     } catch (err: any) {
       if (seq === fetchSeqRef.current) {
@@ -1119,10 +1123,10 @@ export default function OperationsTasksPage() {
     setFormTitle("");
     const userInstId = (user as any)?.institution_id || (user as any)?.memberships?.[0]?.institution_id || activeInstitutionId || (institutions[0]?.id ? String(institutions[0].id) : "1");
     const initialInstId = isPlatformRoute
-      ? (envDefaultInstId || "none")
+      ? (effectiveEnvInstId || "none")
       : ((orgFilter && orgFilter !== "all" && orgFilter !== "none")
         ? orgFilter
-        : (userInstId ? String(userInstId) : (envDefaultInstId || "1")));
+        : (userInstId ? String(userInstId) : (effectiveEnvInstId || "1")));
     setFormInstitutionId(initialInstId);
     void fetchStaffForModal(initialInstId);
     setFormClientId("none");
@@ -1169,7 +1173,7 @@ export default function OperationsTasksPage() {
     const userInstId = (user as any)?.institution_id || (user as any)?.memberships?.[0]?.institution_id || activeInstitutionId || (institutions[0]?.id ? String(institutions[0].id) : "1");
     const initialInstId = isPlatformRoute
       ? (t.institution_id ? String(t.institution_id) : (envDefaultInstId || "none"))
-      : (t.institution_id ? String(t.institution_id) : (userInstId ? String(userInstId) : (envDefaultInstId || "1")));
+      : (t.institution_id ? String(t.institution_id) : (userInstId ? String(userInstId) : (effectiveEnvInstId || "1")));
     setFormInstitutionId(initialInstId);
     void fetchStaffForModal(initialInstId);
     setFormClientId(t.client_id ? String(t.client_id) : "none");
@@ -1646,11 +1650,12 @@ export default function OperationsTasksPage() {
           ? String((targetSub as any).started_by_id) === uidStr
           : (targetSub as any).started_by_name && uName
           ? String((targetSub as any).started_by_name).toLowerCase().trim() === uName
-          : (targetSub as any).assigned_employee_id
+          : (!((targetSub as any).started_by_id) && !((targetSub as any).started_by_name) && (targetSub as any).assigned_employee_id)
           ? String((targetSub as any).assigned_employee_id) === uidStr
           : false;
 
-      if (!isPlatformAdmin && !isStartedByMe) {
+      const canStop = isStartedByMe || (isPlatformAdmin && !isClientRole && !pathname?.startsWith("/client"));
+      if (!canStop) {
         toast.error(`You can only stop your own task. This task was started by ${(targetSub as any)?.started_by_name || 'another user'}.`);
         return;
       }

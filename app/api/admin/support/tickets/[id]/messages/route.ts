@@ -58,12 +58,13 @@ async function uploadAttachment(file: File): Promise<UploadedAttachment> {
         public_id: result.path,
         resource_type: file.type.startsWith("image/") ? "image" : "raw",
       };
-    } catch (openinaryErr) {
-      console.error("Openinary ticket attachment upload failed, falling back to local storage:", openinaryErr);
+    } catch (openinaryErr: any) {
+      console.error("Openinary ticket attachment upload failed:", openinaryErr);
+      throw new Error(`Media upload failed: ${openinaryErr?.message || "Openinary upload error"}`);
     }
   }
 
-  // Fallback: Local storage
+  // Durable storage for non-media document types or when Openinary is unconfigured
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);
   const ext = path.extname(file.name) || (file.type === "application/pdf" ? ".pdf" : ".png");

@@ -177,16 +177,18 @@ export function SubtaskCard({
     if (subtask.started_by_name && uName) {
       return String(subtask.started_by_name).toLowerCase().trim() === uName;
     }
-    if (subtask.assigned_employee_id) {
-      return String(subtask.assigned_employee_id) === uidStr;
-    }
-    if (Array.isArray(subtask.assigned_staff_ids) && subtask.assigned_staff_ids.some((id: any) => String(id) === uidStr)) {
-      return true;
+    if (!subtask.started_by_id && !subtask.started_by_name) {
+      if (subtask.assigned_employee_id) {
+        return String(subtask.assigned_employee_id) === uidStr;
+      }
+      if (Array.isArray(subtask.assigned_staff_ids) && subtask.assigned_staff_ids.some((id: any) => String(id) === uidStr)) {
+        return true;
+      }
     }
     return false;
   }, [currentUser, subtask.started_by_id, subtask.started_by_name, subtask.assigned_employee_id, subtask.assigned_staff_ids]);
 
-  const canStopSubtask = isStartedByMe || isPlatformAdmin;
+  const canStopSubtask = isStartedByMe || (isPlatformAdmin && !isClientView);
 
   // Collect images from uploads / image_url
   const subImages: Array<{ url: string; name?: string }> = [];

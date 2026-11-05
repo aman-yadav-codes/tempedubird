@@ -163,13 +163,7 @@ export function formatUploadStatusLabel(status?: string) {
 
 export function normalizeMediaUrl(url: string | null | undefined): string {
   if (!url) return "";
-  const trimmed = url.trim();
-  const uploadMatch = trimmed.match(/(?:https?:\/\/[^\/]+)?\/uploads\/(?:documents|media)\/(.+)$/i);
-  if (uploadMatch) {
-    const filename = uploadMatch[1];
-    return `https://media.143gb.com/t/crmtaskassets/${filename}`;
-  }
-  return trimmed;
+  return url.trim();
 }
 
 type Props = {
@@ -2024,13 +2018,6 @@ export function SubTaskUploadDialog({
                                                   src={normalizeMediaUrl(att.url)}
                                                   alt={att.name}
                                                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                                                  onError={(e) => {
-                                                    const src = (e.currentTarget as HTMLImageElement).src;
-                                                    const fName = src.split("/").pop()?.split("?")[0];
-                                                    if (fName && !src.includes("media.143gb.com")) {
-                                                      (e.currentTarget as HTMLImageElement).src = `https://media.143gb.com/t/crmtaskassets/${fName}`;
-                                                    }
-                                                  }}
                                                 />
                                                 <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                                   <Maximize2 className="w-4 h-4 text-white drop-shadow" />
@@ -2371,13 +2358,6 @@ export function SubTaskUploadDialog({
                                         src={normalizeMediaUrl(att.url)}
                                         alt={att.name}
                                         className="w-16 h-16 rounded-lg border object-cover group-hover/cimg:scale-105 transition-transform shadow-xs hover:ring-2 hover:ring-primary/40 cursor-pointer bg-muted/20"
-                                        onError={(e) => {
-                                          const src = (e.currentTarget as HTMLImageElement).src;
-                                          const fName = src.split("/").pop()?.split("?")[0];
-                                          if (fName && !src.includes("media.143gb.com")) {
-                                            (e.currentTarget as HTMLImageElement).src = `https://media.143gb.com/t/crmtaskassets/${fName}`;
-                                          }
-                                        }}
                                       />
                                     </a>
                                     <button
@@ -2654,13 +2634,6 @@ export function SubTaskUploadDialog({
                     src={normalizeMediaUrl(previewModalItem.url)}
                     alt={previewModalItem.name}
                     className="max-h-[65vh] max-w-full object-contain rounded-md shadow-md"
-                    onError={(e) => {
-                      const src = (e.currentTarget as HTMLImageElement).src;
-                      const fName = src.split("/").pop()?.split("?")[0];
-                      if (fName && !src.includes("media.143gb.com")) {
-                        (e.currentTarget as HTMLImageElement).src = `https://media.143gb.com/t/crmtaskassets/${fName}`;
-                      }
-                    }}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center p-8 gap-3">

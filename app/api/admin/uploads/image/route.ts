@@ -125,12 +125,18 @@ export async function POST(req: Request) {
             file_type: file.type,
           },
         });
-      } catch (openinaryErr) {
-        console.error("Openinary upload failed, falling back to local storage:", openinaryErr);
+      } catch (openinaryErr: any) {
+        console.error("Openinary upload failed:", openinaryErr);
+        const errMsg = openinaryErr?.message || "Failed to upload media to Openinary";
+        return NextResponse.json(
+          { error: `Upload to media service failed: ${errMsg}` },
+          { status: 502 }
+        );
       }
     }
 
-    // Fallback: Local storage
+    // Durable storage for document types not supported by Openinary (e.g. PDF/Office files)
+    // or when Openinary is not configured.
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const ext = path.extname(file.name) || ".png";

@@ -50,11 +50,13 @@ async function uploadAttachment(file: File): Promise<UploadedAttachment> {
         public_id: result.path,
         resource_type: file.type === "application/pdf" ? "raw" : "image",
       };
-    } catch (openinaryErr) {
-      console.error("Openinary complaint upload failed, falling back to local storage:", openinaryErr);
+    } catch (openinaryErr: any) {
+      console.error("Openinary complaint upload failed:", openinaryErr);
+      throw new Error(`Media upload failed: ${openinaryErr?.message || "Openinary upload error"}`);
     }
   }
 
+  // Durable storage for non-media document types or when Openinary is unconfigured
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);
   const ext = path.extname(file.name) || (file.type === "application/pdf" ? ".pdf" : ".png");
