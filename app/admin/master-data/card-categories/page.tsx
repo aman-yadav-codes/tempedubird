@@ -67,6 +67,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { useAuthStore } from "@/store";
+import { MasterCatalogNavTabs } from "@/components/admin/catalog/master-catalog-nav-tabs";
 
 type CardCategory = {
   id: number;
@@ -476,6 +477,7 @@ export default function CardCategoriesPage() {
 
   return (
     <div className="space-y-6">
+      <MasterCatalogNavTabs />
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>

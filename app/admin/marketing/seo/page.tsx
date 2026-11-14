@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { ImageUploadInput } from "@/components/shared/image-upload-input";
 import {
   Check,
   CheckCircle2,
@@ -1419,12 +1420,11 @@ export default function SeoManagementPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs text-zinc-300">Social Share Image URL (og:image)</Label>
-                  <Input
+                  <ImageUploadInput
+                    label="Social Share Image (og:image)"
                     value={formOgImage}
-                    onChange={(e) => setFormOgImage(e.target.value)}
-                    placeholder="https://... or {{thumbnail}}"
-                    className="bg-black/30 border-white/10 text-xs font-mono"
+                    onChange={setFormOgImage}
+                    folder="marketing/seo"
                   />
                 </div>
               </div>

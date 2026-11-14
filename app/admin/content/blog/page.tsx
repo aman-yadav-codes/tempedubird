@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { MasterCatalogNavTabs } from "@/components/admin/catalog/master-catalog-nav-tabs";
 import {
   FileText,
   Plus,
@@ -659,6 +660,7 @@ export default function AdminBlogStudioPage() {
 
   return (
     <div className="space-y-6">
+      <MasterCatalogNavTabs />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

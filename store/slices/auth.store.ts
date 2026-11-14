@@ -19,6 +19,8 @@ interface AuthState {
   updateUser: (partial: Partial<SafeUser>) => void;
   hasRole: (role: string) => boolean;
   hasPermission: (permission: string, institutionId?: number | null) => boolean;
+  disabledBusinessTypeRoutes: string[];
+  setDisabledBusinessTypeRoutes: (routes: string[]) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -26,14 +28,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   accessToken: null,
   isAuthenticated: false,
   isInitialized: false,
+  disabledBusinessTypeRoutes: [],
 
   setAuth: (user, accessToken) =>
     set({ user, accessToken, isAuthenticated: true }),
 
   clearAuth: () =>
-    set({ user: null, accessToken: null, isAuthenticated: false }),
+    set({ user: null, accessToken: null, isAuthenticated: false, disabledBusinessTypeRoutes: [] }),
 
   setInitialized: () => set({ isInitialized: true }),
+
+  setDisabledBusinessTypeRoutes: (disabledBusinessTypeRoutes) =>
+    set({ disabledBusinessTypeRoutes }),
 
   updateUser: (partial) => {
     const current = get().user;

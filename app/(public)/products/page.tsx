@@ -28,6 +28,9 @@ import {
   X,
   MessageSquare,
   Send,
+  ShoppingCart,
+  Plus,
+  Minus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -41,12 +44,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CourseEnquiryDialog } from "@/components/public/course-enquiry-dialog";
+import { OrderCheckoutDialog } from "@/components/checkout/order-checkout-dialog";
+import { CartDrawer } from "@/components/checkout/cart-drawer";
+import { CartFloatingButton } from "@/components/checkout/cart-floating-button";
 import { UniversalFeedbackDialog, type UniversalEntityTarget } from "@/components/public/universal-feedback-dialog";
 import { PortalBannerAd } from "@/components/public/portal-banner-ad";
 import { FavoriteButton } from "@/components/shared/favorite-button";
+import { useCartStore } from "@/store";
 
 export default function PublicProductsPage() {
+  const { addItem, updateQuantity, getItemQuantity } = useCartStore();
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [programs, setPrograms] = useState<any[]>([]);
@@ -458,6 +465,11 @@ export default function PublicProductsPage() {
                           <span className="text-base font-black text-foreground">
                             ₹{Number(prod.sale_price !== null && prod.sale_price !== undefined ? prod.sale_price : prod.price).toLocaleString("en-IN")}
                           </span>
+                          {(prod.unit || prod.unit_of_measurement) && (
+                            <span className="text-xs font-semibold text-muted-foreground">
+                              / {prod.unit || prod.unit_of_measurement}
+                            </span>
+                          )}
                           {prod.sale_price && Number(prod.sale_price) < Number(prod.price) && (
                             <span className="text-[11px] text-muted-foreground line-through">
                               ₹{Number(prod.price).toLocaleString("en-IN")}
@@ -489,14 +501,49 @@ export default function PublicProductsPage() {
                           <span>Reviews & Q&A</span>
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() => handleOrderInquiry(prod)}
-                          className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-primary text-xs font-bold text-primary-foreground transition hover:bg-primary/90 cursor-pointer shadow-xs"
-                        >
-                          <Send className="h-3.5 w-3.5" />
-                          <span>Enquiry</span>
-                        </button>
+                        {getItemQuantity(prod.id) > 0 ? (
+                          <div className="flex h-9 items-center justify-between border border-rose-300 dark:border-rose-900 rounded-md overflow-hidden bg-background px-1 shadow-2xs">
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(prod.id, getItemQuantity(prod.id) - 1)}
+                              className="size-7 flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground"
+                            >
+                              <Minus className="size-3" />
+                            </button>
+                            <span className="text-xs font-black text-rose-600">
+                              {getItemQuantity(prod.id)} in Cart
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(prod.id, getItemQuantity(prod.id) + 1)}
+                              className="size-7 flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground"
+                            >
+                              <Plus className="size-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const effPrice = Number(prod.sale_price !== null && prod.sale_price !== undefined ? prod.sale_price : prod.price) || 0;
+                              addItem({
+                                id: prod.id,
+                                name: prod.title,
+                                price: effPrice,
+                                regular_price: prod.price ? Number(prod.price) : null,
+                                image_url: prod.image_url,
+                                brand: prod.institution_name,
+                                business_id: prod.business_id,
+                                institution_id: prod.institution_id,
+                              }, 1);
+                              toast.success(`${prod.title} added to cart!`);
+                            }}
+                            className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-xs font-bold text-white transition cursor-pointer shadow-xs"
+                          >
+                            <ShoppingCart className="h-3.5 w-3.5" />
+                            <span>Add to Cart</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </Card>
@@ -664,9 +711,16 @@ export default function PublicProductsPage() {
                         {p.title}
                       </h4>
                       <div className="flex items-center justify-between mt-0.5">
-                        <span className="text-xs font-black text-foreground">
-                          ₹{Number(p.sale_price || p.price).toLocaleString("en-IN")}
-                        </span>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-xs font-black text-foreground">
+                            ₹{Number(p.sale_price || p.price).toLocaleString("en-IN")}
+                          </span>
+                          {((p as any).unit || (p as any).unit_of_measurement) && (
+                            <span className="text-[10px] text-muted-foreground font-semibold">
+                              / {(p as any).unit || (p as any).unit_of_measurement}
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[9px] text-emerald-600 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">
                           Popular
                         </span>
@@ -727,20 +781,20 @@ export default function PublicProductsPage() {
         </div>
       </main>
 
-      {/* Inquiry Dialog */}
+      {/* Product Order Checkout Dialog */}
       {selectedProduct && (
-        <CourseEnquiryDialog
+        <OrderCheckoutDialog
           open={enquiryOpen}
           onOpenChange={setEnquiryOpen}
-          course={{
+          item={{
             id: selectedProduct.id,
-            title: selectedProduct.title,
-            institute: selectedProduct.institution_name || "Official Store",
-            fee_amount: selectedProduct.sale_price || selectedProduct.price,
-            institutionId: selectedProduct.institution_id,
+            name: selectedProduct.title || selectedProduct.name,
             type: "product",
-            is_product: true,
+            price: selectedProduct.sale_price || selectedProduct.price,
+            provider_name: selectedProduct.institution_name || "Official Store",
+            institution_id: selectedProduct.institution_id,
           }}
+          country="IN"
         />
       )}
 
@@ -750,6 +804,10 @@ export default function PublicProductsPage() {
         onOpenChange={setFeedbackOpen}
         target={feedbackTarget}
       />
+
+      {/* Cart Drawer & Floating Cart Trigger */}
+      <CartDrawer />
+      <CartFloatingButton />
     </div>
   );
 }

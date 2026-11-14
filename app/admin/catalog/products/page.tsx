@@ -1,0 +1,1617 @@
+"use client";
+
+import { useEffect, useState, useMemo } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Package,
+  Plus,
+  Search,
+  Tag,
+  IndianRupee,
+  DollarSign,
+  Edit2,
+  Trash2,
+  Loader2,
+  Image as ImageIcon,
+  CheckCircle2,
+  XCircle,
+  ExternalLink,
+  Layers,
+  Sparkles,
+  Calendar,
+  Clock,
+  Barcode,
+  Scale,
+  FolderTree,
+  Eye,
+  SlidersHorizontal,
+  Upload,
+  X,
+  RefreshCw,
+  Globe,
+  AlertCircle,
+} from "lucide-react";
+import { toast } from "sonner";
+import { useAuthStore } from "@/store";
+import { CATALOG_AVAILABLE_COUNTRIES, getCatalogCountryMeta } from "@/lib/config/country-config";
+import { MasterCatalogNavTabs } from "@/components/admin/catalog/master-catalog-nav-tabs";
+
+interface MasterProduct {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  main_category_id: number | null;
+  main_category_name?: string | null;
+  subcategory_id: number | null;
+  subcategory_name?: string | null;
+  category_id?: number | null;
+  category_name?: string | null;
+  default_image_url: string | null;
+  additional_images: string[];
+  brand: string | null;
+  model: string | null;
+  sku: string | null;
+  sku_prefix?: string | null;
+  unit_of_measurement: string;
+  attributes: Record<string, string>;
+  synonyms: string[];
+  countries?: string[];
+  suggested_price: number | string;
+  suggested_price_inr: number | string;
+  suggested_price_usd: number | string;
+  suggested_min_price?: number | string;
+  suggested_max_price?: number | string;
+  country_pricing?: Record<string, any>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface CategoryOption {
+  id: number;
+  name: string;
+  slug: string;
+  parent_id: number | null;
+  category_type: string;
+}
+
+interface AttributeRow {
+  key: string;
+  value: string;
+}
+
+const COMMON_UOM_OPTIONS = [
+  "Piece",
+  "Box",
+  "Kg",
+  "Gram",
+  "Liter",
+  "Milliliter",
+  "Meter",
+  "Centimeter",
+  "Pack",
+  "Set",
+  "Pair",
+  "Dozen",
+  "Roll",
+  "Carton",
+  "Unit",
+];
+
+export default function MasterProductsPage() {
+  const { accessToken } = useAuthStore();
+  const [products, setProducts] = useState<MasterProduct[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [countryFilter, setCountryFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  // Dialog State
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<MasterProduct | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Upload States
+  const [uploadingDefaultImage, setUploadingDefaultImage] = useState(false);
+  const [uploadingAdditional, setUploadingAdditional] = useState(false);
+
+  // View Details Drawer
+  const [detailProduct, setDetailProduct] = useState<MasterProduct | null>(null);
+
+  // Form Fields
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [description, setDescription] = useState("");
+  const [mainCategoryId, setMainCategoryId] = useState("");
+  const [subcategoryId, setSubcategoryId] = useState("");
+  const [defaultImageUrl, setDefaultImageUrl] = useState("");
+  const [additionalImagesText, setAdditionalImagesText] = useState("");
+  const [brand, setBrand] = useState("");
+  const [model, setModel] = useState("");
+  const [sku, setSku] = useState("");
+  const [unitOfMeasurement, setUnitOfMeasurement] = useState("Piece");
+  const [synonymsText, setSynonymsText] = useState("");
+  const [countries, setCountries] = useState<string[]>(["IN", "US"]);
+  const [suggestedPrice, setSuggestedPrice] = useState("");
+  const [suggestedPriceInr, setSuggestedPriceInr] = useState("");
+  const [suggestedPriceUsd, setSuggestedPriceUsd] = useState("");
+  const [suggestedMinPrice, setSuggestedMinPrice] = useState("");
+  const [suggestedMaxPrice, setSuggestedMaxPrice] = useState("");
+  const [suggestedMinPriceInr, setSuggestedMinPriceInr] = useState("");
+  const [suggestedMaxPriceInr, setSuggestedMaxPriceInr] = useState("");
+  const [suggestedMinPriceUsd, setSuggestedMinPriceUsd] = useState("");
+  const [suggestedMaxPriceUsd, setSuggestedMaxPriceUsd] = useState("");
+  const [countryPrices, setCountryPrices] = useState<Record<string, { price: string; min_price: string; max_price: string }>>({});
+  const [isActive, setIsActive] = useState(true);
+  const [attributeRows, setAttributeRows] = useState<AttributeRow[]>([{ key: "", value: "" }]);
+
+  const updateCountryPriceField = (code: string, field: "price" | "min_price" | "max_price", val: string) => {
+    setCountryPrices((prev) => ({
+      ...prev,
+      [code]: {
+        ...(prev[code] || { price: "", min_price: "", max_price: "" }),
+        [field]: val,
+      },
+    }));
+    if (code === "IN") {
+      if (field === "price") { setSuggestedPriceInr(val); setSuggestedPrice(val); }
+      if (field === "min_price") { setSuggestedMinPriceInr(val); setSuggestedMinPrice(val); }
+      if (field === "max_price") { setSuggestedMaxPriceInr(val); setSuggestedMaxPrice(val); }
+    } else if (code === "US") {
+      if (field === "price") setSuggestedPriceUsd(val);
+      if (field === "min_price") setSuggestedMinPriceUsd(val);
+      if (field === "max_price") setSuggestedMaxPriceUsd(val);
+    }
+  };
+
+  const toggleCountry = (code: string) => {
+    if (countries.includes(code)) {
+      if (countries.length === 1) {
+        toast.error("At least one country must be selected");
+        return;
+      }
+      setCountries(countries.filter((c) => c !== code));
+    } else {
+      setCountries([...countries, code]);
+    }
+  };
+
+  // Derived category lists
+  const mainCategories = useMemo(() => {
+    return categories.filter((c) => !c.parent_id);
+  }, [categories]);
+
+  const availableSubcategories = useMemo(() => {
+    if (!mainCategoryId) return [];
+    const mainIdNum = Number(mainCategoryId);
+    return categories.filter((c) => c.parent_id === mainIdNum);
+  }, [categories, mainCategoryId]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [prodRes, catRes] = await Promise.all([
+        fetch(`/api/admin/catalog/products`, {
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+        }),
+        fetch(`/api/admin/categories?type=product`, {
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+        }),
+      ]);
+
+      const prodData = await prodRes.json();
+      if (prodRes.ok && prodData.products) {
+        setProducts(prodData.products);
+      }
+
+      const catData = await catRes.json();
+      if (catRes.ok && catData.data) {
+        setCategories(catData.data);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to load master products");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [accessToken]);
+
+  const openCreateDialog = () => {
+    setEditingProduct(null);
+    setName("");
+    setSlug("");
+    setDescription("");
+    setMainCategoryId("");
+    setSubcategoryId("");
+    setDefaultImageUrl("");
+    setAdditionalImagesText("");
+    setBrand("");
+    setModel("");
+    setSku("");
+    setUnitOfMeasurement("Piece");
+    setSynonymsText("");
+    setCountries(["IN", "US"]);
+    setSuggestedPrice("");
+    setSuggestedPriceInr("");
+    setSuggestedPriceUsd("");
+    setSuggestedMinPrice("");
+    setSuggestedMaxPrice("");
+    setSuggestedMinPriceInr("");
+    setSuggestedMaxPriceInr("");
+    setSuggestedMinPriceUsd("");
+    setSuggestedMaxPriceUsd("");
+    setCountryPrices({
+      IN: { price: "", min_price: "", max_price: "" },
+      US: { price: "", min_price: "", max_price: "" },
+    });
+    setIsActive(true);
+    setAttributeRows([{ key: "", value: "" }]);
+    setDialogOpen(true);
+  };
+
+  const openEditDialog = (prod: MasterProduct) => {
+    setEditingProduct(prod);
+    setName(prod.name || "");
+    setSlug(prod.slug || "");
+    setDescription(prod.description || "");
+    setMainCategoryId(prod.main_category_id ? String(prod.main_category_id) : (prod.category_id ? String(prod.category_id) : ""));
+    setSubcategoryId(prod.subcategory_id ? String(prod.subcategory_id) : "");
+    setDefaultImageUrl(prod.default_image_url || "");
+    setAdditionalImagesText(Array.isArray(prod.additional_images) ? prod.additional_images.join("\n") : "");
+    setBrand(prod.brand || "");
+    setModel(prod.model || "");
+    setSku(prod.sku || prod.sku_prefix || "");
+    setUnitOfMeasurement(prod.unit_of_measurement || "Piece");
+    setSynonymsText(Array.isArray(prod.synonyms) ? prod.synonyms.join(", ") : "");
+    const activeCountries = Array.isArray(prod.countries) && prod.countries.length > 0 ? prod.countries : ["IN", "US"];
+    setCountries(activeCountries);
+
+    const cp = (prod as any).country_pricing || {};
+    const loadedCp: Record<string, { price: string; min_price: string; max_price: string }> = {};
+    activeCountries.forEach((cCode) => {
+      const data = cp[cCode] || cp[cCode.toUpperCase()] || cp[cCode.toLowerCase()] || {};
+      loadedCp[cCode] = {
+        price: data.price !== undefined && data.price !== null ? String(data.price) : (cCode === "IN" && prod.suggested_price_inr ? String(prod.suggested_price_inr) : cCode === "US" && prod.suggested_price_usd ? String(prod.suggested_price_usd) : ""),
+        min_price: data.min_price !== undefined && data.min_price !== null ? String(data.min_price) : "",
+        max_price: data.max_price !== undefined && data.max_price !== null ? String(data.max_price) : "",
+      };
+    });
+    setCountryPrices(loadedCp);
+
+    const inCp = cp.IN || cp.in || {};
+    const usCp = cp.US || cp.us || {};
+
+    const baseInr = prod.suggested_price_inr !== undefined && prod.suggested_price_inr !== null ? String(prod.suggested_price_inr) : (inCp.price ? String(inCp.price) : "");
+    const baseUsd = prod.suggested_price_usd !== undefined && prod.suggested_price_usd !== null ? String(prod.suggested_price_usd) : (usCp.price ? String(usCp.price) : "");
+
+    setSuggestedPrice(prod.suggested_price !== undefined ? String(prod.suggested_price) : "");
+    setSuggestedPriceInr(baseInr);
+    setSuggestedPriceUsd(baseUsd);
+    setSuggestedMinPrice((prod as any).suggested_min_price !== undefined ? String((prod as any).suggested_min_price) : "");
+    setSuggestedMaxPrice((prod as any).suggested_max_price !== undefined ? String((prod as any).suggested_max_price) : "");
+
+    setSuggestedMinPriceInr(inCp.min_price ? String(inCp.min_price) : ((prod as any).suggested_min_price !== undefined ? String((prod as any).suggested_min_price) : ""));
+    setSuggestedMaxPriceInr(inCp.max_price ? String(inCp.max_price) : ((prod as any).suggested_max_price !== undefined ? String((prod as any).suggested_max_price) : ""));
+    setSuggestedMinPriceUsd(usCp.min_price ? String(usCp.min_price) : "");
+    setSuggestedMaxPriceUsd(usCp.max_price ? String(usCp.max_price) : "");
+
+    setIsActive(prod.is_active !== undefined ? prod.is_active : true);
+
+    if (prod.attributes && typeof prod.attributes === "object" && Object.keys(prod.attributes).length > 0) {
+      setAttributeRows(
+        Object.entries(prod.attributes).map(([key, value]) => ({
+          key,
+          value: String(value),
+        }))
+      );
+    } else {
+      setAttributeRows([{ key: "", value: "" }]);
+    }
+
+    setDialogOpen(true);
+  };
+
+  const handleNameChange = (val: string) => {
+    setName(val);
+    if (!editingProduct && (!slug || slug === name.toLowerCase().replace(/[^a-z0-9]+/g, "-"))) {
+      setSlug(val.toLowerCase().replace(/[^a-z0-9]+/g, "-"));
+    }
+  };
+
+  const handleBasePriceChange = (val: string) => {
+    setSuggestedPrice(val);
+    if (!suggestedPriceInr || suggestedPriceInr === suggestedPrice) {
+      setSuggestedPriceInr(val);
+    }
+    const num = Number(val);
+    if (!isNaN(num) && num > 0) {
+      setSuggestedPriceUsd((num / 85).toFixed(2));
+    }
+  };
+
+  const addAttributeRow = () => {
+    setAttributeRows([...attributeRows, { key: "", value: "" }]);
+  };
+
+  const removeAttributeRow = (idx: number) => {
+    setAttributeRows(attributeRows.filter((_, i) => i !== idx));
+  };
+
+  const updateAttributeRow = (idx: number, field: "key" | "value", val: string) => {
+    const updated = [...attributeRows];
+    updated[idx][field] = val;
+    setAttributeRows(updated);
+  };
+
+  // Image Upload Handlers
+  const handleUploadDefaultImage = async (file: File) => {
+    if (!file) return;
+    setUploadingDefaultImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "catalog/products");
+
+      const res = await fetch("/api/admin/uploads/image", {
+        method: "POST",
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+        body: formData,
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to upload image");
+
+      const uploadedUrl = result.data?.url || result.url;
+      if (uploadedUrl) {
+        setDefaultImageUrl(uploadedUrl);
+        toast.success("Default product image uploaded successfully");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload default image");
+    } finally {
+      setUploadingDefaultImage(false);
+    }
+  };
+
+  const handleUploadAdditionalImages = async (files: FileList) => {
+    if (!files || files.length === 0) return;
+    setUploadingAdditional(true);
+    try {
+      const uploadPromises = Array.from(files).map(async (file) => {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("folder", "catalog/products/gallery");
+        const res = await fetch("/api/admin/uploads/image", {
+          method: "POST",
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+          body: formData,
+        });
+        const data = await res.json();
+        return data.data?.url || data.url;
+      });
+
+      const urls = await Promise.all(uploadPromises);
+      const validUrls = urls.filter(Boolean);
+      if (validUrls.length > 0) {
+        setAdditionalImagesText((prev) => (prev ? `${prev}\n${validUrls.join("\n")}` : validUrls.join("\n")));
+        toast.success(`${validUrls.length} image(s) uploaded to product gallery`);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload gallery images");
+    } finally {
+      setUploadingAdditional(false);
+    }
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      toast.error("Please enter a product name");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const attributesObj: Record<string, string> = {};
+      attributeRows.forEach((row) => {
+        if (row.key.trim() && row.value.trim()) {
+          attributesObj[row.key.trim()] = row.value.trim();
+        }
+      });
+
+      const additionalImages = additionalImagesText
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      const synonyms = synonymsText
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      const countryPricing: Record<string, any> = {};
+      countries.forEach((cCode) => {
+        const meta = getCatalogCountryMeta(cCode);
+        const cpVal = countryPrices[cCode] || { price: "", min_price: "", max_price: "" };
+        const priceVal = cpVal.price ? Number(cpVal.price) : (cCode === "IN" && suggestedPriceInr ? Number(suggestedPriceInr) : cCode === "US" && suggestedPriceUsd ? Number(suggestedPriceUsd) : 0);
+        const minVal = cpVal.min_price ? Number(cpVal.min_price) : (cCode === "IN" && suggestedMinPriceInr ? Number(suggestedMinPriceInr) : null);
+        const maxVal = cpVal.max_price ? Number(cpVal.max_price) : (cCode === "IN" && suggestedMaxPriceInr ? Number(suggestedMaxPriceInr) : null);
+        countryPricing[cCode] = {
+          price: priceVal,
+          min_price: minVal,
+          max_price: maxVal,
+          currency: meta.currencyCode,
+          symbol: meta.currencySymbol,
+        };
+      });
+
+      const inPrice = countryPricing["IN"]?.price || (suggestedPriceInr ? Number(suggestedPriceInr) : (suggestedPrice ? Number(suggestedPrice) : 0));
+      const usPrice = countryPricing["US"]?.price || (suggestedPriceUsd ? Number(suggestedPriceUsd) : (inPrice > 0 ? Number((inPrice / 85).toFixed(2)) : 0));
+
+      const payload = {
+        name: name.trim(),
+        slug: slug.trim() || undefined,
+        description: description.trim() || null,
+        main_category_id: mainCategoryId ? Number(mainCategoryId) : null,
+        subcategory_id: subcategoryId ? Number(subcategoryId) : null,
+        category_id: subcategoryId ? Number(subcategoryId) : (mainCategoryId ? Number(mainCategoryId) : null),
+        default_image_url: defaultImageUrl.trim() || null,
+        additional_images: additionalImages,
+        brand: brand.trim() || null,
+        model: model.trim() || null,
+        sku: sku.trim() || null,
+        unit_of_measurement: unitOfMeasurement.trim() || "Piece",
+        attributes: attributesObj,
+        synonyms: synonyms,
+        countries: countries,
+        suggested_price: inPrice || (usPrice * 85),
+        suggested_price_inr: inPrice,
+        suggested_price_usd: usPrice,
+        suggested_min_price: countryPricing["IN"]?.min_price || (suggestedMinPriceInr ? Number(suggestedMinPriceInr) : null),
+        suggested_max_price: countryPricing["IN"]?.max_price || (suggestedMaxPriceInr ? Number(suggestedMaxPriceInr) : null),
+        country_pricing: countryPricing,
+        is_active: isActive,
+      };
+
+      const url = "/api/admin/catalog/products";
+      const method = editingProduct ? "PATCH" : "POST";
+      const body = editingProduct ? { ...payload, id: editingProduct.id } : payload;
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save product");
+
+      toast.success(editingProduct ? "Master product updated successfully" : "Master product created successfully");
+      setDialogOpen(false);
+      loadData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save product");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this master product?")) return;
+    try {
+      const res = await fetch(`/api/admin/catalog/products?id=${id}`, {
+        method: "DELETE",
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete product");
+      }
+      toast.success("Product deleted successfully");
+      loadData();
+    } catch (err: any) {
+      toast.error(err.message || "Error deleting product");
+    }
+  };
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      const matchesSearch =
+        !search ||
+        p.name.toLowerCase().includes(search.toLowerCase()) ||
+        p.description?.toLowerCase().includes(search.toLowerCase()) ||
+        p.brand?.toLowerCase().includes(search.toLowerCase()) ||
+        p.model?.toLowerCase().includes(search.toLowerCase()) ||
+        p.sku?.toLowerCase().includes(search.toLowerCase()) ||
+        p.synonyms?.some((s) => s.toLowerCase().includes(search.toLowerCase()));
+
+      const matchesCategory =
+        categoryFilter === "all" ||
+        String(p.main_category_id) === categoryFilter ||
+        String(p.subcategory_id) === categoryFilter ||
+        String(p.category_id) === categoryFilter;
+
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" && p.is_active) ||
+        (statusFilter === "inactive" && !p.is_active);
+
+      const matchesCountry =
+        countryFilter === "all" ||
+        (Array.isArray(p.countries) && p.countries.includes(countryFilter));
+
+      return matchesSearch && matchesCategory && matchesStatus && matchesCountry;
+    });
+  }, [products, search, categoryFilter, countryFilter, statusFilter]);
+
+  return (
+    <div className="space-y-6">
+      <MasterCatalogNavTabs />
+
+      {/* HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
+              <Package className="size-5" />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground">
+                Master Product Catalog
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Manage default product imagery, hierarchy, brands, models, SKUs, attributes, and country pricing benchmarks.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <Button onClick={openCreateDialog} className="gap-1.5 text-xs font-bold shadow-sm">
+          <Plus className="size-4" /> Add Master Product
+        </Button>
+      </div>
+
+      {/* FILTER BAR */}
+      <Card className="border border-border/60 shadow-xs">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="relative flex-1 w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                placeholder="Search products by name, description, brand, model, SKU, or synonyms..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 h-9 text-xs"
+              />
+            </div>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-full sm:w-[200px] h-9 text-xs">
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {mainCategories.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.name} (Main)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={countryFilter} onValueChange={setCountryFilter}>
+              <SelectTrigger className="w-full sm:w-[130px] h-9 text-xs">
+                <SelectValue placeholder="Country" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Countries</SelectItem>
+                <SelectItem value="IN">India (IN)</SelectItem>
+                <SelectItem value="US">USA (US)</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full sm:w-[140px] h-9 text-xs">
+                <SelectValue placeholder="All Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active Only</SelectItem>
+                <SelectItem value="inactive">Inactive Only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* PRODUCTS TABLE */}
+      <Card className="border border-border/60 shadow-xs">
+        <CardHeader className="py-3 px-4 border-b">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <span>Master Products</span>
+              <Badge variant="secondary" className="text-[10px] font-bold">
+                {filteredProducts.length} items
+              </Badge>
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="flex items-center justify-center p-12 text-muted-foreground gap-2">
+              <Loader2 className="size-5 animate-spin" />
+              <span className="text-xs">Loading master products...</span>
+            </div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="text-center p-12 text-muted-foreground space-y-2">
+              <Package className="size-10 mx-auto text-muted-foreground/40" />
+              <p className="text-xs font-semibold">No master products found</p>
+              <p className="text-[11px]">Click "Add Master Product" to create your first catalog item.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/30">
+                    <TableHead className="w-[70px]">Image</TableHead>
+                    <TableHead>Product Name & Slug</TableHead>
+                    <TableHead>Category Hierarchy</TableHead>
+                    <TableHead>Brand & Model</TableHead>
+                    <TableHead>SKU & Unit</TableHead>
+                    <TableHead>Countries</TableHead>
+                    <TableHead>Synonyms</TableHead>
+                    <TableHead className="text-right">India Suggested</TableHead>
+                    <TableHead className="text-right">USA Suggested</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredProducts.map((p) => (
+                    <TableRow key={p.id} className="hover:bg-muted/40 transition-colors">
+                      <TableCell>
+                        {p.default_image_url ? (
+                          <img
+                            src={p.default_image_url}
+                            alt={p.name}
+                            className="size-10 rounded-lg object-cover border"
+                            onError={(e) => {
+                              (e.target as any).src = "https://placehold.co/80x80/f1f5f9/64748b?text=Product";
+                            }}
+                          />
+                        ) : (
+                          <div className="size-10 rounded-lg bg-muted flex items-center justify-center text-muted-foreground border">
+                            <ImageIcon className="size-4" />
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-semibold text-xs text-foreground">
+                        <div>{p.name}</div>
+                        <div className="text-[10px] text-muted-foreground font-mono">
+                          /{p.slug}
+                        </div>
+                        {p.description && (
+                          <div className="text-[10px] text-muted-foreground line-clamp-1 max-w-xs font-normal mt-0.5">
+                            {p.description}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <div className="space-y-0.5">
+                          {p.main_category_name ? (
+                            <Badge variant="outline" className="text-[10px] bg-primary/5">
+                              {p.main_category_name}
+                            </Badge>
+                          ) : p.category_name ? (
+                            <Badge variant="outline" className="text-[10px]">
+                              {p.category_name}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-[10px]">—</span>
+                          )}
+                          {p.subcategory_name && (
+                            <div>
+                              <span className="text-[9px] text-muted-foreground">↳ </span>
+                              <Badge variant="secondary" className="text-[9px]">
+                                {p.subcategory_name}
+                              </Badge>
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {p.brand ? (
+                          <div className="font-medium text-foreground">{p.brand}</div>
+                        ) : (
+                          <span className="text-muted-foreground text-[10px]">—</span>
+                        )}
+                        {p.model && (
+                          <div className="text-[10px] text-muted-foreground">Mod: {p.model}</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <div className="font-mono text-[11px] text-foreground font-medium">
+                          {p.sku || "—"}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                          <Scale className="size-3" /> {p.unit_of_measurement || "Piece"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <div className="flex flex-wrap gap-1">
+                          {(p.countries && p.countries.length > 0 ? p.countries : ["IN", "US"]).map((code) => (
+                            <Badge
+                              key={code}
+                              variant="outline"
+                              className={`text-[9px] font-bold ${
+                                code === "IN"
+                                  ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20"
+                                  : "bg-blue-500/10 text-blue-700 border-blue-500/20"
+                              }`}
+                            >
+                              {code === "IN" ? "🇮🇳 IN" : "🇺🇸 US"}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-[180px]">
+                        <div className="flex flex-wrap gap-1">
+                          {p.synonyms && p.synonyms.length > 0 ? (
+                            p.synonyms.slice(0, 2).map((syn, idx) => (
+                              <Badge key={idx} variant="secondary" className="text-[9px] font-normal">
+                                {syn}
+                              </Badge>
+                            ))
+                          ) : (
+                            <span className="text-muted-foreground text-[10px]">—</span>
+                          )}
+                          {p.synonyms && p.synonyms.length > 2 && (
+                            <span className="text-[9px] text-muted-foreground font-semibold">
+                              +{p.synonyms.length - 2}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right text-xs font-bold text-foreground">
+                        <div>
+                          <span>₹ {Number(p.suggested_price_inr || p.suggested_price || 0).toLocaleString("en-IN")}</span>
+                          <span className="text-[10px] text-muted-foreground font-normal block">/ {p.unit_of_measurement || "Piece"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right text-xs font-bold text-foreground">
+                        <div>
+                          <span>$ {Number(p.suggested_price_usd || 0).toFixed(2)}</span>
+                          <span className="text-[10px] text-muted-foreground font-normal block">/ {p.unit_of_measurement || "Piece"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {p.is_active ? (
+                          <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-[10px] gap-1">
+                            <CheckCircle2 className="size-3" /> Active
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground text-[10px] gap-1">
+                            <XCircle className="size-3" /> Inactive
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 text-muted-foreground hover:text-foreground"
+                            onClick={() => setDetailProduct(p)}
+                            title="View Product Details"
+                          >
+                            <Eye className="size-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 text-primary hover:text-primary"
+                            onClick={() => openEditDialog(p)}
+                            title="Edit Product"
+                          >
+                            <Edit2 className="size-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 text-destructive hover:text-destructive"
+                            onClick={() => handleDelete(p.id)}
+                            title="Delete Product"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* CREATE / EDIT DIALOG (Full 5.1 Requirements) */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black flex items-center gap-2">
+              <Package className="size-5 text-primary" />
+              <span>{editingProduct ? "Edit Master Product" : "Create Master Product"}</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Configure master product fields, default imagery, suggested country prices, and specifications.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSave} className="space-y-4">
+            <Tabs defaultValue="basic" className="w-full">
+              <TabsList className="grid grid-cols-4 h-9">
+                <TabsTrigger value="basic" className="text-xs">Basic Info</TabsTrigger>
+                <TabsTrigger value="category" className="text-xs">Category & Synonyms</TabsTrigger>
+                <TabsTrigger value="media-attrs" className="text-xs">Media & Countries</TabsTrigger>
+                <TabsTrigger value="pricing" className="text-xs">Pricing & SKU</TabsTrigger>
+              </TabsList>
+
+              {/* TAB 1: BASIC INFO */}
+              <TabsContent value="basic" className="space-y-3 pt-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">Product Name *</Label>
+                    <Input
+                      placeholder="e.g. Premium Cotton Polo T-Shirt"
+                      value={name}
+                      onChange={(e) => handleNameChange(e.target.value)}
+                      required
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">URL Slug *</Label>
+                    <Input
+                      placeholder="premium-cotton-polo-t-shirt"
+                      value={slug}
+                      onChange={(e) => setSlug(e.target.value)}
+                      className="h-8 text-xs font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium">Brand (Optional)</Label>
+                    <Input
+                      placeholder="e.g. Nike, Apple, Samsung"
+                      value={brand}
+                      onChange={(e) => setBrand(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium">Model (Optional)</Label>
+                    <Input
+                      placeholder="e.g. AirMax 2026, Pro Max"
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold">Product Description</Label>
+                  <Textarea
+                    placeholder="Provide a comprehensive product description, specifications, and overview..."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={3}
+                    className="text-xs"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/20">
+                  <div className="space-y-0.5">
+                    <Label className="text-xs font-bold">Active / Inactive Status</Label>
+                    <p className="text-[11px] text-muted-foreground">
+                      Active products can be discovered by customers and selected into business inventory.
+                    </p>
+                  </div>
+                  <Switch checked={isActive} onCheckedChange={setIsActive} />
+                </div>
+              </TabsContent>
+
+              {/* TAB 2: CATEGORY & SYNONYMS */}
+              <TabsContent value="category" className="space-y-3 pt-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">Main Category</Label>
+                    <Select value={mainCategoryId} onValueChange={(val) => {
+                      setMainCategoryId(val);
+                      setSubcategoryId("");
+                    }}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Select Main Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {mainCategories.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">Subcategory</Label>
+                    <Select
+                      value={subcategoryId}
+                      onValueChange={setSubcategoryId}
+                      disabled={!mainCategoryId || availableSubcategories.length === 0}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder={!mainCategoryId ? "Select Main Category First" : (availableSubcategories.length === 0 ? "No Subcategories Found" : "Select Subcategory")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableSubcategories.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold">Product Synonyms (Search Keywords)</Label>
+                  <Input
+                    placeholder="e.g. tee, collar shirt, sportswear, polo (comma-separated)"
+                    value={synonymsText}
+                    onChange={(e) => setSynonymsText(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Comma-separated alternate names and synonyms to enhance discovery when customers search for this item.
+                  </p>
+                </div>
+              </TabsContent>
+
+              {/* TAB 3: MEDIA & COUNTRIES (Moved before Pricing & SKU) */}
+              <TabsContent value="media-attrs" className="space-y-4 pt-3">
+                {/* DEFAULT IMAGE UPLOAD & MANAGEMENT */}
+                <div className="p-3.5 border rounded-xl bg-muted/10 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-xs font-bold flex items-center gap-1.5">
+                        <ImageIcon className="size-3.5 text-primary" /> Default Product Image
+                      </Label>
+                      <p className="text-[10px] text-muted-foreground">
+                        Administrators can upload, replace, and manage the official default product image.
+                      </p>
+                    </div>
+                    {defaultImageUrl && (
+                      <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-[10px] gap-1">
+                        <CheckCircle2 className="size-3" /> Default Set
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="flex items-start gap-3.5">
+                    {defaultImageUrl ? (
+                      <div className="relative group size-20 rounded-xl border overflow-hidden shrink-0 bg-muted shadow-xs">
+                        <img
+                          src={defaultImageUrl}
+                          alt="Default preview"
+                          className="size-full object-cover"
+                          onError={(e) => {
+                            (e.target as any).src = "https://placehold.co/100x100/f1f5f9/64748b?text=Default";
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setDefaultImageUrl("")}
+                          className="absolute top-1 right-1 size-5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                          title="Remove default image"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="size-20 rounded-xl border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center text-muted-foreground shrink-0 bg-muted/20">
+                        <ImageIcon className="size-6 text-muted-foreground/50" />
+                        <span className="text-[9px] mt-1 font-semibold">No Image</span>
+                      </div>
+                    )}
+
+                    <div className="flex-1 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-xs">
+                          {uploadingDefaultImage ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Upload className="size-3.5" />
+                          )}
+                          <span>{defaultImageUrl ? "Replace Default Image" : "Upload Default Image"}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            disabled={uploadingDefaultImage}
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) handleUploadDefaultImage(f);
+                            }}
+                          />
+                        </label>
+
+                        {defaultImageUrl && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDefaultImageUrl("")}
+                            className="h-7 text-xs text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="size-3 mr-1" /> Remove Image
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="space-y-1">
+                        <Input
+                          placeholder="Or paste direct image URL (https://...)"
+                          value={defaultImageUrl}
+                          onChange={(e) => setDefaultImageUrl(e.target.value)}
+                          className="h-7 text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ADDITIONAL GALLERY IMAGES */}
+                <div className="p-3.5 border rounded-xl bg-muted/10 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-xs font-bold flex items-center gap-1.5">
+                        <Layers className="size-3.5 text-primary" /> Additional Product Images
+                      </Label>
+                      <p className="text-[10px] text-muted-foreground">
+                        Upload or paste multiple product gallery photos for different angles and packaging.
+                      </p>
+                    </div>
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border border-border bg-background hover:bg-muted transition-colors shadow-xs">
+                      {uploadingAdditional ? (
+                        <Loader2 className="size-3 animate-spin" />
+                      ) : (
+                        <Plus className="size-3" />
+                      )}
+                      <span>Upload Gallery Photos</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        disabled={uploadingAdditional}
+                        onChange={(e) => {
+                          if (e.target.files) handleUploadAdditionalImages(e.target.files);
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  {/* GALLERY THUMBNAILS */}
+                  {additionalImagesText.split("\n").filter((s) => s.trim()).length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {additionalImagesText
+                        .split("\n")
+                        .map((s) => s.trim())
+                        .filter(Boolean)
+                        .map((imgUrl, idx) => (
+                          <div key={idx} className="relative group size-14 rounded-lg border overflow-hidden shrink-0 bg-muted">
+                            <img
+                              src={imgUrl}
+                              alt={`Gallery ${idx + 1}`}
+                              className="size-full object-cover"
+                              onError={(e) => {
+                                (e.target as any).src = "https://placehold.co/80x80/f1f5f9/64748b?text=Img";
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const list = additionalImagesText
+                                  .split("\n")
+                                  .map((s) => s.trim())
+                                  .filter(Boolean);
+                                list.splice(idx, 1);
+                                setAdditionalImagesText(list.join("\n"));
+                              }}
+                              className="absolute top-0.5 right-0.5 size-4 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Delete this image"
+                            >
+                              <X className="size-2.5" />
+                            </button>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+
+                  <Textarea
+                    placeholder="One image URL per line (paste or upload above)..."
+                    value={additionalImagesText}
+                    onChange={(e) => setAdditionalImagesText(e.target.value)}
+                    rows={2}
+                    className="text-xs font-mono"
+                  />
+                </div>
+
+                {/* COUNTRY AVAILABILITY */}
+                <div className="p-3.5 border rounded-xl bg-muted/10 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-xs font-bold flex items-center gap-1.5">
+                        <Globe className="size-3.5 text-primary" /> Country Availability
+                      </Label>
+                      <p className="text-[10px] text-muted-foreground">
+                        Select countries where this master product catalog entry is active and discoverable.
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="text-xs font-bold">
+                      {countries.length} Selected
+                    </Badge>
+                  </div>
+
+                  {/* Selected Country Badges */}
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {countries.map((cCode) => {
+                      const meta = getCatalogCountryMeta(cCode);
+                      return (
+                        <Badge
+                          key={cCode}
+                          variant="secondary"
+                          className="pl-2 pr-1.5 py-1 text-xs font-medium flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20"
+                        >
+                          <span className="text-sm">{meta.flag}</span>
+                          <span>{meta.name} ({meta.currencyCode} {meta.currencySymbol})</span>
+                          <button
+                            type="button"
+                            onClick={() => toggleCountry(cCode)}
+                            className="hover:bg-primary/20 rounded-full p-0.5 transition-colors"
+                            title={`Remove ${meta.name}`}
+                          >
+                            <X className="size-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                  </div>
+
+                  {/* Quick Select Grid */}
+                  <div className="pt-2 border-t">
+                    <Label className="text-[11px] font-semibold text-muted-foreground block mb-2">
+                      Available Countries (Click to toggle)
+                    </Label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {CATALOG_AVAILABLE_COUNTRIES.map((c) => {
+                        const isSelected = countries.includes(c.code);
+                        return (
+                          <button
+                            type="button"
+                            key={c.code}
+                            onClick={() => toggleCountry(c.code)}
+                            className={`p-2 rounded-lg border text-left text-xs font-medium transition-all flex items-center justify-between ${
+                              isSelected
+                                ? "bg-primary/10 border-primary text-primary font-bold shadow-xs"
+                                : "bg-background border-border text-foreground hover:bg-muted/50"
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span className="text-base">{c.flag}</span>
+                              <span className="truncate">{c.name}</span>
+                            </div>
+                            <span className="text-[10px] opacity-70 shrink-0 font-mono">
+                              {c.currencySymbol}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* PRODUCT ATTRIBUTES */}
+                <div className="space-y-2 pt-2 border-t">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-xs font-bold">Product Attributes</Label>
+                      <p className="text-[10px] text-muted-foreground">
+                        Custom key-value attributes (e.g. Color, Size, Material, Weight).
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addAttributeRow}
+                      className="h-7 text-[11px] gap-1"
+                    >
+                      <Plus className="size-3" /> Add Attribute
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {attributeRows.map((row, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <Input
+                          placeholder="Attribute name (e.g. Color)"
+                          value={row.key}
+                          onChange={(e) => updateAttributeRow(idx, "key", e.target.value)}
+                          className="h-7 text-xs flex-1"
+                        />
+                        <Input
+                          placeholder="Value (e.g. Navy Blue)"
+                          value={row.value}
+                          onChange={(e) => updateAttributeRow(idx, "value", e.target.value)}
+                          className="h-7 text-xs flex-1"
+                        />
+                        {attributeRows.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeAttributeRow(idx)}
+                            className="size-7 text-destructive shrink-0"
+                          >
+                            <Trash2 className="size-3" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* TAB 4: PRICING & SKU (Moved after Media & Countries, Dynamic Country Pricing) */}
+              <TabsContent value="pricing" className="space-y-4 pt-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">SKU / Reference Code (Optional)</Label>
+                    <Input
+                      placeholder="e.g. SKU-PROD-1002"
+                      value={sku}
+                      onChange={(e) => setSku(e.target.value)}
+                      className="h-8 text-xs font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">Unit of Measurement *</Label>
+                    <Select value={unitOfMeasurement} onValueChange={setUnitOfMeasurement}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Select Unit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COMMON_UOM_OPTIONS.map((uom) => (
+                          <SelectItem key={uom} value={uom}>
+                            {uom}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* DYNAMIC COUNTRY PRICING */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <Tag className="size-3.5 text-primary" /> Suggested Product Benchmark Pricing by Country
+                      </h4>
+                      <p className="text-[10px] text-muted-foreground">
+                        Configure suggested reference prices for countries enabled in the Media &amp; Countries tab.
+                      </p>
+                    </div>
+                  </div>
+
+                  {countries.length === 0 ? (
+                    <div className="p-4 border rounded-xl bg-amber-500/10 border-amber-500/20 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2.5">
+                      <AlertCircle className="size-4 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold">No countries selected. </span>
+                        <span>Please switch to the &ldquo;Media &amp; Countries&rdquo; tab and select at least one country to set suggested product prices.</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {countries.map((cCode) => {
+                        const meta = getCatalogCountryMeta(cCode);
+                        const cpVal = countryPrices[cCode] || {
+                          price: cCode === "IN" ? suggestedPriceInr : cCode === "US" ? suggestedPriceUsd : "",
+                          min_price: cCode === "IN" ? suggestedMinPriceInr : cCode === "US" ? suggestedMinPriceUsd : "",
+                          max_price: cCode === "IN" ? suggestedMaxPriceInr : cCode === "US" ? suggestedMaxPriceUsd : "",
+                        };
+                        return (
+                          <div key={cCode} className="p-3.5 border rounded-xl bg-muted/10 border-border space-y-3">
+                            <div className="flex items-center justify-between border-b pb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xl">{meta.flag}</span>
+                                <div>
+                                  <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                    {meta.name} Suggested Pricing ({meta.currencyCode} {meta.currencySymbol})
+                                  </Label>
+                                  <span className="text-[10px] text-muted-foreground block">
+                                    Configure base, minimum, and maximum rates in {meta.currencyCode}
+                                  </span>
+                                </div>
+                              </div>
+                              <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
+                                Active in {meta.code}
+                              </Badge>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <div className="space-y-1">
+                                <Label className="text-[11px] font-semibold">Suggested Base Price ({meta.currencySymbol})</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder={cCode === "IN" ? "e.g. 1500.00" : "e.g. 45.00"}
+                                  value={cpVal.price || ""}
+                                  onChange={(e) => updateCountryPriceField(cCode, "price", e.target.value)}
+                                  className="h-8 text-xs font-mono"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[11px] font-semibold">Suggested Min Price ({meta.currencySymbol})</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  value={cpVal.min_price || ""}
+                                  onChange={(e) => updateCountryPriceField(cCode, "min_price", e.target.value)}
+                                  className="h-8 text-xs font-mono"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[11px] font-semibold">Suggested Max Price ({meta.currencySymbol})</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  value={cpVal.max_price || ""}
+                                  onChange={(e) => updateCountryPriceField(cCode, "max_price", e.target.value)}
+                                  className="h-8 text-xs font-mono"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
+
+            <DialogFooter className="pt-3 border-t">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setDialogOpen(false)}
+                disabled={saving}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={saving}
+                className="text-xs font-bold gap-1.5"
+              >
+                {saving && <Loader2 className="size-3.5 animate-spin" />}
+                {editingProduct ? "Update Product" : "Save Master Product"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* VIEW DETAILS DIALOG */}
+      <Dialog open={Boolean(detailProduct)} onOpenChange={(open) => !open && setDetailProduct(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          {detailProduct && (
+            <div className="space-y-4">
+              <DialogHeader>
+                <div className="flex items-start gap-3">
+                  {detailProduct.default_image_url ? (
+                    <img
+                      src={detailProduct.default_image_url}
+                      alt={detailProduct.name}
+                      className="size-16 rounded-xl object-cover border shrink-0"
+                    />
+                  ) : (
+                    <div className="size-16 rounded-xl bg-muted flex items-center justify-center text-muted-foreground border shrink-0">
+                      <Package className="size-8" />
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <DialogTitle className="text-lg font-black">{detailProduct.name}</DialogTitle>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs text-muted-foreground">/{detailProduct.slug}</span>
+                      {detailProduct.is_active ? (
+                        <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-[10px]">
+                          Active
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                          Inactive
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              {detailProduct.description && (
+                <div className="p-3 bg-muted/20 rounded-lg text-xs text-foreground/80 leading-relaxed">
+                  {detailProduct.description}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 border rounded-lg bg-muted/10 text-xs">
+                <div>
+                  <span className="text-[10px] text-muted-foreground block font-bold uppercase">Main Category</span>
+                  <span className="font-semibold">{detailProduct.main_category_name || detailProduct.category_name || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground block font-bold uppercase">Subcategory</span>
+                  <span className="font-semibold">{detailProduct.subcategory_name || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground block font-bold uppercase">Brand / Model</span>
+                  <span className="font-semibold">{detailProduct.brand || "—"} {detailProduct.model ? `(${detailProduct.model})` : ""}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground block font-bold uppercase">SKU / Reference</span>
+                  <span className="font-mono font-semibold">{detailProduct.sku || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground block font-bold uppercase">Unit of Measurement</span>
+                  <span className="font-semibold">{detailProduct.unit_of_measurement || "Piece"}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground block font-bold uppercase">India Suggested</span>
+                  <span className="font-bold text-foreground">₹ {Number(detailProduct.suggested_price_inr || detailProduct.suggested_price || 0).toLocaleString("en-IN")}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground block font-bold uppercase">USA Suggested</span>
+                  <span className="font-bold text-foreground">$ {Number(detailProduct.suggested_price_usd || 0).toFixed(2)}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground block font-bold uppercase">Created At</span>
+                  <span className="text-muted-foreground">{new Date(detailProduct.created_at).toLocaleDateString()}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground block font-bold uppercase">Updated At</span>
+                  <span className="text-muted-foreground">{new Date(detailProduct.updated_at).toLocaleDateString()}</span>
+                </div>
+              </div>
+
+              {/* ATTRIBUTES */}
+              {detailProduct.attributes && Object.keys(detailProduct.attributes).length > 0 && (
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Product Attributes</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {Object.entries(detailProduct.attributes).map(([k, v]) => (
+                      <div key={k} className="p-2 border rounded bg-background text-xs">
+                        <span className="text-[10px] text-muted-foreground block">{k}</span>
+                        <span className="font-medium text-foreground">{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* SYNONYMS */}
+              {detailProduct.synonyms && detailProduct.synonyms.length > 0 && (
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Synonyms / Search Terms</h4>
+                  <div className="flex flex-wrap gap-1">
+                    {detailProduct.synonyms.map((syn, idx) => (
+                      <Badge key={idx} variant="secondary" className="text-xs">
+                        {syn}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ADDITIONAL IMAGES */}
+              {detailProduct.additional_images && detailProduct.additional_images.length > 0 && (
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Gallery & Additional Images</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {detailProduct.additional_images.map((img, idx) => (
+                      <a key={idx} href={img} target="_blank" rel="noopener noreferrer">
+                        <img
+                          src={img}
+                          alt={`Gallery ${idx + 1}`}
+                          className="size-16 rounded-lg object-cover border hover:opacity-80 transition-opacity"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <DialogFooter className="pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDetailProduct(null)}
+                  className="text-xs"
+                >
+                  Close
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const p = detailProduct;
+                    setDetailProduct(null);
+                    openEditDialog(p);
+                  }}
+                  className="text-xs font-bold gap-1"
+                >
+                  <Edit2 className="size-3" /> Edit Product
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

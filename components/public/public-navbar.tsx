@@ -38,9 +38,11 @@ import {
   PhoneCall,
   Navigation,
   Loader2,
+  Store,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useAuthStore } from "@/store";
+import { useAuthStore, useCartStore } from "@/store";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { clearBrowserSessionData } from "@/lib/auth/clear-browser-session";
 import { cn } from "@/lib/utils";
@@ -54,6 +56,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
 import { AccountSwitcherDialog } from "@/components/auth/account-switcher-dialog";
+import { CartDrawer } from "@/components/checkout/cart-drawer";
 import { toRoleRoutePath } from "@/lib/auth/role-routes";
 import type { PublicInstitutionNavItem, PublicNavbarBrand } from "@/lib/api/public-nav";
 
@@ -73,7 +76,7 @@ const CATEGORY_ITEMS: { key: CategoryKey; label: string; href: string; icon: Rea
   { key: "institutes", label: "Institute", href: "/institutes", icon: Building2 },
   { key: "practice", label: "Practice", href: "/practice", icon: CheckSquare },
   { key: "notes", label: "Notes", href: "/notes", icon: BookMarked },
-  { key: "teachers", label: "Teachers", href: "/teachers", icon: UserCheck },
+  { key: "teachers", label: "Professionals", href: "/explore?type=professional", icon: UserCheck },
   { key: "exams", label: "Exams", href: "/exams", icon: Award },
   { key: "libraries", label: "Library", href: "/libraries", icon: Library },
   { key: "hostels", label: "Hostel", href: "/hostels", icon: Building2 },
@@ -105,11 +108,18 @@ export function PublicNavbar({
   const { user, isAuthenticated, clearAuth } = useAuthStore();
   const { activeInstitution, activeInstitutionId } = useActiveInstitution();
   const { isCategoryVisible, isInstitutionalAdmin, activeInstitutionName } = useCategoryAvailability();
+  const { getTotalCount, toggleCart } = useCartStore();
 
   const [landingViewMode, setLandingViewMode] = useState<"platform" | "institution">("platform");
   const [institutionInfo, setInstitutionInfo] = useState<any>(null);
   const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+
+  const isPlatformAdmin = Boolean(
+    user?.role_codes?.includes("platform_admin") ||
+    user?.role_codes?.includes("super_admin") ||
+    user?.is_super_admin
+  );
 
   const defaultEnvInstId = process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
     ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
@@ -195,8 +205,14 @@ export function PublicNavbar({
     const query = searchQuery.trim();
     if (!query) return;
     const intent = parseSearchIntent(query);
-    const finalParam = intent.cleanQuery ? encodeURIComponent(intent.cleanQuery) : "";
-    const targetUrl = finalParam ? `${intent.targetRoute}?search=${finalParam}` : intent.targetRoute;
+    const finalParam = intent.cleanQuery ? encodeURIComponent(intent.cleanQuery) : encodeURIComponent(query);
+    const separator = intent.targetRoute.includes("?") ? "&" : "?";
+    const locParam = location && location !== "All Locations" ? `&location=${encodeURIComponent(location)}&city=${encodeURIComponent(location)}` : "";
+
+    const targetUrl = intent.targetRoute.startsWith("/explore")
+      ? `${intent.targetRoute}${separator}q=${finalParam}${locParam}`
+      : `${intent.targetRoute}${separator}search=${finalParam}${locParam}`;
+
     router.push(targetUrl);
   };
 
@@ -446,9 +462,39 @@ export function PublicNavbar({
             </DropdownMenu>
           )}
 
+          {/* Shopping Cart Button */}
+          <button
+            type="button"
+            onClick={toggleCart}
+            className="relative p-1.5 sm:p-2 rounded-full hover:bg-gray-100 text-gray-700 transition-colors cursor-pointer shrink-0"
+            aria-label="Shopping Cart"
+            title="View Shopping Cart"
+          >
+            <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 text-gray-700" />
+            {mounted && getTotalCount() > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white shadow-2xs animate-in zoom-in">
+                {getTotalCount()}
+              </span>
+            )}
+          </button>
+
           {/* Logged In User Profile Pill & Notifications vs Sign In Button */}
           {isAuthenticated && user ? (
             <>
+              {/* Store Front Quick Button */}
+              {!isPlatformAdmin && (
+                <Link
+                  href={activeInstitutionId ? `/storefront?institutionId=${activeInstitutionId}` : "/storefront"}
+                  target="_blank"
+                  className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-rose-200/80 bg-rose-50/60 text-[#800000] hover:bg-rose-100 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                  title="Open Live Public Store Front"
+                >
+                  <Store className="h-3.5 w-3.5 text-rose-600" />
+                  <span>Store Front</span>
+                  <ExternalLink className="h-3 w-3 opacity-60" />
+                </Link>
+              )}
+
               {/* Notification Bell */}
               <Link
                 href={toRoleRoutePath("/admin/notifications", user)}
@@ -488,6 +534,22 @@ export function PublicNavbar({
                   </div>
 
                   {/* Dropdown Items */}
+                  {!isPlatformAdmin && (
+                    <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
+                      <Link
+                        href={activeInstitutionId ? `/storefront?institutionId=${activeInstitutionId}` : "/storefront"}
+                        target="_blank"
+                        className="flex items-center justify-between w-full"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Store className="h-4 w-4 text-rose-600" />
+                          <span className="text-xs font-semibold text-gray-900">Store Front</span>
+                        </div>
+                        <span className="text-[10px] text-gray-400">Live storefront ↗</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+
                   <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
                     <Link href={toRoleRoutePath("/admin", user)} className="flex items-center justify-between w-full">
                       <div className="flex items-center gap-2.5">
@@ -789,6 +851,9 @@ export function PublicNavbar({
 
       {/* Live Location Permission Prompt Banner */}
       {!isInstitutionView && <LocationPermissionBanner />}
+
+      {/* Shopping Cart Drawer */}
+      <CartDrawer />
     </header>
   );
 }

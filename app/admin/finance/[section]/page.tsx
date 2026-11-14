@@ -1,8 +1,8 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect } from "react";
 import { ArrowLeftRight, BadgeDollarSign, BarChart3, Bus, CalendarDays, CreditCard, FileText, IndianRupee, Landmark, Tags, TrendingUp, UsersRound } from "lucide-react";
-import { notFound } from "next/navigation";
+import { notFound, usePathname, useRouter } from "next/navigation";
 
 import { AllowanceClient } from "@/app/admin/finance/allowance-client";
 import { Badge } from "@/components/ui/badge";
@@ -16,9 +16,15 @@ import { PerformanceClient } from "@/app/admin/finance/performance-client";
 import { RecurringExpensesClient } from "@/app/admin/finance/recurring-expenses-client";
 import { PurchaseSellRequestsClient } from "@/app/admin/finance/purchase-sell-client";
 import { TransportationFeeClient } from "@/app/admin/finance/transportation-fee-client";
+import { TransactionsClient } from "@/app/admin/finance/transactions-client";
 import FeeManagementPage from "@/app/admin/students/fee-management/page";
 
 const FINANCE_SECTIONS = {
+  transactions: {
+    title: "Transactions",
+    description: "Centralized income and expense transaction management with real-time balance and invoice tracking.",
+    icon: ArrowLeftRight,
+  },
   "fee-management": {
     title: "Fee Management",
     description: "Manage student fees, receipts, concessions, and fee collection records.",
@@ -96,10 +102,30 @@ type FinanceSectionPageProps = {
 
 export default function FinanceSectionPage({ params }: FinanceSectionPageProps) {
   const { section } = use(params);
+  const pathname = usePathname();
+  const router = useRouter();
+
+  const isInstituteRoute = pathname?.startsWith("/instituteadmin");
+  const baseTransactionsPath = isInstituteRoute
+    ? "/instituteadmin/finance/transactions"
+    : "/admin/finance/transactions";
+
+  useEffect(() => {
+    if (section === "income") {
+      router.replace(`${baseTransactionsPath}?type=income`);
+    } else if (section === "expense") {
+      router.replace(`${baseTransactionsPath}?type=expense`);
+    }
+  }, [section, baseTransactionsPath, router]);
+
   if (!(section in FINANCE_SECTIONS)) notFound();
 
   const config = FINANCE_SECTIONS[section as FinanceSection];
   const Icon = config.icon;
+
+  if (section === "transactions") {
+    return <TransactionsClient />;
+  }
 
   if (section === "transportation-fee" || section === "transportation") {
     return <TransportationFeeClient />;
@@ -110,11 +136,11 @@ export default function FinanceSectionPage({ params }: FinanceSectionPageProps) 
   }
 
   if (section === "income") {
-    return <IncomeClient />;
+    return <TransactionsClient initialType="income" />;
   }
 
   if (section === "expense") {
-    return <ExpenseClient />;
+    return <TransactionsClient initialType="expense" />;
   }
 
   if (section === "invoice") {
@@ -148,7 +174,6 @@ export default function FinanceSectionPage({ params }: FinanceSectionPageProps) 
   if (section === "fee-management") {
     return <FeeManagementPage />;
   }
-
 
   return (
     <div className="space-y-6">

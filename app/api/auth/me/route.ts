@@ -83,6 +83,25 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    let hasBusinessProfile = false;
+    let hasProfessionalProfile = false;
+    try {
+      const [bizRes, profRes] = await Promise.all([
+        db.query(`SELECT 1 FROM business_profiles WHERE user_id = $1 AND is_active = true LIMIT 1`, [userId]),
+        db.query(`SELECT 1 FROM professional_profiles WHERE user_id = $1 AND is_active = true LIMIT 1`, [userId])
+      ]);
+      hasBusinessProfile = (bizRes.rowCount ?? 0) > 0;
+      hasProfessionalProfile = (profRes.rowCount ?? 0) > 0;
+    } catch {
+      // Silently proceed if tables differ
+    }
+
+    const sessionUserData = {
+      ...user,
+      has_business_profile: hasBusinessProfile,
+      has_professional_profile: hasProfessionalProfile,
+    };
+
     authDebug("[auth.me.suspension.start]", { user_id: userId });
     const suspension = await getSuspensionStatus(db, userId);
     authDebug("[auth.me.suspension.ok]", { elapsed_ms: Date.now() - startedAt, suspended: suspension.suspended });
@@ -130,8 +149,8 @@ export async function GET(req: Request) {
     // Return the new access token if we generated one, otherwise just return the user structure
     return NextResponse.json(
       newAccessToken
-        ? { user: toSessionUser(user), accessToken: newAccessToken }
-        : { user: toSessionUser(user) }
+        ? { user: toSessionUser(sessionUserData), accessToken: newAccessToken }
+        : { user: toSessionUser(sessionUserData) }
     );
   } catch (err: unknown) {
     const message = getErrorMessage(err, "Auth check failed");

@@ -6,11 +6,18 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const rawQuery = (searchParams.get("q") || searchParams.get("query") || searchParams.get("search") || "").trim();
+    const rawLocation = (searchParams.get("location") || searchParams.get("city") || "").trim();
+    const filterLocation = rawLocation && rawLocation.toLowerCase() !== "all locations" && rawLocation.toLowerCase() !== "all" ? rawLocation : "";
 
     if (!rawQuery) {
       return NextResponse.json({
         success: true,
         results: {
+          businesses: [],
+          professionals: [],
+          products: [],
+          services: [],
+          categories: [],
           courses: [],
           institutes: [],
           teachers: [],
@@ -18,8 +25,8 @@ export async function GET(req: NextRequest) {
           notes: [],
         },
         intent: {
-          category: "courses",
-          targetRoute: "/courses",
+          category: "all",
+          targetRoute: "/explore",
           cleanQuery: "",
           isIntentDetected: false,
         },
@@ -31,6 +38,308 @@ export async function GET(req: NextRequest) {
     const searchQuery = intent.cleanQuery || rawQuery;
     const likeQuery = `%${searchQuery}%`;
     const rawLikeQuery = `%${rawQuery}%`;
+
+    // 0a. Search Businesses
+    const businessesPromise = (async () => {
+      try {
+        const params: any[] = [likeQuery, rawLikeQuery];
+        let locFilter = "";
+        if (filterLocation) {
+          params.push(`%${filterLocation}%`);
+          locFilter = `AND (bp.city ILIKE $${params.length} OR bp.state ILIKE $${params.length} OR bp.locality ILIKE $${params.length})`;
+        }
+        const res = await db.query(
+          `SELECT
+            bp.id,
+            bp.name,
+            bp.slug,
+            bp.business_type,
+            bp.city,
+            bp.state,
+            bp.logo_url,
+            c.id AS category_id,
+            c.name AS category_name,
+            sc.id AS subcategory_id,
+            sc.name AS subcategory_name
+          FROM business_profiles bp
+          LEFT JOIN categories c ON c.id = bp.category_id
+          LEFT JOIN categories sc ON sc.id = bp.subcategory_id
+          WHERE COALESCE(bp.is_active, TRUE) = TRUE
+            AND (
+              bp.name ILIKE $1 OR COALESCE(bp.business_type, '') ILIKE $1 OR COALESCE(bp.about, '') ILIKE $1 OR COALESCE(bp.city, '') ILIKE $1
+              OR array_to_string(bp.synonyms, ' ') ILIKE $1
+              OR COALESCE(c.name, '') ILIKE $1 OR COALESCE(sc.name, '') ILIKE $1 OR array_to_string(c.synonyms, ' ') ILIKE $1 OR array_to_string(sc.synonyms, ' ') ILIKE $1
+              OR bp.name ILIKE $2 OR COALESCE(bp.about, '') ILIKE $2 OR array_to_string(bp.synonyms, ' ') ILIKE $2
+            )
+            ${locFilter}
+          ORDER BY bp.is_featured DESC, bp.id DESC
+          LIMIT 6`,
+          params
+        );
+        return res.rows.map((r: any) => ({
+          id: r.id,
+          title: r.name,
+          category_name: r.category_name || r.business_type || "Business",
+          subcategory_name: r.subcategory_name,
+          subtitle: [r.category_name, r.subcategory_name, r.city, r.state].filter(Boolean).join(" • ") || r.business_type || "Business",
+          slug: r.slug,
+          href: `/business/${r.slug || r.id}`,
+          profileHref: `/business/${r.slug || r.id}`,
+          listingHref: `/explore?type=business&q=${encodeURIComponent(r.name)}`,
+          logo_url: r.logo_url,
+          type: "business",
+        }));
+      } catch (err) {
+        console.error("Business search query error:", err);
+        return [];
+      }
+    })();
+
+    // 0b. Search Professionals
+    const professionalsPromise = (async () => {
+      try {
+        const params: any[] = [likeQuery, rawLikeQuery];
+        let locFilter = "";
+        if (filterLocation) {
+          params.push(`%${filterLocation}%`);
+          locFilter = `AND (pp.city ILIKE $${params.length} OR pp.state ILIKE $${params.length} OR pp.locality ILIKE $${params.length})`;
+        }
+        const res = await db.query(
+          `SELECT
+            pp.id,
+            pp.name,
+            pp.slug,
+            pp.profession_type,
+            pp.designation,
+            pp.city,
+            pp.state,
+            pp.avatar_url,
+            pp.institution_profile_id,
+            c.id AS category_id,
+            c.name AS category_name,
+            sc.id AS subcategory_id,
+            sc.name AS subcategory_name
+          FROM professional_profiles pp
+          LEFT JOIN categories c ON c.id = pp.category_id
+          LEFT JOIN categories sc ON sc.id = pp.subcategory_id
+          WHERE COALESCE(pp.is_active, TRUE) = TRUE
+            AND (
+              pp.name ILIKE $1 OR COALESCE(pp.profession_type, '') ILIKE $1 OR COALESCE(pp.designation, '') ILIKE $1 OR COALESCE(pp.about, '') ILIKE $1 OR array_to_string(pp.skills, ' ') ILIKE $1
+              OR array_to_string(pp.synonyms, ' ') ILIKE $1
+              OR COALESCE(c.name, '') ILIKE $1 OR COALESCE(sc.name, '') ILIKE $1 OR array_to_string(c.synonyms, ' ') ILIKE $1 OR array_to_string(sc.synonyms, ' ') ILIKE $1
+              OR pp.name ILIKE $2 OR COALESCE(pp.about, '') ILIKE $2 OR array_to_string(pp.synonyms, ' ') ILIKE $2
+            )
+            ${locFilter}
+          ORDER BY pp.is_featured DESC, pp.id DESC
+          LIMIT 6`,
+          params
+        );
+        return res.rows.map((r: any) => ({
+          id: r.id,
+          title: r.name,
+          category_name: r.category_name || "Professional",
+          subcategory_name: r.subcategory_name,
+          designation: r.designation || r.profession_type || "Professional",
+          subtitle: [r.designation || r.profession_type, r.category_name, r.subcategory_name, r.city, r.state].filter(Boolean).join(" • "),
+          slug: r.slug,
+          href: `/professional/${r.slug || r.id}`,
+          profileHref: `/professional/${r.slug || r.id}`,
+          listingHref: `/explore?type=professional&q=${encodeURIComponent(r.name)}`,
+          logo_url: r.avatar_url,
+          type: "professional",
+        }));
+      } catch (err) {
+        console.error("Professional search query error:", err);
+        return [];
+      }
+    })();
+
+    // 0c. Search Products
+    const productsPromise = (async () => {
+      try {
+        const res = await db.query(
+          `SELECT
+            mp.id,
+            mp.name,
+            mp.slug,
+            mp.brand,
+            mp.model,
+            COALESCE(mp.unit, mp.unit_of_measurement, 'kg') AS unit,
+            COALESCE(mp.suggested_price, mp.suggested_price_inr, 0) AS price,
+            mp.default_image_url,
+            c.id AS category_id,
+            c.name AS category_name,
+            sc.id AS subcategory_id,
+            sc.name AS subcategory_name,
+            COALESCE(bp.slug, seller.slug, bp.id::text, seller.id::text) AS business_slug,
+            COALESCE(bp.name, seller.business_name, mp.brand) AS business_name
+          FROM master_products mp
+          LEFT JOIN categories c ON c.id = mp.category_id
+          LEFT JOIN categories sc ON sc.id = mp.subcategory_id
+          LEFT JOIN business_profiles bp ON bp.id = mp.business_profile_id
+          LEFT JOIN LATERAL (
+            SELECT bp2.id, bp2.slug, bp2.name AS business_name
+            FROM business_products bprod
+            JOIN business_profiles bp2 ON (bp2.id = bprod.business_profile_id OR bp2.id = bprod.business_id)
+            WHERE bprod.master_product_id = mp.id
+            LIMIT 1
+          ) seller ON TRUE
+          WHERE COALESCE(mp.is_active, TRUE) = TRUE
+            AND (
+              mp.name ILIKE $1 OR COALESCE(mp.description, '') ILIKE $1 OR COALESCE(mp.brand, '') ILIKE $1 OR array_to_string(mp.synonyms, ' ') ILIKE $1
+              OR COALESCE(c.name, '') ILIKE $1 OR COALESCE(sc.name, '') ILIKE $1 OR array_to_string(c.synonyms, ' ') ILIKE $1 OR array_to_string(sc.synonyms, ' ') ILIKE $1
+              OR mp.name ILIKE $2 OR COALESCE(mp.description, '') ILIKE $2 OR array_to_string(mp.synonyms, ' ') ILIKE $2
+            )
+          ORDER BY mp.id DESC
+          LIMIT 6`,
+          [likeQuery, rawLikeQuery]
+        );
+        return res.rows.map((r: any) => {
+          const bizSlug = r.business_slug;
+          const storeUrl = bizSlug
+            ? `/business/${bizSlug}?tab=products&highlight=${r.id}`
+            : `/explore?type=product&q=${encodeURIComponent(r.name)}`;
+
+          return {
+            id: r.id,
+            title: r.name,
+            category_name: r.category_name,
+            subcategory_name: r.subcategory_name,
+            business_name: r.business_name,
+            subtitle: [
+              r.business_name ? `By ${r.business_name}` : null,
+              r.category_name,
+              r.subcategory_name,
+              r.price && Number(r.price) > 0 ? `₹${r.price} / ${r.unit || "unit"}` : null,
+            ].filter(Boolean).join(" • "),
+            href: storeUrl,
+            listingHref: storeUrl,
+            storefrontHref: storeUrl,
+            logo_url: r.default_image_url,
+            price: r.price,
+            unit: r.unit || "unit",
+            type: "product",
+          };
+        });
+      } catch (err) {
+        console.error("Product search query error:", err);
+        return [];
+      }
+    })();
+
+    // 0d. Search Services
+    const servicesPromise = (async () => {
+      try {
+        const res = await db.query(
+          `SELECT
+            ms.id,
+            ms.name,
+            ms.slug,
+            ms.pricing_model,
+            COALESCE(ms.suggested_price, ms.suggested_price_inr, 0) AS price,
+            ms.default_image_url,
+            c.id AS category_id,
+            c.name AS category_name,
+            sc.id AS subcategory_id,
+            sc.name AS subcategory_name,
+            COALESCE(bp.slug, pp_biz.slug, bp.id::text, pp_biz.id::text) AS business_slug,
+            COALESCE(bp.name, pp_biz.name) AS business_name,
+            pp.slug AS professional_slug,
+            pp.name AS professional_name
+          FROM master_services ms
+          LEFT JOIN categories c ON c.id = ms.category_id
+          LEFT JOIN categories sc ON sc.id = ms.subcategory_id
+          LEFT JOIN business_profiles bp ON bp.id = ms.business_profile_id
+          LEFT JOIN professional_profiles pp ON pp.id = ms.professional_profile_id
+          LEFT JOIN business_profiles pp_biz ON pp_biz.id = pp.business_profile_id
+          WHERE COALESCE(ms.is_active, TRUE) = TRUE
+            AND (
+              ms.name ILIKE $1 OR COALESCE(ms.description, '') ILIKE $1 OR array_to_string(ms.synonyms, ' ') ILIKE $1
+              OR COALESCE(c.name, '') ILIKE $1 OR COALESCE(sc.name, '') ILIKE $1 OR array_to_string(c.synonyms, ' ') ILIKE $1 OR array_to_string(sc.synonyms, ' ') ILIKE $1
+              OR ms.name ILIKE $2 OR COALESCE(ms.description, '') ILIKE $2 OR array_to_string(ms.synonyms, ' ') ILIKE $2
+            )
+          ORDER BY ms.id DESC
+          LIMIT 6`,
+          [likeQuery, rawLikeQuery]
+        );
+        return res.rows.map((r: any) => {
+          const bizSlug = r.business_slug;
+          const profSlug = r.professional_slug;
+          const storeUrl = bizSlug
+            ? `/business/${bizSlug}?tab=services&highlight=${r.id}`
+            : profSlug
+            ? `/professional/${profSlug}?tab=services&highlight=${r.id}`
+            : `/explore?type=service&q=${encodeURIComponent(r.name)}`;
+
+          return {
+            id: r.id,
+            title: r.name,
+            category_name: r.category_name,
+            subcategory_name: r.subcategory_name,
+            business_name: r.business_name || r.professional_name,
+            subtitle: [
+              r.business_name || r.professional_name ? `By ${r.business_name || r.professional_name}` : null,
+              r.category_name,
+              r.subcategory_name,
+              r.pricing_model,
+              r.price && Number(r.price) > 0 ? `₹${r.price}` : null,
+            ].filter(Boolean).join(" • "),
+            href: storeUrl,
+            listingHref: storeUrl,
+            storefrontHref: storeUrl,
+            logo_url: r.default_image_url,
+            price: r.price,
+            type: "service",
+          };
+        });
+      } catch (err) {
+        console.error("Service search query error:", err);
+        return [];
+      }
+    })();
+
+    // 0e. Search Categories
+    const categoriesPromise = (async () => {
+      try {
+        const res = await db.query(
+          `SELECT
+            c.id,
+            c.name,
+            c.slug,
+            c.category_type,
+            parent.name AS parent_name
+          FROM categories c
+          LEFT JOIN categories parent ON parent.id = c.parent_id
+          WHERE COALESCE(c.is_deleted, FALSE) = FALSE
+            AND COALESCE(c.is_active, TRUE) = TRUE
+            AND (
+              c.name ILIKE $1 OR c.slug ILIKE $1 OR array_to_string(c.synonyms, ' ') ILIKE $1
+              OR c.name ILIKE $2 OR c.slug ILIKE $2 OR array_to_string(c.synonyms, ' ') ILIKE $2
+            )
+          ORDER BY (CASE WHEN c.name ILIKE $1 THEN 1 ELSE 2 END), c.name ASC
+          LIMIT 8`,
+          [likeQuery, rawLikeQuery]
+        );
+        return res.rows.map((r: any) => {
+          const typeLabel = r.category_type
+            ? r.category_type.charAt(0).toUpperCase() + r.category_type.slice(1)
+            : "General";
+          return {
+            id: r.id,
+            title: r.name,
+            category_name: r.name,
+            category_type: r.category_type || "all",
+            subtitle: [r.parent_name ? `Under ${r.parent_name}` : null, `${typeLabel} Category`].filter(Boolean).join(" • "),
+            href: `/explore?categoryId=${r.id}&categoryName=${encodeURIComponent(r.name)}&type=all`,
+            listingHref: `/explore?categoryId=${r.id}&categoryName=${encodeURIComponent(r.name)}&type=all`,
+            type: "category",
+          };
+        });
+      } catch (err) {
+        console.error("Category search query error:", err);
+        return [];
+      }
+    })();
 
     // 1. Search Courses
     const coursesPromise = (async () => {
@@ -280,7 +589,12 @@ export async function GET(req: NextRequest) {
       }
     })();
 
-    const [courses, institutes, teachers, practice, notes] = await Promise.all([
+    const [businesses, professionals, products, services, categories, courses, institutes, teachers, practice, notes] = await Promise.all([
+      businessesPromise,
+      professionalsPromise,
+      productsPromise,
+      servicesPromise,
+      categoriesPromise,
       coursesPromise,
       institutesPromise,
       teachersPromise,
@@ -289,11 +603,25 @@ export async function GET(req: NextRequest) {
     ]);
 
     const totalCount =
-      courses.length + institutes.length + teachers.length + practice.length + notes.length;
+      businesses.length +
+      professionals.length +
+      products.length +
+      services.length +
+      categories.length +
+      courses.length +
+      institutes.length +
+      teachers.length +
+      practice.length +
+      notes.length;
 
     return NextResponse.json({
       success: true,
       results: {
+        businesses,
+        professionals,
+        products,
+        services,
+        categories,
         courses,
         institutes,
         teachers,

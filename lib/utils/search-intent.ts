@@ -6,9 +6,9 @@
  */
 
 export type SearchIntentResult = {
-  targetRoute: string; // e.g. "/teachers", "/courses", "/practice", "/institutes", "/notes"
+  targetRoute: string; // e.g. "/explore", "/teachers", "/courses", "/practice", "/institutes", "/notes"
   cleanQuery: string;  // e.g. "math", "wordpress", "class 11th math"
-  category: "teachers" | "courses" | "practice" | "institutes" | "notes";
+  category: "teachers" | "courses" | "practice" | "institutes" | "notes" | "business" | "professional" | "product" | "service" | "all";
   isIntentDetected: boolean;
 };
 
@@ -170,13 +170,92 @@ const COURSE_KEYWORDS = [
   "class",
 ];
 
+const BUSINESS_KEYWORDS = [
+  "business",
+  "businesses",
+  "company",
+  "companies",
+  "store",
+  "stores",
+  "shop",
+  "shops",
+  "agency",
+  "agencies",
+  "firm",
+  "firms",
+  "clinic",
+  "clinics",
+  "hospital",
+  "hospitals",
+  "showroom",
+  "showrooms",
+];
+
+const PROFESSIONAL_KEYWORDS = [
+  "professional",
+  "professionals",
+  "doctor",
+  "doctors",
+  "lawyer",
+  "lawyers",
+  "advocate",
+  "advocates",
+  "consultant",
+  "consultants",
+  "accountant",
+  "accountants",
+  "plumber",
+  "plumbers",
+  "electrician",
+  "electricians",
+  "mechanic",
+  "mechanics",
+  "architect",
+  "architects",
+  "freelancer",
+  "freelancers",
+];
+
+const PRODUCT_KEYWORDS = [
+  "product",
+  "products",
+  "item",
+  "items",
+  "tool",
+  "tools",
+  "kit",
+  "kits",
+  "hardware",
+  "terminal",
+  "gadget",
+  "gadgets",
+  "device",
+  "devices",
+  "equipment",
+];
+
+const SERVICE_KEYWORDS = [
+  "service",
+  "services",
+  "repair",
+  "repairs",
+  "maintenance",
+  "installation",
+  "filing",
+  "advisory",
+  "tax filing",
+  "trademark",
+  "gst",
+  "consultation",
+];
+
 export function parseSearchIntent(rawQuery: string): SearchIntentResult {
   const trimmed = rawQuery.trim();
   if (!trimmed) {
     return {
-      targetRoute: "/courses",
+      targetRoute: "/explore",
       cleanQuery: "",
-      category: "courses",
+      category: "all",
       isIntentDetected: false,
     };
   }
@@ -192,16 +271,70 @@ export function parseSearchIntent(rawQuery: string): SearchIntentResult {
   working = working.replace(/\s+/g, " ").trim();
 
   // Check Category Intent
-  let category: SearchIntentResult["category"] = "courses";
-  let targetRoute = "/courses";
+  let category: SearchIntentResult["category"] = "all";
+  let targetRoute = "/explore";
   let isIntentDetected = false;
 
-  // 1. Check Teachers
+  // 0a. Check Businesses
+  for (const kw of BUSINESS_KEYWORDS) {
+    const kwRegex = new RegExp(`\\b${kw}\\b`, "gi");
+    if (kwRegex.test(working)) {
+      category = "business";
+      targetRoute = "/explore?type=business";
+      isIntentDetected = true;
+      working = working.replace(kwRegex, " ");
+      break;
+    }
+  }
+
+  // 0b. Check Professionals
+  if (!isIntentDetected) {
+    for (const kw of PROFESSIONAL_KEYWORDS) {
+      const kwRegex = new RegExp(`\\b${kw}\\b`, "gi");
+      if (kwRegex.test(working)) {
+        category = "professional";
+        targetRoute = "/explore?type=professional";
+        isIntentDetected = true;
+        working = working.replace(kwRegex, " ");
+        break;
+      }
+    }
+  }
+
+  // 0c. Check Products
+  if (!isIntentDetected) {
+    for (const kw of PRODUCT_KEYWORDS) {
+      const kwRegex = new RegExp(`\\b${kw}\\b`, "gi");
+      if (kwRegex.test(working)) {
+        category = "product";
+        targetRoute = "/explore?type=product";
+        isIntentDetected = true;
+        working = working.replace(kwRegex, " ");
+        break;
+      }
+    }
+  }
+
+  // 0d. Check Services
+  if (!isIntentDetected) {
+    for (const kw of SERVICE_KEYWORDS) {
+      const kwRegex = new RegExp(`\\b${kw}\\b`, "gi");
+      if (kwRegex.test(working)) {
+        category = "service";
+        targetRoute = "/explore?type=service";
+        isIntentDetected = true;
+        working = working.replace(kwRegex, " ");
+        break;
+      }
+    }
+  }
+
+  // 1. Check Teachers -> redirect to explore professionals
   for (const kw of TEACHER_KEYWORDS) {
     const kwRegex = new RegExp(`\\b${kw}\\b`, "gi");
     if (kwRegex.test(working)) {
-      category = "teachers";
-      targetRoute = "/teachers";
+      category = "professional";
+      targetRoute = "/explore?type=professional";
       isIntentDetected = true;
       working = working.replace(kwRegex, " ");
       break;

@@ -41,11 +41,11 @@ export function LocationPermissionBanner() {
             </div>
             <div>
               <h4 className="text-sm font-extrabold text-gray-900 leading-snug flex items-center gap-1.5">
-                <span>Find Nearby Institutes & Courses</span>
+                <span>Discover Local Businesses, Services & Institutes</span>
                 <Sparkles className="h-3.5 w-3.5 text-amber-500" />
               </h4>
               <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">
-                Allow location to discover verified colleges, teachers & programs in your city.
+                Allow location to find verified enterprises, certified professionals, products and services in your city.
               </p>
             </div>
           </div>

@@ -164,7 +164,25 @@ export async function GET(req: Request) {
     let query = `SELECT * FROM operations_tasks WHERE 1=1`;
     const params: any[] = [];
     const userRole = (user as any)?.role || (user as any)?.role_code || "";
-    const userInstId = (user as any)?.institution_id || user?.memberships?.[0]?.institution_id || null;
+    let userInstId = (user as any)?.institution_id || (user as any)?.under_institution_id || user?.memberships?.[0]?.institution_id || null;
+    if (!userInstId && user?.id) {
+      try {
+        const bpRes = await db.query(`SELECT institution_profile_id FROM business_profiles WHERE user_id = $1 AND is_active = TRUE LIMIT 1`, [user.id]);
+        if (bpRes.rows.length > 0 && bpRes.rows[0].institution_profile_id) {
+          userInstId = Number(bpRes.rows[0].institution_profile_id);
+        } else {
+          const imRes = await db.query(`SELECT institution_id FROM institution_memberships WHERE user_id = $1 AND is_active = TRUE AND COALESCE(is_deleted, FALSE) = FALSE LIMIT 1`, [user.id]);
+          if (imRes.rows.length > 0 && imRes.rows[0].institution_id) {
+            userInstId = Number(imRes.rows[0].institution_id);
+          } else {
+            const upRes = await db.query(`SELECT under_institution_id FROM user_profiles WHERE user_id = $1 LIMIT 1`, [user.id]);
+            if (upRes.rows.length > 0 && upRes.rows[0].under_institution_id) {
+              userInstId = Number(upRes.rows[0].under_institution_id);
+            }
+          }
+        }
+      } catch {}
+    }
     const isPlatform = !userInstId || (user && isPlatformAdminUser(user));
     const envInstRaw = String(
       process.env.INSTITUTION_ID ??
@@ -202,21 +220,31 @@ export async function GET(req: Request) {
     } else if (envDefaultInstId) {
       targetInstId = envDefaultInstId;
     }
+    if (!isPlatform && userInstId) {
+      targetInstId = targetInstId || userInstId;
+    }
     const referer = req.headers.get("referer") || "";
-    const isClientRoute = referer.includes("/client/") || referer.endsWith("/client");
-    const isTaskManagementPage = referer.includes("/admin/operations/tasks");
+    const isClientRoute = referer.includes("/client/") || referer.endsWith("/client") || url.pathname.includes("/client/");
+    const isTaskManagementPage = referer.includes("/operations/tasks") || referer.includes("/tasks") || url.pathname.includes("/operations/tasks") || url.pathname.includes("/tasks");
     const isClient = !isTaskManagementPage && (userRole === "client" || user?.role_codes?.includes("client") || (user as any)?.roles?.some((r: any) => String(r).toLowerCase() === "client") || isClientRoute);
 
     const isSelfScope = employeeId === "me" || scope === "me";
     const effectiveEmployeeId = isSelfScope ? (user?.id ? String(user.id) : "") : employeeId;
-    // Organization scoping: institution staff only see their tasks, platform admin can see all or specific
+    // Organization scoping: all work created for that business is visible to everyone in that business
     // When isSelfScope is true, user views their own assigned/created tasks across the system
     // Clients must see all projects associated with their client account across the system without institution scoping
     const defaultScopedInstId = targetInstId || envDefaultInstId || 1;
     if (!isSelfScope && !isClient) {
       if (targetInstId && !isPlatform) {
         params.push(targetInstId);
-        query += ` AND institution_id = $${params.length}`;
+        query += ` AND (
+          operations_tasks.institution_id = $${params.length}
+          OR (operations_tasks.institution_id IS NULL AND operations_tasks.created_by IN (
+            SELECT user_id FROM institution_memberships WHERE institution_id = $${params.length}
+            UNION
+            SELECT user_id FROM business_profiles WHERE institution_profile_id = $${params.length}
+          ))
+        )`;
       } else if (requestedInstParam === "none" || (isPlatform && requestedInstParam !== "all")) {
         query += ` AND (institution_id = ${defaultScopedInstId} OR institution_id IS NULL)`;
       }
@@ -426,10 +454,19 @@ export async function GET(req: Request) {
             COALESCE(NULLIF(TRIM(u.full_name), ''), u.email) AS name,
             u.email,
             u.phone,
-            COALESCE(d.name, r.name, r.code, 'Staff Member') AS role,
-            COALESCE(r.code, 'staff') AS role_code
+            CASE
+              WHEN EXISTS (SELECT 1 FROM business_profiles bp WHERE bp.user_id = u.id AND bp.is_active = TRUE) THEN 'Business Owner'
+              WHEN r.code = 'institution_admin' THEN 'Business Owner'
+              ELSE COALESCE(d.name, r.name, r.code, 'Staff Member')
+            END AS role,
+            COALESCE(r.code, 'staff') AS role_code,
+            COALESCE(
+              (SELECT bp.name FROM business_profiles bp WHERE bp.user_id = u.id AND bp.is_active = TRUE LIMIT 1),
+              (SELECT ip.name FROM institution_profiles ip WHERE ip.id = COALESCE(im.institution_id, up.under_institution_id, $1::int) LIMIT 1),
+              ''
+            ) AS business_name
           FROM users u
-          JOIN institution_memberships im ON im.user_id = u.id AND im.is_active = TRUE AND COALESCE(im.is_deleted, FALSE) = FALSE
+          LEFT JOIN institution_memberships im ON im.user_id = u.id AND im.is_active = TRUE AND COALESCE(im.is_deleted, FALSE) = FALSE
           LEFT JOIN user_roles ur ON ur.user_id = u.id
           LEFT JOIN roles r ON r.id = COALESCE(im.role_id, ur.role_id)
           LEFT JOIN user_profiles up ON up.user_id = u.id
@@ -437,38 +474,98 @@ export async function GET(req: Request) {
           LEFT JOIN scope_types st ON st.id = r.scope_id
           WHERE COALESCE(u.is_deleted, FALSE) = FALSE
             AND (
-              -- If targetInstId is provided (from query param or env), strictly include staff belonging to that institution
-              ($1::int IS NOT NULL AND (im.institution_id = $1::int OR up.under_institution_id = $1::int))
-              -- If no targetInstId (platform scope), fallback to platform staff
+              -- If targetInstId is provided (from query param or env), include staff or business owners belonging to that institution
+              ($1::int IS NOT NULL AND (
+                im.institution_id = $1::int 
+                OR up.under_institution_id = $1::int
+                OR EXISTS (
+                  SELECT 1 FROM business_profiles bp 
+                  WHERE bp.user_id = u.id AND (bp.institution_profile_id = $1::int OR bp.id = $1::int)
+                )
+                OR EXISTS (
+                  SELECT 1 FROM institution_profiles ip
+                  WHERE ip.id = $1::int AND ip.created_by = u.id
+                )
+              ))
+              -- If no targetInstId (platform scope), include platform staff and all registered business owners
               OR ($1::int IS NULL AND (
                 r.code IN ('platform_admin', 'super_admin', 'admin', 'platform_staff', 'accountant', 'head_of_operations')
                 OR st.code = 'platform'
+                OR EXISTS (SELECT 1 FROM business_profiles bp WHERE bp.user_id = u.id AND bp.is_active = TRUE)
               ))
             )
-            -- Exclude students, parents/guardians, drivers, and clients from the staff picker
-            AND LOWER(COALESCE(r.code, '')) NOT IN ('student', 'guardian', 'parent', 'client', 'driver')
-            AND LOWER(COALESCE(r.name, '')) NOT IN ('student', 'guardian', 'parent', 'client', 'driver')
-            AND LOWER(COALESCE(d.name, '')) NOT IN ('student', 'guardian', 'parent', 'client', 'driver')
-            AND NOT EXISTS (
-              SELECT 1 FROM user_roles sur JOIN roles sr ON sr.id = sur.role_id
-              WHERE sur.user_id = u.id AND (LOWER(sr.code) IN ('student', 'guardian', 'parent', 'client', 'driver') OR LOWER(sr.name) IN ('student', 'guardian', 'parent', 'client', 'driver'))
-            )
-            AND NOT EXISTS (
-              SELECT 1 FROM institution_memberships sim JOIN roles sr ON sr.id = sim.role_id
-              WHERE sim.user_id = u.id AND (LOWER(sr.code) IN ('student', 'guardian', 'parent', 'client', 'driver') OR LOWER(sr.name) IN ('student', 'guardian', 'parent', 'client', 'driver'))
+            -- Exclude purely non-staff users (students, parents, drivers, external clients) UNLESS they are a business owner / institution admin
+            AND (
+              EXISTS (SELECT 1 FROM business_profiles bp WHERE bp.user_id = u.id AND bp.is_active = TRUE)
+              OR r.code IN ('institution_admin', 'business_owner', 'director', 'principal', 'branch_manager', 'head_of_operations', 'platform_admin')
+              OR (
+                LOWER(COALESCE(r.code, '')) NOT IN ('student', 'guardian', 'parent', 'client', 'driver')
+                AND LOWER(COALESCE(r.name, '')) NOT IN ('student', 'guardian', 'parent', 'client', 'driver')
+                AND LOWER(COALESCE(d.name, '')) NOT IN ('student', 'guardian', 'parent', 'client', 'driver')
+              )
             )
           ORDER BY u.id, 
             CASE 
-              WHEN r.code = 'head_of_operations' THEN 1 
-              WHEN r.code = 'platform_admin' THEN 2 
-              WHEN r.code = 'institution_admin' THEN 3
-              ELSE 4 
+              WHEN EXISTS (SELECT 1 FROM business_profiles bp WHERE bp.user_id = u.id AND bp.is_active = TRUE) THEN 0
+              WHEN r.code = 'business_owner' THEN 1
+              WHEN r.code = 'institution_admin' THEN 2
+              WHEN r.code = 'head_of_operations' THEN 3
+              WHEN r.code = 'platform_admin' THEN 4
+              ELSE 5 
             END
         )
-        SELECT * FROM staff_members ORDER BY name ASC;
+        SELECT * FROM staff_members ORDER BY 
+          CASE WHEN role = 'Business Owner' THEN 0 ELSE 1 END,
+          name ASC;
       `,
       [targetInstId || envDefaultInstId || null]
     );
+
+    const finalStaffList = [...staffRes.rows];
+    const targetLookupInst = targetInstId || userInstId;
+    if (targetLookupInst) {
+      try {
+        const ownerRes = await db.query(`
+          SELECT 
+            u.id,
+            COALESCE(NULLIF(TRIM(u.full_name), ''), u.email) AS name,
+            u.email,
+            u.phone,
+            'Business Owner' AS role,
+            'institution_admin' AS role_code,
+            COALESCE(
+              (SELECT bp.name FROM business_profiles bp WHERE bp.user_id = u.id AND bp.is_active = TRUE LIMIT 1),
+              ip.name,
+              ''
+            ) AS business_name
+          FROM users u
+          LEFT JOIN institution_profiles ip ON ip.id = $1::int
+          WHERE (
+            u.id = ip.created_by
+            OR EXISTS (
+              SELECT 1 FROM business_profiles bp 
+              WHERE bp.user_id = u.id AND (bp.institution_profile_id = $1::int OR bp.id = $1::int) AND bp.is_active = TRUE
+            )
+          )
+          LIMIT 1
+        `, [targetLookupInst]);
+        if (ownerRes.rows.length > 0) {
+          const bo = ownerRes.rows[0];
+          const idx = finalStaffList.findIndex((s: any) => String(s.id) === String(bo.id));
+          if (idx >= 0) {
+            finalStaffList[idx] = { ...finalStaffList[idx], ...bo, role: 'Business Owner' };
+          } else {
+            finalStaffList.unshift(bo);
+          }
+        }
+      } catch {}
+    }
+
+    finalStaffList.sort((a, b) => {
+      if (a.role === 'Business Owner' && b.role !== 'Business Owner') return -1;
+      if (b.role === 'Business Owner' && a.role !== 'Business Owner') return 1;
+      return (a.name || '').localeCompare(b.name || '');
+    });
     // Auto-seed sample tasks ONLY if table is completely empty and requester is an admin
     const canManageAllTasks = Boolean(user && (
       isPlatformAdminUser(user) ||
@@ -614,7 +711,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       tasks: sanitizedTasks,
       clients: clientsRes.rows,
-      staff: staffRes.rows,
+      staff: finalStaffList,
       configured_institution_id: targetInstId || envDefaultInstId || null,
       stats: {
         totalTasks,
@@ -644,7 +741,25 @@ export async function POST(req: Request) {
       Boolean((user as any)?.is_super_admin) ||
       isPlatformAdmin ||
       ["platform_admin", "super_admin", "institution_admin", "director", "principal", "school_owner", "college_owner", "university_owner"].includes(creatorRole);
-    const creatorInstId = (user as any)?.institution_id || user?.memberships?.[0]?.institution_id || null;
+    let creatorInstId = (user as any)?.institution_id || (user as any)?.under_institution_id || user?.memberships?.[0]?.institution_id || null;
+    if (!creatorInstId && user?.id) {
+      try {
+        const bpRes = await db.query(`SELECT institution_profile_id FROM business_profiles WHERE user_id = $1 AND is_active = TRUE LIMIT 1`, [user.id]);
+        if (bpRes.rows.length > 0 && bpRes.rows[0].institution_profile_id) {
+          creatorInstId = Number(bpRes.rows[0].institution_profile_id);
+        } else {
+          const imRes = await db.query(`SELECT institution_id FROM institution_memberships WHERE user_id = $1 AND is_active = TRUE AND COALESCE(is_deleted, FALSE) = FALSE LIMIT 1`, [user.id]);
+          if (imRes.rows.length > 0 && imRes.rows[0].institution_id) {
+            creatorInstId = Number(imRes.rows[0].institution_id);
+          } else {
+            const upRes = await db.query(`SELECT under_institution_id FROM user_profiles WHERE user_id = $1 LIMIT 1`, [user.id]);
+            if (upRes.rows.length > 0 && upRes.rows[0].under_institution_id) {
+              creatorInstId = Number(upRes.rows[0].under_institution_id);
+            }
+          }
+        }
+      } catch {}
+    }
     const bodyInstId = body.institution_id && body.institution_id !== "none" && body.institution_id !== "all" ? Number(body.institution_id) : null;
     const institutionId = (isAdmin && bodyInstId !== null) ? bodyInstId : (bodyInstId || creatorInstId || (isPlatformAdmin ? 1 : null));
     const todayDateStr = new Date().toISOString().split("T")[0];

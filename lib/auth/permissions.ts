@@ -152,6 +152,7 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "analytics.leads", label: "Leads", description: "analytics leads", scope: "institution", page: "/admin/users/leads" },
   { key: "analytics.sales", label: "Sales", description: "analytics sales", scope: "institution", page: "/admin/analytics/sales" },
   { key: "analytics.reports", label: "Analytics Reports", description: "analytics reports", scope: "institution", page: "/admin/analytics/reports" },
+  { key: "finance.transactions", label: "Transactions", description: "unified finance transactions", scope: "institution", page: "/admin/finance/transactions" },
   { key: "finance.income", label: "Finance Income", description: "finance income", scope: "institution", page: "/admin/finance/income" },
   { key: "finance.expense", label: "Finance Expense", description: "finance expenses", scope: "institution", page: "/admin/finance/expense" },
   { key: "finance.invoice", label: "Finance Invoice", description: "finance invoices", scope: "institution", page: "/admin/finance/invoice" },
@@ -454,10 +455,50 @@ export function isPlatformAdminUser(
 export function isInstitutionAdminUser(
   user: {
     role_codes?: string[];
+    roles?: string[];
+    has_business_profile?: boolean;
+    has_professional_profile?: boolean;
+    memberships?: InstitutionMembership[];
   } | null | undefined
 ) {
+  if (!user) return false;
+  if (user.has_business_profile || user.has_professional_profile) return true;
+  if (
+    user.roles?.some((r) =>
+      [
+        "institution admin",
+        "business & professional admin",
+        "business owner",
+        "professional provider",
+        "business admin",
+      ].includes(r.toLowerCase().trim())
+    )
+  ) {
+    return true;
+  }
+  if (
+    user.memberships?.some((m) =>
+      [
+        "institution_admin",
+        "business_owner",
+        "professional_provider",
+        "business & professional admin",
+        "business owner",
+        "professional provider",
+      ].includes((m.role_code || "").toLowerCase().trim()) ||
+      [
+        "institution admin",
+        "business admin",
+        "business & professional admin",
+        "business owner",
+        "professional provider",
+      ].includes((m.role_name || "").toLowerCase().trim())
+    )
+  ) {
+    return true;
+  }
   return Boolean(
-    user?.role_codes?.some((role) =>
+    user.role_codes?.some((role) =>
       [
         "institution_admin",
         "professional_organization",
@@ -466,6 +507,8 @@ export function isInstitutionAdminUser(
         "university_owner",
         "library_owner",
         "pg_owner",
+        "business_owner",
+        "professional_provider",
       ].includes(role)
     )
   );
@@ -482,9 +525,164 @@ export function isStudentUser(
 export function isClientUser(
   user: {
     role_codes?: string[];
+    roles?: string[];
+    is_super_admin?: boolean;
+    has_business_profile?: boolean;
+    has_professional_profile?: boolean;
   } | null | undefined
 ) {
+  if (!user) return false;
+  if (user.is_super_admin || isPlatformAdminUser(user) || isInstitutionAdminUser(user)) return false;
   return Boolean(user?.role_codes?.includes("client"));
+}
+
+export const STAFF_ROLE_CODES = new Set([
+  "staff",
+  "teacher",
+  "faculty",
+  "hod",
+  "head_of_operations",
+  "operation_head",
+  "operations_head",
+  "academic_coordinator",
+  "director",
+  "principal",
+  "vice_principal",
+  "dean",
+  "center_head",
+  "branch_manager",
+  "sales_head",
+  "hr_head",
+  "finance_head",
+  "business_operations_manager",
+  "marketing_manager",
+  "sales_manager",
+  "store_manager",
+  "inventory_manager",
+  "sales_executive",
+  "cashier",
+  "tutor",
+  "teaching_assistant",
+  "doubt_expert",
+  "counselor",
+  "admission_counselor",
+  "telecaller",
+  "marketing_executive",
+  "accountant",
+  "institution_accountant",
+  "fee_collector",
+  "exam_controller",
+  "curriculum_developer",
+  "librarian",
+  "lab_assistant",
+  "it_support",
+  "placement_officer",
+  "hostel_warden",
+  "transport_coordinator",
+  "driver",
+  "security_guard",
+  "administrative_staff",
+  "sports_coach",
+]);
+
+export function isStaffUser(
+  user: {
+    role_codes?: string[];
+    roles?: string[];
+    primary_role?: string | null;
+    is_teacher?: boolean;
+    under_institution_id?: number | null;
+    memberships?: InstitutionMembership[];
+  } | null | undefined
+): boolean {
+  if (!user) return false;
+  const codes = (user.role_codes ?? []).map((c) => c.toLowerCase().trim());
+  if (codes.some((c) => STAFF_ROLE_CODES.has(c))) return true;
+  if (codes.some((c) => c.includes("head") || c.includes("manager") || c.includes("sales") || c.includes("marketing") || c.includes("executive") || c.includes("staff"))) return true;
+  const primary = (user.primary_role ?? "").toLowerCase().trim();
+  if (STAFF_ROLE_CODES.has(primary)) return true;
+  if (
+    user.memberships?.some((m) => {
+      const mc = (m.role_code ?? "").toLowerCase().trim();
+      return STAFF_ROLE_CODES.has(mc) || (mc && mc !== "student" && mc !== "parent" && mc !== "customer");
+    })
+  ) {
+    return true;
+  }
+  const roles = (user.roles ?? []).map((r) => r.toLowerCase().trim());
+  if (
+    roles.some((r) =>
+      r.includes("staff") ||
+      r.includes("teacher") ||
+      r.includes("faculty") ||
+      r.includes("head of department") ||
+      r.includes("hod") ||
+      r.includes("head of operations") ||
+      r.includes("operation head") ||
+      r.includes("operations head") ||
+      r.includes("coordinator") ||
+      r.includes("manager") ||
+      r.includes("counselor") ||
+      r.includes("principal") ||
+      r.includes("director") ||
+      r.includes("accountant")
+    )
+  ) {
+    return true;
+  }
+  return Boolean(user.is_teacher || (user.under_institution_id && !user.role_codes?.includes("student") && !user.role_codes?.includes("parent")));
+}
+
+export function isCustomerUser(
+  user: {
+    role_codes?: string[];
+    roles?: string[];
+    primary_role?: string | null;
+    is_super_admin?: boolean;
+    has_business_profile?: boolean;
+    has_professional_profile?: boolean;
+    is_customer?: boolean;
+    is_teacher?: boolean;
+    under_institution_id?: number | null;
+    memberships?: InstitutionMembership[];
+  } | null | undefined
+): boolean {
+  if (!user) return false;
+  if (user.is_super_admin || user.role_codes?.includes("platform_admin")) return false;
+  // If consumer listed business or professional profile or is institution admin, treat as admin, NOT customer
+  if (user.has_business_profile || user.has_professional_profile) return false;
+  if (isInstitutionAdminUser(user)) return false;
+  // Staff members are employees of the business/institution, NOT customers
+  if (isStaffUser(user)) return false;
+  if (
+    user.role_codes?.some((r) =>
+      [
+        "institution_admin",
+        "teacher",
+        "student",
+        "parent",
+        "driver",
+        "staff",
+        "hod",
+        "head_of_operations",
+        "operation_head",
+        "business_owner",
+        "professional_provider",
+      ].includes(r)
+    )
+  ) {
+    return false;
+  }
+  if (user.is_customer === true) return true;
+  if (user.role_codes?.includes("customer")) return true;
+  if (
+    !user.role_codes?.some((r) =>
+      ["institution_admin", "teacher", "student", "parent", "driver", "client", "staff", "hod"].includes(r)
+    )
+  ) {
+    return true;
+  }
+  return false;
 }
 
 const TEACHING_ROLE_CODES = new Set([
@@ -542,6 +740,46 @@ export function isAdminPathVisibleForRole(
   pathname: string
 ) {
   const normalized = normalizeAdminPath(pathname);
+  if (
+    normalized === "/admin/institution/complaints" ||
+    normalized === "/admin/complaints" ||
+    normalized.startsWith("/admin/complaints/") ||
+    normalized.startsWith("/admin/institution/complaints")
+  ) {
+    return true;
+  }
+  if (isPlatformAdminUser(user)) {
+    return !PLATFORM_ADMIN_HIDDEN_PATHS.some(
+      (hiddenPath) =>
+        normalized === hiddenPath ||
+        normalized.startsWith(`${hiddenPath}/`)
+    );
+  }
+  if (isInstitutionAdminUser(user)) {
+    if (normalized === "/admin/users" || normalized.startsWith("/admin/users/")) return false;
+    if (normalized === "/admin/profiles" || normalized.startsWith("/admin/profiles/")) return false;
+    if (normalized === "/admin/business-type-access" || normalized.startsWith("/admin/business-type-access/")) return false;
+    if (normalized === "/admin/categories" || normalized.startsWith("/admin/categories/")) return false;
+    if (normalized === "/admin/catalog" || normalized.startsWith("/admin/catalog/")) return false;
+    if (normalized === "/admin/locations" || normalized.startsWith("/admin/locations/")) return false;
+    if (normalized === "/admin/institutions" || normalized.startsWith("/admin/institutions/")) return false;
+    if (normalized === "/admin/classroom" || normalized.startsWith("/admin/classroom/")) return false;
+    if (normalized === "/admin/students" || normalized.startsWith("/admin/students/")) return false;
+    return true;
+  }
+  if (isCustomerUser(user)) {
+    return (
+      normalized === "/admin" ||
+      normalized === "/admin/orders" ||
+      normalized.startsWith("/admin/orders/") ||
+      normalized === "/admin/finance" ||
+      normalized.startsWith("/admin/finance/") ||
+      normalized === "/admin/my-profile" ||
+      normalized.startsWith("/admin/my-profile/") ||
+      normalized === "/admin/account" ||
+      normalized.startsWith("/admin/account/")
+    );
+  }
   if (isClientUser(user)) {
     return (
       normalized === "/admin/operations/tasks" ||
@@ -559,6 +797,15 @@ export function isAdminPathVisibleForRole(
     return !isStudentUser(user) && !isParentUser(user);
   }
   if (normalized === "/admin/affiliate" || normalized.startsWith("/admin/affiliate")) return true;
+  if (
+    normalized === "/admin/profiles" || normalized.startsWith("/admin/profiles/") ||
+    normalized === "/admin/locations" || normalized.startsWith("/admin/locations/") ||
+    normalized === "/admin/categories" || normalized.startsWith("/admin/categories/") ||
+    normalized === "/admin/catalog" || normalized.startsWith("/admin/catalog/")
+  ) {
+    return isPlatformAdminUser(user);
+  }
+
   if (normalized === "/admin/users" || normalized.startsWith("/admin/users/")) {
     if (isInstitutionAdminUser(user)) return false;
   }
@@ -609,8 +856,7 @@ export function isAdminPathVisibleForRole(
       hasPermission(user, "operations.tasks.manage") ||
       hasPermission(user, "operations.tasks.view_all") ||
       hasPermission(user, "managestaff.tasks") ||
-      Boolean(user?.role_codes?.includes("head_of_operations")) ||
-      Boolean(user?.role_codes?.includes("business_operations_manager"))
+      Boolean(user?.role_codes?.some(r => ["hod", "head_of_operations", "operation_head", "operations_head", "business_operations_manager"].includes(r)))
     );
   }
 
@@ -652,7 +898,13 @@ export function isAdminPathVisibleForRole(
     );
   }
 
-  if (normalized === "/admin/master-data" || normalized.startsWith("/admin/master-data")) {
+  if (
+    normalized === "/admin/profiles" || normalized.startsWith("/admin/profiles/") ||
+    normalized === "/admin/locations" || normalized.startsWith("/admin/locations/") ||
+    normalized === "/admin/categories" || normalized.startsWith("/admin/categories/") ||
+    normalized === "/admin/catalog" || normalized.startsWith("/admin/catalog/") ||
+    normalized === "/admin/master-data" || normalized.startsWith("/admin/master-data")
+  ) {
     return isPlatformAdminUser(user);
   }
 
@@ -688,7 +940,14 @@ export function isPermissionAssignableToRole(permission: string, roleCode?: stri
   }
 
   const permissionModule = getPermissionModule(permission);
-  if (!permissionModule) return false;
+  if (!permissionModule) {
+    const roleOwnedPrefix = permission.split(".")[0];
+    if (["student", "parent", "teacher", "driver"].includes(roleOwnedPrefix)) {
+      return roleCode === roleOwnedPrefix;
+    }
+    if (roleCode === "student" || roleCode === "parent") return false;
+    return true;
+  }
 
 
   const roleOwnedPrefix = permissionModule.key.split(".")[0];
@@ -910,6 +1169,9 @@ export type PermissionUser = {
   memberships: InstitutionMembership[];
   under_institution_id?: number | null;
   avatar_url?: string | null;
+  has_business_profile?: boolean;
+  has_professional_profile?: boolean;
+  is_customer?: boolean;
 };
 
 type PermissionTarget = {
@@ -958,31 +1220,47 @@ export function hasPermission(
   if (permissionSetAllows(platformPermissions, permission)) return true;
 
   if (isInstitutionAdminUser(user)) {
-    if (target.institutionId) {
-      const allowedIds = (user.memberships ?? []).map((m) => m.institution_id);
-      if ((user as any).under_institution_id) allowedIds.push((user as any).under_institution_id);
-      return allowedIds.includes(target.institutionId);
-    }
     return true;
   }
 
-  if (isTeacherUser(user)) {
-    const isTeacherAllowed =
+  if (isCustomerUser(user)) {
+    if (
+      permission === "dashboard.view" ||
+      permission === "customer.dashboard.view" ||
+      permission.startsWith("customer.") ||
+      permission.startsWith("orders.") ||
+      permission.startsWith("finance.") ||
+      permission.startsWith("support.") ||
+      permission.startsWith("notifications.")
+    ) {
+      return true;
+    }
+  }
+
+  if (isStaffUser(user) || isTeacherUser(user)) {
+    const isStaffAllowed =
+      permission === "dashboard.view" ||
+      permission === "teacher.dashboard.view" ||
+      permission.startsWith("operations.") ||
+      permission.startsWith("managestaff.") ||
       permission.startsWith("content.") ||
       permission.startsWith("managestudents.") ||
       permission.startsWith("student.myclassroom.") ||
       permission.startsWith("teacher.") ||
       permission.startsWith("notifications.") ||
       permission.startsWith("support.") ||
-      permission === "rolespermissions.rolepermissions.view";
+      permission.startsWith("rolespermissions.") ||
+      permission.startsWith("institution.complaints") ||
+      permission.startsWith("complaints.") ||
+      permission.startsWith("noticeboard.");
 
-    if (isTeacherAllowed) {
+    if (isStaffAllowed) {
       if (target.institutionId) {
         const allowedIds = (user.memberships ?? []).map((m) => m.institution_id);
         if ((user as any).under_institution_id) allowedIds.push((user as any).under_institution_id);
-        return allowedIds.includes(target.institutionId);
+        return allowedIds.length === 0 || allowedIds.includes(target.institutionId);
       }
-      return (user.memberships ?? []).length > 0 || Boolean((user as any).under_institution_id);
+      return true;
     }
   }
 
@@ -1004,13 +1282,19 @@ export function canAccessAdminArea(
     permissions?: string[];
     memberships?: InstitutionMembership[];
     is_super_admin?: boolean;
+    has_business_profile?: boolean;
+    has_professional_profile?: boolean;
+    is_customer?: boolean;
   } | null | undefined
 ) {
   if (!user) return false;
   if (user.is_super_admin || isPlatformFullAccess(user)) return true;
+  if (isStaffUser(user)) return true;
+  if (isCustomerUser(user)) return true;
   if (
     user.role_codes?.some((role) =>
       [
+        "customer",
         "client",
         "accountant",
         "institution_accountant",
@@ -1158,6 +1442,7 @@ export function getRequestPermission(method: string, url: string) {
   if (pathname.includes("/api/admin/staff/letters")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/staff/jobs")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/staff/applicants")) return AUTHENTICATED_LOOKUP_PERMISSION;
+  if (pathname.includes("/api/admin/finance/transactions")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/finance/income")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/finance/expense")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/finance/allowance")) return AUTHENTICATED_LOOKUP_PERMISSION;
@@ -1231,7 +1516,18 @@ export function getRequestPermission(method: string, url: string) {
   if (pathname.includes("/api/admin/sales/pipeline")) return permissionForAction("sales.pipeline", verb);
   if (pathname.includes("/api/admin/sales/enrollments")) return permissionForAction("sales.enrollments", verb);
   if (pathname.includes("/api/admin/sales/leads")) return permissionForAction("sales.leads", verb);
+  if (pathname.includes("/api/business/")) return AUTHENTICATED_LOOKUP_PERMISSION;
+  if (pathname.includes("/api/professional/")) return AUTHENTICATED_LOOKUP_PERMISSION;
+  if (pathname.includes("/api/admin/profiles")) return AUTHENTICATED_LOOKUP_PERMISSION;
+  if (pathname.includes("/api/admin/geography/countries")) return AUTHENTICATED_LOOKUP_PERMISSION;
+  if (pathname.includes("/api/admin/catalog/products")) return AUTHENTICATED_LOOKUP_PERMISSION;
+  if (pathname.includes("/api/admin/catalog/services")) return AUTHENTICATED_LOOKUP_PERMISSION;
+  if (pathname.includes("/api/admin/catalog/pricing")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/institutions/create-business")) return AUTHENTICATED_LOOKUP_PERMISSION;
+  if (pathname.includes("/api/admin/customers")) return AUTHENTICATED_LOOKUP_PERMISSION;
+  if (pathname.includes("/api/admin/business-owners")) return AUTHENTICATED_LOOKUP_PERMISSION;
+  if (pathname.includes("/api/admin/professionals")) return AUTHENTICATED_LOOKUP_PERMISSION;
+  if (pathname.includes("/api/admin/analytics/dashboard")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/institutions/profiles")) return permissionForAction("institution.institutions", verb);
   if (pathname.includes("/api/admin/institutions")) return permissionForAction("institution.institutions", verb);
   if (pathname.includes("/api/admin/institution-notification-settings")) return permissionForAction("notifications.controls", verb);
@@ -1307,6 +1603,8 @@ export function hasAdminPagePermission(
   const normalized = normalizeAdminPath(pathname);
   if (!normalized.startsWith("/admin")) return true;
   if (!isAdminPathVisibleForRole(user, normalized)) return false;
+  if (isPlatformAdminUser(user) || isInstitutionAdminUser(user)) return true;
+  if (isCustomerUser(user)) return true;
   if (isClientUser(user)) return true;
 
   if (normalized === "/admin/affiliate" || normalized.startsWith("/admin/affiliate")) return true;
@@ -1407,9 +1705,15 @@ export function hasAdminPagePermission(
       hasPermission(user, "operations.tasks.manage") ||
       hasPermission(user, "operations.tasks.view_all") ||
       hasPermission(user, "managestaff.tasks") ||
-      Boolean(user?.role_codes?.includes("head_of_operations")) ||
-      Boolean(user?.role_codes?.includes("business_operations_manager"))
+      Boolean(user?.role_codes?.some(r => ["hod", "head_of_operations", "operation_head", "operations_head", "business_operations_manager"].includes(r)))
     );
+  }
+
+  if (normalized === "/admin/categories" || normalized.startsWith("/admin/categories/")) {
+    return isPlatformAdminUser(user);
+  }
+  if (normalized === "/admin/locations" || normalized.startsWith("/admin/locations/")) {
+    return isPlatformAdminUser(user);
   }
 
   if (normalized === "/admin/company" || normalized.startsWith("/admin/company")) {
@@ -1425,11 +1729,37 @@ export function hasAdminPagePermission(
   }
 
   if (normalized === "/admin/marketing" || normalized.startsWith("/admin/marketing")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized));
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized)) || Boolean(user?.permissions?.some(p => p.startsWith("marketing.")));
   }
 
   if (normalized === "/admin/sales" || normalized.startsWith("/admin/sales")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized));
+    if (isPlatformAdminUser(user) || isInstitutionAdminUser(user)) return true;
+    if (normalized === "/admin/sales/orders") {
+      return hasPermission(user, "sales.orders.view") || Boolean(user?.permissions?.some(p => p.startsWith("sales.orders")));
+    }
+    if (normalized === "/admin/sales/pipeline") {
+      return hasPermission(user, "sales.pipeline.view") || Boolean(user?.permissions?.some(p => p.startsWith("sales.pipeline")));
+    }
+    if (normalized === "/admin/sales/proposals") {
+      return hasPermission(user, "sales.proposals.view") || Boolean(user?.permissions?.some(p => p.startsWith("sales.proposals")));
+    }
+    if (normalized === "/admin/sales/clients") {
+      return hasPermission(user, "sales.clients.view") || Boolean(user?.permissions?.some(p => p.startsWith("sales.clients")));
+    }
+    if (normalized === "/admin/sales/enquiries") {
+      return hasPermission(user, "sales.enquiries.view") || Boolean(user?.permissions?.some(p => p.startsWith("sales.enquiries")));
+    }
+    if (normalized === "/admin/sales/commissions") {
+      return hasPermission(user, "sales.commissions.view") || Boolean(user?.permissions?.some(p => p.startsWith("sales.commissions")));
+    }
+    if (normalized === "/admin/sales/leads") {
+      return hasPermission(user, "sales.leads.view") || Boolean(user?.permissions?.some(p => p.startsWith("sales.leads")));
+    }
+    return hasPermission(user, getPageViewPermission(normalized)) || Boolean(user?.permissions?.some(p => p.startsWith("sales.") || p.startsWith("leads.")));
+  }
+
+  if (normalized === "/admin/vendors" || normalized.startsWith("/admin/vendors")) {
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, "admin.vendors.view") || hasPermission(user, "inventory.view") || Boolean(user?.permissions?.some(p => p.startsWith("vendors.") || p.startsWith("inventory."))) || Boolean(user?.role_codes?.includes("head_of_operations"));
   }
 
   if (normalized === "/admin/finance/allowance") {
@@ -1445,6 +1775,7 @@ export function hasAdminPagePermission(
 
   if (normalized === "/admin/finance" || normalized.startsWith("/admin/finance/")) {
     if (isPlatformAdminUser(user) || isInstitutionAdminUser(user)) return true;
+    if (normalized === "/admin/finance/transactions") return true;
     if (normalized === "/admin/finance/income") {
       return hasPermission(user, "finance.platform.income.view") || hasPermission(user, "finance.income.view");
     }
@@ -1537,7 +1868,12 @@ export function hasAdminPagePermission(
     );
   }
 
-  if (normalized === "/admin/institution/complaints") {
+  if (
+    normalized === "/admin/institution/complaints" ||
+    normalized.startsWith("/admin/institution/complaints") ||
+    normalized === "/admin/complaints" ||
+    normalized.startsWith("/admin/complaints")
+  ) {
     return true;
   }
 
@@ -1562,7 +1898,12 @@ export function hasAdminPagePermission(
     );
   }
 
-  if (normalized === "/admin/institutions/news") {
+  if (
+    normalized === "/admin/institutions/news" ||
+    normalized.startsWith("/admin/institutions/news") ||
+    normalized === "/admin/noticeboard" ||
+    normalized.startsWith("/admin/noticeboard")
+  ) {
     return true;
   }
 
@@ -1609,19 +1950,27 @@ export function hasAdminPagePermission(
 export function getFirstAllowedAdminPath(
   user: {
     role_codes?: string[];
+    roles?: string[];
     permissions?: string[];
     memberships?: InstitutionMembership[];
     is_super_admin?: boolean;
+    has_business_profile?: boolean;
+    has_professional_profile?: boolean;
+    is_customer?: boolean;
   } | null | undefined
 ) {
   if (!user) return null;
+  if (isPlatformAdminUser(user)) return "/admin";
+  if (isInstitutionAdminUser(user)) return "/admin";
+  if (isCustomerUser(user)) return "/admin";
+  if (isStaffUser(user)) return "/admin";
   if (isClientUser(user)) return "/admin/operations/tasks";
   const match = ADMIN_PERMISSION_MODULES.find(
     (module) =>
       isAdminPathVisibleForRole(user, module.page) &&
       hasPermission(user, `${module.key}.view`)
   );
-  return match?.page ?? null;
+  return match?.page ?? "/admin";
 }
 
 export function getInstitutionIdFromUrl(url: string) {

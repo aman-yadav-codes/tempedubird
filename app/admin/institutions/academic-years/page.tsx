@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { formatIndianDate } from "@/lib/format-time";
 import { cn } from "@/lib/utils";
+import { MasterCatalogNavTabs } from "@/components/admin/catalog/master-catalog-nav-tabs";
 import { useAuthStore } from "@/store";
 
 type SessionTemplate = {
@@ -294,6 +295,7 @@ export default function AcademicSessionsPage() {
 
   return (
     <div className="w-full max-w-full space-y-6">
+      <MasterCatalogNavTabs />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Academic Sessions</h1>

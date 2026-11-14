@@ -1,17 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Shield, LayoutDashboard, LogIn, User } from "lucide-react";
+import { Shield, LogIn, User, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAuthStore } from "@/store";
+import { useAuthStore, useCartStore } from "@/store";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
+import { CartDrawer } from "@/components/checkout/cart-drawer";
 
 export function PlatformAdminHeader() {
   const { user } = useAuthStore();
+  const { getTotalCount, toggleCart } = useCartStore();
+  const [mounted, setMounted] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authDialogTab, setAuthDialogTab] = useState<"signin" | "signup">("signin");
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const isPlatformUser = Boolean(
     user?.is_super_admin || user?.role_codes?.includes("platform_admin")
@@ -42,14 +49,24 @@ export function PlatformAdminHeader() {
         <div className="flex items-center gap-2 sm:gap-3">
           <ThemeToggle />
 
+          {/* Cart Button */}
+          <button
+            type="button"
+            onClick={toggleCart}
+            className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors cursor-pointer"
+            title="Shopping Cart"
+            aria-label="Shopping Cart"
+          >
+            <ShoppingCart className="size-4" />
+            {mounted && getTotalCount() > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white shadow-xs">
+                {getTotalCount()}
+              </span>
+            )}
+          </button>
+
           {user ? (
             <div className="flex items-center gap-2">
-              <Link href="/platformadmin">
-                <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9">
-                  <LayoutDashboard className="size-3.5" />
-                  <span className="hidden sm:inline">Platform Console</span>
-                </Button>
-              </Link>
               <Link href="/platformadmin/my-profile">
                 <Button size="sm" variant="ghost" className="gap-1.5 text-xs h-9 px-2.5">
                   <User className="size-3.5 text-muted-foreground" />
@@ -81,6 +98,9 @@ export function PlatformAdminHeader() {
         onOpenChange={setAuthDialogOpen}
         defaultTab={authDialogTab}
       />
+
+      {/* Shopping Cart Drawer */}
+      <CartDrawer />
     </header>
   );
 }

@@ -1203,13 +1203,13 @@ export default function InstitutionsAdminPage() {
         <div className="space-y-6 w-full max-w-full">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Institutions</h1>
-                    <p className="text-sm text-muted-foreground">Manage organization profiles, contact info, subtypes and media.</p>
+                    <h1 className="text-2xl font-bold tracking-tight">Businesses & Professionals</h1>
+                    <p className="text-sm text-muted-foreground">Manage business & professional directory, contact info, categories, and profiles.</p>
                 </div>
                 {!isPlatformAdmin && (
                     <div>
                         <Button onClick={openCreateDialog} className="w-full sm:w-auto">
-                            <Plus className="mr-2 h-4 w-4" /> New Institution
+                            <Plus className="mr-2 h-4 w-4" /> New Business / Profile
                         </Button>
                     </div>
                 )}

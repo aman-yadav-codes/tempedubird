@@ -16,6 +16,7 @@ import {
   X,
   Users,
   Briefcase,
+  GraduationCap,
   Sparkles,
   ShieldCheck,
   KeyRound,
@@ -272,7 +273,7 @@ export function AuthModalDialog({
     }
   };
 
-  const handleDemoLogin = async (role: "student" | "guardian" | "professional" | "platform_admin") => {
+  const handleDemoLogin = async (role: "student" | "guardian" | "professional" | "ramesh" | "platform_admin") => {
     setSubmitting(true);
     try {
       const res = await fetch("/api/auth/demo-login", {
@@ -292,8 +293,8 @@ export function AuthModalDialog({
           ? "Student"
           : role === "guardian"
             ? "Guardian"
-            : role === "professional"
-              ? "Professional"
+            : role === "ramesh" || role === "professional"
+              ? "Ramesh Kumar (Quality Specialist)"
               : "Platform Admin";
       toast.success(`Signed in with Demo ${roleLabel} Account!`);
       onOpenChange(false);
@@ -339,7 +340,7 @@ export function AuthModalDialog({
           email: payloadEmail,
           phone: cleanPhone,
           address: signUpCity.trim(),
-          role_code: "institution_admin",
+          role_code: "customer",
           institution_id: null,
           referral_code: signUpReferralCode.trim() || null,
           password: signUpPassword,
@@ -839,6 +840,62 @@ export function AuthModalDialog({
                   </>
                 )}
               </Button>
+
+              {/* Demo 1-Click Access */}
+              <div className="pt-3 border-t border-slate-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-600 flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-[#D91B1B]" />
+                    Try Demo Accounts
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium">1-Click Sign In</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => handleDemoLogin("ramesh")}
+                    className="flex flex-col items-center justify-center p-2 rounded-xl border border-slate-200 bg-slate-50/80 hover:bg-slate-100 hover:border-blue-400 transition-all cursor-pointer group text-center"
+                  >
+                    <Briefcase className="h-4 w-4 text-blue-600 mb-0.5 group-hover:scale-110 transition-transform" />
+                    <span className="text-[11px] font-bold text-slate-800">Ramesh Kumar</span>
+                    <span className="text-[9px] text-slate-500">Quality Specialist</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => handleDemoLogin("student")}
+                    className="flex flex-col items-center justify-center p-2 rounded-xl border border-slate-200 bg-slate-50/80 hover:bg-slate-100 hover:border-red-400 transition-all cursor-pointer group text-center"
+                  >
+                    <GraduationCap className="h-4 w-4 text-red-500 mb-0.5 group-hover:scale-110 transition-transform" />
+                    <span className="text-[11px] font-bold text-slate-800">Student</span>
+                    <span className="text-[9px] text-slate-500">Learner</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => handleDemoLogin("guardian")}
+                    className="flex flex-col items-center justify-center p-2 rounded-xl border border-slate-200 bg-slate-50/80 hover:bg-slate-100 hover:border-amber-400 transition-all cursor-pointer group text-center"
+                  >
+                    <Users className="h-4 w-4 text-amber-500 mb-0.5 group-hover:scale-110 transition-transform" />
+                    <span className="text-[11px] font-bold text-slate-800">Guardian</span>
+                    <span className="text-[9px] text-slate-500">Parent</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => handleDemoLogin("platform_admin")}
+                    className="flex flex-col items-center justify-center p-2 rounded-xl border border-slate-200 bg-slate-50/80 hover:bg-slate-100 hover:border-purple-400 transition-all cursor-pointer group text-center"
+                  >
+                    <ShieldCheck className="h-4 w-4 text-purple-600 mb-0.5 group-hover:scale-110 transition-transform" />
+                    <span className="text-[11px] font-bold text-slate-800">Super Admin</span>
+                    <span className="text-[9px] text-slate-500">Full Access</span>
+                  </button>
+                </div>
+              </div>
 
               {/* Footer Switcher */}
               <div className="text-center pt-1 text-xs text-slate-500">

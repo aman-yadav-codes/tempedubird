@@ -15,6 +15,10 @@ export type SalesOrder = {
   order_number: string;
   institution_id: number | null;
   institution_name?: string | null;
+  business_id?: number | null;
+  professional_id?: number | null;
+  seller_user_id?: number | null;
+  order_type?: string | null;
   customer_name: string;
   customer_email: string;
   customer_phone: string | null;
@@ -44,6 +48,10 @@ export async function ensureSalesOrdersTable() {
       id BIGSERIAL PRIMARY KEY,
       order_number VARCHAR(50) UNIQUE NOT NULL,
       institution_id INTEGER REFERENCES institution_profiles(id) ON DELETE SET NULL,
+      business_id INTEGER,
+      professional_id INTEGER,
+      seller_user_id INTEGER,
+      order_type VARCHAR(50) DEFAULT 'product',
       customer_name VARCHAR(255) NOT NULL,
       customer_email VARCHAR(255) NOT NULL,
       customer_phone VARCHAR(50),
@@ -61,6 +69,11 @@ export async function ensureSalesOrdersTable() {
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
 
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS business_id INTEGER;
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS professional_id INTEGER;
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS seller_user_id INTEGER;
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS order_type VARCHAR(50) DEFAULT 'product';
+
     CREATE TABLE IF NOT EXISTS sales_order_items (
       id BIGSERIAL PRIMARY KEY,
       order_id BIGINT REFERENCES sales_orders(id) ON DELETE CASCADE,
@@ -74,6 +87,9 @@ export async function ensureSalesOrdersTable() {
     CREATE INDEX IF NOT EXISTS idx_sales_orders_inst ON sales_orders(institution_id);
     CREATE INDEX IF NOT EXISTS idx_sales_orders_status ON sales_orders(payment_status, fulfillment_status);
     CREATE INDEX IF NOT EXISTS idx_sales_orders_created ON sales_orders(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_sales_orders_business ON sales_orders(business_id);
+    CREATE INDEX IF NOT EXISTS idx_sales_orders_professional ON sales_orders(professional_id);
+    CREATE INDEX IF NOT EXISTS idx_sales_orders_seller_user ON sales_orders(seller_user_id);
     CREATE INDEX IF NOT EXISTS idx_sales_order_items_order ON sales_order_items(order_id);
   `);
 
@@ -229,6 +245,13 @@ export async function getSalesOrdersList(params: {
   paymentStatus?: string;
   fulfillmentStatus?: string;
   institutionId?: number | null;
+  customerUserId?: number | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  sellerUserId?: number | null;
+  sellerBusinessId?: number | null;
+  sellerProfessionalId?: number | null;
+  orderType?: string | null;
   page?: number;
   limit?: number;
 }) {
@@ -240,6 +263,42 @@ export async function getSalesOrdersList(params: {
 
   const conditions: string[] = ["1=1"];
   const values: any[] = [];
+
+  if (params.customerUserId) {
+    values.push(params.customerUserId);
+    const uIdx = values.length;
+    if (params.customerEmail || params.customerPhone) {
+      values.push(params.customerEmail ? params.customerEmail.toLowerCase().trim() : "");
+      const eIdx = values.length;
+      values.push(params.customerPhone ? params.customerPhone.trim() : "");
+      const pIdx = values.length;
+      conditions.push(`(o.created_by = $${uIdx} OR ($${eIdx} != '' AND LOWER(o.customer_email) = $${eIdx}) OR ($${pIdx} != '' AND o.customer_phone = $${pIdx}))`);
+    } else {
+      conditions.push(`o.created_by = $${uIdx}`);
+    }
+  }
+
+  if (params.sellerUserId || params.sellerBusinessId || params.sellerProfessionalId) {
+    const sellerConds: string[] = [];
+    if (params.sellerUserId) {
+      values.push(params.sellerUserId);
+      sellerConds.push(`o.seller_user_id = $${values.length}`);
+    }
+    if (params.sellerBusinessId) {
+      values.push(params.sellerBusinessId);
+      sellerConds.push(`o.business_id = $${values.length}`);
+    }
+    if (params.sellerProfessionalId) {
+      values.push(params.sellerProfessionalId);
+      sellerConds.push(`o.professional_id = $${values.length}`);
+    }
+    conditions.push(`(${sellerConds.join(" OR ")})`);
+  }
+
+  if (params.orderType && params.orderType !== "all") {
+    values.push(params.orderType);
+    conditions.push(`o.order_type = $${values.length}`);
+  }
 
   if (params.institutionId) {
     values.push(params.institutionId);

@@ -133,6 +133,7 @@ export async function POST(req: Request) {
       features = [],
       status = "active",
       is_featured = false,
+      unit = "piece",
       institution_id: providedInstId,
       institution_name: providedInstName,
     } = body;
@@ -164,8 +165,8 @@ export async function POST(req: Request) {
       `INSERT INTO products (
         title, slug, description, price, sale_price, category, category_id, program_ids, image_url,
         gallery, institution_id, institution_name, stock_quantity, sku,
-        badge_text, features, status, is_featured, created_by, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW(), NOW())
+        badge_text, features, status, is_featured, unit, created_by, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW(), NOW())
       RETURNING *`,
       [
         title.trim(),
@@ -186,6 +187,7 @@ export async function POST(req: Request) {
         JSON.stringify(features || []),
         status || "active",
         Boolean(is_featured),
+        unit || "piece",
         user?.id || null,
       ]
     );
@@ -219,6 +221,7 @@ export async function PUT(req: Request) {
       features,
       status,
       is_featured,
+      unit,
     } = body;
 
     if (!id) {
@@ -242,8 +245,9 @@ export async function PUT(req: Request) {
         features = $13,
         status = $14,
         is_featured = $15,
+        unit = COALESCE($16, unit),
         updated_at = NOW()
-      WHERE id = $16
+      WHERE id = $17
       RETURNING *`,
       [
         title?.trim(),
@@ -261,6 +265,7 @@ export async function PUT(req: Request) {
         JSON.stringify(features || []),
         status || "active",
         Boolean(is_featured),
+        unit?.trim() || null,
         id,
       ]
     );

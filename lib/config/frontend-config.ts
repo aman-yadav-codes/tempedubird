@@ -172,3 +172,4 @@ export function getValidatedInstitutionId(): number | null {
   const config = getFrontendConfig();
   return config.isValid ? config.institutionId : null;
 }
+

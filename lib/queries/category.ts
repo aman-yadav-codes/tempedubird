@@ -35,6 +35,7 @@ export const listCategories = async (
     onlyLeaf = false,
     limit = 10,
     offset = 0,
+    category_type,
   } = options;
 
   const parsedSearchId = /^\d+$/.test(search) ? Number(search) : null;
@@ -48,6 +49,30 @@ export const listCategories = async (
 
   const baseConditions = ["c.is_deleted = FALSE"];
   const params: unknown[] = [];
+
+  if (category_type && category_type !== 'all') {
+    params.push(category_type);
+    baseConditions.push(`c.category_type = $${params.length}`);
+  }
+
+  if (options.business_category_id) {
+    params.push(options.business_category_id);
+    baseConditions.push(`c.business_category_id = $${params.length}`);
+  }
+
+  if (options.business_subcategory_id) {
+    params.push(options.business_subcategory_id);
+    baseConditions.push(`c.business_subcategory_id = $${params.length}`);
+  }
+
+  if (options.parentId !== undefined) {
+    if (options.parentId === null) {
+      baseConditions.push("c.parent_id IS NULL");
+    } else {
+      params.push(options.parentId);
+      baseConditions.push(`c.parent_id = $${params.length}`);
+    }
+  }
 
   if (onlyClass) {
     baseConditions.push(`
@@ -64,7 +89,9 @@ export const listCategories = async (
     )`);
   }
 
-  if (onlyRoot || (showRootsFirst && !search)) {
+  if (onlyRoot) {
+    baseConditions.push("c.parent_id IS NULL");
+  } else if (showRootsFirst && !search) {
     baseConditions.push("c.depth = 1");
   }
 
@@ -89,6 +116,19 @@ export const listCategories = async (
         c.slug,
         c.parent_id,
         c.depth,
+        c.category_type,
+        c.business_category_id,
+        c.business_subcategory_id,
+        bc.name AS business_category_name,
+        bsc.name AS business_subcategory_name,
+        c.icon_url,
+        c.image_url,
+        c.description,
+        c.seo_title,
+        c.meta_description,
+        c.display_order,
+        c.countries,
+        c.synonyms,
         c.is_active,
         c.is_deleted,
         c.created_at,
@@ -115,6 +155,12 @@ export const listCategories = async (
 
       LEFT JOIN categories p
         ON p.id = c.parent_id
+
+      LEFT JOIN categories bc
+        ON bc.id = c.business_category_id
+
+      LEFT JOIN categories bsc
+        ON bsc.id = c.business_subcategory_id
 
       ${whereClause}
 
@@ -198,6 +244,19 @@ export const getCategoryById = async (
       c.slug,
       c.parent_id,
       c.depth,
+      c.category_type,
+      c.business_category_id,
+      c.business_subcategory_id,
+      bc.name AS business_category_name,
+      bsc.name AS business_subcategory_name,
+      c.icon_url,
+      c.image_url,
+      c.description,
+      c.seo_title,
+      c.meta_description,
+      c.display_order,
+      c.countries,
+      c.synonyms,
       c.is_active,
       c.is_deleted,
       c.created_at,
@@ -208,6 +267,12 @@ export const getCategoryById = async (
 
     LEFT JOIN categories p
       ON p.id = c.parent_id
+
+    LEFT JOIN categories bc
+      ON bc.id = c.business_category_id
+
+    LEFT JOIN categories bsc
+      ON bsc.id = c.business_subcategory_id
 
     WHERE c.id = $1
     `,
@@ -255,9 +320,20 @@ export const insertCategory = async (
         name,
         slug,
         parent_id,
-        depth
+        depth,
+        category_type,
+        business_category_id,
+        business_subcategory_id,
+        icon_url,
+        image_url,
+        description,
+        seo_title,
+        meta_description,
+        display_order,
+        countries,
+        synonyms
       )
-      VALUES ($1, $2, $3, $4)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 
       RETURNING
         id,
@@ -265,12 +341,31 @@ export const insertCategory = async (
         slug,
         parent_id,
         depth,
+        category_type,
+        business_category_id,
+        business_subcategory_id,
         is_active,
         is_deleted,
         created_at,
         updated_at
       `,
-      [data.name, data.slug, data.parentId, depth]
+      [
+        data.name,
+        data.slug,
+        data.parentId,
+        depth,
+        data.category_type || "business",
+        data.business_category_id || null,
+        data.business_subcategory_id || null,
+        data.icon_url || null,
+        data.image_url || null,
+        data.description || null,
+        data.seo_title || null,
+        data.meta_description || null,
+        data.display_order || 0,
+        JSON.stringify(data.countries || ["IN", "US"]),
+        JSON.stringify(data.synonyms || [])
+      ]
     );
 
     const newCat: Category = catRes.rows[0];
@@ -456,6 +551,12 @@ export async function updateCategory(
     name: string;
     slug: string;
     parentId: number | null;
+    category_type?: string;
+    business_category_id?: number | null;
+    business_subcategory_id?: number | null;
+    icon_url?: string | null;
+    description?: string | null;
+    synonyms?: string[] | string | null;
   }
 ) {
   const client = await db.connect();
@@ -536,6 +637,14 @@ export async function updateCategory(
       [subtreeIds]
     );
 
+    const synonymsArr = input.synonyms !== undefined
+      ? (Array.isArray(input.synonyms)
+          ? input.synonyms.map((s) => String(s).trim()).filter(Boolean)
+          : typeof input.synonyms === "string"
+          ? input.synonyms.split(",").map((s) => s.trim()).filter(Boolean)
+          : [])
+      : null;
+
     // update the moved category itself
     await client.query(
       `
@@ -544,10 +653,27 @@ export async function updateCategory(
         name = $1,
         slug = $2,
         parent_id = $3,
+        category_type = COALESCE($5, category_type),
+        business_category_id = $6,
+        business_subcategory_id = $7,
+        icon_url = COALESCE($8, icon_url),
+        description = COALESCE($9, description),
+        synonyms = COALESCE($10, synonyms),
         updated_at = NOW()
       WHERE id = $4
       `,
-      [input.name, input.slug, input.parentId, input.id]
+      [
+        input.name,
+        input.slug,
+        input.parentId,
+        input.id,
+        input.category_type || null,
+        input.business_category_id !== undefined ? input.business_category_id : null,
+        input.business_subcategory_id !== undefined ? input.business_subcategory_id : null,
+        input.icon_url || null,
+        input.description || null,
+        synonymsArr,
+      ]
     );
 
     // remove old closure rows for the whole subtree

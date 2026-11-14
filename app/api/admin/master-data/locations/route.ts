@@ -71,6 +71,42 @@ export async function GET(req: Request) {
     const scopesParam = url.searchParams.get("scopes");
     const scopes = scopesParam ? scopesParam.split(",") : undefined;
 
+    const format = url.searchParams.get("format");
+    if (format === "csv") {
+      const allRows = await db.query(`
+        SELECT l.id, l.name, l.slug, l.type, l.country, l.state, l.city, l.pincode, l.latitude, l.longitude, l.is_active
+        FROM locations l
+        WHERE l.is_deleted = FALSE
+        ORDER BY l.id ASC
+      `);
+      const headers = ["ID", "Name", "Slug", "Type", "Country", "State", "City", "PIN_ZIP_Code", "Latitude", "Longitude", "Status"];
+      const csv = [
+        headers.join(","),
+        ...allRows.rows.map((r) =>
+          [
+            r.id,
+            `"${(r.name || "").replace(/"/g, '""')}"`,
+            r.slug || "",
+            r.type || "",
+            `"${(r.country || "").replace(/"/g, '""')}"`,
+            `"${(r.state || "").replace(/"/g, '""')}"`,
+            `"${(r.city || "").replace(/"/g, '""')}"`,
+            r.pincode || "",
+            r.latitude || "",
+            r.longitude || "",
+            r.is_active ? "active" : "disabled",
+          ].join(",")
+        ),
+      ].join("\n");
+
+      return new NextResponse(csv, {
+        headers: {
+          "Content-Type": "text/csv",
+          "Content-Disposition": 'attachment; filename="locations_export.csv"',
+        },
+      });
+    }
+
     const { data, total } = await listLocations(db, { search, limit, offset, scopes, type });
 
     return NextResponse.json({
@@ -88,6 +124,28 @@ export async function POST(req: Request) {
   try {
     await requireAdmin(req);
     const body = await req.json();
+
+    if (body.bulk && Array.isArray(body.bulk)) {
+      const results = [];
+      for (const item of body.bulk) {
+        if (!item.name || !item.type) continue;
+        const res = await findOrCreateLocationNode(
+          item.name,
+          item.type,
+          item.parent_id || null,
+          item.latitude ? parseFloat(item.latitude) : null,
+          item.longitude ? parseFloat(item.longitude) : null
+        );
+        if (item.pincode && res && res.id) {
+          await db.query(
+            `UPDATE locations SET pincode = $1, country = COALESCE($2, country), state = COALESCE($3, state), city = COALESCE($4, city) WHERE id = $5`,
+            [item.pincode, item.country || null, item.state || null, item.city || null, res.id]
+          );
+        }
+        results.push(res);
+      }
+      return NextResponse.json({ success: true, count: results.length, data: results }, { status: 201 });
+    }
 
     const country = body.country?.trim() || "India";
     const state = body.state?.trim() || "";

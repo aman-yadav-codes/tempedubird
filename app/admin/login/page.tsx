@@ -154,7 +154,7 @@ export default function AdminLoginPage() {
     }
   }
 
-  async function handleDemoLogin(role: "student" | "guardian" | "professional" | "platform_admin") {
+  async function handleDemoLogin(role: "student" | "guardian" | "professional" | "ramesh" | "platform_admin") {
     setIsPending(true);
     try {
       const res = await fetch("/api/auth/demo-login", {
@@ -174,8 +174,8 @@ export default function AdminLoginPage() {
           ? "Student"
           : role === "guardian"
           ? "Guardian"
-          : role === "professional"
-          ? "Maa Sharda Institute"
+          : role === "ramesh" || role === "professional"
+          ? "Ramesh Kumar (Quality Specialist)"
           : "Platform Admin";
       toast.success(`Signed in as ${roleLabel}`);
 
@@ -401,12 +401,12 @@ export default function AdminLoginPage() {
                 <button
                   type="button"
                   disabled={isPending}
-                  onClick={() => handleDemoLogin("professional")}
+                  onClick={() => handleDemoLogin("ramesh")}
                   className="flex flex-col items-center justify-center p-2 rounded-xl border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800 hover:border-blue-500/40 transition-all cursor-pointer group text-center"
                 >
                   <Briefcase className="h-4 w-4 text-blue-400 mb-1 group-hover:scale-110 transition-transform" />
-                  <span className="text-xs font-semibold text-zinc-200 group-hover:text-white">Professional</span>
-                  <span className="text-[9px] text-zinc-500 mt-0.5">Maa Sharda (160)</span>
+                  <span className="text-xs font-semibold text-zinc-200 group-hover:text-white">Ramesh Kumar</span>
+                  <span className="text-[9px] text-zinc-500 mt-0.5">Quality Specialist</span>
                 </button>
 
                 <button

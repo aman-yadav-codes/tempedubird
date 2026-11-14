@@ -15,7 +15,18 @@ export function useAdminGuard() {
   const hasAdminAccess = canAccessAdminArea(user);
   const isPublicPage = !canonicalPathname.startsWith("/admin");
   const isSelfServicePage = canonicalPathname === "/admin/account";
-  const hasPageAccess = isPublicPage || isSelfServicePage || hasAdminPagePermission(user, canonicalPathname);
+  const disabledBusinessTypeRoutes = useAuthStore((s) => s.disabledBusinessTypeRoutes) || [];
+  const isPlatformAdmin = Boolean(user?.role_codes?.includes("platform_admin") || user?.is_super_admin);
+  const isPlatformAdminPanel = isPlatformAdmin && Boolean(pathname?.startsWith("/platformadmin"));
+
+  // Route blocked if it belongs to a disabled module/section for the active business type
+  const isRouteBlockedByBusinessType = !isPlatformAdminPanel && disabledBusinessTypeRoutes.some((dr) => {
+    const cleanPath = canonicalPathname.split("?")[0].split("#")[0];
+    const cleanDr = dr.split("?")[0].split("#")[0];
+    return cleanPath === cleanDr || cleanPath.startsWith(cleanDr + "/");
+  });
+
+  const hasPageAccess = (isPublicPage || isSelfServicePage || hasAdminPagePermission(user, canonicalPathname)) && !isRouteBlockedByBusinessType;
   const isForbidden = !isPublicPage && isInitialized && isAuthenticated && (!hasAdminAccess || !hasPageAccess);
   const isReady = isPublicPage || (isInitialized && isAuthenticated && hasAdminAccess && hasPageAccess);
 
@@ -30,7 +41,10 @@ export function useAdminGuard() {
     }
 
     if (!hasAdminAccess || !hasPageAccess) {
-      toast.error("You don't have permission to access this area.", {
+      const errorMsg = isRouteBlockedByBusinessType
+        ? "This module is not enabled for your business type."
+        : "You don't have permission to access this area.";
+      toast.error(errorMsg, {
         id: "permission-required",
       });
       return;

@@ -413,7 +413,7 @@ export const getUserById = async (
 ): Promise<PermissionUser | null> => {
   await ensureInstitutionRolePermissionDenialsSchema(db);
   await ensureInstitutionUserPermissionsSchema(db);
-  const [userResult, platformResult, membershipResult] = await Promise.all([
+  const [userResult, platformResult, membershipResult, bizResult, profResult] = await Promise.all([
     db.query<QueryResultRow & {
       id: number;
       full_name: string;
@@ -497,19 +497,26 @@ export const getUserById = async (
         ON ip.id = sm.institution_id
         AND ip.is_active = TRUE
         AND COALESCE(ip.is_deleted, FALSE) = FALSE
-        AND EXISTS (
-          SELECT 1
-          FROM institution_memberships admin_im
-          INNER JOIN roles admin_role
-            ON admin_role.id = admin_im.role_id
-            AND admin_role.code = 'institution_admin'
-          INNER JOIN users admin_user
-            ON admin_user.id = admin_im.user_id
-            AND admin_user.is_active = TRUE
-            AND COALESCE(admin_user.is_deleted, FALSE) = FALSE
-          WHERE admin_im.institution_id = ip.id
-            AND admin_im.is_active = TRUE
-            AND COALESCE(admin_im.is_deleted, FALSE) = FALSE
+        AND (
+          EXISTS (
+            SELECT 1
+            FROM institution_memberships admin_im
+            INNER JOIN roles admin_role
+              ON admin_role.id = admin_im.role_id
+              AND admin_role.code IN ('institution_admin', 'business_owner', 'director', 'principal', 'platform_admin', 'branch_manager')
+            INNER JOIN users admin_user
+              ON admin_user.id = admin_im.user_id
+              AND admin_user.is_active = TRUE
+              AND COALESCE(admin_user.is_deleted, FALSE) = FALSE
+            WHERE admin_im.institution_id = ip.id
+              AND admin_im.is_active = TRUE
+              AND COALESCE(admin_im.is_deleted, FALSE) = FALSE
+          )
+          OR EXISTS (
+            SELECT 1 FROM business_profiles bp
+            WHERE bp.institution_profile_id = ip.id
+              AND bp.is_active = TRUE
+          )
         )
       LEFT JOIN boards b
         ON b.id = ip.board_id
@@ -548,10 +555,16 @@ export const getUserById = async (
           AND iup.user_id = $1
       ) permission_codes ON TRUE
     `, [id]),
+    db.query(`SELECT 1 FROM business_profiles WHERE user_id = $1 AND is_active = true LIMIT 1`, [id]).catch(() => ({ rowCount: 0 })),
+    db.query(`SELECT 1 FROM professional_profiles WHERE user_id = $1 AND is_active = true LIMIT 1`, [id]).catch(() => ({ rowCount: 0 })),
   ]);
 
   const user = userResult.rows[0];
   if (!user) return null;
+
+  const hasBiz = Boolean(bizResult && ('rowCount' in bizResult ? ((bizResult as any).rowCount ?? 0) : ((bizResult as any).rows?.length ?? 0)) > 0);
+  const hasProf = Boolean(profResult && ('rowCount' in profResult ? ((profResult as any).rowCount ?? 0) : ((profResult as any).rows?.length ?? 0)) > 0);
+  const hasBusinessOrProfessional = hasBiz || hasProf;
 
   const roles = Array.from(new Set([
     ...platformResult.rows.map((row) => row.role_name),
@@ -561,12 +574,31 @@ export const getUserById = async (
     ...platformResult.rows.map((row) => row.role_code),
     ...membershipResult.rows.map((row) => row.role_code),
   ]));
+
+  if (hasBusinessOrProfessional) {
+    if (!roleCodes.includes("institution_admin")) {
+      roleCodes.unshift("institution_admin");
+    }
+    const resolvedRoleTitle = hasBiz && hasProf
+      ? "Business & Professional Admin"
+      : hasBiz
+        ? "Business Owner"
+        : "Professional Provider";
+    if (!roles.includes(resolvedRoleTitle)) {
+      roles.unshift(resolvedRoleTitle);
+    }
+  }
+
   const permissions = Array.from(
-    new Set(
-      platformResult.rows
+    new Set([
+      ...platformResult.rows
         .map((row) => row.permission_code)
-        .filter((code): code is string => Boolean(code))
-    )
+        .filter((code): code is string => Boolean(code)),
+      ...membershipResult.rows
+        .filter((row) => !row.permission_code || isPermissionAssignableToRole(row.permission_code, row.role_code))
+        .map((row) => row.permission_code)
+        .filter((code): code is string => Boolean(code)),
+    ])
   );
 
   const membershipMap = new Map<number, PermissionUser["memberships"][number]>();
@@ -611,6 +643,38 @@ export const getUserById = async (
     permissions,
     memberships: Array.from(membershipMap.values()),
     under_institution_id: user.under_institution_id ? Number(user.under_institution_id) : null,
+    has_business_profile: hasBiz,
+    has_professional_profile: hasProf,
+    is_customer: !(
+      hasBusinessOrProfessional ||
+      roleCodes.some((rc) => {
+        const lower = rc.toLowerCase();
+        return (
+          [
+            "institution_admin", "platform_admin", "staff", "teacher", "faculty", "hod", "head_of_operations",
+            "operation_head", "operations_head", "accountant", "admission_counselor", "academic_coordinator",
+            "business_owner", "professional_provider", "sales_head", "hr_head", "finance_head",
+            "business_operations_manager", "marketing_manager", "sales_manager", "store_manager", "inventory_manager",
+            "sales_executive", "cashier"
+          ].includes(lower) ||
+          lower.includes("head") ||
+          lower.includes("manager") ||
+          lower.includes("sales") ||
+          lower.includes("marketing") ||
+          lower.includes("operations") ||
+          lower.includes("executive")
+        );
+      }) ||
+      roles.some((r) =>
+        [
+          "institution admin", "platform admin", "head of department", "business admin", "business & professional admin", "staff"
+        ].includes(r.toLowerCase().trim())
+      ) ||
+      membershipResult.rows.some((m) => {
+        const code = (m.role_code || "").toLowerCase();
+        return Boolean(code && code !== "student" && code !== "parent" && code !== "customer");
+      })
+    ),
   };
 };
 
@@ -1060,10 +1124,15 @@ export const getUsersPaginatedQuery = async (
         u.is_verified,
         u.is_profile_complete,
         u.created_at,
+        u.last_login_at,
         ugp.plain_password AS generated_password,
         COALESCE(up.employment_status, 'ACTIVE') AS employment_status,
         COALESCE(up.show_in_team, u.show_in_team, FALSE) AS show_in_team,
-        COALESCE(role_names.roles, '{}') AS roles
+        COALESCE(role_names.roles, '{}') AS roles,
+        EXISTS (SELECT 1 FROM business_profiles bp WHERE bp.user_id = u.id AND COALESCE(bp.is_active, TRUE) = TRUE) AS has_business_profile,
+        EXISTS (SELECT 1 FROM professional_profiles pp WHERE pp.user_id = u.id AND COALESCE(pp.is_active, TRUE) = TRUE) AS has_professional_profile,
+        (SELECT bp.name FROM business_profiles bp WHERE bp.user_id = u.id ORDER BY bp.id DESC LIMIT 1) AS business_name,
+        (SELECT pp.name FROM professional_profiles pp WHERE pp.user_id = u.id ORDER BY pp.id DESC LIMIT 1) AS professional_name
       FROM users u
       LEFT JOIN user_generated_passwords ugp ON ugp.user_id = u.id
       LEFT JOIN user_profiles up ON up.user_id = u.id
@@ -1181,12 +1250,37 @@ export const insertUserRole = async (db: Queryable, userId: number, roleId: numb
   );
 };
 
-export const listRolesQuery = async (db: Queryable, institutionId?: number | null) => {
+export const listRolesQuery = async (db: Queryable, institutionId?: number | null, businessTypeId?: number | null) => {
   const params: unknown[] = [];
   let institutionFilter = "r.institution_id IS NULL";
   if (institutionId) {
     params.push(institutionId);
     institutionFilter = `(r.institution_id IS NULL OR r.institution_id = $${params.length})`;
+  }
+
+  let businessTypeFilter = "";
+  if (businessTypeId) {
+    params.push(businessTypeId);
+    businessTypeFilter = `AND (
+      NOT EXISTS (SELECT 1 FROM business_type_roles WHERE business_type_id = $${params.length})
+      OR r.id IN (
+        SELECT btr.role_id FROM business_type_roles btr
+        WHERE btr.business_type_id = $${params.length} AND btr.is_enabled = TRUE
+      )
+    )`;
+  } else if (institutionId) {
+    businessTypeFilter = `AND (
+      NOT EXISTS (
+        SELECT 1 FROM business_type_roles btr
+        JOIN institution_profiles ip ON ip.institution_type_id = btr.business_type_id
+        WHERE ip.id = $1
+      )
+      OR r.id IN (
+        SELECT btr.role_id FROM business_type_roles btr
+        JOIN institution_profiles ip ON ip.institution_type_id = btr.business_type_id
+        WHERE ip.id = $1 AND btr.is_enabled = TRUE
+      )
+    )`;
   }
 
   const result = await db.query<RoleRow>(`
@@ -1199,6 +1293,7 @@ export const listRolesQuery = async (db: Queryable, institutionId?: number | nul
     LEFT JOIN scope_types st ON st.id = r.scope_id
     WHERE COALESCE(r.is_deleted, FALSE) = FALSE
       AND ${institutionFilter}
+      ${businessTypeFilter}
     ORDER BY st.code ASC NULLS LAST, (r.institution_id IS NOT NULL) ASC, r.name ASC
   `, params);
 
@@ -1484,7 +1579,18 @@ export async function resolvePublicSignupRole(
   input: { roleId?: number | null; roleCode?: string | null }
 ) {
   const roleId = input.roleId ?? null;
-  const rawRoleCode = input.roleCode?.trim() || null;
+  const rawRoleCode = input.roleCode?.trim() || (!roleId ? "customer" : null);
+
+  if (rawRoleCode === "customer" || (!roleId && !input.roleCode)) {
+    const custRes = await db.query<RoleRow>(
+      `SELECT r.id, r.name, r.code, st.code AS scope_code
+       FROM roles r
+       LEFT JOIN scope_types st ON st.id = r.scope_id
+       WHERE r.code = 'customer'
+       LIMIT 1`
+    );
+    if (custRes.rows[0]) return custRes.rows[0];
+  }
 
   if (!roleId && !rawRoleCode) return null;
 
@@ -1524,9 +1630,22 @@ export async function resolvePublicSignupRole(
     [roleId, primaryRoleCode, fallbackRoleCode]
   );
 
-  const role = result.rows[0];
+  let role = result.rows[0];
+  if (!role && rawRoleCode === "customer") {
+    const fallbackCustomer = await db.query<RoleRow>(
+      `SELECT r.id, r.name, r.code, st.code AS scope_code
+       FROM roles r
+       LEFT JOIN scope_types st ON st.id = r.scope_id
+       WHERE r.code IN ('customer', 'client', 'student', 'institution_admin')
+       ORDER BY CASE WHEN r.code = 'customer' THEN 0 WHEN r.code = 'client' THEN 1 ELSE 2 END
+       LIMIT 1`
+    );
+    if (fallbackCustomer.rows[0]) {
+      role = fallbackCustomer.rows[0];
+    }
+  }
   if (!role) throw new Error("Invalid signup role");
-  if (role.code === "platform_admin" || role.scope_code === "platform") {
+  if (role.code === "platform_admin" || role.code === "admin") {
     throw new Error("Platform admin role can only be assigned from the admin panel");
   }
 

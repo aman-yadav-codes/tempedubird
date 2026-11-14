@@ -43,7 +43,10 @@ function canUploadAdminFile(
     canAccessAdminArea(user) ||
     user.role_codes.includes("teacher") ||
     user.role_codes.includes("institution_admin") ||
-    user.role_codes.includes("platform_admin")
+    user.role_codes.includes("platform_admin") ||
+    user.role_codes.includes("business_owner") ||
+    user.role_codes.includes("professional") ||
+    user.role_codes.includes("customer")
   );
 }
 

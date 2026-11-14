@@ -47,12 +47,24 @@ export async function GET(req: Request) {
     const onlyLeaf =
       url.searchParams.get("onlyLeaf") === "true";
 
+    const category_type = url.searchParams.get("type") || url.searchParams.get("category_type") || undefined;
+    const business_category_id = url.searchParams.get("business_category_id") ? Number(url.searchParams.get("business_category_id")) : undefined;
+    const business_subcategory_id = url.searchParams.get("business_subcategory_id") ? Number(url.searchParams.get("business_subcategory_id")) : undefined;
+    const parentIdParam = url.searchParams.get("parentId") ?? url.searchParams.get("parent_id");
+    const parentId = parentIdParam !== null && parentIdParam !== undefined && parentIdParam !== ""
+      ? Number(parentIdParam)
+      : undefined;
+
     const { data, total } = await listCategories(db, {
       search,
       onlyRoot,
       showRootsFirst,
       onlyClass,
       onlyLeaf,
+      parentId,
+      category_type,
+      business_category_id,
+      business_subcategory_id,
       limit,
       offset,
     });
@@ -89,6 +101,17 @@ export async function POST(req: Request) {
       name,
       slug,
       parentId = null,
+      category_type = "business",
+      business_category_id = null,
+      business_subcategory_id = null,
+      icon_url,
+      image_url,
+      description,
+      seo_title,
+      meta_description,
+      display_order,
+      countries,
+      synonyms,
     } = body;
 
     if (!name || !slug) {
@@ -102,6 +125,17 @@ export async function POST(req: Request) {
       name,
       slug,
       parentId,
+      category_type,
+      business_category_id: business_category_id ? Number(business_category_id) : null,
+      business_subcategory_id: business_subcategory_id ? Number(business_subcategory_id) : null,
+      icon_url,
+      image_url,
+      description,
+      seo_title,
+      meta_description,
+      display_order,
+      countries,
+      synonyms,
     });
 
     return NextResponse.json(

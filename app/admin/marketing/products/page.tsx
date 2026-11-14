@@ -109,6 +109,8 @@ export type ProductRecord = {
   category: string;
   category_id?: number | null;
   category_name?: string | null;
+  unit?: string | null;
+  unit_of_measurement?: string | null;
   program_ids?: number[] | null;
   associated_programs?: Array<{ id: number; title: string }> | null;
   image_url?: string | null;
@@ -727,6 +729,11 @@ export default function AdminProductsPage() {
                     <span className="text-lg font-black text-foreground">
                       {formatCurrency(prod.sale_price !== null && prod.sale_price !== undefined ? prod.sale_price : prod.price)}
                     </span>
+                    {(prod.unit || prod.unit_of_measurement) && (
+                      <span className="text-xs font-bold text-muted-foreground">
+                        / {prod.unit || prod.unit_of_measurement}
+                      </span>
+                    )}
                     {prod.sale_price && Number(prod.sale_price) < Number(prod.price) && (
                       <span className="text-xs text-muted-foreground line-through">
                         {formatCurrency(prod.price)}

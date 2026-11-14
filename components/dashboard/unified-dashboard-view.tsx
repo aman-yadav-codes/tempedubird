@@ -36,11 +36,16 @@ import {
   AlertTriangle,
   LucideIcon,
   ExternalLink,
+  Star,
+  MapPin,
+  Store,
 } from "lucide-react";
 import { useAuthStore } from "@/store";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AddBusinessProfileButton } from "@/components/business/add-business-profile-button";
+import { useActiveInstitution } from "@/hooks/use-active-institution";
 
 export type ContextOption = {
   id: number | string;
@@ -193,6 +198,12 @@ export function UnifiedDashboardView({
   notifications = [],
 }: UnifiedDashboardProps) {
   const { user } = useAuthStore();
+  const isPlatformAdmin = Boolean(
+    user?.role_codes?.includes("platform_admin") ||
+    user?.role_codes?.includes("super_admin") ||
+    user?.is_super_admin ||
+    role === "platform_admin"
+  );
   const [greeting, setGreeting] = useState("Good Day");
   const [selectedContextId, setSelectedContextId] = useState<number | string>(
     contexts[0]?.id ?? 1
@@ -209,7 +220,64 @@ export function UnifiedDashboardView({
     }
   }, [contexts, selectedContextId]);
 
+    const [businessProfile, setBusinessProfile] = useState<any>(null);
+  const [professionalProfile, setProfessionalProfile] = useState<any>(null);
+  const [loadingProfiles, setLoadingProfiles] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadProfiles() {
+      try {
+        const [bizRes, proRes] = await Promise.allSettled([
+          fetch("/api/business/profile", { cache: "no-store" }),
+          fetch("/api/professional/profile", { cache: "no-store" }),
+        ]);
+
+        if (bizRes.status === "fulfilled" && bizRes.value.ok) {
+          const bizData = await bizRes.value.json();
+          if (bizData?.profile && isMounted) {
+            setBusinessProfile(bizData.profile);
+          }
+        }
+
+        if (proRes.status === "fulfilled" && proRes.value.ok) {
+          const proData = await proRes.value.json();
+          if (proData?.profile && isMounted) {
+            setProfessionalProfile(proData.profile);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load user profiles in dashboard:", err);
+      } finally {
+        if (isMounted) setLoadingProfiles(false);
+      }
+    }
+
+    loadProfiles();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const { activeInstitution } = useActiveInstitution();
   const activeContext = contexts.find((c) => c.id === selectedContextId) || contexts[0];
+  const currentInstId = activeInstitution?.id || (typeof activeContext?.id === 'number' ? activeContext.id : null);
+
+  const businessStorefrontUrl = businessProfile?.slug
+    ? `/business/${businessProfile.slug}`
+    : businessProfile?.id
+    ? `/business/${businessProfile.id}`
+    : currentInstId
+    ? `/storefront?institutionId=${currentInstId}`
+    : "/storefront";
+
+  const professionalStorefrontUrl = professionalProfile?.slug
+    ? `/professional/${professionalProfile.slug}`
+    : professionalProfile?.id
+    ? `/professional/${professionalProfile.id}`
+    : currentInstId
+    ? `/storefront?institutionId=${currentInstId}`
+    : "/storefront";
 
   const getMetricColorClasses = (color: DashboardMetricCard["color"]) => {
     switch (color) {
@@ -259,6 +327,208 @@ export function UnifiedDashboardView({
 
   return (
     <div className="space-y-8">
+      {/* PROFILE SHOWCASE CARDS (LIVE PROFILE VIEW) */}
+      {/* 1. Active Business Profile Showcase */}
+      {businessProfile && (
+        <div className="rounded-2xl border border-rose-200/80 dark:border-rose-900/40 bg-gradient-to-r from-rose-50/70 via-white to-amber-50/40 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-5 shadow-xs">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-4">
+              {businessProfile.logo_url ? (
+                <img
+                  src={businessProfile.logo_url}
+                  alt={businessProfile.name}
+                  className="size-14 rounded-2xl object-cover border-2 border-white shadow-sm shrink-0 bg-white"
+                />
+              ) : (
+                <div className="size-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black text-xl border-2 border-white shadow-sm shrink-0">
+                  {businessProfile.name?.[0]?.toUpperCase() || <Building2 className="size-7" />}
+                </div>
+              )}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge className="bg-primary text-white text-[10px] font-bold">
+                    Business Profile
+                  </Badge>
+                  {businessProfile.is_verified && (
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 text-[10px]">
+                      <ShieldCheck className="size-3 mr-1 text-emerald-600" /> Verified
+                    </Badge>
+                  )}
+                  <Badge variant="outline" className="text-[10px] bg-white/80 dark:bg-slate-800">
+                    {businessProfile.category_name || "General Business"}
+                  </Badge>
+                </div>
+                <h2 className="text-lg font-black text-foreground">
+                  {businessProfile.name}
+                </h2>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                  {(businessProfile.city || businessProfile.state) && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="size-3.5 text-primary" />
+                      {[businessProfile.city, businessProfile.state].filter(Boolean).join(", ")}
+                    </span>
+                  )}
+                  {businessProfile.phone && (
+                    <span className="flex items-center gap-1">
+                      <Phone className="size-3.5 text-emerald-600" />
+                      {businessProfile.phone}
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400">
+                    <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                    {businessProfile.avg_rating || "5.0"} ({businessProfile.reviews_count || 0} reviews)
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    • {businessProfile.products_count || 0} Products • {businessProfile.services_count || 0} Services
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+              <Button
+                size="sm"
+                asChild
+                className="font-bold text-xs gap-1.5 bg-primary text-white hover:bg-primary/90 shadow-xs cursor-pointer"
+              >
+                <a
+                  href={businessProfile.slug ? `/institutes/${businessProfile.slug}` : `/institutes/${businessProfile.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <ExternalLink className="size-3.5" />
+                  View Profile Page
+                </a>
+              </Button>
+              <Link href="/admin/profiles">
+                <Button size="sm" variant="outline" className="text-xs font-semibold gap-1.5">
+                  <Settings className="size-3.5 text-muted-foreground" />
+                  Manage Profile
+                </Button>
+              </Link>
+              <AddBusinessProfileButton />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Active Professional Profile Showcase */}
+      {professionalProfile && (
+        <div className="rounded-2xl border border-purple-200/80 dark:border-purple-900/40 bg-gradient-to-r from-purple-50/70 via-white to-blue-50/40 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-5 shadow-xs">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-4">
+              {professionalProfile.avatar_url ? (
+                <img
+                  src={professionalProfile.avatar_url}
+                  alt={professionalProfile.name}
+                  className="size-14 rounded-2xl object-cover border-2 border-white shadow-sm shrink-0 bg-white"
+                />
+              ) : (
+                <div className="size-14 rounded-2xl bg-purple-600/10 text-purple-600 flex items-center justify-center font-black text-xl border-2 border-white shadow-sm shrink-0">
+                  {professionalProfile.name?.[0]?.toUpperCase() || <UserCheck className="size-7" />}
+                </div>
+              )}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge className="bg-purple-600 text-white text-[10px] font-bold">
+                    Professional Profile
+                  </Badge>
+                  {professionalProfile.is_verified && (
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 text-[10px]">
+                      <ShieldCheck className="size-3 mr-1 text-emerald-600" /> Verified
+                    </Badge>
+                  )}
+                  {professionalProfile.designation && (
+                    <Badge variant="secondary" className="text-[10px] font-semibold">
+                      {professionalProfile.designation}
+                    </Badge>
+                  )}
+                  <Badge variant="outline" className="text-[10px] bg-white/80 dark:bg-slate-800">
+                    {professionalProfile.category_name || professionalProfile.profession_type || "Professional"}
+                  </Badge>
+                </div>
+                <h2 className="text-lg font-black text-foreground">
+                  {professionalProfile.name}
+                </h2>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                  {professionalProfile.experience_years ? (
+                    <span className="font-semibold text-foreground">
+                      {professionalProfile.experience_years} Years Experience
+                    </span>
+                  ) : null}
+                  {(professionalProfile.city || professionalProfile.state) && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="size-3.5 text-purple-600" />
+                      {[professionalProfile.city, professionalProfile.state].filter(Boolean).join(", ")}
+                    </span>
+                  )}
+                  {professionalProfile.phone && (
+                    <span className="flex items-center gap-1">
+                      <Phone className="size-3.5 text-emerald-600" />
+                      {professionalProfile.phone}
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400">
+                    <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                    {professionalProfile.avg_rating || "5.0"} ({professionalProfile.reviews_count || 0} reviews)
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    • {professionalProfile.services_count || 0} Services Listed
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+              <Button
+                size="sm"
+                asChild
+                className="font-bold text-xs gap-1.5 bg-purple-600 hover:bg-purple-700 text-white shadow-xs cursor-pointer"
+              >
+                <a
+                  href={professionalStorefrontUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Store className="size-3.5" />
+                  Store Front
+                  <ExternalLink className="size-3 opacity-75" />
+                </a>
+              </Button>
+              <Link href="/admin/profiles">
+                <Button size="sm" variant="outline" className="text-xs font-semibold gap-1.5">
+                  <Settings className="size-3.5 text-muted-foreground" />
+                  Manage Profile
+                </Button>
+              </Link>
+              {!businessProfile && <AddBusinessProfileButton />}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Empty State (No business or professional profile yet) */}
+      {!businessProfile && !professionalProfile && !loadingProfiles && !isPlatformAdmin && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 px-4 rounded-2xl bg-gradient-to-r from-rose-50 via-white to-rose-50/50 border border-rose-200/70 dark:from-rose-950/20 dark:via-slate-900 dark:to-rose-950/20 dark:border-rose-900/30 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
+              <Building2 className="size-5" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                Workspace Profile • Business & Professional Management
+              </h3>
+              <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                Add your Business Profile or Professional Profile to manage staff, workflows, tasks, and client pipeline.
+              </p>
+            </div>
+          </div>
+          <div className="shrink-0">
+            <AddBusinessProfileButton />
+          </div>
+        </div>
+      )}
+
       {/* WELCOME & MULTI-CONTEXT HERO BANNER */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-rose-950 to-slate-900 p-6 sm:p-8 text-white shadow-xl border border-rose-900/30">
         <div className="relative z-10 space-y-6">
@@ -283,6 +553,59 @@ export function UnifiedDashboardView({
 
             {/* ACTION BUTTONS */}
             <div className="flex flex-wrap items-center gap-3 shrink-0">
+              {/* STORE FRONT BUTTON FOR BUSINESS / PROFESSIONAL ADMIN */}
+              {businessProfile ? (
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  asChild
+                  className="font-bold text-xs gap-2 bg-white text-slate-900 hover:bg-slate-100 shadow-md cursor-pointer border border-white/20"
+                >
+                  <a
+                    href={businessStorefrontUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Store className="h-4 w-4 text-primary" />
+                    Store Front
+                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                  </a>
+                </Button>
+              ) : professionalProfile ? (
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  asChild
+                  className="font-bold text-xs gap-2 bg-white text-slate-900 hover:bg-slate-100 shadow-md cursor-pointer border border-white/20"
+                >
+                  <a
+                    href={professionalStorefrontUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Store className="h-4 w-4 text-purple-600" />
+                    Store Front
+                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                  </a>
+                </Button>
+              ) : (
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  asChild
+                  className="font-bold text-xs gap-2 bg-white text-slate-900 hover:bg-slate-100 shadow-md cursor-pointer border border-white/20"
+                >
+                  <a
+                    href={currentInstId ? `/storefront?institutionId=${currentInstId}` : "/storefront"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Store className="h-4 w-4 text-primary" />
+                    Store Front
+                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                  </a>
+                </Button>
+              )}
               {primaryButtonText && (
                 <Link href={primaryButtonHref}>
                   <Button
