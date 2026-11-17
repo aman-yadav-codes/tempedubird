@@ -125,6 +125,19 @@ const COMPANY_TABS = [
   { slug: "working-hours", label: "Working Hours", icon: Clock },
 ];
 
+const ALL_DETAILS_TABS = [
+  { slug: "contact-branches", label: "Identity", icon: Building2 },
+  { slug: "address", label: "Address", icon: MapPin },
+  { slug: "working-hours", label: "Working Hours", icon: Clock },
+  { slug: "payment-methods", label: "Payment Methods", icon: CreditCard },
+  { slug: "faqs", label: "FAQs", icon: HelpCircle },
+  { slug: "privacy-policy", label: "Privacy Policy", icon: ShieldCheck },
+  { slug: "terms-and-conditions", label: "Terms & Conditions", icon: FileText },
+  { slug: "copyright-policy", label: "Copyright Policy", icon: Copyright },
+  { slug: "refund-policy", label: "Refund Policy", icon: RefreshCw },
+  { slug: "social-links", label: "Social Media Links", icon: Share2 },
+];
+
 const PAGE_TABS = [
   { slug: "payment-methods", label: "Payment Methods", icon: CreditCard },
   { slug: "faqs", label: "FAQs", icon: HelpCircle },
@@ -1540,10 +1553,137 @@ export default function AdminCompanyPage() {
     </div>
   );
 
+  const renderAddressManagementCard = () => (
+    <Card className="border-border shadow-xs">
+      <CardHeader className="flex flex-row items-center justify-between border-b bg-card/60 px-6 py-4">
+        <div className="space-y-1">
+          <CardTitle className="text-xl flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-primary" />
+            Office Addresses & Operating Centers
+          </CardTitle>
+          <CardDescription>
+            Manage official office addresses, campus locations, and regional operating centers.
+          </CardDescription>
+        </div>
+        <Button onClick={handleOpenAddBranch} size="sm" className="flex items-center gap-1.5">
+          <Plus className="h-4 w-4" /> Add Address / Office
+        </Button>
+      </CardHeader>
+
+      <CardContent className="p-6 space-y-4">
+        {loadingBranches ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" /> Loading addresses...
+          </div>
+        ) : branches.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground border rounded-lg bg-muted/20">
+            <MapPin className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3" />
+            <p className="font-medium text-base">No office addresses configured yet.</p>
+            <p className="text-sm text-muted-foreground mb-4">Add office locations to showcase your verified address presence across cities and states.</p>
+            <Button onClick={handleOpenAddBranch} size="sm">
+              <Plus className="mr-1.5 h-4 w-4" /> Add Address / Office
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {branches.map((b) => (
+              <div
+                key={b.id}
+                className={`p-5 rounded-2xl border bg-card hover:border-primary/50 transition-all shadow-xs flex flex-col justify-between space-y-4 ${
+                  b.is_headquarters ? "border-primary/40 bg-primary/[0.02]" : ""
+                }`}
+              >
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-base text-foreground block">{b.branch_name}</span>
+                        {b.is_headquarters ? (
+                          <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 text-[10px] gap-1 py-0 h-5 font-semibold">
+                            <Sparkles className="w-3 h-3" /> HQ
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        <Badge variant="outline" className="text-xs font-semibold text-primary">
+                          {b.city}{b.state ? `, ${b.state}` : ""}
+                        </Badge>
+                        {b.branch_type && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            {b.branch_type}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <Badge variant={b.status === "active" ? "default" : "secondary"} className="text-[10px]">
+                      {b.status}
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-1.5 text-xs text-muted-foreground pt-1">
+                    <p className="leading-relaxed text-foreground/80">{b.address}{b.pincode ? ` - ${b.pincode}` : ""}</p>
+                    {b.phone && (
+                      <div className="flex items-center gap-1.5 text-slate-600 dark:text-zinc-300">
+                        <Phone className="w-3.5 h-3.5 text-primary shrink-0" /> {b.phone}
+                      </div>
+                    )}
+                    {b.email && (
+                      <div className="flex items-center gap-1.5 text-slate-600 dark:text-zinc-300">
+                        <Mail className="w-3.5 h-3.5 text-primary shrink-0" /> {b.email}
+                      </div>
+                    )}
+                    {b.manager_name && (
+                      <p className="text-[11px] text-muted-foreground pt-1">
+                        Contact Person: <span className="font-medium text-foreground">{b.manager_name}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t">
+                  {b.map_url ? (
+                    <a
+                      href={b.map_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                    >
+                      <Globe className="h-3.5 w-3.5" /> Map Location
+                    </a>
+                  ) : <span />}
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleOpenEditBranch(b)}>
+                      <Edit className="h-3.5 w-3.5 mr-1" /> Edit
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDeleteBranch(b.id)}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="space-y-6 p-6">
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
+        <TabsList className="flex flex-wrap h-auto gap-1.5 p-1.5 bg-muted/50 rounded-xl border border-border/60">
+          {ALL_DETAILS_TABS.map((tab) => (
+            <TabsTrigger
+              key={tab.slug}
+              value={tab.slug}
+              className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all cursor-pointer"
+            >
+              <tab.icon className="w-3.5 h-3.5 text-primary" />
+              <span>{tab.label}</span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
         {/* Dynamic Page Content Tabs (Excluding FAQs, Payment Methods & Branches) */}
         {PAGE_TABS.filter((t) => t.slug !== "faqs" && t.slug !== "payment-methods" && t.slug !== "contact-branches").map((tab) => {
           const page: CompanyPageData = pagesData[tab.slug] || {
@@ -2629,6 +2769,114 @@ export default function AdminCompanyPage() {
                     </div>
                   </div>
 
+                  {/* Official Contacts & Registered Headquarters Address */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Contacts */}
+                    <div className="p-5 rounded-xl border bg-muted/20 space-y-4">
+                      <div className="flex items-center gap-2 border-b pb-3">
+                        <Mail className="h-4 w-4 text-primary" />
+                        <h3 className="font-semibold text-sm tracking-wide uppercase text-foreground">Official Contact Channels</h3>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="ci-email" className="text-xs font-semibold">Support & Inquiries Email *</Label>
+                          <Input
+                            id="ci-email"
+                            type="email"
+                            value={companyInfo.support_email || ""}
+                            onChange={(e) => setCompanyInfo((prev) => ({ ...prev, support_email: e.target.value }))}
+                            placeholder="support@example.com"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="ci-phone" className="text-xs font-semibold">Support Phone</Label>
+                            <Input
+                              id="ci-phone"
+                              value={companyInfo.support_phone || ""}
+                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, support_phone: e.target.value }))}
+                              placeholder="+91 98765 43210"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="ci-tollfree" className="text-xs font-semibold">Toll-Free Helpline</Label>
+                            <Input
+                              id="ci-tollfree"
+                              value={companyInfo.helpline_toll_free || ""}
+                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, helpline_toll_free: e.target.value }))}
+                              placeholder="1800 123 4567"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="ci-web" className="text-xs font-semibold">Official Website / Portfolio Link</Label>
+                          <Input
+                            id="ci-web"
+                            value={companyInfo.website_url || ""}
+                            onChange={(e) => setCompanyInfo((prev) => ({ ...prev, website_url: e.target.value }))}
+                            placeholder="https://example.com"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Registered Headquarters Address */}
+                    <div className="p-5 rounded-xl border bg-muted/20 space-y-4">
+                      <div className="flex items-center gap-2 border-b pb-3">
+                        <MapPin className="h-4 w-4 text-primary" />
+                        <h3 className="font-semibold text-sm tracking-wide uppercase text-foreground">
+                          {companyInfo.listing_type === "professional" ? "Primary Practice / Clinic Address" : "Registered Office / Headquarters Address"}
+                        </h3>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="ci-addr-street" className="text-xs font-semibold">Street / Building Address *</Label>
+                          <Textarea
+                            id="ci-addr-street"
+                            rows={2}
+                            value={companyInfo.address_street || ""}
+                            onChange={(e) => setCompanyInfo((prev) => ({ ...prev, address_street: e.target.value }))}
+                            placeholder="e.g. Plot No. 45, Sector 62, Technology Corridor..."
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="ci-addr-city" className="text-xs font-semibold">City *</Label>
+                            <Input
+                              id="ci-addr-city"
+                              value={companyInfo.address_city || ""}
+                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, address_city: e.target.value }))}
+                              placeholder="e.g. Noida"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="ci-addr-state" className="text-xs font-semibold">State</Label>
+                            <Input
+                              id="ci-addr-state"
+                              value={companyInfo.address_state || ""}
+                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, address_state: e.target.value }))}
+                              placeholder="e.g. Uttar Pradesh"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="ci-addr-pin" className="text-xs font-semibold">Pincode</Label>
+                            <Input
+                              id="ci-addr-pin"
+                              value={companyInfo.address_pincode || ""}
+                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, address_pincode: e.target.value }))}
+                              placeholder="e.g. 201301"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Working Hours Section */}
                   {renderWorkingHoursEditor()}
 
@@ -2646,6 +2894,9 @@ export default function AdminCompanyPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Operating Centers & Branch Offices Directory */}
+          {renderAddressManagementCard()}
         </TabsContent>
 
         {/* Dedicated Working Hours Tab */}
@@ -2703,113 +2954,68 @@ export default function AdminCompanyPage() {
               <div className="space-y-1">
                 <CardTitle className="text-xl flex items-center gap-2">
                   <MapPin className="h-5 w-5 text-primary" />
-                  Office Addresses & Operating Centers
+                  {companyInfo.listing_type === "professional" ? "Primary Practice / Clinic Address" : "Registered Office / Headquarters Address"}
                 </CardTitle>
                 <CardDescription>
-                  Manage official office addresses, campus locations, and regional operating centers.
+                  Official registered office address and location coordinates for public verification.
                 </CardDescription>
               </div>
-              <Button onClick={handleOpenAddBranch} size="sm" className="flex items-center gap-1.5">
-                <Plus className="h-4 w-4" /> Add Address / Office
+              <Button
+                onClick={handleSaveCompanyInfo}
+                disabled={savingCompanyInfo}
+                size="sm"
+                className="gap-2"
+              >
+                {savingCompanyInfo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save Address
               </Button>
             </CardHeader>
-
             <CardContent className="p-6 space-y-4">
-              {loadingBranches ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" /> Loading addresses...
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="ci-addr-street-main" className="text-xs font-semibold">Street / Building Address *</Label>
+                  <Textarea
+                    id="ci-addr-street-main"
+                    rows={2}
+                    value={companyInfo.address_street || ""}
+                    onChange={(e) => setCompanyInfo((prev) => ({ ...prev, address_street: e.target.value }))}
+                    placeholder="e.g. Plot No. 45, Sector 62, Technology Corridor..."
+                  />
                 </div>
-              ) : branches.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground border rounded-lg bg-muted/20">
-                  <MapPin className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3" />
-                  <p className="font-medium text-base">No office addresses configured yet.</p>
-                  <p className="text-sm text-muted-foreground mb-4">Add office locations to showcase your verified address presence across cities and states.</p>
-                  <Button onClick={handleOpenAddBranch} size="sm">
-                    <Plus className="mr-1.5 h-4 w-4" /> Add Address / Office
-                  </Button>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="ci-addr-city-main" className="text-xs font-semibold">City *</Label>
+                    <Input
+                      id="ci-addr-city-main"
+                      value={companyInfo.address_city || ""}
+                      onChange={(e) => setCompanyInfo((prev) => ({ ...prev, address_city: e.target.value }))}
+                      placeholder="e.g. Noida"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ci-addr-state-main" className="text-xs font-semibold">State</Label>
+                    <Input
+                      id="ci-addr-state-main"
+                      value={companyInfo.address_state || ""}
+                      onChange={(e) => setCompanyInfo((prev) => ({ ...prev, address_state: e.target.value }))}
+                      placeholder="e.g. Uttar Pradesh"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ci-addr-pin-main" className="text-xs font-semibold">Pincode</Label>
+                    <Input
+                      id="ci-addr-pin-main"
+                      value={companyInfo.address_pincode || ""}
+                      onChange={(e) => setCompanyInfo((prev) => ({ ...prev, address_pincode: e.target.value }))}
+                      placeholder="e.g. 201301"
+                    />
+                  </div>
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {branches.map((b) => (
-                    <div
-                      key={b.id}
-                      className={`p-5 rounded-2xl border bg-card hover:border-primary/50 transition-all shadow-xs flex flex-col justify-between space-y-4 ${
-                        b.is_headquarters ? "border-primary/40 bg-primary/[0.02]" : ""
-                      }`}
-                    >
-                      <div className="space-y-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-bold text-base text-foreground block">{b.branch_name}</span>
-                              {b.is_headquarters ? (
-                                <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 text-[10px] gap-1 py-0 h-5 font-semibold">
-                                  <Sparkles className="w-3 h-3" /> HQ
-                                </Badge>
-                              ) : null}
-                            </div>
-                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                              <Badge variant="outline" className="text-xs font-semibold text-primary">
-                                {b.city}{b.state ? `, ${b.state}` : ""}
-                              </Badge>
-                              {b.branch_type && (
-                                <Badge variant="secondary" className="text-[10px]">
-                                  {b.branch_type}
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                          <Badge variant={b.status === "active" ? "default" : "secondary"} className="text-[10px]">
-                            {b.status}
-                          </Badge>
-                        </div>
-
-                        <div className="space-y-1.5 text-xs text-muted-foreground pt-1">
-                          <p className="leading-relaxed text-foreground/80">{b.address}{b.pincode ? ` - ${b.pincode}` : ""}</p>
-                          {b.phone && (
-                            <div className="flex items-center gap-1.5 text-slate-600 dark:text-zinc-300">
-                              <Phone className="w-3.5 h-3.5 text-primary shrink-0" /> {b.phone}
-                            </div>
-                          )}
-                          {b.email && (
-                            <div className="flex items-center gap-1.5 text-slate-600 dark:text-zinc-300">
-                              <Mail className="w-3.5 h-3.5 text-primary shrink-0" /> {b.email}
-                            </div>
-                          )}
-                          {b.manager_name && (
-                            <p className="text-[11px] text-muted-foreground pt-1">
-                              Contact Person: <span className="font-medium text-foreground">{b.manager_name}</span>
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-3 border-t">
-                        {b.map_url ? (
-                          <a
-                            href={b.map_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-                          >
-                            <Globe className="h-3.5 w-3.5" /> Map Location
-                          </a>
-                        ) : <span />}
-                        <div className="flex items-center gap-2">
-                          <Button variant="outline" size="sm" onClick={() => handleOpenEditBranch(b)}>
-                            <Edit className="h-3.5 w-3.5 mr-1" /> Edit
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDeleteBranch(b.id)}>
-                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              </div>
             </CardContent>
           </Card>
+
+          {renderAddressManagementCard()}
         </TabsContent>
 
         {/* 1. About Company Tab */}
