@@ -48,8 +48,16 @@ import { OrderCheckoutDialog } from "@/components/checkout/order-checkout-dialog
 import { CartDrawer } from "@/components/checkout/cart-drawer";
 import { CartFloatingButton } from "@/components/checkout/cart-floating-button";
 import { UniversalFeedbackDialog, type UniversalEntityTarget } from "@/components/public/universal-feedback-dialog";
+import {
+  isWeightBasedProduct,
+  STANDARD_WEIGHT_OPTIONS,
+  calculateWeightPrice,
+  formatWeightPrice,
+  formatGramsDisplay,
+} from "@/lib/utils/weight-unit";
 import { PortalBannerAd } from "@/components/public/portal-banner-ad";
 import { FavoriteButton } from "@/components/shared/favorite-button";
+import { CompactProductCard } from "@/components/shared/compact-product-card";
 import { useCartStore } from "@/store";
 
 export default function PublicProductsPage() {
@@ -375,178 +383,18 @@ export default function PublicProductsPage() {
                 </Button>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
                 {filteredProducts.map((prod) => (
-                  <Card
+                  <CompactProductCard
                     key={prod.id}
-                    className="overflow-hidden border-border bg-card shadow-2xs hover:shadow-md hover:border-primary/40 transition-all flex flex-col justify-between rounded-2xl group"
-                  >
-                    <div className="space-y-3">
-                      {/* Product Image */}
-                      <div className="relative h-44 w-full bg-muted overflow-hidden">
-                        <img
-                          src={prod.image_url || "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=800&q=80"}
-                          alt={prod.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5">
-                          <Badge variant="secondary" className="text-[10px] font-extrabold bg-background/90 backdrop-blur-xs text-foreground shadow-2xs">
-                            {prod.category}
-                          </Badge>
-                          {prod.badge_text && (
-                            <Badge variant="outline" className="text-[10px] font-extrabold bg-primary text-primary-foreground border-transparent shadow-2xs">
-                              {prod.badge_text}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="absolute top-2.5 right-2.5 z-10">
-                          <FavoriteButton
-                            entityType="product"
-                            entityId={prod.id}
-                            title={prod.title}
-                            subtitle={prod.institution_name}
-                            imageUrl={prod.image_url}
-                            targetUrl="/products"
-                            price={prod.price ? `₹${prod.price}` : undefined}
-                            badge={prod.category}
-                            size="sm"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Title & Institution */}
-                      <div className="px-4 space-y-1">
-                        {prod.institution_name && (
-                          <span className="text-[10px] font-bold text-primary flex items-center gap-1">
-                            <Building2 className="h-3 w-3" /> {prod.institution_name}
-                          </span>
-                        )}
-                        <h3 className="font-extrabold text-sm text-foreground line-clamp-2 leading-snug">{prod.title}</h3>
-                        <p className="text-xs text-muted-foreground line-clamp-2">{prod.description}</p>
-                      </div>
-
-                      {/* Associated Academic Course Tags */}
-                      {Array.isArray(prod.associated_programs) && prod.associated_programs.length > 0 && (
-                        <div className="px-4 flex flex-wrap gap-1 pt-0.5">
-                          {prod.associated_programs.slice(0, 2).map((prog: any) => (
-                            <span
-                              key={prog.id}
-                              className="text-[9px] font-bold text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded-md flex items-center gap-1"
-                            >
-                              <GraduationCap className="w-2.5 h-2.5" />
-                              <span className="truncate max-w-[120px]">{prog.title}</span>
-                            </span>
-                          ))}
-                          {prod.associated_programs.length > 2 && (
-                            <span className="text-[9px] font-semibold text-muted-foreground self-center">
-                              +{prod.associated_programs.length - 2} more
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Features Preview */}
-                      {Array.isArray(prod.features) && prod.features.length > 0 && (
-                        <div className="px-4 space-y-1">
-                          {prod.features.slice(0, 2).map((f: string, idx: number) => (
-                            <div key={idx} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                              <span className="truncate">{f}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Price & Action */}
-                    <div className="p-4 border-t border-border mt-3 space-y-3 bg-muted/20">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-baseline gap-1.5">
-                          <span className="text-base font-black text-foreground">
-                            ₹{Number(prod.sale_price !== null && prod.sale_price !== undefined ? prod.sale_price : prod.price).toLocaleString("en-IN")}
-                          </span>
-                          {(prod.unit || prod.unit_of_measurement) && (
-                            <span className="text-xs font-semibold text-muted-foreground">
-                              / {prod.unit || prod.unit_of_measurement}
-                            </span>
-                          )}
-                          {prod.sale_price && Number(prod.sale_price) < Number(prod.price) && (
-                            <span className="text-[11px] text-muted-foreground line-through">
-                              ₹{Number(prod.price).toLocaleString("en-IN")}
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[9px] text-emerald-600 font-bold block">
-                          Verified Delivery
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/50">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFeedbackTarget({
-                              type: "product",
-                              id: prod.id,
-                              title: prod.title,
-                              subtitle: `${prod.category} • Academic Store`,
-                              avg_rating: 4.8,
-                              review_count: 16,
-                            });
-                            setFeedbackOpen(true);
-                          }}
-                          className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-amber-300 bg-amber-50/70 text-xs font-bold text-amber-800 transition hover:bg-amber-100 cursor-pointer"
-                        >
-                          <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
-                          <span>Reviews & Q&A</span>
-                        </button>
-
-                        {getItemQuantity(prod.id) > 0 ? (
-                          <div className="flex h-9 items-center justify-between border border-rose-300 dark:border-rose-900 rounded-md overflow-hidden bg-background px-1 shadow-2xs">
-                            <button
-                              type="button"
-                              onClick={() => updateQuantity(prod.id, getItemQuantity(prod.id) - 1)}
-                              className="size-7 flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground"
-                            >
-                              <Minus className="size-3" />
-                            </button>
-                            <span className="text-xs font-black text-rose-600">
-                              {getItemQuantity(prod.id)} in Cart
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => updateQuantity(prod.id, getItemQuantity(prod.id) + 1)}
-                              className="size-7 flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground"
-                            >
-                              <Plus className="size-3" />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const effPrice = Number(prod.sale_price !== null && prod.sale_price !== undefined ? prod.sale_price : prod.price) || 0;
-                              addItem({
-                                id: prod.id,
-                                name: prod.title,
-                                price: effPrice,
-                                regular_price: prod.price ? Number(prod.price) : null,
-                                image_url: prod.image_url,
-                                brand: prod.institution_name,
-                                business_id: prod.business_id,
-                                institution_id: prod.institution_id,
-                              }, 1);
-                              toast.success(`${prod.title} added to cart!`);
-                            }}
-                            className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-xs font-bold text-white transition cursor-pointer shadow-xs"
-                          >
-                            <ShoppingCart className="h-3.5 w-3.5" />
-                            <span>Add to Cart</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </Card>
+                    product={prod}
+                    business={prod.institution_name ? {
+                      id: prod.institution_id || prod.business_id,
+                      name: prod.institution_name,
+                      slug: prod.institution_slug || "",
+                      institution_profile_id: prod.institution_id,
+                    } : undefined}
+                  />
                 ))}
               </div>
             )}
@@ -809,5 +657,319 @@ export default function PublicProductsPage() {
       <CartDrawer />
       <CartFloatingButton />
     </div>
+  );
+}
+
+function PublicCatalogProductCard({
+  prod,
+  onOpenFeedback,
+}: {
+  prod: any;
+  onOpenFeedback: (prod: any) => void;
+}) {
+  const { addItem, getItemQuantity, updateQuantity } = useCartStore();
+
+  const rawUnit = prod.unit || prod.unit_of_measurement || "";
+  const weightMeta = useMemo(() => isWeightBasedProduct(rawUnit), [rawUnit]);
+
+  const [selectedWeightKey, setSelectedWeightKey] = useState<string>(weightMeta.defaultKey);
+  const [showCustom, setShowCustom] = useState(false);
+  const [customGrams, setCustomGrams] = useState<string>("250");
+
+  const basePrice = Number(
+    prod.sale_price !== null && prod.sale_price !== undefined ? prod.sale_price : prod.price
+  ) || 0;
+  const baseRegularPrice = prod.price ? Number(prod.price) : null;
+
+  const { targetGrams, displayUnit, effectivePrice, effectiveRegularPrice, cartItemId } = useMemo(() => {
+    if (!weightMeta.isWeight) {
+      return {
+        targetGrams: 0,
+        displayUnit: rawUnit || "unit",
+        effectivePrice: basePrice,
+        effectiveRegularPrice: baseRegularPrice,
+        cartItemId: String(prod.id),
+      };
+    }
+
+    let grams = 1000;
+    let label = "1 kg";
+
+    if (showCustom) {
+      grams = Math.max(10, Number(customGrams) || 100);
+      label = formatGramsDisplay(grams);
+    } else {
+      const opt = STANDARD_WEIGHT_OPTIONS.find((o) => o.key === selectedWeightKey) || STANDARD_WEIGHT_OPTIONS[3];
+      grams = opt.grams;
+      label = opt.label;
+    }
+
+    const price = calculateWeightPrice(basePrice, weightMeta.baseGrams, grams);
+    const regPrice = baseRegularPrice
+      ? calculateWeightPrice(baseRegularPrice, weightMeta.baseGrams, grams)
+      : null;
+
+    const cId = `${prod.id}_${showCustom ? `${grams}g` : selectedWeightKey}`;
+
+    return {
+      targetGrams: grams,
+      displayUnit: label,
+      effectivePrice: price,
+      effectiveRegularPrice: regPrice,
+      cartItemId: cId,
+    };
+  }, [
+    weightMeta,
+    rawUnit,
+    basePrice,
+    baseRegularPrice,
+    selectedWeightKey,
+    showCustom,
+    customGrams,
+    prod.id,
+  ]);
+
+  const hasDiscount = Boolean(
+    effectiveRegularPrice && effectiveRegularPrice > effectivePrice
+  );
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const currentCartQty = mounted ? getItemQuantity(cartItemId) : 0;
+
+  const handleAddToCart = () => {
+    const added = addItem(
+      {
+        id: cartItemId,
+        name: weightMeta.isWeight ? `${prod.title} (${displayUnit})` : prod.title,
+        price: effectivePrice,
+        regular_price: effectiveRegularPrice,
+        image_url: prod.image_url,
+        brand: prod.institution_name,
+        unit: displayUnit,
+        business_id: prod.business_id,
+        business_name: prod.institution_name,
+        institution_id: prod.institution_id,
+        item_type: "product",
+      },
+      1
+    );
+    if (added) {
+      toast.success(`${prod.title} (${displayUnit}) added to cart!`);
+    }
+  };
+
+  return (
+    <Card
+      key={prod.id}
+      className="overflow-hidden border-border bg-card shadow-2xs hover:shadow-md hover:border-primary/40 transition-all flex flex-col justify-between rounded-2xl group"
+    >
+      <div className="space-y-3">
+        {/* Product Image */}
+        <div className="relative h-44 w-full bg-muted overflow-hidden">
+          <img
+            src={prod.image_url || "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=800&q=80"}
+            alt={prod.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+          <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5">
+            <Badge variant="secondary" className="text-[10px] font-extrabold bg-background/90 backdrop-blur-xs text-foreground shadow-2xs">
+              {prod.category}
+            </Badge>
+            {prod.badge_text && (
+              <Badge variant="outline" className="text-[10px] font-extrabold bg-primary text-primary-foreground border-transparent shadow-2xs">
+                {prod.badge_text}
+              </Badge>
+            )}
+          </div>
+          <div className="absolute top-2.5 right-2.5 z-10">
+            <FavoriteButton
+              entityType="product"
+              entityId={prod.id}
+              title={prod.title}
+              subtitle={prod.institution_name}
+              imageUrl={prod.image_url}
+              targetUrl="/products"
+              price={prod.price ? `₹${prod.price}` : undefined}
+              badge={prod.category}
+              size="sm"
+            />
+          </div>
+        </div>
+
+        {/* Title & Institution */}
+        <div className="px-4 space-y-1">
+          {prod.institution_name && (
+            <span className="text-[10px] font-bold text-primary flex items-center gap-1">
+              <Building2 className="h-3 w-3" /> {prod.institution_name}
+            </span>
+          )}
+          <h3 className="font-extrabold text-sm text-foreground line-clamp-2 leading-snug">{prod.title}</h3>
+          <p className="text-xs text-muted-foreground line-clamp-2">{prod.description}</p>
+        </div>
+
+        {/* Associated Academic Course Tags */}
+        {Array.isArray(prod.associated_programs) && prod.associated_programs.length > 0 && (
+          <div className="px-4 flex flex-wrap gap-1 pt-0.5">
+            {prod.associated_programs.slice(0, 2).map((prog: any) => (
+              <span
+                key={prog.id}
+                className="text-[9px] font-bold text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded-md flex items-center gap-1"
+              >
+                <GraduationCap className="w-2.5 h-2.5" />
+                <span className="truncate max-w-[120px]">{prog.title}</span>
+              </span>
+            ))}
+            {prod.associated_programs.length > 2 && (
+              <span className="text-[9px] font-semibold text-muted-foreground self-center">
+                +{prod.associated_programs.length - 2} more
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Features Preview */}
+        {Array.isArray(prod.features) && prod.features.length > 0 && (
+          <div className="px-4 space-y-1">
+            {prod.features.slice(0, 2).map((f: string, idx: number) => (
+              <div key={idx} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                <span className="truncate">{f}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Weight & Grams Selection (for items priced in KG or weight units) */}
+      {weightMeta.isWeight && (
+        <div className="px-4 pb-2 pt-2 border-t border-dashed border-border/70 space-y-1.5 bg-muted/20">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-bold text-muted-foreground">Order Quantity:</span>
+            <span className="font-extrabold text-foreground bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 px-2 py-0.5 rounded text-[11px] border border-rose-200 dark:border-rose-900">
+              {displayUnit}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1 flex-wrap">
+            {STANDARD_WEIGHT_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => {
+                  setSelectedWeightKey(opt.key);
+                  setShowCustom(false);
+                }}
+                className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                  selectedWeightKey === opt.key && !showCustom
+                    ? "bg-rose-600 text-white shadow-2xs"
+                    : "bg-background hover:bg-muted text-muted-foreground hover:text-foreground border border-border"
+                }`}
+              >
+                {opt.shortLabel}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setShowCustom(!showCustom)}
+              className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                showCustom
+                  ? "bg-rose-600 text-white shadow-2xs"
+                  : "bg-background hover:bg-muted text-muted-foreground hover:text-foreground border border-border"
+              }`}
+            >
+              Custom g
+            </button>
+          </div>
+
+          {showCustom && (
+            <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-background border border-border text-xs mt-1">
+              <span className="text-[10px] font-semibold text-muted-foreground shrink-0">
+                Grams:
+              </span>
+              <input
+                type="number"
+                min="10"
+                step="50"
+                placeholder="e.g. 350"
+                value={customGrams}
+                onChange={(e) => setCustomGrams(e.target.value)}
+                className="w-20 h-6 text-xs px-1.5 rounded border bg-background font-mono font-bold"
+              />
+              <span className="text-[11px] font-bold text-rose-600 shrink-0">
+                = ₹{formatWeightPrice(effectivePrice)}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Price & Action */}
+      <div className="p-4 border-t border-border mt-3 space-y-3 bg-muted/20">
+        <div className="flex items-center justify-between">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-base font-black text-foreground">
+              ₹{formatWeightPrice(effectivePrice)}
+            </span>
+            <span className="text-xs font-semibold text-muted-foreground">
+              / {displayUnit}
+            </span>
+            {hasDiscount && (
+              <span className="text-[11px] text-muted-foreground line-through">
+                ₹{formatWeightPrice(effectiveRegularPrice!)}
+              </span>
+            )}
+          </div>
+          <span className="text-[9px] text-emerald-600 font-bold block">
+            Verified Delivery
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/50">
+          <button
+            type="button"
+            onClick={() => onOpenFeedback(prod)}
+            className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-amber-300 bg-amber-50/70 text-xs font-bold text-amber-800 transition hover:bg-amber-100 cursor-pointer"
+          >
+            <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
+            <span>Reviews & Q&A</span>
+          </button>
+
+          {currentCartQty > 0 ? (
+            <div className="flex h-9 items-center justify-between border border-rose-300 dark:border-rose-900 rounded-md overflow-hidden bg-background px-1 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => updateQuantity(cartItemId, currentCartQty - 1)}
+                className="size-7 flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <Minus className="size-3" />
+              </button>
+              <span className="text-xs font-black text-rose-600">
+                {currentCartQty} in Cart
+              </span>
+              <button
+                type="button"
+                onClick={() => updateQuantity(cartItemId, currentCartQty + 1)}
+                className="size-7 flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <Plus className="size-3" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleAddToCart}
+              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-xs font-bold text-white transition cursor-pointer shadow-xs"
+            >
+              <ShoppingCart className="h-3.5 w-3.5" />
+              <span>Add to Cart</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }

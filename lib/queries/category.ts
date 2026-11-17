@@ -51,18 +51,24 @@ export const listCategories = async (
   const params: unknown[] = [];
 
   if (category_type && category_type !== 'all') {
-    params.push(category_type);
-    baseConditions.push(`c.category_type = $${params.length}`);
+    if (category_type === 'course' || category_type === 'courses') {
+      baseConditions.push(`c.category_type IN ('course', 'courses', 'academic')`);
+    } else if (category_type === 'job' || category_type === 'jobs') {
+      baseConditions.push(`c.category_type IN ('job', 'jobs')`);
+    } else {
+      params.push(category_type);
+      baseConditions.push(`c.category_type = $${params.length}`);
+    }
   }
 
   if (options.business_category_id) {
     params.push(options.business_category_id);
-    baseConditions.push(`c.business_category_id = $${params.length}`);
+    baseConditions.push(`COALESCE(c.business_category_id, p.business_category_id) = $${params.length}`);
   }
 
   if (options.business_subcategory_id) {
     params.push(options.business_subcategory_id);
-    baseConditions.push(`c.business_subcategory_id = $${params.length}`);
+    baseConditions.push(`COALESCE(c.business_subcategory_id, p.business_subcategory_id) = $${params.length}`);
   }
 
   if (options.parentId !== undefined) {
@@ -117,8 +123,8 @@ export const listCategories = async (
         c.parent_id,
         c.depth,
         c.category_type,
-        c.business_category_id,
-        c.business_subcategory_id,
+        COALESCE(c.business_category_id, p.business_category_id) AS business_category_id,
+        COALESCE(c.business_subcategory_id, p.business_subcategory_id) AS business_subcategory_id,
         bc.name AS business_category_name,
         bsc.name AS business_subcategory_name,
         c.icon_url,
@@ -157,10 +163,10 @@ export const listCategories = async (
         ON p.id = c.parent_id
 
       LEFT JOIN categories bc
-        ON bc.id = c.business_category_id
+        ON bc.id = COALESCE(c.business_category_id, p.business_category_id)
 
       LEFT JOIN categories bsc
-        ON bsc.id = c.business_subcategory_id
+        ON bsc.id = COALESCE(c.business_subcategory_id, p.business_subcategory_id)
 
       ${whereClause}
 
@@ -245,8 +251,8 @@ export const getCategoryById = async (
       c.parent_id,
       c.depth,
       c.category_type,
-      c.business_category_id,
-      c.business_subcategory_id,
+      COALESCE(c.business_category_id, p.business_category_id) AS business_category_id,
+      COALESCE(c.business_subcategory_id, p.business_subcategory_id) AS business_subcategory_id,
       bc.name AS business_category_name,
       bsc.name AS business_subcategory_name,
       c.icon_url,
@@ -269,10 +275,10 @@ export const getCategoryById = async (
       ON p.id = c.parent_id
 
     LEFT JOIN categories bc
-      ON bc.id = c.business_category_id
+      ON bc.id = COALESCE(c.business_category_id, p.business_category_id)
 
     LEFT JOIN categories bsc
-      ON bsc.id = c.business_subcategory_id
+      ON bsc.id = COALESCE(c.business_subcategory_id, p.business_subcategory_id)
 
     WHERE c.id = $1
     `,
@@ -675,6 +681,25 @@ export async function updateCategory(
         synonymsArr,
       ]
     );
+
+    // If updating a root category, propagate the business classification to its child categories
+    if (input.business_category_id !== undefined && !input.parentId) {
+      await client.query(
+        `
+        UPDATE categories
+        SET
+          business_category_id = $1,
+          business_subcategory_id = COALESCE($2, business_subcategory_id),
+          updated_at = NOW()
+        WHERE parent_id = $3
+        `,
+        [
+          input.business_category_id,
+          input.business_subcategory_id !== undefined ? input.business_subcategory_id : null,
+          input.id,
+        ]
+      );
+    }
 
     // remove old closure rows for the whole subtree
     await client.query(

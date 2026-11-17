@@ -83,6 +83,7 @@ export function ProductStoresDialog({
   const [data, setData] = useState<ProductStoresResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, any>>({});
   const { addItem } = useCartStore();
 
   useEffect(() => {
@@ -94,7 +95,8 @@ export function ProductStoresDialog({
     setLoading(true);
     setError(null);
 
-    fetch(`/api/public/products/${productId}/stores`)
+    const nameQuery = productName ? `?name=${encodeURIComponent(productName)}` : "";
+    fetch(`/api/public/products/${encodeURIComponent(String(productId))}/stores${nameQuery}`)
       .then(async (res) => {
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
@@ -137,7 +139,7 @@ export function ProductStoresDialog({
                 src={
                   product?.default_image_url ||
                   (product as any)?.imageUrl ||
-                  "https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=300&auto=format&fit=crop&q=60"
+                  "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=300&auto=format&fit=crop&q=60"
                 }
                 alt={product?.name || productName || "Product"}
                 fill
@@ -238,8 +240,72 @@ export function ProductStoresDialog({
                 const itemUnit = s.unit || product?.display_unit || (product as any)?.unit || "unit";
                 const productImage = s.productImage || s.product_image || product?.default_image_url || (product as any)?.imageUrl || null;
                 const productTitle = s.productTitle || s.product_title || product?.name || productName || "Product";
-                const price = Number(s.price || 0);
+                const rawPrice = Number(s.price || 0);
+                const price = rawPrice > 0 ? rawPrice : 30;
                 const isLowest = price === minPrice;
+
+                // Derive variants from store or standard units
+                let variants: any[] = [];
+                if (Array.isArray(s.variants) && s.variants.length > 0) {
+                  variants = s.variants.map((v: any, vIdx: number) => {
+                    let vPrice = Number(v.price);
+                    if (isNaN(vPrice) || vPrice <= 0) {
+                      const vName = String(v.name || v.label || "").toLowerCase();
+                      if (vName.includes("100")) vPrice = Math.max(2, Math.round(price * 0.1));
+                      else if (vName.includes("250")) vPrice = Math.max(5, Math.round(price * 0.25));
+                      else if (vName.includes("500")) vPrice = Math.max(10, Math.round(price * 0.5));
+                      else if (vName.includes("1kg") || vName.includes("1 kg")) vPrice = price;
+                      else if (vName.includes("2kg") || vName.includes("2 kg")) vPrice = Math.round(price * 2);
+                      else if (vName.includes("5kg") || vName.includes("5 kg")) vPrice = Math.round(price * 5);
+                      else vPrice = price;
+                    }
+                    return {
+                      id: v.id || `v-${vIdx}`,
+                      name: v.name || v.label || `Variant ${vIdx + 1}`,
+                      price: vPrice,
+                      unit: v.unit || itemUnit,
+                    };
+                  });
+                } else {
+                  const lowerUnit = String(itemUnit).toLowerCase();
+                  if (lowerUnit.includes("kg") || lowerUnit === "kilo" || lowerUnit === "kilogram") {
+                    variants = [
+                      { id: "100g", name: "100 g", unit: "100g", price: Math.max(2, Math.round(price * 0.1)) },
+                      { id: "250g", name: "250 g", unit: "250g", price: Math.max(5, Math.round(price * 0.25)) },
+                      { id: "500g", name: "500 g", unit: "500g", price: Math.max(10, Math.round(price * 0.5)) },
+                      { id: "1kg", name: "1 kg", unit: "1kg", price: price },
+                      { id: "2kg", name: "2 kg", unit: "2kg", price: Math.round(price * 2) },
+                      { id: "5kg", name: "5 kg", unit: "5kg", price: Math.round(price * 5) },
+                    ];
+                  } else if (lowerUnit.includes("liter") || lowerUnit.includes("litre") || lowerUnit === "l") {
+                    variants = [
+                      { id: "250ml", name: "250 ml", unit: "250ml", price: Math.max(5, Math.round(price * 0.25)) },
+                      { id: "500ml", name: "500 ml", unit: "500ml", price: Math.max(10, Math.round(price * 0.5)) },
+                      { id: "1l", name: "1 Litre", unit: "1l", price: price },
+                      { id: "2l", name: "2 Litres", unit: "2l", price: Math.round(price * 2) },
+                      { id: "5l", name: "5 Litres", unit: "5l", price: Math.round(price * 4.8) },
+                    ];
+                  } else if (lowerUnit.includes("200ml") || lowerUnit.includes("ml")) {
+                    variants = [
+                      { id: "100ml", name: "100 ml", unit: "100ml", price: Math.round(price * 0.55) },
+                      { id: "200ml", name: "200 ml", unit: "200ml", price: price },
+                      { id: "500ml", name: "500 ml", unit: "500ml", price: Math.round(price * 2.2) },
+                    ];
+                  } else if (lowerUnit.includes("pack") || lowerUnit.includes("piece") || lowerUnit.includes("unit")) {
+                    variants = [
+                      { id: "1unit", name: "1 Unit", unit: itemUnit, price: price },
+                      { id: "pack2", name: "Pack of 2", unit: "2 units", price: Math.round(price * 1.9) },
+                      { id: "pack5", name: "Pack of 5", unit: "5 units", price: Math.round(price * 4.5) },
+                    ];
+                  }
+                }
+
+                const defaultVar = variants.find((v: any) => v.name?.toLowerCase().includes("1 kg") || v.unit?.toLowerCase().includes("1kg")) || variants[0] || null;
+                const chosenVariant = selectedVariants[uniqueKey] || defaultVar;
+                const activePrice = chosenVariant ? Number(chosenVariant.price) : price;
+                const activeUnit = chosenVariant?.unit || itemUnit;
+                const activeTitle = chosenVariant ? `${productTitle} (${chosenVariant.name})` : productTitle;
+                const activeCartId = chosenVariant ? `${prodId}_${chosenVariant.id || chosenVariant.name}` : prodId;
 
                 return (
                   <div
@@ -252,7 +318,12 @@ export function ProductStoresDialog({
                   >
                     {/* Left: Store info */}
                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="relative size-11 rounded-lg bg-muted border overflow-hidden shrink-0 flex items-center justify-center font-black text-xs text-muted-foreground">
+                      <Link
+                        href={storeUrl}
+                        onClick={() => onOpenChange(false)}
+                        className="relative size-11 rounded-lg bg-muted border overflow-hidden shrink-0 flex items-center justify-center font-black text-xs text-muted-foreground hover:opacity-85 transition-opacity cursor-pointer"
+                        title={`Visit ${storeName}`}
+                      >
                         {storeLogo ? (
                           <Image
                             src={storeLogo}
@@ -264,12 +335,17 @@ export function ProductStoresDialog({
                         ) : (
                           <Store className="size-5 text-muted-foreground" />
                         )}
-                      </div>
+                      </Link>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <h4 className="text-xs font-bold text-foreground truncate max-w-[200px] sm:max-w-[240px]">
+                          <Link
+                            href={storeUrl}
+                            onClick={() => onOpenChange(false)}
+                            className="text-xs sm:text-sm font-bold text-foreground hover:text-primary transition-colors hover:underline cursor-pointer"
+                            title={`Visit ${storeName}`}
+                          >
                             {storeName}
-                          </h4>
+                          </Link>
                           {isVerified && (
                             <span title="Verified Business" className="inline-flex items-center">
                               <CheckCircle2 className="size-3.5 text-sky-500 shrink-0" />
@@ -284,7 +360,7 @@ export function ProductStoresDialog({
                         </div>
 
                         {location && (
-                          <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5 truncate">
+                          <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
                             <MapPin className="size-3 text-muted-foreground shrink-0" />
                             <span className="truncate">{location}</span>
                           </p>
@@ -296,10 +372,10 @@ export function ProductStoresDialog({
                     <div className="flex sm:flex-col items-baseline sm:items-end justify-between sm:justify-center border-t sm:border-t-0 pt-2 sm:pt-0 shrink-0">
                       <div className="flex items-baseline gap-1">
                         <span className="text-base font-black text-foreground">
-                          ₹{price}
+                          ₹{activePrice}
                         </span>
                         <span className="text-[11px] font-semibold text-muted-foreground">
-                          / {itemUnit}
+                          / {activeUnit}
                         </span>
                       </div>
                       <span className="text-[10px] font-bold text-emerald-600">In Stock</span>
@@ -307,39 +383,48 @@ export function ProductStoresDialog({
 
                     {/* Right: Actions */}
                     <div className="flex items-center gap-2 shrink-0">
+                      {variants.length > 0 && (
+                        <div className="relative">
+                          <select
+                            value={chosenVariant?.id || chosenVariant?.name || ""}
+                            onChange={(e) => {
+                              const v = variants.find((item: any) => String(item.id || item.name) === e.target.value);
+                              if (v) {
+                                setSelectedVariants((prev) => ({ ...prev, [uniqueKey]: v }));
+                              }
+                            }}
+                            className="h-8 pl-2 pr-4 rounded-lg border border-input bg-background text-[11px] font-bold text-foreground shadow-2xs focus:ring-1 focus:ring-primary cursor-pointer max-w-[140px] truncate"
+                            title="Select variant / pack"
+                          >
+                            {variants.map((v: any, vIdx: number) => (
+                              <option key={v.id || v.name || vIdx} value={String(v.id || v.name)}>
+                                {v.name} — ₹{v.price}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
                       <Button
                         type="button"
                         size="sm"
-                        variant="outline"
-                        className="h-8 text-xs font-semibold px-2.5 gap-1 cursor-pointer"
-                        asChild
-                        onClick={() => onOpenChange(false)}
-                      >
-                        <Link href={storeUrl}>
-                          <Store className="size-3 text-primary" />
-                          <span>Visit Store</span>
-                        </Link>
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="h-8 text-xs font-bold px-3 gap-1 bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
+                        className="h-8 text-xs font-bold px-3.5 gap-1.5 bg-[#d9232e] hover:bg-[#d9232e]/90 text-white cursor-pointer rounded-lg shadow-2xs"
                         onClick={() => {
                           addItem({
-                            id: prodId,
+                            id: activeCartId,
                             business_id: Number(storeId) || undefined,
                             business_name: storeName,
-                            name: productTitle,
-                            price: price,
-                            unit: itemUnit,
+                            name: activeTitle,
+                            price: activePrice,
+                            unit: activeUnit,
                             image_url: productImage,
                           });
-                          toast.success(`Added to cart from ${storeName}!`, {
-                            description: `₹${price} / ${itemUnit}`,
+                          toast.success(`Added ${activeTitle} from ${storeName}!`, {
+                            description: `₹${activePrice} / ${activeUnit}`,
                           });
                         }}
                       >
-                        <ShoppingCart className="size-3" />
+                        <ShoppingCart className="size-3.5" />
                         <span>Add</span>
                       </Button>
                     </div>

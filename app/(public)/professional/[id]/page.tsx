@@ -59,56 +59,63 @@ const fetchProfessionalFullData = cache(async (idOrSlug: string) => {
       // Services
       db.query(
         `SELECT
-          ms.id,
-          ms.name,
-          ms.slug,
-          ms.pricing_model,
-          ms.regular_price,
-          ms.discounted_price,
-          COALESCE(ms.discounted_price, ms.regular_price, ms.suggested_price, 0) AS price,
-          ms.currency,
-          ms.default_image_url,
+          s.id,
+          s.title AS name,
+          s.slug,
+          COALESCE(s.pricing_model, 'fixed_price') AS pricing_model,
+          s.price AS regular_price,
+          s.sale_price AS discounted_price,
+          COALESCE(s.sale_price, s.price, 0) AS price,
+          'INR' AS currency,
+          COALESCE(s.image_url, ms.default_image_url) AS default_image_url,
           ms.images,
-          ms.description,
-          ms.estimated_duration,
-          ms.service_location,
-          c.name AS category_name,
-          sc.name AS subcategory_name
-        FROM master_services ms
+          s.description,
+          COALESCE(s.duration_minutes || ' mins', ms.estimated_duration, '30 mins') AS estimated_duration,
+          COALESCE(s.service_location, ms.service_location, 'At Center') AS service_location,
+          COALESCE(sc.name, s.category, c.name, 'General') AS category_name,
+          ssc.name AS subcategory_name
+        FROM services s
+        LEFT JOIN service_categories sc ON sc.id = s.category_id
+        LEFT JOIN master_services ms ON ms.id = s.master_service_id
         LEFT JOIN categories c ON c.id = ms.category_id
-        LEFT JOIN categories sc ON sc.id = ms.subcategory_id
-        WHERE ms.professional_profile_id = $1
-          AND COALESCE(ms.is_active, TRUE) = TRUE
-        ORDER BY ms.id DESC`,
-        [profId]
+        LEFT JOIN categories ssc ON ssc.id = ms.subcategory_id
+        WHERE (s.professional_profile_id = $1 OR ($2::int IS NOT NULL AND s.business_profile_id = $2))
+          AND COALESCE(s.status, 'active') = 'active'
+        ORDER BY s.id DESC`,
+        [profId, bizId]
       ),
 
       // Products (if any)
       db.query(
         `SELECT
-          mp.id,
-          mp.name,
-          mp.slug,
-          mp.regular_price,
-          mp.discounted_price,
-          COALESCE(mp.discounted_price, mp.regular_price, mp.suggested_price, 0) AS price,
-          mp.currency,
-          mp.default_image_url,
+          p.id,
+          p.title AS name,
+          p.slug,
+          COALESCE(mp.brand, 'Generic') AS brand,
+          b.name AS brand_name,
+          p.price AS regular_price,
+          p.sale_price AS discounted_price,
+          COALESCE(p.sale_price, p.price, 0) AS price,
+          'INR' AS currency,
+          COALESCE(p.image_url, mp.default_image_url) AS default_image_url,
           mp.images,
-          mp.description,
-          mp.unit_of_measurement,
-          COALESCE(mp.unit, mp.unit_of_measurement, u.short_symbol, 'piece') AS unit,
-          COALESCE(mp.unit_quantity, 1) AS unit_quantity,
-          c.name AS category_name,
-          sc.name AS subcategory_name
-        FROM master_products mp
-        LEFT JOIN units u ON u.id = mp.unit_id
+          p.description,
+          COALESCE(p.unit, 'piece') AS unit_of_measurement,
+          COALESCE(p.unit, 'piece') AS unit,
+          COALESCE(p.unit_quantity, 1) AS unit_quantity,
+          COALESCE(pc.name, p.category, c.name, 'General') AS category_name,
+          sc.name AS subcategory_name,
+          p.stock_quantity
+        FROM products p
+        LEFT JOIN product_categories pc ON pc.id = p.category_id
+        LEFT JOIN master_products mp ON mp.id = p.master_product_id
+        LEFT JOIN brands b ON b.id = mp.brand_id
         LEFT JOIN categories c ON c.id = mp.category_id
         LEFT JOIN categories sc ON sc.id = mp.subcategory_id
-        WHERE mp.professional_profile_id = $1
-          AND COALESCE(mp.is_active, TRUE) = TRUE
-        ORDER BY mp.id DESC`,
-        [profId]
+        WHERE (p.professional_profile_id = $1 OR ($2::int IS NOT NULL AND p.business_profile_id = $2))
+          AND COALESCE(p.status, 'active') = 'active'
+        ORDER BY p.id DESC`,
+        [profId, bizId]
       ),
 
       // Reviews
@@ -178,12 +185,6 @@ export default async function ProfessionalProfilePage({ params }: Props) {
 
   if (!data || !data.professional) {
     notFound();
-  }
-
-  // Canonical SEO redirect to category + subcategory + location URL
-  const canonicalSeoUrl = buildProfessionalSeoUrl(data.professional);
-  if (canonicalSeoUrl && !canonicalSeoUrl.startsWith("/professional/")) {
-    redirect(canonicalSeoUrl);
   }
 
   return (

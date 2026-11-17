@@ -702,17 +702,6 @@ export default function SeoManagementPage() {
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchTags}
-            disabled={loading}
-            className="h-10 text-xs font-bold bg-zinc-800/60 border-white/10 text-zinc-200 hover:bg-zinc-800"
-          >
-            <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", loading && "animate-spin text-[#e06836]")} />
-            Refresh
-          </Button>
-
           {/* "+ Custom Page SEO" Orange CTA Button */}
           <Button
             onClick={() => {

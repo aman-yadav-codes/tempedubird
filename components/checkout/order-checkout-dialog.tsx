@@ -43,6 +43,14 @@ import {
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
 import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
+import { isUserStoreOwner } from "@/lib/auth/store-ownership";
+import {
+  isWeightBasedProduct,
+  STANDARD_WEIGHT_OPTIONS,
+  calculateWeightPrice,
+  formatWeightPrice,
+  formatGramsDisplay,
+} from "@/lib/utils/weight-unit";
 
 export interface CheckoutItem {
   id: number | string;
@@ -126,6 +134,11 @@ export function OrderCheckoutDialog({
   // Placed Order state
   const [completedOrder, setCompletedOrder] = useState<any | null>(null);
 
+  // Weight & Grams Selection (for products priced in KG or weight units)
+  const [selectedWeightKey, setSelectedWeightKey] = useState<string>("1kg");
+  const [showCustomWeight, setShowCustomWeight] = useState(false);
+  const [customGrams, setCustomGrams] = useState<string>("250");
+
   // Auto-populate user details when opened
   useEffect(() => {
     if (open) {
@@ -135,6 +148,12 @@ export function OrderCheckoutDialog({
       setFulfillmentType("pickup");
       setPaymentMethod("Online (UPI / Card / Netbanking)");
       setNotes("");
+
+      if (item?.unit) {
+        const meta = isWeightBasedProduct(item.unit);
+        setSelectedWeightKey(meta.defaultKey);
+        setShowCustomWeight(false);
+      }
 
       // Set default tomorrow date
       const tomorrow = new Date();
@@ -148,7 +167,7 @@ export function OrderCheckoutDialog({
         setCustomerEmail(user.email || "");
       }
     }
-  }, [open, user]);
+  }, [open, user, item]);
 
   if (!item) return null;
 
@@ -157,12 +176,42 @@ export function OrderCheckoutDialog({
     ? (item.suggested_price_usd || item.price || item.sale_price || 0)
     : (item.suggested_price_inr || item.sale_price || item.price || 0);
 
-  const unitPrice = Number(basePrice) || 0;
+  const weightMeta = isWeightBasedProduct(item.unit);
+  let effectiveGrams = 1000;
+  let effectiveDisplayUnit = item.unit || "unit";
+
+  if (weightMeta.isWeight && isProduct) {
+    if (showCustomWeight) {
+      effectiveGrams = Math.max(10, Number(customGrams) || 100);
+      effectiveDisplayUnit = formatGramsDisplay(effectiveGrams);
+    } else {
+      const opt = STANDARD_WEIGHT_OPTIONS.find((o) => o.key === selectedWeightKey) || STANDARD_WEIGHT_OPTIONS[3];
+      effectiveGrams = opt.grams;
+      effectiveDisplayUnit = opt.label;
+    }
+  }
+
+  const unitPrice = weightMeta.isWeight && isProduct
+    ? calculateWeightPrice(Number(basePrice) || 0, weightMeta.baseGrams, effectiveGrams)
+    : (Number(basePrice) || 0);
+
   const totalPrice = unitPrice * Math.max(1, quantity);
   const currencySymbol = country === "US" ? "$" : "₹";
 
+  const isOwner = isUserStoreOwner(user, {
+    institution_id: item?.institution_id,
+    institution_profile_id: item?.institution_id,
+    user_id: item?.seller_info?.user_id || item?.provider_info?.user_id,
+    owner_id: item?.seller_info?.owner_id || item?.provider_info?.owner_id,
+  });
+
   const handleNextStep = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isOwner) {
+      toast.error("Store Owner Restriction: You cannot place orders or book services from your own storefront.");
+      return;
+    }
 
     if (isProduct) {
       if (step === 1) {
@@ -199,6 +248,11 @@ export function OrderCheckoutDialog({
   };
 
   const handleConfirmOrder = async () => {
+    if (isOwner) {
+      toast.error("Store Owner Restriction: You cannot place orders or book services from your own storefront.");
+      return;
+    }
+
     setLoading(true);
     try {
       const fullShippingAddress = fulfillmentType === "delivery"
@@ -206,7 +260,7 @@ export function OrderCheckoutDialog({
         : item.provider_address || "Merchant Store Location";
 
       const payload = {
-        itemName: item.name,
+        itemName: weightMeta.isWeight && isProduct ? `${item.name} (${effectiveDisplayUnit})` : item.name,
         itemType: item.type,
         quantity: isProduct ? quantity : 1,
         unitPrice,
@@ -267,8 +321,8 @@ export function OrderCheckoutDialog({
               <div className="text-right">
                 <div className="text-[11px] text-white/80">Price</div>
                 <div className="text-xl font-black text-white flex items-baseline justify-end gap-1">
-                  <span>{currencySymbol}{unitPrice.toLocaleString()}</span>
-                  {item.unit && <span className="text-xs font-semibold text-white/80">/ {item.unit}</span>}
+                  <span>{currencySymbol}{formatWeightPrice(unitPrice)}</span>
+                  {(item.unit || effectiveDisplayUnit) && <span className="text-xs font-semibold text-white/80">/ {effectiveDisplayUnit}</span>}
                 </div>
               </div>
             )}
@@ -390,6 +444,19 @@ export function OrderCheckoutDialog({
                 </div>
               )}
 
+              {/* STORE OWNER PREVIEW BANNER */}
+              {isOwner && !completedOrder && (
+                <div className="mb-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex items-start gap-3 text-xs">
+                  <AlertCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                  <div>
+                    <span className="font-bold block">Store Owner Preview</span>
+                    <span>
+                      You are the owner/manager of this listing. Store owners and providers cannot place orders or book appointments on their own listings.
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* ========================================================= */}
               {/* PRODUCT FLOW: STEP 1 - FULFILLMENT CHOICE                 */}
               {/* ========================================================= */}
@@ -456,6 +523,70 @@ export function OrderCheckoutDialog({
                 </div>
               </div>
 
+              {/* Weight & Grams Selection (for items priced in KG or weight units) */}
+              {weightMeta.isWeight && (
+                <div className="p-3.5 border rounded-xl bg-muted/20 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <div>
+                      <Label className="text-xs font-bold text-foreground">Select Weight / Pack</Label>
+                      <p className="text-[10px] text-muted-foreground">Order in grams or kilograms</p>
+                    </div>
+                    <Badge className="bg-rose-600 text-white font-bold text-xs">
+                      {effectiveDisplayUnit}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {STANDARD_WEIGHT_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => {
+                          setSelectedWeightKey(opt.key);
+                          setShowCustomWeight(false);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          selectedWeightKey === opt.key && !showCustomWeight
+                            ? "bg-rose-600 text-white shadow-2xs"
+                            : "bg-background hover:bg-muted text-muted-foreground hover:text-foreground border border-border"
+                        }`}
+                      >
+                        {opt.shortLabel}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomWeight(!showCustomWeight)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        showCustomWeight
+                          ? "bg-rose-600 text-white shadow-2xs"
+                          : "bg-background hover:bg-muted text-muted-foreground hover:text-foreground border border-border"
+                      }`}
+                    >
+                      Custom g
+                    </button>
+                  </div>
+
+                  {showCustomWeight && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-background border border-border text-xs mt-1">
+                      <span className="text-[11px] font-semibold text-muted-foreground shrink-0">Enter grams:</span>
+                      <input
+                        type="number"
+                        min="10"
+                        step="50"
+                        placeholder="e.g. 350"
+                        value={customGrams}
+                        onChange={(e) => setCustomGrams(e.target.value)}
+                        className="w-24 h-7 text-xs px-2 rounded border bg-background font-mono font-bold"
+                      />
+                      <span className="text-xs font-bold text-rose-600 shrink-0">
+                        = {currencySymbol}{formatWeightPrice(unitPrice)} per pack
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Quantity Selector */}
               <div className="p-3.5 border rounded-xl bg-muted/20 flex items-center justify-between">
                 <div>
@@ -491,7 +622,7 @@ export function OrderCheckoutDialog({
                 <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" size="sm" className="bg-[#d9232e] hover:bg-[#d9232e]/90 text-white font-bold gap-1.5">
+                <Button type="submit" size="sm" disabled={isOwner} className="bg-[#d9232e] hover:bg-[#d9232e]/90 text-white font-bold gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
                   Next: Select Date &amp; Time <ArrowRight className="size-3.5" />
                 </Button>
               </DialogFooter>
@@ -652,7 +783,7 @@ export function OrderCheckoutDialog({
                 <Button type="button" variant="outline" size="sm" onClick={() => setStep(1)}>
                   <ArrowLeft className="size-3.5 mr-1" /> Back
                 </Button>
-                <Button type="submit" size="sm" className="bg-[#d9232e] hover:bg-[#d9232e]/90 text-white font-bold gap-1.5">
+                <Button type="submit" size="sm" disabled={isOwner} className="bg-[#d9232e] hover:bg-[#d9232e]/90 text-white font-bold gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
                   Proceed to Payment <ArrowRight className="size-3.5" />
                 </Button>
               </DialogFooter>
@@ -771,8 +902,8 @@ export function OrderCheckoutDialog({
                   type="button"
                   size="sm"
                   onClick={handleConfirmOrder}
-                  disabled={loading}
-                  className="bg-[#d9232e] hover:bg-[#d9232e]/90 text-white font-bold gap-1.5"
+                  disabled={loading || isOwner}
+                  className="bg-[#d9232e] hover:bg-[#d9232e]/90 text-white font-bold gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <>
@@ -902,7 +1033,7 @@ export function OrderCheckoutDialog({
                 <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" size="sm" className="bg-[#d9232e] hover:bg-[#d9232e]/90 text-white font-bold gap-1.5">
+                <Button type="submit" size="sm" disabled={isOwner} className="bg-[#d9232e] hover:bg-[#d9232e]/90 text-white font-bold gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
                   Next: Payment &amp; Review <ArrowRight className="size-3.5" />
                 </Button>
               </DialogFooter>
@@ -1010,8 +1141,8 @@ export function OrderCheckoutDialog({
                   type="button"
                   size="sm"
                   onClick={handleConfirmOrder}
-                  disabled={loading}
-                  className="bg-[#d9232e] hover:bg-[#d9232e]/90 text-white font-bold gap-1.5"
+                  disabled={loading || isOwner}
+                  className="bg-[#d9232e] hover:bg-[#d9232e]/90 text-white font-bold gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <>

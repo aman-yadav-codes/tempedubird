@@ -21,9 +21,57 @@ export async function GET(req: Request) {
     await ensureFeatureSchema();
     const url = new URL(req.url);
     const activeOnly = url.searchParams.get("active") === "true";
+    const parentIdParam = url.searchParams.get("parentId");
 
-    const whereClause = activeOnly ? "WHERE is_active = TRUE" : "";
+    const conditions: string[] = ["category_type = 'product'", "COALESCE(is_deleted, false) = false"];
+    const params: any[] = [];
+
+    if (activeOnly) {
+      conditions.push("is_active = TRUE");
+    }
+
+    if (parentIdParam !== null && parentIdParam !== undefined && parentIdParam !== "") {
+      if (parentIdParam === "null" || parentIdParam === "root") {
+        conditions.push("parent_id IS NULL");
+      } else {
+        params.push(Number(parentIdParam));
+        conditions.push(`parent_id = $${params.length}`);
+      }
+    }
+
+    const whereClause = `WHERE ${conditions.join(" AND ")}`;
     const query = `
+      SELECT 
+        c.id,
+        c.name,
+        c.slug,
+        c.description,
+        COALESCE(c.icon_url, '') AS icon,
+        c.is_active,
+        c.parent_id,
+        c.business_category_id,
+        (
+          SELECT COUNT(*)::int 
+          FROM products p 
+          WHERE p.category_id = c.id OR p.subcategory_id = c.id OR p.category = c.name
+        ) AS products_count
+      FROM categories c
+      ${whereClause}
+      ORDER BY c.parent_id NULLS FIRST, c.name ASC
+    `;
+
+    const res = await db.query(query, params);
+
+    if (res.rows.length > 0) {
+      return NextResponse.json({
+        success: true,
+        categories: res.rows,
+      });
+    }
+
+    // Fallback to legacy product_categories if unified categories returned empty
+    const legacyWhere = activeOnly ? "WHERE is_active = TRUE" : "";
+    const legacyQuery = `
       SELECT 
         pc.id,
         pc.name,
@@ -39,15 +87,15 @@ export async function GET(req: Request) {
           WHERE p.category_id = pc.id OR p.category = pc.name
         ) AS products_count
       FROM product_categories pc
-      ${whereClause}
+      ${legacyWhere}
       ORDER BY pc.sort_order ASC, pc.id ASC
     `;
 
-    const res = await db.query(query);
+    const legacyRes = await db.query(legacyQuery);
 
     return NextResponse.json({
       success: true,
-      categories: res.rows,
+      categories: legacyRes.rows,
     });
   } catch (error: any) {
     console.error("[Product Categories GET] Error:", error);
@@ -88,6 +136,19 @@ export async function POST(req: Request) {
       `,
       [name, slug, description, icon, isActive, sortOrder]
     );
+
+    // Also sync into unified categories table
+    const catCheck = await db.query(
+      `SELECT id FROM categories WHERE (name = $1 OR slug = $2) AND category_type = 'product' AND COALESCE(is_deleted, false) = false`,
+      [name, slug]
+    );
+    if (catCheck.rows.length === 0) {
+      await db.query(
+        `INSERT INTO categories (name, slug, category_type, is_active, description, icon_url, created_at, updated_at)
+         VALUES ($1, $2, 'product', $3, $4, $5, NOW(), NOW())`,
+        [name, slug, isActive, description, icon]
+      );
+    }
 
     return NextResponse.json({
       success: true,

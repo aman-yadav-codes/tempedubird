@@ -42,6 +42,8 @@ import { toast } from "sonner";
 import { useAuthStore } from "@/store";
 import { useCartStore, type CartItem } from "@/store";
 import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
+import { CartConflictDialog } from "@/components/checkout/cart-conflict-dialog";
+import { isUserStoreOwner } from "@/lib/auth/store-ownership";
 
 export function CartDrawer() {
   const {
@@ -56,6 +58,20 @@ export function CartDrawer() {
   } = useCartStore();
 
   const { user } = useAuthStore();
+
+  // Check if any items belong to the logged-in user's own store
+  const ownStoreItemIds = new Set(
+    items
+      .filter((item) =>
+        isUserStoreOwner(user, {
+          institution_id: item.institution_id,
+          institution_profile_id: item.institution_id,
+          id: item.business_id,
+        })
+      )
+      .map((item) => item.id)
+  );
+  const hasOwnStoreItems = ownStoreItemIds.size > 0;
 
   // Dialog stages: "cart" -> "checkout" -> "success"
   const [stage, setStage] = useState<"cart" | "checkout" | "success">("cart");
@@ -106,6 +122,10 @@ export function CartDrawer() {
       setAuthModalOpen(true);
       return;
     }
+    if (hasOwnStoreItems) {
+      toast.error("You cannot order items from your own store. Please remove your store items to proceed.");
+      return;
+    }
     setStage("checkout");
   };
 
@@ -114,6 +134,11 @@ export function CartDrawer() {
 
     if (!user) {
       setAuthModalOpen(true);
+      return;
+    }
+
+    if (hasOwnStoreItems) {
+      toast.error("You cannot order items from your own store. Please remove your store items to proceed.");
       return;
     }
 
@@ -261,6 +286,16 @@ export function CartDrawer() {
                   </div>
                 ) : (
                   <div className="space-y-3.5">
+                    {/* Owner Restriction Notice if user has their own items in cart */}
+                    {hasOwnStoreItems && (
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 flex items-start gap-2.5 text-xs">
+                        <span className="font-bold shrink-0">⚠️ Owner Restriction:</span>
+                        <span>
+                          Your cart contains items from your own store. Store owners cannot place orders on their own storefront. Please remove them to proceed.
+                        </span>
+                      </div>
+                    )}
+
                     {items.map((item) => (
                       <div
                         key={item.id}
@@ -283,9 +318,16 @@ export function CartDrawer() {
                         {/* Details */}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
-                            <h4 className="text-xs font-bold text-foreground truncate">
-                              {item.name}
-                            </h4>
+                            <div className="min-w-0 flex-1">
+                              <h4 className="text-xs font-bold text-foreground truncate">
+                                {item.name}
+                              </h4>
+                              {ownStoreItemIds.has(item.id) && (
+                                <Badge variant="outline" className="mt-1 text-[9px] font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 border-amber-500/30">
+                                  Your Store Item (Self-order restricted)
+                                </Badge>
+                              )}
+                            </div>
                             <button
                               type="button"
                               onClick={() => removeItem(item.id)}
@@ -598,7 +640,8 @@ export function CartDrawer() {
               </div>
               <Button
                 onClick={handleProceedToCheckout}
-                className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs h-9 px-4 gap-1.5 cursor-pointer shadow-sm"
+                disabled={hasOwnStoreItems}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs h-9 px-4 gap-1.5 cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Proceed to Checkout ({totalCount}) <ArrowRight className="size-3.5" />
               </Button>
@@ -613,6 +656,9 @@ export function CartDrawer() {
         onOpenChange={setAuthModalOpen}
         defaultTab="signup"
       />
+
+      {/* Cart Conflict Prompt Dialog (Single Store & Single Category Policy) */}
+      <CartConflictDialog />
     </>
   );
 }

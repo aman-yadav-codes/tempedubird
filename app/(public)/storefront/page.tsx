@@ -1,26 +1,33 @@
 import { redirect } from "next/navigation";
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
+import { getFrontendConfig } from "@/lib/config/frontend-config";
 
 export const dynamic = "force-dynamic";
 
 interface Props {
-  searchParams?: Promise<{ institutionId?: string; type?: string }> | { institutionId?: string; type?: string };
+  searchParams?: Promise<{ institutionId?: string; type?: string; businessId?: string }> | { institutionId?: string; type?: string; businessId?: string };
 }
 
 export default async function StorefrontRedirectPage({ searchParams }: Props) {
   const resolvedSearchParams = await Promise.resolve(searchParams);
+  const config = getFrontendConfig();
+
+  const paramBizId = resolvedSearchParams?.businessId ? Number(resolvedSearchParams.businessId) : null;
   const paramInstId = resolvedSearchParams?.institutionId ? Number(resolvedSearchParams.institutionId) : null;
+  const envBizId = config.mode === "business" && config.businessId ? config.businessId : null;
+
+  const targetId = paramBizId || paramInstId || envBizId;
 
   let targetUrl: string | null = null;
 
-  // 1. If a specific institutionId was passed (e.g. from the active workspace switcher or header)
-  if (paramInstId && Number.isInteger(paramInstId) && paramInstId > 0) {
+  // 1. If target ID is present
+  if (targetId && Number.isInteger(targetId) && targetId > 0) {
     try {
-      // 1.1 Check if linked to a business_profile
+      // 1.1 Check if linked to a business_profile by id or institution_profile_id
       const bizCheck = await db.query(
-        `SELECT slug, id FROM business_profiles WHERE institution_profile_id = $1 AND COALESCE(is_active, TRUE) = TRUE LIMIT 1`,
-        [paramInstId]
+        `SELECT slug, id FROM business_profiles WHERE (id = $1 OR institution_profile_id = $1) AND COALESCE(is_active, TRUE) = TRUE ORDER BY (id = $1) DESC LIMIT 1`,
+        [targetId]
       );
       if (bizCheck.rows.length > 0) {
         targetUrl = `/business/${bizCheck.rows[0].slug || bizCheck.rows[0].id}`;
@@ -29,8 +36,8 @@ export default async function StorefrontRedirectPage({ searchParams }: Props) {
       // 1.2 Check if linked to a professional_profile
       if (!targetUrl) {
         const profCheck = await db.query(
-          `SELECT slug, id FROM professional_profiles WHERE institution_profile_id = $1 AND COALESCE(is_active, TRUE) = TRUE LIMIT 1`,
-          [paramInstId]
+          `SELECT slug, id FROM professional_profiles WHERE (id = $1 OR institution_profile_id = $1) AND COALESCE(is_active, TRUE) = TRUE LIMIT 1`,
+          [targetId]
         );
         if (profCheck.rows.length > 0) {
           targetUrl = `/professional/${profCheck.rows[0].slug || profCheck.rows[0].id}`;
@@ -41,14 +48,14 @@ export default async function StorefrontRedirectPage({ searchParams }: Props) {
       if (!targetUrl) {
         const instCheck = await db.query(
           `SELECT slug, id FROM institution_profiles WHERE id = $1 LIMIT 1`,
-          [paramInstId]
+          [targetId]
         );
         if (instCheck.rows.length > 0) {
           targetUrl = `/institutes/${instCheck.rows[0].slug || instCheck.rows[0].id}`;
         }
       }
     } catch (error) {
-      console.error("[StorefrontRedirect paramInstId] error:", error);
+      console.error("[StorefrontRedirect targetId] error:", error);
     }
   }
 
@@ -103,7 +110,7 @@ export default async function StorefrontRedirectPage({ searchParams }: Props) {
         if (instRes.rows.length > 0) {
           const inst = instRes.rows[0];
           const instBiz = await db.query(
-            `SELECT slug, id FROM business_profiles WHERE institution_profile_id = $1 LIMIT 1`,
+            `SELECT slug, id FROM business_profiles WHERE (institution_profile_id = $1 OR id = $1) LIMIT 1`,
             [inst.id]
           );
           if (instBiz.rows.length > 0) {

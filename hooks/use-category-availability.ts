@@ -7,6 +7,7 @@ import { useActiveInstitution } from "@/hooks/use-active-institution";
 export type CategoryKey =
   | "courses"
   | "products"
+  | "services"
   | "institutes"
   | "practice"
   | "notes"
@@ -16,7 +17,8 @@ export type CategoryKey =
   | "hostels"
   | "blogs"
   | "gallery"
-  | "contact";
+  | "contact"
+  | "jobs";
 
 export type CategoryAvailabilityItem = {
   hasData: boolean;
@@ -31,7 +33,7 @@ export function useCategoryAvailability() {
   const { user, isAuthenticated } = useAuthStore();
   const { activeInstitutionId, activeInstitution, defaultEnvInstitutionId } = useActiveInstitution();
 
-  const resolvedInstitutionId = defaultEnvInstitutionId ?? null;
+  const resolvedInstitutionId = defaultEnvInstitutionId ?? activeInstitutionId ?? null;
   const isInstitutionalAdmin = Boolean(resolvedInstitutionId);
   const isPlatformAdmin = !isInstitutionalAdmin;
 
@@ -43,7 +45,7 @@ export function useCategoryAvailability() {
   const fetchAvailability = useCallback(async (signal?: AbortSignal) => {
     try {
       const url = targetInstitutionId
-        ? `/api/public/categories/availability?institutionId=${targetInstitutionId}`
+        ? `/api/public/categories/availability?institutionId=${targetInstitutionId}&businessId=${targetInstitutionId}`
         : "/api/public/categories/availability";
 
       const res = await fetch(url, { signal });
@@ -71,9 +73,11 @@ export function useCategoryAvailability() {
 
   const isCategoryVisible = useCallback(
     (key: CategoryKey) => {
+      if (categories) {
+        return Boolean(categories[key]?.hasData);
+      }
       if (!isInstitutionalAdmin && !targetInstitutionId) return true; // Platform Admin or public marketplace guest sees all categories
-      if (!categories) return false; // While loading institution categories, don't show unverified categories
-      return Boolean(categories[key]?.hasData);
+      return false; // While loading institution categories, don't show unverified categories
     },
     [isInstitutionalAdmin, targetInstitutionId, categories]
   );

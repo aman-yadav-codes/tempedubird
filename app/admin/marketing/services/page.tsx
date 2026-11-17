@@ -85,6 +85,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { InheritMasterServicesDialog } from "@/components/admin/catalog/inherit-master-services-dialog";
+import { ServiceFormDialog } from "@/components/admin/catalog/service-form-dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export type ServiceCategory = {
   id: number;
@@ -184,6 +187,9 @@ export default function AdminServicesPage() {
   const [newCatName, setNewCatName] = useState("");
   const [newCatDesc, setNewCatDesc] = useState("");
   const [savingCategory, setSavingCategory] = useState(false);
+
+  // Inherit Master Services Dialog State
+  const [inheritModalOpen, setInheritModalOpen] = useState(false);
 
   // Form Fields for Service
   const [formTitle, setFormTitle] = useState("");
@@ -322,43 +328,11 @@ export default function AdminServicesPage() {
 
   const handleOpenCreate = () => {
     setEditingService(null);
-    setFormTitle("");
-    setFormCategoryId(categories[0]?.id ? String(categories[0].id) : "");
-    setFormProgramIds([]);
-    setFormPrice("");
-    setFormSalePrice("");
-    setFormPricingModel("fixed");
-    setFormDurationMinutes("60");
-    setFormDeliveryMode("online");
-    setFormServiceLocation("");
-    setFormBadge("");
-    setFormImage("");
-    setFormDescription("");
-    setFormStatus("active");
-    setFormIsFeatured(false);
-    setFormFeatures([""]);
-    setFormTab("basic");
     setDialogOpen(true);
   };
 
   const handleOpenEdit = (srv: ServiceRecord) => {
     setEditingService(srv);
-    setFormTitle(srv.title || "");
-    setFormCategoryId(srv.category_id ? String(srv.category_id) : "");
-    setFormProgramIds(Array.isArray(srv.program_ids) ? srv.program_ids : []);
-    setFormPrice(String(srv.price || ""));
-    setFormSalePrice(srv.sale_price !== null && srv.sale_price !== undefined ? String(srv.sale_price) : "");
-    setFormPricingModel(srv.pricing_model || "fixed");
-    setFormDurationMinutes(String(srv.duration_minutes || 60));
-    setFormDeliveryMode(srv.delivery_mode || "online");
-    setFormServiceLocation(srv.service_location || "");
-    setFormBadge(srv.badge_text || "");
-    setFormImage(srv.image_url || "");
-    setFormDescription(srv.description || "");
-    setFormStatus(srv.status || "active");
-    setFormIsFeatured(Boolean(srv.is_featured));
-    setFormFeatures(Array.isArray(srv.features) && srv.features.length > 0 ? srv.features : [""]);
-    setFormTab("basic");
     setDialogOpen(true);
   };
 
@@ -503,6 +477,16 @@ export default function AdminServicesPage() {
           )}
 
           <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setInheritModalOpen(true)}
+            className="h-9 px-3.5 text-xs font-bold border-sky-500/40 text-sky-600 hover:bg-sky-500/10 rounded-xl gap-1.5 shadow-2xs cursor-pointer"
+          >
+            <Layers className="w-4 h-4 text-sky-600" />
+            Inherit
+          </Button>
+
+          <Button
             size="sm"
             onClick={handleOpenCreate}
             className="h-9 px-3.5 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl gap-1.5 shadow-2xs cursor-pointer"
@@ -616,535 +600,175 @@ export default function AdminServicesPage() {
           <Briefcase className="h-10 w-10 text-muted-foreground/40 mx-auto" />
           <h3 className="font-bold text-sm text-foreground">No services found</h3>
           <p className="text-xs text-muted-foreground">
-            Click &quot;Add Service&quot; to publish your first consultation package, workshop, or bespoke solution.
+            Inherit pre-configured services from the master catalog or publish your bespoke service package.
           </p>
-          <Button size="sm" onClick={handleOpenCreate} className="font-bold text-xs">
-            <Plus className="w-4 h-4 mr-1" /> Add Service Now
-          </Button>
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+            <Button size="sm" variant="outline" onClick={() => setInheritModalOpen(true)} className="font-bold text-xs rounded-xl border-sky-500/40 text-sky-600 hover:bg-sky-500/10">
+              <Layers className="w-4 h-4 mr-1 text-sky-600" /> Inherit from Master Catalog
+            </Button>
+            <Button size="sm" onClick={handleOpenCreate} className="font-bold text-xs rounded-xl">
+              <Plus className="w-4 h-4 mr-1" /> Add Service Now
+            </Button>
+          </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {services.map((srv) => {
             const hasSale = Boolean(srv.sale_price && Number(srv.sale_price) < Number(srv.price));
-            const currentPrice = hasSale ? Number(srv.sale_price) : Number(srv.price);
+            const currentPrice = hasSale ? Number(srv.sale_price) : Number(srv.price || 0);
+            const subtitle = [
+              srv.pricing_model ? srv.pricing_model.replace(/_/g, " ") : "Fixed",
+              srv.duration_minutes ? `${srv.duration_minutes} ${srv.duration_unit || "mins"}` : null,
+              srv.category_name || srv.category || "General",
+            ]
+              .filter(Boolean)
+              .slice(0, 2)
+              .join(" • ");
 
             return (
-              <Card
+              <div
                 key={srv.id}
-                className="overflow-hidden border border-border/80 bg-card hover:border-primary/40 hover:shadow-md transition-all rounded-2xl flex flex-col justify-between group"
+                className="p-3 rounded-2xl border transition-all flex items-center gap-3 group relative bg-card hover:bg-muted/30 shadow-2xs hover:shadow-xs border-border/70"
               >
-                <div>
-                  {/* Service Image & Badges */}
-                  <div className="relative h-44 w-full bg-muted overflow-hidden">
-                    {srv.image_url ? (
-                      <Image
-                        src={srv.image_url}
-                        alt={srv.title}
-                        fill
-                        sizes="(max-width: 768px) 100vw, 360px"
-                        className="object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex flex-col items-center justify-center bg-sky-50 dark:bg-sky-950/20 text-sky-600">
-                        <Briefcase className="w-10 h-10 opacity-40 mb-1" />
-                        <span className="text-[11px] font-semibold text-muted-foreground">No Cover Image</span>
-                      </div>
-                    )}
-
-                    <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
-                      <Badge
-                        variant="secondary"
-                        className={`text-[10px] font-bold uppercase tracking-wider backdrop-blur-md shadow-xs ${
-                          srv.status === "active"
-                            ? "bg-emerald-500/90 text-white"
-                            : srv.status === "draft"
-                            ? "bg-amber-500/90 text-white"
-                            : "bg-slate-700/90 text-white"
-                        }`}
-                      >
-                        {srv.status}
-                      </Badge>
-
-                      {srv.badge_text && (
-                        <Badge variant="outline" className="text-[10px] font-bold bg-background/90 backdrop-blur-md text-foreground">
-                          {srv.badge_text}
-                        </Badge>
-                      )}
+                {/* 1. Left Thumbnail Image */}
+                <Link
+                  href={`/services/${srv.id}`}
+                  className="relative size-16 rounded-xl bg-muted shrink-0 overflow-hidden border border-border/60 block group/img"
+                  title={`View ${srv.title}`}
+                >
+                  {srv.image_url ? (
+                    <img
+                      src={srv.image_url}
+                      alt={srv.title}
+                      className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-sky-50 dark:bg-sky-950/20 text-sky-600">
+                      <Briefcase className="size-6 opacity-60" />
                     </div>
+                  )}
+                </Link>
 
-                    <div className="absolute top-2.5 right-2.5 flex items-center gap-1">
-                      <Badge
-                        variant="secondary"
-                        className="text-[10px] font-bold bg-background/90 backdrop-blur-md text-foreground flex items-center gap-1"
-                      >
-                        {srv.delivery_mode === "online" ? (
-                          <>
-                            <Video className="w-3 h-3 text-sky-500" /> Online
-                          </>
-                        ) : srv.delivery_mode === "in_person" ? (
-                          <>
-                            <MapPin className="w-3 h-3 text-emerald-500" /> In-Person
-                          </>
-                        ) : (
-                          <>
-                            <Globe className="w-3 h-3 text-purple-500" /> Hybrid
-                          </>
-                        )}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  {/* Body Content */}
-                  <div className="p-4 space-y-2">
-                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                      <span className="font-semibold text-primary">{srv.category_name || srv.category || "General"}</span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-muted-foreground" />
-                        {srv.duration_minutes} mins
-                      </span>
-                    </div>
-
-                    <h3 className="font-bold text-sm text-foreground line-clamp-2 leading-snug group-hover:text-primary transition-colors">
+                {/* 2. Middle Content */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Link
+                      href={`/services/${srv.id}`}
+                      className="text-xs font-bold text-foreground truncate hover:text-sky-600 transition-colors cursor-pointer block max-w-[170px]"
+                      title={srv.title}
+                    >
                       {srv.title}
-                    </h3>
+                    </Link>
+                  </div>
 
-                    {srv.description && (
-                      <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                        {srv.description}
-                      </p>
-                    )}
+                  <p className="text-[11px] text-muted-foreground truncate" title={subtitle}>
+                    {subtitle}
+                  </p>
 
-                    {/* Features list bullet points */}
-                    {Array.isArray(srv.features) && srv.features.length > 0 && (
-                      <div className="pt-2 border-t border-border/60 space-y-1">
-                        {srv.features.slice(0, 2).map((feat, idx) => (
-                          <div key={idx} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                            <Check className="w-3 h-3 text-emerald-600 shrink-0" />
-                            <span className="truncate">{feat}</span>
-                          </div>
-                        ))}
-                        {srv.features.length > 2 && (
-                          <span className="text-[10px] text-muted-foreground font-semibold block">
-                            +{srv.features.length - 2} more deliverables
-                          </span>
-                        )}
-                      </div>
+                  {/* Pricing */}
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-xs font-black text-foreground">
+                      ₹{currentPrice.toLocaleString("en-IN")}
+                    </span>
+                    {hasSale && (
+                      <span className="text-[10px] text-muted-foreground line-through">
+                        ₹{Number(srv.price).toLocaleString("en-IN")}
+                      </span>
                     )}
                   </div>
+                  <span className="text-[10px] text-muted-foreground block truncate">
+                    {srv.delivery_mode ? srv.delivery_mode.replace(/_/g, " ") : "Online"} • {srv.duration_minutes || 60}m
+                  </span>
                 </div>
 
-                {/* Footer Pricing & Actions */}
-                <div className="p-4 pt-2 border-t border-border/60 flex items-center justify-between bg-muted/20">
-                  <div>
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-base font-black text-foreground">
-                        {srv.pricing_model === "free_consultation"
-                          ? "Free"
-                          : srv.pricing_model === "quote_required"
-                          ? "On Request"
-                          : formatCurrency(currentPrice)}
-                      </span>
-                      {hasSale && srv.pricing_model !== "free_consultation" && (
-                        <span className="text-xs text-muted-foreground line-through">
-                          {formatCurrency(srv.price)}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-muted-foreground capitalize">
-                      {srv.pricing_model.replace("_", " ")}
-                    </span>
-                  </div>
+                {/* 3. Right Actions: Status Badge, Info Popover, Edit, Delete */}
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <Badge
+                    variant="outline"
+                    className={`text-[9px] px-1.5 py-0 font-bold uppercase tracking-wider ${
+                      srv.status === "active"
+                        ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                        : "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                    }`}
+                  >
+                    {srv.status}
+                  </Badge>
 
                   <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleOpenEdit(srv)}
-                      className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-lg cursor-pointer"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </Button>
+                    {/* Short Description Info Popover */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="size-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors cursor-pointer border border-border/40 hover:border-border"
+                          title="Click to view details & scope"
+                          aria-label="Service description"
+                        >
+                          <Info className="size-3.5" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-3 text-xs rounded-xl shadow-xl border bg-background" side="top">
+                        <div className="space-y-2">
+                          <div className="font-bold text-foreground text-xs line-clamp-1 border-b pb-1.5 flex items-center justify-between">
+                            <span>{srv.title}</span>
+                            <span className="text-[10px] text-sky-600 font-black">₹{currentPrice}</span>
+                          </div>
+                          <p className="text-muted-foreground text-[11px] leading-relaxed">
+                            {srv.description || "No description provided."}
+                          </p>
+                          {Array.isArray(srv.features) && srv.features.length > 0 && (
+                            <div className="pt-1.5 border-t space-y-1">
+                              <span className="text-[10px] font-bold text-muted-foreground uppercase block">Inclusions:</span>
+                              {srv.features.slice(0, 3).map((f, i) => (
+                                <div key={i} className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                  <Check className="size-3 text-emerald-600 shrink-0" />
+                                  <span className="truncate">{f}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="pt-1 border-t flex items-center justify-between text-[10px] text-muted-foreground font-medium">
+                            <span>Category: {srv.category_name || srv.category}</span>
+                            <span>Model: {srv.pricing_model || "Fixed"}</span>
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
 
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteService(srv.id)}
-                      className="h-8 w-8 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg cursor-pointer"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleOpenEdit(srv)}
+                      className="size-7 p-0 rounded-lg text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/20 border-border/40 hover:border-border"
+                      title="Edit Service"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Edit2 className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeleteService(srv.id)}
+                      className="size-7 p-0 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 border-border/40 hover:border-border"
+                      title="Delete Service"
+                    >
+                      <Trash2 className="size-3.5" />
                     </Button>
                   </div>
                 </div>
-              </Card>
+              </div>
             );
           })}
         </div>
       )}
 
-      {/* ================= ADD / EDIT SERVICE DIALOG ================= */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-black flex items-center gap-2">
-              <Briefcase className="w-5 h-5 text-primary" />
-              {editingService ? "Edit Marketing Service" : "Create Marketing Service"}
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Configure service details, duration, pricing model, delivery mode, and deliverables.
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* Form Tabs */}
-          <div className="flex items-center gap-1 p-1 bg-muted rounded-xl border border-border">
-            {FORM_TABS.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = formTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setFormTab(tab.id)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    isActive
-                      ? "bg-background text-foreground shadow-xs"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="space-y-4 py-2">
-            {/* TAB 1: BASIC INFO */}
-            {formTab === "basic" && (
-              <div className="space-y-3 text-xs">
-                <div>
-                  <Label htmlFor="srv-title" className="text-xs font-semibold">Service Title *</Label>
-                  <Input
-                    id="srv-title"
-                    value={formTitle}
-                    onChange={(e) => setFormTitle(e.target.value)}
-                    placeholder="e.g. 1-on-1 Career Mentorship & Portfolio Review"
-                    className="h-9 text-xs mt-1"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label htmlFor="srv-badge" className="text-xs font-semibold">Highlight Badge (Optional)</Label>
-                    <Input
-                      id="srv-badge"
-                      value={formBadge}
-                      onChange={(e) => setFormBadge(e.target.value)}
-                      placeholder="e.g. Popular, Premium, Limited"
-                      className="h-9 text-xs mt-1"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="srv-status" className="text-xs font-semibold">Status</Label>
-                    <Select value={formStatus} onValueChange={(v: any) => setFormStatus(v)}>
-                      <SelectTrigger id="srv-status" className="h-9 text-xs mt-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Active (Visible)</SelectItem>
-                        <SelectItem value="draft">Draft (Hidden)</SelectItem>
-                        <SelectItem value="archived">Archived</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="srv-desc" className="text-xs font-semibold">Description</Label>
-                  <Textarea
-                    id="srv-desc"
-                    value={formDescription}
-                    onChange={(e) => setFormDescription(e.target.value)}
-                    placeholder="Describe what the client receives, how the session is conducted, and key benefits..."
-                    rows={4}
-                    className="text-xs mt-1 resize-none"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border">
-                  <div>
-                    <span className="font-bold text-foreground block text-xs">Featured Service</span>
-                    <span className="text-[11px] text-muted-foreground">Highlight on hero sections and discovery listings</span>
-                  </div>
-                  <Switch checked={formIsFeatured} onCheckedChange={setFormIsFeatured} />
-                </div>
-              </div>
-            )}
-
-            {/* TAB 2: CATEGORY & SCOPE */}
-            {formTab === "category" && (
-              <div className="space-y-3 text-xs">
-                <div>
-                  <Label htmlFor="srv-cat" className="text-xs font-semibold">Service Category</Label>
-                  <Select value={formCategoryId} onValueChange={setFormCategoryId}>
-                    <SelectTrigger id="srv-cat" className="h-9 text-xs mt-1">
-                      <SelectValue placeholder="Select Category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((c) => (
-                        <SelectItem key={c.id} value={String(c.id)}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label className="text-xs font-semibold">Associated Programs / Bootcamps (Optional)</Label>
-                  <p className="text-[11px] text-muted-foreground mb-1.5">
-                    Link this consultation service to relevant academic or training courses.
-                  </p>
-                  <div className="max-h-40 overflow-y-auto p-2 rounded-xl border bg-background space-y-1">
-                    {programOptions.length === 0 ? (
-                      <span className="text-[11px] text-muted-foreground italic p-2 block">No programs available</span>
-                    ) : (
-                      programOptions.map((prog) => {
-                        const isSelected = formProgramIds.includes(prog.id);
-                        return (
-                          <div
-                            key={prog.id}
-                            onClick={() => {
-                              if (isSelected) {
-                                setFormProgramIds(formProgramIds.filter((id) => id !== prog.id));
-                              } else {
-                                setFormProgramIds([...formProgramIds, prog.id]);
-                              }
-                            }}
-                            className={`flex items-center justify-between p-2 rounded-lg text-xs cursor-pointer transition-colors ${
-                              isSelected ? "bg-primary/10 text-primary font-bold" : "hover:bg-muted"
-                            }`}
-                          >
-                            <span>{prog.title}</span>
-                            {isSelected && <Check className="w-3.5 h-3.5 text-primary" />}
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 3: IMAGES */}
-            {formTab === "images" && (
-              <div className="space-y-4 text-xs">
-                <div>
-                  <Label htmlFor="srv-img" className="text-xs font-semibold">Image URL</Label>
-                  <Input
-                    id="srv-img"
-                    value={formImage}
-                    onChange={(e) => setFormImage(e.target.value)}
-                    placeholder="https://images.unsplash.com/photo-..."
-                    className="h-9 text-xs mt-1"
-                  />
-                </div>
-
-                <div className="p-4 border-2 border-dashed rounded-xl text-center space-y-2 bg-muted/20">
-                  <UploadCloud className="w-8 h-8 text-muted-foreground mx-auto" />
-                  <p className="text-xs font-medium text-foreground">Upload Service Cover</p>
-                  <p className="text-[10px] text-muted-foreground">PNG, JPG, WEBP up to 10MB</p>
-                  <label className="inline-flex items-center justify-center h-8 px-3 text-xs font-bold bg-primary text-primary-foreground rounded-lg cursor-pointer hover:bg-primary/90 gap-1.5">
-                    {uploadingImage ? <Loader2 className="w-3 h-3 animate-spin" /> : <Camera className="w-3 h-3" />}
-                    <span>{uploadingImage ? "Uploading..." : "Browse File"}</span>
-                    <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                  </label>
-                </div>
-
-                <div>
-                  <span className="text-[11px] font-bold text-muted-foreground uppercase block mb-1.5">
-                    Or Pick from Quick Sample Presets
-                  </span>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {SAMPLE_SERVICE_IMAGES.map((sample, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => setFormImage(sample.url)}
-                        className={`p-2 rounded-xl border text-center cursor-pointer transition-all ${
-                          formImage === sample.url ? "border-primary bg-primary/10 ring-1 ring-primary" : "hover:bg-muted"
-                        }`}
-                      >
-                        <div className="relative h-16 w-full rounded-lg overflow-hidden bg-muted mb-1">
-                          <Image src={sample.url} alt={sample.label} fill sizes="120px" className="object-cover" />
-                        </div>
-                        <span className="text-[11px] font-semibold text-foreground truncate block">{sample.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 4: PRICING & DURATION */}
-            {formTab === "pricing" && (
-              <div className="space-y-3 text-xs">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label htmlFor="srv-model" className="text-xs font-semibold">Pricing Model</Label>
-                    <Select value={formPricingModel} onValueChange={(v: any) => setFormPricingModel(v)}>
-                      <SelectTrigger id="srv-model" className="h-9 text-xs mt-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="fixed">Fixed Price</SelectItem>
-                        <SelectItem value="hourly">Hourly Rate</SelectItem>
-                        <SelectItem value="per_session">Per Session</SelectItem>
-                        <SelectItem value="free_consultation">Free Consultation</SelectItem>
-                        <SelectItem value="quote_required">Custom Quote Required</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="srv-duration" className="text-xs font-semibold">Estimated Duration (Minutes)</Label>
-                    <Input
-                      id="srv-duration"
-                      type="number"
-                      value={formDurationMinutes}
-                      onChange={(e) => setFormDurationMinutes(e.target.value)}
-                      placeholder="60"
-                      className="h-9 text-xs mt-1"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label htmlFor="srv-price" className="text-xs font-semibold">Regular Price (₹)</Label>
-                    <Input
-                      id="srv-price"
-                      type="number"
-                      value={formPrice}
-                      onChange={(e) => setFormPrice(e.target.value)}
-                      placeholder="e.g. 1999"
-                      disabled={formPricingModel === "free_consultation"}
-                      className="h-9 text-xs mt-1"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="srv-sale" className="text-xs font-semibold">Offer / Sale Price (₹ Optional)</Label>
-                    <Input
-                      id="srv-sale"
-                      type="number"
-                      value={formSalePrice}
-                      onChange={(e) => setFormSalePrice(e.target.value)}
-                      placeholder="e.g. 1499"
-                      disabled={formPricingModel === "free_consultation"}
-                      className="h-9 text-xs mt-1"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label htmlFor="srv-mode" className="text-xs font-semibold">Delivery Mode</Label>
-                    <Select value={formDeliveryMode} onValueChange={(v: any) => setFormDeliveryMode(v)}>
-                      <SelectTrigger id="srv-mode" className="h-9 text-xs mt-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="online">Online / Video Meeting</SelectItem>
-                        <SelectItem value="in_person">In-Person / Onsite</SelectItem>
-                        <SelectItem value="hybrid">Hybrid</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="srv-loc" className="text-xs font-semibold">Location / Address (If Onsite)</Label>
-                    <Input
-                      id="srv-loc"
-                      value={formServiceLocation}
-                      onChange={(e) => setFormServiceLocation(e.target.value)}
-                      placeholder="e.g. Campus Studio or Client Office"
-                      className="h-9 text-xs mt-1"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 5: DELIVERABLES */}
-            {formTab === "deliverables" && (
-              <div className="space-y-3 text-xs">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <Label className="text-xs font-semibold">What&apos;s Included / Key Deliverables</Label>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setFormFeatures([...formFeatures, ""])}
-                      className="h-7 text-[11px] font-bold text-primary gap-1 p-0 cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Add Deliverable
-                    </Button>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground mb-2">
-                    Bullet points displayed on store and checkout (e.g. &quot;Full Portfolio Audit&quot;, &quot;Resume Review&quot;).
-                  </p>
-
-                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                    {formFeatures.map((feat, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <Input
-                          value={feat}
-                          onChange={(e) => {
-                            const updated = [...formFeatures];
-                            updated[idx] = e.target.value;
-                            setFormFeatures(updated);
-                          }}
-                          placeholder={`Deliverable #${idx + 1}`}
-                          className="h-9 text-xs"
-                        />
-                        {formFeatures.length > 1 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setFormFeatures(formFeatures.filter((_, i) => i !== idx));
-                            }}
-                            className="h-9 w-9 text-rose-500 shrink-0"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter className="border-t pt-3 flex items-center justify-between">
-            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="text-xs font-semibold">
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleSaveService}
-              disabled={saving}
-              className="text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 cursor-pointer"
-            >
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-              <span>{saving ? "Saving..." : editingService ? "Update Service" : "Publish Service"}</span>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ================= ADD / EDIT SERVICE DIALOG (Same as Platform Admin) ================= */}
+      <ServiceFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        service={editingService as any}
+        onSuccess={fetchServices}
+        accessToken={accessToken}
+      />
 
       {/* ================= CATEGORY MANAGEMENT MODAL ================= */}
       <Dialog open={categoryModalOpen} onOpenChange={setCategoryModalOpen}>
@@ -1210,6 +834,14 @@ export default function AdminServicesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* INHERIT FROM MASTER CATALOG DIALOG */}
+      <InheritMasterServicesDialog
+        open={inheritModalOpen}
+        onOpenChange={setInheritModalOpen}
+        onSuccess={fetchServices}
+        accessToken={accessToken}
+      />
     </div>
   );
 }

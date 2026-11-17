@@ -156,7 +156,7 @@ export async function ensureFeatureSchema() {
       CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
       CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
 
-      ALTER TABLE products ADD COLUMN IF NOT EXISTS category_id INTEGER REFERENCES product_categories(id) ON DELETE SET NULL;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS category_id INTEGER;
       ALTER TABLE products ADD COLUMN IF NOT EXISTS program_ids JSONB DEFAULT '[]'::jsonb;
 
       CREATE TABLE IF NOT EXISTS service_categories (
@@ -941,11 +941,48 @@ export async function ensureFeatureSchema() {
       `ALTER TABLE finance_expense_entries ADD COLUMN IF NOT EXISTS reference_no VARCHAR(100)`,
       `ALTER TABLE master_products ADD COLUMN IF NOT EXISTS synonyms TEXT[] DEFAULT '{}'`,
       `ALTER TABLE products ADD COLUMN IF NOT EXISTS synonyms TEXT[] DEFAULT '{}'`,
+      `ALTER TABLE products ADD COLUMN IF NOT EXISTS brand VARCHAR(255)`,
+      `ALTER TABLE products ADD COLUMN IF NOT EXISTS model VARCHAR(255)`,
+      `ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory_id INTEGER`,
+      `ALTER TABLE products ADD COLUMN IF NOT EXISTS main_category_id INTEGER`,
+      `ALTER TABLE products ADD COLUMN IF NOT EXISTS attributes JSONB DEFAULT '{}'::jsonb`,
+      `ALTER TABLE products ADD COLUMN IF NOT EXISTS variants JSONB DEFAULT '[]'::jsonb`,
       `ALTER TABLE master_services ADD COLUMN IF NOT EXISTS synonyms TEXT[] DEFAULT '{}'`,
       `ALTER TABLE services ADD COLUMN IF NOT EXISTS synonyms TEXT[] DEFAULT '{}'`,
+      `ALTER TABLE services ADD COLUMN IF NOT EXISTS subcategory_id INTEGER`,
+      `ALTER TABLE services ADD COLUMN IF NOT EXISTS main_category_id INTEGER`,
+      `ALTER TABLE services ADD COLUMN IF NOT EXISTS attributes JSONB DEFAULT '{}'::jsonb`,
+      `ALTER TABLE services ADD COLUMN IF NOT EXISTS variants JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE products DROP CONSTRAINT IF EXISTS products_category_id_fkey`,
+      `ALTER TABLE services DROP CONSTRAINT IF EXISTS services_category_id_fkey`,
       `ALTER TABLE categories ADD COLUMN IF NOT EXISTS synonyms TEXT[] DEFAULT '{}'`,
       `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS synonyms TEXT[] DEFAULT '{}'`,
       `ALTER TABLE professional_profiles ADD COLUMN IF NOT EXISTS synonyms TEXT[] DEFAULT '{}'`,
+      `CREATE TABLE IF NOT EXISTS master_jobs (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) NOT NULL,
+        business_category_id INT REFERENCES categories(id) ON DELETE SET NULL,
+        professional_category_id INT REFERENCES categories(id) ON DELETE SET NULL,
+        role_id INT REFERENCES designations(id) ON DELETE SET NULL,
+        role_title VARCHAR(255),
+        department VARCHAR(255) NOT NULL,
+        employment_type VARCHAR(100) DEFAULT 'Full-time',
+        experience_level VARCHAR(100) DEFAULT 'Mid Level (3-5 yrs)',
+        work_mode VARCHAR(100) DEFAULT 'On-site',
+        location VARCHAR(255) DEFAULT 'All India / Multiple Locations',
+        salary_range VARCHAR(255),
+        openings_count INT DEFAULT 1,
+        description TEXT NOT NULL,
+        requirements TEXT,
+        benefits TEXT,
+        skills TEXT[] DEFAULT '{}',
+        is_active BOOLEAN DEFAULT TRUE,
+        is_featured BOOLEAN DEFAULT FALSE,
+        is_deleted BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )`,
     ];
     for (const sql of criticalAlters) {
       await db.query(sql).catch((e: any) => {

@@ -143,17 +143,6 @@ export default function BusinessAnalyticsPage() {
               <SelectItem value="yearly">This Year (Annual)</SelectItem>
             </SelectContent>
           </Select>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchAnalytics}
-            disabled={loading}
-            className="h-9 px-3 text-xs font-bold rounded-xl gap-1.5 cursor-pointer shadow-2xs"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-primary" : ""}`} />
-            <span className="hidden sm:inline">Refresh</span>
-          </Button>
         </div>
       </div>
 

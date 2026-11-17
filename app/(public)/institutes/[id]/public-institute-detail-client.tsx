@@ -97,8 +97,6 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
       "placements",
       "cutoffs",
       "scholarships",
-      "hostels",
-      "libraries",
       "branches"
     ];
 
@@ -389,36 +387,6 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                   <Sparkles className="h-4 w-4" />
                   <span>Scholarships</span>
                 </button>
-
-                {hostels.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => scrollToSection("hostels")}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
-                      activeSection === "hostels"
-                        ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30"
-                        : "bg-card border border-border/70 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }`}
-                  >
-                    <Home className="h-4 w-4" />
-                    <span>Hostels ({hostels.length})</span>
-                  </button>
-                )}
-
-                {libraries.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => scrollToSection("libraries")}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
-                      activeSection === "libraries"
-                        ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30"
-                        : "bg-card border border-border/70 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }`}
-                  >
-                    <Library className="h-4 w-4" />
-                    <span>Library</span>
-                  </button>
-                )}
 
                 <button
                   type="button"
@@ -1219,157 +1187,6 @@ export function PublicInstituteDetailClient({ data }: { data: any }) {
                 ) : (
                   <Card className="p-8 text-center text-muted-foreground">No scholarship records listed.</Card>
                 )}
-              </section>
-
-              {/* HOSTELS TAB */}
-              <section id="section-hostels" className="scroll-mt-28 space-y-6 pt-8 border-t border-border/70">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-xl font-bold flex items-center gap-2">
-                      <Building2 className="h-5 w-5 text-primary" />
-                      Campus Accommodation & Hostels ({hostels.length})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {hostels.length > 0 ? (
-                      <div className="grid gap-6 md:grid-cols-2">
-                        {hostels.map((h: any) => (
-                          <Card key={h.id} className="p-6 border bg-card/60 space-y-4 shadow-xs hover:border-primary/50 transition-all flex flex-col justify-between">
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-between gap-2">
-                                <h4 className="font-bold text-lg text-foreground">{h.name}</h4>
-                                <Badge className="bg-primary text-primary-foreground font-semibold">
-                                  {h.type} Hostel
-                                </Badge>
-                              </div>
-
-                              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{h.description || "Modern campus residence facility equipped with 24/7 security and comfortable living quarters."}</p>
-
-                              <div className="grid grid-cols-2 gap-2 text-xs bg-muted/40 p-3 rounded-lg border">
-                                <div><span className="font-bold text-foreground">Annual Rent:</span> ₹{Number(h.annual_fee || 45000).toLocaleString("en-IN")}</div>
-                                <div><span className="font-bold text-foreground">Security Deposit:</span> ₹{Number(h.security_deposit || 5000).toLocaleString("en-IN")}</div>
-                                <div><span className="font-bold text-foreground">Available Beds:</span> <span className="text-emerald-600 dark:text-emerald-400 font-bold">{h.available_beds || 25} Beds</span></div>
-                                <div><span className="font-bold text-foreground">Total Capacity:</span> {h.capacity || 100} Beds</div>
-                              </div>
-
-                              <div className="space-y-1 text-xs">
-                                <p><strong className="text-foreground">Room Sharing:</strong> <span className="text-muted-foreground">{h.room_types || "Single, Double & Triple Sharing"}</span></p>
-                                <p><strong className="text-foreground">Mess & Dining:</strong> <span className="text-muted-foreground">{h.mess_facility || "Four Meals Daily (Veg & Non-Veg)"}</span></p>
-                              </div>
-
-                              <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                                {h.ac_available && <Badge variant="secondary" className="text-xs bg-blue-500/10 text-blue-600">AC Available</Badge>}
-                                {h.wifi_available && <Badge variant="secondary" className="text-xs bg-emerald-500/10 text-emerald-600">High-Speed Wi-Fi</Badge>}
-                                <Badge variant="secondary" className="text-xs bg-purple-500/10 text-purple-600">24/7 Security</Badge>
-                              </div>
-
-                              {h.rules && (
-                                <p className="text-xs text-muted-foreground italic border-t pt-2 mt-2">
-                                  📌 <strong>Rules & Curfew:</strong> {h.rules}
-                                </p>
-                              )}
-                            </div>
-
-                            <Button className="w-full mt-4 font-semibold" variant="outline" onClick={() => {
-                              const el = document.querySelector('[data-tracker-trigger="enquiry"]');
-                              if (el) el.scrollIntoView({ behavior: 'smooth' });
-                            }}>
-                              Enquire About Hostel Admission
-                            </Button>
-                          </Card>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-10 text-muted-foreground border rounded-xl bg-muted/20">
-                        <Building2 className="mx-auto h-10 w-10 text-muted-foreground/50 mb-2" />
-                        <p className="font-semibold text-base">Hostel Facilities Available On-Campus</p>
-                        <p className="text-xs text-muted-foreground max-w-md mx-auto mt-1">
-                          Separate boys and girls hostels are equipped with 24/7 security, AC & Non-AC rooms, hygienic dining hall, and high-speed Wi-Fi. Contact campus administration for live seat availability.
-                        </p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </section>
-
-              {/* LIBRARIES TAB */}
-              <section id="section-libraries" className="scroll-mt-28 space-y-6 pt-8 border-t border-border/70">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-xl font-bold flex items-center gap-2">
-                      <BookOpen className="h-5 w-5 text-primary" />
-                      Central Library & Digital E-Resources ({libraries.length})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    {libraries.length > 0 ? (
-                      <div className="space-y-6">
-                        {libraries.map((lib: any) => (
-                          <Card key={lib.id} className="p-6 border bg-card/60 space-y-4 shadow-xs">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
-                              <div>
-                                <h3 className="text-xl font-bold text-foreground">{lib.name}</h3>
-                                <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1 font-medium">
-                                  <Clock className="h-3.5 w-3.5 text-primary" />
-                                  Opening Hours: <strong className="text-foreground">{lib.opening_hours || "8:00 AM - 10:00 PM"}</strong>
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {lib.reading_hall_available && <Badge className="bg-purple-600 text-white text-xs">Quiet Reading Hall</Badge>}
-                                {lib.e_resources_access && <Badge className="bg-blue-600 text-white text-xs">24/7 E-Resource Portal</Badge>}
-                              </div>
-                            </div>
-
-                            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{lib.description || "Central academic library resource center housing thousands of textbooks, international research journals, and digital workstations."}</p>
-
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center py-2">
-                              <div className="p-3 rounded-xl bg-primary/10 border border-primary/20">
-                                <p className="text-lg font-bold text-primary">{Number(lib.total_books || 15000).toLocaleString("en-IN")}+</p>
-                                <p className="text-xs text-muted-foreground font-medium">Physical Books</p>
-                              </div>
-                              <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                                <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{Number(lib.digital_titles || 5000).toLocaleString("en-IN")}+</p>
-                                <p className="text-xs text-muted-foreground font-medium">E-Books & Titles</p>
-                              </div>
-                              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                                <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{lib.journals_subscribed || 120}+</p>
-                                <p className="text-xs text-muted-foreground font-medium">Subscribed Journals</p>
-                              </div>
-                              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                                <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{lib.seating_capacity || 250}</p>
-                                <p className="text-xs text-muted-foreground font-medium">Seating Seats</p>
-                              </div>
-                            </div>
-
-                            {lib.borrowing_rules && (
-                              <div className="p-3 rounded-lg bg-muted/40 border text-xs text-muted-foreground">
-                                📖 <strong>Borrowing Rules & Policy:</strong> {lib.borrowing_rules}
-                              </div>
-                            )}
-
-                            {(lib.librarian_name || lib.librarian_email || lib.librarian_phone) && (
-                              <div className="flex flex-wrap items-center justify-between text-xs text-muted-foreground pt-2 border-t">
-                                <span className="font-semibold text-foreground">Librarian: {lib.librarian_name || "Head Librarian"}</span>
-                                <div className="flex items-center gap-3">
-                                  {lib.librarian_phone && <span>📞 {lib.librarian_phone}</span>}
-                                  {lib.librarian_email && <span>✉️ {lib.librarian_email}</span>}
-                                </div>
-                              </div>
-                            )}
-                          </Card>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-10 text-muted-foreground border rounded-xl bg-muted/20">
-                        <BookOpen className="mx-auto h-10 w-10 text-muted-foreground/50 mb-2" />
-                        <p className="font-semibold text-base">Central Campus Library & E-Learning Center</p>
-                        <p className="text-xs text-muted-foreground max-w-md mx-auto mt-1">
-                          The campus features an air-conditioned central library with 20,000+ volumes, IEEE digital journal subscriptions, online library portal access, and spacious reading halls.
-                        </p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
               </section>
 
               {/* BRANCHES TAB */}

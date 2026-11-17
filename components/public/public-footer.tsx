@@ -108,9 +108,14 @@ export function PublicFooter() {
     address?: string;
   }>(() => cachedPlatformContact || {});
 
-  const defaultEnvInstId = process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
-    ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
-    : null;
+  const defaultEnvInstId =
+    process.env.NEXT_PUBLIC_BUSINESS_ID
+      ? Number(process.env.NEXT_PUBLIC_BUSINESS_ID)
+      : process.env.NEXT_PUBLIC_INSTITUTION_ID
+      ? Number(process.env.NEXT_PUBLIC_INSTITUTION_ID)
+      : process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
+      ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
+      : null;
 
   useEffect(() => {
     setMounted(true);

@@ -68,9 +68,7 @@ function isDebuggingEnabled() {
 }
 
 function getLoginPath(request: NextRequest) {
-    return getAppModeForHost(request.headers.get("x-forwarded-host") ?? request.headers.get("host")) === "institution"
-        ? "/institution/login"
-        : "/admin/login";
+    return "/";
 }
 
 async function readProxyPayload(request: NextRequest) {
@@ -95,6 +93,15 @@ export async function proxy(request: NextRequest) {
     const segments = pathname.split("/").filter(Boolean);
     const firstSegment = segments[0] ?? "";
 
+    if (
+        pathname === "/admin/login" ||
+        pathname.startsWith("/admin/login") ||
+        pathname === "/institution/login" ||
+        pathname.startsWith("/institution/login")
+    ) {
+        return NextResponse.redirect(new URL("/", request.url), 307);
+    }
+
     if (pathname.startsWith("/api") && isDebuggingEnabled()) {
         console.log("[api.proxy.request]", {
             method: request.method,
@@ -105,7 +112,7 @@ export async function proxy(request: NextRequest) {
     }
 
     if (pathname === "/institution/login") {
-        return NextResponse.next();
+        return NextResponse.redirect(new URL("/", request.url));
     }
 
     if (PUBLIC_TOP_LEVEL_ROUTES.has(firstSegment)) {
@@ -162,10 +169,6 @@ export async function proxy(request: NextRequest) {
         const rewriteUrl = request.nextUrl.clone();
         rewriteUrl.pathname = `/admin${segments.length > 1 ? `/${segments.slice(1).join("/")}` : ""}`;
 
-        if (rewriteUrl.pathname === "/admin/login") {
-            return NextResponse.rewrite(rewriteUrl);
-        }
-
         const refreshToken = request.cookies.get("refresh_token");
         if (!refreshToken) {
             return NextResponse.redirect(new URL("/", request.url));
@@ -174,7 +177,7 @@ export async function proxy(request: NextRequest) {
         return NextResponse.rewrite(rewriteUrl);
     }
 
-    if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/login")) {
+    if (pathname.startsWith("/admin")) {
         const refreshToken = request.cookies.get("refresh_token");
 
         if (!refreshToken) {

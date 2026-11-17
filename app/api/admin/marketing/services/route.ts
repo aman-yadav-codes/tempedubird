@@ -165,6 +165,11 @@ export async function POST(req: Request) {
       sale_price,
       category = "General",
       category_id,
+      main_category_id,
+      subcategory_id,
+      synonyms = [],
+      attributes = {},
+      variants = [],
       program_ids = [],
       image_url,
       gallery = [],
@@ -179,6 +184,8 @@ export async function POST(req: Request) {
       is_featured = false,
       institution_id: providedInstId,
       institution_name: providedInstName,
+      business_profile_id: providedBizId,
+      professional_profile_id: providedProfId,
     } = body;
 
     if (!title || !title.trim()) {
@@ -196,8 +203,8 @@ export async function POST(req: Request) {
     const catalogScope = await getUserCatalogScope(db, user);
     let institutionId = providedInstId ? Number(providedInstId) : catalogScope.primaryInstitutionId;
     let institutionName = providedInstName || (institutionId ? "Institute Services" : "EduBird Services");
-    let businessProfileId = catalogScope.primaryBusinessId;
-    let professionalProfileId = catalogScope.primaryProfessionalId;
+    let businessProfileId = providedBizId ? Number(providedBizId) : catalogScope.primaryBusinessId;
+    let professionalProfileId = providedProfId ? Number(providedProfId) : catalogScope.primaryProfessionalId;
 
     if (catalogScope.isPureProfessional) {
       businessProfileId = null;
@@ -213,6 +220,8 @@ export async function POST(req: Request) {
         sale_price,
         category,
         category_id,
+        main_category_id,
+        subcategory_id,
         program_ids,
         image_url,
         gallery,
@@ -229,13 +238,16 @@ export async function POST(req: Request) {
         service_location,
         status,
         is_featured,
+        synonyms,
+        attributes,
+        variants,
         created_by,
         created_at,
         updated_at
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-        $21, $22, $23, $24, NOW(), NOW()
+        $21, $22, $23, $24, $25, $26, $27, $28, $29, NOW(), NOW()
       ) RETURNING *`,
       [
         title.trim(),
@@ -245,6 +257,8 @@ export async function POST(req: Request) {
         sale_price !== undefined && sale_price !== null && sale_price !== "" ? parseFloat(String(sale_price)) : null,
         category || "General",
         category_id ? Number(category_id) : null,
+        main_category_id ? Number(main_category_id) : (category_id ? Number(category_id) : null),
+        subcategory_id ? Number(subcategory_id) : null,
         JSON.stringify(Array.isArray(program_ids) ? program_ids.map(Number).filter((pId: number) => !isNaN(pId) && pId > 0) : []),
         image_url?.trim() || null,
         JSON.stringify(gallery || []),
@@ -261,6 +275,9 @@ export async function POST(req: Request) {
         service_location?.trim() || null,
         status || "active",
         Boolean(is_featured),
+        Array.isArray(synonyms) ? synonyms : [],
+        JSON.stringify(typeof attributes === "object" ? attributes : {}),
+        JSON.stringify(Array.isArray(variants) ? variants : []),
         user?.id || null,
       ]
     );
@@ -289,6 +306,11 @@ export async function PUT(req: Request) {
       sale_price,
       category,
       category_id,
+      main_category_id,
+      subcategory_id,
+      synonyms,
+      attributes,
+      variants,
       program_ids,
       image_url,
       gallery,
@@ -301,6 +323,8 @@ export async function PUT(req: Request) {
       service_location,
       status,
       is_featured,
+      business_profile_id,
+      professional_profile_id,
     } = body;
 
     if (!id) {
@@ -357,20 +381,27 @@ export async function PUT(req: Request) {
         sale_price = $4,
         category = $5,
         category_id = $6,
-        program_ids = $7,
-        image_url = $8,
-        gallery = $9,
-        badge_text = $10,
-        features = $11,
-        pricing_model = $12,
-        duration_minutes = $13,
-        duration_unit = $14,
-        delivery_mode = $15,
-        service_location = $16,
-        status = $17,
-        is_featured = $18,
+        main_category_id = COALESCE($7, main_category_id),
+        subcategory_id = $8,
+        program_ids = $9,
+        image_url = $10,
+        gallery = $11,
+        badge_text = $12,
+        features = $13,
+        pricing_model = $14,
+        duration_minutes = $15,
+        duration_unit = $16,
+        delivery_mode = $17,
+        service_location = $18,
+        status = $19,
+        is_featured = $20,
+        synonyms = COALESCE($21, synonyms),
+        attributes = COALESCE($22, attributes),
+        variants = COALESCE($23, variants),
+        business_profile_id = COALESCE($24, business_profile_id),
+        professional_profile_id = COALESCE($25, professional_profile_id),
         updated_at = NOW()
-      WHERE id = $19
+      WHERE id = $26
       RETURNING *`,
       [
         title?.trim(),
@@ -379,6 +410,8 @@ export async function PUT(req: Request) {
         sale_price !== undefined && sale_price !== null && sale_price !== "" ? parseFloat(String(sale_price)) : null,
         category || "General",
         category_id ? Number(category_id) : null,
+        main_category_id ? Number(main_category_id) : (category_id ? Number(category_id) : null),
+        subcategory_id ? Number(subcategory_id) : null,
         program_ids ? JSON.stringify(Array.isArray(program_ids) ? program_ids.map(Number).filter((pId: number) => !isNaN(pId) && pId > 0) : []) : JSON.stringify([]),
         image_url?.trim() || null,
         JSON.stringify(gallery || []),
@@ -391,6 +424,11 @@ export async function PUT(req: Request) {
         service_location?.trim() || null,
         status || "active",
         Boolean(is_featured),
+        Array.isArray(synonyms) ? synonyms : null,
+        attributes ? JSON.stringify(attributes) : null,
+        variants ? JSON.stringify(variants) : null,
+        business_profile_id ? Number(business_profile_id) : null,
+        professional_profile_id ? Number(professional_profile_id) : null,
         id,
       ]
     );

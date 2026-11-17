@@ -38,6 +38,12 @@ import {
   Loader2,
   Sparkles,
   Filter,
+  ArrowUpDown,
+  Tag,
+  FolderTree,
+  Folder,
+  BookOpen,
+  SlidersHorizontal,
   CheckCircle2,
   X,
   ExternalLink,
@@ -53,16 +59,24 @@ import {
 import { useAuthStore, useCartStore } from "@/store";
 import { toast } from "sonner";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { buildBusinessSeoUrl, buildProfessionalSeoUrl } from "@/lib/utils/seo-slug";
 import { OrderCheckoutDialog, CheckoutItem } from "@/components/checkout/order-checkout-dialog";
 import { CartDrawer } from "@/components/checkout/cart-drawer";
 import { CartFloatingButton } from "@/components/checkout/cart-floating-button";
 import { ServiceBookingDialog, BookingServiceItem } from "@/components/checkout/service-booking-dialog";
+import { CompactProductCard } from "@/components/shared/compact-product-card";
+import { CompactServiceCard } from "@/components/shared/compact-service-card";
 
 interface DiscoveryItem {
   id: number;
-  resultType: "business" | "professional" | "product" | "service";
+  resultType: "business" | "professional" | "product" | "service" | "course" | "job";
   name: string;
+  title?: string;
+  brand?: string | null;
+  brand_name?: string | null;
+  price?: number | string | null;
+  rating?: number | null;
   slug?: string;
   business_type?: string;
   profession_type?: string;
@@ -96,6 +110,24 @@ interface DiscoveryItem {
   duration_minutes?: number | null;
   seller_info?: any;
   provider_info?: any;
+  // Course specific
+  code?: string;
+  duration_value?: number;
+  duration_unit?: string;
+  university_name?: string;
+  seats_available?: number;
+  authority_type?: string;
+  thumbnail_url?: string;
+  // Job specific
+  department?: string;
+  employment_type?: string;
+  experience_level?: string;
+  work_mode?: string;
+  location?: string;
+  salary_range?: string;
+  openings_count?: number;
+  company_name?: string;
+  company_logo?: string;
 }
 
 function CustomerExplorePageContent() {
@@ -108,11 +140,18 @@ function CustomerExplorePageContent() {
   const urlCategory = searchParams.get("categoryId") ? Number(searchParams.get("categoryId")) : null;
   const urlCategoryName = searchParams.get("categoryName") || "";
 
+  const envBizId =
+    process.env.NEXT_PUBLIC_BUSINESS_ID ||
+    process.env.NEXT_PUBLIC_INSTITUTION_ID ||
+    "";
+  const urlBiz = searchParams.get("businessId") || searchParams.get("business_id") || envBizId;
+  const activeBusinessId = urlBiz && /^\d+$/.test(urlBiz.trim()) ? Number(urlBiz.trim()) : null;
+
   const { location: userGlobalLocation, setLocation: setGlobalLocation } = useUserLocation();
 
   const [query, setQuery] = useState(urlQ);
-  const [activeType, setActiveType] = useState<"all" | "business" | "professional" | "product" | "service">(
-    urlCategory ? "all" : (["all", "business", "professional", "product", "service"].includes(urlType) ? urlType : "all")
+  const [activeType, setActiveType] = useState<"all" | "business" | "service" | "product" | "professional" | "course" | "job">(
+    urlCategory ? "all" : (["all", "business", "service", "product", "professional", "course", "job"].includes(urlType) ? urlType : "all")
   );
   const [country, setCountry] = useState<string>(urlCountry);
   const [city, setCity] = useState<string>(
@@ -120,8 +159,16 @@ function CustomerExplorePageContent() {
   );
   const [locality, setLocality] = useState<string>("");
   const [postalCode, setPostalCode] = useState<string>("");
+
+  // Cascading Category & Subcategory states
+  const [categories, setCategories] = useState<Array<{ id: number; name: string; slug?: string }>>([]);
+  const [subcategories, setSubcategories] = useState<Array<{ id: number; name: string; slug?: string }>>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(urlCategory);
   const [selectedCategoryName, setSelectedCategoryName] = useState<string>(urlCategoryName);
+  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<number | null>(null);
+  const [selectedSubcategoryName, setSelectedSubcategoryName] = useState<string>("");
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [loadingSubcategories, setLoadingSubcategories] = useState(false);
 
   // Sync state if URL search parameters change
   useEffect(() => {
@@ -129,14 +176,16 @@ function CustomerExplorePageContent() {
     if (urlCategory) {
       setSelectedCategoryId(urlCategory);
       if (urlCategoryName) setSelectedCategoryName(urlCategoryName);
-      setActiveType("all"); // Show all: business, professional, product, and services
-    } else if (urlType && ["all", "business", "professional", "product", "service"].includes(urlType)) {
+      setActiveType("all");
+    } else if (urlType && ["all", "business", "service", "product", "professional", "course", "job"].includes(urlType)) {
       setActiveType(urlType);
     }
     if (urlCity) {
       setCity(urlCity);
-    } else if (userGlobalLocation && userGlobalLocation !== "All Locations" && !city) {
+    } else if (userGlobalLocation && userGlobalLocation !== "All Locations") {
       setCity(userGlobalLocation);
+    } else if (userGlobalLocation === "All Locations") {
+      setCity("");
     }
     if (urlCountry) setCountry(urlCountry);
   }, [urlQ, urlType, urlCity, urlCountry, urlCategory, urlCategoryName, userGlobalLocation]);
@@ -147,9 +196,228 @@ function CustomerExplorePageContent() {
   const [professionals, setProfessionals] = useState<DiscoveryItem[]>([]);
   const [products, setProducts] = useState<DiscoveryItem[]>([]);
   const [services, setServices] = useState<DiscoveryItem[]>([]);
+  const [courses, setCourses] = useState<DiscoveryItem[]>([]);
+  const [jobs, setJobs] = useState<DiscoveryItem[]>([]);
 
-  // Categories list
-  const [categories, setCategories] = useState<Array<{ id: number; name: string; category_type: string }>>([]);
+  // Filter: Sort By, Keyword Search, Brand
+  const [sortBy, setSortBy] = useState<string>("featured");
+  const [productNameSearch, setProductNameSearch] = useState<string>("");
+  const [selectedBrand, setSelectedBrand] = useState<string>("all");
+
+  // Load categories dynamically based on selected Type
+  useEffect(() => {
+    let ignore = false;
+    async function loadTypeCategories() {
+      setLoadingCategories(true);
+      try {
+        const typeParam = activeType === "all" ? "" : `type=${activeType}&`;
+        const bizParam = activeBusinessId ? `businessId=${activeBusinessId}&` : "";
+        const res = await fetch(`/api/public/categories?${typeParam}${bizParam}onlyRoot=true&limit=300`);
+        const json = await res.json();
+        if (!ignore && json?.data) {
+          setCategories(json.data);
+        }
+      } catch (err) {
+        console.error("Failed to load categories for type:", err);
+      } finally {
+        if (!ignore) setLoadingCategories(false);
+      }
+    }
+    loadTypeCategories();
+    return () => { ignore = true; };
+  }, [activeType, activeBusinessId]);
+
+  // Load subcategories dynamically based on selected Category
+  useEffect(() => {
+    let ignore = false;
+    async function loadCategorySubcategories() {
+      if (!selectedCategoryId) {
+        setSubcategories([]);
+        setSelectedSubcategoryId(null);
+        setSelectedSubcategoryName("");
+        return;
+      }
+      setLoadingSubcategories(true);
+      try {
+        const bizParam = activeBusinessId ? `&businessId=${activeBusinessId}` : "";
+        const res = await fetch(`/api/public/categories?parentId=${selectedCategoryId}${bizParam}&limit=300`);
+        const json = await res.json();
+        if (!ignore && json?.data) {
+          setSubcategories(json.data);
+        }
+      } catch (err) {
+        console.error("Failed to load subcategories:", err);
+      } finally {
+        if (!ignore) setLoadingSubcategories(false);
+      }
+    }
+    loadCategorySubcategories();
+    return () => { ignore = true; };
+  }, [selectedCategoryId, activeBusinessId]);
+
+  const availableBrands = useMemo(() => {
+    const brandsSet = new Set<string>();
+    products.forEach((p) => {
+      const b = (p.brand || (p as any).brand_name || "").trim();
+      if (b && b.toLowerCase() !== "generic") {
+        brandsSet.add(b);
+      }
+    });
+    return Array.from(brandsSet).sort();
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    let list = [...products];
+
+    // Filter by search
+    if (productNameSearch.trim()) {
+      const q = productNameSearch.toLowerCase().trim();
+      list = list.filter((p) =>
+        (p.name || p.title || "").toLowerCase().includes(q) ||
+        (p.description || "").toLowerCase().includes(q) ||
+        (p.brand || "").toLowerCase().includes(q)
+      );
+    }
+
+    // Filter by brand (Only applicable for Product)
+    if (selectedBrand && selectedBrand !== "all") {
+      list = list.filter((p) => ((p.brand || (p as any).brand_name || "").trim()) === selectedBrand);
+    }
+
+    // Sort
+    if (sortBy === "price_asc") {
+      list.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+    } else if (sortBy === "price_desc") {
+      list.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+    } else if (sortBy === "name_asc") {
+      list.sort((a, b) => (a.name || a.title || "").localeCompare(b.name || b.title || ""));
+    } else if (sortBy === "name_desc") {
+      list.sort((a, b) => (b.name || b.title || "").localeCompare(a.name || a.title || ""));
+    } else if (sortBy === "rating_desc") {
+      list.sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
+    } else if (sortBy === "newest") {
+      list.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    }
+
+    return list;
+  }, [products, productNameSearch, selectedBrand, sortBy]);
+
+  const filteredBusinesses = useMemo(() => {
+    let list = [...businesses];
+    if (productNameSearch.trim()) {
+      const q = productNameSearch.toLowerCase().trim();
+      list = list.filter((b) =>
+        (b.name || "").toLowerCase().includes(q) ||
+        (b.description || b.about || "").toLowerCase().includes(q)
+      );
+    }
+    if (sortBy === "name_asc") {
+      list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    } else if (sortBy === "name_desc") {
+      list.sort((a, b) => (b.name || "").localeCompare(a.name || ""));
+    } else if (sortBy === "rating_desc") {
+      list.sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
+    } else if (sortBy === "newest") {
+      list.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    }
+    return list;
+  }, [businesses, productNameSearch, sortBy]);
+
+  const filteredProfessionals = useMemo(() => {
+    let list = [...professionals];
+    if (productNameSearch.trim()) {
+      const q = productNameSearch.toLowerCase().trim();
+      list = list.filter((p) =>
+        (p.name || "").toLowerCase().includes(q) ||
+        (p.description || p.about || "").toLowerCase().includes(q)
+      );
+    }
+    if (sortBy === "name_asc") {
+      list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    } else if (sortBy === "name_desc") {
+      list.sort((a, b) => (b.name || "").localeCompare(a.name || ""));
+    } else if (sortBy === "rating_desc") {
+      list.sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
+    } else if (sortBy === "newest") {
+      list.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    }
+    return list;
+  }, [professionals, productNameSearch, sortBy]);
+
+  const filteredServices = useMemo(() => {
+    let list = [...services];
+    if (productNameSearch.trim()) {
+      const q = productNameSearch.toLowerCase().trim();
+      list = list.filter((s) =>
+        (s.name || s.title || "").toLowerCase().includes(q) ||
+        (s.description || "").toLowerCase().includes(q)
+      );
+    }
+    if (sortBy === "price_asc") {
+      list.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+    } else if (sortBy === "price_desc") {
+      list.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+    } else if (sortBy === "name_asc") {
+      list.sort((a, b) => (a.name || a.title || "").localeCompare(b.name || b.title || ""));
+    } else if (sortBy === "name_desc") {
+      list.sort((a, b) => (b.name || b.title || "").localeCompare(a.name || a.title || ""));
+    } else if (sortBy === "rating_desc") {
+      list.sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
+    } else if (sortBy === "newest") {
+      list.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    }
+    return list;
+  }, [services, productNameSearch, sortBy]);
+
+  const filteredCourses = useMemo(() => {
+    let list = [...courses];
+    if (productNameSearch.trim()) {
+      const q = productNameSearch.toLowerCase().trim();
+      list = list.filter((c) =>
+        (c.name || "").toLowerCase().includes(q) ||
+        (c.description || "").toLowerCase().includes(q) ||
+        (c.code || "").toLowerCase().includes(q) ||
+        (c.university_name || "").toLowerCase().includes(q)
+      );
+    }
+    if (sortBy === "name_asc") {
+      list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    } else if (sortBy === "name_desc") {
+      list.sort((a, b) => (b.name || "").localeCompare(a.name || ""));
+    } else if (sortBy === "newest") {
+      list.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    }
+    return list;
+  }, [courses, productNameSearch, sortBy]);
+
+  const filteredJobs = useMemo(() => {
+    let list = [...jobs];
+    if (productNameSearch.trim()) {
+      const q = productNameSearch.toLowerCase().trim();
+      list = list.filter((j) =>
+        (j.name || j.title || "").toLowerCase().includes(q) ||
+        (j.description || "").toLowerCase().includes(q) ||
+        (j.department || "").toLowerCase().includes(q) ||
+        (j.company_name || "").toLowerCase().includes(q)
+      );
+    }
+    if (sortBy === "name_asc") {
+      list.sort((a, b) => (a.name || a.title || "").localeCompare(b.name || b.title || ""));
+    } else if (sortBy === "name_desc") {
+      list.sort((a, b) => (b.name || b.title || "").localeCompare(a.name || a.title || ""));
+    } else if (sortBy === "newest") {
+      list.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    }
+    return list;
+  }, [jobs, productNameSearch, sortBy]);
+
+  const totalFilteredCount =
+    filteredBusinesses.length +
+    filteredProfessionals.length +
+    filteredProducts.length +
+    filteredServices.length +
+    filteredCourses.length +
+    filteredJobs.length;
 
   // Favorites set
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
@@ -169,6 +437,11 @@ function CustomerExplorePageContent() {
 
   // Cart store actions
   const { addItem, updateQuantity, getItemQuantity } = useCartStore();
+  const [cartMounted, setCartMounted] = useState(false);
+  useEffect(() => {
+    setCartMounted(true);
+  }, []);
+  const safeCartQty = (id: string | number) => (cartMounted ? getItemQuantity(id) : 0);
 
   // Enquiry form
   const [enquiryForm, setEnquiryForm] = useState({
@@ -196,18 +469,6 @@ function CustomerExplorePageContent() {
     description: "",
   });
   const [submittingReport, setSubmittingReport] = useState(false);
-
-  // Load Categories on mount
-  useEffect(() => {
-    fetch("/api/admin/categories?limit=100")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.data) {
-          setCategories(data.data);
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   // Load Favorites if logged in
   useEffect(() => {
@@ -280,13 +541,16 @@ function CustomerExplorePageContent() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
+      if (activeBusinessId) params.set("businessId", String(activeBusinessId));
       if (query.trim()) params.set("q", query.trim());
       if (activeType !== "all") params.set("type", activeType);
       if (country) params.set("country", country);
       if (city.trim()) params.set("city", city.trim());
       if (locality.trim()) params.set("locality", locality.trim());
       if (postalCode.trim()) params.set("postalCode", postalCode.trim());
-      if (selectedCategoryId) params.set("categoryId", String(selectedCategoryId));
+
+      const effectiveCatId = selectedSubcategoryId || selectedCategoryId;
+      if (effectiveCatId) params.set("categoryId", String(effectiveCatId));
 
       const res = await fetch(`/api/public/discovery?${params.toString()}`);
       const data = await res.json();
@@ -296,6 +560,8 @@ function CustomerExplorePageContent() {
         setProfessionals(data.data.professionals || []);
         setProducts(data.data.products || []);
         setServices(data.data.services || []);
+        setCourses(data.data.courses || []);
+        setJobs(data.data.jobs || []);
       }
     } catch (err) {
       console.error(err);
@@ -303,7 +569,7 @@ function CustomerExplorePageContent() {
     } finally {
       setLoading(false);
     }
-  }, [query, activeType, country, city, locality, postalCode, selectedCategoryId]);
+  }, [activeBusinessId, query, activeType, country, city, locality, postalCode, selectedCategoryId, selectedSubcategoryId]);
 
   useEffect(() => {
     performSearch();
@@ -461,158 +727,200 @@ function CustomerExplorePageContent() {
   };
 
   return (
-    <div className="min-h-screen bg-muted/20 py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8">
-      {/* Search Header Banner */}
-      <div className="rounded-3xl bg-linear-to-r from-blue-700 via-indigo-700 to-purple-800 text-white p-6 sm:p-10 shadow-lg relative overflow-hidden">
-        <div className="relative z-10 space-y-4 max-w-3xl">
-          <Badge className="bg-white/20 hover:bg-white/30 text-white border-0 text-xs py-1 px-3">
-            <Sparkles className="size-3.5 mr-1" /> Customer Directory & Marketplace
-          </Badge>
-          <h1 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
-            Discover Verified Businesses, Top Professionals, Products & Services
-          </h1>
-          <p className="text-sm sm:text-base text-blue-100/90 leading-relaxed">
-            Search nearby local enterprises, contact licensed consultants, browse catalogs with suggested INR/USD prices, and connect directly via Call or WhatsApp.
-          </p>
-
-          {/* Quick Location Detector */}
-          <div className="flex items-center gap-2 pt-2 flex-wrap text-xs">
-            <button
-              onClick={requestCurrentLocation}
-              disabled={locating}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all cursor-pointer font-medium"
-            >
-              <LocateFixed className={`size-3.5 ${locating ? "animate-spin" : ""}`} />
-              <span>{locating ? "Detecting location..." : detectedLocation ? `Location: ${detectedLocation}` : "Share Current Location"}</span>
-            </button>
-            {detectedLocation && (
-              <Badge variant="outline" className="text-white/80 border-white/20 bg-white/5 text-[11px]">
-                <CheckCircle2 className="size-3 mr-1 text-emerald-300" /> Active
-              </Badge>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Search & Location Filter Controls */}
-      <Card className="rounded-2xl border shadow-sm">
-        <CardContent className="p-4 sm:p-6 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-            {/* Keyword Input */}
-            <div className="md:col-span-5 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input
-                placeholder="Search business name, doctor, lawyer, product, service, or keyword..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="pl-9 text-sm h-11"
-              />
-              {query && (
-                <button
-                  onClick={() => setQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  <X className="size-4" />
-                </button>
-              )}
-            </div>
-
-            {/* Country Selector */}
-            <div className="md:col-span-2">
+    <div className="min-h-screen bg-muted/20 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6">
+      {/* 4-Filter Cascading Hierarchy Bar */}
+      <Card className="rounded-2xl border shadow-xs bg-card">
+        <CardContent className="p-4 sm:p-5 space-y-4">
+          <div className={cn(
+            "grid gap-3",
+            activeType === "product"
+              ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+              : "grid-cols-1 sm:grid-cols-3"
+          )}>
+            {/* Filter 1: Type */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <Layers className="size-3.5 text-primary" />
+                <span>1. Type</span>
+              </label>
               <select
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-semibold shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={activeType}
+                onChange={(e) => {
+                  const newType = e.target.value as any;
+                  setActiveType(newType);
+                  setSelectedCategoryId(null);
+                  setSelectedCategoryName("");
+                  setSelectedSubcategoryId(null);
+                  setSelectedSubcategoryName("");
+                  setSelectedBrand("all");
+                }}
+                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer"
               >
-                <option value="">🌍 All Countries</option>
-                <option value="IN">🇮🇳 India (₹ INR)</option>
-                <option value="US">🇺🇸 United States ($ USD)</option>
+                <option value="all">All Types</option>
+                <option value="business">Business</option>
+                <option value="service">Service</option>
+                <option value="product">Product</option>
+                <option value="professional">Professional</option>
+                <option value="course">Courses</option>
+                <option value="job">Jobs</option>
               </select>
             </div>
 
-            {/* City */}
-            <div className="md:col-span-3 relative">
-              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            {/* Filter 2: Category (Dynamic based on Type) */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <FolderTree className="size-3.5 text-primary" />
+                <span>2. Category {loadingCategories ? "(Loading...)" : `(${categories.length})`}</span>
+              </label>
+              <select
+                value={selectedCategoryId || ""}
+                onChange={(e) => {
+                  const val = e.target.value ? Number(e.target.value) : null;
+                  setSelectedCategoryId(val);
+                  setSelectedSubcategoryId(null);
+                  setSelectedSubcategoryName("");
+                  if (val) {
+                    const cat = categories.find((c) => c.id === val);
+                    setSelectedCategoryName(cat ? cat.name : "");
+                  } else {
+                    setSelectedCategoryName("");
+                  }
+                }}
+                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer"
+              >
+                <option value="">All Categories ({categories.length})</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter 3: Subcategory (Dynamic based on Category) */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <Folder className="size-3.5 text-primary" />
+                <span>3. Subcategory {selectedCategoryId ? (loadingSubcategories ? "(Loading...)" : `(${subcategories.length})`) : ""}</span>
+              </label>
+              <select
+                value={selectedSubcategoryId || ""}
+                disabled={!selectedCategoryId || subcategories.length === 0}
+                onChange={(e) => {
+                  const val = e.target.value ? Number(e.target.value) : null;
+                  setSelectedSubcategoryId(val);
+                  if (val) {
+                    const s = subcategories.find((sub) => sub.id === val);
+                    setSelectedSubcategoryName(s ? s.name : "");
+                  } else {
+                    setSelectedSubcategoryName("");
+                  }
+                }}
+                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">
+                  {!selectedCategoryId
+                    ? "Select a category first"
+                    : subcategories.length === 0
+                      ? "No subcategories available"
+                      : `All Subcategories (${subcategories.length})`}
+                </option>
+                {subcategories.map((sub) => (
+                  <option key={sub.id} value={sub.id}>
+                    {sub.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter 4: Brand (Conditional - ONLY when Product is selected, completely hidden otherwise) */}
+            {activeType === "product" && (
+              <div className="space-y-1.5 animate-in fade-in">
+                <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Tag className="size-3.5 text-primary" />
+                  <span>4. Brand ({availableBrands.length})</span>
+                </label>
+                <select
+                  value={selectedBrand}
+                  onChange={(e) => setSelectedBrand(e.target.value)}
+                  className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer"
+                >
+                  <option value="all">All Brands ({availableBrands.length})</option>
+                  {availableBrands.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Search by Keyword & Sort Controls */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-border/50">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
-                placeholder="City (or leave empty for all)"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                className="pl-9 text-xs h-11"
+                placeholder="Search by keyword, item name, title, or description..."
+                value={productNameSearch}
+                onChange={(e) => setProductNameSearch(e.target.value)}
+                className="pl-9 text-xs h-10 rounded-xl"
               />
-              {city && (
+              {productNameSearch && (
                 <button
                   type="button"
-                  onClick={() => setCity("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-[10px] font-bold"
-                  title="Clear city to show all locations"
+                  onClick={() => setProductNameSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
                 >
-                  Clear
+                  <X className="size-3.5" />
                 </button>
               )}
             </div>
 
-            {/* Locality / ZIP */}
-            <div className="md:col-span-2">
-              <Input
-                placeholder="Locality / PIN / ZIP"
-                value={locality || postalCode}
-                onChange={(e) => {
-                  setLocality(e.target.value);
-                  setPostalCode(e.target.value);
-                }}
-                className="text-xs h-11"
-              />
-            </div>
-          </div>
-
-          {/* Location Scope Indicator */}
-          <div className="flex items-center justify-between gap-2 p-2.5 bg-muted/40 rounded-xl text-xs flex-wrap border border-border/40">
-            <div className="flex items-center gap-2">
-              <MapPin className="size-3.5 text-rose-600 shrink-0" />
-              <span className="text-muted-foreground font-medium">Location Scope:</span>
-              <span className="font-bold text-foreground">
-                {city ? `City: ${city}` : country ? `Country: ${country === "IN" ? "India" : "United States"}` : "Entire Available Dataset (All Locations & Countries)"}
-              </span>
-            </div>
-            {city || country ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setCity("");
-                  setCountry("");
-                  setLocality("");
-                  setPostalCode("");
-                }}
-                className="h-7 text-[11px] px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+            <div className="flex items-center gap-2 shrink-0">
+              <label className="text-xs font-bold text-muted-foreground whitespace-nowrap flex items-center gap-1">
+                <ArrowUpDown className="size-3.5" /> Sort:
+              </label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="h-10 rounded-xl border border-input bg-background px-3 py-1.5 text-xs font-semibold shadow-2xs cursor-pointer min-w-[150px]"
               >
-                Reset to Entire World (All Data)
-              </Button>
-            ) : (
-              <span className="text-[11px] text-muted-foreground">
-                Showing all registered businesses, professionals, products & services
-              </span>
-            )}
+                <option value="featured">Featured / Best Match</option>
+                <option value="price_asc">Price: Low to High</option>
+                <option value="price_desc">Price: High to Low</option>
+                <option value="rating_desc">Highest Rated</option>
+                <option value="name_asc">Name: A to Z</option>
+                <option value="name_desc">Name: Z to A</option>
+                <option value="newest">Newest First</option>
+              </select>
+            </div>
           </div>
 
           {/* Type Tabs */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-border/50">
+          <div className="pt-2">
             <Tabs value={activeType} onValueChange={(val: any) => setActiveType(val)} className="w-full">
               <TabsList className="p-1 bg-muted/60 h-auto gap-1 flex-wrap">
                 <TabsTrigger value="all" className="text-xs font-semibold px-3 py-1.5 gap-1.5">
-                  <Layers className="size-3.5" /> All ({businesses.length + professionals.length + products.length + services.length})
+                  <Layers className="size-3.5" /> All ({totalFilteredCount})
                 </TabsTrigger>
                 <TabsTrigger value="business" className="text-xs font-semibold px-3 py-1.5 gap-1.5">
-                  <Building2 className="size-3.5" /> Businesses ({businesses.length})
-                </TabsTrigger>
-                <TabsTrigger value="professional" className="text-xs font-semibold px-3 py-1.5 gap-1.5">
-                  <Briefcase className="size-3.5" /> Professionals ({professionals.length})
-                </TabsTrigger>
-                <TabsTrigger value="product" className="text-xs font-semibold px-3 py-1.5 gap-1.5">
-                  <Package className="size-3.5" /> Products ({products.length})
+                  <Building2 className="size-3.5" /> Businesses ({filteredBusinesses.length})
                 </TabsTrigger>
                 <TabsTrigger value="service" className="text-xs font-semibold px-3 py-1.5 gap-1.5">
-                  <Sparkles className="size-3.5" /> Services ({services.length})
+                  <Sparkles className="size-3.5" /> Services ({filteredServices.length})
+                </TabsTrigger>
+                <TabsTrigger value="product" className="text-xs font-semibold px-3 py-1.5 gap-1.5">
+                  <Package className="size-3.5" /> Products ({filteredProducts.length})
+                </TabsTrigger>
+                <TabsTrigger value="professional" className="text-xs font-semibold px-3 py-1.5 gap-1.5">
+                  <Briefcase className="size-3.5" /> Professionals ({filteredProfessionals.length})
+                </TabsTrigger>
+                <TabsTrigger value="course" className="text-xs font-semibold px-3 py-1.5 gap-1.5">
+                  <BookOpen className="size-3.5" /> Courses ({filteredCourses.length})
+                </TabsTrigger>
+                <TabsTrigger value="job" className="text-xs font-semibold px-3 py-1.5 gap-1.5">
+                  <Briefcase className="size-3.5" /> Jobs ({filteredJobs.length})
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -621,17 +929,17 @@ function CustomerExplorePageContent() {
       </Card>
 
       {/* Active Category Filter Banner */}
-      {selectedCategoryId && (
+      {(selectedCategoryId || selectedSubcategoryId) && (
         <div className="flex items-center justify-between p-3.5 bg-primary/10 border border-primary/20 rounded-2xl text-xs flex-wrap gap-2 animate-in fade-in">
           <div className="flex items-center gap-2 flex-wrap">
             <Badge className="bg-primary text-primary-foreground font-bold text-xs py-0.5 px-2">
-              Category Filter Active
+              Filter Active
             </Badge>
             <span className="font-bold text-foreground text-sm">
-              {selectedCategoryName || categories.find((c) => c.id === selectedCategoryId)?.name || `Category #${selectedCategoryId}`}
+              {selectedSubcategoryName ? `${selectedCategoryName} > ${selectedSubcategoryName}` : selectedCategoryName || `Category #${selectedCategoryId}`}
             </span>
             <span className="text-muted-foreground text-xs hidden sm:inline">
-              — Displaying all matching businesses, professionals, products, and services
+              — Displaying matching results
             </span>
           </div>
           <Button
@@ -640,6 +948,8 @@ function CustomerExplorePageContent() {
             onClick={() => {
               setSelectedCategoryId(null);
               setSelectedCategoryName("");
+              setSelectedSubcategoryId(null);
+              setSelectedSubcategoryName("");
             }}
             className="h-7 text-xs font-bold text-primary hover:text-primary gap-1 cursor-pointer"
           >
@@ -658,17 +968,17 @@ function CustomerExplorePageContent() {
       ) : (
         <div className="space-y-8">
           {/* Section: Businesses */}
-          {(activeType === "all" || activeType === "business") && businesses.length > 0 && (
+          {(activeType === "all" || activeType === "business") && filteredBusinesses.length > 0 && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
                   <Building2 className="size-5 text-blue-600" />
-                  Businesses & Establishments ({businesses.length})
+                  Businesses & Establishments ({filteredBusinesses.length})
                 </h2>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {businesses.map((biz) => {
+                {filteredBusinesses.map((biz) => {
                   const favKey = `business-${biz.id}`;
                   const isFavorited = favorites.has(favKey);
                   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${biz.name} ${biz.city || ""}`)}`;
@@ -840,18 +1150,18 @@ function CustomerExplorePageContent() {
             </div>
           )}
 
-          {/* Section: Professionals */}
-          {(activeType === "all" || activeType === "professional") && professionals.length > 0 && (
+                    {/* Section: Professionals */}
+          {(activeType === "all" || activeType === "professional") && filteredProfessionals.length > 0 && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
                   <Briefcase className="size-5 text-purple-600" />
-                  Top Professionals & Consultants ({professionals.length})
+                  Top Professionals & Consultants ({filteredProfessionals.length})
                 </h2>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {professionals.map((pro) => {
+                {filteredProfessionals.map((pro) => {
                   const favKey = `professional-${pro.id}`;
                   const isFavorited = favorites.has(favKey);
                   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${pro.name} ${pro.city || ""}`)}`;
@@ -1021,196 +1331,251 @@ function CustomerExplorePageContent() {
             </div>
           )}
 
-          {/* Section: Products */}
-          {(activeType === "all" || activeType === "product") && products.length > 0 && (
+                    {/* Section: Products */}
+          {(activeType === "all" || activeType === "product") && filteredProducts.length > 0 && (
             <div className="space-y-4">
               <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
                 <Package className="size-5 text-indigo-600" />
-                Featured Products & Master Catalog ({products.length})
+                Featured Products & Master Catalog ({filteredProducts.length})
               </h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {products.map((prod) => {
-                  const price = country === "US" ? prod.suggested_price_usd : prod.suggested_price_inr;
-                  const currencySymbol = country === "US" ? "$" : "₹";
-
-                  return (
-                    <Card key={prod.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
-                      <div>
-                        {prod.default_image_url ? (
-                          <div className="h-40 w-full overflow-hidden rounded-t-2xl bg-muted/40">
-                            <img src={prod.default_image_url} alt={prod.name} className="h-full w-full object-cover" />
-                          </div>
-                        ) : (
-                          <div className="h-32 w-full flex items-center justify-center bg-muted/30 text-muted-foreground/40 rounded-t-2xl">
-                            <Package className="size-10" />
-                          </div>
-                        )}
-                        <CardHeader className="p-4 pb-2">
-                          <Badge variant="outline" className="w-fit text-[10px] mb-1">
-                            {prod.category_name || "Product"}
-                          </Badge>
-                          <CardTitle className="text-sm font-bold text-foreground line-clamp-1">{prod.name}</CardTitle>
-                          {prod.description && (
-                            <p className="text-muted-foreground text-xs line-clamp-2 mt-1">{prod.description}</p>
-                          )}
-                        </CardHeader>
-                        <CardContent className="p-4 pt-0 space-y-2">
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-xs text-muted-foreground">Suggested Price:</span>
-                            <span className="text-base font-extrabold text-foreground">
-                              {currencySymbol} {price ? Number(price).toLocaleString() : "Contact"}
-                            </span>
-                          </div>
-                          {prod.seller_info && (
-                            <p className="text-[11px] text-muted-foreground">
-                              Seller: <span className="font-semibold text-foreground">{prod.seller_info.business_name}</span> ({prod.seller_info.city || "Available"})
-                            </p>
-                          )}
-                        </CardContent>
-                      </div>
-
-                      <CardFooter className="p-4 pt-0">
-                        {getItemQuantity(prod.id) > 0 ? (
-                          <div className="flex h-8 w-full items-center justify-between border border-rose-300 dark:border-rose-900 rounded-xl overflow-hidden bg-background px-2 shadow-2xs">
-                            <button
-                              type="button"
-                              onClick={() => updateQuantity(prod.id, getItemQuantity(prod.id) - 1)}
-                              className="size-6 flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground"
-                            >
-                              <Minus className="size-3" />
-                            </button>
-                            <span className="text-xs font-black text-rose-600">
-                              {getItemQuantity(prod.id)} in Cart
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => updateQuantity(prod.id, getItemQuantity(prod.id) + 1)}
-                              className="size-6 flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground"
-                            >
-                              <Plus className="size-3" />
-                            </button>
-                          </div>
-                        ) : (
-                          <Button
-                            size="sm"
-                            className="w-full text-xs font-bold gap-1.5 cursor-pointer bg-rose-600 hover:bg-rose-700 text-white shadow-2xs"
-                            onClick={() => {
-                              const effPrice = Number((prod as any).suggested_price_inr || (prod as any).price || 0);
-                              addItem({
-                                id: prod.id,
-                                name: prod.name,
-                                price: effPrice,
-                                regular_price: (prod as any).regular_price ? Number((prod as any).regular_price) : null,
-                                image_url: prod.default_image_url,
-                                brand: (prod as any).brand || prod.seller_info?.business_name,
-                                business_id: prod.seller_info?.business_id || (prod as any).business_id,
-                                institution_id: (prod as any).institution_id,
-                              }, 1);
-                              toast.success(`${prod.name} added to cart!`);
-                            }}
-                          >
-                            <ShoppingCart className="size-3.5" /> Add to Cart
-                          </Button>
-                        )}
-                      </CardFooter>
-                    </Card>
-                  );
-                })}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {filteredProducts.map((prod) => (
+                  <CompactProductCard
+                    key={prod.id}
+                    product={prod}
+                    business={prod.seller_info ? {
+                      id: prod.seller_info.business_id,
+                      name: prod.seller_info.business_name,
+                      slug: prod.seller_info.business_slug,
+                      institution_profile_id: prod.seller_info.institution_id,
+                      user_id: prod.seller_info.user_id,
+                    } : undefined}
+                  />
+                ))}
               </div>
             </div>
           )}
 
-          {/* Section: Services */}
-          {(activeType === "all" || activeType === "service") && services.length > 0 && (
+                    {/* Section: Services */}
+          {(activeType === "all" || activeType === "service") && filteredServices.length > 0 && (
             <div className="space-y-4">
               <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
                 <Sparkles className="size-5 text-emerald-600" />
-                Featured Services & Master Services ({services.length})
+                Featured Services & Master Services ({filteredServices.length})
               </h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {services.map((srv) => {
-                  const price = country === "US" ? srv.suggested_price_usd : srv.suggested_price_inr;
-                  const currencySymbol = country === "US" ? "$" : "₹";
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {filteredServices.map((srv) => (
+                  <CompactServiceCard
+                    key={srv.id}
+                    service={srv}
+                    business={srv.seller_info ? {
+                      id: srv.seller_info.business_id,
+                      name: srv.seller_info.business_name,
+                      slug: srv.seller_info.business_slug,
+                      institution_profile_id: srv.seller_info.institution_id,
+                      user_id: srv.seller_info.user_id,
+                    } : undefined}
+                    onBook={(s) => {
+                      setSelectedBookingService({
+                        id: s.id,
+                        name: s.name,
+                        price: (s as any).suggested_price_inr || (s as any).price || 0,
+                        regular_price: (s as any).regular_price ? Number((s as any).regular_price) : null,
+                        pricing_model: s.pricing_model,
+                        estimated_duration: (s as any).estimated_duration || `${(s as any).duration_minutes || 60} mins`,
+                        service_location: (s as any).service_location || "In-Person & Online",
+                        default_image_url: s.default_image_url,
+                        provider_name: (s as any).provider_name || s.seller_info?.business_name || "Service Provider",
+                        business_id: (s as any).business_id || s.seller_info?.business_id || null,
+                        professional_id: (s as any).professional_id || null,
+                        institution_id: (s as any).institution_id || null,
+                      });
+                      setBookingDialogOpen(true);
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
-                  return (
-                    <Card key={srv.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
-                      <div>
-                        {srv.default_image_url ? (
-                          <div className="h-40 w-full overflow-hidden rounded-t-2xl bg-muted/40">
-                            <img src={srv.default_image_url} alt={srv.name} className="h-full w-full object-cover" />
-                          </div>
-                        ) : (
-                          <div className="h-32 w-full flex items-center justify-center bg-muted/30 text-muted-foreground/40 rounded-t-2xl">
-                            <Sparkles className="size-10" />
-                          </div>
-                        )}
-                        <CardHeader className="p-4 pb-2">
-                          <div className="flex items-center justify-between gap-1 mb-1">
-                            <Badge variant="outline" className="text-[10px]">
-                              {srv.category_name || "Service"}
+                              {/* Section: Courses */}
+          {(activeType === "all" || activeType === "course") && filteredCourses.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <BookOpen className="size-5 text-amber-600" />
+                Featured Academic Courses & Programs ({filteredCourses.length})
+              </h2>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredCourses.map((c) => (
+                  <Card key={c.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card">
+                    <CardHeader className="p-4 pb-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          {c.category_name && (
+                            <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 mb-1 bg-amber-50 text-amber-700 border-amber-200">
+                              {c.category_name}
                             </Badge>
-                            {srv.pricing_model && (
-                              <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-0 text-[10px]">
-                                {srv.pricing_model}
-                              </Badge>
-                            )}
-                          </div>
-                          <CardTitle className="text-sm font-bold text-foreground line-clamp-1">{srv.name}</CardTitle>
-                          {srv.description && (
-                            <p className="text-muted-foreground text-xs line-clamp-2 mt-1">{srv.description}</p>
                           )}
-                        </CardHeader>
-                        <CardContent className="p-4 pt-0 space-y-2">
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-xs text-muted-foreground">Price:</span>
-                            <span className="text-base font-extrabold text-foreground">
-                              {currencySymbol} {price ? Number(price).toLocaleString() : "Quote"}
-                            </span>
-                          </div>
-                          {srv.duration_minutes && (
-                            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                              <Clock className="size-3" /> Duration: {srv.duration_minutes} mins
-                            </span>
+                          <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
+                            {c.name}
+                          </h3>
+                          {c.code && (
+                            <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                              Code: {c.code}
+                            </p>
                           )}
-                        </CardContent>
+                        </div>
+                        <div className="size-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+                          <BookOpen className="size-4.5" />
+                        </div>
                       </div>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-1 pb-3 text-xs space-y-2 flex-1">
+                      {c.description && (
+                        <p className="text-muted-foreground text-[11px] line-clamp-2">
+                          {c.description}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
+                        {c.duration_value && (
+                          <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                            <Clock className="size-3 text-primary" />
+                            {c.duration_value} {c.duration_unit || "Months"}
+                          </span>
+                        )}
+                        {c.university_name && (
+                          <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                            <Building2 className="size-3 text-primary" />
+                            {c.university_name}
+                          </span>
+                        )}
+                        {c.seats_available !== undefined && (
+                          <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                            {c.seats_available} Seats Available
+                          </span>
+                        )}
+                      </div>
+                    </CardContent>
+                    <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() => {
+                          setEnquiryModalItem(c);
+                          setEnquiryForm({
+                            name: user?.full_name || "",
+                            email: user?.email || "",
+                            phone: user?.phone || "",
+                            message: `Hi, I am interested in admission for ${c.name}. Please share details and fee structure.`,
+                            preferredDate: "",
+                            preferredTime: "",
+                          });
+                        }}
+                        className="w-full text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white"
+                      >
+                        Enquire for Admission
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
 
-                      <CardFooter className="p-4 pt-0">
-                        <Button
-                          size="sm"
-                          className="w-full text-xs font-bold gap-1.5 cursor-pointer bg-sky-600 hover:bg-sky-700 text-white shadow-2xs"
-                          onClick={() => {
-                            setSelectedBookingService({
-                              id: srv.id,
-                              name: srv.name,
-                              price: (srv as any).suggested_price_inr || (srv as any).price || 0,
-                              regular_price: (srv as any).regular_price ? Number((srv as any).regular_price) : null,
-                              pricing_model: srv.pricing_model,
-                              estimated_duration: (srv as any).estimated_duration || `${(srv as any).duration_minutes || 60} mins`,
-                              service_location: (srv as any).service_location || "In-Person & Online",
-                              default_image_url: srv.default_image_url,
-                              provider_name: (srv as any).provider_name || "Service Provider",
-                              business_id: (srv as any).business_id || null,
-                              professional_id: (srv as any).professional_id || null,
-                              institution_id: (srv as any).institution_id || null,
-                            });
-                            setBookingDialogOpen(true);
-                          }}
-                        >
-                          <Calendar className="size-3.5" /> Book Appointment
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  );
-                })}
+          {/* Section: Jobs */}
+          {(activeType === "all" || activeType === "job") && filteredJobs.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Briefcase className="size-5 text-blue-600" />
+                Featured Job Openings & Vacancies ({filteredJobs.length})
+              </h2>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredJobs.map((j) => (
+                  <Card key={j.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card">
+                    <CardHeader className="p-4 pb-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          {j.department && (
+                            <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 mb-1 bg-blue-50 text-blue-700 border-blue-200">
+                              {j.department}
+                            </Badge>
+                          )}
+                          <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
+                            {j.title || j.name}
+                          </h3>
+                          {j.company_name && (
+                            <p className="text-xs text-muted-foreground font-semibold mt-0.5">
+                              {j.company_name}
+                            </p>
+                          )}
+                        </div>
+                        <div className="size-9 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0">
+                          <Briefcase className="size-4.5" />
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-1 pb-3 text-xs space-y-2 flex-1">
+                      {j.description && (
+                        <p className="text-muted-foreground text-[11px] line-clamp-2">
+                          {j.description}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
+                        {j.location && (
+                          <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                            <MapPin className="size-3 text-primary" />
+                            {j.location}
+                          </span>
+                        )}
+                        {j.employment_type && (
+                          <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                            {j.employment_type}
+                          </span>
+                        )}
+                        {j.work_mode && (
+                          <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md capitalize">
+                            {j.work_mode}
+                          </span>
+                        )}
+                        {j.salary_range && (
+                          <span className="flex items-center gap-1 font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
+                            {j.salary_range}
+                          </span>
+                        )}
+                      </div>
+                    </CardContent>
+                    <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() => {
+                          setEnquiryModalItem(j);
+                          setEnquiryForm({
+                            name: user?.full_name || "",
+                            email: user?.email || "",
+                            phone: user?.phone || "",
+                            message: `Hi, I would like to apply for the ${j.title || j.name} position. Please review my candidacy.`,
+                            preferredDate: "",
+                            preferredTime: "",
+                          });
+                        }}
+                        className="w-full text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white"
+                      >
+                        Apply / Express Interest
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
               </div>
             </div>
           )}
 
           {/* Empty state */}
-          {businesses.length === 0 && professionals.length === 0 && products.length === 0 && services.length === 0 && (
+          {totalFilteredCount === 0 && (
             <div className="text-center py-16 space-y-3 bg-card border rounded-2xl p-8">
               <Search className="size-10 text-muted-foreground/40 mx-auto" />
               <h3 className="text-base font-bold text-foreground">No matching listings found</h3>
@@ -1226,6 +1591,10 @@ function CustomerExplorePageContent() {
                   setLocality("");
                   setPostalCode("");
                   setSelectedCategoryId(null);
+                  setSelectedCategoryName("");
+                  setSortBy("featured");
+                  setProductNameSearch("");
+                  setSelectedBrand("all");
                   setActiveType("all");
                 }}
                 className="text-xs font-semibold cursor-pointer"

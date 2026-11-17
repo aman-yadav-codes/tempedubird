@@ -16,7 +16,9 @@ export type SalesOrder = {
   institution_id: number | null;
   institution_name?: string | null;
   business_id?: number | null;
+  business_name?: string | null;
   professional_id?: number | null;
+  professional_name?: string | null;
   seller_user_id?: number | null;
   order_type?: string | null;
   customer_name: string;
@@ -28,7 +30,7 @@ export type SalesOrder = {
   total_amount: number;
   payment_status: "Paid" | "Pending" | "Failed" | "Refunded";
   payment_method: string;
-  fulfillment_status: "Delivered" | "Processing" | "Shipped" | "Ready for Pickup" | "Cancelled";
+  fulfillment_status: "Received" | "Confirmed" | "Delivered" | "Processing" | "Shipped" | "Ready for Pickup" | "Cancelled";
   shipping_address: string | null;
   notes: string | null;
   created_by?: number | null;
@@ -250,7 +252,9 @@ export async function getSalesOrdersList(params: {
   customerPhone?: string | null;
   sellerUserId?: number | null;
   sellerBusinessId?: number | null;
+  sellerBusinessIds?: number[] | null;
   sellerProfessionalId?: number | null;
+  sellerProfessionalIds?: number[] | null;
   orderType?: string | null;
   page?: number;
   limit?: number;
@@ -278,7 +282,13 @@ export async function getSalesOrdersList(params: {
     }
   }
 
-  if (params.sellerUserId || params.sellerBusinessId || params.sellerProfessionalId) {
+  if (
+    params.sellerUserId ||
+    params.sellerBusinessId ||
+    params.sellerProfessionalId ||
+    (Array.isArray(params.sellerBusinessIds) && params.sellerBusinessIds.length > 0) ||
+    (Array.isArray(params.sellerProfessionalIds) && params.sellerProfessionalIds.length > 0)
+  ) {
     const sellerConds: string[] = [];
     if (params.sellerUserId) {
       values.push(params.sellerUserId);
@@ -288,9 +298,17 @@ export async function getSalesOrdersList(params: {
       values.push(params.sellerBusinessId);
       sellerConds.push(`o.business_id = $${values.length}`);
     }
+    if (Array.isArray(params.sellerBusinessIds) && params.sellerBusinessIds.length > 0) {
+      values.push(params.sellerBusinessIds);
+      sellerConds.push(`o.business_id = ANY($${values.length})`);
+    }
     if (params.sellerProfessionalId) {
       values.push(params.sellerProfessionalId);
       sellerConds.push(`o.professional_id = $${values.length}`);
+    }
+    if (Array.isArray(params.sellerProfessionalIds) && params.sellerProfessionalIds.length > 0) {
+      values.push(params.sellerProfessionalIds);
+      sellerConds.push(`o.professional_id = ANY($${values.length})`);
     }
     conditions.push(`(${sellerConds.join(" OR ")})`);
   }
@@ -344,15 +362,19 @@ export async function getSalesOrdersList(params: {
     SELECT 
       o.*,
       i.name AS institution_name,
+      bp.name AS business_name,
+      pp.name AS professional_name,
       COALESCE(
         string_agg(it.product_name || ' (x' || it.quantity || ')', ', ' ORDER BY it.id),
         ''
       ) AS items_summary
     FROM sales_orders o
     LEFT JOIN institution_profiles i ON i.id = o.institution_id
+    LEFT JOIN business_profiles bp ON bp.id = o.business_id
+    LEFT JOIN professional_profiles pp ON pp.id = o.professional_id
     LEFT JOIN sales_order_items it ON it.order_id = o.id
     WHERE ${whereClause}
-    GROUP BY o.id, i.name
+    GROUP BY o.id, i.name, bp.name, pp.name
     ORDER BY o.created_at DESC
     LIMIT $${values.length + 1} OFFSET $${values.length + 2}
   `;
@@ -379,9 +401,13 @@ export async function getSalesOrderById(id: number) {
   const query = `
     SELECT 
       o.*,
-      i.name AS institution_name
+      i.name AS institution_name,
+      bp.name AS business_name,
+      pp.name AS professional_name
     FROM sales_orders o
     LEFT JOIN institution_profiles i ON i.id = o.institution_id
+    LEFT JOIN business_profiles bp ON bp.id = o.business_id
+    LEFT JOIN professional_profiles pp ON pp.id = o.professional_id
     WHERE o.id = $1
   `;
 

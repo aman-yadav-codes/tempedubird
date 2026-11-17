@@ -64,9 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           if (data?.error_code === DEPLOYMENT_ACCESS_ERROR_CODE) {
             clearAuth();
-            const loginPath = String(data.reason ?? "").startsWith("INSTITUTION_SITE")
-              ? "/institution/login"
-              : "/admin/login";
+            const loginPath = "/";
             if (pathname !== loginPath) {
               const reason = encodeURIComponent(String(data.reason ?? data.error_code));
               window.location.replace(`${loginPath}?auth_error=${reason}`);

@@ -924,7 +924,7 @@ export default function SalesClientsPage() {
   const handleCopyCredentials = () => {
     const loginIdentifier = passwordEmail || passwordPhone || "Primary Email / Phone";
     const textToCopy = `Client Portal Access Credentials:
-Login URL: ${typeof window !== "undefined" ? window.location.origin : ""}/admin/login
+Login URL: ${typeof window !== "undefined" ? window.location.origin : ""}/login
 Username: ${loginIdentifier}
 Password: ${passwordValue}`;
     if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -1036,16 +1036,6 @@ Password: ${passwordValue}`;
         </div>
 
         <div className="flex items-center gap-2.5">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchRecords}
-            disabled={loading}
-            className="rounded-xl h-10 px-3.5"
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin text-primary" : ""}`} />
-            Refresh
-          </Button>
           <Button
             variant="outline"
             size="sm"

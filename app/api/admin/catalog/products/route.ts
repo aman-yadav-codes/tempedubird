@@ -12,7 +12,13 @@ async function ensureProductColumns() {
       ADD COLUMN IF NOT EXISTS countries TEXT[] DEFAULT '{"IN", "US"}',
       ADD COLUMN IF NOT EXISTS suggested_min_price NUMERIC,
       ADD COLUMN IF NOT EXISTS suggested_max_price NUMERIC,
-      ADD COLUMN IF NOT EXISTS country_pricing JSONB DEFAULT '{}'::jsonb;
+      ADD COLUMN IF NOT EXISTS country_pricing JSONB DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS main_category_id INTEGER,
+      ADD COLUMN IF NOT EXISTS attributes JSONB DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS sku VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS sku_prefix VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS suggested_price_usd NUMERIC,
+      ADD COLUMN IF NOT EXISTS variants JSONB DEFAULT '[]'::jsonb;
     `);
     productColumnsEnsured = true;
   } catch (err) {
@@ -50,8 +56,8 @@ export async function GET(req: Request) {
         COALESCE(mp.additional_images, '{}') AS additional_images,
         mp.brand,
         mp.model,
-        COALESCE(mp.sku, mp.sku_prefix) AS sku,
-        mp.sku_prefix,
+        COALESCE(mp.sku, mp.sku_prefix, '') AS sku,
+        COALESCE(mp.sku_prefix, mp.sku, '') AS sku_prefix,
         COALESCE(mp.unit_of_measurement, 'Piece') AS unit_of_measurement,
         COALESCE(mp.unit, mp.unit_of_measurement, 'Piece') AS unit,
         COALESCE(mp.unit_quantity, 1) AS unit_quantity,
@@ -64,6 +70,12 @@ export async function GET(req: Request) {
         COALESCE(mp.suggested_min_price, 0) AS suggested_min_price,
         COALESCE(mp.suggested_max_price, 0) AS suggested_max_price,
         COALESCE(mp.country_pricing, '{}'::jsonb) AS country_pricing,
+        COALESCE(mp.variants, '[]'::jsonb) AS variants,
+        mp.business_profile_id,
+        bp.name AS business_name,
+        mp.professional_profile_id,
+        pp.name AS professional_name,
+        mp.profile_type,
         mp.is_active,
         mp.created_at,
         mp.updated_at
@@ -71,6 +83,8 @@ export async function GET(req: Request) {
       LEFT JOIN categories c_main ON c_main.id = COALESCE(mp.main_category_id, mp.category_id)
       LEFT JOIN categories c_sub ON c_sub.id = mp.subcategory_id
       LEFT JOIN categories c ON c.id = mp.category_id
+      LEFT JOIN business_profiles bp ON bp.id = mp.business_profile_id
+      LEFT JOIN professional_profiles pp ON pp.id = mp.professional_profile_id
       WHERE 1=1
     `;
     const params: any[] = [];
@@ -101,9 +115,12 @@ export async function GET(req: Request) {
       pIdx++;
     }
 
-    // Tenant & Business ownership scope filtering
+    // Tenant & Business ownership scope filtering:
+    // Only restrict items if caller explicitly requests "mine" (e.g. from store-specific inventory tab).
+    // The Master Product Catalog lists all master template products for browsing, cloning, and assignment.
+    const scope = searchParams.get("scope");
     const catalogScope = await getUserCatalogScope(db, user);
-    if (!catalogScope.isSuperAdmin) {
+    if (scope === "mine" && !catalogScope.isSuperAdmin) {
       if (catalogScope.isPureProfessional) {
         // Professional account owners can see products listed by them only
         if (catalogScope.professionalProfileIds.length === 0) {
@@ -179,6 +196,9 @@ export async function POST(req: Request) {
       suggested_max_price,
       country_pricing,
       is_active,
+      business_profile_id,
+      professional_profile_id,
+      profile_type,
     } = body;
 
     if (!name?.trim()) {
@@ -264,13 +284,14 @@ export async function POST(req: Request) {
         institution_id,
         professional_profile_id,
         profile_type,
+        variants,
         created_at,
         updated_at
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-        $21, $22::jsonb, $23, $24, $25, $26, $27,
+        $21, $22::jsonb, $23, $24, $25, $26, $27, $28::jsonb,
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
       )
       RETURNING *;
@@ -303,6 +324,7 @@ export async function POST(req: Request) {
         assignedInstitutionId,
         assignedProfessionalId,
         assignedProfileType,
+        JSON.stringify(Array.isArray(body.variants) ? body.variants : []),
       ]
     );
 
@@ -347,6 +369,9 @@ export async function PATCH(req: Request) {
       suggested_max_price,
       country_pricing,
       is_active,
+      business_profile_id,
+      professional_profile_id,
+      profile_type,
     } = body;
 
     if (!id) {
@@ -422,6 +447,10 @@ export async function PATCH(req: Request) {
         main_category_id = COALESCE($20, main_category_id),
         subcategory_id = COALESCE($21, subcategory_id),
         category_id = COALESCE($22, category_id),
+        business_profile_id = CASE WHEN $24::boolean THEN $25::int ELSE business_profile_id END,
+        professional_profile_id = CASE WHEN $26::boolean THEN $27::int ELSE professional_profile_id END,
+        profile_type = COALESCE($28, profile_type),
+        variants = CASE WHEN $29::jsonb IS NOT NULL THEN $29::jsonb ELSE variants END,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $23
       RETURNING *;
@@ -450,6 +479,12 @@ export async function PATCH(req: Request) {
         effectiveSubCat !== undefined ? effectiveSubCat : null,
         effectiveCategory !== undefined ? effectiveCategory : null,
         Number(id),
+        business_profile_id !== undefined,
+        business_profile_id ? Number(business_profile_id) : null,
+        professional_profile_id !== undefined,
+        professional_profile_id ? Number(professional_profile_id) : null,
+        profile_type || null,
+        body.variants !== undefined ? JSON.stringify(body.variants) : null,
       ]
     );
 

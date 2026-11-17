@@ -23,9 +23,24 @@ export async function GET(
 
     const isPlatform = isPlatformFullAccess(user) || user.role_codes?.includes("platform_admin");
     if (!isPlatform) {
-      const activeInst = user.memberships?.find((m) => m.role_code === "institution_admin")?.institution_id;
-      if (order.institution_id && order.institution_id !== activeInst) {
-        return NextResponse.json({ error: "Unauthorized access to this order" }, { status: 403 });
+      // Business owners, professionals, sellers, and institution admins have access
+      const isOwnerOrSeller = Boolean(
+        user.id === order.seller_user_id ||
+        user.id === order.created_by ||
+        user.role_codes?.includes("business_owner") ||
+        user.role_codes?.includes("professional") ||
+        user.memberships?.some(
+          (m) =>
+            (m.institution_id && m.institution_id === order.institution_id) ||
+            m.role_code === "business_owner" ||
+            m.role_code === "professional"
+        )
+      );
+      if (!isOwnerOrSeller) {
+        const activeInst = user.memberships?.find((m) => m.role_code === "institution_admin")?.institution_id;
+        if (order.institution_id && order.institution_id !== activeInst) {
+          return NextResponse.json({ error: "Unauthorized access to this order" }, { status: 403 });
+        }
       }
     }
 

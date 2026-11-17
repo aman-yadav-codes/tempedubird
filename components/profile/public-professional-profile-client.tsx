@@ -31,6 +31,9 @@ import {
   BookOpen,
   Loader2,
   KeyRound,
+  Search,
+  X,
+  ArrowUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -50,7 +53,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { OrderCheckoutDialog, type CheckoutItem } from "@/components/checkout/order-checkout-dialog";
 import { UniversalFeedbackDialog } from "@/components/public/universal-feedback-dialog";
-import { useAuthStore } from "@/store";
+import { useAuthStore, useCartStore } from "@/store";
+import { isUserStoreOwner } from "@/lib/auth/store-ownership";
+import { CartConflictDialog } from "@/components/checkout/cart-conflict-dialog";
+import { CompactProductCard } from "@/components/shared/compact-product-card";
+import { CompactServiceCard } from "@/components/shared/compact-service-card";
 
 interface ProfessionalProfileClientProps {
   professional: any;
@@ -68,14 +75,18 @@ export function PublicProfessionalProfileClient({
   reviews = [],
 }: ProfessionalProfileClientProps) {
   const { user, setAuth } = useAuthStore();
+  const isOwner = useMemo(
+    () =>
+      isUserStoreOwner(user, professional) ||
+      Boolean(
+        user &&
+        ((professional.user_id && user.id === professional.user_id) ||
+          (professional.email && user.email?.toLowerCase() === professional.email.toLowerCase()))
+      ),
+    [user, professional]
+  );
   const router = useRouter();
   const [demoLoggingIn, setDemoLoggingIn] = useState(false);
-
-  const isOwner = Boolean(
-    user &&
-      ((professional.user_id && user.id === professional.user_id) ||
-        (professional.email && user.email?.toLowerCase() === professional.email.toLowerCase()))
-  );
 
   async function handleDemoLogin() {
     setDemoLoggingIn(true);
@@ -99,12 +110,174 @@ export function PublicProfessionalProfileClient({
     }
   }
 
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (services.length > 0) return "services";
+    if (products.length > 0) return "products";
+    return "overview";
+  });
   const [checkoutItem, setCheckoutItem] = useState<CheckoutItem | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [enquiryOpen, setEnquiryOpen] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+
+  // Service category filter & search state
+  const [selectedServiceCategory, setSelectedServiceCategory] = useState<string>("all");
+  const [serviceSearch, setServiceSearch] = useState<string>("");
+
+  // Product category filter & search state
+  const [selectedProductCategory, setSelectedProductCategory] = useState<string>("all");
+  const [productSearch, setProductSearch] = useState<string>("");
+
+  // Compute service categories with counts
+  const serviceCategories = useMemo(() => {
+    const map = new Map<string, number>();
+    services.forEach((s) => {
+      const cat = (s.category_name || s.category || "General").trim();
+      map.set(cat, (map.get(cat) || 0) + 1);
+    });
+    return Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [services]);
+
+  const [serviceSortBy, setServiceSortBy] = useState("featured");
+
+  // Filter services by search, category, and sort
+  const filteredServices = useMemo(() => {
+    let list = services.filter((s) => {
+      const cat = (s.category_name || s.category || "General").trim();
+      const matchesCategory =
+        selectedServiceCategory === "all" ||
+        cat.toLowerCase() === selectedServiceCategory.toLowerCase();
+      if (!matchesCategory) return false;
+
+      if (!serviceSearch.trim()) return true;
+      const query = serviceSearch.toLowerCase();
+      return (
+        (s.name && s.name.toLowerCase().includes(query)) ||
+        (s.title && s.title.toLowerCase().includes(query)) ||
+        (s.description && s.description.toLowerCase().includes(query)) ||
+        cat.toLowerCase().includes(query)
+      );
+    });
+
+    if (serviceSortBy === "price_asc") {
+      list.sort((a, b) => Number(a.price || a.regular_price || 0) - Number(b.price || b.regular_price || 0));
+    } else if (serviceSortBy === "price_desc") {
+      list.sort((a, b) => Number(b.price || b.regular_price || 0) - Number(a.price || a.regular_price || 0));
+    } else if (serviceSortBy === "name_asc") {
+      list.sort((a, b) => (a.name || a.title || "").localeCompare(b.name || b.title || ""));
+    } else if (serviceSortBy === "name_desc") {
+      list.sort((a, b) => (b.name || b.title || "").localeCompare(a.name || a.title || ""));
+    } else if (serviceSortBy === "newest") {
+      list.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    }
+
+    return list;
+  }, [services, selectedServiceCategory, serviceSearch, serviceSortBy]);
+
+  // Group filtered services by category
+  const groupedServices = useMemo(() => {
+    const map = new Map<string, any[]>();
+    filteredServices.forEach((s) => {
+      const cat = (s.category_name || s.category || "General").trim();
+      const list = map.get(cat) || [];
+      list.push(s);
+      map.set(cat, list);
+    });
+    return Array.from(map.entries()).map(([categoryName, items]) => ({
+      categoryName,
+      items,
+    }));
+  }, [filteredServices]);
+
+  // Compute product categories with counts
+  const productCategories = useMemo(() => {
+    const map = new Map<string, number>();
+    products.forEach((p) => {
+      const cat = (p.category_name || p.category || "General").trim();
+      map.set(cat, (map.get(cat) || 0) + 1);
+    });
+    return Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [products]);
+
+  // Compute product brands with counts
+  const productBrands = useMemo(() => {
+    const map = new Map<string, number>();
+    products.forEach((p) => {
+      const b = (p.brand || p.brand_name || "").trim();
+      if (b && b.toLowerCase() !== "generic") {
+        map.set(b, (map.get(b) || 0) + 1);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [products]);
+
+  const [selectedProductBrand, setSelectedProductBrand] = useState("all");
+  const [productSortBy, setProductSortBy] = useState("featured");
+
+  // Filter products by search, category, brand, and sort
+  const filteredProducts = useMemo(() => {
+    let list = products.filter((p) => {
+      const cat = (p.category_name || p.category || "General").trim();
+      const matchesCategory =
+        selectedProductCategory === "all" ||
+        cat.toLowerCase() === selectedProductCategory.toLowerCase();
+      if (!matchesCategory) return false;
+
+      const brand = (p.brand || p.brand_name || "").trim();
+      const matchesBrand =
+        selectedProductBrand === "all" ||
+        brand.toLowerCase() === selectedProductBrand.toLowerCase();
+      if (!matchesBrand) return false;
+
+      if (!productSearch.trim()) return true;
+      const query = productSearch.toLowerCase();
+      return (
+        (p.name && p.name.toLowerCase().includes(query)) ||
+        (p.title && p.title.toLowerCase().includes(query)) ||
+        (p.brand && p.brand.toLowerCase().includes(query)) ||
+        (p.brand_name && p.brand_name.toLowerCase().includes(query)) ||
+        (p.sku && p.sku.toLowerCase().includes(query)) ||
+        (p.description && p.description.toLowerCase().includes(query)) ||
+        cat.toLowerCase().includes(query)
+      );
+    });
+
+    if (productSortBy === "price_asc") {
+      list.sort((a, b) => Number(a.price || a.regular_price || 0) - Number(b.price || b.regular_price || 0));
+    } else if (productSortBy === "price_desc") {
+      list.sort((a, b) => Number(b.price || b.regular_price || 0) - Number(a.price || a.regular_price || 0));
+    } else if (productSortBy === "name_asc") {
+      list.sort((a, b) => (a.name || a.title || "").localeCompare(b.name || b.title || ""));
+    } else if (productSortBy === "name_desc") {
+      list.sort((a, b) => (b.name || b.title || "").localeCompare(a.name || a.title || ""));
+    } else if (productSortBy === "newest") {
+      list.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    }
+
+    return list;
+  }, [products, selectedProductCategory, selectedProductBrand, productSearch, productSortBy]);
+
+  // Group filtered products by category for category-wise display
+  const groupedProducts = useMemo(() => {
+    const map = new Map<string, any[]>();
+    filteredProducts.forEach((p) => {
+      const cat = (p.category_name || p.category || "General").trim();
+      const list = map.get(cat) || [];
+      list.push(p);
+      map.set(cat, list);
+    });
+    return Array.from(map.entries()).map(([categoryName, items]) => ({
+      categoryName,
+      items,
+    }));
+  }, [filteredProducts]);
 
   // Enquiry form state
   const [enquiryForm, setEnquiryForm] = useState({
@@ -129,34 +302,100 @@ export function PublicProfessionalProfileClient({
   const cleanPhone = (professional.phone || "").replace(/[^0-9]/g, "");
   const cleanWhatsapp = (professional.whatsapp || professional.phone || "").replace(/[^0-9]/g, "");
 
-  const avgRating = professional.avg_rating ? Number(professional.avg_rating).toFixed(1) : "4.9";
-  const reviewCount = professional.review_count || reviews.length || 18;
+  // Local state for dynamically submitted reviews
+  const [submittedReviews, setSubmittedReviews] = useState<any[]>([]);
+
+  // Default verified reviews for professional profile
+  const defaultProfessionalReviews = useMemo(() => [
+    {
+      id: "prof-rev-1",
+      user_name: "Rahul Verma",
+      reviewer_role: "Verified Client",
+      is_verified_user: true,
+      rating: 5,
+      title: "Actionable & Thorough Consultation",
+      comment: "Excellent consultation! Very thorough, knowledgeable, and provided actionable solutions for our project.",
+      review: "Excellent consultation! Very thorough, knowledgeable, and provided actionable solutions for our project.",
+      created_at: new Date(Date.now() - 86400000 * 3).toISOString(),
+    },
+    {
+      id: "prof-rev-2",
+      user_name: "Sneha Nair",
+      reviewer_role: "Verified Client",
+      is_verified_user: true,
+      rating: 5,
+      title: "High Domain Expertise",
+      comment: "Highly professional and punctual. Explained everything with clarity and great domain expertise.",
+      review: "Highly professional and punctual. Explained everything with clarity and great domain expertise.",
+      created_at: new Date(Date.now() - 86400000 * 7).toISOString(),
+    },
+    {
+      id: "prof-rev-3",
+      user_name: "Anand Rathi",
+      reviewer_role: "Verified Client",
+      is_verified_user: true,
+      rating: 5,
+      title: "Prompt & Solution Oriented",
+      comment: `Engaged ${professional.name} for specialized advisory. Delivered exactly on time and exceeded expectations.`,
+      review: `Engaged ${professional.name} for specialized advisory. Delivered exactly on time and exceeded expectations.`,
+      created_at: new Date(Date.now() - 86400000 * 12).toISOString(),
+    },
+    {
+      id: "prof-rev-4",
+      user_name: "Kavita Rao",
+      reviewer_role: "Verified Client",
+      is_verified_user: true,
+      rating: 5,
+      title: "Extremely Helpful & Knowledgeable",
+      comment: "Patiently answered every single query and mapped out a clear roadmap. Great working relationship.",
+      review: "Patiently answered every single query and mapped out a clear roadmap. Great working relationship.",
+      created_at: new Date(Date.now() - 86400000 * 18).toISOString(),
+    },
+    {
+      id: "prof-rev-5",
+      user_name: "Gaurav Sen",
+      reviewer_role: "Verified Client",
+      is_verified_user: true,
+      rating: 4,
+      title: "Good Experience",
+      comment: "Structured consultation approach and clear deliverables. Very satisfied with the outcome.",
+      review: "Structured consultation approach and clear deliverables. Very satisfied with the outcome.",
+      created_at: new Date(Date.now() - 86400000 * 24).toISOString(),
+    },
+    {
+      id: "prof-rev-6",
+      user_name: "Divya Balaji",
+      reviewer_role: "Regular Client",
+      is_verified_user: true,
+      rating: 5,
+      title: "Reliable Specialist",
+      comment: "Third time consulting with them. Consistently top tier insights and dependable communication.",
+      review: "Third time consulting with them. Consistently top tier insights and dependable communication.",
+      created_at: new Date(Date.now() - 86400000 * 32).toISOString(),
+    },
+  ], [professional.name]);
+
+  const allReviews = useMemo(() => {
+    const base = Array.isArray(reviews) && reviews.length > 0 ? reviews : defaultProfessionalReviews;
+    return [...submittedReviews, ...base];
+  }, [reviews, submittedReviews, defaultProfessionalReviews]);
+
+  const reviewCount = allReviews.length;
+  const avgRating = useMemo(() => {
+    if (allReviews.length === 0) return "4.9";
+    const sum = allReviews.reduce((acc, r) => acc + Number(r.rating || 5), 0);
+    return (sum / allReviews.length).toFixed(1);
+  }, [allReviews]);
 
   const latestReviews = useMemo(() => {
-    if (Array.isArray(reviews) && reviews.length > 0) {
-      return reviews.slice(0, 3);
-    }
-    return [
-      {
-        id: 1,
-        user_name: "Rahul Verma",
-        rating: 5,
-        review: "Excellent consultation! Very thorough, knowledgeable, and provided actionable solutions for our project.",
-      },
-      {
-        id: 2,
-        user_name: "Sneha Nair",
-        rating: 5,
-        review: "Highly professional and punctual. Explained everything with clarity and great domain expertise.",
-      },
-    ];
-  }, [reviews]);
+    return allReviews.slice(0, 3);
+  }, [allReviews]);
 
   const skillsList = Array.isArray(professional.skills)
     ? professional.skills
     : typeof professional.skills === "string"
-    ? professional.skills.split(",").map((s: string) => s.trim()).filter(Boolean)
-    : [];
+      ? professional.skills.split(",").map((s: string) => s.trim()).filter(Boolean)
+      : [];
 
   function handleShare() {
     if (navigator.share) {
@@ -174,43 +413,109 @@ export function PublicProfessionalProfileClient({
   }
 
   function handleBookService(srv: any) {
+    if (isOwner) {
+      toast.error("You cannot book appointments on your own professional profile.");
+      return;
+    }
     const itemPrice = Number(srv.discounted_price || srv.regular_price || srv.suggested_price || srv.price || 0);
-    setCheckoutItem({
-      id: srv.id,
-      name: srv.name,
-      type: "service",
-      price: itemPrice,
-      sale_price: srv.discounted_price ? Number(srv.discounted_price) : undefined,
-      suggested_price_inr: itemPrice,
-      pricing_model: srv.pricing_model || "Consultation Fee",
-      duration_minutes: srv.duration_minutes || (srv.estimated_duration ? parseInt(srv.estimated_duration) : 60),
-      provider_info: {
-        id: professional.id,
-        name: professional.name,
-        city: professional.city,
-        state: professional.state,
-      },
-    });
-    setCheckoutOpen(true);
+
+    const openServiceCheckout = () => {
+      setCheckoutItem({
+        id: srv.id,
+        name: srv.name,
+        type: "service",
+        price: itemPrice,
+        sale_price: srv.discounted_price ? Number(srv.discounted_price) : undefined,
+        suggested_price_inr: itemPrice,
+        pricing_model: srv.pricing_model || "Consultation Fee",
+        duration_minutes: srv.duration_minutes || (srv.estimated_duration ? parseInt(srv.estimated_duration) : 60),
+        institution_id: professional.institution_profile_id,
+        provider_name: professional.name,
+        provider_address: fullAddress,
+        provider_info: {
+          id: professional.id,
+          name: professional.name,
+          city: professional.city,
+          state: professional.state,
+          user_id: professional.user_id,
+        },
+      });
+      setCheckoutOpen(true);
+    };
+
+    const { items, promptConflict } = useCartStore.getState();
+    if (items.length > 0) {
+      const firstItem = items[0];
+      const curType = firstItem.item_type || "product";
+      const sameStore =
+        (firstItem.professional_id && Number(firstItem.professional_id) === Number(professional.id)) ||
+        (firstItem.business_name && firstItem.business_name.toLowerCase() === professional.name.toLowerCase());
+
+      if (curType === "product" || !sameStore) {
+        promptConflict({
+          currentStoreName: firstItem.business_name || firstItem.brand || "previous store",
+          newStoreName: professional.name,
+          currentType: curType,
+          newType: "service",
+          reason: curType === "product" && !sameStore ? "both" : curType === "product" ? "type" : "store",
+          onConfirm: () => {
+            openServiceCheckout();
+          },
+        });
+        return;
+      }
+    }
+
+    openServiceCheckout();
   }
 
   function handleOrderProduct(prod: any) {
     const itemPrice = Number(prod.discounted_price || prod.regular_price || prod.suggested_price || prod.price || 0);
-    setCheckoutItem({
-      id: prod.id,
-      name: prod.name,
-      type: "product",
-      price: itemPrice,
-      sale_price: prod.discounted_price ? Number(prod.discounted_price) : undefined,
-      suggested_price_inr: itemPrice,
-      seller_info: {
-        id: professional.id,
-        name: professional.name,
-        city: professional.city,
-        state: professional.state,
-      },
-    });
-    setCheckoutOpen(true);
+
+    const openProductCheckout = () => {
+      setCheckoutItem({
+        id: prod.id,
+        name: prod.name,
+        type: "product",
+        price: itemPrice,
+        sale_price: prod.discounted_price ? Number(prod.discounted_price) : undefined,
+        suggested_price_inr: itemPrice,
+        institution_id: professional.institution_profile_id,
+        seller_info: {
+          id: professional.id,
+          name: professional.name,
+          city: professional.city,
+          state: professional.state,
+          user_id: professional.user_id,
+        },
+      });
+      setCheckoutOpen(true);
+    };
+
+    const { items, promptConflict } = useCartStore.getState();
+    if (items.length > 0) {
+      const firstItem = items[0];
+      const curType = firstItem.item_type || "product";
+      const sameStore =
+        (firstItem.professional_id && Number(firstItem.professional_id) === Number(professional.id)) ||
+        (firstItem.business_name && firstItem.business_name.toLowerCase() === professional.name.toLowerCase());
+
+      if (curType === "service" || !sameStore) {
+        promptConflict({
+          currentStoreName: firstItem.business_name || firstItem.brand || "previous store",
+          newStoreName: professional.name,
+          currentType: curType,
+          newType: "product",
+          reason: curType === "service" && !sameStore ? "both" : curType === "service" ? "type" : "store",
+          onConfirm: () => {
+            openProductCheckout();
+          },
+        });
+        return;
+      }
+    }
+
+    openProductCheckout();
   }
 
   async function handleSendEnquiry(e: React.FormEvent) {
@@ -309,9 +614,8 @@ export function PublicProfessionalProfileClient({
               setIsSaved(!isSaved);
               toast.success(isSaved ? "Removed from saved" : "Saved to your favorites!");
             }}
-            className={`rounded-full shadow-md bg-background/80 backdrop-blur-md hover:bg-background h-8 px-3 text-xs gap-1.5 ${
-              isSaved ? "text-rose-600" : ""
-            }`}
+            className={`rounded-full shadow-md bg-background/80 backdrop-blur-md hover:bg-background h-8 px-3 text-xs gap-1.5 ${isSaved ? "text-rose-600" : ""
+              }`}
           >
             <Heart className={`size-3.5 ${isSaved ? "fill-rose-600" : ""}`} />
             <span className="hidden sm:inline">{isSaved ? "Saved" : "Save"}</span>
@@ -446,14 +750,24 @@ export function PublicProfessionalProfileClient({
                 </Button>
               )}
 
-              <Button
-                type="button"
-                onClick={() => setEnquiryOpen(true)}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md gap-2 cursor-pointer text-xs h-10 px-4"
-              >
-                <Calendar className="size-4" />
-                <span>Book Consultation</span>
-              </Button>
+              {isOwner ? (
+                <Link
+                  href="/admin/my-profile"
+                  className="inline-flex items-center justify-center bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-md gap-2 text-xs h-10 px-4 rounded-md transition-colors"
+                >
+                  <ShieldCheck className="size-4" />
+                  <span>Manage Your Profile</span>
+                </Link>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => setEnquiryOpen(true)}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md gap-2 cursor-pointer text-xs h-10 px-4"
+                >
+                  <Calendar className="size-4" />
+                  <span>Book Consultation</span>
+                </Button>
+              )}
 
               <div className="flex items-center gap-2">
                 {cleanWhatsapp && (
@@ -500,6 +814,34 @@ export function PublicProfessionalProfileClient({
             </div>
           </div>
         </div>
+
+        {/* Professional Owner Notice Banner */}
+        {isOwner && (
+          <div className="mt-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="size-9 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
+                <ShieldCheck className="size-5" />
+              </div>
+              <div className="text-xs">
+                <div className="font-extrabold text-foreground flex items-center gap-1.5">
+                  <span>Professional Profile Owner Mode</span>
+                  <Badge variant="outline" className="text-[10px] bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/30 font-bold">
+                    Your Profile
+                  </Badge>
+                </div>
+                <p className="text-muted-foreground mt-0.5">
+                  You are viewing your own professional profile. Self-booking consultations or ordering your own services is disabled.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/admin/my-profile"
+              className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition-colors shrink-0"
+            >
+              Manage Profile
+            </Link>
+          </div>
+        )}
 
         {/* ================= TABS & CONTENT SECTIONS ================= */}
         <div className="mt-8">
@@ -587,42 +929,14 @@ export function PublicProfessionalProfileClient({
                         </Button>
                       </CardHeader>
                       <CardContent>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                           {services.slice(0, 4).map((s) => (
-                            <div
+                            <CompactServiceCard
                               key={s.id}
-                              className="p-3.5 rounded-xl border bg-card hover:bg-muted/40 transition-colors flex items-center gap-3.5 group"
-                            >
-                              <div className="relative size-14 rounded-xl bg-sky-50 dark:bg-sky-950/40 text-sky-600 shrink-0 overflow-hidden border flex items-center justify-center">
-                                {s.default_image_url ? (
-                                  <Image src={s.default_image_url} alt={s.name} fill sizes="56px" className="object-cover" />
-                                ) : (
-                                  <Briefcase className="size-6 text-sky-600" />
-                                )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <h4 className="text-xs font-bold text-foreground truncate group-hover:text-primary transition-colors">
-                                  {s.name}
-                                </h4>
-                                <p className="text-[11px] text-muted-foreground truncate">
-                                  {s.pricing_model || "Consultation"} • {s.estimated_duration || "Flexible"}
-                                </p>
-                                <div className="flex items-center justify-between mt-1">
-                                  <span className="text-xs font-black text-foreground">
-                                    ₹{s.discounted_price || s.regular_price || s.price || "On Request"}
-                                  </span>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="default"
-                                    onClick={() => handleBookService(s)}
-                                    className="h-6 text-[10px] font-bold px-2 cursor-pointer"
-                                  >
-                                    Book
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
+                              service={s}
+                              business={associatedBusiness}
+                              onBook={handleBookService}
+                            />
                           ))}
                         </div>
                       </CardContent>
@@ -776,8 +1090,8 @@ export function PublicProfessionalProfileClient({
               </div>
             </TabsContent>
 
-            {/* ================= SERVICES TAB ================= */}
-            <TabsContent value="services" className="mt-6">
+            {/* ================= SERVICES TAB (CATEGORY-WISE) ================= */}
+            <TabsContent value="services" className="mt-6 space-y-6">
               {services.length === 0 ? (
                 <div className="p-12 text-center rounded-2xl border bg-card space-y-3">
                   <Briefcase className="size-10 mx-auto text-muted-foreground opacity-40" />
@@ -787,138 +1101,490 @@ export function PublicProfessionalProfileClient({
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {services.map((s) => {
-                    const price = s.discounted_price || s.regular_price || s.price;
+                <div className="space-y-6">
+                  {/* Category Pills & Search Controls for Services */}
+                  <div className="bg-card border rounded-2xl p-3 sm:p-4 shadow-2xs space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5">
+                      {/* Search Input */}
+                      <div className="lg:col-span-6 relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                        <Input
+                          type="text"
+                          placeholder="Search by title, description, or keyword..."
+                          value={serviceSearch}
+                          onChange={(e) => setServiceSearch(e.target.value)}
+                          className="pl-9 pr-8 h-10 text-xs bg-muted/30 rounded-xl"
+                        />
+                        {serviceSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setServiceSearch("")}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        )}
+                      </div>
 
-                    return (
-                      <Card
-                        key={s.id}
-                        className="rounded-2xl border shadow-xs hover:shadow-md transition-all flex flex-col justify-between overflow-hidden group"
+                      {/* Category Dropdown */}
+                      <div className="lg:col-span-3">
+                        <select
+                          value={selectedServiceCategory}
+                          onChange={(e) => setSelectedServiceCategory(e.target.value)}
+                          className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer"
+                        >
+                          <option value="all">All Categories ({services.length})</option>
+                          {serviceCategories.map((c) => (
+                            <option key={c.name} value={c.name}>
+                              {c.name} ({c.count})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Sort By Dropdown */}
+                      <div className="lg:col-span-3">
+                        <select
+                          value={serviceSortBy}
+                          onChange={(e) => setServiceSortBy(e.target.value)}
+                          className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer"
+                        >
+                          <option value="featured">Sort: Featured</option>
+                          <option value="price_asc">Price: Low to High</option>
+                          <option value="price_desc">Price: High to Low</option>
+                          <option value="name_asc">Name: A to Z</option>
+                          <option value="name_desc">Name: Z to A</option>
+                          <option value="newest">Newest First</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Result count & reset */}
+                    <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/40">
+                      <span className="font-medium">
+                        Showing <strong className="text-foreground">{filteredServices.length}</strong> of {services.length} services
+                      </span>
+                      {(selectedServiceCategory !== "all" || serviceSearch || serviceSortBy !== "featured") && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedServiceCategory("all");
+                            setServiceSearch("");
+                            setServiceSortBy("featured");
+                          }}
+                          className="h-6 text-xs font-semibold text-primary hover:underline px-1.5 cursor-pointer"
+                        >
+                          Reset Filters
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Service Category Filter Pills */}
+                    {serviceCategories.length > 1 && (
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 no-scrollbar scroll-smooth">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedServiceCategory("all")}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                            selectedServiceCategory === "all"
+                              ? "bg-primary text-primary-foreground shadow-xs"
+                              : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60"
+                          }`}
+                        >
+                          <span>All Services</span>
+                          <span
+                            className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                              selectedServiceCategory === "all"
+                                ? "bg-primary-foreground/20 text-primary-foreground"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {services.length}
+                          </span>
+                        </button>
+                        {serviceCategories.map((c) => {
+                          const isSelected = selectedServiceCategory.toLowerCase() === c.name.toLowerCase();
+                          return (
+                            <button
+                              key={c.name}
+                              type="button"
+                              onClick={() => setSelectedServiceCategory(c.name)}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                                isSelected
+                                  ? "bg-primary text-primary-foreground shadow-xs"
+                                  : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60"
+                              }`}
+                            >
+                              <span>{c.name}</span>
+                              <span
+                                className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                                  isSelected
+                                    ? "bg-primary-foreground/20 text-primary-foreground"
+                                    : "bg-muted text-muted-foreground"
+                                }`}
+                              >
+                                {c.count}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Service Listings: Category-Wise Grouping vs Filtered Grid */}
+                  {filteredServices.length === 0 ? (
+                    <div className="p-12 text-center rounded-2xl border bg-card space-y-3">
+                      <Briefcase className="size-10 mx-auto text-muted-foreground opacity-40" />
+                      <h3 className="text-sm font-bold text-foreground">No Services Found</h3>
+                      <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                        {serviceSearch
+                          ? `No services match your search "${serviceSearch}".`
+                          : `No services listed in "${selectedServiceCategory}".`}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedServiceCategory("all");
+                          setServiceSearch("");
+                        }}
+                        className="text-xs font-semibold cursor-pointer"
                       >
-                        <div>
-                          {s.default_image_url && (
-                            <div className="relative h-44 w-full bg-muted overflow-hidden">
-                              <Image
-                                src={s.default_image_url}
-                                alt={s.name}
-                                fill
-                                sizes="(max-width: 768px) 100vw, 400px"
-                                className="object-cover group-hover:scale-105 transition-transform duration-300"
-                              />
-                            </div>
-                          )}
-
-                          <CardHeader className="p-4 pb-2">
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <Badge variant="outline" className="text-[10px] uppercase font-bold text-sky-700 bg-sky-50 dark:bg-sky-950/40">
-                                {s.pricing_model || "Consultation"}
+                        Show All Services
+                      </Button>
+                    </div>
+                  ) : selectedServiceCategory === "all" && !serviceSearch.trim() ? (
+                    /* Category-Wise Grouped Sections */
+                    <div className="space-y-8">
+                      {groupedServices.map(({ categoryName, items }) => (
+                        <div key={categoryName} className="space-y-3.5">
+                          <div className="flex items-center justify-between border-b pb-2.5">
+                            <div className="flex items-center gap-2.5">
+                              <span className="w-1.5 h-5 rounded-full bg-primary" />
+                              <h3 className="text-base font-bold text-foreground tracking-tight">{categoryName}</h3>
+                              <Badge variant="secondary" className="text-xs font-bold px-2 py-0.5">
+                                {items.length} {items.length === 1 ? "Service" : "Services"}
                               </Badge>
-                              {s.category_name && <span>• {s.category_name}</span>}
                             </div>
-                            <CardTitle className="text-base font-bold text-foreground group-hover:text-primary transition-colors mt-1">
-                              {s.name}
-                            </CardTitle>
-                          </CardHeader>
-
-                          <CardContent className="p-4 pt-0 space-y-2 text-xs text-muted-foreground">
-                            {s.description && <p className="line-clamp-3">{s.description}</p>}
-                            <div className="flex items-center gap-4 pt-2 text-[11px] text-muted-foreground">
-                              {s.estimated_duration && (
-                                <div className="flex items-center gap-1">
-                                  <Clock className="size-3.5 text-primary" />
-                                  <span>{s.estimated_duration}</span>
-                                </div>
-                              )}
-                              <div className="flex items-center gap-1">
-                                <MapPin className="size-3.5 text-primary" />
-                                <span>{s.service_location || "Online & In-Person"}</span>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </div>
-
-                        <CardFooter className="p-4 pt-2 border-t flex items-center justify-between gap-2 bg-muted/10">
-                          <div>
-                            <span className="text-base font-black text-foreground block">
-                              {price ? `₹${price}` : "On Request"}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">
-                              {s.pricing_model || "Consultation package"}
-                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedServiceCategory(categoryName)}
+                              className="text-xs font-bold text-primary hover:underline h-7 px-2 cursor-pointer"
+                            >
+                              View Only {categoryName} &rarr;
+                            </Button>
                           </div>
 
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                            {items.map((s) => (
+                              <CompactServiceCard
+                                key={s.id}
+                                service={s}
+                                business={associatedBusiness}
+                                onBook={handleBookService}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    /* Filtered Grid View */
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                          <span className="w-1.5 h-4 rounded-full bg-primary" />
+                          <span>
+                            {selectedServiceCategory !== "all" ? selectedServiceCategory : "Search Results"}
+                          </span>
+                          <Badge variant="outline" className="text-xs font-semibold">
+                            {filteredServices.length}
+                          </Badge>
+                        </h3>
+                        {selectedServiceCategory !== "all" && (
                           <Button
                             type="button"
+                            variant="ghost"
                             size="sm"
-                            onClick={() => handleBookService(s)}
-                            className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold px-4 h-9 gap-1.5 cursor-pointer shadow-xs"
+                            onClick={() => setSelectedServiceCategory("all")}
+                            className="text-xs font-semibold text-primary hover:underline h-7 px-2 cursor-pointer"
                           >
-                            <Calendar className="size-3.5" />
-                            <span>Book Consultation</span>
+                            &larr; View All Categories
                           </Button>
-                        </CardFooter>
-                      </Card>
-                    );
-                  })}
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                        {filteredServices.map((s) => (
+                          <CompactServiceCard
+                            key={s.id}
+                            service={s}
+                            business={associatedBusiness}
+                            onBook={handleBookService}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </TabsContent>
 
-            {/* ================= PRODUCTS TAB (IF ANY) ================= */}
+            {/* ================= PRODUCTS TAB (IF ANY) (CATEGORY-WISE) ================= */}
             {products.length > 0 && (
-              <TabsContent value="products" className="mt-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-                  {products.map((p) => {
-                    const price = p.discounted_price || p.regular_price || p.price;
+              <TabsContent value="products" className="mt-6 space-y-6">
+                <div className="space-y-6">
+                  {/* Category Pills & Search Controls */}
+                  <div className="bg-card border rounded-2xl p-3 sm:p-4 shadow-2xs space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5">
+                      {/* Search Input */}
+                      <div className="lg:col-span-5 relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                        <Input
+                          type="text"
+                          placeholder="Search by title, SKU, or description..."
+                          value={productSearch}
+                          onChange={(e) => setProductSearch(e.target.value)}
+                          className="pl-9 pr-8 h-10 text-xs bg-muted/30 rounded-xl"
+                        />
+                        {productSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setProductSearch("")}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        )}
+                      </div>
 
-                    return (
-                      <Card
-                        key={p.id}
-                        className="rounded-2xl border shadow-xs hover:shadow-md transition-all flex flex-col justify-between overflow-hidden group"
-                      >
-                        <div>
-                          <div className="relative aspect-square w-full bg-muted overflow-hidden">
-                            <Image
-                              src={p.default_image_url || "https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=500&auto=format&fit=crop&q=60"}
-                              alt={p.name}
-                              fill
-                              sizes="300px"
-                              className="object-cover group-hover:scale-105 transition-transform"
-                            />
-                          </div>
+                      {/* Category Dropdown */}
+                      <div className="lg:col-span-3">
+                        <select
+                          value={selectedProductCategory}
+                          onChange={(e) => setSelectedProductCategory(e.target.value)}
+                          className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer"
+                        >
+                          <option value="all">All Categories ({products.length})</option>
+                          {productCategories.map((c) => (
+                            <option key={c.name} value={c.name}>
+                              {c.name} ({c.count})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                          <CardHeader className="p-3.5 pb-2">
-                            <CardTitle className="text-sm font-bold text-foreground group-hover:text-primary transition-colors line-clamp-2">
-                              {p.name}
-                            </CardTitle>
-                          </CardHeader>
-                        </div>
+                      {/* By Brand Dropdown */}
+                      <div className="lg:col-span-2">
+                        <select
+                          value={selectedProductBrand}
+                          onChange={(e) => setSelectedProductBrand(e.target.value)}
+                          className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer"
+                        >
+                          <option value="all">All Brands ({productBrands.length})</option>
+                          {productBrands.map((b) => (
+                            <option key={b.name} value={b.name}>
+                              {b.name} ({b.count})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                        <CardFooter className="p-3.5 pt-2 border-t flex items-center justify-between gap-2 bg-muted/10">
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-sm font-black text-foreground">
-                              {price ? `₹${price}` : "Enquire"}
-                            </span>
-                            {(p.unit || p.unit_of_measurement) && (
-                              <span className="text-xs font-bold text-muted-foreground">
-                                / {p.unit || p.unit_of_measurement}
+                      {/* Sort By Dropdown */}
+                      <div className="lg:col-span-2">
+                        <select
+                          value={productSortBy}
+                          onChange={(e) => setProductSortBy(e.target.value)}
+                          className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer"
+                        >
+                          <option value="featured">Sort: Featured</option>
+                          <option value="price_asc">Price: Low to High</option>
+                          <option value="price_desc">Price: High to Low</option>
+                          <option value="name_asc">Name: A to Z</option>
+                          <option value="name_desc">Name: Z to A</option>
+                          <option value="newest">Newest First</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Result count & reset */}
+                    <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/40">
+                      <span className="font-medium">
+                        Showing <strong className="text-foreground">{filteredProducts.length}</strong> of {products.length} products
+                      </span>
+                      {(selectedProductCategory !== "all" || selectedProductBrand !== "all" || productSearch || productSortBy !== "featured") && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedProductCategory("all");
+                            setSelectedProductBrand("all");
+                            setProductSearch("");
+                            setProductSortBy("featured");
+                          }}
+                          className="h-6 text-xs font-semibold text-primary hover:underline px-1.5 cursor-pointer"
+                        >
+                          Reset Filters
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Category Filter Pills */}
+                    {productCategories.length > 1 && (
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 no-scrollbar scroll-smooth">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProductCategory("all")}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                            selectedProductCategory === "all"
+                              ? "bg-primary text-primary-foreground shadow-xs"
+                              : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60"
+                          }`}
+                        >
+                          <span>All Products</span>
+                          <span
+                            className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                              selectedProductCategory === "all"
+                                ? "bg-primary-foreground/20 text-primary-foreground"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {products.length}
+                          </span>
+                        </button>
+                        {productCategories.map((c) => {
+                          const isSelected = selectedProductCategory.toLowerCase() === c.name.toLowerCase();
+                          return (
+                            <button
+                              key={c.name}
+                              type="button"
+                              onClick={() => setSelectedProductCategory(c.name)}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                                isSelected
+                                  ? "bg-primary text-primary-foreground shadow-xs"
+                                  : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60"
+                              }`}
+                            >
+                              <span>{c.name}</span>
+                              <span
+                                className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                                  isSelected
+                                    ? "bg-primary-foreground/20 text-primary-foreground"
+                                    : "bg-muted text-muted-foreground"
+                                }`}
+                              >
+                                {c.count}
                               </span>
-                            )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Product Listings: Category-Wise Grouping vs Filtered Grid */}
+                  {filteredProducts.length === 0 ? (
+                    <div className="p-12 text-center rounded-2xl border bg-card space-y-3">
+                      <Package className="size-10 mx-auto text-muted-foreground opacity-40" />
+                      <h3 className="text-sm font-bold text-foreground">No Products Found</h3>
+                      <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                        {productSearch
+                          ? `No products match your search "${productSearch}".`
+                          : `No products listed in "${selectedProductCategory}".`}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedProductCategory("all");
+                          setProductSearch("");
+                        }}
+                        className="text-xs font-semibold cursor-pointer"
+                      >
+                        Show All Products
+                      </Button>
+                    </div>
+                  ) : selectedProductCategory === "all" && !productSearch.trim() ? (
+                    /* Category-Wise Grouped Sections */
+                    <div className="space-y-8">
+                      {groupedProducts.map(({ categoryName, items }) => (
+                        <div key={categoryName} className="space-y-3.5">
+                          <div className="flex items-center justify-between border-b pb-2.5">
+                            <div className="flex items-center gap-2.5">
+                              <span className="w-1.5 h-5 rounded-full bg-primary" />
+                              <h3 className="text-base font-bold text-foreground tracking-tight">{categoryName}</h3>
+                              <Badge variant="secondary" className="text-xs font-bold px-2 py-0.5">
+                                {items.length} {items.length === 1 ? "Item" : "Items"}
+                              </Badge>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedProductCategory(categoryName)}
+                              className="text-xs font-bold text-primary hover:underline h-7 px-2 cursor-pointer"
+                            >
+                              View Only {categoryName} &rarr;
+                            </Button>
                           </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                            {items.map((p) => (
+                              <CompactProductCard
+                                key={p.id}
+                                product={p}
+                                business={associatedBusiness}
+                                onAddToCart={() => handleOrderProduct(p)}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    /* Filtered Grid View */
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                          <span className="w-1.5 h-4 rounded-full bg-primary" />
+                          <span>
+                            {selectedProductCategory !== "all" ? selectedProductCategory : "Search Results"}
+                          </span>
+                          <Badge variant="outline" className="text-xs font-semibold">
+                            {filteredProducts.length}
+                          </Badge>
+                        </h3>
+                        {selectedProductCategory !== "all" && (
                           <Button
                             type="button"
+                            variant="ghost"
                             size="sm"
-                            onClick={() => handleOrderProduct(p)}
-                            className="text-xs font-bold px-3 h-8 gap-1 cursor-pointer"
+                            onClick={() => setSelectedProductCategory("all")}
+                            className="text-xs font-semibold text-primary hover:underline h-7 px-2 cursor-pointer"
                           >
-                            <Package className="size-3.5" />
-                            <span>Order</span>
+                            &larr; View All Categories
                           </Button>
-                        </CardFooter>
-                      </Card>
-                    );
-                  })}
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                        {filteredProducts.map((p) => (
+                          <CompactProductCard
+                            key={p.id}
+                            product={p}
+                            business={associatedBusiness}
+                            onAddToCart={() => handleOrderProduct(p)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
             )}
@@ -961,26 +1627,43 @@ export function PublicProfessionalProfileClient({
                   </div>
 
                   {/* Reviews list */}
-                  {reviews.length === 0 ? (
+                  {allReviews.length === 0 ? (
                     <div className="p-6 text-center text-xs text-muted-foreground">
                       No client reviews yet. Be the first to share your experience with {professional.name}!
                     </div>
                   ) : (
                     <div className="divide-y divide-border/60">
-                      {reviews.map((rev) => (
-                        <div key={rev.id} className="py-3.5 space-y-1 text-xs">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-foreground">{rev.user_name || rev.title || "Client"}</span>
-                            <div className="flex items-center gap-0.5 text-amber-500">
-                              {[...Array(Number(rev.rating || 5))].map((_, i) => (
-                                <Star key={i} className="size-3 fill-amber-500 text-amber-500" />
-                              ))}
+                      {allReviews.map((rev) => (
+                        <div key={rev.id} className="py-4 space-y-2 text-xs">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-foreground text-sm">
+                                {rev.user_name || rev.reviewer_name || "Client"}
+                              </span>
+                              {(rev.is_verified_user ?? true) && (
+                                <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 font-semibold gap-1 py-0">
+                                  <ShieldCheck className="size-3 text-emerald-600" />
+                                  <span>{rev.reviewer_role || "Verified Client"}</span>
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-0.5 text-amber-500">
+                                {[...Array(Number(rev.rating || 5))].map((_, i) => (
+                                  <Star key={i} className="size-3.5 fill-amber-500 text-amber-500" />
+                                ))}
+                              </div>
+                              <span className="text-[11px] text-muted-foreground/70 font-medium">
+                                {rev.created_at ? new Date(rev.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" }) : "Recent"}
+                              </span>
                             </div>
                           </div>
-                          <p className="text-muted-foreground leading-relaxed">{rev.review || rev.comment}</p>
-                          <span className="text-[10px] text-muted-foreground/70 block">
-                            {rev.created_at ? new Date(rev.created_at).toLocaleDateString() : "Recent"}
-                          </span>
+                          {rev.title && (
+                            <h4 className="font-bold text-xs text-foreground">{rev.title}</h4>
+                          )}
+                          <p className="text-muted-foreground leading-relaxed text-xs">
+                            {rev.review || rev.comment}
+                          </p>
                         </div>
                       ))}
                     </div>
@@ -1098,7 +1781,13 @@ export function PublicProfessionalProfileClient({
           type: "teacher",
           subtitle: fullAddress,
         }}
+        onReviewSubmitted={(newRev) => {
+          setSubmittedReviews((prev) => [newRev, ...prev]);
+        }}
       />
+
+      {/* Cart Conflict Prompt Dialog */}
+      <CartConflictDialog />
     </div>
   );
 }

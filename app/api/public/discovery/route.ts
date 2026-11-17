@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/db";
+import { getFrontendConfig } from "@/lib/config/frontend-config";
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,12 +17,46 @@ export async function GET(req: NextRequest) {
     const limit = Math.max(1, Math.min(50, Number(searchParams.get("limit")) || 20));
     const offset = (page - 1) * limit;
 
+    // Resolve Business and Institution Scoping
+    const config = getFrontendConfig();
+    const rawBizParam = searchParams.get("businessId") || searchParams.get("business_id");
+    const requestedBizId = rawBizParam && /^\d+$/.test(rawBizParam) ? Number(rawBizParam) : null;
+
+    let scopedBusinessId: number | null = null;
+    if (requestedBizId) {
+      scopedBusinessId = requestedBizId;
+    } else if (config.isValid && (config.mode === "business" || config.mode === "institution") && config.businessId) {
+      scopedBusinessId = config.businessId;
+    } else {
+      const envBiz = process.env.BUSINESS_ID || process.env.NEXT_PUBLIC_BUSINESS_ID || process.env.INSTITUTION_ID || process.env.NEXT_PUBLIC_INSTITUTION_ID;
+      if (envBiz && /^\d+$/.test(envBiz.trim())) {
+        scopedBusinessId = Number(envBiz.trim());
+      }
+    }
+
+    let scopedInstitutionId: number | null = null;
+    if (scopedBusinessId) {
+      try {
+        const ipLookup = await db.query(
+          "SELECT id FROM institution_profiles WHERE business_id = $1 OR id = $1 LIMIT 1",
+          [scopedBusinessId]
+        );
+        if (ipLookup.rows.length > 0) {
+          scopedInstitutionId = ipLookup.rows[0].id;
+        }
+      } catch (err) {
+        console.warn("Could not resolve institution for business:", err);
+      }
+    }
+
     const likeQ = q ? `%${q}%` : null;
 
     let businesses: any[] = [];
     let professionals: any[] = [];
     let products: any[] = [];
     let services: any[] = [];
+    let courses: any[] = [];
+    let jobs: any[] = [];
 
     // Resolve Category Family & Linked Businesses if categoryId is provided
     let categoryIds: number[] = categoryId ? [categoryId] : [];
@@ -68,6 +103,12 @@ export async function GET(req: NextRequest) {
     if (type === "all" || type === "business") {
       const bConditions: string[] = ["COALESCE(bp.is_active, true) = true"];
       const bParams: any[] = [];
+
+      // Business mode scope: only show the business that matches business_id
+      if (scopedBusinessId) {
+        bParams.push(scopedBusinessId);
+        bConditions.push(`bp.id = $${bParams.length}`);
+      }
 
       if (likeQ) {
         bParams.push(likeQ);
@@ -151,9 +192,19 @@ export async function GET(req: NextRequest) {
       const pConditions: string[] = ["COALESCE(pp.is_active, true) = true"];
       const pParams: any[] = [];
 
+      // Business mode scope: only show professionals associated with this business/institution
+      if (scopedBusinessId) {
+        if (scopedInstitutionId) {
+          pParams.push(scopedBusinessId, scopedInstitutionId);
+          pConditions.push(`(pp.business_profile_id = $${pParams.length - 1} OR pp.institution_profile_id = $${pParams.length})`);
+        } else {
+          pParams.push(scopedBusinessId);
+          pConditions.push(`pp.business_profile_id = $${pParams.length}`);
+        }
+      }
+
       if (likeQ) {
         pParams.push(likeQ);
-        bParamsLength:
         pConditions.push(`(
           pp.name ILIKE $${pParams.length} 
           OR pp.profession_type ILIKE $${pParams.length} 
@@ -242,6 +293,32 @@ export async function GET(req: NextRequest) {
       const prodConditions: string[] = ["COALESCE(mp.is_active, true) = true"];
       const prodParams: any[] = [];
 
+      // Business mode scope: only show products added by / assigned to this business
+      if (scopedBusinessId) {
+        if (scopedInstitutionId) {
+          prodParams.push(scopedBusinessId, scopedInstitutionId);
+          prodConditions.push(`(
+            mp.business_profile_id = $${prodParams.length - 1}
+            OR mp.institution_id = $${prodParams.length}
+            OR mp.id IN (
+              SELECT bprod.master_product_id FROM business_products bprod
+              WHERE (bprod.business_profile_id = $${prodParams.length - 1} OR bprod.business_id = $${prodParams.length - 1})
+                AND COALESCE(bprod.is_available, true) = true
+            )
+          )`);
+        } else {
+          prodParams.push(scopedBusinessId);
+          prodConditions.push(`(
+            mp.business_profile_id = $${prodParams.length}
+            OR mp.id IN (
+              SELECT bprod.master_product_id FROM business_products bprod
+              WHERE (bprod.business_profile_id = $${prodParams.length} OR bprod.business_id = $${prodParams.length})
+                AND COALESCE(bprod.is_available, true) = true
+            )
+          )`);
+        }
+      }
+
       if (likeQ) {
         prodParams.push(likeQ);
         prodConditions.push(`(
@@ -265,6 +342,10 @@ export async function GET(req: NextRequest) {
           prodConditions.push(`(mp.category_id = ANY($${prodParams.length}::int[]) OR mp.subcategory_id = ANY($${prodParams.length}::int[]))`);
         }
       }
+
+      const sellerScopeClause = scopedBusinessId
+        ? `AND (bp.id = ${scopedBusinessId})`
+        : "";
 
       const prodQuery = `
         SELECT
@@ -292,6 +373,7 @@ export async function GET(req: NextRequest) {
             FROM business_products bprod
             JOIN business_profiles bp ON (bp.id = bprod.business_profile_id OR bp.id = bprod.business_id)
             WHERE bprod.master_product_id = mp.id AND COALESCE(bprod.is_available, true) = true
+            ${sellerScopeClause}
             ${city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all" ? `AND bp.city ILIKE '%${city.replace(/'/g, "''")}%'` : ""}
             LIMIT 1
           ) AS seller_info
@@ -310,6 +392,44 @@ export async function GET(req: NextRequest) {
     if (type === "all" || type === "service") {
       const sConditions: string[] = ["COALESCE(ms.is_active, true) = true"];
       const sParams: any[] = [];
+
+      // Business mode scope: only show services added by / assigned to this business
+      if (scopedBusinessId) {
+        if (scopedInstitutionId) {
+          sParams.push(scopedBusinessId, scopedInstitutionId);
+          sConditions.push(`(
+            ms.business_profile_id = $${sParams.length - 1}
+            OR ms.institution_id = $${sParams.length}
+            OR ms.id IN (
+              SELECT bserv.master_service_id FROM business_services bserv
+              WHERE (bserv.business_id = $${sParams.length - 1} OR bserv.business_id = $${sParams.length})
+                AND COALESCE(bserv.is_active, true) = true
+            )
+            OR ms.id IN (
+              SELECT ps.master_service_id FROM professional_services ps
+              JOIN professional_profiles pp ON pp.id = ps.professional_id
+              WHERE (pp.business_profile_id = $${sParams.length - 1} OR pp.institution_profile_id = $${sParams.length})
+                AND COALESCE(ps.is_active, true) = true
+            )
+          )`);
+        } else {
+          sParams.push(scopedBusinessId);
+          sConditions.push(`(
+            ms.business_profile_id = $${sParams.length}
+            OR ms.id IN (
+              SELECT bserv.master_service_id FROM business_services bserv
+              WHERE bserv.business_id = $${sParams.length}
+                AND COALESCE(bserv.is_active, true) = true
+            )
+            OR ms.id IN (
+              SELECT ps.master_service_id FROM professional_services ps
+              JOIN professional_profiles pp ON pp.id = ps.professional_id
+              WHERE pp.business_profile_id = $${sParams.length}
+                AND COALESCE(ps.is_active, true) = true
+            )
+          )`);
+        }
+      }
 
       if (likeQ) {
         sParams.push(likeQ);
@@ -333,6 +453,10 @@ export async function GET(req: NextRequest) {
           sConditions.push(`(ms.category_id = ANY($${sParams.length}::int[]) OR ms.subcategory_id = ANY($${sParams.length}::int[]))`);
         }
       }
+
+      const providerScopeClause = scopedBusinessId
+        ? `AND (pp.business_profile_id = ${scopedBusinessId} ${scopedInstitutionId ? `OR pp.institution_profile_id = ${scopedInstitutionId}` : ""})`
+        : "";
 
       const sQuery = `
         SELECT
@@ -360,6 +484,7 @@ export async function GET(req: NextRequest) {
             FROM professional_services ps
             JOIN professional_profiles pp ON pp.id = ps.professional_id
             WHERE ps.master_service_id = ms.id AND COALESCE(ps.is_active, true) = true
+            ${providerScopeClause}
             ${city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all" ? `AND pp.city ILIKE '%${city.replace(/'/g, "''")}%'` : ""}
             LIMIT 1
           ) AS provider_info
@@ -374,7 +499,261 @@ export async function GET(req: NextRequest) {
       services = sRes.rows.map((r) => ({ ...r, resultType: "service" }));
     }
 
-    const total = businesses.length + professionals.length + products.length + services.length;
+    // 5. Search Courses
+    if (type === "all" || type === "course" || type === "courses") {
+      if (scopedBusinessId) {
+        // Business mode scope: only show courses offered by this business / institution
+        if (scopedInstitutionId) {
+          try {
+            const cParams: any[] = [scopedInstitutionId];
+            let cWhere = "iprog.institution_id = $1 AND COALESCE(iprog.is_active, true) = true AND COALESCE(iprog.is_deleted, false) = false";
+            if (likeQ) {
+              cParams.push(likeQ);
+              cWhere += ` AND (iprog.title ILIKE $${cParams.length} OR COALESCE(iprog.about, '') ILIKE $${cParams.length})`;
+            }
+
+            const cQuery = `
+              SELECT
+                iprog.id,
+                iprog.title AS name,
+                iprog.slug,
+                NULL AS code,
+                iprog.about AS description,
+                iprog.duration_value,
+                iprog.duration_unit,
+                NULL AS thumbnail_url,
+                NULL AS icon_url,
+                COALESCE(u.name, b.name, 'Institution') AS university_name,
+                'institution' AS authority_type,
+                COALESCE(pt.name, 'Program') AS category_name,
+                COALESCE(iprog.seats_available, 60) AS seats_available
+              FROM institution_programs iprog
+              LEFT JOIN program_types pt ON pt.id = iprog.program_type_id
+              LEFT JOIN universities u ON u.id = iprog.university_id
+              LEFT JOIN boards b ON b.id = iprog.board_id
+              WHERE ${cWhere}
+              ORDER BY iprog.id DESC
+              LIMIT $${cParams.length + 1} OFFSET $${cParams.length + 2}
+            `;
+            const cRes = await db.query(cQuery, [...cParams, limit, offset]);
+            courses = cRes.rows.map((r) => ({ ...r, resultType: "course" }));
+          } catch (cErr) {
+            console.warn("Could not query institution courses:", cErr);
+            courses = [];
+          }
+        } else {
+          courses = [];
+        }
+      } else {
+        // Platform Admin / Global discovery
+        const cConditions: string[] = ["COALESCE(mc.is_active, true) = true", "COALESCE(mc.is_deleted, false) = false"];
+        const cParams: any[] = [];
+
+        if (likeQ) {
+          cParams.push(likeQ);
+          cConditions.push(`(
+            mc.name ILIKE $${cParams.length}
+            OR COALESCE(mc.description, '') ILIKE $${cParams.length}
+            OR COALESCE(mc.code, '') ILIKE $${cParams.length}
+            OR COALESCE(mc.university_name, '') ILIKE $${cParams.length}
+          )`);
+        }
+
+        if (categoryIds.length > 0) {
+          cParams.push(categoryIds);
+          cConditions.push(`(mc.category_id = ANY($${cParams.length}::int[]) OR mc.category_id IN (SELECT id FROM categories WHERE parent_id = ANY($${cParams.length}::int[])))`);
+        }
+
+        const cQuery = `
+          SELECT
+            mc.id,
+            mc.name,
+            mc.slug,
+            mc.code,
+            mc.description,
+            mc.duration_value,
+            mc.duration_unit,
+            mc.thumbnail_url,
+            mc.icon_url,
+            mc.university_name,
+            mc.authority_type,
+            c.name AS category_name,
+            COALESCE(mc.seats_available, 60) AS seats_available
+          FROM master_courses mc
+          LEFT JOIN categories c ON c.id = mc.category_id
+          WHERE ${cConditions.join(" AND ")}
+          ORDER BY mc.id DESC
+          LIMIT $${cParams.length + 1} OFFSET $${cParams.length + 2}
+        `;
+
+        const cRes = await db.query(cQuery, [...cParams, limit, offset]);
+        courses = cRes.rows.map((r) => ({ ...r, resultType: "course" }));
+      }
+    }
+
+    // 6. Search Jobs
+    if (type === "all" || type === "job" || type === "jobs") {
+      if (scopedBusinessId) {
+        // Business mode scope: only show jobs posted by this business / institution
+        if (scopedInstitutionId) {
+          try {
+            const jParams: any[] = [scopedInstitutionId];
+            let jWhere = "sjp.institution_id = $1 AND LOWER(COALESCE(sjp.status, 'active')) IN ('active', 'open')";
+            if (likeQ) {
+              jParams.push(likeQ);
+              jWhere += ` AND (sjp.title ILIKE $${jParams.length} OR COALESCE(sjp.description, '') ILIKE $${jParams.length})`;
+            }
+
+            const jQuery = `
+              SELECT
+                sjp.id,
+                sjp.title AS name,
+                sjp.title,
+                sjp.slug,
+                sjp.department,
+                sjp.employment_type,
+                sjp.experience_level,
+                sjp.work_mode,
+                sjp.location,
+                sjp.salary_range,
+                sjp.openings_count,
+                sjp.description,
+                sjp.status,
+                sjp.created_at,
+                ip.name AS company_name,
+                ip.logo_url AS company_logo
+              FROM staff_job_postings sjp
+              LEFT JOIN institution_profiles ip ON ip.id = sjp.institution_id
+              WHERE ${jWhere}
+              ORDER BY sjp.id DESC
+              LIMIT $${jParams.length + 1} OFFSET $${jParams.length + 2}
+            `;
+            const jRes = await db.query(jQuery, [...jParams, limit, offset]);
+            jobs = jRes.rows.map((r) => ({ ...r, resultType: "job" }));
+          } catch (jErr) {
+            console.warn("Could not query institution jobs:", jErr);
+            jobs = [];
+          }
+        } else {
+          jobs = [];
+        }
+      } else {
+        // Platform Admin / Global discovery
+        let masterJobsRows: any[] = [];
+        try {
+          const mjConditions: string[] = ["COALESCE(mj.is_active, true) = true", "COALESCE(mj.is_deleted, false) = false"];
+          const mjParams: any[] = [];
+          if (likeQ) {
+            mjParams.push(likeQ);
+            mjConditions.push(`(
+              mj.title ILIKE $${mjParams.length}
+              OR COALESCE(mj.department, '') ILIKE $${mjParams.length}
+              OR COALESCE(mj.role_title, '') ILIKE $${mjParams.length}
+              OR COALESCE(mj.location, '') ILIKE $${mjParams.length}
+              OR COALESCE(mj.description, '') ILIKE $${mjParams.length}
+            )`);
+          }
+          if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
+            mjParams.push(`%${city}%`);
+            mjConditions.push(`mj.location ILIKE $${mjParams.length}`);
+          }
+          if (categoryIds.length > 0) {
+            mjParams.push(categoryIds);
+            mjConditions.push(`(
+              mj.business_category_id = ANY($${mjParams.length}::int[])
+              OR mj.professional_category_id = ANY($${mjParams.length}::int[])
+            )`);
+          }
+          const mjRes = await db.query(`
+            SELECT
+              mj.id,
+              mj.title AS name,
+              mj.title,
+              mj.slug,
+              mj.department,
+              mj.employment_type,
+              mj.experience_level,
+              mj.work_mode,
+              mj.location,
+              mj.salary_range,
+              mj.openings_count,
+              mj.description,
+              'Active' AS status,
+              mj.created_at,
+              bc.name AS company_name,
+              NULL AS company_logo
+            FROM master_jobs mj
+            LEFT JOIN categories bc ON bc.id = mj.business_category_id
+            WHERE ${mjConditions.join(" AND ")}
+            ORDER BY mj.id DESC
+            LIMIT 20
+          `, mjParams);
+          masterJobsRows = mjRes.rows;
+        } catch (mjErr) {
+          console.warn("Could not query master_jobs:", mjErr);
+        }
+
+        const jConditions: string[] = ["LOWER(COALESCE(sjp.status, 'active')) IN ('active', 'open')"];
+        const jParams: any[] = [];
+
+        if (likeQ) {
+          jParams.push(likeQ);
+          jConditions.push(`(
+            sjp.title ILIKE $${jParams.length}
+            OR COALESCE(sjp.description, '') ILIKE $${jParams.length}
+            OR COALESCE(sjp.department, '') ILIKE $${jParams.length}
+            OR COALESCE(sjp.location, '') ILIKE $${jParams.length}
+          )`);
+        }
+
+        if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
+          jParams.push(`%${city}%`);
+          jConditions.push(`sjp.location ILIKE $${jParams.length}`);
+        }
+
+        if (categoryIds.length > 0) {
+          jParams.push(categoryIds);
+          jConditions.push(`EXISTS (
+            SELECT 1 FROM categories c WHERE c.id = ANY($${jParams.length}::int[])
+            AND (
+              sjp.department ILIKE '%' || c.name || '%'
+              OR sjp.title ILIKE '%' || c.name || '%'
+              OR c.name ILIKE '%' || COALESCE(sjp.department, '') || '%'
+            )
+          )`);
+        }
+
+        const jQuery = `
+          SELECT
+            sjp.id,
+            sjp.title AS name,
+            sjp.title,
+            sjp.slug,
+            sjp.department,
+            sjp.employment_type,
+            sjp.experience_level,
+            sjp.work_mode,
+            sjp.location,
+            sjp.salary_range,
+            sjp.openings_count,
+            sjp.description,
+            sjp.status,
+            sjp.created_at,
+            ip.name AS company_name,
+            ip.logo_url AS company_logo
+          FROM staff_job_postings sjp
+          LEFT JOIN institution_profiles ip ON ip.id = sjp.institution_id
+          WHERE ${jConditions.join(" AND ")}
+          ORDER BY sjp.id DESC
+          LIMIT $${jParams.length + 1} OFFSET $${jParams.length + 2}
+        `;
+
+        const jRes = await db.query(jQuery, [...jParams, limit, offset]);
+        jobs = [...masterJobsRows, ...jRes.rows].map((r) => ({ ...r, resultType: "job" }));
+      }
+    }
+
+    const total = businesses.length + professionals.length + products.length + services.length + courses.length + jobs.length;
 
     return NextResponse.json({
       success: true,
@@ -383,12 +762,16 @@ export async function GET(req: NextRequest) {
         professionals,
         products,
         services,
+        courses,
+        jobs,
         meta: {
           total,
           page,
           limit,
           query: q,
           type,
+          businessId: scopedBusinessId,
+          institutionId: scopedInstitutionId,
           filters: { country, state, city, locality, postalCode, categoryId },
         },
       },
@@ -401,4 +784,3 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-

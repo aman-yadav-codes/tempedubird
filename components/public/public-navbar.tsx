@@ -36,6 +36,8 @@ import {
   Sparkles,
   Image as ImageIcon,
   PhoneCall,
+  Briefcase,
+  Layers,
   Navigation,
   Loader2,
   Store,
@@ -73,17 +75,13 @@ type PublicNavbarProps = {
 
 const CATEGORY_ITEMS: { key: CategoryKey; label: string; href: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "courses", label: "Course", href: "/courses", icon: BookOpen },
-  { key: "institutes", label: "Institute", href: "/institutes", icon: Building2 },
-  { key: "practice", label: "Practice", href: "/practice", icon: CheckSquare },
-  { key: "notes", label: "Notes", href: "/notes", icon: BookMarked },
-  { key: "teachers", label: "Professionals", href: "/explore?type=professional", icon: UserCheck },
-  { key: "exams", label: "Exams", href: "/exams", icon: Award },
-  { key: "libraries", label: "Library", href: "/libraries", icon: Library },
-  { key: "hostels", label: "Hostel", href: "/hostels", icon: Building2 },
+  { key: "teachers", label: "Staff", href: "/teachers", icon: UserCheck },
   { key: "products", label: "Product", href: "/products", icon: ShoppingCart },
+  { key: "services", label: "Services", href: "/explore?type=service", icon: Layers },
   { key: "blogs", label: "Blogs", href: "/blogs", icon: FileText },
   { key: "gallery", label: "Gallery", href: "/gallery", icon: ImageIcon },
   { key: "contact", label: "Contact", href: "/contact", icon: PhoneCall },
+  { key: "jobs", label: "Jobs", href: "/jobs", icon: Briefcase },
 ];
 
 function getInitials(name?: string | null) {
@@ -121,9 +119,14 @@ export function PublicNavbar({
     user?.is_super_admin
   );
 
-  const defaultEnvInstId = process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
-    ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
-    : null;
+  const defaultEnvInstId =
+    process.env.NEXT_PUBLIC_BUSINESS_ID
+      ? Number(process.env.NEXT_PUBLIC_BUSINESS_ID)
+      : process.env.NEXT_PUBLIC_INSTITUTION_ID
+      ? Number(process.env.NEXT_PUBLIC_INSTITUTION_ID)
+      : process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
+      ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
+      : null;
 
   useEffect(() => {
     setMounted(true);
@@ -159,27 +162,26 @@ export function PublicNavbar({
     institutionInfo?.name ||
     (brand?.isInstitution ? brand.name : "Institution");
 
-  // Platform marketplace: strictly the Marketplace modules (without Gallery, Contact, Library or Hostel)
+  // Platform marketplace: filtered dynamically by isCategoryVisible
   const PLATFORM_MARKETPLACE_KEYS: CategoryKey[] = [
     "courses",
-    "institutes",
-    "practice",
-    "notes",
     "teachers",
-    "exams",
     "products",
+    "services",
     "blogs",
+    "gallery",
+    "contact",
+    "jobs",
   ];
   const platformCategoryItems = CATEGORY_ITEMS.filter((item) =>
-    PLATFORM_MARKETPLACE_KEYS.includes(item.key)
+    PLATFORM_MARKETPLACE_KEYS.includes(item.key) &&
+    (!mounted || isCategoryVisible(item.key))
   );
 
-  // Institution edition menu: WITHOUT "institutes", "contact", "hostels", "libraries" as standalone items
-  // (Hostel and Library appear under About Us dropdown when added by the institute)
+  // Institution edition menu: items filtered dynamically by isCategoryVisible
   const institutionCategoryItems = CATEGORY_ITEMS.filter(
     (item) =>
       item.key !== "institutes" &&
-      item.key !== "contact" &&
       item.key !== "hostels" &&
       item.key !== "libraries" &&
       (!mounted || isCategoryVisible(item.key))
@@ -195,7 +197,7 @@ export function PublicNavbar({
   } = useUserLocation();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState("Notes");
+  const [activeTab, setActiveTab] = useState("Course");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authDialogTab, setAuthDialogTab] = useState<"signin" | "signup">("signin");
@@ -481,19 +483,6 @@ export function PublicNavbar({
           {/* Logged In User Profile Pill & Notifications vs Sign In Button */}
           {isAuthenticated && user ? (
             <>
-              {/* Store Front Quick Button */}
-              {!isPlatformAdmin && (
-                <Link
-                  href={activeInstitutionId ? `/storefront?institutionId=${activeInstitutionId}` : "/storefront"}
-                  target="_blank"
-                  className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-rose-200/80 bg-rose-50/60 text-[#800000] hover:bg-rose-100 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
-                  title="Open Live Public Store Front"
-                >
-                  <Store className="h-3.5 w-3.5 text-rose-600" />
-                  <span>Store Front</span>
-                  <ExternalLink className="h-3 w-3 opacity-60" />
-                </Link>
-              )}
 
               {/* Notification Bell */}
               <Link

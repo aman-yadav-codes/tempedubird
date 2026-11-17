@@ -310,10 +310,24 @@ export async function resolvePageMetadata(
     }
 
     if (!record) {
-      return fallback || {
-        title: "EduBird - Unified Education Platform",
-        description: "Explore verified courses, colleges, schools, coaching institutes, and automated campus ERP solutions.",
-      };
+      record = {
+        meta_title: fallback?.title?.toString() || "EduBird",
+        meta_description: fallback?.description?.toString() || "",
+        favicon_url: null,
+      } as any;
+    }
+
+    // Check platform_company_info for configured favicon_url from workspace/company
+    if (institutionId) {
+      try {
+        const pciFav = await db.query(
+          `SELECT favicon_url FROM platform_company_info WHERE (business_id = $1 OR institution_id = $1) AND favicon_url IS NOT NULL AND favicon_url <> '' LIMIT 1`,
+          [institutionId]
+        );
+        if (pciFav.rows[0]?.favicon_url) {
+          record.favicon_url = pciFav.rows[0].favicon_url;
+        }
+      } catch {}
     }
 
     const title = record.meta_title || fallback?.title?.toString() || "EduBird";

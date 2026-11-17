@@ -36,6 +36,7 @@ import {
   Upload,
   Loader2,
   Camera,
+  Scan,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
@@ -80,6 +81,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { InheritMasterProductsDialog } from "@/components/admin/catalog/inherit-master-products-dialog";
+import { ProductFormDialog, COMMON_UOM_OPTIONS } from "@/components/admin/catalog/product-form-dialog";
+import { UpdateStockBillDialog } from "@/components/admin/catalog/update-stock-bill-dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export type ProductCategory = {
   id: number;
@@ -89,6 +94,8 @@ export type ProductCategory = {
   icon?: string | null;
   is_active: boolean;
   products_count?: number;
+  parent_id?: number | null;
+  business_category_id?: number | null;
 };
 
 export type ProgramOption = {
@@ -121,6 +128,12 @@ export type ProductRecord = {
   sku?: string | null;
   badge_text?: string | null;
   features?: string[] | null;
+  brand?: string | null;
+  model?: string | null;
+  subcategory_id?: number | null;
+  main_category_id?: number | null;
+  attributes?: any;
+  variants?: any;
   status: "active" | "draft" | "archived";
   is_featured: boolean;
   created_at: string;
@@ -164,7 +177,10 @@ export default function AdminProductsPage() {
 
   const [search, setSearch] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState("all");
+  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState("all");
+  const [selectedBrand, setSelectedBrand] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [sortBy, setSortBy] = useState("newest");
 
   // Product Add / Edit Modal State
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -177,6 +193,11 @@ export default function AdminProductsPage() {
   const [newCatName, setNewCatName] = useState("");
   const [newCatDesc, setNewCatDesc] = useState("");
   const [savingCategory, setSavingCategory] = useState(false);
+
+  // Inherit Master Products Dialog State
+  const [inheritModalOpen, setInheritModalOpen] = useState(false);
+  // Update Stock from Bill Dialog State
+  const [billStockModalOpen, setBillStockModalOpen] = useState(false);
 
   // Form Fields for Product
   const [formTitle, setFormTitle] = useState("");
@@ -195,6 +216,93 @@ export default function AdminProductsPage() {
   const [formIsFeatured, setFormIsFeatured] = useState(false);
   const [formFeatures, setFormFeatures] = useState<string[]>([""]);
   const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Add Stock Dialog State
+  const [stockProduct, setStockProduct] = useState<ProductRecord | null>(null);
+  const [stockQuantityInput, setStockQuantityInput] = useState<string>("");
+  const [stockUnitInput, setStockUnitInput] = useState<string>("Piece");
+  const [stockMode, setStockMode] = useState<"add" | "set">("add");
+  const [savingStock, setSavingStock] = useState<boolean>(false);
+
+  const handleOpenAddStock = (prod: ProductRecord) => {
+    setStockProduct(prod);
+    setStockQuantityInput("");
+    setStockUnitInput(prod.unit || prod.unit_of_measurement || "Piece");
+    setStockMode("add");
+  };
+
+  const handleSaveStock = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!stockProduct) return;
+
+    const qty = parseInt(stockQuantityInput);
+    if (isNaN(qty) || qty < 0) {
+      toast.error("Please enter a valid positive number for stock quantity");
+      return;
+    }
+
+    setSavingStock(true);
+    try {
+      const payload: any = {
+        id: stockProduct.id,
+        unit: stockUnitInput.trim() || "Piece",
+      };
+
+      if (stockMode === "add") {
+        payload.add_stock = qty;
+      } else {
+        payload.stock_quantity = qty;
+      }
+
+      const res = await fetch("/api/admin/marketing/products", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.product) {
+        toast.success(`Stock updated! Total: ${data.product.stock_quantity} ${data.product.unit || stockUnitInput} for ${stockProduct.title}`);
+
+        // Update product in local state
+        setProducts((prev) =>
+          prev.map((p) =>
+            p.id === stockProduct.id
+              ? {
+                  ...p,
+                  stock_quantity: data.product.stock_quantity,
+                  unit: data.product.unit || stockUnitInput,
+                  unit_of_measurement: data.product.unit || stockUnitInput,
+                }
+              : p
+          )
+        );
+
+        // Update stats
+        setStats((prev) => {
+          const oldStock = Number(stockProduct.stock_quantity) || 0;
+          const newStock = Number(data.product.stock_quantity) || 0;
+          const price = Number(stockProduct.sale_price || stockProduct.price) || 0;
+          const wasOutOfStock = oldStock <= 0;
+          const isNowOutOfStock = newStock <= 0;
+
+          return {
+            ...prev,
+            outOfStock: prev.outOfStock + (isNowOutOfStock && !wasOutOfStock ? 1 : !isNowOutOfStock && wasOutOfStock ? -1 : 0),
+            totalInventoryValue: prev.totalInventoryValue + (newStock - oldStock) * price,
+          };
+        });
+
+        setStockProduct(null);
+      } else {
+        toast.error(data.error || "Failed to update stock");
+      }
+    } catch {
+      toast.error("Error updating product stock");
+    } finally {
+      setSavingStock(false);
+    }
+  };
 
   const isPlatformAdmin = Boolean(
     user?.role_codes?.some((r: string) => r.includes("super") || r.includes("platform")) ||
@@ -281,7 +389,10 @@ export default function AdminProductsPage() {
       const params = new URLSearchParams();
       if (search.trim()) params.set("search", search.trim());
       if (selectedCategoryId !== "all") params.set("category_id", selectedCategoryId);
+      if (selectedSubcategoryId !== "all") params.set("subcategory_id", selectedSubcategoryId);
+      if (selectedBrand !== "all") params.set("brand", selectedBrand);
       if (selectedStatus !== "all") params.set("status", selectedStatus);
+      if (sortBy !== "newest") params.set("sort_by", sortBy);
 
       const res = await fetch(`/api/admin/marketing/products?${params.toString()}`, { headers });
       const data = await res.json();
@@ -296,7 +407,7 @@ export default function AdminProductsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, selectedCategoryId, selectedStatus, accessToken]);
+  }, [search, selectedCategoryId, selectedSubcategoryId, selectedBrand, selectedStatus, sortBy, accessToken]);
 
   useEffect(() => {
     fetchCategories();
@@ -306,6 +417,29 @@ export default function AdminProductsPage() {
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
+
+  // Root categories vs subcategories
+  const rootCategories = useMemo(() => {
+    // If some have parent_id, separate them, otherwise show all
+    const roots = categories.filter((c) => !c.parent_id);
+    return roots.length > 0 ? roots : categories;
+  }, [categories]);
+
+  const availableSubcategories = useMemo(() => {
+    if (selectedCategoryId === "all") return [];
+    return categories.filter((c) => String(c.parent_id) === String(selectedCategoryId));
+  }, [categories, selectedCategoryId]);
+
+  const availableBrands = useMemo(() => {
+    const brandsSet = new Set<string>();
+    products.forEach((p) => {
+      const b = (p.brand || "").trim();
+      if (b && b.toLowerCase() !== "generic") {
+        brandsSet.add(b);
+      }
+    });
+    return Array.from(brandsSet).sort();
+  }, [products]);
 
   // Filtered Programs for dropdown
   const filteredProgramOptions = useMemo(() => {
@@ -321,57 +455,12 @@ export default function AdminProductsPage() {
   // Open Dialog for Create
   const handleOpenCreate = () => {
     setEditingProduct(null);
-    setFormTab("basic");
-    setFormTitle("");
-    setFormCategoryId(categories[0]?.id ? String(categories[0].id) : "");
-    setFormProgramIds([]);
-    setProgramSearch("");
-    setProgramDropdownOpen(false);
-    setFormPrice("");
-    setFormSalePrice("");
-    setFormStock("100");
-    setFormSku(`PRD-${Math.floor(1000 + Math.random() * 9000)}`);
-    setFormBadge("");
-    setFormImage(SAMPLE_IMAGES[0].url);
-    setFormDescription("");
-    setFormStatus("active");
-    setFormIsFeatured(false);
-    setFormFeatures([""]);
     setDialogOpen(true);
   };
 
   // Open Dialog for Edit
   const handleOpenEdit = (product: ProductRecord) => {
     setEditingProduct(product);
-    setFormTab("basic");
-    setFormTitle(product.title);
-    setFormCategoryId(product.category_id ? String(product.category_id) : (categories.find(c => c.name === product.category)?.id ? String(categories.find(c => c.name === product.category)?.id) : ""));
-    setProgramSearch("");
-    setProgramDropdownOpen(false);
-    
-    // Parse program_ids
-    let progIds: number[] = [];
-    if (Array.isArray(product.program_ids)) {
-      progIds = product.program_ids.map(Number).filter(n => !isNaN(n));
-    } else if (Array.isArray(product.associated_programs)) {
-      progIds = product.associated_programs.map(p => p.id);
-    }
-    setFormProgramIds(progIds);
-
-    setFormPrice(String(product.price || ""));
-    setFormSalePrice(product.sale_price !== null && product.sale_price !== undefined ? String(product.sale_price) : "");
-    setFormStock(String(product.stock_quantity || "0"));
-    setFormSku(product.sku || "");
-    setFormBadge(product.badge_text || "");
-    setFormImage(product.image_url || "");
-    setFormDescription(product.description || "");
-    setFormStatus(product.status || "active");
-    setFormIsFeatured(Boolean(product.is_featured));
-    setFormFeatures(
-      Array.isArray(product.features) && product.features.length > 0
-        ? product.features
-        : [""]
-    );
     setDialogOpen(true);
   };
 
@@ -546,23 +635,33 @@ export default function AdminProductsPage() {
           )}
 
           <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setBillStockModalOpen(true)}
+            className="font-bold text-xs gap-1.5 shadow-2xs h-9 rounded-xl border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 cursor-pointer"
+            title="Upload purchase bill to extract items, update stock and log expenses"
+          >
+            <Scan className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            Update Stock
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setInheritModalOpen(true)}
+            className="font-bold text-xs gap-1.5 shadow-2xs h-9 rounded-xl border-primary/40 text-primary hover:bg-primary/10 cursor-pointer"
+          >
+            <Layers className="w-4 h-4 text-primary" />
+            Inherit
+          </Button>
+
+          <Button
             size="sm"
             onClick={handleOpenCreate}
             className="font-bold text-xs gap-1.5 shadow-2xs h-9 rounded-xl cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Add Product
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchProducts}
-            disabled={loading}
-            className="h-9 px-3 text-xs font-bold rounded-xl gap-1.5 shadow-2xs"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-primary" : ""}`} />
-            Refresh
           </Button>
         </div>
       </div>
@@ -596,44 +695,144 @@ export default function AdminProductsPage() {
         </Card>
       </div>
 
-      {/* FILTERS */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-card p-3 rounded-xl border border-border shadow-2xs">
-        <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by title, SKU, or description..."
-            className="pl-9 text-xs h-9 bg-background rounded-lg"
-          />
+      {/* FILTERS & SEARCH */}
+      <div className="flex flex-col gap-3 bg-card p-3.5 rounded-xl border border-border shadow-2xs">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="relative w-full sm:flex-1">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by title, SKU, brand, or description..."
+              className="pl-9 text-xs h-9 bg-background rounded-lg"
+            />
+          </div>
+
+          {/* Quick Sort Control */}
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+            <label className="text-xs font-bold text-muted-foreground whitespace-nowrap">Sort By:</label>
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-[160px] h-9 text-xs font-bold bg-background rounded-lg">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest First</SelectItem>
+                <SelectItem value="price_asc">Price: Low to High</SelectItem>
+                <SelectItem value="price_desc">Price: High to Low</SelectItem>
+                <SelectItem value="name_asc">Name: A to Z</SelectItem>
+                <SelectItem value="name_desc">Name: Z to A</SelectItem>
+                <SelectItem value="stock_desc">Highest Stock</SelectItem>
+                <SelectItem value="stock_asc">Lowest Stock</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
-            <SelectTrigger className="w-[180px] h-9 text-xs font-bold bg-background rounded-lg">
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories ({categories.length})</SelectItem>
-              {categories.map((c) => (
-                <SelectItem key={c.id} value={String(c.id)}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {/* Cascading Filter Controls: Category -> Subcategory -> Brand -> Status */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-border/60">
+          {/* Category Filter */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              Category ({rootCategories.length})
+            </label>
+            <Select
+              value={selectedCategoryId}
+              onValueChange={(val) => {
+                setSelectedCategoryId(val);
+                setSelectedSubcategoryId("all");
+              }}
+            >
+              <SelectTrigger className="w-full h-8 text-xs font-semibold bg-background rounded-lg">
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent position="popper" className="max-h-80 w-[240px]">
+                <SelectItem value="all">All Categories ({rootCategories.length})</SelectItem>
+                {rootCategories.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    <div className="flex items-center justify-between w-full gap-2">
+                      <span className="truncate">{c.name}</span>
+                      {c.products_count !== undefined && (
+                        <span className="text-[10px] text-muted-foreground font-semibold px-1.5 py-0.5 rounded-full bg-muted shrink-0">
+                          {c.products_count}
+                        </span>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-          <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-            <SelectTrigger className="w-[130px] h-9 text-xs font-bold bg-background rounded-lg">
-              <SelectValue placeholder="All Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="archived">Archived</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Subcategory Filter */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              Subcategory {selectedCategoryId !== "all" && `(${availableSubcategories.length})`}
+            </label>
+            <Select
+              value={selectedSubcategoryId}
+              onValueChange={setSelectedSubcategoryId}
+              disabled={selectedCategoryId === "all" || availableSubcategories.length === 0}
+            >
+              <SelectTrigger className="w-full h-8 text-xs font-semibold bg-background rounded-lg disabled:opacity-50">
+                <SelectValue
+                  placeholder={
+                    selectedCategoryId === "all"
+                      ? "Select Category First"
+                      : availableSubcategories.length === 0
+                      ? "No Subcategories"
+                      : "All Subcategories"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent position="popper" className="max-h-80 w-[240px]">
+                <SelectItem value="all">All Subcategories ({availableSubcategories.length})</SelectItem>
+                {availableSubcategories.map((sc) => (
+                  <SelectItem key={sc.id} value={String(sc.id)}>
+                    <span className="truncate">{sc.name}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Brand Filter */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              Brand ({availableBrands.length})
+            </label>
+            <Select value={selectedBrand} onValueChange={setSelectedBrand}>
+              <SelectTrigger className="w-full h-8 text-xs font-semibold bg-background rounded-lg">
+                <SelectValue placeholder="All Brands" />
+              </SelectTrigger>
+              <SelectContent position="popper" className="max-h-80 w-[200px]">
+                <SelectItem value="all">All Brands ({availableBrands.length})</SelectItem>
+                {availableBrands.map((b) => (
+                  <SelectItem key={b} value={b}>
+                    <span className="truncate">{b}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Status Filter */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              Status
+            </label>
+            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <SelectTrigger className="w-full h-8 text-xs font-semibold bg-background rounded-lg">
+                <SelectValue placeholder="All Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
+                <SelectItem value="out_of_stock">Out of Stock</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
@@ -644,90 +843,70 @@ export default function AdminProductsPage() {
         <Card className="p-10 text-center space-y-3 bg-card border-border rounded-2xl">
           <ShoppingBag className="h-10 w-10 text-muted-foreground/40 mx-auto" />
           <h3 className="font-bold text-sm text-foreground">No products found</h3>
-          <p className="text-xs text-muted-foreground">Click "Add Product" to create your first study kit, book, or uniform listing.</p>
-          <Button size="sm" onClick={handleOpenCreate} className="font-bold text-xs">
-            <Plus className="w-4 h-4 mr-1" /> Add Product Now
-          </Button>
+          <p className="text-xs text-muted-foreground">Inherit already configured items from the master catalog or create a custom listing.</p>
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+            <Button size="sm" variant="outline" onClick={() => setInheritModalOpen(true)} className="font-bold text-xs rounded-xl border-primary/40 text-primary hover:bg-primary/10">
+              <Layers className="w-4 h-4 mr-1 text-primary" /> Inherit from Master Catalog
+            </Button>
+            <Button size="sm" onClick={handleOpenCreate} className="font-bold text-xs rounded-xl">
+              <Plus className="w-4 h-4 mr-1" /> Add Product Now
+            </Button>
+          </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {products.map((prod) => (
-            <Card
-              key={prod.id}
-              className="overflow-hidden border-border bg-card shadow-xs hover:shadow-md hover:border-primary/40 transition-all flex flex-col justify-between rounded-2xl group"
-            >
-              <div className="space-y-3">
-                {/* Product Image & Badges */}
-                <div className="relative h-44 w-full bg-muted overflow-hidden">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {products.map((prod) => {
+            const currentPrice = prod.sale_price !== null && prod.sale_price !== undefined && Number(prod.sale_price) > 0
+              ? Number(prod.sale_price)
+              : Number(prod.price || 0);
+            const rawUnit = prod.unit || prod.unit_of_measurement || "Piece";
+            const imageUrl = prod.image_url || SAMPLE_IMAGES[0].url;
+            const brandOrCat = prod.brand || prod.category_name || prod.category || "General";
+
+            return (
+              <div
+                key={prod.id}
+                className="p-3 rounded-2xl border transition-all flex items-center gap-3 group relative bg-card hover:bg-muted/30 shadow-2xs hover:shadow-xs border-border/70"
+              >
+                {/* 1. Left Thumbnail Image */}
+                <Link
+                  href={`/products/${prod.id}`}
+                  className="relative size-16 rounded-xl bg-muted shrink-0 overflow-hidden border border-border/60 block group/img"
+                  title={`View ${prod.title}`}
+                >
                   <img
-                    src={prod.image_url || SAMPLE_IMAGES[0].url}
+                    src={imageUrl}
                     alt={prod.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
+                    onError={(e) => {
+                      (e.target as any).src = "https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=300&auto=format&fit=crop&q=60";
+                    }}
                   />
-                  <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5">
-                    <Badge variant="secondary" className="text-[10px] font-extrabold bg-background/90 backdrop-blur-xs text-foreground shadow-2xs">
-                      {prod.category_name || prod.category}
-                    </Badge>
-                    {prod.badge_text && (
-                      <Badge variant="outline" className="text-[10px] font-extrabold bg-primary text-primary-foreground border-transparent shadow-2xs">
-                        {prod.badge_text}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="absolute top-2.5 right-2.5">
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] font-extrabold shadow-2xs ${
-                        prod.status === "active"
-                          ? "bg-emerald-500 text-white border-transparent"
-                          : "bg-amber-500 text-white border-transparent"
-                      }`}
+                </Link>
+
+                {/* 2. Middle Content */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Link
+                      href={`/products/${prod.id}`}
+                      className="text-xs font-bold text-foreground truncate hover:text-primary transition-colors cursor-pointer block max-w-[170px]"
+                      title={prod.title}
                     >
-                      {prod.status.toUpperCase()}
-                    </Badge>
+                      {prod.title}
+                    </Link>
                   </div>
-                </div>
 
-                {/* Title & SKU */}
-                <div className="px-4 space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase">{prod.sku || `PRD-${prod.id}`}</span>
-                    {prod.institution_name && (
-                      <span className="text-[10px] font-bold text-primary truncate max-w-[140px]">{prod.institution_name}</span>
-                    )}
-                  </div>
-                  <h3 className="font-extrabold text-base text-foreground line-clamp-2 leading-snug">{prod.title}</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2">{prod.description || "No description provided."}</p>
-                </div>
+                  <p className="text-[11px] text-muted-foreground truncate" title={brandOrCat}>
+                    {brandOrCat} {prod.sku ? `• ${prod.sku}` : ""}
+                  </p>
 
-                {/* Associated Programs */}
-                {Array.isArray(prod.associated_programs) && prod.associated_programs.length > 0 && (
-                  <div className="px-4 space-y-1">
-                    <span className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
-                      <GraduationCap className="h-3 w-3 text-primary" /> Associated Programs:
+                  {/* Pricing & Stock */}
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-xs font-black text-foreground">
+                      ₹{currentPrice.toLocaleString("en-IN")}
                     </span>
-                    <div className="flex flex-wrap gap-1">
-                      {prod.associated_programs.slice(0, 2).map((prog: any) => (
-                        <Badge key={prog.id} variant="outline" className="text-[9px] font-bold bg-primary/5 text-primary border-primary/20">
-                          {prog.title}
-                        </Badge>
-                      ))}
-                      {prod.associated_programs.length > 2 && (
-                        <Badge variant="outline" className="text-[9px] font-bold text-muted-foreground">
-                          +{prod.associated_programs.length - 2} more
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Price, Stock & Actions Footer */}
-              <div className="p-4 border-t border-border mt-3 flex items-center justify-between gap-3 bg-muted/20">
-                <div>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-lg font-black text-foreground">
-                      {formatCurrency(prod.sale_price !== null && prod.sale_price !== undefined ? prod.sale_price : prod.price)}
+                    <span className="text-[10px] font-semibold text-muted-foreground truncate">
+                      / {rawUnit}
                     </span>
                     {(prod.unit || prod.unit_of_measurement) && (
                       <span className="text-xs font-bold text-muted-foreground">
@@ -735,804 +914,108 @@ export default function AdminProductsPage() {
                       </span>
                     )}
                     {prod.sale_price && Number(prod.sale_price) < Number(prod.price) && (
-                      <span className="text-xs text-muted-foreground line-through">
-                        {formatCurrency(prod.price)}
+                      <span className="text-[10px] text-muted-foreground line-through">
+                        ₹{Number(prod.price).toLocaleString("en-IN")}
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] text-muted-foreground font-semibold">
-                    Stock: <strong>{prod.stock_quantity} units</strong>
-                  </span>
+                  {/* Stock */}
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-[10px] text-muted-foreground">
+                      Stock:{" "}
+                      <strong className={Number(prod.stock_quantity) <= 0 ? "text-rose-600 font-bold" : "text-foreground font-bold"}>
+                        {prod.stock_quantity || 0} {rawUnit}
+                      </strong>
+                    </span>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-1.5">
-                  <Button
+                {/* 3. Right Actions: Status Badge, Info Popover, Add Stock, Edit, Delete */}
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <Badge
                     variant="outline"
-                    size="sm"
-                    onClick={() => handleOpenEdit(prod)}
-                    className="h-8 w-8 p-0 rounded-lg text-primary hover:bg-primary/10"
-                    title="Edit Product"
+                    className={`text-[9px] px-1.5 py-0 font-bold uppercase tracking-wider ${
+                      prod.status === "active"
+                        ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                        : "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                    }`}
                   >
-                    <Edit2 className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDeleteProduct(prod.id)}
-                    className="h-8 w-8 p-0 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20"
-                    title="Delete Product"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+                    {prod.status}
+                  </Badge>
 
-      {/* PRODUCT CREATE / EDIT DIALOG */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="w-full sm:max-w-4xl lg:max-w-5xl max-h-[92vh] overflow-y-auto p-0 gap-0">
-          <div className="p-5 pb-4 border-b border-border bg-muted/20">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-black flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-primary/10 text-primary shrink-0">
-                  <ShoppingBag className="w-5 h-5" />
-                </div>
-                <div>
-                  <span>{editingProduct ? "Edit Product Listing" : "Add New Product"}</span>
-                  <span className="block text-xs font-normal text-muted-foreground mt-0.5">
-                    Configure basic information, categories, images, pricing & technical specifications
-                  </span>
-                </div>
-              </DialogTitle>
-            </DialogHeader>
-          </div>
-
-          <form onSubmit={handleSaveProduct} className="flex flex-col">
-            <div className="p-5 space-y-4">
-              {/* Tab Navigation Header */}
-              <Tabs value={formTab} onValueChange={(val) => setFormTab(val as FormTabId)} className="w-full">
-                <TabsList className="grid grid-cols-5 w-full bg-muted/60 p-1 rounded-xl h-auto gap-1 border border-border/50">
-                  {FORM_TABS.map((t) => {
-                    const IconComp = t.icon;
-                    return (
-                      <TabsTrigger
-                        key={t.id}
-                        value={t.id}
-                        className="flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 px-1 text-xs font-bold rounded-lg transition-all"
-                      >
-                        <IconComp className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">{t.label}</span>
-                      </TabsTrigger>
-                    );
-                  })}
-                </TabsList>
-
-                {/* TAB 1: BASIC */}
-                <TabsContent value="basic" className="space-y-4 pt-3 outline-none focus-visible:outline-none">
-                  <div className="p-3 bg-primary/5 rounded-xl border border-primary/10 flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-black text-foreground">1. Basic Product Identity</h4>
-                      <p className="text-[11px] text-muted-foreground">General details, inventory SKU, listing status and overview description.</p>
-                    </div>
-                    <Badge variant="outline" className="text-[10px] font-bold bg-background">
-                      Tab 1 of 5
-                    </Badge>
-                  </div>
-
-                  {/* Title */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold">Product Title / Name *</Label>
-                    <Input
-                      value={formTitle}
-                      onChange={(e) => setFormTitle(e.target.value)}
-                      placeholder="e.g. Robotics & IoT Starter STEM Kit (50+ Sensors)"
-                      className="text-xs h-9"
-                      required
-                    />
-                  </div>
-
-                  {/* SKU & Status */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold">SKU / Item Code</Label>
-                      <Input
-                        value={formSku}
-                        onChange={(e) => setFormSku(e.target.value)}
-                        placeholder="e.g. PRD-8492"
-                        className="text-xs h-9 font-mono"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold">Storefront Visibility Status *</Label>
-                      <Select value={formStatus} onValueChange={(val: any) => setFormStatus(val)}>
-                        <SelectTrigger className="text-xs h-9 font-semibold">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="active">Active (Visible in Store)</SelectItem>
-                          <SelectItem value="draft">Draft (Hidden / Unlisted)</SelectItem>
-                          <SelectItem value="archived">Archived (Discontinued)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Badge & Featured Toggle */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold">Promotional Badge Text (Optional)</Label>
-                      <Input
-                        value={formBadge}
-                        onChange={(e) => setFormBadge(e.target.value)}
-                        placeholder="e.g. Best Seller, Top Rated, New Release"
-                        className="text-xs h-9"
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/20">
-                      <div className="space-y-0.5">
-                        <Label className="text-xs font-bold flex items-center gap-1.5 cursor-pointer">
-                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                          Featured Product
-                        </Label>
-                        <p className="text-[10px] text-muted-foreground">
-                          Spotlight in student store banner & recommendations
-                        </p>
-                      </div>
-                      <Switch
-                        checked={formIsFeatured}
-                        onCheckedChange={setFormIsFeatured}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Description */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold">Product Description & Overview</Label>
-                    <Textarea
-                      value={formDescription}
-                      onChange={(e) => setFormDescription(e.target.value)}
-                      placeholder="Detailed overview, syllabus alignment, what is inside the box, key highlights..."
-                      rows={4}
-                      className="text-xs resize-none"
-                    />
-                  </div>
-                </TabsContent>
-
-                {/* TAB 2: CATEGORY & COURSES */}
-                <TabsContent value="category" className="space-y-4 pt-3 outline-none focus-visible:outline-none">
-                  <div className="p-3 bg-primary/5 rounded-xl border border-primary/10 flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-black text-foreground">2. Category & Academic Program Alignment</h4>
-                      <p className="text-[11px] text-muted-foreground">Categorize product and link it to student courses for smart cross-sell recommendations.</p>
-                    </div>
-                    <Badge variant="outline" className="text-[10px] font-bold bg-background">
-                      Tab 2 of 5
-                    </Badge>
-                  </div>
-
-                  {/* Category Selector */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-bold">Product Category (Platform Admin) *</Label>
-                      <span className="text-[10px] text-muted-foreground font-semibold">
-                        {categories.length} categories available
-                      </span>
-                    </div>
-                    <Select value={formCategoryId} onValueChange={setFormCategoryId}>
-                      <SelectTrigger className="text-xs h-9 font-semibold">
-                        <SelectValue placeholder="Select Category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((cat) => (
-                          <SelectItem key={cat.id} value={String(cat.id)}>
-                            {cat.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Link to Courses / Programs Multi-Select Dropdown */}
-                  <div className="space-y-2.5 p-3.5 bg-muted/30 border border-border rounded-xl">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
-                        <GraduationCap className="h-4 w-4 text-primary" />
-                        Associated Courses & Academic Programs (Multi-Select)
-                      </Label>
-                      <div className="flex items-center gap-1.5">
-                        <Badge variant="outline" className="text-[10px] font-bold bg-primary/10 text-primary border-primary/20">
-                          {formProgramIds.length} Selected
-                        </Badge>
-                        {formProgramIds.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setFormProgramIds([])}
-                            className="text-[10px] text-muted-foreground hover:text-rose-600 font-semibold cursor-pointer underline"
-                          >
-                            Clear All
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      Students enrolled in the selected courses will automatically see this product recommended inside their portal.
-                    </p>
-
-                    {/* Selected Program Badges */}
-                    {formProgramIds.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 pt-1 pb-1">
-                        {formProgramIds.map((progId) => {
-                          const prog = programOptions.find((p) => p.id === progId);
-                          if (!prog) return null;
-                          return (
-                            <Badge
-                              key={prog.id}
-                              variant="secondary"
-                              className="text-[10px] font-bold py-0.5 px-2 bg-primary/10 text-primary border border-primary/20 flex items-center gap-1.5"
-                            >
-                              <span className="truncate max-w-[200px]">{prog.title}</span>
-                              <button
-                                type="button"
-                                onClick={() => toggleProgram(prog.id)}
-                                className="hover:text-rose-600 cursor-pointer"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </Badge>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Dropdown Toggle Button */}
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setProgramDropdownOpen((prev) => !prev)}
-                        className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-lg border border-border bg-background hover:bg-muted/50 transition-colors cursor-pointer text-left"
-                      >
-                        <span className="flex items-center gap-2 truncate">
-                          <BookOpen className="h-3.5 w-3.5 text-primary shrink-0" />
-                          {formProgramIds.length === 0
-                            ? `Select from all courses & academic programs (${programOptions.length} available)...`
-                            : `${formProgramIds.length} course(s) selected (Click to modify)`}
-                        </span>
-                        <ChevronRight
-                          className={`h-4 w-4 text-muted-foreground transition-transform shrink-0 ${
-                            programDropdownOpen ? "rotate-90" : ""
-                          }`}
-                        />
-                      </button>
-
-                      {/* Dropdown Menu Panel */}
-                      {programDropdownOpen && (
-                        <div className="mt-2 p-2.5 bg-background border border-border rounded-xl shadow-lg space-y-2 animate-in fade-in-50 duration-150">
-                          {/* Search inside dropdown */}
-                          <div className="relative">
-                            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                            <Input
-                              value={programSearch}
-                              onChange={(e) => setProgramSearch(e.target.value)}
-                              placeholder={`Search ${programOptions.length} courses (e.g. Class 9, ADCA, BBA, Web Dev)...`}
-                              className="pl-8 text-xs h-8 bg-muted/30"
-                            />
-                          </div>
-
-                          {/* Quick Selection Actions */}
-                          <div className="flex items-center justify-between text-[11px] text-muted-foreground px-1 border-b border-border/60 pb-1.5">
-                            <span>
-                              Showing {filteredProgramOptions.length} of {programOptions.length} courses
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const allFilteredIds = filteredProgramOptions.map((p) => p.id);
-                                  setFormProgramIds((prev) => Array.from(new Set([...prev, ...allFilteredIds])));
-                                }}
-                                className="font-bold text-primary hover:underline cursor-pointer"
-                              >
-                                Select All ({filteredProgramOptions.length})
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Multi-Checkbox Scrollable Options List */}
-                          {filteredProgramOptions.length === 0 ? (
-                            <div className="p-4 text-center text-xs text-muted-foreground">
-                              No courses match "{programSearch}"
-                            </div>
-                          ) : (
-                            <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
-                              {filteredProgramOptions.map((prog) => {
-                                const isChecked = formProgramIds.includes(prog.id);
-                                return (
-                                  <div
-                                    key={prog.id}
-                                    onClick={() => toggleProgram(prog.id)}
-                                    className={`p-2 rounded-lg border text-xs transition-all flex items-center justify-between gap-3 cursor-pointer select-none ${
-                                      isChecked
-                                        ? "bg-primary/10 border-primary text-primary font-bold shadow-2xs"
-                                        : "bg-background border-border/60 text-foreground hover:bg-muted"
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-2.5 min-w-0">
-                                      <div
-                                        className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                                          isChecked
-                                            ? "bg-primary border-primary text-primary-foreground"
-                                            : "border-muted-foreground/40 bg-background"
-                                        }`}
-                                      >
-                                        {isChecked && <Check className="h-3 w-3" />}
-                                      </div>
-                                      <div className="truncate min-w-0">
-                                        <span className="block truncate font-bold text-xs">{prog.title}</span>
-                                        {prog.institution_name && (
-                                          <span className="text-[10px] text-muted-foreground block truncate">
-                                            {prog.institution_name}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    {prog.fee_amount && (
-                                      <span className="text-[10px] font-semibold text-muted-foreground shrink-0">
-                                        {typeof prog.fee_amount === "number" || !isNaN(Number(prog.fee_amount))
-                                          ? `₹${Number(prog.fee_amount).toLocaleString("en-IN")}`
-                                          : prog.fee_amount}
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </TabsContent>
-
-                {/* TAB 3: IMAGES */}
-                <TabsContent value="images" className="space-y-4 pt-3 outline-none focus-visible:outline-none">
-                  <div className="p-3 bg-primary/5 rounded-xl border border-primary/10 flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-black text-foreground">3. Product Media & Visual Assets</h4>
-                      <p className="text-[11px] text-muted-foreground">Upload high quality product pictures, paste direct image URLs, or choose from quick sample presets.</p>
-                    </div>
-                    <Badge variant="outline" className="text-[10px] font-bold bg-background">
-                      Tab 3 of 5
-                    </Badge>
-                  </div>
-
-                  {/* Direct Image Upload Box */}
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold text-foreground flex items-center justify-between">
-                      <span>Upload Product Photo</span>
-                      <span className="text-[10px] font-normal text-muted-foreground">JPG, PNG, WEBP, AVIF (Max 10MB)</span>
-                    </Label>
-
-                    <div className="border-2 border-dashed border-border hover:border-primary/50 transition-colors rounded-xl p-4 bg-muted/10 text-center relative flex flex-col items-center justify-center gap-2">
-                      <input
-                        type="file"
-                        id="product-image-file-input"
-                        accept="image/png,image/jpeg,image/webp,image/avif,image/gif,image/svg+xml"
-                        className="hidden"
-                        onChange={handleImageUpload}
-                        disabled={uploadingImage}
-                      />
-                      
-                      {uploadingImage ? (
-                        <div className="py-4 flex flex-col items-center gap-2">
-                          <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                          <p className="text-xs font-bold text-foreground">Uploading product image...</p>
-                          <p className="text-[11px] text-muted-foreground">Please wait while the image is processed</p>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center gap-2 py-1">
-                          <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                            <UploadCloud className="w-5 h-5" />
-                          </div>
-                          <div className="space-y-0.5">
-                            <p className="text-xs font-bold text-foreground">Drag & drop product picture here, or browse</p>
-                            <p className="text-[10px] text-muted-foreground">High resolution product photos look great on storefront</p>
-                          </div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="default"
-                              onClick={() => document.getElementById("product-image-file-input")?.click()}
-                              className="h-8 text-xs font-bold gap-1.5 shadow-sm cursor-pointer"
-                            >
-                              <Upload className="w-3.5 h-3.5" />
-                              Browse &amp; Upload
-                            </Button>
-                            {formImage && (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setFormImage("")}
-                                className="h-8 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20 gap-1 cursor-pointer"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                                Clear Image
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Fallback Image URL Input */}
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-bold">Or Product Image URL</Label>
-                      {formImage && (
-                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3" /> Image linked
-                        </span>
-                      )}
-                    </div>
-                    <Input
-                      value={formImage}
-                      onChange={(e) => setFormImage(e.target.value)}
-                      placeholder="https://images.unsplash.com/... or uploaded Openinary URL"
-                      className="text-xs h-9"
-                    />
-                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                      <span className="text-[10px] text-muted-foreground font-semibold py-0.5">Quick Presets:</span>
-                      {SAMPLE_IMAGES.map((s, idx) => (
+                  <div className="flex items-center gap-1">
+                    {/* Short Description Info Popover */}
+                    <Popover>
+                      <PopoverTrigger asChild>
                         <button
-                          key={idx}
                           type="button"
-                          onClick={() => setFormImage(s.url)}
-                          className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-muted hover:bg-primary hover:text-primary-foreground text-foreground transition-colors cursor-pointer"
+                          className="size-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors cursor-pointer border border-border/40 hover:border-border"
+                          title="Click to view short description"
+                          aria-label="Short description"
                         >
-                          {s.label}
+                          <Info className="size-3.5" />
                         </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Live Visual Preview Container */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                    <div className="border border-border rounded-xl p-3 bg-muted/20 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-muted-foreground">Storefront Card Preview</span>
-                        {formImage && (
-                          <span className="text-[10px] text-primary font-bold">Live Preview</span>
-                        )}
-                      </div>
-                      <div className="relative aspect-video w-full rounded-lg overflow-hidden bg-background border border-border/60 flex items-center justify-center shadow-inner">
-                        {formImage ? (
-                          <img
-                            src={formImage}
-                            alt={formTitle || "Product preview"}
-                            className="w-full h-full object-cover transition-transform hover:scale-105 duration-300"
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = "none";
-                            }}
-                          />
-                        ) : (
-                          <div className="flex flex-col items-center gap-1.5 text-muted-foreground p-4 text-center">
-                            <ImageIcon className="w-8 h-8 opacity-40" />
-                            <span className="text-[10px]">Upload an image or enter a URL to preview</span>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-3 text-xs rounded-xl shadow-xl border bg-background" side="top">
+                        <div className="space-y-2">
+                          <div className="font-bold text-foreground text-xs line-clamp-1 border-b pb-1.5 flex items-center justify-between">
+                            <span>{prod.title}</span>
+                            <span className="text-[10px] text-primary font-black">₹{currentPrice}</span>
                           </div>
-                        )}
-                        {formBadge && (
-                          <div className="absolute top-2 left-2 shadow-sm">
-                            <Badge className="text-[9px] font-black bg-primary text-primary-foreground px-1.5 py-0.5">
-                              {formBadge}
-                            </Badge>
+                          <p className="text-muted-foreground text-[11px] leading-relaxed">
+                            {prod.description || "No description provided."}
+                          </p>
+                          <div className="pt-1 border-t flex items-center justify-between text-[10px] text-muted-foreground font-medium">
+                            <span>Category: {prod.category_name || prod.category}</span>
+                            <span>SKU: {prod.sku || `PRD-${prod.id}`}</span>
                           </div>
-                        )}
-                      </div>
-                      <div className="pt-1">
-                        <span className="font-bold text-xs line-clamp-1">{formTitle || "Sample Product Name"}</span>
-                        <div className="flex items-center gap-2 text-xs font-semibold text-primary mt-0.5">
-                          <span>{formPrice ? `₹${formPrice}` : "₹0"}</span>
-                          {formSalePrice && (
-                            <span className="text-muted-foreground line-through text-[11px]">
-                              ₹{formSalePrice}
-                            </span>
-                          )}
                         </div>
-                      </div>
-                    </div>
-
-                    <div className="border border-border/80 rounded-xl p-3.5 bg-muted/10 space-y-2 text-xs">
-                      <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-primary" />
-                        Image Recommendations
-                      </span>
-                      <ul className="space-y-1.5 text-[11px] text-muted-foreground">
-                        <li className="flex items-start gap-1.5">
-                          <span className="text-primary font-bold">•</span>
-                          <span>Upload crisp product photos in 16:9 or 1:1 square aspect ratio.</span>
-                        </li>
-                        <li className="flex items-start gap-1.5">
-                          <span className="text-primary font-bold">•</span>
-                          <span>High resolution images (800x600 or higher) look sharp across mobile and desktop.</span>
-                        </li>
-                        <li className="flex items-start gap-1.5">
-                          <span className="text-primary font-bold">•</span>
-                          <span>Supports direct photo upload to cloud storage as well as external CDN URLs.</span>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                {/* TAB 4: PRICE & STOCK */}
-                <TabsContent value="price" className="space-y-4 pt-3 outline-none focus-visible:outline-none">
-                  <div className="p-3 bg-primary/5 rounded-xl border border-primary/10 flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-black text-foreground">4. Pricing, Discounts & Inventory</h4>
-                      <p className="text-[11px] text-muted-foreground">Configure retail price, optional discounted sale rate, and inventory stock tracking.</p>
-                    </div>
-                    <Badge variant="outline" className="text-[10px] font-bold bg-background">
-                      Tab 4 of 5
-                    </Badge>
-                  </div>
-
-                  {/* Prices */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold">Product Actual MRP Price (₹) *</Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2.5 text-xs text-muted-foreground font-bold">₹</span>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={formPrice}
-                          onChange={(e) => setFormPrice(e.target.value)}
-                          placeholder="e.g. 4999"
-                          className="text-xs h-9 pl-7"
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold">Discounted Sale Price (₹) (Optional)</Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2.5 text-xs text-muted-foreground font-bold">₹</span>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={formSalePrice}
-                          onChange={(e) => setFormSalePrice(e.target.value)}
-                          placeholder="e.g. 3899"
-                          className="text-xs h-9 pl-7"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Dynamic Discount Callout */}
-                  {(() => {
-                    const p = parseFloat(formPrice);
-                    const s = parseFloat(formSalePrice);
-                    if (p > 0 && s > 0) {
-                      if (s < p) {
-                        const pct = Math.round(((p - s) / p) * 100);
-                        const saved = p - s;
-                        return (
-                          <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-between text-xs text-emerald-700 dark:text-emerald-400 font-semibold">
-                            <div className="flex items-center gap-2">
-                              <Percent className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                              <span>Calculated Discount: <strong className="font-black text-emerald-800 dark:text-emerald-300">{pct}% OFF</strong></span>
-                            </div>
-                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 font-bold border-emerald-500/30">
-                              Student Saves ₹{saved.toLocaleString("en-IN")}
-                            </Badge>
-                          </div>
-                        );
-                      } else {
-                        return (
-                          <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
-                            <AlertTriangle className="w-4 h-4 shrink-0" />
-                            <span>Discounted sale price should be lower than the actual MRP price (₹{p}).</span>
-                          </div>
-                        );
-                      }
-                    }
-                    return null;
-                  })()}
-
-                  {/* Stock Quantity */}
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-bold">Stock Quantity in Warehouse *</Label>
-                      <Badge
-                        variant="outline"
-                        className={`text-[10px] font-bold ${
-                          parseInt(formStock) <= 0
-                            ? "bg-rose-500/10 text-rose-600 border-rose-500/20"
-                            : parseInt(formStock) <= 10
-                            ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                            : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                        }`}
-                      >
-                        {parseInt(formStock) <= 0
-                          ? "Out of Stock"
-                          : parseInt(formStock) <= 10
-                          ? "Low Stock Alert"
-                          : "In Stock & Available"}
-                      </Badge>
-                    </div>
-                    <Input
-                      type="number"
-                      value={formStock}
-                      onChange={(e) => setFormStock(e.target.value)}
-                      placeholder="100"
-                      className="text-xs h-9"
-                      min="0"
-                    />
-                  </div>
-                </TabsContent>
-
-                {/* TAB 5: SPECIFICATIONS */}
-                <TabsContent value="specifications" className="space-y-4 pt-3 outline-none focus-visible:outline-none">
-                  <div className="p-3 bg-primary/5 rounded-xl border border-primary/10 flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-black text-foreground">5. Specifications & Key Highlights</h4>
-                      <p className="text-[11px] text-muted-foreground">List product features, package contents, warranty details, and technical parameters.</p>
-                    </div>
-                    <Badge variant="outline" className="text-[10px] font-bold bg-background">
-                      Tab 5 of 5
-                    </Badge>
-                  </div>
-
-                  {/* Key Features Bullet Points */}
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-bold">Key Feature Bullets & Highlights</Label>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleAddFeature}
-                        className="text-[11px] h-7 px-2.5 text-primary font-bold hover:bg-primary/10"
-                      >
-                        <Plus className="h-3 w-3 mr-1" /> Add Bullet Point
-                      </Button>
-                    </div>
-
-                    <div className="space-y-2">
-                      {formFeatures.map((feat, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[10px] font-black text-muted-foreground shrink-0">
-                            {idx + 1}
-                          </span>
-                          <Input
-                            value={feat}
-                            onChange={(e) => handleUpdateFeature(idx, e.target.value)}
-                            placeholder={`Feature bullet ${idx + 1} (e.g. 15 Years Solved Papers, 1 Year Replacement Warranty)`}
-                            className="text-xs h-8.5"
-                          />
-                          {formFeatures.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemoveFeature(idx)}
-                              className="h-8.5 w-8.5 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 shrink-0"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Quick Suggestion Pills */}
-                    <div className="pt-2 border-t border-border/60">
-                      <span className="text-[10px] font-bold text-muted-foreground block mb-1.5">
-                        Quick Add Suggestions:
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {[
-                          "1-Year Replacement Warranty",
-                          "100% Syllabus Covered",
-                          "Includes Certificate of Completion",
-                          "50+ Hands-on Experiments Kit",
-                          "Step-by-Step Video Tutorials Included",
-                          "Free Nationwide Express Delivery",
-                        ].map((sug, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => {
-                              if (formFeatures.length === 1 && formFeatures[0] === "") {
-                                setFormFeatures([sug]);
-                              } else {
-                                setFormFeatures((prev) => [...prev, sug]);
-                              }
-                            }}
-                            className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-muted hover:bg-primary/10 hover:text-primary text-muted-foreground transition-colors cursor-pointer"
-                          >
-                            + {sug}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </div>
-
-            {/* Modal Actions Footer with Tab Navigation */}
-            {(() => {
-              const currentTabIndex = FORM_TABS.findIndex((t) => t.id === formTab);
-              const hasPrevTab = currentTabIndex > 0;
-              const hasNextTab = currentTabIndex < FORM_TABS.length - 1;
-
-              return (
-                <div className="p-4 px-6 border-t border-border bg-muted/20 flex flex-wrap items-center justify-between gap-2.5">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setDialogOpen(false)}
-                    disabled={saving}
-                    className="text-xs"
-                  >
-                    Cancel
-                  </Button>
-
-                  <div className="flex items-center gap-2">
-                    {hasPrevTab && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setFormTab(FORM_TABS[currentTabIndex - 1].id)}
-                        className="text-xs font-bold gap-1"
-                      >
-                        <ChevronLeft className="h-3.5 w-3.5" />
-                        Previous
-                      </Button>
-                    )}
-
-                    {hasNextTab && (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setFormTab(FORM_TABS[currentTabIndex + 1].id)}
-                        className="text-xs font-bold gap-1"
-                      >
-                        Next
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
+                      </PopoverContent>
+                    </Popover>
 
                     <Button
-                      type="submit"
-                      disabled={saving}
+                      variant="outline"
                       size="sm"
-                      className="font-bold text-xs gap-1.5 bg-primary text-primary-foreground shadow-sm hover:opacity-90"
+                      onClick={() => handleOpenAddStock(prod)}
+                      className="size-7 p-0 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 border-border/40 hover:border-border"
+                      title="Add Stock (Quantity & Units)"
                     >
-                      {saving ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                      {editingProduct ? "Save Changes" : "Create Product"}
+                      <Boxes className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleOpenEdit(prod)}
+                      className="size-7 p-0 rounded-lg text-primary hover:bg-primary/10 border-border/40 hover:border-border"
+                      title="Edit Product"
+                    >
+                      <Edit2 className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeleteProduct(prod.id)}
+                      className="size-7 p-0 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 border-border/40 hover:border-border"
+                      title="Delete Product"
+                    >
+                      <Trash2 className="size-3.5" />
                     </Button>
                   </div>
                 </div>
-              );
-            })()}
-          </form>
-        </DialogContent>
-      </Dialog>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* PRODUCT CREATE / EDIT DIALOG (Same as Platform Admin) */}
+      <ProductFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        product={editingProduct as any}
+        onSuccess={fetchProducts}
+        accessToken={accessToken}
+      />
 
       {/* PLATFORM ADMIN PRODUCT CATEGORY MANAGER MODAL */}
       <Dialog open={categoryModalOpen} onOpenChange={setCategoryModalOpen}>
@@ -1609,6 +1092,193 @@ export default function AdminProductsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* INHERIT FROM MASTER CATALOG DIALOG */}
+      <InheritMasterProductsDialog
+        open={inheritModalOpen}
+        onOpenChange={setInheritModalOpen}
+        onSuccess={fetchProducts}
+        accessToken={accessToken}
+      />
+
+      {/* ADD / MANAGE PRODUCT STOCK DIALOG */}
+      <Dialog open={Boolean(stockProduct)} onOpenChange={(open) => !open && setStockProduct(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Boxes className="size-4 text-primary" />
+              Add / Manage Product Stock
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Add inventory stock quantity and select measurement units.
+            </DialogDescription>
+          </DialogHeader>
+
+          {stockProduct && (
+            <form onSubmit={handleSaveStock} className="space-y-4 pt-2">
+              {/* Product Info Summary */}
+              <div className="p-3 rounded-xl bg-muted/40 border flex items-center gap-3">
+                <img
+                  src={stockProduct.image_url || SAMPLE_IMAGES[0].url}
+                  alt={stockProduct.title}
+                  className="size-12 rounded-lg object-cover border shrink-0"
+                  onError={(e) => {
+                    (e.target as any).src = "https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=300&auto=format&fit=crop&q=60";
+                  }}
+                />
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-xs font-bold text-foreground truncate">{stockProduct.title}</h4>
+                  <p className="text-[11px] text-muted-foreground truncate">{stockProduct.category_name || stockProduct.category}</p>
+                  <p className="text-[11px] mt-0.5">
+                    Current Stock: <strong className="text-foreground">{stockProduct.stock_quantity || 0} {stockProduct.unit || stockProduct.unit_of_measurement || "Piece"}</strong>
+                  </p>
+                </div>
+              </div>
+
+              {/* Stock Mode: Add to stock vs Set exact stock */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Operation Mode</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStockMode("add")}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold border text-center transition-colors ${
+                      stockMode === "add"
+                        ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                        : "bg-background text-muted-foreground border-border hover:bg-muted/30"
+                    }`}
+                  >
+                    + Add to Current Stock
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStockMode("set")}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold border text-center transition-colors ${
+                      stockMode === "set"
+                        ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                        : "bg-background text-muted-foreground border-border hover:bg-muted/30"
+                    }`}
+                  >
+                    = Set Exact Stock Total
+                  </button>
+                </div>
+              </div>
+
+              {/* Stock Quantity (Number) & Quick Add Chips */}
+              <div className="space-y-2">
+                <Label className="text-xs font-bold">
+                  {stockMode === "add" ? "Quantity to Add (Number) *" : "New Stock Quantity (Number) *"}
+                </Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder={stockMode === "add" ? "e.g. 50" : String(stockProduct.stock_quantity || 0)}
+                  value={stockQuantityInput}
+                  onChange={(e) => setStockQuantityInput(e.target.value)}
+                  className="h-9 text-xs font-mono font-bold"
+                  required
+                  autoFocus
+                />
+
+                {/* Quick Number Chips */}
+                {stockMode === "add" && (
+                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                    <span className="text-[10px] text-muted-foreground">Quick add:</span>
+                    {[10, 25, 50, 100, 250, 500].map((chip) => (
+                      <button
+                        key={chip}
+                        type="button"
+                        onClick={() => {
+                          const cur = parseInt(stockQuantityInput) || 0;
+                          setStockQuantityInput(String(cur + chip));
+                        }}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-border bg-muted/30 hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer"
+                      >
+                        +{chip}
+                      </button>
+                    ))}
+                    {stockQuantityInput && (
+                      <button
+                        type="button"
+                        onClick={() => setStockQuantityInput("")}
+                        className="text-[10px] text-muted-foreground hover:text-destructive transition-colors ml-1 cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Measurement Unit (Units) */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Unit of Measurement (Units) *</Label>
+                <Select value={stockUnitInput} onValueChange={setStockUnitInput}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Select Unit" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-56">
+                    {COMMON_UOM_OPTIONS.map((u) => (
+                      <SelectItem key={u} value={u} className="text-xs">
+                        {u}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">
+                  Measurement unit displayed on storefront (e.g. kg, pack, bottle, piece).
+                </p>
+              </div>
+
+              {/* Live Result Calculation Preview */}
+              <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-between text-xs">
+                <span className="text-muted-foreground font-medium">Updated Stock Total:</span>
+                <span className="font-mono font-black text-sm text-primary">
+                  {stockMode === "add"
+                    ? (Number(stockProduct.stock_quantity) || 0) + (parseInt(stockQuantityInput) || 0)
+                    : parseInt(stockQuantityInput) || 0}{" "}
+                  {stockUnitInput}
+                </span>
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setStockProduct(null)}
+                  disabled={savingStock}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={savingStock || !stockQuantityInput}
+                  className="font-bold gap-1.5"
+                >
+                  {savingStock && <Loader2 className="size-3.5 animate-spin" />}
+                  Save Stock
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+      {/* UPDATE STOCK FROM BILL / INVOICE DIALOG */}
+      <UpdateStockBillDialog
+        open={billStockModalOpen}
+        onOpenChange={setBillStockModalOpen}
+        onSuccess={fetchProducts}
+        catalogProducts={products.map((p) => ({
+          id: p.id,
+          title: p.title,
+          unit: p.unit || p.unit_of_measurement || "Piece",
+          stock_quantity: Number(p.stock_quantity || 0),
+          price: Number(p.price || 0),
+        }))}
+      />
     </div>
   );
 }

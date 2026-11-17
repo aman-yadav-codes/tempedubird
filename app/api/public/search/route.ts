@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/db";
 import { parseSearchIntent } from "@/lib/utils/search-intent";
+import { getFrontendConfig } from "@/lib/config/frontend-config";
 
 export async function GET(req: NextRequest) {
   try {
@@ -39,6 +40,13 @@ export async function GET(req: NextRequest) {
     const likeQuery = `%${searchQuery}%`;
     const rawLikeQuery = `%${rawQuery}%`;
 
+    const config = getFrontendConfig();
+    const envBusinessId = process.env.BUSINESS_ID || process.env.NEXT_PUBLIC_BUSINESS_ID;
+    const envInstitutionId = process.env.INSTITUTION_ID || process.env.NEXT_PUBLIC_INSTITUTION_ID;
+    const isPlatformMode = (config.mode as string) === "platform_admin" || (config.mode as string) === "platform" || config.mode === "all";
+    const scopedBusinessId = !isPlatformMode ? ((config.mode === "business" ? config.businessId : null) || (envBusinessId && /^\d+$/.test(envBusinessId) ? Number(envBusinessId) : null)) : null;
+    const scopedInstitutionId = !isPlatformMode ? ((config.mode === "institution" ? config.institutionId : null) || (envInstitutionId && /^\d+$/.test(envInstitutionId) ? Number(envInstitutionId) : null)) : null;
+
     // 0a. Search Businesses
     const businessesPromise = (async () => {
       try {
@@ -65,6 +73,7 @@ export async function GET(req: NextRequest) {
           LEFT JOIN categories c ON c.id = bp.category_id
           LEFT JOIN categories sc ON sc.id = bp.subcategory_id
           WHERE COALESCE(bp.is_active, TRUE) = TRUE
+            ${scopedBusinessId ? `AND bp.id = ${scopedBusinessId}` : ''}
             AND (
               bp.name ILIKE $1 OR COALESCE(bp.business_type, '') ILIKE $1 OR COALESCE(bp.about, '') ILIKE $1 OR COALESCE(bp.city, '') ILIKE $1
               OR array_to_string(bp.synonyms, ' ') ILIKE $1
@@ -123,6 +132,7 @@ export async function GET(req: NextRequest) {
           LEFT JOIN categories c ON c.id = pp.category_id
           LEFT JOIN categories sc ON sc.id = pp.subcategory_id
           WHERE COALESCE(pp.is_active, TRUE) = TRUE
+            ${scopedBusinessId ? `AND (pp.business_profile_id = ${scopedBusinessId} ${scopedInstitutionId ? `OR pp.institution_profile_id = ${scopedInstitutionId}` : ''})` : ''}
             AND (
               pp.name ILIKE $1 OR COALESCE(pp.profession_type, '') ILIKE $1 OR COALESCE(pp.designation, '') ILIKE $1 OR COALESCE(pp.about, '') ILIKE $1 OR array_to_string(pp.skills, ' ') ILIKE $1
               OR array_to_string(pp.synonyms, ' ') ILIKE $1
@@ -185,6 +195,7 @@ export async function GET(req: NextRequest) {
             LIMIT 1
           ) seller ON TRUE
           WHERE COALESCE(mp.is_active, TRUE) = TRUE
+            ${scopedBusinessId ? `AND (mp.business_profile_id = ${scopedBusinessId} ${scopedInstitutionId ? `OR mp.institution_id = ${scopedInstitutionId}` : ''} OR mp.id IN (SELECT bprod.master_product_id FROM business_products bprod WHERE (bprod.business_profile_id = ${scopedBusinessId} OR bprod.business_id = ${scopedBusinessId}) AND COALESCE(bprod.is_available, true) = true))` : ''}
             AND (
               mp.name ILIKE $1 OR COALESCE(mp.description, '') ILIKE $1 OR COALESCE(mp.brand, '') ILIKE $1 OR array_to_string(mp.synonyms, ' ') ILIKE $1
               OR COALESCE(c.name, '') ILIKE $1 OR COALESCE(sc.name, '') ILIKE $1 OR array_to_string(c.synonyms, ' ') ILIKE $1 OR array_to_string(sc.synonyms, ' ') ILIKE $1
@@ -253,6 +264,7 @@ export async function GET(req: NextRequest) {
           LEFT JOIN professional_profiles pp ON pp.id = ms.professional_profile_id
           LEFT JOIN business_profiles pp_biz ON pp_biz.id = pp.business_profile_id
           WHERE COALESCE(ms.is_active, TRUE) = TRUE
+            ${scopedBusinessId ? `AND (ms.business_profile_id = ${scopedBusinessId} ${scopedInstitutionId ? `OR ms.institution_id = ${scopedInstitutionId}` : ''} OR ms.id IN (SELECT ps.master_service_id FROM professional_services ps JOIN professional_profiles pp ON pp.id = ps.professional_id WHERE (pp.business_profile_id = ${scopedBusinessId} ${scopedInstitutionId ? `OR pp.institution_profile_id = ${scopedInstitutionId}` : ''}) AND COALESCE(ps.is_active, true) = true))` : ''}
             AND (
               ms.name ILIKE $1 OR COALESCE(ms.description, '') ILIKE $1 OR array_to_string(ms.synonyms, ' ') ILIKE $1
               OR COALESCE(c.name, '') ILIKE $1 OR COALESCE(sc.name, '') ILIKE $1 OR array_to_string(c.synonyms, ' ') ILIKE $1 OR array_to_string(sc.synonyms, ' ') ILIKE $1

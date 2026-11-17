@@ -33,6 +33,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Package,
   Plus,
   Search,
@@ -53,6 +58,7 @@ import {
   Barcode,
   Scale,
   FolderTree,
+  Briefcase,
   Eye,
   SlidersHorizontal,
   Upload,
@@ -60,11 +66,11 @@ import {
   RefreshCw,
   Globe,
   AlertCircle,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
 import { CATALOG_AVAILABLE_COUNTRIES, getCatalogCountryMeta } from "@/lib/config/country-config";
-import { MasterCatalogNavTabs } from "@/components/admin/catalog/master-catalog-nav-tabs";
 
 interface MasterProduct {
   id: number;
@@ -93,6 +99,11 @@ interface MasterProduct {
   suggested_min_price?: number | string;
   suggested_max_price?: number | string;
   country_pricing?: Record<string, any>;
+  business_profile_id?: number | null;
+  business_name?: string | null;
+  professional_profile_id?: number | null;
+  professional_name?: string | null;
+  profile_type?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -104,11 +115,28 @@ interface CategoryOption {
   slug: string;
   parent_id: number | null;
   category_type: string;
+  business_category_id?: number | null;
+  business_category_name?: string | null;
+}
+
+interface BusinessCategoryOption {
+  id: number;
+  name: string;
+  slug: string;
 }
 
 interface AttributeRow {
   key: string;
   value: string;
+}
+
+interface ProductVariantRow {
+  id: string;
+  name: string;
+  price: string;
+  regular_price: string;
+  unit: string;
+  sku: string;
 }
 
 const COMMON_UOM_OPTIONS = [
@@ -133,6 +161,12 @@ export default function MasterProductsPage() {
   const { accessToken } = useAuthStore();
   const [products, setProducts] = useState<MasterProduct[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [businessCategories, setBusinessCategories] = useState<BusinessCategoryOption[]>([]);
+  const [businessCategoryId, setBusinessCategoryId] = useState("");
+  const [availableBusinesses, setAvailableBusinesses] = useState<{ id: number; name: string; city?: string }[]>([]);
+  const [availableProfessionals, setAvailableProfessionals] = useState<{ id: number; name: string; designation?: string; business_name?: string }[]>([]);
+  const [businessProfileId, setBusinessProfileId] = useState<string>("");
+  const [professionalProfileId, setProfessionalProfileId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -177,6 +211,7 @@ export default function MasterProductsPage() {
   const [countryPrices, setCountryPrices] = useState<Record<string, { price: string; min_price: string; max_price: string }>>({});
   const [isActive, setIsActive] = useState(true);
   const [attributeRows, setAttributeRows] = useState<AttributeRow[]>([{ key: "", value: "" }]);
+  const [variants, setVariants] = useState<ProductVariantRow[]>([]);
 
   const updateCountryPriceField = (code: string, field: "price" | "min_price" | "max_price", val: string) => {
     setCountryPrices((prev) => ({
@@ -211,8 +246,12 @@ export default function MasterProductsPage() {
 
   // Derived category lists
   const mainCategories = useMemo(() => {
-    return categories.filter((c) => !c.parent_id);
-  }, [categories]);
+    return categories.filter((c) => {
+      if (c.parent_id) return false;
+      if (!businessCategoryId || businessCategoryId === "all") return true;
+      return String(c.business_category_id) === String(businessCategoryId);
+    });
+  }, [categories, businessCategoryId]);
 
   const availableSubcategories = useMemo(() => {
     if (!mainCategoryId) return [];
@@ -223,11 +262,17 @@ export default function MasterProductsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [prodRes, catRes] = await Promise.all([
+      const [prodRes, catRes, bizRes, assigneesRes] = await Promise.all([
         fetch(`/api/admin/catalog/products`, {
           headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
         }),
-        fetch(`/api/admin/categories?type=product`, {
+        fetch(`/api/admin/categories?type=product&limit=1000`, {
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+        }),
+        fetch(`/api/admin/categories?type=business&onlyRoot=true&limit=100`, {
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+        }),
+        fetch(`/api/admin/catalog/assignees`, {
           headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
         }),
       ]);
@@ -240,6 +285,17 @@ export default function MasterProductsPage() {
       const catData = await catRes.json();
       if (catRes.ok && catData.data) {
         setCategories(catData.data);
+      }
+
+      const bizData = await bizRes.json();
+      if (bizRes.ok && bizData.data) {
+        setBusinessCategories(bizData.data);
+      }
+
+      if (assigneesRes.ok) {
+        const assigneesData = await assigneesRes.json();
+        if (assigneesData.businesses) setAvailableBusinesses(assigneesData.businesses);
+        if (assigneesData.professionals) setAvailableProfessionals(assigneesData.professionals);
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to load master products");
@@ -257,6 +313,7 @@ export default function MasterProductsPage() {
     setName("");
     setSlug("");
     setDescription("");
+    setBusinessCategoryId("");
     setMainCategoryId("");
     setSubcategoryId("");
     setDefaultImageUrl("");
@@ -280,8 +337,11 @@ export default function MasterProductsPage() {
       IN: { price: "", min_price: "", max_price: "" },
       US: { price: "", min_price: "", max_price: "" },
     });
+    setBusinessProfileId("none");
+    setProfessionalProfileId("none");
     setIsActive(true);
     setAttributeRows([{ key: "", value: "" }]);
+    setVariants([]);
     setDialogOpen(true);
   };
 
@@ -290,8 +350,21 @@ export default function MasterProductsPage() {
     setName(prod.name || "");
     setSlug(prod.slug || "");
     setDescription(prod.description || "");
-    setMainCategoryId(prod.main_category_id ? String(prod.main_category_id) : (prod.category_id ? String(prod.category_id) : ""));
+    const mCatId = prod.main_category_id ? String(prod.main_category_id) : (prod.category_id ? String(prod.category_id) : "");
+    setMainCategoryId(mCatId);
     setSubcategoryId(prod.subcategory_id ? String(prod.subcategory_id) : "");
+
+    // Automatically resolve business category for edit mode
+    if (mCatId) {
+      const match = categories.find((c) => String(c.id) === mCatId);
+      if (match?.business_category_id) {
+        setBusinessCategoryId(String(match.business_category_id));
+      } else {
+        setBusinessCategoryId("");
+      }
+    } else {
+      setBusinessCategoryId("");
+    }
     setDefaultImageUrl(prod.default_image_url || "");
     setAdditionalImagesText(Array.isArray(prod.additional_images) ? prod.additional_images.join("\n") : "");
     setBrand(prod.brand || "");
@@ -331,6 +404,9 @@ export default function MasterProductsPage() {
     setSuggestedMinPriceUsd(usCp.min_price ? String(usCp.min_price) : "");
     setSuggestedMaxPriceUsd(usCp.max_price ? String(usCp.max_price) : "");
 
+    setBusinessProfileId(prod.business_profile_id ? String(prod.business_profile_id) : "none");
+    setProfessionalProfileId(prod.professional_profile_id ? String(prod.professional_profile_id) : "none");
+
     setIsActive(prod.is_active !== undefined ? prod.is_active : true);
 
     if (prod.attributes && typeof prod.attributes === "object" && Object.keys(prod.attributes).length > 0) {
@@ -343,6 +419,18 @@ export default function MasterProductsPage() {
     } else {
       setAttributeRows([{ key: "", value: "" }]);
     }
+
+    const loadedVariants = Array.isArray((prod as any).variants)
+      ? (prod as any).variants.map((v: any, idx: number) => ({
+          id: v.id || String(idx + 1),
+          name: v.name || "",
+          price: v.price !== undefined && v.price !== null ? String(v.price) : "",
+          regular_price: v.regular_price !== undefined && v.regular_price !== null ? String(v.regular_price) : "",
+          unit: v.unit || prod.unit_of_measurement || "Piece",
+          sku: v.sku || "",
+        }))
+      : [];
+    setVariants(loadedVariants);
 
     setDialogOpen(true);
   };
@@ -464,6 +552,17 @@ export default function MasterProductsPage() {
         .map((s) => s.trim())
         .filter(Boolean);
 
+      const formattedVariants = variants
+        .filter((v) => v.name.trim() && v.price.trim())
+        .map((v, idx) => ({
+          id: v.id || `v-${idx + 1}`,
+          name: v.name.trim(),
+          price: Number(v.price),
+          regular_price: v.regular_price ? Number(v.regular_price) : undefined,
+          unit: v.unit.trim() || unitOfMeasurement || "Piece",
+          sku: v.sku.trim() || undefined,
+        }));
+
       const countryPricing: Record<string, any> = {};
       countries.forEach((cCode) => {
         const meta = getCatalogCountryMeta(cCode);
@@ -505,6 +604,12 @@ export default function MasterProductsPage() {
         suggested_min_price: countryPricing["IN"]?.min_price || (suggestedMinPriceInr ? Number(suggestedMinPriceInr) : null),
         suggested_max_price: countryPricing["IN"]?.max_price || (suggestedMaxPriceInr ? Number(suggestedMaxPriceInr) : null),
         country_pricing: countryPricing,
+        business_profile_id: businessProfileId && businessProfileId !== "none" ? Number(businessProfileId) : null,
+        professional_profile_id: professionalProfileId && professionalProfileId !== "none" ? Number(professionalProfileId) : null,
+        profile_type: (businessProfileId && businessProfileId !== "none" && professionalProfileId && professionalProfileId !== "none")
+          ? "both"
+          : (professionalProfileId && professionalProfileId !== "none" ? "professional" : "business"),
+        variants: formattedVariants,
         is_active: isActive,
       };
 
@@ -584,8 +689,6 @@ export default function MasterProductsPage() {
 
   return (
     <div className="space-y-6">
-      <MasterCatalogNavTabs />
-
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -693,10 +796,8 @@ export default function MasterProductsPage() {
                     <TableHead>Category Hierarchy</TableHead>
                     <TableHead>Brand & Model</TableHead>
                     <TableHead>SKU & Unit</TableHead>
-                    <TableHead>Countries</TableHead>
                     <TableHead>Synonyms</TableHead>
-                    <TableHead className="text-right">India Suggested</TableHead>
-                    <TableHead className="text-right">USA Suggested</TableHead>
+                    <TableHead className="text-right">Suggested Price</TableHead>
                     <TableHead className="text-center">Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -725,6 +826,18 @@ export default function MasterProductsPage() {
                         <div className="text-[10px] text-muted-foreground font-mono">
                           /{p.slug}
                         </div>
+                        {p.business_name && (
+                          <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Briefcase className="size-2.5 text-primary shrink-0" />
+                            <span className="font-medium text-foreground">{p.business_name}</span>
+                          </div>
+                        )}
+                        {p.professional_name && (
+                          <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <span className="text-[9px] text-blue-500 font-bold shrink-0">👤</span>
+                            <span>{p.professional_name}</span>
+                          </div>
+                        )}
                         {p.description && (
                           <div className="text-[10px] text-muted-foreground line-clamp-1 max-w-xs font-normal mt-0.5">
                             {p.description}
@@ -772,23 +885,6 @@ export default function MasterProductsPage() {
                           <Scale className="size-3" /> {p.unit_of_measurement || "Piece"}
                         </div>
                       </TableCell>
-                      <TableCell className="text-xs">
-                        <div className="flex flex-wrap gap-1">
-                          {(p.countries && p.countries.length > 0 ? p.countries : ["IN", "US"]).map((code) => (
-                            <Badge
-                              key={code}
-                              variant="outline"
-                              className={`text-[9px] font-bold ${
-                                code === "IN"
-                                  ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20"
-                                  : "bg-blue-500/10 text-blue-700 border-blue-500/20"
-                              }`}
-                            >
-                              {code === "IN" ? "🇮🇳 IN" : "🇺🇸 US"}
-                            </Badge>
-                          ))}
-                        </div>
-                      </TableCell>
                       <TableCell className="max-w-[180px]">
                         <div className="flex flex-wrap gap-1">
                           {p.synonyms && p.synonyms.length > 0 ? (
@@ -807,17 +903,93 @@ export default function MasterProductsPage() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right text-xs font-bold text-foreground">
-                        <div>
-                          <span>₹ {Number(p.suggested_price_inr || p.suggested_price || 0).toLocaleString("en-IN")}</span>
-                          <span className="text-[10px] text-muted-foreground font-normal block">/ {p.unit_of_measurement || "Piece"}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right text-xs font-bold text-foreground">
-                        <div>
-                          <span>$ {Number(p.suggested_price_usd || 0).toFixed(2)}</span>
-                          <span className="text-[10px] text-muted-foreground font-normal block">/ {p.unit_of_measurement || "Piece"}</span>
-                        </div>
+                      <TableCell className="text-right text-xs">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              className="inline-flex items-center justify-end gap-1.5 py-1 px-2 rounded-md hover:bg-muted font-bold text-xs text-foreground cursor-pointer transition-colors group"
+                            >
+                              <div className="text-right">
+                                <div>
+                                  ₹ {Number(p.suggested_price_inr || p.suggested_price || 0).toLocaleString("en-IN")}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground font-normal flex items-center justify-end gap-1">
+                                  <span>
+                                    {Array.isArray(p.countries) && p.countries.length > 0
+                                      ? `${p.countries.length} ${p.countries.length === 1 ? "country" : "countries"}`
+                                      : "2 countries"}
+                                  </span>
+                                  <ChevronDown className="size-2.5 opacity-60 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                              </div>
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent align="end" className="w-80 p-3 space-y-2.5 shadow-lg">
+                            <div className="flex items-center justify-between border-b pb-2">
+                              <div className="font-semibold text-xs flex items-center gap-1.5 text-foreground">
+                                <Globe className="size-3.5 text-primary" />
+                                <span>Country-Wise Suggested Price</span>
+                              </div>
+                              <Badge variant="outline" className="text-[9px] font-mono">
+                                {Array.isArray(p.countries) && p.countries.length > 0 ? `${p.countries.length} Active` : "2 Active"}
+                              </Badge>
+                            </div>
+
+                            <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
+                              {(() => {
+                                const activeCodes = Array.isArray(p.countries) && p.countries.length > 0 ? p.countries : ["IN", "US"];
+                                return activeCodes.map((code) => {
+                                  const meta = getCatalogCountryMeta(code);
+                                  const countryP = p.country_pricing?.[code];
+                                  const price = countryP?.price !== undefined
+                                    ? countryP.price
+                                    : code === "IN"
+                                      ? (p.suggested_price_inr || p.suggested_price || 0)
+                                      : code === "US"
+                                        ? (p.suggested_price_usd || 0)
+                                        : 0;
+                                  const minP = countryP?.min_price !== undefined ? countryP.min_price : (code === "IN" ? p.suggested_min_price : undefined);
+                                  const maxP = countryP?.max_price !== undefined ? countryP.max_price : (code === "IN" ? p.suggested_max_price : undefined);
+
+                                  return (
+                                    <div
+                                      key={code}
+                                      className="flex items-center justify-between p-2 rounded-md bg-muted/30 border border-muted/60 hover:bg-muted/50 transition-colors"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-base leading-none">{meta.flag}</span>
+                                        <div>
+                                          <div className="font-medium text-xs text-foreground flex items-center gap-1">
+                                            <span>{meta.name}</span>
+                                            <span className="text-[9px] text-muted-foreground font-mono">({code})</span>
+                                          </div>
+                                          {(minP || maxP) ? (
+                                            <div className="text-[10px] text-muted-foreground">
+                                              Range: {meta.currencySymbol} {Number(minP || 0).toLocaleString()} – {meta.currencySymbol} {Number(maxP || 0).toLocaleString()}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <div className="text-xs font-bold text-foreground">
+                                          {meta.currencySymbol} {Number(price || 0).toLocaleString()}
+                                        </div>
+                                        <div className="text-[9px] text-muted-foreground font-mono">
+                                          / {p.unit_of_measurement || "Piece"}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                });
+                              })()}
+                            </div>
+
+                            <p className="text-[10px] text-muted-foreground italic text-center pt-1 border-t">
+                              Suggested discovery rates • Provider pricing remains independent
+                            </p>
+                          </PopoverContent>
+                        </Popover>
                       </TableCell>
                       <TableCell className="text-center">
                         {p.is_active ? (
@@ -884,15 +1056,106 @@ export default function MasterProductsPage() {
           </DialogHeader>
 
           <form onSubmit={handleSave} className="space-y-4">
-            <Tabs defaultValue="basic" className="w-full">
+            <Tabs defaultValue="category" className="w-full">
               <TabsList className="grid grid-cols-4 h-9">
-                <TabsTrigger value="basic" className="text-xs">Basic Info</TabsTrigger>
                 <TabsTrigger value="category" className="text-xs">Category & Synonyms</TabsTrigger>
-                <TabsTrigger value="media-attrs" className="text-xs">Media & Countries</TabsTrigger>
+                <TabsTrigger value="basic" className="text-xs">Basic Info</TabsTrigger>
+                <TabsTrigger value="media-attrs" className="text-xs">Media & Attributes</TabsTrigger>
                 <TabsTrigger value="pricing" className="text-xs">Pricing & SKU</TabsTrigger>
               </TabsList>
 
-              {/* TAB 1: BASIC INFO */}
+              {/* TAB 1: CATEGORY & SYNONYMS (FIRST TAB) */}
+              <TabsContent value="category" className="space-y-3 pt-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">Business Type / Sector *</Label>
+                    <Select
+                      value={businessCategoryId}
+                      onValueChange={(val) => {
+                        setBusinessCategoryId(val);
+                        setMainCategoryId("");
+                        setSubcategoryId("");
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Select Business Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Business Types</SelectItem>
+                        {businessCategories.map((bc) => (
+                          <SelectItem key={bc.id} value={String(bc.id)}>
+                            {bc.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">Main Product Category *</Label>
+                    <Select
+                      value={mainCategoryId}
+                      onValueChange={(val) => {
+                        setMainCategoryId(val);
+                        setSubcategoryId("");
+                        if (!businessCategoryId || businessCategoryId === "all") {
+                          const cat = categories.find((c) => String(c.id) === val);
+                          if (cat?.business_category_id) {
+                            setBusinessCategoryId(String(cat.business_category_id));
+                          }
+                        }
+                      }}
+                      disabled={mainCategories.length === 0}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder={mainCategories.length === 0 ? "No Categories Found" : "Select Product Category"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {mainCategories.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">Sub Product Category</Label>
+                    <Select
+                      value={subcategoryId}
+                      onValueChange={setSubcategoryId}
+                      disabled={!mainCategoryId || availableSubcategories.length === 0}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder={!mainCategoryId ? "Select Product Category First" : (availableSubcategories.length === 0 ? "No Subcategories Found" : "Select Subcategory")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableSubcategories.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold">Product Synonyms (Search Keywords)</Label>
+                  <Input
+                    placeholder="e.g. tee, collar shirt, sportswear, polo (comma-separated)"
+                    value={synonymsText}
+                    onChange={(e) => setSynonymsText(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Comma-separated alternate names and synonyms to enhance discovery when customers search for this item.
+                  </p>
+                </div>
+              </TabsContent>
+
+              {/* TAB 2: BASIC INFO */}
               <TabsContent value="basic" className="space-y-3 pt-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
@@ -937,6 +1200,54 @@ export default function MasterProductsPage() {
                   </div>
                 </div>
 
+                <div className="p-3 bg-muted/40 border border-muted/70 rounded-lg space-y-2.5">
+                  <div className="flex items-center gap-1.5 font-bold text-xs text-foreground">
+                    <Briefcase className="size-3.5 text-primary" />
+                    <span>Store & Professional Assignment</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs font-semibold">Assigned Store / Business Profile</Label>
+                      <Select value={businessProfileId} onValueChange={setBusinessProfileId}>
+                        <SelectTrigger className="h-8 text-xs bg-background">
+                          <SelectValue placeholder="Unassigned (Platform Catalog)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Unassigned (Platform Catalog)</SelectItem>
+                          {availableBusinesses.map((b) => (
+                            <SelectItem key={b.id} value={String(b.id)}>
+                              {b.name} {b.city ? `(${b.city})` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] text-muted-foreground">
+                        Assign to a store/business profile to display in its storefront catalog.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-xs font-semibold">Assigned Professional Profile</Label>
+                      <Select value={professionalProfileId} onValueChange={setProfessionalProfileId}>
+                        <SelectTrigger className="h-8 text-xs bg-background">
+                          <SelectValue placeholder="Unassigned (General Store Product)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Unassigned (General Store Product)</SelectItem>
+                          {availableProfessionals.map((p) => (
+                            <SelectItem key={p.id} value={String(p.id)}>
+                              {p.name} {p.designation ? `— ${p.designation}` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] text-muted-foreground">
+                        Optional: Associate with a specialist professional (e.g. physician, trainer).
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="space-y-1">
                   <Label className="text-xs font-bold">Product Description</Label>
                   <Textarea
@@ -959,64 +1270,7 @@ export default function MasterProductsPage() {
                 </div>
               </TabsContent>
 
-              {/* TAB 2: CATEGORY & SYNONYMS */}
-              <TabsContent value="category" className="space-y-3 pt-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-bold">Main Category</Label>
-                    <Select value={mainCategoryId} onValueChange={(val) => {
-                      setMainCategoryId(val);
-                      setSubcategoryId("");
-                    }}>
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder="Select Main Category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {mainCategories.map((c) => (
-                          <SelectItem key={c.id} value={String(c.id)}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs font-bold">Subcategory</Label>
-                    <Select
-                      value={subcategoryId}
-                      onValueChange={setSubcategoryId}
-                      disabled={!mainCategoryId || availableSubcategories.length === 0}
-                    >
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder={!mainCategoryId ? "Select Main Category First" : (availableSubcategories.length === 0 ? "No Subcategories Found" : "Select Subcategory")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableSubcategories.map((c) => (
-                          <SelectItem key={c.id} value={String(c.id)}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold">Product Synonyms (Search Keywords)</Label>
-                  <Input
-                    placeholder="e.g. tee, collar shirt, sportswear, polo (comma-separated)"
-                    value={synonymsText}
-                    onChange={(e) => setSynonymsText(e.target.value)}
-                    className="h-8 text-xs"
-                  />
-                  <p className="text-[10px] text-muted-foreground">
-                    Comma-separated alternate names and synonyms to enhance discovery when customers search for this item.
-                  </p>
-                </div>
-              </TabsContent>
-
-              {/* TAB 3: MEDIA & COUNTRIES (Moved before Pricing & SKU) */}
+              {/* TAB 3: MEDIA & ATTRIBUTES */}
               <TabsContent value="media-attrs" className="space-y-4 pt-3">
                 {/* DEFAULT IMAGE UPLOAD & MANAGEMENT */}
                 <div className="p-3.5 border rounded-xl bg-muted/10 space-y-3">
@@ -1186,80 +1440,6 @@ export default function MasterProductsPage() {
                   />
                 </div>
 
-                {/* COUNTRY AVAILABILITY */}
-                <div className="p-3.5 border rounded-xl bg-muted/10 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-xs font-bold flex items-center gap-1.5">
-                        <Globe className="size-3.5 text-primary" /> Country Availability
-                      </Label>
-                      <p className="text-[10px] text-muted-foreground">
-                        Select countries where this master product catalog entry is active and discoverable.
-                      </p>
-                    </div>
-                    <Badge variant="outline" className="text-xs font-bold">
-                      {countries.length} Selected
-                    </Badge>
-                  </div>
-
-                  {/* Selected Country Badges */}
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {countries.map((cCode) => {
-                      const meta = getCatalogCountryMeta(cCode);
-                      return (
-                        <Badge
-                          key={cCode}
-                          variant="secondary"
-                          className="pl-2 pr-1.5 py-1 text-xs font-medium flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20"
-                        >
-                          <span className="text-sm">{meta.flag}</span>
-                          <span>{meta.name} ({meta.currencyCode} {meta.currencySymbol})</span>
-                          <button
-                            type="button"
-                            onClick={() => toggleCountry(cCode)}
-                            className="hover:bg-primary/20 rounded-full p-0.5 transition-colors"
-                            title={`Remove ${meta.name}`}
-                          >
-                            <X className="size-3" />
-                          </button>
-                        </Badge>
-                      );
-                    })}
-                  </div>
-
-                  {/* Quick Select Grid */}
-                  <div className="pt-2 border-t">
-                    <Label className="text-[11px] font-semibold text-muted-foreground block mb-2">
-                      Available Countries (Click to toggle)
-                    </Label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                      {CATALOG_AVAILABLE_COUNTRIES.map((c) => {
-                        const isSelected = countries.includes(c.code);
-                        return (
-                          <button
-                            type="button"
-                            key={c.code}
-                            onClick={() => toggleCountry(c.code)}
-                            className={`p-2 rounded-lg border text-left text-xs font-medium transition-all flex items-center justify-between ${
-                              isSelected
-                                ? "bg-primary/10 border-primary text-primary font-bold shadow-xs"
-                                : "bg-background border-border text-foreground hover:bg-muted/50"
-                            }`}
-                          >
-                            <div className="flex items-center gap-1.5 truncate">
-                              <span className="text-base">{c.flag}</span>
-                              <span className="truncate">{c.name}</span>
-                            </div>
-                            <span className="text-[10px] opacity-70 shrink-0 font-mono">
-                              {c.currencySymbol}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
                 {/* PRODUCT ATTRIBUTES */}
                 <div className="space-y-2 pt-2 border-t">
                   <div className="flex items-center justify-between">
@@ -1349,7 +1529,7 @@ export default function MasterProductsPage() {
                         <Tag className="size-3.5 text-primary" /> Suggested Product Benchmark Pricing by Country
                       </h4>
                       <p className="text-[10px] text-muted-foreground">
-                        Configure suggested reference prices for countries enabled in the Media &amp; Countries tab.
+                        Configure suggested reference benchmark prices by country.
                       </p>
                     </div>
                   </div>
@@ -1358,8 +1538,7 @@ export default function MasterProductsPage() {
                     <div className="p-4 border rounded-xl bg-amber-500/10 border-amber-500/20 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2.5">
                       <AlertCircle className="size-4 shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-bold">No countries selected. </span>
-                        <span>Please switch to the &ldquo;Media &amp; Countries&rdquo; tab and select at least one country to set suggested product prices.</span>
+                        <span className="font-bold">No countries available.</span>
                       </div>
                     </div>
                   ) : (
@@ -1428,6 +1607,125 @@ export default function MasterProductsPage() {
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+                </div>
+
+                {/* PRODUCT VARIANTS & PACK SIZES */}
+                <div className="space-y-3 pt-3 border-t">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <Layers className="size-3.5 text-primary" /> Product Variants &amp; Pricing (Pack Sizes, Weights, Options)
+                      </h4>
+                      <p className="text-[10px] text-muted-foreground">
+                        Define custom variants with individual prices shown in store comparison &amp; product dropdowns (e.g. 250 g, 500 g, 1 kg).
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setVariants((prev) => [
+                          ...prev,
+                          {
+                            id: `v-${Date.now()}`,
+                            name: "",
+                            price: "",
+                            regular_price: "",
+                            unit: unitOfMeasurement || "Piece",
+                            sku: "",
+                          },
+                        ])
+                      }
+                      className="h-7 text-[11px] gap-1 cursor-pointer"
+                    >
+                      <Plus className="size-3" /> Add Variant
+                    </Button>
+                  </div>
+
+                  {variants.length === 0 ? (
+                    <div className="p-3 text-center rounded-xl border border-dashed text-xs text-muted-foreground bg-muted/10">
+                      No custom variants added. Standard unit pricing applies. Click <strong>+ Add Variant</strong> to define pack sizes (e.g., 250 g, 500 g, 1 kg).
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-muted-foreground px-1">
+                        <span className="col-span-4">Variant Name / Pack</span>
+                        <span className="col-span-2">Price (₹) *</span>
+                        <span className="col-span-2">MRP / Reg Price</span>
+                        <span className="col-span-2">Unit</span>
+                        <span className="col-span-2 text-right">Action</span>
+                      </div>
+                      {variants.map((v, vIdx) => (
+                        <div key={v.id || vIdx} className="grid grid-cols-12 gap-2 items-center bg-muted/20 p-2 rounded-xl border">
+                          <div className="col-span-4">
+                            <Input
+                              placeholder="e.g. 500 g or 1 kg"
+                              value={v.name}
+                              onChange={(e) => {
+                                const copy = [...variants];
+                                copy[vIdx].name = e.target.value;
+                                setVariants(copy);
+                              }}
+                              className="h-7 text-xs"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              placeholder="₹ Price"
+                              value={v.price}
+                              onChange={(e) => {
+                                const copy = [...variants];
+                                copy[vIdx].price = e.target.value;
+                                setVariants(copy);
+                              }}
+                              className="h-7 text-xs font-mono font-bold"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              placeholder="₹ Reg Price"
+                              value={v.regular_price}
+                              onChange={(e) => {
+                                const copy = [...variants];
+                                copy[vIdx].regular_price = e.target.value;
+                                setVariants(copy);
+                              }}
+                              className="h-7 text-xs font-mono"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Input
+                              placeholder="Unit"
+                              value={v.unit}
+                              onChange={(e) => {
+                                const copy = [...variants];
+                                copy[vIdx].unit = e.target.value;
+                                setVariants(copy);
+                              }}
+                              className="h-7 text-xs"
+                            />
+                          </div>
+                          <div className="col-span-2 flex justify-end">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setVariants((prev) => prev.filter((_, i) => i !== vIdx))}
+                              className="size-7 text-destructive hover:bg-destructive/10 cursor-pointer"
+                              title="Delete variant"
+                            >
+                              <Trash2 className="size-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>

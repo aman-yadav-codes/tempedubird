@@ -2,7 +2,7 @@
 
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Briefcase,
@@ -48,6 +48,7 @@ interface JobDetailPageProps {
 
 export default function JobDetailPage({ params }: JobDetailPageProps) {
   const { id } = use(params);
+  const router = useRouter();
   const [job, setJob] = useState<StaffJobPosting | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFoundState, setNotFoundState] = useState(false);
@@ -87,12 +88,15 @@ export default function JobDetailPage({ params }: JobDetailPageProps) {
         return;
       }
       setJob(json.data);
+      if (json.data.slug && /^\d+$/.test(id) && json.data.slug !== id) {
+        router.replace(`/jobs/${json.data.slug}`);
+      }
     } catch {
       setNotFoundState(true);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, router]);
 
   useEffect(() => {
     void fetchJob();

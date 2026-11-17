@@ -24,7 +24,7 @@ const fetchBusinessFullData = cache(async (idOrSlug: string) => {
       FROM business_profiles bp
       LEFT JOIN categories c ON c.id = bp.category_id
       LEFT JOIN categories sc ON sc.id = bp.subcategory_id
-      WHERE (bp.slug = $1 OR bp.id = $2)
+      WHERE (bp.slug = $1 OR bp.id = $2 OR $1 ILIKE '%' || bp.slug || '%')
         AND COALESCE(bp.is_active, TRUE) = TRUE
       LIMIT 1`,
       [idOrSlug, numId || -1]
@@ -47,84 +47,126 @@ const fetchBusinessFullData = cache(async (idOrSlug: string) => {
     const business = bizRes.rows[0];
     const bizId = business.id;
     const instId = business.institution_profile_id || -1;
+    const userId = business.user_id || -1;
 
-    // 2. Concurrently fetch products, services, professionals, reviews
-    const [productsSettled, servicesSettled, professionalsSettled, reviewsSettled] = await Promise.allSettled([
-      // Products
+    // 2. Concurrently fetch products, services, professionals, reviews, courses, jobs
+    const [productsSettled, servicesSettled, professionalsSettled, reviewsSettled, coursesSettled, jobsSettled] = await Promise.allSettled([
+      // Products: Query store products first, falling back to / unioning master_products
       db.query(
         `SELECT
-          mp.id,
-          mp.name,
-          mp.slug,
-          mp.brand,
+          p.id,
+          p.title AS name,
+          p.slug,
+          COALESCE(mp.brand, 'Generic') AS brand,
           b.name AS brand_name,
-          mp.regular_price,
-          mp.discounted_price,
-          COALESCE(mp.discounted_price, mp.regular_price, mp.suggested_price, 0) AS price,
-          mp.currency,
-          mp.default_image_url,
+          p.price AS regular_price,
+          p.sale_price AS discounted_price,
+          COALESCE(p.sale_price, p.price, 0) AS price,
+          'INR' AS currency,
+          COALESCE(p.image_url, mp.default_image_url) AS default_image_url,
           mp.images,
-          mp.description,
-          mp.unit_of_measurement,
-          COALESCE(mp.unit, mp.unit_of_measurement, u.short_symbol, 'piece') AS unit,
-          COALESCE(mp.unit_quantity, 1) AS unit_quantity,
-          c.name AS category_name,
-          sc.name AS subcategory_name
-        FROM master_products mp
+          p.description,
+          COALESCE(p.unit, 'piece') AS unit_of_measurement,
+          COALESCE(p.unit, 'piece') AS unit,
+          COALESCE(p.unit_quantity, 1) AS unit_quantity,
+          COALESCE(pc.name, p.category, c.name, 'General') AS category_name,
+          sc.name AS subcategory_name,
+          p.stock_quantity
+        FROM products p
+        LEFT JOIN product_categories pc ON pc.id = p.category_id
+        LEFT JOIN master_products mp ON mp.id = p.master_product_id
         LEFT JOIN brands b ON b.id = mp.brand_id
-        LEFT JOIN units u ON u.id = mp.unit_id
         LEFT JOIN categories c ON c.id = mp.category_id
         LEFT JOIN categories sc ON sc.id = mp.subcategory_id
-        WHERE (mp.business_profile_id = $1 OR (mp.institution_id = $2 AND mp.profile_type = 'business'))
-          AND COALESCE(mp.is_active, TRUE) = TRUE
-        ORDER BY mp.id DESC`,
-        [bizId, instId]
+        WHERE (
+          p.business_profile_id = $1 
+          OR (p.institution_id IS NOT NULL AND p.institution_id = $2)
+          OR (p.created_by IS NOT NULL AND p.created_by = $3)
+        )
+          AND COALESCE(p.status, 'active') = 'active'
+        ORDER BY p.id DESC`,
+        [bizId, instId, userId]
       ),
 
-      // Services
+      // Services: Query store services
       db.query(
         `SELECT
-          ms.id,
-          ms.name,
-          ms.slug,
-          ms.pricing_model,
-          ms.regular_price,
-          ms.discounted_price,
-          COALESCE(ms.discounted_price, ms.regular_price, ms.suggested_price, 0) AS price,
-          ms.currency,
-          ms.default_image_url,
+          s.id,
+          s.title AS name,
+          s.slug,
+          COALESCE(s.pricing_model, 'fixed_price') AS pricing_model,
+          s.price AS regular_price,
+          s.sale_price AS discounted_price,
+          COALESCE(s.sale_price, s.price, 0) AS price,
+          'INR' AS currency,
+          COALESCE(s.image_url, ms.default_image_url) AS default_image_url,
           ms.images,
-          ms.description,
-          ms.estimated_duration,
-          ms.service_location,
-          c.name AS category_name,
-          sc.name AS subcategory_name
-        FROM master_services ms
+          s.description,
+          COALESCE(s.duration_minutes || ' mins', ms.estimated_duration, '30 mins') AS estimated_duration,
+          COALESCE(s.service_location, ms.service_location, 'At Center') AS service_location,
+          COALESCE(sc.name, s.category, c.name, 'General') AS category_name,
+          ssc.name AS subcategory_name
+        FROM services s
+        LEFT JOIN service_categories sc ON sc.id = s.category_id
+        LEFT JOIN master_services ms ON ms.id = s.master_service_id
         LEFT JOIN categories c ON c.id = ms.category_id
-        LEFT JOIN categories sc ON sc.id = ms.subcategory_id
-        WHERE (ms.business_profile_id = $1 OR (ms.institution_id = $2 AND ms.profile_type = 'business'))
-          AND COALESCE(ms.is_active, TRUE) = TRUE
-        ORDER BY ms.id DESC`,
-        [bizId, instId]
+        LEFT JOIN categories ssc ON ssc.id = ms.subcategory_id
+        WHERE (
+          s.business_profile_id = $1 
+          OR (s.institution_id IS NOT NULL AND s.institution_id = $2)
+          OR (s.created_by IS NOT NULL AND s.created_by = $3)
+        )
+          AND COALESCE(s.status, 'active') = 'active'
+        ORDER BY s.id DESC`,
+        [bizId, instId, userId]
       ),
 
-      // Associated Professionals
+      // Team: Associated Professionals & Institution Staff Members
       db.query(
-        `SELECT
-          pp.id,
-          pp.name,
-          pp.slug,
-          pp.designation,
-          pp.profession_type,
-          pp.avatar_url,
-          pp.experience_years,
-          pp.city,
-          pp.state
-        FROM professional_profiles pp
-        WHERE pp.business_profile_id = $1
-          AND COALESCE(pp.is_active, TRUE) = TRUE
-        ORDER BY pp.id ASC`,
-        [bizId]
+        `SELECT * FROM (
+          -- 1. Registered Professional Profiles
+          SELECT
+            pp.id::text AS id,
+            pp.name,
+            COALESCE(pp.slug, 'prof-' || pp.id) AS slug,
+            COALESCE(pp.designation, pp.profession_type, 'Professional Specialist') AS designation,
+            COALESCE(pp.profession_type, 'Professional') AS profession_type,
+            pp.avatar_url,
+            COALESCE(pp.experience_years::text, '') AS experience_years,
+            COALESCE(pp.city, '') AS city,
+            COALESCE(pp.state, '') AS state,
+            'professional' AS member_type,
+            1 AS sort_order
+          FROM professional_profiles pp
+          WHERE (pp.business_profile_id = $1 OR (pp.institution_profile_id IS NOT NULL AND pp.institution_profile_id = $2))
+            AND COALESCE(pp.is_active, TRUE) = TRUE
+
+          UNION ALL
+
+          -- 2. Staff Members & Faculty from Institution / Business
+          SELECT DISTINCT ON (u.id)
+            ('staff-' || u.id) AS id,
+            COALESCE(NULLIF(TRIM(u.full_name), ''), u.email) AS name,
+            COALESCE(u.id::text, '') AS slug,
+            COALESCE(d.name, up.designation, r.name, up.department, 'Staff Member') AS designation,
+            COALESCE(r.name, up.department, 'Team Member') AS profession_type,
+            COALESCE(up.avatar_url, u.avatar_url) AS avatar_url,
+            COALESCE(up.experience_years::text, '') AS experience_years,
+            '' AS city,
+            '' AS state,
+            'staff' AS member_type,
+            2 AS sort_order
+          FROM users u
+          JOIN institution_memberships im ON im.user_id = u.id AND im.is_active = TRUE AND COALESCE(im.is_deleted, FALSE) = FALSE
+          JOIN roles r ON r.id = im.role_id
+          LEFT JOIN user_profiles up ON up.user_id = u.id
+          LEFT JOIN designations d ON d.id = up.designation_id
+          WHERE (im.institution_id = $2 OR ($2::int = -1 AND u.id = $3))
+            AND COALESCE(u.is_deleted, FALSE) = FALSE
+            AND r.code NOT IN ('student', 'guardian', 'parent')
+        ) team
+        ORDER BY sort_order ASC, name ASC`,
+        [bizId, instId, userId]
       ),
 
       // Reviews
@@ -144,6 +186,69 @@ const fetchBusinessFullData = cache(async (idOrSlug: string) => {
         LIMIT 20`,
         [instId, bizId]
       ),
+
+      // Courses: Inherited / Created Institution & Business Courses
+      db.query(
+        `SELECT
+          ic.id,
+          COALESCE(ic.course_name, mc.name) AS name,
+          COALESCE(ic.slug, mc.slug, 'course-' || ic.id) AS slug,
+          COALESCE(ic.code, mc.code) AS code,
+          COALESCE(ic.description, mc.description) AS description,
+          COALESCE(mc.duration_value, 1) AS duration_value,
+          COALESCE(mc.duration_unit, 'Year') AS duration_unit,
+          COALESCE(ic.thumbnail_url, mc.thumbnail_url) AS thumbnail_url,
+          COALESCE(ic.icon_url, mc.icon_url) AS icon_url,
+          COALESCE(ic.board_or_university, mc.university_name) AS university_name,
+          COALESCE(mc.authority_type, 'Accredited Program') AS authority_type,
+          COALESCE(c.name, mc_cat.name, 'Academic & Certification') AS category_name,
+          COALESCE(ic.seats_available, mc.seats_available, 60) AS seats_available,
+          COALESCE(ic.fee_amount, 0) AS fee_amount,
+          ic.price AS price_text
+        FROM institution_courses ic
+        LEFT JOIN master_courses mc ON mc.id = ic.master_course_id
+        LEFT JOIN categories c ON c.id = ic.category_id
+        LEFT JOIN categories mc_cat ON mc_cat.id = mc.category_id
+        WHERE (
+          ic.business_profile_id = $1
+          OR (ic.institution_id IS NOT NULL AND ic.institution_id = $2)
+        )
+          AND COALESCE(ic.is_active, TRUE) = TRUE
+        ORDER BY ic.id DESC
+        LIMIT 100`,
+        [bizId, instId]
+      ),
+
+      // Jobs: Store & Staff Job Postings
+      db.query(
+        `SELECT
+          sjp.id,
+          sjp.title,
+          COALESCE(sjp.slug, 'job-' || sjp.id) AS slug,
+          sjp.department,
+          sjp.employment_type,
+          sjp.experience_level,
+          sjp.work_mode,
+          sjp.location,
+          sjp.salary_range,
+          sjp.openings_count,
+          sjp.description,
+          sjp.requirements,
+          sjp.benefits,
+          sjp.status,
+          sjp.created_at,
+          COALESCE(sjp.department, 'Store Operations') AS category_name
+        FROM staff_job_postings sjp
+        WHERE (
+          (sjp.institution_id IS NOT NULL AND sjp.institution_id = $1)
+          OR (sjp.created_by IS NOT NULL AND sjp.created_by = $2)
+          OR sjp.institution_id IS NULL
+        )
+          AND LOWER(COALESCE(sjp.status, 'active')) = 'active'
+        ORDER BY sjp.id DESC
+        LIMIT 50`,
+        [instId, userId]
+      ),
     ]);
 
     return {
@@ -152,6 +257,8 @@ const fetchBusinessFullData = cache(async (idOrSlug: string) => {
       services: servicesSettled.status === "fulfilled" ? servicesSettled.value.rows : [],
       professionals: professionalsSettled.status === "fulfilled" ? professionalsSettled.value.rows : [],
       reviews: reviewsSettled.status === "fulfilled" ? reviewsSettled.value.rows : [],
+      courses: coursesSettled.status === "fulfilled" ? coursesSettled.value.rows : [],
+      jobs: jobsSettled.status === "fulfilled" ? jobsSettled.value.rows : [],
     };
   } catch (err: any) {
     console.error("fetchBusinessFullData error:", err?.message || err);
@@ -210,6 +317,8 @@ export default async function BusinessProfilePage({ params }: Props) {
         services={data.services}
         professionals={data.professionals}
         reviews={data.reviews}
+        courses={data.courses}
+        jobs={data.jobs}
       />
     </Suspense>
   );

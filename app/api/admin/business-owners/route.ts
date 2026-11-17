@@ -91,6 +91,23 @@ export async function GET(req: Request) {
         u.last_login_at,
         (COUNT(DISTINCT bp.id) + COUNT(DISTINCT ip.id))::int as businesses_count,
         (
+          SELECT COALESCE(json_agg(json_build_object(
+            'id', b.id,
+            'name', b.name,
+            'slug', b.slug,
+            'type', b.type
+          )), '[]'::json)
+          FROM (
+            SELECT bp2.id, bp2.name, bp2.slug, 'business' as type
+            FROM business_profiles bp2
+            WHERE bp2.user_id = u.id AND COALESCE(bp2.is_active, true) = true
+            UNION ALL
+            SELECT ip2.id, ip2.name, ip2.slug, 'institution' as type
+            FROM institution_profiles ip2
+            WHERE ip2.created_by = u.id AND COALESCE(ip2.is_deleted, false) = false
+          ) b
+        ) as businesses,
+        (
           COALESCE(SUM((SELECT COUNT(*)::int FROM business_products bprod WHERE bprod.business_profile_id = bp.id OR bprod.business_id = bp.id)), 0) +
           COALESCE(SUM((SELECT COUNT(*)::int FROM products p WHERE p.institution_id = ip.id)), 0)
         )::int as total_products,

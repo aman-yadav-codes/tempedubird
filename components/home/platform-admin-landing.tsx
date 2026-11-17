@@ -56,6 +56,7 @@ import { parseSearchIntent } from "@/lib/utils/search-intent";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { Card, CardContent } from "@/components/ui/card";
 import { CategoriesSection } from "@/components/home/categories-section";
+import { HomeCategoriesProductsSection } from "@/components/home/home-categories-products";
 import { FeaturedCoursesSection } from "@/components/home/featured-courses-section";
 import { PublicExamsSection } from "@/components/home/public-exams-section";
 import { WhyChooseUsSection } from "@/components/home/why-choose-us-section";
@@ -1044,6 +1045,9 @@ export function PlatformAdminLanding() {
 
       {/* 4. ACADEMIC CATEGORIES GRID (ALL 9 MODULES) */}
       <CategoriesSection />
+
+      {/* 4B. CATEGORIES WISE TOP PRODUCTS */}
+      <HomeCategoriesProductsSection />
 
       {/* 5. FEATURED & HIGHEST RATED COURSES */}
       <FeaturedCoursesSection />

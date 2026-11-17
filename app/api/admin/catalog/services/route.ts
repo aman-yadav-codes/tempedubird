@@ -3,12 +3,29 @@ import { db } from "@/lib/db/db";
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { getUserCatalogScope } from "@/lib/auth/institution-scope";
 
+let serviceColumnsEnsured = false;
+async function ensureServiceColumns() {
+  if (serviceColumnsEnsured) return;
+  try {
+    await db.query(`
+      ALTER TABLE master_services
+      ADD COLUMN IF NOT EXISTS attributes JSONB DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS variants JSONB DEFAULT '[]'::jsonb;
+    `);
+    serviceColumnsEnsured = true;
+  } catch (err) {
+    console.warn("Could not ensure master_services columns:", err);
+  }
+}
+
 export async function GET(req: Request) {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    await ensureServiceColumns();
 
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search")?.trim() || "";
@@ -41,7 +58,14 @@ export async function GET(req: Request) {
         COALESCE(ms.suggested_min_price, 0) AS suggested_min_price,
         COALESCE(ms.suggested_max_price, 0) AS suggested_max_price,
         COALESCE(ms.country_pricing, '{}'::jsonb) AS country_pricing,
+        COALESCE(ms.attributes, '{}'::jsonb) AS attributes,
+        COALESCE(ms.variants, '[]'::jsonb) AS variants,
         COALESCE(ms.supported_pricing_models, '{"fixed_price","hourly","per_visit","per_session","per_project","per_day","per_unit","starting_from","price_range","free_consultation","quote_required"}') AS supported_pricing_models,
+        ms.business_profile_id,
+        bp.name AS business_name,
+        ms.professional_profile_id,
+        pp.name AS professional_name,
+        ms.profile_type,
         ms.is_active,
         ms.created_at,
         ms.updated_at
@@ -49,6 +73,8 @@ export async function GET(req: Request) {
       LEFT JOIN categories c_main ON c_main.id = COALESCE(ms.main_category_id, ms.category_id)
       LEFT JOIN categories c_sub ON c_sub.id = ms.subcategory_id
       LEFT JOIN categories c ON c.id = ms.category_id
+      LEFT JOIN business_profiles bp ON bp.id = ms.business_profile_id
+      LEFT JOIN professional_profiles pp ON pp.id = ms.professional_profile_id
       WHERE 1=1
     `;
     const params: any[] = [];
@@ -77,9 +103,12 @@ export async function GET(req: Request) {
       pIdx++;
     }
 
-    // Tenant & Business ownership scope filtering
+    // Tenant & Business ownership scope filtering:
+    // Only restrict items if caller explicitly requests "mine" (e.g. from store-specific inventory tab).
+    // The Master Services Catalog lists all master template services for browsing, cloning, and assignment.
+    const scope = searchParams.get("scope");
     const catalogScope = await getUserCatalogScope(db, user);
-    if (!catalogScope.isSuperAdmin) {
+    if (scope === "mine" && !catalogScope.isSuperAdmin) {
       if (catalogScope.isPureProfessional) {
         // Professional account owners can see services listed by them only
         if (catalogScope.professionalProfileIds.length === 0) {
@@ -230,6 +259,7 @@ export async function POST(req: Request) {
       category_id,
       default_image_url,
       additional_images,
+      attributes,
       synonyms,
       countries,
       pricing_model,
@@ -243,6 +273,9 @@ export async function POST(req: Request) {
       country_pricing,
       supported_pricing_models,
       is_active,
+      business_profile_id,
+      professional_profile_id,
+      profile_type,
     } = body;
 
     if (!name?.trim()) {
@@ -298,6 +331,8 @@ export async function POST(req: Request) {
     const assignedProfessionalId = body.professional_profile_id ? Number(body.professional_profile_id) : catalogScope.primaryProfessionalId;
     const assignedProfileType = body.profile_type || (assignedProfessionalId ? "professional" : "business");
 
+    const parsedAttributes = attributes && typeof attributes === "object" ? attributes : {};
+
     const result = await db.query(
       `
       INSERT INTO master_services (
@@ -309,6 +344,7 @@ export async function POST(req: Request) {
         description,
         default_image_url,
         additional_images,
+        attributes,
         synonyms,
         countries,
         pricing_model,
@@ -326,15 +362,18 @@ export async function POST(req: Request) {
         institution_id,
         professional_profile_id,
         profile_type,
+        variants,
         created_at,
         updated_at
       )
       VALUES (
         $1, $2, $3, $4, $5,
-        $6, $7, $8, $9, $10,
+        $6, $7, $8, $9::jsonb, $10,
         $11, $12, $13, $14, $15,
-        $16, $17, $18, $19::jsonb, $20::text[],
-        $21, $22, $23, $24, $25,
+        $16, $17, $18, $19, $20::jsonb,
+        $21::text[], $22, $23, $24, $25,
+        $26,
+        $27::jsonb,
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
       )
       RETURNING *;
@@ -348,6 +387,7 @@ export async function POST(req: Request) {
         description?.trim() || null,
         default_image_url?.trim() || null,
         additionalImagesArr,
+        JSON.stringify(parsedAttributes),
         synonymsArr,
         countriesArr,
         (pricing_model || "fixed_price").trim(),
@@ -365,6 +405,7 @@ export async function POST(req: Request) {
         assignedInstitutionId,
         assignedProfessionalId,
         assignedProfileType,
+        JSON.stringify(Array.isArray(body.variants) ? body.variants : []),
       ]
     );
 
@@ -405,6 +446,7 @@ export async function PATCH(req: Request) {
       category_id,
       default_image_url,
       additional_images,
+      attributes,
       synonyms,
       countries,
       pricing_model,
@@ -418,6 +460,9 @@ export async function PATCH(req: Request) {
       country_pricing,
       supported_pricing_models,
       is_active,
+      business_profile_id,
+      professional_profile_id,
+      profile_type,
     } = body;
 
     if (!id) {
@@ -445,6 +490,7 @@ export async function PATCH(req: Request) {
     const minPrice = suggested_min_price !== undefined ? (suggested_min_price !== null && suggested_min_price !== "" ? Number(suggested_min_price) : null) : undefined;
     const maxPrice = suggested_max_price !== undefined ? (suggested_max_price !== null && suggested_max_price !== "" ? Number(suggested_max_price) : null) : undefined;
     const countryPricingJson = country_pricing !== undefined ? JSON.stringify(country_pricing) : undefined;
+    const attributesJson = attributes !== undefined ? (typeof attributes === "object" ? JSON.stringify(attributes) : String(attributes)) : undefined;
     const supportedModels = Array.isArray(supported_pricing_models) ? supported_pricing_models : undefined;
 
     const result = await db.query(
@@ -467,13 +513,18 @@ export async function PATCH(req: Request) {
         suggested_min_price = COALESCE($14, suggested_min_price),
         suggested_max_price = COALESCE($15, suggested_max_price),
         country_pricing = COALESCE($16::jsonb, country_pricing),
-        supported_pricing_models = COALESCE($17::text[], supported_pricing_models),
-        is_active = COALESCE($18, is_active),
-        main_category_id = COALESCE($19, main_category_id),
-        subcategory_id = COALESCE($20, subcategory_id),
-        category_id = COALESCE($21, category_id),
+        attributes = COALESCE($17::jsonb, attributes),
+        supported_pricing_models = COALESCE($18::text[], supported_pricing_models),
+        is_active = COALESCE($19, is_active),
+        main_category_id = COALESCE($20, main_category_id),
+        subcategory_id = COALESCE($21, subcategory_id),
+        category_id = COALESCE($22, category_id),
+        business_profile_id = CASE WHEN $24::boolean THEN $25::int ELSE business_profile_id END,
+        professional_profile_id = CASE WHEN $26::boolean THEN $27::int ELSE professional_profile_id END,
+        profile_type = COALESCE($28, profile_type),
+        variants = CASE WHEN $29::jsonb IS NOT NULL THEN $29::jsonb ELSE variants END,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $22
+      WHERE id = $23
       RETURNING *;
     `,
       [
@@ -493,12 +544,19 @@ export async function PATCH(req: Request) {
         minPrice !== undefined ? minPrice : null,
         maxPrice !== undefined ? maxPrice : null,
         countryPricingJson !== undefined ? countryPricingJson : null,
+        attributesJson !== undefined ? attributesJson : null,
         supportedModels !== undefined ? supportedModels : null,
         is_active !== undefined ? Boolean(is_active) : null,
         effectiveMainCat !== undefined ? effectiveMainCat : null,
         effectiveSubCat !== undefined ? effectiveSubCat : null,
         effectiveCategory !== undefined ? effectiveCategory : null,
         Number(id),
+        business_profile_id !== undefined,
+        business_profile_id ? Number(business_profile_id) : null,
+        professional_profile_id !== undefined,
+        professional_profile_id ? Number(professional_profile_id) : null,
+        profile_type || null,
+        body.variants !== undefined ? JSON.stringify(body.variants) : null,
       ]
     );
 

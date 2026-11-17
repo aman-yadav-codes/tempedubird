@@ -38,7 +38,7 @@ export function checkDeploymentAccess(
 ): DeploymentAccessResult {
   const mode = getAppModeForHost(host);
 
-  if (mode === "all" || mode === "platform_admin") {
+  if (mode === "all" || mode === "platform_admin" || mode === "business") {
     return { allowed: true };
   }
 
@@ -55,11 +55,20 @@ export function checkDeploymentAccess(
   }
 
   if (isPlatformAdminUser(user)) {
-    return {
-      allowed: false,
-      reason: "INSTITUTION_SITE_REQUIRES_INSTITUTION_ACCOUNT",
-      message: getDeploymentAccessMessage("INSTITUTION_SITE_REQUIRES_INSTITUTION_ACCOUNT"),
-    };
+    return { allowed: true };
+  }
+
+  // End-users (students, guardians, customers, clients) are always allowed to access and browse public/storefront
+  const isEndUser =
+    user.role_codes?.some((r: string) =>
+      ["student", "guardian", "parent", "customer", "client", "guest"].includes(r.toLowerCase())
+    ) ||
+    user.roles?.some((r: any) =>
+      ["student", "guardian", "parent", "customer", "client", "guest"].includes((r.code || r.name || "").toLowerCase())
+    );
+
+  if (isEndUser) {
+    return { allowed: true };
   }
 
   if (!tenant?.institution_id) {
@@ -70,9 +79,15 @@ export function checkDeploymentAccess(
     };
   }
 
-  const hasTenantMembership = user.memberships?.some(
-    (membership) => membership.institution_id === tenant.institution_id
-  );
+  const hasTenantMembership =
+    user.memberships?.some(
+      (membership) => membership.institution_id === tenant.institution_id
+    ) ||
+    (user as any).under_institution_id === tenant.institution_id ||
+    (user as any).institution_id === tenant.institution_id ||
+    (user as any).business_id === tenant.institution_id ||
+    (tenant as any)?.created_by === user.id ||
+    (tenant as any)?.user_id === user.id;
 
   if (!hasTenantMembership) {
     return {

@@ -50,10 +50,12 @@ import {
   CheckCircle2,
   X,
   Filter,
+  BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 interface CategoryItem {
   id: number;
@@ -141,7 +143,7 @@ export function CategoryManagerContent() {
   // Form State for Product / Service / Professional Category (2-step)
   const [formBizCatId, setFormBizCatId] = useState<string>("");
   const [formBizSubcatId, setFormBizSubcatId] = useState<string>("");
-  const [formType, setFormType] = useState<"product" | "service" | "professional">("product");
+  const [formType, setFormType] = useState<"product" | "service" | "professional" | "course" | "job">("product");
   const [formParentId, setFormParentId] = useState<string>("none");
   const [formName, setFormName] = useState("");
   const [formSlug, setFormSlug] = useState("");
@@ -297,23 +299,39 @@ export function CategoryManagerContent() {
     setBizSubcatDialogOpen(true);
   };
 
-  // 3. OPEN ADD PRODUCT / SERVICE / PROFESSIONAL CATEGORY MODAL (Mandatory 2-Step)
-  const openAddCatalogCatDialog = (targetType?: "product" | "service" | "professional") => {
+  // 3. OPEN ADD PRODUCT / SERVICE / PROFESSIONAL / COURSE / JOB CATEGORY MODAL (Mandatory 2-Step)
+  const openAddCatalogCatDialog = (targetType?: "product" | "service" | "professional" | "course" | "job") => {
     const determinedType =
       targetType ||
       (activeTab === "product"
         ? "product"
         : activeTab === "service"
-        ? "service"
-        : activeTab === "professional"
-        ? "professional"
-        : "product");
+          ? "service"
+          : activeTab === "professional"
+            ? "professional"
+            : activeTab === "course"
+              ? "course"
+              : activeTab === "job"
+                ? "job"
+                : "product");
 
     setFormType(determinedType);
-    setFormBizCatId(businessRootCategories[0]?.id ? String(businessRootCategories[0].id) : "");
+
+    // If course, default Business Category to Education & Coaching (7816)
+    let defaultBizCatId = businessRootCategories[0]?.id ? String(businessRootCategories[0].id) : "";
+    if (determinedType === "course") {
+      const eduCat = businessRootCategories.find(
+        (b) => b.id === 7816 || b.name.toLowerCase().includes("education")
+      );
+      if (eduCat) {
+        defaultBizCatId = String(eduCat.id);
+      }
+    }
+
+    setFormBizCatId(defaultBizCatId);
     setFormBizSubcatId("");
-    if (businessRootCategories[0]?.id) {
-      loadBusinessSubcategories(businessRootCategories[0].id);
+    if (defaultBizCatId) {
+      loadBusinessSubcategories(Number(defaultBizCatId));
     }
     setFormParentId("none");
     setFormName("");
@@ -604,15 +622,23 @@ export function CategoryManagerContent() {
                 {activeTab === "business"
                   ? "Business Categories & Subcategories"
                   : activeTab === "product"
-                  ? "Product Categories & Subcategories"
-                  : activeTab === "service"
-                  ? "Service Categories & Subcategories"
-                  : activeTab === "professional"
-                  ? "Professional Categories & Subcategories"
-                  : "Category System"}
+                    ? "Product Categories & Subcategories"
+                    : activeTab === "service"
+                      ? "Service Categories & Subcategories"
+                      : activeTab === "professional"
+                        ? "Professional Categories & Subcategories"
+                        : activeTab === "course"
+                          ? "Course Categories & Subcategories"
+                          : activeTab === "job"
+                            ? "Job Categories & Subcategories"
+                            : "Category System"}
               </h1>
               <p className="text-xs text-muted-foreground">
-                Manage business classifications, product categories, and service categories with hierarchies.
+                {activeTab === "course"
+                  ? "Manage course and academic categories mapped to Education & Coaching business sectors."
+                  : activeTab === "job"
+                    ? "Manage job classifications and employment categories mapped to business sectors."
+                    : "Manage business classifications, product categories, and service categories with hierarchies."}
               </p>
             </div>
           </div>
@@ -662,6 +688,22 @@ export function CategoryManagerContent() {
             >
               <Plus className="size-3.5" /> Add Professional Category
             </Button>
+          ) : activeTab === "course" ? (
+            <Button
+              onClick={() => openAddCatalogCatDialog("course")}
+              size="sm"
+              className="gap-1.5 text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white shadow-sm h-9"
+            >
+              <Plus className="size-3.5" /> Add Course Category
+            </Button>
+          ) : activeTab === "job" ? (
+            <Button
+              onClick={() => openAddCatalogCatDialog("job")}
+              size="sm"
+              className="gap-1.5 text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white shadow-sm h-9"
+            >
+              <Plus className="size-3.5" /> Add Job Category
+            </Button>
           ) : (
             // ALL ACTIONS
             <div className="flex items-center gap-2">
@@ -683,6 +725,38 @@ export function CategoryManagerContent() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* CATEGORY TYPE TABS */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-border/50 text-xs font-semibold">
+        {[
+          { key: "all", label: "All Categories", icon: Layers },
+          { key: "business", label: "Business Categories", icon: Building2 },
+          { key: "product", label: "Product Categories", icon: Package },
+          { key: "service", label: "Service Categories", icon: Briefcase },
+          { key: "professional", label: "Professional Categories", icon: UserCheck },
+          { key: "course", label: "Course Categories", icon: BookOpen },
+          { key: "job", label: "Job Categories", icon: Briefcase },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => handleTabChange(tab.key)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap",
+                isActive
+                  ? "bg-[#d9232e] text-white font-bold shadow-xs"
+                  : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Icon className="size-3.5 shrink-0" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* SEARCH & FILTERS ROW */}
@@ -834,12 +908,18 @@ export function CategoryManagerContent() {
               {activeTab === "all"
                 ? "All System Categories"
                 : activeTab === "business"
-                ? "Business Categories & Subcategories"
-                : activeTab === "product"
-                ? "Product Categories & Subcategories"
-                : activeTab === "service"
-                ? "Service Categories & Subcategories"
-                : "Professional Categories & Subcategories"}
+                  ? "Business Categories & Subcategories"
+                  : activeTab === "product"
+                    ? "Product Categories & Subcategories"
+                    : activeTab === "service"
+                      ? "Service Categories & Subcategories"
+                      : activeTab === "professional"
+                        ? "Professional Categories & Subcategories"
+                        : activeTab === "course"
+                          ? "Course Categories & Subcategories"
+                          : activeTab === "job"
+                            ? "Job Categories & Subcategories"
+                            : "Categories"}
             </span>
             <Badge variant="secondary" className="text-[10px] font-bold">
               {totalCount} total
@@ -872,15 +952,31 @@ export function CategoryManagerContent() {
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     <TableHead className="w-[70px]">ID</TableHead>
-                    <TableHead>Category Name</TableHead>
+                    <TableHead>
+                      {activeTab === "service"
+                        ? "Services Name"
+                        : activeTab === "product"
+                          ? "Product Name"
+                          : activeTab === "professional"
+                            ? "Professional Role"
+                            : "Category Name"}
+                    </TableHead>
                     <TableHead>Slug</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>
                       {activeTab === "business"
                         ? "Parent Business Category"
-                        : "Associated Business Classification"}
+                        : "Main Business Category"}
                     </TableHead>
-                    <TableHead>Parent (Within Type)</TableHead>
+                    <TableHead>
+                      {activeTab === "service"
+                        ? "Service Category"
+                        : activeTab === "product"
+                          ? "Product Category"
+                          : activeTab === "professional"
+                            ? "Professional Category"
+                            : "Parent (Within Type)"}
+                    </TableHead>
                     <TableHead className="text-center">Depth</TableHead>
                     <TableHead className="text-center">Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -920,15 +1016,14 @@ export function CategoryManagerContent() {
                       <TableCell>
                         <Badge
                           variant="secondary"
-                          className={`text-[9px] font-bold capitalize ${
-                            cat.category_type === "business"
-                              ? "bg-rose-500/10 text-rose-700 border-rose-200"
-                              : cat.category_type === "product"
+                          className={`text-[9px] font-bold capitalize ${cat.category_type === "business"
+                            ? "bg-rose-500/10 text-rose-700 border-rose-200"
+                            : cat.category_type === "product"
                               ? "bg-blue-500/10 text-blue-700 border-blue-200"
                               : cat.category_type === "service"
-                              ? "bg-emerald-500/10 text-emerald-700 border-emerald-200"
-                              : "bg-purple-500/10 text-purple-700 border-purple-200"
-                          }`}
+                                ? "bg-emerald-500/10 text-emerald-700 border-emerald-200"
+                                : "bg-purple-500/10 text-purple-700 border-purple-200"
+                            }`}
                         >
                           {cat.category_type || "General"}
                         </Badge>
@@ -948,10 +1043,15 @@ export function CategoryManagerContent() {
                             </Badge>
                           )
                         ) : cat.business_category_name ? (
-                          <div className="flex flex-col gap-0.5">
-                            <span className="inline-flex items-center gap-1 font-semibold text-[11px] text-foreground">
+                          <div
+                            onClick={() => openEditModal(cat)}
+                            className="cursor-pointer group flex flex-col gap-0.5 p-1 rounded hover:bg-muted/60 transition-colors w-fit"
+                            title="Click to change business classification"
+                          >
+                            <span className="inline-flex items-center gap-1 font-semibold text-[11px] text-foreground group-hover:text-primary transition-colors">
                               <Building2 className="size-3 text-rose-600 shrink-0" />
                               {cat.business_category_name}
+                              <Edit2 className="size-2.5 opacity-0 group-hover:opacity-70 transition-opacity ml-1" />
                             </span>
                             {cat.business_subcategory_name && (
                               <span className="text-[10px] text-muted-foreground pl-4 flex items-center gap-1">
@@ -961,8 +1061,13 @@ export function CategoryManagerContent() {
                             )}
                           </div>
                         ) : (
-                          <Badge variant="outline" className="text-[10px] text-muted-foreground bg-muted/20 border-dashed">
-                            Unassigned
+                          <Badge
+                            onClick={() => openEditModal(cat)}
+                            variant="outline"
+                            className="text-[10px] text-amber-700 bg-amber-500/10 border-amber-300 hover:bg-amber-500/20 cursor-pointer transition-colors"
+                            title="Click to assign business classification"
+                          >
+                            + Assign Business Category
                           </Badge>
                         )}
                       </TableCell>
@@ -1251,10 +1356,14 @@ export function CategoryManagerContent() {
                 <Package className="size-4 text-blue-600" />
               ) : formType === "service" ? (
                 <Briefcase className="size-4 text-emerald-600" />
+              ) : formType === "course" ? (
+                <BookOpen className="size-4 text-amber-600" />
+              ) : formType === "job" ? (
+                <Briefcase className="size-4 text-indigo-600" />
               ) : (
                 <UserCheck className="size-4 text-purple-600" />
               )}
-              Add {formType.charAt(0).toUpperCase() + formType.slice(1)} Category
+              Add {formType === "course" ? "Course" : formType === "job" ? "Job" : formType.charAt(0).toUpperCase() + formType.slice(1)} Category
             </DialogTitle>
             <DialogDescription className="text-xs">
               First select the associated business industry classification, then specify category details.
@@ -1284,7 +1393,13 @@ export function CategoryManagerContent() {
                 </Label>
                 <Select
                   value={formBizCatId}
-                  onValueChange={(val) => setFormBizCatId(val)}
+                  onValueChange={(val) => {
+                    setFormBizCatId(val);
+                    setFormBizSubcatId("");
+                    if (val) {
+                      loadBusinessSubcategories(Number(val));
+                    }
+                  }}
                 >
                   <SelectTrigger className="mt-1 h-9 text-xs bg-background">
                     <SelectValue placeholder="Select Business Category..." />
@@ -1298,6 +1413,30 @@ export function CategoryManagerContent() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {formBizCatId && currentFormSubcategories.length > 0 && (
+                <div className="pt-1">
+                  <Label className="text-[11px] font-semibold text-foreground">
+                    Business Subcategory (Optional)
+                  </Label>
+                  <Select
+                    value={formBizSubcatId}
+                    onValueChange={(val) => setFormBizSubcatId(val === "none" ? "" : val)}
+                  >
+                    <SelectTrigger className="mt-1 h-9 text-xs bg-background">
+                      <SelectValue placeholder="Select Business Subcategory..." />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-56">
+                      <SelectItem value="none">None / General</SelectItem>
+                      {currentFormSubcategories.map((sub) => (
+                        <SelectItem key={sub.id} value={String(sub.id)}>
+                          {sub.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             {/* STEP 2: CATEGORY DETAILS */}
@@ -1311,15 +1450,19 @@ export function CategoryManagerContent() {
 
               <div>
                 <Label className="text-xs font-semibold">
-                  {formType.charAt(0).toUpperCase() + formType.slice(1)} Category Name *
+                  {formType === "course" ? "Course" : formType === "job" ? "Job" : formType.charAt(0).toUpperCase() + formType.slice(1)} Category Name *
                 </Label>
                 <Input
                   placeholder={
-                    formType === "product"
-                      ? "e.g. Brake Systems & Components"
-                      : formType === "service"
-                      ? "e.g. Engine Diagnostics & Repair"
-                      : "e.g. Certified Auto Mechanic"
+                    formType === "course"
+                      ? "e.g. IIT-JEE Physics Coaching, Computer Science & Engineering"
+                      : formType === "job"
+                        ? "e.g. Senior Faculty, Lab Technician, Software Developer"
+                        : formType === "product"
+                          ? "e.g. Brake Systems & Components"
+                          : formType === "service"
+                            ? "e.g. Engine Diagnostics & Repair"
+                            : "e.g. Certified Auto Mechanic"
                   }
                   value={formName}
                   onChange={(e) => {
@@ -1375,7 +1518,7 @@ export function CategoryManagerContent() {
                 className="gap-1.5 font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white"
               >
                 {saving && <Loader2 className="size-3.5 animate-spin" />}
-                Create {formType.charAt(0).toUpperCase() + formType.slice(1)} Category
+                Create {formType === "course" ? "Course" : formType === "job" ? "Job" : formType.charAt(0).toUpperCase() + formType.slice(1)} Category
               </Button>
             </DialogFooter>
           </form>

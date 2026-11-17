@@ -77,35 +77,6 @@ export const MASTER_CATALOG_TABS = [
 ];
 
 export function MasterCatalogNavTabs() {
-  const pathname = usePathname();
-  const { user } = useAuthStore();
-
-  return (
-    <div className="w-full border-b border-border/80 bg-background/95 backdrop-blur-xs pb-px">
-      <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-1">
-        {MASTER_CATALOG_TABS.map((tab) => {
-          const roleUrl = toRoleRoutePath(tab.url, user);
-          const isActive = pathname === tab.url || pathname === roleUrl || pathname?.startsWith(tab.url + "/");
-          const Icon = tab.icon;
-
-          return (
-            <Link
-              key={tab.url}
-              href={roleUrl}
-              className={cn(
-                "inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition-all shrink-0",
-                isActive
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <Icon className="size-3.5 shrink-0" />
-              <span>{tab.title}</span>
-            </Link>
-          );
-        })}
-      </div>
-    </div>
-  );
+  return null;
 }
 

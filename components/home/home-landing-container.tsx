@@ -43,11 +43,13 @@ export function HomeLandingContainer({
 
   const envInstId =
     configuredInstitutionId ??
-    (process.env.NEXT_PUBLIC_INSTITUTION_ID
+    (process.env.NEXT_PUBLIC_BUSINESS_ID
+      ? Number(process.env.NEXT_PUBLIC_BUSINESS_ID)
+      : process.env.NEXT_PUBLIC_INSTITUTION_ID
       ? Number(process.env.NEXT_PUBLIC_INSTITUTION_ID)
       : process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
-        ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
-        : null);
+      ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
+      : null);
 
   const isInstitutionEdition = Boolean(
     initialIsInstitutionEdition ||

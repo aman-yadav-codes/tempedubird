@@ -174,7 +174,13 @@ export async function handlePublicInstitutionsGet(req: Request) {
 
 export async function getCurrentPublicInstitutionProfile(host: string | null | undefined) {
   let tenant = await getInstitutionTenantByHost(db, host);
-  const defaultEnvId = process.env.DEFAULT_INSTITUTION_ID || process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID;
+  const defaultEnvId =
+    process.env.BUSINESS_ID ||
+    process.env.NEXT_PUBLIC_BUSINESS_ID ||
+    process.env.INSTITUTION_ID ||
+    process.env.NEXT_PUBLIC_INSTITUTION_ID ||
+    process.env.DEFAULT_INSTITUTION_ID ||
+    process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID;
   if (!tenant && defaultEnvId && /^\d+$/.test(defaultEnvId.trim()) && Number(defaultEnvId.trim()) > 0) {
     tenant = {
       institution_id: Number(defaultEnvId.trim()),
@@ -270,5 +276,53 @@ export async function getCurrentPublicInstitutionProfile(host: string | null | u
     [tenant.institution_id],
   );
 
-  return result.rows[0] ?? null;
+  const profile = result.rows[0] ?? null;
+  if (profile) {
+    try {
+      const pciRes = await db.query(
+        `SELECT brand_name, company_name, logo_url, support_email, phone, website_url, about, headquarters_address, city, state, pincode
+         FROM platform_company_info
+         WHERE business_id = $1 OR institution_id = $1
+         ORDER BY (business_id = $1) DESC
+         LIMIT 1`,
+        [tenant.institution_id]
+      );
+      if (pciRes.rows.length > 0) {
+        const pci = pciRes.rows[0];
+        if (pci.brand_name || pci.company_name) profile.name = pci.brand_name || pci.company_name;
+        if (pci.phone) profile.phone = pci.phone;
+        if (pci.support_email) profile.email = pci.support_email;
+        if (pci.website_url) profile.website = pci.website_url;
+        if (pci.about) profile.about = pci.about;
+        if (pci.logo_url) profile.logo_url = pci.logo_url;
+        if (pci.headquarters_address) profile.full_address = pci.headquarters_address;
+        if (pci.city) profile.location_name = pci.city;
+      }
+
+      const branchRes = await db.query(
+        `SELECT id, branch_name, address, city, state, pincode, phone, email, is_headquarters, branch_type
+         FROM platform_branches
+         WHERE (business_id = $1 OR institution_id = $1) AND status = 'active'
+         ORDER BY is_headquarters DESC, id ASC`,
+        [tenant.institution_id]
+      );
+      if (branchRes.rows.length > 0) {
+        profile.branches = branchRes.rows.map((b: any) => ({
+          id: b.id,
+          branch_name: b.branch_name,
+          address: b.address,
+          city: b.city,
+          state: b.state,
+          pincode: b.pincode,
+          phones: b.phone ? [{ id: "1", title: "Office Phone", phone: b.phone, type: "phone" }] : [],
+          emails: b.email ? [{ id: "1", title: "General Email", email: b.email }] : [],
+          working_hours: "Monday - Saturday: 9:00 AM - 6:00 PM",
+        }));
+      }
+    } catch (err) {
+      console.warn("Could not overlay company info onto institution profile:", err);
+    }
+  }
+
+  return profile;
 }

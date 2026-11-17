@@ -2,7 +2,7 @@
 
 import NextImage from "next/image";
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
-import { ArrowLeftRight, Gift } from "lucide-react";
+import { ArrowLeftRight, Gift, Clock } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -88,6 +88,8 @@ import {
     Store,
     Plus,
     SlidersHorizontal,
+    Target,
+    User,
 } from "lucide-react";
 import { CreateBusinessProfileDialog } from "@/components/business/create-business-profile-dialog";
 import { toast } from "sonner";
@@ -188,7 +190,6 @@ const navItems: SidebarItem[] = [
         icon: UserCheck,
         children: [
             { title: "My Account", url: "/admin/account", permissionPath: "/admin/account", icon: UserCog },
-            { title: "Roles & Profiles", url: "/admin/my-profile?tab=roles-profiles", permissionPath: "/admin/my-profile", icon: Briefcase },
             { title: "Attendance", url: "/admin/my-profile?tab=attendance", permissionPath: "/admin/my-profile", icon: CalendarDays },
             { title: "Salary Slip", url: "/admin/my-profile?tab=salary-slip", permissionPath: "/admin/my-profile", icon: Receipt },
             { title: "My Tasks", url: "/admin/my-profile?tab=tasks", permissionPath: "/admin/my-profile", icon: ClipboardList },
@@ -244,6 +245,8 @@ const navItems: SidebarItem[] = [
             { title: "Product Categories", url: "/admin/categories?type=product", icon: Package },
             { title: "Service Categories", url: "/admin/categories?type=service", icon: Briefcase },
             { title: "Professional Categories", url: "/admin/categories?type=professional", icon: UserCheck },
+            { title: "Course Categories", url: "/admin/categories?type=course", icon: BookOpen },
+            { title: "Job Categories", url: "/admin/categories?type=job", icon: Briefcase },
         ],
     },
     {
@@ -253,6 +256,8 @@ const navItems: SidebarItem[] = [
         children: [
             { title: "Master Products", url: "/admin/catalog/products", icon: Package },
             { title: "Master Services", url: "/admin/catalog/services", icon: Briefcase },
+            { title: "Master Courses", url: "/admin/catalog/courses", icon: BookOpen },
+            { title: "Master Jobs", url: "/admin/catalog/jobs", icon: Briefcase },
             { title: "Synonyms & Keywords", url: "/admin/master-data/synonyms", icon: Sparkles },
             { title: "Blog", url: "/admin/content/blog", icon: FileText },
             { title: "Skills", url: "/admin/master-data/skills", icon: BookOpen },
@@ -274,8 +279,6 @@ const navItems: SidebarItem[] = [
             { title: "Permissions", url: "/admin/access-control?section=permissions", permissionPath: "/admin/access-control/permissions", icon: ShieldCheck },
             { title: "Roles", url: "/admin/access-control?section=roles", permissionPath: "/admin/access-control/roles", icon: UserCog },
             { title: "Role Permissions", url: "/admin/access-control?section=role-permissions", permissionPath: "/admin/access-control/role-permissions", icon: ShieldCheck },
-            { title: "Institution Memberships", url: "/admin/access-control?section=institution-memberships", permissionPath: "/admin/access-control/institution-memberships", icon: Building },
-            { title: "Institution Role Permissions", url: "/admin/access-control?section=institution-role-permissions", permissionPath: "/admin/access-control/institution-role-permissions", icon: ShieldCheck },
         ],
     },
     {
@@ -294,10 +297,10 @@ const navItems: SidebarItem[] = [
         url: "/admin/staff",
         icon: Users,
         children: [
+            { title: "All Staff", url: "/admin/staff", icon: UsersRound },
             { title: "Documents", url: "/admin/staff/my-data?tab=documents", icon: FileText },
             { title: "Noticeboard", url: "/admin/noticeboard", icon: Bell },
             { title: "Complaints", url: "/admin/complaints", icon: MessageSquareWarning },
-            { title: "All Staff", url: "/admin/staff", icon: UsersRound },
             { title: "Staff Performance", url: "/admin/staff/performance", icon: TrendingUp },
             { title: "Leaderboard", url: "/admin/performance/leaderboard", icon: Trophy },
             { title: "Attendance", url: "/admin/staff/attendance", icon: ClipboardCheck },
@@ -379,6 +382,7 @@ const navItems: SidebarItem[] = [
         children: [
             { title: "Products", url: "/admin/marketing/products", icon: ShoppingBag },
             { title: "Services", url: "/admin/marketing/services", icon: Briefcase },
+            { title: "Courses", url: "/admin/marketing/courses", icon: BookOpen },
             { title: "Pricing Packages", url: "/admin/marketing/packages", icon: CreditCard },
             { title: "Social Media", url: "/admin/marketing/social-media", icon: Share2 },
             { title: "Form Builder", url: "/admin/marketing/form-builder", icon: FileText },
@@ -477,12 +481,18 @@ const navItems: SidebarItem[] = [
         ],
     },
     {
-        title: "Company & Legal",
+        title: "Details Information",
         url: "/admin/company?tab=contact-branches",
         permissionPath: "/admin/company",
         icon: Building2,
         children: [
-            { title: "Company Info & Branches", url: "/admin/company?tab=contact-branches", icon: Building2 },
+            { title: "Identity", url: "/admin/company?tab=contact-branches", icon: Building2 },
+            { title: "Address", url: "/admin/company?tab=address", icon: MapPin },
+            { title: "Working Hours", url: "/admin/company?tab=working-hours", icon: Clock },
+            { title: "About Us", url: "/admin/company?tab=about-institute", icon: Info },
+            { title: "Mission, Vision & Goals", url: "/admin/company?tab=mission-vision-goal", icon: Target },
+            { title: "About Founder", url: "/admin/company?tab=about-founder", icon: User },
+            { title: "Facilities & Infrastructure", url: "/admin/company?tab=facilities", icon: Sparkles },
             { title: "Payment Methods", url: "/admin/company?tab=payment-methods", icon: CreditCard },
             { title: "FAQs", url: "/admin/company?tab=faqs", icon: HelpCircle },
             { title: "Privacy Policy", url: "/admin/company?tab=privacy-policy", icon: ShieldCheck },
@@ -560,6 +570,21 @@ function getActiveSidebarLeaf(
         }
 
 
+
+        if (item.url.startsWith("/admin/company")) {
+            const itemTab = item.url.includes("tab=")
+                ? item.url.split("tab=")[1]?.split("&")[0]
+                : "contact-branches";
+            const currentTab = searchTab || searchParam || "contact-branches";
+            const normPath = normalizeAdminPath(pathname);
+            if (
+                (normPath === "/admin/company" || normPath === "/workspace/company") &&
+                itemTab === currentTab
+            ) {
+                matches.push({ key: item.url, pathLength: item.url.length + 20 });
+            }
+            return;
+        }
 
         if (item.url.startsWith("/admin/my-profile")) {
             const itemTab = item.url.includes("tab=")
