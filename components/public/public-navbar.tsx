@@ -290,7 +290,7 @@ export function PublicNavbar({
                     type="button"
                     className={cn(
                       "flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg whitespace-nowrap text-xs font-semibold transition-all duration-200 cursor-pointer select-none outline-none shrink-0",
-                      pathname.startsWith("/about")
+                      pathname.startsWith("/about") || pathname.startsWith("/mission-vision") || pathname.startsWith("/founder")
                         ? "bg-[#FEE2E2] text-[#991B1B] font-bold shadow-2xs border border-rose-200/60"
                         : "text-[#800000] hover:text-[#991B1B] hover:bg-rose-100/50"
                     )}
@@ -302,7 +302,7 @@ export function PublicNavbar({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-60 p-1.5 space-y-1 bg-white border border-gray-200 shadow-xl rounded-xl">
                   <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
-                    <Link href="/about#overview" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
+                    <Link href="/about" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
                       <Building2 className="h-4 w-4 text-rose-600 shrink-0" />
                       <div className="flex flex-col leading-tight">
                         <span className="font-bold">Overview</span>
@@ -311,7 +311,7 @@ export function PublicNavbar({
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
-                    <Link href="/about#mission-vision" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
+                    <Link href="/about/mission-vision" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
                       <Target className="h-4 w-4 text-rose-600 shrink-0" />
                       <div className="flex flex-col leading-tight">
                         <span className="font-bold">Mission, Vision & Goal</span>
@@ -320,7 +320,7 @@ export function PublicNavbar({
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
-                    <Link href="/about#founder" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
+                    <Link href="/about/founder" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
                       <User className="h-4 w-4 text-rose-600 shrink-0" />
                       <div className="flex flex-col leading-tight">
                         <span className="font-bold">About Founder</span>
@@ -676,7 +676,7 @@ export function PublicNavbar({
                 </span>
                 <div className="grid grid-cols-3 gap-1 pt-1">
                   <Link
-                    href="/about#overview"
+                    href="/about"
                     onClick={() => setMobileMenuOpen(false)}
                     className="flex items-center gap-1.5 p-1.5 rounded-lg text-xs font-semibold text-gray-800 hover:bg-rose-100/60"
                   >
@@ -684,7 +684,7 @@ export function PublicNavbar({
                     <span className="truncate">Overview</span>
                   </Link>
                   <Link
-                    href="/about#mission-vision"
+                    href="/about/mission-vision"
                     onClick={() => setMobileMenuOpen(false)}
                     className="flex items-center gap-1.5 p-1.5 rounded-lg text-xs font-semibold text-gray-800 hover:bg-rose-100/60"
                   >
@@ -692,7 +692,7 @@ export function PublicNavbar({
                     <span className="truncate">Mission & Vision</span>
                   </Link>
                   <Link
-                    href="/about#founder"
+                    href="/about/founder"
                     onClick={() => setMobileMenuOpen(false)}
                     className="flex items-center gap-1.5 p-1.5 rounded-lg text-xs font-semibold text-gray-800 hover:bg-rose-100/60"
                   >
