@@ -726,10 +726,54 @@ function CustomerExplorePageContent() {
     }
   };
 
+  const isBusinessMode = Boolean(
+    activeBusinessId ||
+    process.env.NEXT_PUBLIC_APP_MODE === "business" ||
+    process.env.NEXT_PUBLIC_APP_MODE === "institution"
+  );
+
   return (
     <div className="min-h-screen bg-muted/20 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6">
-      {/* 4-Filter Cascading Hierarchy Bar */}
-      <Card className="rounded-2xl border shadow-xs bg-card">
+{isBusinessMode && activeType === "professional" ? (
+        <Card className="rounded-2xl border shadow-xs bg-card">
+          <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs px-2.5 py-0.5 font-bold">
+                  Our Team
+                </Badge>
+                <span className="text-xs text-muted-foreground font-medium">
+                  Verified Staff & Faculty
+                </span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-1 flex items-center gap-2">
+                <Users className="size-7 text-primary" />
+                Our Staff & Faculty Members
+              </h1>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                Meet the certified teachers, counselors, leaders, and administrative staff members.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  value={productNameSearch}
+                  onChange={(e) => setProductNameSearch(e.target.value)}
+                  placeholder="Search staff by name or role..."
+                  className="pl-9 h-10 rounded-xl text-xs bg-background"
+                />
+              </div>
+              <Badge variant="secondary" className="text-xs px-3 py-2 font-bold whitespace-nowrap">
+                {filteredProfessionals.length} Staff Members
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        /* 4-Filter Cascading Hierarchy Bar */
+        <Card className="rounded-2xl border shadow-xs bg-card">
         <CardContent className="p-4 sm:p-5 space-y-4">
           <div className={cn(
             "grid gap-3",
@@ -927,6 +971,7 @@ function CustomerExplorePageContent() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Active Category Filter Banner */}
       {(selectedCategoryId || selectedSubcategoryId) && (
@@ -1172,23 +1217,36 @@ function CustomerExplorePageContent() {
                       <div>
                         <CardHeader className="pb-3 border-b bg-muted/10">
                           <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <Link href={buildProfessionalSeoUrl(pro)}>
-                                  <CardTitle className="text-base font-bold text-foreground hover:text-primary transition-colors cursor-pointer">
-                                    {pro.name}
-                                  </CardTitle>
-                                </Link>
-                                {pro.is_verified && (
-                                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 text-[10px] px-1 py-0">
-                                    <ShieldCheck className="size-3 mr-0.5 text-emerald-600" /> Verified
-                                  </Badge>
+<div className="flex items-start gap-3 min-w-0 flex-1">
+                                {pro.avatar_url ? (
+                                  <img
+                                    src={pro.avatar_url}
+                                    alt={pro.name}
+                                    className="size-11 rounded-full object-cover border border-border shadow-2xs shrink-0"
+                                  />
+                                ) : (
+                                  <div className="size-11 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center shrink-0 text-xs border border-primary/20">
+                                    {pro.name.slice(0, 2).toUpperCase()}
+                                  </div>
                                 )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <Link href={buildProfessionalSeoUrl(pro)}>
+                                      <CardTitle className="text-base font-bold text-foreground hover:text-primary transition-colors cursor-pointer truncate">
+                                        {pro.name}
+                                      </CardTitle>
+                                    </Link>
+                                    {pro.is_verified && (
+                                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 text-[10px] px-1 py-0">
+                                        <ShieldCheck className="size-3 mr-0.5 text-emerald-600" /> Verified
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <span className="text-xs text-muted-foreground block mt-0.5 font-medium text-purple-600 dark:text-purple-400">
+                                    {pro.profession_type} {pro.experience_years ? `• ${pro.experience_years} Years Experience` : ""}
+                                  </span>
+                                </div>
                               </div>
-                              <span className="text-xs text-muted-foreground block mt-0.5 font-medium text-purple-600 dark:text-purple-400">
-                                {pro.profession_type} • {pro.experience_years ? `${pro.experience_years} Years Experience` : "Expert"}
-                              </span>
-                            </div>
 
                             <button
                               onClick={() => handleToggleFavorite(pro)}
