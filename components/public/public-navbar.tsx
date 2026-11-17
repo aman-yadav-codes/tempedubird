@@ -75,14 +75,14 @@ type PublicNavbarProps = {
 };
 
 const CATEGORY_ITEMS: { key: CategoryKey; label: string; href: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { key: "courses", label: "Course", href: "/courses", icon: BookOpen },
-  { key: "teachers", label: "Staff", href: "/teachers", icon: UserCheck },
+  { key: "courses", label: "Courses", href: "/courses", icon: BookOpen },
   { key: "products", label: "Product", href: "/products", icon: ShoppingCart },
-  { key: "services", label: "Services", href: "/explore?type=service", icon: Layers },
-  { key: "blogs", label: "Blogs", href: "/blogs", icon: FileText },
+  { key: "teachers", label: "Staff", href: "/teachers", icon: UserCheck },
   { key: "gallery", label: "Gallery", href: "/gallery", icon: ImageIcon },
-  { key: "contact", label: "Contact", href: "/contact", icon: PhoneCall },
   { key: "jobs", label: "Jobs", href: "/jobs", icon: Briefcase },
+  { key: "blogs", label: "Blog", href: "/blogs", icon: FileText },
+  { key: "contact", label: "Contact Us", href: "/contact", icon: PhoneCall },
+  { key: "services", label: "Services", href: "/explore?type=service", icon: Layers },
 ];
 
 function getInitials(name?: string | null) {
@@ -170,13 +170,13 @@ export function PublicNavbar({
   // Platform marketplace: filtered dynamically by isCategoryVisible
   const PLATFORM_MARKETPLACE_KEYS: CategoryKey[] = [
     "courses",
-    "teachers",
     "products",
-    "services",
-    "blogs",
+    "teachers",
     "gallery",
-    "contact",
     "jobs",
+    "blogs",
+    "contact",
+    "services",
   ];
   const platformCategoryItems = CATEGORY_ITEMS.filter((item) =>
     PLATFORM_MARKETPLACE_KEYS.includes(item.key) &&
@@ -189,6 +189,7 @@ export function PublicNavbar({
       item.key !== "institutes" &&
       item.key !== "hostels" &&
       item.key !== "libraries" &&
+      item.key !== "services" &&
       (!mounted || isCategoryVisible(item.key))
   );
   const effectiveInstitutionItems = institutionCategoryItems;
@@ -202,7 +203,7 @@ export function PublicNavbar({
   } = useUserLocation();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState("Course");
+  const [activeTab, setActiveTab] = useState("Courses");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authDialogTab, setAuthDialogTab] = useState<"signin" | "signup">("signin");

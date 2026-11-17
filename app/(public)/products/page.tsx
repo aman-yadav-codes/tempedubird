@@ -311,7 +311,7 @@ export default function PublicProductsPage() {
               {(selectedCategory !== "all" || selectedProgramId !== "all" || selectedPriceRange !== "all") && (
                 <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-border/60">
                   <span className="text-[11px] font-bold text-muted-foreground mr-1">Active Filters:</span>
-                  
+
                   {selectedCategory !== "all" && (
                     <Badge
                       variant="secondary"
@@ -356,8 +356,8 @@ export default function PublicProductsPage() {
                         {selectedPriceRange === "under-1000"
                           ? "Under ₹1,000"
                           : selectedPriceRange === "1000-3000"
-                          ? "₹1,000 - ₹3,000"
-                          : "Above ₹3,000"}
+                            ? "₹1,000 - ₹3,000"
+                            : "Above ₹3,000"}
                       </span>
                       <button
                         type="button"
@@ -421,11 +421,10 @@ export default function PublicProductsPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedCategory("all")}
-                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center justify-between cursor-pointer ${
-                    selectedCategory === "all"
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center justify-between cursor-pointer ${selectedCategory === "all"
                       ? "bg-primary text-primary-foreground font-bold shadow-2xs"
                       : "hover:bg-muted text-foreground"
-                  }`}
+                    }`}
                 >
                   <span className="truncate">All Categories</span>
                   <Badge variant={selectedCategory === "all" ? "outline" : "secondary"} className="text-[10px] ml-1 shrink-0">
@@ -441,11 +440,10 @@ export default function PublicProductsPage() {
                       key={cat.id || cat.name}
                       type="button"
                       onClick={() => setSelectedCategory(isSelected ? "all" : cat.name)}
-                      className={`w-full text-left p-2 rounded-lg text-xs transition flex items-center justify-between cursor-pointer ${
-                        isSelected
+                      className={`w-full text-left p-2 rounded-lg text-xs transition flex items-center justify-between cursor-pointer ${isSelected
                           ? "bg-primary/10 border border-primary/30 text-primary font-bold shadow-2xs"
                           : "hover:bg-muted text-foreground border border-transparent"
-                      }`}
+                        }`}
                     >
                       <span className="truncate font-semibold text-xs">{cat.name}</span>
                       <div className="flex items-center gap-1.5">
@@ -521,11 +519,10 @@ export default function PublicProductsPage() {
                   <button
                     type="button"
                     onClick={() => setSelectedProgramId("all")}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center justify-between cursor-pointer ${
-                      selectedProgramId === "all"
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center justify-between cursor-pointer ${selectedProgramId === "all"
                         ? "bg-primary text-primary-foreground font-bold shadow-2xs"
                         : "hover:bg-muted text-foreground"
-                    }`}
+                      }`}
                   >
                     <span className="truncate">All Collections</span>
                     <Badge variant={selectedProgramId === "all" ? "outline" : "secondary"} className="text-[10px] ml-1 shrink-0">
@@ -540,11 +537,10 @@ export default function PublicProductsPage() {
                         key={prog.id}
                         type="button"
                         onClick={() => setSelectedProgramId(isSelected ? "all" : String(prog.id))}
-                        className={`w-full text-left p-2 rounded-lg text-xs transition flex flex-col gap-0.5 cursor-pointer ${
-                          isSelected
+                        className={`w-full text-left p-2 rounded-lg text-xs transition flex flex-col gap-0.5 cursor-pointer ${isSelected
                             ? "bg-primary/10 border border-primary/30 text-primary font-bold shadow-2xs"
                             : "hover:bg-muted text-foreground border border-transparent"
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center justify-between gap-1.5 w-full">
                           <span className="truncate font-bold text-xs">{prog.title}</span>
@@ -902,11 +898,10 @@ function PublicCatalogProductCard({
                   setSelectedWeightKey(opt.key);
                   setShowCustom(false);
                 }}
-                className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
-                  selectedWeightKey === opt.key && !showCustom
+                className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${selectedWeightKey === opt.key && !showCustom
                     ? "bg-rose-600 text-white shadow-2xs"
                     : "bg-background hover:bg-muted text-muted-foreground hover:text-foreground border border-border"
-                }`}
+                  }`}
               >
                 {opt.shortLabel}
               </button>
@@ -914,11 +909,10 @@ function PublicCatalogProductCard({
             <button
               type="button"
               onClick={() => setShowCustom(!showCustom)}
-              className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
-                showCustom
+              className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${showCustom
                   ? "bg-rose-600 text-white shadow-2xs"
                   : "bg-background hover:bg-muted text-muted-foreground hover:text-foreground border border-border"
-              }`}
+                }`}
             >
               Custom g
             </button>
