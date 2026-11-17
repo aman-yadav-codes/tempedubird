@@ -33,7 +33,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ContactLiveChat } from "@/components/public/contact-live-chat";
 import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { useAuthStore } from "@/store";
@@ -436,12 +435,6 @@ export function ContactPageView({
           )}
 
 
-
-          {/* Interactive Live Chat & Support Ticket System */}
-          <div className="space-y-4">
-            <h2 className="text-xl font-bold text-foreground">Live Support Ticket</h2>
-            <ContactLiveChat />
-          </div>
 
           {/* Custom Page HTML Content (if configured in Company & Legal editor) */}
           {companyPage?.content && (

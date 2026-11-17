@@ -492,7 +492,6 @@ const navItems: SidebarItem[] = [
             { title: "About Us", url: "/admin/company?tab=about-institute", icon: Info },
             { title: "Mission, Vision & Goals", url: "/admin/company?tab=mission-vision-goal", icon: Target },
             { title: "About Founder", url: "/admin/company?tab=about-founder", icon: User },
-            { title: "Facilities & Infrastructure", url: "/admin/company?tab=facilities", icon: Sparkles },
             { title: "Payment Methods", url: "/admin/company?tab=payment-methods", icon: CreditCard },
             { title: "FAQs", url: "/admin/company?tab=faqs", icon: HelpCircle },
             { title: "Privacy Policy", url: "/admin/company?tab=privacy-policy", icon: ShieldCheck },

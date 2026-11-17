@@ -132,7 +132,6 @@ const ALL_DETAILS_TABS = [
   { slug: "about-institute", label: "About Us", icon: Info },
   { slug: "mission-vision-goal", label: "Mission, Vision & Goal", icon: Target },
   { slug: "about-founder", label: "About Founder", icon: User },
-  { slug: "facilities", label: "Facilities & Infrastructure", icon: Sparkles },
   { slug: "payment-methods", label: "Payment Methods", icon: CreditCard },
   { slug: "faqs", label: "FAQs", icon: HelpCircle },
   { slug: "privacy-policy", label: "Privacy Policy", icon: ShieldCheck },
