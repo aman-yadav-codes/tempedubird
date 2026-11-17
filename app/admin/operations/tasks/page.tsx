@@ -3447,105 +3447,6 @@ export default function OperationsTasksPage() {
                 />
               </div>
 
-              {/* Project Type & Pipeline Template Selection */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl border bg-muted/20">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-semibold flex items-center gap-1.5">
-                      <FolderKanban className="w-3.5 h-3.5 text-primary" />
-                      Work Type
-                    </Label>
-                    <Link
-                      href="/admin/operations/project-types"
-                      target="_blank"
-                      className="text-[10px] text-primary hover:underline font-medium"
-                    >
-                      Manage Types
-                    </Link>
-                  </div>
-                  <select
-                    value={formProjectTypeId}
-                    onChange={(e) => handleSelectProjectType(e.target.value)}
-                    className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring font-medium text-foreground cursor-pointer"
-                  >
-                    <option value="none">-- Select Work Type --</option>
-                    {projectTypesList.map((pt) => (
-                      <option key={pt.id} value={String(pt.id)}>
-                        {pt.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-semibold flex items-center gap-1.5">
-                      <GitFork className="w-3.5 h-3.5 text-primary" />
-                      Pipeline Template
-                    </Label>
-                    <Link
-                      href="/admin/operations/project-pipelines"
-                      target="_blank"
-                      className="text-[10px] text-primary hover:underline font-medium"
-                    >
-                      Manage Pipelines
-                    </Link>
-                  </div>
-                  <select
-                    value={formPipelineId}
-                    disabled={formProjectTypeId === "none" || availablePipelines.length === 0}
-                    onChange={(e) => handleSelectPipeline(e.target.value)}
-                    className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring font-medium text-foreground cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value="none">
-                      {formProjectTypeId === "none"
-                        ? "-- Select Work Type First --"
-                        : availablePipelines.length === 0
-                          ? "-- No Active Pipelines for this Type --"
-                          : "-- Select Pipeline Template --"}
-                    </option>
-                    {availablePipelines.map((pl) => (
-                      <option key={pl.id} value={String(pl.id)}>
-                        {pl.name} {pl.is_default ? "★ (Default)" : ""} ({Array.isArray(pl.phases) ? pl.phases.length : 0} phases)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Pipeline Phases Preview */}
-                {formPipelinePhases.length > 0 && (
-                  <div className="sm:col-span-2 space-y-1.5 pt-1 border-t mt-1">
-                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                      <span className="font-semibold text-foreground flex items-center gap-1">
-                        <Layers className="w-3 h-3 text-primary" />
-                        Pipeline Snapshot: {formPipelinePhases.length} Phases
-                      </span>
-                      <span className="font-mono text-[10px]">
-                        Total Est: {formPipelinePhases.reduce((acc, p) => acc + (parseFloat(String(p.estimated_duration_hours || 0)) || 0), 0)}h
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar">
-                      {formPipelinePhases.map((ph, idx) => (
-                        <div
-                          key={ph.id || idx}
-                          className="flex items-center gap-1 text-[10px] bg-background border px-2 py-1 rounded-md shrink-0 shadow-2xs"
-                        >
-                          <span className="font-mono font-bold text-primary">{idx + 1}.</span>
-                          <span className="font-medium text-foreground max-w-[120px] truncate" title={ph.name}>
-                            {ph.name}
-                          </span>
-                          {ph.requires_approval && (
-                            <span className="text-[9px] text-amber-600 bg-amber-500/15 px-1 rounded font-semibold">
-                              Approval
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Ownership: For Own Company or Client */}
               <div className="space-y-2 p-3 rounded-xl border bg-muted/20">
                 <div className="flex items-center justify-between">
@@ -3602,12 +3503,7 @@ export default function OperationsTasksPage() {
                   </button>
                 </div>
 
-                {formProjectFor === "own_company" ? (
-                  <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20 text-xs text-primary font-medium">
-                    <Building2 className="w-4 h-4 shrink-0" />
-                    <span>This work will be assigned for internal company: <strong>EduBird</strong></span>
-                  </div>
-                ) : (
+                {formProjectFor === "client" && (
                   <div className="space-y-1.5 pt-1">
                     <div className="flex items-center justify-between">
                       <Label className="text-xs font-semibold flex items-center gap-1.5">
@@ -3889,36 +3785,6 @@ export default function OperationsTasksPage() {
                     value={formCost}
                     onChange={(e) => setFormCost(e.target.value)}
                     placeholder="0.00"
-                    className="text-xs h-9 bg-background"
-                  />
-                </div>
-              </div>
-
-              {/* Live and Demo URLs */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold flex items-center gap-1.5">
-                    <ExternalLink className="w-3.5 h-3.5 text-primary" />
-                    Live Website / Portal URL
-                  </Label>
-                  <Input
-                    type="url"
-                    value={formLiveUrl}
-                    onChange={(e) => setFormLiveUrl(e.target.value)}
-                    placeholder="https://..."
-                    className="text-xs h-9 bg-background"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold flex items-center gap-1.5">
-                    <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
-                    Demo / Staging URL
-                  </Label>
-                  <Input
-                    type="url"
-                    value={formDemoUrl}
-                    onChange={(e) => setFormDemoUrl(e.target.value)}
-                    placeholder="https://staging..."
                     className="text-xs h-9 bg-background"
                   />
                 </div>
