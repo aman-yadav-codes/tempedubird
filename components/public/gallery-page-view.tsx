@@ -141,13 +141,13 @@ export function GalleryPageView({
           <div className="max-w-3xl space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/10 text-[#800000] border border-rose-500/20 text-xs font-bold uppercase tracking-wider">
               <Building2 className="h-3.5 w-3.5" />
-              <span>Campus Facilities & Gallery</span>
+              <span>Photo Gallery & Showcase</span>
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Facilities & Infrastructure at {institutionName}
+              Photo Gallery & Showcase — {institutionName}
             </h1>
             <p className="text-base text-muted-foreground leading-relaxed">
-              Explore our world-class academic facilities, high-tech research laboratories, modern lecture halls, campus libraries, and student amenities.
+              Explore photos, workspaces, products, events, and operations at {institutionName}.
             </p>
           </div>
 
@@ -178,15 +178,15 @@ export function GalleryPageView({
       <section className="container mx-auto px-4 py-12">
         {loading ? (
           <div className="flex items-center justify-center py-24 text-muted-foreground">
-            <Sparkles className="h-6 w-6 animate-spin mr-2 text-primary" /> Loading campus facilities...
+            <Sparkles className="h-6 w-6 animate-spin mr-2 text-primary" /> Loading gallery photos...
           </div>
         ) : filteredItems.length === 0 ? (
           <div className="text-center py-20 border rounded-2xl bg-card space-y-3">
             <ImageIcon className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <h3 className="text-lg font-bold text-foreground">No facilities found in this category</h3>
-            <p className="text-xs text-muted-foreground">Select another category or view all facilities.</p>
+            <h3 className="text-lg font-bold text-foreground">No photos found in this category</h3>
+            <p className="text-xs text-muted-foreground">Select another category or view all photos.</p>
             <Button size="sm" onClick={() => setSelectedCategory("all")}>
-              View All Facilities
+              View All Photos
             </Button>
           </div>
         ) : (
@@ -209,7 +209,7 @@ export function GalleryPageView({
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
                     <div className="text-white space-y-1">
                       <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-300">
-                        <Maximize2 className="h-3.5 w-3.5" /> Click to view full facility
+                        <Maximize2 className="h-3.5 w-3.5" /> Click to view full image
                       </span>
                       {item.description && (
                         <p className="text-xs text-slate-200 line-clamp-2">{item.description}</p>
@@ -229,7 +229,7 @@ export function GalleryPageView({
                 <div className="p-4 space-y-1 border-t bg-card">
                   <div className="flex items-center justify-between gap-2">
                     <Badge variant="outline" className="text-[10px] font-semibold">
-                      {item.category_name || item.media_type || "Facility"}
+                      {item.category_name || item.media_type || "Photo"}
                     </Badge>
                   </div>
                   <h4 className="font-bold text-sm text-foreground leading-snug line-clamp-1 group-hover:text-primary transition-colors">

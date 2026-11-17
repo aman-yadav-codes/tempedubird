@@ -255,7 +255,7 @@ export function PublicNavbar({
                   {institutionDisplayName}
                 </span>
                 <span className="text-[9px] font-semibold text-rose-700 uppercase tracking-wider truncate">
-                  Campus Portal
+                  {Boolean(process.env.NEXT_PUBLIC_BUSINESS_ID || process.env.NEXT_PUBLIC_APP_MODE === "business") ? "Official Portal" : "Campus Portal"}
                 </span>
               </div>
             </>

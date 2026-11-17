@@ -248,13 +248,13 @@ export default function PublicJobsPage() {
         <div className="container mx-auto px-4 text-center max-w-4xl space-y-4">
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-primary">
             <Briefcase className="size-3.5" />
-            Careers & Campus Recruitment
+            Careers & Opportunities
           </div>
           <h1 className="text-3xl font-black tracking-tight sm:text-5xl text-foreground">
-            Explore Opportunities & Faculty Openings
+            Explore Career Openings & Opportunities
           </h1>
           <p className="text-base text-muted-foreground sm:text-lg max-w-2xl mx-auto">
-            Discover teaching positions, research roles, and administrative careers at top educational institutions and universities.
+            Discover rewarding career opportunities, professional roles, and open positions across our departments.
           </p>
 
           {/* Search Box */}
@@ -262,7 +262,7 @@ export default function PublicJobsPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-3 size-4 text-muted-foreground" />
               <Input
-                placeholder="Search job title, subject, or location..."
+                placeholder="Search job title, skills, department, or location..."
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);

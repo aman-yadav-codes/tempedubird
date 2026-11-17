@@ -47,13 +47,13 @@ type BlogItem = {
 
 const CATEGORIES = [
   "All Categories",
-  "Academic & Curriculum",
-  "Admissions & Counseling",
-  "Campus Life & Culture",
-  "Exams, Cutoffs & Results",
-  "Placements & Career",
-  "Scholarships & Financial Aid",
+  "News & Announcements",
+  "Product Updates",
+  "Guides & Insights",
+  "Industry Trends",
+  "Stories & Culture",
   "Technology & Innovation",
+  "Career & Growth",
 ];
 
 export default function BlogsPublicPage() {
@@ -106,20 +106,20 @@ export default function BlogsPublicPage() {
   return (
     <div className="min-h-screen bg-background pb-20 pt-6">
       <div className="container mx-auto px-4 max-w-7xl space-y-8">
-        <SeoBreadcrumbs items={[{ label: "Articles & Campus Blogs" }]} />
+        <SeoBreadcrumbs items={[{ label: "Articles & Blogs" }]} />
 
         {/* Page Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-border/80 pb-6">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-600 text-xs font-bold">
               <Sparkles className="h-3.5 w-3.5" />
-              <span>Campus News, Articles & Insights</span>
+              <span>Articles, Insights & News</span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-black text-foreground tracking-tight">
-              Educational Articles & Campus Journal
+              Articles, Guides & Latest Updates
             </h1>
             <p className="text-sm text-muted-foreground max-w-2xl">
-              Explore accredited syllabus guides, career roadmaps, exam cutoffs, faculty research, and campus stories.
+              Explore informative articles, industry insights, operational guides, product announcements, and company stories.
             </p>
           </div>
 

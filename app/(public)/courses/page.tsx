@@ -617,10 +617,10 @@ function CoursesPageContent() {
         {/* Header Title & Search Row */}
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,520px)] lg:items-end border-b border-border/80 pb-6">
           <div>
-            <Badge className="bg-primary/10 text-primary border-primary/20 mb-1.5">Accredited Curriculum</Badge>
-            <h1 className="text-3xl font-extrabold text-foreground tracking-tight sm:text-4xl">Explore Courses & Programs</h1>
+            <Badge className="bg-primary/10 text-primary border-primary/20 mb-1.5">Courses & Training</Badge>
+            <h1 className="text-3xl font-extrabold text-foreground tracking-tight sm:text-4xl">Explore Courses, Training & Programs</h1>
             <p className="mt-1 text-sm text-muted-foreground sm:text-base">
-              Browse verified courses, fee structures, and syllabus modules from top accredited institutes.
+              Browse verified courses, training modules, skill workshops, and educational programs.
             </p>
           </div>
 
@@ -629,7 +629,7 @@ function CoursesPageContent() {
               value={state.search}
               onValueChange={(search) => updateState({ search })}
               debounceMs={350}
-              placeholder="Search courses, institutes, or subjects..."
+              placeholder="Search courses, programs, or skills..."
               className="h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-4 text-sm shadow-none focus-visible:ring-0"
             />
             <button

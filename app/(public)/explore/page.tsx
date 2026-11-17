@@ -744,15 +744,15 @@ function CustomerExplorePageContent() {
                   Our Team
                 </Badge>
                 <span className="text-xs text-muted-foreground font-medium">
-                  Verified Staff & Faculty
+                  Verified Team & Staff
                 </span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-1 flex items-center gap-2">
                 <Users className="size-7 text-primary" />
-                Our Staff & Faculty Members
+                Our Staff & Team Members
               </h1>
               <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                Meet the certified teachers, counselors, leaders, and administrative staff members.
+                Meet the experienced specialists, leaders, and dedicated staff members.
               </p>
             </div>
             <div className="flex items-center gap-3">

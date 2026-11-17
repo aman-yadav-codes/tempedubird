@@ -181,15 +181,15 @@ export default function PublicProductsPage() {
       <section className="relative overflow-hidden bg-gradient-to-b from-primary/10 via-background to-background border-b border-border py-10 sm:py-14">
         <div className="container mx-auto px-4 text-center max-w-3xl space-y-3.5">
           <Badge variant="outline" className="text-xs font-extrabold uppercase px-3 py-1 bg-primary/10 text-primary border-primary/20">
-            {institutionInfo?.name ? `${institutionInfo.name} Store` : "Official Academic Store & Student Kits"}
+            {institutionInfo?.name ? `${institutionInfo.name} Store` : "Official Store & Catalog"}
           </Badge>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-foreground tracking-tight">
-            {institutionInfo?.name ? `${institutionInfo.name} Study Kits, Uniforms & Essentials` : "Curated Study Kits, Uniforms & Lab Equipment"}
+            {institutionInfo?.name ? `${institutionInfo.name} Products & Catalog` : "Products & Store Catalog"}
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl mx-auto">
             {institutionInfo?.name
-              ? `Explore official student apparel, laboratory kits, prescribed textbooks, and academic supplies verified for ${institutionInfo.name}.`
-              : "Discover verified solved question banks, laboratory toolkits, official student apparel, and digital learning devices tailored for your course."}
+              ? `Explore verified products, authentic supplies, and premium offerings available from ${institutionInfo.name}.`
+              : "Discover verified products, supplies, and exclusive merchandise from top providers."}
           </p>
 
           {/* SEARCH BAR */}
@@ -199,7 +199,7 @@ export default function PublicProductsPage() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search study kits, solved papers, uniforms..."
+                placeholder="Search products, items, brands, or categories..."
                 className="pl-10 h-10 text-xs bg-card rounded-xl shadow-xs"
               />
             </div>
@@ -266,27 +266,29 @@ export default function PublicProductsPage() {
                     </Select>
                   </div>
 
-                  {/* 2. Course / Academic Program Dropdown */}
-                  <div className="w-[200px] sm:w-[230px]">
-                    <Select value={selectedProgramId} onValueChange={setSelectedProgramId}>
-                      <SelectTrigger className="h-9 text-xs font-bold bg-background border-border shadow-2xs">
-                        <div className="flex items-center gap-1.5 truncate">
-                          <GraduationCap className="w-3.5 h-3.5 text-primary shrink-0" />
-                          <SelectValue placeholder="All Courses & Programs" />
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent className="max-h-72">
-                        <SelectItem value="all">
-                          All Courses & Programs ({programs.length})
-                        </SelectItem>
-                        {programs.map((prog) => (
-                          <SelectItem key={prog.id} value={String(prog.id)}>
-                            {prog.title}
+                  {/* 2. Collection / Program Dropdown (if available) */}
+                  {programs.length > 0 && (
+                    <div className="w-[200px] sm:w-[230px]">
+                      <Select value={selectedProgramId} onValueChange={setSelectedProgramId}>
+                        <SelectTrigger className="h-9 text-xs font-bold bg-background border-border shadow-2xs">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <Layers className="w-3.5 h-3.5 text-primary shrink-0" />
+                            <SelectValue placeholder="All Collections & Programs" />
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent className="max-h-72">
+                          <SelectItem value="all">
+                            All Collections & Programs ({programs.length})
                           </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                          {programs.map((prog) => (
+                            <SelectItem key={prog.id} value={String(prog.id)}>
+                              {prog.title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   {/* 3. Price Filter Dropdown */}
                   <div className="w-[130px] sm:w-[150px]">
@@ -402,94 +404,136 @@ export default function PublicProductsPage() {
 
           {/* ================= RIGHT SIDEBAR ================= */}
           <aside className="w-full lg:w-80 xl:w-88 shrink-0 space-y-6">
-            {/* 1. COURSES & ACADEMIC PROGRAMS FILTER WIDGET */}
+            {/* 1. PRODUCT CATEGORIES FILTER WIDGET */}
             <Card className="p-4 bg-card border-border shadow-xs rounded-2xl space-y-3">
               <div className="flex items-center justify-between border-b border-border pb-2.5">
                 <h3 className="font-extrabold text-sm text-foreground flex items-center gap-2">
-                  <GraduationCap className="w-4 h-4 text-primary" />
-                  Select Course / Program
+                  <Tag className="w-4 h-4 text-primary" />
+                  Product Categories
                 </h3>
                 <span className="text-[10px] font-bold text-muted-foreground">
-                  {programs.length} Courses
+                  {categories.length} Categories
                 </span>
               </div>
 
-              {/* Course Search Input */}
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                <Input
-                  value={programSearch}
-                  onChange={(e) => setProgramSearch(e.target.value)}
-                  placeholder="Search courses or institutes..."
-                  className="pl-8 pr-7 h-8 text-xs bg-background rounded-lg border-border"
-                />
-                {programSearch && (
-                  <button
-                    type="button"
-                    onClick={() => setProgramSearch("")}
-                    className="absolute right-2 top-2 text-muted-foreground hover:text-foreground cursor-pointer"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Selected Course Active Chip */}
-              {selectedProgramObj && (
-                <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between text-xs">
-                  <div className="truncate min-w-0 pr-2">
-                    <span className="font-bold text-primary block truncate">{selectedProgramObj.title}</span>
-                    {selectedProgramObj.institution_name && (
-                      <span className="text-[10px] text-muted-foreground block truncate">
-                        {selectedProgramObj.institution_name}
-                      </span>
-                    )}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedProgramId("all")}
-                    className="h-6 w-6 p-0 text-muted-foreground hover:text-rose-600 shrink-0 cursor-pointer"
-                    title="Clear course filter"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              )}
-
-              {/* Scrollable Course Selection List */}
-              <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
+              {/* Categories Selection List */}
+              <div className="max-h-60 overflow-y-auto space-y-1 pr-1">
                 <button
                   type="button"
-                  onClick={() => setSelectedProgramId("all")}
+                  onClick={() => setSelectedCategory("all")}
                   className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center justify-between cursor-pointer ${
-                    selectedProgramId === "all"
+                    selectedCategory === "all"
                       ? "bg-primary text-primary-foreground font-bold shadow-2xs"
                       : "hover:bg-muted text-foreground"
                   }`}
                 >
-                  <span className="truncate">All Courses & Programs</span>
-                  <Badge variant={selectedProgramId === "all" ? "outline" : "secondary"} className="text-[10px] ml-1 shrink-0">
+                  <span className="truncate">All Categories</span>
+                  <Badge variant={selectedCategory === "all" ? "outline" : "secondary"} className="text-[10px] ml-1 shrink-0">
                     {products.length}
                   </Badge>
                 </button>
 
-                {filteredPrograms.length === 0 ? (
-                  <div className="py-4 text-center space-y-1">
-                    <p className="text-[11px] text-muted-foreground">
-                      No courses found matching &quot;{programSearch}&quot;
-                    </p>
+                {categories.map((cat) => {
+                  const isSelected = selectedCategory === cat.name;
+                  const count = products.filter((p) => (p.category_name || p.category) === cat.name).length;
+                  return (
+                    <button
+                      key={cat.id || cat.name}
+                      type="button"
+                      onClick={() => setSelectedCategory(isSelected ? "all" : cat.name)}
+                      className={`w-full text-left p-2 rounded-lg text-xs transition flex items-center justify-between cursor-pointer ${
+                        isSelected
+                          ? "bg-primary/10 border border-primary/30 text-primary font-bold shadow-2xs"
+                          : "hover:bg-muted text-foreground border border-transparent"
+                      }`}
+                    >
+                      <span className="truncate font-semibold text-xs">{cat.name}</span>
+                      <div className="flex items-center gap-1.5">
+                        {count > 0 && (
+                          <span className="text-[10px] text-muted-foreground font-medium">({count})</span>
+                        )}
+                        {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" />}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </Card>
+
+            {/* 2. OPTIONAL COLLECTIONS / PROGRAMS FILTER WIDGET */}
+            {programs.length > 0 && (
+              <Card className="p-4 bg-card border-border shadow-xs rounded-2xl space-y-3">
+                <div className="flex items-center justify-between border-b border-border pb-2.5">
+                  <h3 className="font-extrabold text-sm text-foreground flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-primary" />
+                    Collections & Programs
+                  </h3>
+                  <span className="text-[10px] font-bold text-muted-foreground">
+                    {programs.length} Options
+                  </span>
+                </div>
+
+                {/* Search Input */}
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    value={programSearch}
+                    onChange={(e) => setProgramSearch(e.target.value)}
+                    placeholder="Search collections..."
+                    className="pl-8 pr-7 h-8 text-xs bg-background rounded-lg border-border"
+                  />
+                  {programSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setProgramSearch("")}
+                      className="absolute right-2 top-2 text-muted-foreground hover:text-foreground cursor-pointer"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Selected Active Chip */}
+                {selectedProgramObj && (
+                  <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between text-xs">
+                    <div className="truncate min-w-0 pr-2">
+                      <span className="font-bold text-primary block truncate">{selectedProgramObj.title}</span>
+                      {selectedProgramObj.institution_name && (
+                        <span className="text-[10px] text-muted-foreground block truncate">
+                          {selectedProgramObj.institution_name}
+                        </span>
+                      )}
+                    </div>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setProgramSearch("")}
-                      className="text-[10px] h-6 px-2 text-primary"
+                      onClick={() => setSelectedProgramId("all")}
+                      className="h-6 w-6 p-0 text-muted-foreground hover:text-rose-600 shrink-0 cursor-pointer"
+                      title="Clear filter"
                     >
-                      Clear search
+                      <X className="h-3.5 w-3.5" />
                     </Button>
                   </div>
-                ) : (
-                  filteredPrograms.map((prog) => {
+                )}
+
+                {/* Scrollable Selection List */}
+                <div className="max-h-52 overflow-y-auto space-y-1 pr-1">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedProgramId("all")}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center justify-between cursor-pointer ${
+                      selectedProgramId === "all"
+                        ? "bg-primary text-primary-foreground font-bold shadow-2xs"
+                        : "hover:bg-muted text-foreground"
+                    }`}
+                  >
+                    <span className="truncate">All Collections</span>
+                    <Badge variant={selectedProgramId === "all" ? "outline" : "secondary"} className="text-[10px] ml-1 shrink-0">
+                      {products.length}
+                    </Badge>
+                  </button>
+
+                  {filteredPrograms.map((prog) => {
                     const isSelected = String(prog.id) === String(selectedProgramId);
                     return (
                       <button
@@ -506,39 +550,33 @@ export default function PublicProductsPage() {
                           <span className="truncate font-bold text-xs">{prog.title}</span>
                           {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" />}
                         </div>
-                        {prog.institution_name && (
-                          <span className="text-[10px] text-muted-foreground truncate flex items-center gap-1">
-                            <Building2 className="w-2.5 h-2.5 shrink-0 opacity-70" />
-                            {prog.institution_name}
-                          </span>
-                        )}
                       </button>
                     );
-                  })
-                )}
-              </div>
-            </Card>
+                  })}
+                </div>
+              </Card>
+            )}
 
             {/* Dynamic Product Banner Ad (Right Sidebar) */}
             <PortalBannerAd
               section="product"
               placement="right_sidebar"
               fallbackBadge="STORE EXCLUSIVE"
-              fallbackTitle="Verified Lab Kits & Study Essentials"
-              fallbackDescription="Order genuine tools, uniforms, and approved books with direct campus delivery."
+              fallbackTitle="Authentic Products & Genuine Supplies"
+              fallbackDescription="Order verified items, genuine products, and premium supplies with reliable direct delivery."
               fallbackCta="View Catalog"
               fallbackUrl="/products"
             />
 
-            {/* 2. MOST SEARCHED / TRENDING PRODUCTS WIDGET */}
+            {/* 3. MOST SEARCHED / TRENDING PRODUCTS WIDGET */}
             <Card className="p-4 bg-card border-border shadow-xs rounded-2xl space-y-3">
               <div className="flex items-center justify-between border-b border-border pb-2.5">
                 <h3 className="font-extrabold text-sm text-foreground flex items-center gap-2">
                   <Flame className="w-4 h-4 text-rose-500" />
-                  Most Searched Products
+                  Featured & Trending Products
                 </h3>
                 <Badge variant="outline" className="text-[10px] font-bold bg-rose-500/10 text-rose-600 border-rose-500/20">
-                  Trending
+                  Popular
                 </Badge>
               </div>
 
@@ -570,7 +608,7 @@ export default function PublicProductsPage() {
                           )}
                         </div>
                         <span className="text-[9px] text-emerald-600 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                          Popular
+                          Featured
                         </span>
                       </div>
                     </div>
@@ -579,49 +617,50 @@ export default function PublicProductsPage() {
               </div>
             </Card>
 
-            {/* 3. HIGH-IMPACT ADVERTISEMENT / PROMOTIONAL BANNERS */}
+            {/* 4. PROMOTIONAL BANNERS */}
             <div className="space-y-4">
               {/* Primary Ad Banner */}
               <div className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 text-white shadow-md border border-indigo-500/30 space-y-3">
                 <div className="flex items-center justify-between">
                   <Badge variant="outline" className="text-[10px] font-extrabold uppercase bg-indigo-500/20 text-indigo-300 border-indigo-500/30 flex items-center gap-1">
-                    <Megaphone className="w-3 h-3 text-indigo-400" /> Sponsored Ad
+                    <Megaphone className="w-3 h-3 text-indigo-400" /> Special Offer
                   </Badge>
                   <span className="text-[10px] font-bold text-indigo-400">Limited Time</span>
                 </div>
 
                 <div className="space-y-1">
                   <h4 className="font-black text-base leading-snug">
-                    Flat 30% Off on Engineering & Robotics Lab Kits
+                    Exclusive Savings & Bulk Order Discounts
                   </h4>
                   <p className="text-xs text-indigo-200/80 leading-relaxed">
-                    Exclusive student coupon on complete Arduino & sensor starter modules for affiliated institutions.
+                    Enjoy promotional discount coupons and special wholesale pricing on qualified catalog orders.
                   </p>
                 </div>
 
                 <div className="pt-1 flex items-center justify-between">
-                  <span className="text-xs font-black text-amber-300">Code: STEM30</span>
-                  <Link href="/courses">
+                  <span className="text-xs font-black text-amber-300">Code: SAVE20</span>
+                  <Link href="/products">
                     <Button size="sm" className="h-7 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white gap-1 rounded-lg">
-                      Claim Offer <ArrowRight className="w-3 h-3" />
+                      Explore Deals <ArrowRight className="w-3 h-3" />
                     </Button>
                   </Link>
                 </div>
               </div>
 
               {/* Secondary Ad Banner */}
-              <div className="relative overflow-hidden rounded-2xl p-4 bg-gradient-to-br from-amber-500/15 via-background to-amber-500/5 border border-amber-500/30 space-y-2">
+              <div className="relative overflow-hidden rounded-2xl p-4 bg-gradient-to-br from-emerald-500/15 via-background to-emerald-500/5 border border-emerald-500/30 space-y-2">
                 <div className="flex items-center gap-2">
-                  <Gift className="w-4 h-4 text-amber-500" />
-                  <span className="text-xs font-black text-foreground">Free Institutional Delivery</span>
+                  <Truck className="w-4 h-4 text-emerald-600" />
+                  <span className="text-xs font-black text-foreground">Verified Fast Delivery</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Order any official uniform set or 15-year solved paper series and get doorstep express delivery.
+                  Order any product from our store and get reliable, safely packaged doorstep delivery.
                 </p>
                 <div className="pt-1">
-                  <span className="text-[11px] font-extrabold text-primary hover:underline flex items-center gap-1 cursor-pointer">
-                    Explore Uniform Store <ArrowRight className="w-3 h-3" />
-                  </span>
+                  <Link href="/products" className="text-[11px] font-extrabold text-primary hover:underline flex items-center gap-1 cursor-pointer">
+                    <span>Shop All Items</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </Link>
                 </div>
               </div>
             </div>

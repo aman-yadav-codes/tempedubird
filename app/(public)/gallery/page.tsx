@@ -14,8 +14,8 @@ export async function generateMetadata() {
   const name = profile?.name ?? "EduBird";
 
   return {
-    title: `Campus Gallery & Facilities | ${name}`,
-    description: `Browse the photo gallery, infrastructure, laboratory setups, and campus facilities of ${name}.`,
+    title: `Photo Gallery & Showcase | ${name}`,
+    description: `Browse the photo gallery, workspace, products, and showcase of ${name}.`,
   };
 }
 
