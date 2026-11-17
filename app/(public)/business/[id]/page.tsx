@@ -37,7 +37,10 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
       FROM business_profiles bp
       LEFT JOIN categories c ON c.id = bp.category_id
       LEFT JOIN categories sc ON sc.id = bp.subcategory_id
-      LEFT JOIN institution_profiles ip ON (ip.id = bp.institution_profile_id OR ip.id = bp.id OR ip.business_id = bp.id)
+      LEFT JOIN institution_profiles ip ON (
+        ip.id = bp.institution_profile_id
+        OR (bp.institution_profile_id IS NULL AND (ip.id = bp.id OR ip.business_id = bp.id))
+      )
       LEFT JOIN users u ON u.id = bp.user_id
       WHERE (bp.slug = $1 OR bp.id = $2 OR bp.institution_profile_id = $2 OR $1 ILIKE '%' || bp.slug || '%')
         AND COALESCE(bp.is_active, TRUE) = TRUE

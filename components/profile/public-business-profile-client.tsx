@@ -1860,77 +1860,126 @@ export function PublicBusinessProfileClient({
                     </Card>
                   )}
 
-                  {/* Mission, Vision & Goals Card */}
-                  {Boolean(business.mission || business.vision || business.goal) && (
-                    <Card className="rounded-2xl border shadow-xs overflow-hidden">
-                      <CardHeader className="pb-3 border-b border-border/50 bg-muted/20">
-                        <CardTitle className="text-base font-bold flex items-center justify-between">
-                          <span className="flex items-center gap-2">
-                            <Target className="size-4 text-primary" />
-                            <span>Mission, Vision & Goals</span>
-                          </span>
-                        </CardTitle>
-                        <CardDescription className="text-xs">
-                          Guiding principles & institutional roadmap
-                        </CardDescription>
+                  {/* 1. Mission Card */}
+                  {Boolean(business.mission) && (
+                    <Card className="rounded-2xl border shadow-xs overflow-hidden hover:shadow-md transition-all border-blue-200/80 dark:border-blue-900/50 bg-gradient-to-br from-blue-50/60 via-card to-card dark:from-blue-950/20">
+                      <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
+                        <div className="flex items-center gap-2">
+                          <div className="size-8 rounded-lg bg-blue-600/10 text-blue-600 flex items-center justify-center">
+                            <Target className="size-4" />
+                          </div>
+                          <div>
+                            <CardTitle className="text-sm font-bold text-foreground">Our Mission</CardTitle>
+                            <CardDescription className="text-[11px]">Core purpose & daily commitment</CardDescription>
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/50">
+                          <Link href="/about/mission-vision#mission">
+                            <span>Details</span>
+                            <ChevronRight className="size-3 ml-0.5" />
+                          </Link>
+                        </Button>
                       </CardHeader>
-                      <CardContent className="p-4 space-y-4">
-                        {/* Mission */}
-                        {business.mission && (
-                          <div className="space-y-1.5 p-3.5 rounded-xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-800/30">
-                            <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 font-bold text-xs uppercase tracking-wide">
-                              <Target className="size-3.5 shrink-0" />
-                              <span>Our Mission</span>
-                            </div>
-                            <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-line">
-                              {business.mission}
-                            </p>
-                          </div>
-                        )}
+                      <CardContent className="p-4 space-y-2">
+                        <blockquote className="border-l-2 border-blue-600 pl-3 py-0.5 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line">
+                          &ldquo;{business.mission}&rdquo;
+                        </blockquote>
+                        <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
+                          <span className="flex items-center gap-1 text-blue-600 font-semibold">
+                            <CheckCircle2 className="size-3" /> Purpose-driven
+                          </span>
+                          <span className="font-medium">{business.name}</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
 
-                        {/* Vision */}
-                        {business.vision && (
-                          <div className="space-y-1.5 p-3.5 rounded-xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/50 dark:border-purple-800/30">
-                            <div className="flex items-center gap-2 text-purple-700 dark:text-purple-400 font-bold text-xs uppercase tracking-wide">
-                              <Compass className="size-3.5 shrink-0" />
-                              <span>Our Vision</span>
-                            </div>
-                            <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-line">
-                              {business.vision}
-                            </p>
+                  {/* 2. Vision Card */}
+                  {Boolean(business.vision) && (
+                    <Card className="rounded-2xl border shadow-xs overflow-hidden hover:shadow-md transition-all border-purple-200/80 dark:border-purple-900/50 bg-gradient-to-br from-purple-50/60 via-card to-card dark:from-purple-950/20">
+                      <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
+                        <div className="flex items-center gap-2">
+                          <div className="size-8 rounded-lg bg-purple-600/10 text-purple-600 flex items-center justify-center">
+                            <Compass className="size-4" />
                           </div>
-                        )}
-
-                        {/* Goals */}
-                        {business.goal && (
-                          <div className="space-y-2.5 p-3.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30">
-                            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold text-xs uppercase tracking-wide">
-                              <Award className="size-3.5 shrink-0" />
-                              <span>Strategic Goals</span>
-                            </div>
-                            <div className="space-y-2">
-                              {business.goal
-                                .split("\n")
-                                .map((g: string) => g.trim())
-                                .filter(Boolean)
-                                .map((goalItem: string, idx: number) => {
-                                  const colonIdx = goalItem.indexOf(":");
-                                  const title = colonIdx > -1 ? goalItem.slice(0, colonIdx).trim() : null;
-                                  const desc = colonIdx > -1 ? goalItem.slice(colonIdx + 1).trim() : goalItem;
-
-                                  return (
-                                    <div key={idx} className="flex items-start gap-2 text-xs">
-                                      <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                                      <div className="text-foreground/85 leading-snug">
-                                        {title && <span className="font-semibold text-foreground">{title}: </span>}
-                                        <span>{desc}</span>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                            </div>
+                          <div>
+                            <CardTitle className="text-sm font-bold text-foreground">Our Vision</CardTitle>
+                            <CardDescription className="text-[11px]">Future horizon & long-term impact</CardDescription>
                           </div>
-                        )}
+                        </div>
+                        <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/50">
+                          <Link href="/about/mission-vision#vision">
+                            <span>Details</span>
+                            <ChevronRight className="size-3 ml-0.5" />
+                          </Link>
+                        </Button>
+                      </CardHeader>
+                      <CardContent className="p-4 space-y-2">
+                        <blockquote className="border-l-2 border-purple-600 pl-3 py-0.5 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line">
+                          &ldquo;{business.vision}&rdquo;
+                        </blockquote>
+                        <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
+                          <span className="flex items-center gap-1 text-purple-600 font-semibold">
+                            <CheckCircle2 className="size-3" /> Future-focused
+                          </span>
+                          <span className="font-medium">{business.name}</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* 3. Goal Card */}
+                  {Boolean(business.goal) && (
+                    <Card className="rounded-2xl border shadow-xs overflow-hidden hover:shadow-md transition-all border-amber-200/80 dark:border-amber-900/50 bg-gradient-to-br from-amber-50/60 via-card to-card dark:from-amber-950/20">
+                      <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
+                        <div className="flex items-center gap-2">
+                          <div className="size-8 rounded-lg bg-amber-600/10 text-amber-600 flex items-center justify-center">
+                            <Award className="size-4" />
+                          </div>
+                          <div>
+                            <CardTitle className="text-sm font-bold text-foreground">Strategic Goals</CardTitle>
+                            <CardDescription className="text-[11px]">Milestones & active benchmarks</CardDescription>
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/50">
+                          <Link href="/about/mission-vision#goals">
+                            <span>View All</span>
+                            <ChevronRight className="size-3 ml-0.5" />
+                          </Link>
+                        </Button>
+                      </CardHeader>
+                      <CardContent className="p-4 space-y-2.5">
+                        <div className="space-y-2">
+                          {business.goal
+                            .split("\n")
+                            .map((g: string) => g.trim())
+                            .filter(Boolean)
+                            .slice(0, 4)
+                            .map((goalItem: string, idx: number) => {
+                              const colonIdx = goalItem.indexOf(":");
+                              const title = colonIdx > -1 ? goalItem.slice(0, colonIdx).trim() : null;
+                              const desc = colonIdx > -1 ? goalItem.slice(colonIdx + 1).trim() : goalItem;
+
+                              return (
+                                <div key={idx} className="flex items-start gap-2 text-xs">
+                                  <CheckCircle2 className="size-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                  <div className="text-foreground/90 leading-snug">
+                                    {title && <span className="font-bold text-foreground">{title}: </span>}
+                                    <span className="line-clamp-2">{desc}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                        <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
+                          <span className="flex items-center gap-1 text-amber-600 font-semibold">
+                            <CheckCircle2 className="size-3" /> Active Strategy
+                          </span>
+                          <Link href="/about/mission-vision#goals" className="font-bold text-primary hover:underline flex items-center gap-0.5">
+                            <span>Read complete roadmap</span>
+                            <ChevronRight className="size-3" />
+                          </Link>
+                        </div>
                       </CardContent>
                     </Card>
                   )}
