@@ -1429,6 +1429,111 @@ export function PublicBusinessProfileClient({
                       )}
                     </CardContent>
                   </Card>
+
+                  {/* Owner / Leadership Details Card */}
+                  {Boolean(business.owner_name || business.founder_name || business.name) && (
+                    <Card className="rounded-2xl border shadow-xs overflow-hidden">
+                      <CardHeader className="pb-3 border-b border-border/50 bg-muted/20">
+                        <CardTitle className="text-base font-bold flex items-center justify-between">
+                          <span className="flex items-center gap-2">
+                            <Users className="size-4 text-primary" />
+                            <span>Business Owner / Leadership</span>
+                          </span>
+                          <Badge variant="outline" className="text-[10px] font-semibold bg-primary/5 text-primary border-primary/20">
+                            Verified
+                          </Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 space-y-4">
+                        <div className="flex items-center gap-3.5">
+                          <div className="relative size-14 rounded-full overflow-hidden border-2 border-primary/20 shrink-0 bg-muted">
+                            {Boolean(business.owner_image_url || business.founder_image_url) ? (
+                              <Image
+                                src={business.owner_image_url || business.founder_image_url}
+                                alt={business.owner_name || business.founder_name || business.name || "Owner"}
+                                fill
+                                sizes="56px"
+                                className="object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-bold text-lg">
+                                {(business.owner_name || business.founder_name || business.name || "O").charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-sm font-bold text-foreground truncate">
+                              {business.owner_name || business.founder_name || "Business Owner"}
+                            </h4>
+                            <p className="text-xs font-medium text-muted-foreground truncate">
+                              {business.owner_designation || business.founder_title || "Founder & Business Owner"}
+                            </p>
+                            {business.name && (
+                              <p className="text-[11px] text-muted-foreground/80 truncate">
+                                {business.name}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Quick Contact & Action Buttons */}
+                        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/50">
+                          {/* Call / Phone */}
+                          {Boolean(business.owner_phone || business.phone) ? (
+                            <a
+                              href={`tel:${business.owner_phone || business.phone}`}
+                              className="flex flex-col items-center justify-center py-2.5 px-2 rounded-xl bg-muted/40 hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all border border-border/50 group text-center cursor-pointer"
+                              title={`Call ${business.owner_phone || business.phone}`}
+                            >
+                              <Phone className="size-4 text-primary group-hover:scale-110 transition-transform mb-1" />
+                              <span className="text-[11px] font-semibold text-foreground">Call</span>
+                            </a>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center py-2.5 px-2 rounded-xl bg-muted/20 text-muted-foreground/40 border border-border/20 text-center">
+                              <Phone className="size-4 mb-1" />
+                              <span className="text-[11px] font-semibold">Call</span>
+                            </div>
+                          )}
+
+                          {/* WhatsApp */}
+                          {Boolean((business.owner_whatsapp || business.whatsapp || business.owner_phone || business.phone)?.replace(/[^0-9]/g, "")) ? (
+                            <a
+                              href={`https://wa.me/${(business.owner_whatsapp || business.whatsapp || business.owner_phone || business.phone).replace(/[^0-9]/g, "")}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex flex-col items-center justify-center py-2.5 px-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 transition-all border border-emerald-500/20 group text-center cursor-pointer"
+                              title="Chat on WhatsApp"
+                            >
+                              <MessageCircle className="size-4 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform mb-1" />
+                              <span className="text-[11px] font-semibold">WhatsApp</span>
+                            </a>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center py-2.5 px-2 rounded-xl bg-muted/20 text-muted-foreground/40 border border-border/20 text-center">
+                              <MessageCircle className="size-4 mb-1" />
+                              <span className="text-[11px] font-semibold">WhatsApp</span>
+                            </div>
+                          )}
+
+                          {/* Email */}
+                          {Boolean(business.owner_email || business.email) ? (
+                            <a
+                              href={`mailto:${business.owner_email || business.email}`}
+                              className="flex flex-col items-center justify-center py-2.5 px-2 rounded-xl bg-muted/40 hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all border border-border/50 group text-center cursor-pointer"
+                              title={`Email ${business.owner_email || business.email}`}
+                            >
+                              <Mail className="size-4 text-primary group-hover:scale-110 transition-transform mb-1" />
+                              <span className="text-[11px] font-semibold text-foreground">Email</span>
+                            </a>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center py-2.5 px-2 rounded-xl bg-muted/20 text-muted-foreground/40 border border-border/20 text-center">
+                              <Mail className="size-4 mb-1" />
+                              <span className="text-[11px] font-semibold">Email</span>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               </div>
             </TabsContent>

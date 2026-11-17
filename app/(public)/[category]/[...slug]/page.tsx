@@ -30,10 +30,19 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
         c.name AS category_name,
         c.slug AS category_slug,
         sc.name AS subcategory_name,
-        sc.slug AS subcategory_slug
+        sc.slug AS subcategory_slug,
+        COALESCE(ip.founder_name, u.full_name) AS owner_name,
+        COALESCE(ip.founder_title, 'Founder & Managing Director') AS owner_designation,
+        COALESCE(ip.founder_image_url, u.avatar_url) AS owner_image_url,
+        COALESCE(ip.phone, bp.phone, u.phone) AS owner_phone,
+        COALESCE(bp.whatsapp, ip.phone, bp.phone, u.phone) AS owner_whatsapp,
+        COALESCE(ip.email, bp.email, u.email) AS owner_email,
+        ip.founder_about AS owner_about
       FROM business_profiles bp
       LEFT JOIN categories c ON c.id = bp.category_id
       LEFT JOIN categories sc ON sc.id = bp.subcategory_id
+      LEFT JOIN institution_profiles ip ON ip.id = bp.institution_profile_id
+      LEFT JOIN users u ON u.id = bp.user_id
       WHERE COALESCE(bp.is_active, TRUE) = TRUE
         AND (
           bp.slug = $1
