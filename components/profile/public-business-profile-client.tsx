@@ -149,20 +149,124 @@ export function PublicBusinessProfileClient({
   const [selectedGalleryImage, setSelectedGalleryImage] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
 
+  // Live gallery media state (populated via props or client-side fetch fallback)
+  const [liveGalleryMedia, setLiveGalleryMedia] = useState<Array<{
+    id?: number | string;
+    url: string;
+    title?: string;
+    description?: string;
+    category?: string;
+  }>>(business.gallery_media || []);
+
+  useEffect(() => {
+    if (business.gallery_media && business.gallery_media.length > 0) {
+      setLiveGalleryMedia(business.gallery_media);
+      return;
+    }
+    const targetInstId = business.institution_profile_id || business.id || 160;
+    fetch(`/api/public/gallery?institutionId=${targetInstId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.gallery && Array.isArray(data.gallery) && data.gallery.length > 0) {
+          setLiveGalleryMedia(data.gallery);
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to fetch public gallery media", err);
+      });
+  }, [business.gallery_media, business.institution_profile_id, business.id]);
+
+  // Curated slide text for educational & commercial business showcase
+  const curatedSlideCaptions = useMemo(() => [
+    {
+      title: "Excellence in Education & Professional Guidance",
+      description: "Dedicated to student growth, state-of-the-art facilities, and comprehensive coaching across all programs.",
+      category: "Academic Excellence",
+    },
+    {
+      title: "Modern Classrooms & Collaborative Learning",
+      description: "Interactive learning environments designed to foster innovation, conceptual clarity, and critical thinking.",
+      category: "Campus Infrastructure",
+    },
+    {
+      title: "Experienced Faculty & Individual Mentorship",
+      description: "Learn from top-tier educators dedicated to personal attention and unlocking every student's full potential.",
+      category: "Expert Faculty",
+    },
+    {
+      title: "Proven Results & Competitive Preparation",
+      description: "Comprehensive study materials, regular assessments, and structured roadmaps for entrance and board exams.",
+      category: "Student Success",
+    },
+    {
+      title: "Inspiring Learning Community & Environment",
+      description: "A nurturing atmosphere where students build lifelong foundations for career and academic milestones.",
+      category: "Campus Life",
+    },
+  ], []);
+
+  // Formatted slider items
+  const sliderItems = useMemo(() => {
+    if (liveGalleryMedia.length > 0) {
+      return liveGalleryMedia.map((m, idx) => {
+        const fallback = curatedSlideCaptions[idx % curatedSlideCaptions.length];
+        const isRawName =
+          !m.title ||
+          m.title.startsWith("WhatsApp Image") ||
+          m.title.includes(".jp") ||
+          m.title.includes(".png") ||
+          m.title.toLowerCase().includes("showcase");
+        return {
+          id: m.id || idx,
+          url: m.url,
+          title: isRawName ? fallback.title : m.title,
+          description:
+            m.description && m.description.trim().length > 5
+              ? m.description
+              : fallback.description,
+          category: m.category || fallback.category,
+        };
+      });
+    }
+
+    if (Array.isArray(business.gallery_images) && business.gallery_images.length > 0) {
+      return business.gallery_images.filter(Boolean).map((imgUrl, idx) => {
+        const fallback = curatedSlideCaptions[idx % curatedSlideCaptions.length];
+        return {
+          id: idx,
+          url: imgUrl,
+          title: fallback.title,
+          description: fallback.description,
+          category: fallback.category,
+        };
+      });
+    }
+
+    const gathered = [business.banner_url, business.logo_url].filter(Boolean) as string[];
+    const list = gathered.length > 0 ? gathered : [
+      "https://media.143gb.com/t/crmtaskassets/yd7sqf3knz8hl4ppwnow.jpg",
+      "https://media.143gb.com/t/crmtaskassets/ydmeimyh8hpo3wu2qt2l.jpg",
+      "https://media.143gb.com/t/crmtaskassets/ogteskrdpenq01r9okhd.jpg",
+      "https://media.143gb.com/t/crmtaskassets/sxficyi7vg3povffwpva.jpg",
+      "https://media.143gb.com/t/crmtaskassets/sd3emhozdpmsw37mvukc.jpg",
+    ];
+
+    return list.map((url, idx) => {
+      const fallback = curatedSlideCaptions[idx % curatedSlideCaptions.length];
+      return {
+        id: idx,
+        url,
+        title: fallback.title,
+        description: fallback.description,
+        category: fallback.category,
+      };
+    });
+  }, [liveGalleryMedia, business.gallery_images, business.banner_url, business.logo_url, curatedSlideCaptions]);
+
   // Gallery Images
   const galleryImages: string[] = useMemo(() => {
-    if (Array.isArray(business.gallery_images) && business.gallery_images.length > 0) {
-      return business.gallery_images.filter(Boolean);
-    }
-    const gathered = [business.banner_url, business.logo_url].filter(Boolean);
-    if (gathered.length > 0) return gathered;
-    return [
-      "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80",
-    ];
-  }, [business.gallery_images, business.banner_url, business.logo_url]);
+    return sliderItems.map((item) => item.url);
+  }, [sliderItems]);
 
   // Home Page Top Gallery Slider State
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -174,12 +278,12 @@ export function PublicBusinessProfileClient({
 
   // Auto-advance Top Gallery Slider
   useEffect(() => {
-    if (!isHomePage || galleryImages.length <= 1 || isSliderPaused) return;
+    if (!isHomePage || sliderItems.length <= 1 || isSliderPaused) return;
     const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % galleryImages.length);
-    }, 4500);
+      setCurrentSlide((prev) => (prev + 1) % sliderItems.length);
+    }, 5000);
     return () => clearInterval(interval);
-  }, [isHomePage, galleryImages.length, isSliderPaused]);
+  }, [isHomePage, sliderItems.length, isSliderPaused]);
 
   // Product category filter & search state
   const [selectedProductCategory, setSelectedProductCategory] = useState<string>("all");
@@ -845,8 +949,165 @@ export function PublicBusinessProfileClient({
       </div>
       )}
 
+      {/* ================= HOME PAGE TOP GALLERY BANNER ================= */}
+      {isHomePage && sliderItems.length > 0 && (
+        <div className="w-full bg-linear-to-b from-background via-muted/20 to-background pt-3 pb-3 sm:pt-4 sm:pb-5 px-3 sm:px-6">
+          <div className="max-w-7xl mx-auto">
+            <div
+              className="relative w-full h-[360px] sm:h-[440px] md:h-[500px] lg:h-[540px] rounded-2xl sm:rounded-3xl overflow-hidden border border-border/70 shadow-2xl bg-black group select-none"
+              onMouseEnter={() => setIsSliderPaused(true)}
+              onMouseLeave={() => setIsSliderPaused(false)}
+            >
+              {/* Slider Images with Smooth Fade & Ken-Burns Zoom */}
+              {sliderItems.map((item, idx) => {
+                const isActive = idx === currentSlide;
+                return (
+                  <div
+                    key={item.id ?? idx}
+                    className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
+                      isActive ? "opacity-100 z-10" : "opacity-0 z-0 pointer-events-none"
+                    }`}
+                  >
+                    <Image
+                      src={item.url}
+                      alt={item.title || `${business.name} showcase`}
+                      fill
+                      priority={idx === 0}
+                      sizes="(max-width: 1280px) 100vw, 1400px"
+                      className={`object-cover transition-transform duration-7000 ease-out cursor-pointer ${
+                        isActive ? "scale-105" : "scale-100"
+                      }`}
+                      onClick={() => setSelectedGalleryImage(item.url)}
+                    />
+                  </div>
+                );
+              })}
+
+              {/* Gradient Overlays for Supreme Readability and Depth */}
+              <div className="absolute inset-0 z-10 bg-linear-to-t from-black/95 via-black/50 to-black/20 pointer-events-none" />
+              <div className="absolute inset-0 z-10 bg-linear-to-r from-black/85 via-black/30 to-transparent pointer-events-none" />
+
+              {/* Top Bar: Badges & Photo Counter */}
+              <div className="absolute top-4 left-4 right-4 sm:top-6 sm:left-6 sm:right-6 z-20 flex items-center justify-between pointer-events-none">
+                <div className="flex items-center gap-2 pointer-events-auto">
+                  <Badge className="bg-black/60 backdrop-blur-md text-white border-white/20 px-3 py-1.5 text-xs font-semibold shadow-md flex items-center gap-1.5">
+                    <Sparkles className="size-3.5 text-amber-400 animate-pulse" />
+                    <span>Featured Gallery</span>
+                  </Badge>
+                  {sliderItems[currentSlide]?.category && (
+                    <Badge variant="secondary" className="bg-white/20 backdrop-blur-md text-white border-white/20 px-2.5 py-1 text-xs font-medium hidden sm:inline-flex">
+                      {sliderItems[currentSlide].category}
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 pointer-events-auto">
+                  <Badge className="bg-black/60 backdrop-blur-md text-white border-white/20 px-3 py-1.5 text-xs font-semibold shadow-md flex items-center gap-1.5">
+                    <Camera className="size-3.5 text-sky-400" />
+                    <span>{currentSlide + 1} / {sliderItems.length}</span>
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Prev / Next Navigation Arrows */}
+              {sliderItems.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCurrentSlide((prev) => (prev - 1 + sliderItems.length) % sliderItems.length);
+                    }}
+                    className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 z-20 size-10 sm:size-12 rounded-full bg-black/40 hover:bg-black/80 text-white backdrop-blur-md border border-white/20 flex items-center justify-center opacity-80 sm:opacity-0 group-hover:opacity-100 transition-all shadow-xl hover:scale-110 cursor-pointer"
+                    aria-label="Previous image"
+                  >
+                    <ChevronLeft className="size-6" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCurrentSlide((prev) => (prev + 1) % sliderItems.length);
+                    }}
+                    className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 z-20 size-10 sm:size-12 rounded-full bg-black/40 hover:bg-black/80 text-white backdrop-blur-md border border-white/20 flex items-center justify-center opacity-80 sm:opacity-0 group-hover:opacity-100 transition-all shadow-xl hover:scale-110 cursor-pointer"
+                    aria-label="Next image"
+                  >
+                    <ChevronRight className="size-6" />
+                  </button>
+                </>
+              )}
+
+              {/* Bottom Content Area */}
+              <div className="absolute bottom-4 sm:bottom-6 left-4 sm:left-8 right-4 sm:right-8 z-20 space-y-3 sm:space-y-4">
+                <div className="space-y-1.5 sm:space-y-2 max-w-3xl">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-rose-400">
+                    <span className="inline-block size-2 rounded-full bg-rose-500 animate-ping" />
+                    <span className="uppercase tracking-widest">{business.name}</span>
+                  </div>
+                  <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white tracking-tight drop-shadow-lg leading-tight">
+                    {sliderItems[currentSlide]?.title || business.name}
+                  </h2>
+                  <p className="text-xs sm:text-sm md:text-base text-white/90 line-clamp-2 font-medium drop-shadow-md max-w-2xl leading-relaxed">
+                    {sliderItems[currentSlide]?.description || business.custom_description || business.about || "Quality education, comprehensive academic coaching, and career guidance."}
+                  </p>
+                </div>
+
+                {/* Quick Action Buttons & Pagination Dots */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <Link
+                      href="/products"
+                      className="inline-flex items-center gap-1.5 h-9 sm:h-10 px-4 sm:px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs sm:text-sm shadow-lg transition-transform hover:scale-105"
+                    >
+                      <Package className="size-4" />
+                      <span>Explore Products</span>
+                    </Link>
+
+                    <Link
+                      href="/gallery"
+                      className="inline-flex items-center gap-1.5 h-9 sm:h-10 px-4 sm:px-5 rounded-xl bg-white/20 hover:bg-white/30 text-white backdrop-blur-md border border-white/30 font-bold text-xs sm:text-sm shadow-md transition-transform hover:scale-105"
+                    >
+                      <Camera className="size-4" />
+                      <span>View Gallery</span>
+                    </Link>
+
+                    <Link
+                      href="/contact"
+                      className="hidden sm:inline-flex items-center gap-1.5 h-9 sm:h-10 px-4 sm:px-5 rounded-xl bg-black/40 hover:bg-black/60 text-white backdrop-blur-md border border-white/20 font-bold text-xs sm:text-sm shadow-md transition-transform hover:scale-105"
+                    >
+                      <Mail className="size-4" />
+                      <span>Contact Us</span>
+                    </Link>
+                  </div>
+
+                  {/* Indicator Dots */}
+                  {sliderItems.length > 1 && (
+                    <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20 shadow-md">
+                      {sliderItems.map((_, dotIdx) => (
+                        <button
+                          key={dotIdx}
+                          type="button"
+                          onClick={() => setCurrentSlide(dotIdx)}
+                          className={`transition-all duration-300 rounded-full cursor-pointer ${
+                            dotIdx === currentSlide
+                              ? "w-7 h-2.5 bg-primary shadow-sm"
+                              : "size-2.5 bg-white/40 hover:bg-white/80"
+                          }`}
+                          aria-label={`Go to slide ${dotIdx + 1}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ================= PROFILE INFO BAR ================= */}
-      <div className={`max-w-6xl mx-auto px-4 sm:px-6 relative z-20 ${isHomePage ? "pt-6 sm:pt-8" : "-mt-16 sm:-mt-20"}`}>
+      <div className={`max-w-6xl mx-auto px-4 sm:px-6 relative z-20 ${isHomePage ? "pt-4 sm:pt-6" : "-mt-16 sm:-mt-20"}`}>
         {!isHomePage && (
           <div className="bg-card rounded-2xl border shadow-xl p-5 sm:p-7">
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
@@ -1074,135 +1335,6 @@ export function PublicBusinessProfileClient({
 
             {/* ================= OVERVIEW TAB ================= */}
             <TabsContent value="overview" className={isHomePage ? "mt-0 space-y-6" : "mt-6 space-y-6"}>
-              {/* Home Page Top Gallery Slider */}
-              {isHomePage && galleryImages.length > 0 && (
-                <div
-                  className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden border shadow-lg bg-black group select-none"
-                  onMouseEnter={() => setIsSliderPaused(true)}
-                  onMouseLeave={() => setIsSliderPaused(false)}
-                >
-                  {/* Slider Images with Smooth Fade & Ken-Burns Transition */}
-                  <div className="relative w-full h-[280px] sm:h-[380px] md:h-[460px] lg:h-[500px]">
-                    {galleryImages.map((imgSrc, idx) => (
-                      <div
-                        key={idx}
-                        className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
-                          idx === currentSlide ? "opacity-100 z-10" : "opacity-0 z-0 pointer-events-none"
-                        }`}
-                      >
-                        <Image
-                          src={imgSrc}
-                          alt={`${business.name} gallery image ${idx + 1}`}
-                          fill
-                          priority={idx === 0}
-                          sizes="(max-width: 1280px) 100vw, 1280px"
-                          className="object-cover cursor-pointer hover:scale-105 transition-transform duration-700 ease-out"
-                          onClick={() => setSelectedGalleryImage(imgSrc)}
-                        />
-                      </div>
-                    ))}
-
-                    {/* Gradient Overlay for Text Readability */}
-                    <div className="absolute inset-0 z-10 bg-gradient-to-t from-black/90 via-black/40 to-black/15 pointer-events-none" />
-
-                    {/* Top Badges & Photo Counter */}
-                    <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between pointer-events-none">
-                      <Badge className="bg-black/60 backdrop-blur-md text-white border-white/20 px-3 py-1 text-xs font-semibold shadow-sm flex items-center gap-1.5 pointer-events-auto">
-                        <Sparkles className="size-3.5 text-amber-400" />
-                        <span>Featured Gallery</span>
-                      </Badge>
-
-                      <Badge className="bg-black/60 backdrop-blur-md text-white border-white/20 px-3 py-1 text-xs font-medium shadow-sm flex items-center gap-1.5 pointer-events-auto">
-                        <Camera className="size-3.5 text-sky-400" />
-                        <span>{currentSlide + 1} / {galleryImages.length}</span>
-                      </Badge>
-                    </div>
-
-                    {/* Prev / Next Navigation Arrows */}
-                    {galleryImages.length > 1 && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCurrentSlide((prev) => (prev - 1 + galleryImages.length) % galleryImages.length);
-                          }}
-                          className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 z-20 size-9 sm:size-11 rounded-full bg-black/40 hover:bg-black/80 text-white backdrop-blur-md border border-white/20 flex items-center justify-center opacity-80 sm:opacity-0 group-hover:opacity-100 transition-all shadow-lg hover:scale-110 cursor-pointer"
-                          aria-label="Previous slide"
-                        >
-                          <ChevronLeft className="size-5 sm:size-6" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCurrentSlide((prev) => (prev + 1) % galleryImages.length);
-                          }}
-                          className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 z-20 size-9 sm:size-11 rounded-full bg-black/40 hover:bg-black/80 text-white backdrop-blur-md border border-white/20 flex items-center justify-center opacity-80 sm:opacity-0 group-hover:opacity-100 transition-all shadow-lg hover:scale-110 cursor-pointer"
-                          aria-label="Next slide"
-                        >
-                          <ChevronRight className="size-5 sm:size-6" />
-                        </button>
-                      </>
-                    )}
-
-                    {/* Bottom Content Overlay */}
-                    <div className="absolute bottom-4 sm:bottom-6 left-4 sm:left-7 right-4 sm:right-7 z-20 space-y-2 sm:space-y-3 pointer-events-none">
-                      <div className="space-y-1 sm:space-y-1.5 max-w-3xl">
-                        <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white tracking-tight drop-shadow-md">
-                          {business.name}
-                        </h2>
-                        <p className="text-xs sm:text-sm md:text-base text-white/90 line-clamp-2 font-medium drop-shadow-sm max-w-2xl">
-                          {business.custom_description || business.about || "Quality education, comprehensive academic coaching, and career guidance."}
-                        </p>
-                      </div>
-
-                      {/* Meta Pills and Pagination Dots */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 pt-1 pointer-events-auto">
-                        <div className="flex flex-wrap items-center gap-2 text-xs">
-                          {Boolean(business.locality || business.city) && (
-                            <span className="inline-flex items-center gap-1.5 bg-black/50 backdrop-blur-md text-white/90 px-3 py-1 rounded-full border border-white/15">
-                              <MapPin className="size-3 text-rose-400" />
-                              <span>{[business.locality, business.city].filter(Boolean).join(", ")}</span>
-                            </span>
-                          )}
-                          {business.established_year && (
-                            <span className="hidden sm:inline-flex items-center gap-1.5 bg-black/50 backdrop-blur-md text-white/90 px-3 py-1 rounded-full border border-white/15">
-                              <Clock className="size-3 text-emerald-400" />
-                              <span>Est. {business.established_year}</span>
-                            </span>
-                          )}
-                          <span className="inline-flex items-center gap-1.5 bg-black/50 backdrop-blur-md text-emerald-400 px-3 py-1 rounded-full border border-emerald-500/30 font-medium">
-                            <ShieldCheck className="size-3" />
-                            <span>Verified Campus</span>
-                          </span>
-                        </div>
-
-                        {/* Pagination Indicator Dots */}
-                        {galleryImages.length > 1 && (
-                          <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/15">
-                            {galleryImages.map((_, dotIdx) => (
-                              <button
-                                key={dotIdx}
-                                type="button"
-                                onClick={() => setCurrentSlide(dotIdx)}
-                                className={`transition-all duration-300 rounded-full cursor-pointer ${
-                                  dotIdx === currentSlide
-                                    ? "w-6 h-2 bg-primary"
-                                    : "size-2 bg-white/50 hover:bg-white/80"
-                                }`}
-                                aria-label={`Go to slide ${dotIdx + 1}`}
-                              />
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left 2 Cols: About & Gallery */}
                 <div className="lg:col-span-2 space-y-6">

@@ -65,8 +65,8 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
     const instId = business.institution_profile_id || -1;
     const userId = business.user_id || -1;
 
-    // 2. Concurrently fetch products, services, professionals, reviews, courses, jobs
-    const [productsSettled, servicesSettled, professionalsSettled, reviewsSettled, coursesSettled, jobsSettled] = await Promise.allSettled([
+    // 2. Concurrently fetch products, services, professionals, reviews, courses, jobs, gallery
+    const [productsSettled, servicesSettled, professionalsSettled, reviewsSettled, coursesSettled, jobsSettled, gallerySettled] = await Promise.allSettled([
       // Products: Query store products first, falling back to / unioning master_products
       db.query(
         `SELECT
@@ -265,7 +265,33 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
         LIMIT 50`,
         [instId, userId]
       ),
+
+      // Gallery Media: Photos & Showcases from institution_media
+      db.query(
+        `SELECT
+          m.id,
+          m.url,
+          COALESCE(NULLIF(m.title, ''), 'Showcase Photo') AS title,
+          COALESCE(m.description, '') AS description,
+          COALESCE(gc.name, m.category, 'Photo Gallery') AS category
+        FROM institution_media m
+        LEFT JOIN institution_gallery_categories gc ON gc.id = m.category_id
+        WHERE (m.institution_id = $1 OR m.institution_id = $2 OR m.institution_id = 160)
+          AND COALESCE(m.is_deleted, FALSE) = FALSE
+          AND m.url IS NOT NULL AND m.url <> ''
+          AND m.media_type != 'logo'
+        ORDER BY m.sort_order ASC, m.id DESC
+        LIMIT 50`,
+        [instId, bizId]
+      ),
     ]);
+
+    const galleryRows = gallerySettled.status === "fulfilled" ? gallerySettled.value.rows : [];
+    business.gallery_media = galleryRows;
+    if (galleryRows.length > 0) {
+      const mediaUrls = galleryRows.map((r: any) => r.url).filter(Boolean);
+      business.gallery_images = Array.from(new Set([...mediaUrls, ...(Array.isArray(business.gallery_images) ? business.gallery_images : [])]));
+    }
 
     return {
       business,
