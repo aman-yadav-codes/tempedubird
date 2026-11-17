@@ -263,21 +263,21 @@ export function UnifiedDashboardView({
   const activeContext = contexts.find((c) => c.id === selectedContextId) || contexts[0];
   const currentInstId = activeInstitution?.id || (typeof activeContext?.id === 'number' ? activeContext.id : null);
 
+  const fallbackStorefrontUrl =
+    activeInstitution?.storefrontUrl ||
+    (currentInstId ? `/institutes/${currentInstId}` : "/explore");
+
   const businessStorefrontUrl = businessProfile?.slug
     ? `/business/${businessProfile.slug}`
     : businessProfile?.id
     ? `/business/${businessProfile.id}`
-    : currentInstId
-    ? `/storefront?institutionId=${currentInstId}`
-    : "/storefront";
+    : fallbackStorefrontUrl;
 
   const professionalStorefrontUrl = professionalProfile?.slug
     ? `/professional/${professionalProfile.slug}`
     : professionalProfile?.id
     ? `/professional/${professionalProfile.id}`
-    : currentInstId
-    ? `/storefront?institutionId=${currentInstId}`
-    : "/storefront";
+    : fallbackStorefrontUrl;
 
   const getMetricColorClasses = (color: DashboardMetricCard["color"]) => {
     switch (color) {
@@ -596,7 +596,7 @@ export function UnifiedDashboardView({
                   className="font-bold text-xs gap-2 bg-white text-slate-900 hover:bg-slate-100 shadow-md cursor-pointer border border-white/20"
                 >
                   <a
-                    href={currentInstId ? `/storefront?institutionId=${currentInstId}` : "/storefront"}
+                    href={fallbackStorefrontUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                   >

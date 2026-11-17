@@ -33,13 +33,15 @@ async function getCachedInstitutionOptions(accessToken: string, isPlatformAdmin:
   })
     .then(async (res) => {
       if (!res.ok) return [];
-      const json = (await res.json()) as { institutions?: Array<{ id: number; name: string; type_name?: string }> };
+      const json = (await res.json()) as { institutions?: Array<{ id: number; name: string; type_name?: string; slug?: string; storefront_url?: string }> };
       const rows: ActiveInstitutionSummary[] = (json.institutions ?? []).map((inst) => ({
         id: inst.id,
         name: inst.name,
         roleName: isPlatformAdmin ? "Platform Admin" : "Institution Admin",
         boardId: null,
         boardName: null,
+        slug: inst.slug ?? null,
+        storefrontUrl: inst.storefront_url ?? (inst.slug ? `/institutes/${inst.slug}` : `/institutes/${inst.id}`),
       }));
       cachedOptionsKey = key;
       cachedOptions = rows;

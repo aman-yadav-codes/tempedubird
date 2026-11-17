@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { redirect, RedirectType } from "next/navigation";
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
 import { getFrontendConfig } from "@/lib/config/frontend-config";
@@ -61,7 +61,7 @@ export default async function StorefrontRedirectPage({ searchParams }: Props) {
 
   // 2. If targetUrl found, redirect immediately
   if (targetUrl) {
-    redirect(targetUrl);
+    redirect(targetUrl, RedirectType.replace);
   }
 
   // 3. Fallback to authenticated user's own business / professional / institution profile
@@ -125,5 +125,5 @@ export default async function StorefrontRedirectPage({ searchParams }: Props) {
     }
   }
 
-  redirect(targetUrl || "/explore");
+  redirect(targetUrl || "/explore", RedirectType.replace);
 }

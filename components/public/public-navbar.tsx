@@ -526,7 +526,7 @@ export function PublicNavbar({
                   {!isPlatformAdmin && (
                     <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
                       <Link
-                        href={activeInstitutionId ? `/storefront?institutionId=${activeInstitutionId}` : "/storefront"}
+                        href={institutionInfo?.slug ? `/institutes/${institutionInfo.slug}` : (activeInstitutionId ? `/institutes/${activeInstitutionId}` : "/explore")}
                         target="_blank"
                         className="flex items-center justify-between w-full"
                       >
