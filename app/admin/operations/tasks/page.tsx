@@ -2701,6 +2701,39 @@ export default function OperationsTasksPage() {
                               <span>Edit</span>
                             </DropdownMenuItem>
                           )}
+                          {canEditOrRemove && (
+                            <DropdownMenuItem
+                              onClick={async () => {
+                                setAttachPipelineTask(task);
+                                const tId = task.project_type_id ? String(task.project_type_id) : "none";
+                                setAttachTypeId(tId);
+                                setAttachPipelineId(task.pipeline_id ? String(task.pipeline_id) : "none");
+                                void fetchProjectTypesForModal();
+                                if (tId !== "none") {
+                                  try {
+                                    const res = await fetch(`/api/admin/operations/project-pipelines?project_type_id=${tId}&status=active`);
+                                    if (res.ok) {
+                                      const data = await res.json();
+                                      const pls = data.pipelines || [];
+                                      setAttachAvailablePipelines(pls);
+                                      if (!task.pipeline_id) {
+                                        const def = pls.find((p: any) => p.is_default) || pls[0];
+                                        if (def) setAttachPipelineId(String(def.id));
+                                      }
+                                    }
+                                  } catch (err) {
+                                    console.error("Error loading pipelines for task:", err);
+                                  }
+                                } else {
+                                  setAttachAvailablePipelines([]);
+                                }
+                              }}
+                              className="gap-2 cursor-pointer font-medium"
+                            >
+                              <GitFork className="w-4 h-4 text-purple-600" />
+                              <span>Assign Work Type & Pipeline</span>
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem
                             onClick={() => {
                               setHistoryModalSubtask(null);
@@ -4215,7 +4248,7 @@ export default function OperationsTasksPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold">
               <GitFork className="w-5 h-5 text-primary" />
-              <span>Assign Pipeline Workflow</span>
+              <span>Assign Work Type & Pipeline</span>
             </DialogTitle>
             <DialogDescription className="text-xs">
               Work: <strong>{attachPipelineTask?.title}</strong>
@@ -4224,7 +4257,19 @@ export default function OperationsTasksPage() {
 
           <div className="space-y-3 py-2 text-xs">
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold">Select Work Type</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold flex items-center gap-1.5">
+                  <FolderKanban className="w-3.5 h-3.5 text-primary" />
+                  Work Type
+                </Label>
+                <Link
+                  href="/admin/operations/project-types"
+                  target="_blank"
+                  className="text-[10px] text-primary hover:underline font-medium"
+                >
+                  Manage Types
+                </Link>
+              </div>
               <select
                 value={attachTypeId}
                 onChange={async (e) => {
@@ -4260,7 +4305,19 @@ export default function OperationsTasksPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold">Select Pipeline Template</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold flex items-center gap-1.5">
+                  <GitFork className="w-3.5 h-3.5 text-primary" />
+                  Pipeline Template
+                </Label>
+                <Link
+                  href="/admin/operations/project-pipelines"
+                  target="_blank"
+                  className="text-[10px] text-primary hover:underline font-medium"
+                >
+                  Manage Pipelines
+                </Link>
+              </div>
               <select
                 value={attachPipelineId}
                 disabled={attachTypeId === "none" || attachAvailablePipelines.length === 0}
@@ -4271,7 +4328,7 @@ export default function OperationsTasksPage() {
                   {attachTypeId === "none"
                     ? "-- Select Work Type First --"
                     : attachAvailablePipelines.length === 0
-                    ? "-- No active pipelines --"
+                    ? "-- No active pipelines for this type --"
                     : "-- Select Pipeline Template --"}
                 </option>
                 {attachAvailablePipelines.map((pl) => (
@@ -4281,6 +4338,36 @@ export default function OperationsTasksPage() {
                 ))}
               </select>
             </div>
+
+            {/* Pipeline phases preview */}
+            {(() => {
+              const selectedPl = attachAvailablePipelines.find((p) => String(p.id) === String(attachPipelineId));
+              const phases = Array.isArray(selectedPl?.phases) ? selectedPl.phases : [];
+              if (phases.length === 0) return null;
+              return (
+                <div className="space-y-1.5 pt-2 border-t">
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span className="font-semibold text-foreground flex items-center gap-1">
+                      <Layers className="w-3 h-3 text-primary" />
+                      Pipeline Preview ({phases.length} Phases)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar">
+                    {phases.map((ph: any, idx: number) => (
+                      <div
+                        key={ph.id || idx}
+                        className="flex items-center gap-1 text-[10px] bg-muted/40 border px-2 py-1 rounded-md shrink-0"
+                      >
+                        <span className="font-mono font-bold text-primary">{idx + 1}.</span>
+                        <span className="font-medium text-foreground max-w-[120px] truncate" title={ph.name}>
+                          {ph.name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <DialogFooter className="gap-2 pt-2 border-t">
@@ -4331,7 +4418,7 @@ export default function OperationsTasksPage() {
 
                   const resData = await res.json().catch(() => ({}));
                   if (!res.ok) throw new Error(resData.error || "Failed to assign pipeline");
-                  toast.success(`Pipeline "${selPl?.name}" assigned to work!`);
+                  toast.success(`Work Type & Pipeline "${selPl?.name}" assigned!`);
                   setAttachPipelineTask(null);
                   await fetchTasks();
                 } catch (err: any) {
@@ -4342,7 +4429,7 @@ export default function OperationsTasksPage() {
               }}
               className="bg-primary text-primary-foreground font-semibold cursor-pointer"
             >
-              {savingAttachPipeline ? "Assigning..." : "Assign Pipeline"}
+              {savingAttachPipeline ? "Assigning..." : "Assign Work Type & Pipeline"}
             </Button>
           </DialogFooter>
         </DialogContent>
