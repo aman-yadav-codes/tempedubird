@@ -3510,7 +3510,7 @@ export default function AdminCompanyPage() {
       <Dialog open={branchDialogOpen} onOpenChange={setBranchDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingBranch ? "Edit Branch Office" : "Add Branch Office"}</DialogTitle>
+            <DialogTitle>{editingBranch ? "Edit Address" : "Add Address"}</DialogTitle>
             <DialogDescription className="sr-only">
               Configure official address and contact details.
             </DialogDescription>
@@ -3518,7 +3518,7 @@ export default function AdminCompanyPage() {
 
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="br-name">Office Name *</Label>
+              <Label htmlFor="br-name">Name of Address *</Label>
               <Input
                 id="br-name"
                 value={branchName}
@@ -3530,18 +3530,18 @@ export default function AdminCompanyPage() {
             <div className="space-y-2 relative">
               <Label htmlFor="br-addr">Street Address *</Label>
               <div className="relative">
-                <Textarea
+                <Input
                   id="br-addr"
-                  rows={2}
                   value={branchAddressQuery || branchAddress}
                   onChange={(e) => handleBranchAddressInputChange(e.target.value)}
                   onFocus={() => {
                     if (branchAddressSuggestions.length > 0) setShowBranchSuggestions(true);
                   }}
                   placeholder="Start typing to search address (e.g. km, park, street)..."
+                  className="pr-10"
                 />
                 {searchingBranchAddress && (
-                  <div className="absolute right-3 top-3">
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
                     <Loader2 className="h-4 w-4 animate-spin text-primary" />
                   </div>
                 )}
@@ -3638,7 +3638,7 @@ export default function AdminCompanyPage() {
             </Button>
             <Button onClick={handleSaveBranch} disabled={savingBranch}>
               {savingBranch ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
-              {editingBranch ? "Update Branch" : "Save Branch"}
+              {editingBranch ? "Update Address" : "Save Address"}
             </Button>
           </DialogFooter>
         </DialogContent>
