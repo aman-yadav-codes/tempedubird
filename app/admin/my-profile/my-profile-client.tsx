@@ -1,4 +1,4 @@
-"use client";
+"use client"; ``
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
@@ -20,6 +20,8 @@ import { ProjectInvoicesDialog } from "../operations/tasks/project-invoices-dial
 import { SubtaskCard } from "@/components/subtask-card";
 import { SubtaskModalDialog } from "@/components/subtask-modal-dialog";
 import { toast } from "sonner";
+import { MyRolesProfilesView } from "@/components/profile/my-roles-profiles-view";
+import { AddBusinessProfileButton } from "@/components/business/add-business-profile-button";
 import {
   UserCheck,
   UserCog,
@@ -167,7 +169,7 @@ function numberToWordsINR(num: number): string {
 
 
 const tabMeta: Record<string, { label: string; title: string; icon: React.ReactNode; description: string }> = {
-    "account": {
+  "account": {
     label: "My Account",
     title: "Account Security & Credentials",
     icon: <UserCog className="h-5 w-5 text-sky-500" />,
@@ -271,6 +273,45 @@ export function MyProfileClient() {
   const setActiveTab = (tab: string) => {
     router.push(`${pathname}?tab=${tab}`);
   };
+  const [businessProfile, setBusinessProfile] = useState<any>(null);
+  const [professionalProfile, setProfessionalProfile] = useState<any>(null);
+  const [loadingUserProfiles, setLoadingUserProfiles] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadUserProfiles() {
+      try {
+        const [bizRes, proRes] = await Promise.allSettled([
+          fetch("/api/business/profile", { cache: "no-store" }),
+          fetch("/api/professional/profile", { cache: "no-store" }),
+        ]);
+
+        if (bizRes.status === "fulfilled" && bizRes.value.ok) {
+          const bizData = await bizRes.value.json();
+          if (bizData?.profile && isMounted) {
+            setBusinessProfile(bizData.profile);
+          }
+        }
+
+        if (proRes.status === "fulfilled" && proRes.value.ok) {
+          const proData = await proRes.value.json();
+          if (proData?.profile && isMounted) {
+            setProfessionalProfile(proData.profile);
+          }
+        }
+      } catch (err) {
+        console.error("Error loading user profiles in my-profile:", err);
+      } finally {
+        if (isMounted) setLoadingUserProfiles(false);
+      }
+    }
+
+    loadUserProfiles();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const d = new Date();
@@ -417,7 +458,7 @@ export function MyProfileClient() {
 
   // Enforce single active task rule: check if any other task or subtask is running
   const activeRunningTask = useMemo(() => {
-    return tasks.find(t => 
+    return tasks.find(t =>
       normalizeTaskStatus(t.status) === "in_progress" ||
       (Array.isArray(t.sub_tasks) && t.sub_tasks.some((s: any) => normalizeTaskStatus(s.status) === "in_progress"))
     );
@@ -567,7 +608,7 @@ export function MyProfileClient() {
           })
             .then(r => r.ok ? r.json() : null)
             .then(d => { if (d) setAttendanceData(d); })
-            .catch(() => {});
+            .catch(() => { });
         }
         window.dispatchEvent(new CustomEvent("task-status-updated", { detail: { taskId, status: newStatus } }));
         toast.success(`Task moved to ${newStatus.replace("_", " ")}`);
@@ -593,10 +634,10 @@ export function MyProfileClient() {
         targetSub.started_by_id
           ? String(targetSub.started_by_id) === uidStr
           : targetSub.started_by_name && uName
-          ? String(targetSub.started_by_name).toLowerCase().trim() === uName
-          : (!targetSub.started_by_id && !targetSub.started_by_name && targetSub.assigned_employee_id)
-          ? String(targetSub.assigned_employee_id) === uidStr
-          : false;
+            ? String(targetSub.started_by_name).toLowerCase().trim() === uName
+            : (!targetSub.started_by_id && !targetSub.started_by_name && targetSub.assigned_employee_id)
+              ? String(targetSub.assigned_employee_id) === uidStr
+              : false;
 
       if (!isPlatformAdmin && !isStartedByMe) {
         toast.error(`You can only stop your own task. This task was started by ${targetSub?.started_by_name || 'another user'}.`);
@@ -698,7 +739,7 @@ export function MyProfileClient() {
           })
             .then(r => r.ok ? r.json() : null)
             .then(d => { if (d) setAttendanceData(d); })
-            .catch(() => {});
+            .catch(() => { });
         }
         window.dispatchEvent(new CustomEvent("task-status-updated", { detail: { taskId: task.id, subtaskId: subId, status: newStatus } }));
         if (newStatus === "under_review") {
@@ -717,7 +758,7 @@ export function MyProfileClient() {
 
   // Stop currently running active task(s)
   const handleStopCurrentTask = async () => {
-    const runningTasks = tasks.filter(t => 
+    const runningTasks = tasks.filter(t =>
       normalizeTaskStatus(t.status) === "in_progress" ||
       (Array.isArray(t.sub_tasks) && t.sub_tasks.some((s: any) => normalizeTaskStatus(s.status) === "in_progress"))
     );
@@ -767,7 +808,7 @@ export function MyProfileClient() {
     })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setAttendanceData(d); })
-      .catch(() => {});
+      .catch(() => { });
     window.dispatchEvent(new CustomEvent("task-status-updated", { detail: { action: "stop_all" } }));
     toast.success("Active task stopped and moved back to Pending.");
   };
@@ -1849,9 +1890,9 @@ export function MyProfileClient() {
         // Check if database attendance record exists
         const dbRecord = Array.isArray(attendanceData?.attendance)
           ? attendanceData.attendance.find((a: any) => {
-              if (!a.date) return false;
-              return a.date === dateStr || String(a.date).startsWith(dateStr);
-            })
+            if (!a.date) return false;
+            return a.date === dateStr || String(a.date).startsWith(dateStr);
+          })
           : null;
 
         if (dbRecord) {
@@ -2378,9 +2419,339 @@ export function MyProfileClient() {
   }, [attSummary, tasks, currentSalary, performance]);
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 lg:p-8 space-y-8 max-w-7xl">
-      {/* 2. Active Section Under My Profile */}
+    <div className="container mx-auto p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl">
+      {/* 1. TOP PROFILE HEADER & IDENTITY BANNER */}
+      <div className="rounded-3xl bg-gradient-to-r from-slate-950 via-slate-900 to-rose-950 p-6 sm:p-7 text-white shadow-lg border border-rose-900/30 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="size-16 rounded-2xl bg-white/10 border-2 border-white/20 text-white flex items-center justify-center font-black text-2xl shadow-inner shrink-0">
+              {userName?.[0]?.toUpperCase() || "U"}
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge className="bg-primary text-white text-[10px] font-bold">
+                  {user?.primary_role?.replace(/_/g, " ").toUpperCase() || "USER PROFILE"}
+                </Badge>
+                {businessProfile && (
+                  <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-400/40 text-[10px]">
+                    <Building2 className="size-3 mr-1" /> Business Owner
+                  </Badge>
+                )}
+                {professionalProfile && (
+                  <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-400/40 text-[10px]">
+                    <Briefcase className="size-3 mr-1" /> Professional Provider
+                  </Badge>
+                )}
+              </div>
+              <h1 className="text-xl sm:text-2xl font-black text-white">{userName}</h1>
+              <p className="text-xs text-white/70 flex items-center gap-3 flex-wrap">
+                {userEmail && (
+                  <span className="flex items-center gap-1">
+                    <Mail className="size-3 text-white/50" /> {userEmail}
+                  </span>
+                )}
+                {userPhone && (
+                  <span className="flex items-center gap-1">
+                    <Phone className="size-3 text-white/50" /> {userPhone}
+                  </span>
+                )}
+                <span>Account ID: USR-#{user?.id || 101}</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {businessProfile && (
+              <Button
+                size="sm"
+                asChild
+                className="font-bold text-xs gap-1.5 bg-white text-slate-900 hover:bg-slate-100 shadow-md cursor-pointer"
+              >
+                <a
+                  href={businessProfile.slug ? `/institutes/${businessProfile.slug}` : `/institutes/${businessProfile.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <ExternalLink className="size-3.5 text-primary" />
+                  View Business Page
+                </a>
+              </Button>
+            )}
+            {professionalProfile && (
+              <Button
+                size="sm"
+                asChild
+                className="font-bold text-xs gap-1.5 bg-white text-slate-900 hover:bg-slate-100 shadow-md cursor-pointer"
+              >
+                <a
+                  href={`/explore?type=professional&q=${encodeURIComponent(professionalProfile.name)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <ExternalLink className="size-3.5 text-purple-600" />
+                  View Professional Page
+                </a>
+              </Button>
+            )}
+            <AddBusinessProfileButton />
+          </div>
+        </div>
+      </div>
+
+      {/* 2. DEDICATED SHOWCASE: ADDED BUSINESS OR PROFESSIONAL PROFILES */}
+      <div className="space-y-4">
+        {/* Active Business Profile Card */}
+        {businessProfile && (
+          <div className="rounded-2xl border border-rose-200/80 dark:border-rose-900/40 bg-gradient-to-r from-rose-50/70 via-white to-amber-50/40 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-5 shadow-xs">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="flex items-start sm:items-center gap-4">
+                {businessProfile.logo_url ? (
+                  <img
+                    src={businessProfile.logo_url}
+                    alt={businessProfile.name}
+                    className="size-16 rounded-2xl object-cover border-2 border-white shadow-sm shrink-0 bg-white"
+                  />
+                ) : (
+                  <div className="size-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black text-2xl border-2 border-white shadow-sm shrink-0">
+                    {businessProfile.name?.[0]?.toUpperCase() || <Building2 className="size-8" />}
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge className="bg-primary text-white text-[10px] font-bold">
+                      My Business Profile
+                    </Badge>
+                    {businessProfile.is_verified ? (
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 text-[10px]">
+                        <ShieldCheck className="size-3 mr-1 text-emerald-600" /> Verified
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 text-[10px]">
+                        Pending Verification
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-[10px] bg-white/80 dark:bg-slate-800">
+                      {businessProfile.category_name || businessProfile.business_type || "Business"}
+                    </Badge>
+                    {businessProfile.subcategory_name && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        {businessProfile.subcategory_name}
+                      </Badge>
+                    )}
+                  </div>
+                  <h2 className="text-xl font-black text-foreground">
+                    {businessProfile.name}
+                  </h2>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                    {(businessProfile.city || businessProfile.state) && (
+                      <span className="flex items-center gap-1 font-medium">
+                        <MapPin className="size-3.5 text-primary" />
+                        {[businessProfile.locality, businessProfile.city, businessProfile.state].filter(Boolean).join(", ")}
+                      </span>
+                    )}
+                    {businessProfile.phone && (
+                      <span className="flex items-center gap-1 font-medium">
+                        <Phone className="size-3.5 text-emerald-600" />
+                        {businessProfile.phone}
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400">
+                      <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                      {businessProfile.avg_rating || "5.0"} ({businessProfile.reviews_count || 0} reviews)
+                    </span>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      • {businessProfile.products_count || 0} Products • {businessProfile.services_count || 0} Services
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+                <Button
+                  size="sm"
+                  asChild
+                  className="font-bold text-xs gap-1.5 bg-primary text-white hover:bg-primary/90 shadow-xs cursor-pointer"
+                >
+                  <a
+                    href={businessProfile.slug ? `/institutes/${businessProfile.slug}` : `/institutes/${businessProfile.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalLink className="size-3.5" />
+                    View Live Profile Page
+                  </a>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setActiveTab("roles-profiles")}
+                  className="text-xs font-semibold gap-1.5"
+                >
+                  <Briefcase className="size-3.5 text-muted-foreground" />
+                  Manage Business & Catalog
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Active Professional Profile Card */}
+        {professionalProfile && (
+          <div className="rounded-2xl border border-purple-200/80 dark:border-purple-900/40 bg-gradient-to-r from-purple-50/70 via-white to-blue-50/40 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-5 shadow-xs">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="flex items-start sm:items-center gap-4">
+                {professionalProfile.avatar_url ? (
+                  <img
+                    src={professionalProfile.avatar_url}
+                    alt={professionalProfile.name}
+                    className="size-16 rounded-2xl object-cover border-2 border-white shadow-sm shrink-0 bg-white"
+                  />
+                ) : (
+                  <div className="size-16 rounded-2xl bg-purple-600/10 text-purple-600 flex items-center justify-center font-black text-2xl border-2 border-white shadow-sm shrink-0">
+                    {professionalProfile.name?.[0]?.toUpperCase() || <UserCheck className="size-8" />}
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge className="bg-purple-600 text-white text-[10px] font-bold">
+                      My Professional Profile
+                    </Badge>
+                    {professionalProfile.is_verified ? (
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 text-[10px]">
+                        <ShieldCheck className="size-3 mr-1 text-emerald-600" /> Verified
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 text-[10px]">
+                        Pending Verification
+                      </Badge>
+                    )}
+                    {professionalProfile.designation && (
+                      <Badge variant="secondary" className="text-[10px] font-semibold">
+                        {professionalProfile.designation}
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-[10px] bg-white/80 dark:bg-slate-800">
+                      {professionalProfile.category_name || professionalProfile.profession_type || "Professional"}
+                    </Badge>
+                    {professionalProfile.subcategory_name && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        {professionalProfile.subcategory_name}
+                      </Badge>
+                    )}
+                  </div>
+                  <h2 className="text-xl font-black text-foreground">
+                    {professionalProfile.name}
+                  </h2>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                    {professionalProfile.experience_years ? (
+                      <span className="font-semibold text-foreground">
+                        {professionalProfile.experience_years} Years Experience
+                      </span>
+                    ) : null}
+                    {(professionalProfile.city || professionalProfile.state) && (
+                      <span className="flex items-center gap-1 font-medium">
+                        <MapPin className="size-3.5 text-purple-600" />
+                        {[professionalProfile.city, professionalProfile.state].filter(Boolean).join(", ")}
+                      </span>
+                    )}
+                    {professionalProfile.phone && (
+                      <span className="flex items-center gap-1 font-medium">
+                        <Phone className="size-3.5 text-emerald-600" />
+                        {professionalProfile.phone}
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400">
+                      <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                      {professionalProfile.avg_rating || "5.0"} ({professionalProfile.reviews_count || 0} reviews)
+                    </span>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      • {professionalProfile.services_count || 0} Services Listed
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+                <Button
+                  size="sm"
+                  asChild
+                  className="font-bold text-xs gap-1.5 bg-purple-600 hover:bg-purple-700 text-white shadow-xs cursor-pointer"
+                >
+                  <a
+                    href={`/explore?type=professional&q=${encodeURIComponent(professionalProfile.name)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalLink className="size-3.5" />
+                    View Live Profile Page
+                  </a>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setActiveTab("roles-profiles")}
+                  className="text-xs font-semibold gap-1.5"
+                >
+                  <Briefcase className="size-3.5 text-muted-foreground" />
+                  Manage Professional Practice
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Empty State Banner (No business or professional profile yet) */}
+        {!businessProfile && !professionalProfile && !loadingUserProfiles && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 px-5 rounded-2xl bg-gradient-to-r from-rose-50 via-white to-amber-50/50 border border-rose-200/70 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 shadow-2xs">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
+                <Building2 className="size-5" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                  List Your Business or Professional Practice
+                </h3>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                  You haven&apos;t added a business or professional listing yet. Add your listing to appear across the directory and manage services, products, and customer inquiries.
+                </p>
+              </div>
+            </div>
+            <div className="shrink-0">
+              <AddBusinessProfileButton />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 3. RESPONSIVE NAVIGATION TABS */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="bg-muted/60 p-1 rounded-xl w-full flex flex-wrap h-auto gap-1">
+          <TabsTrigger value="my-data" className="text-xs font-semibold gap-1.5 py-2">
+            <User className="size-3.5" /> Personal Information
+          </TabsTrigger>
+          <TabsTrigger value="roles-profiles" className="text-xs font-semibold gap-1.5 py-2">
+            <Layers className="size-3.5" /> Business & Professional Workspaces
+            {(businessProfile || professionalProfile) && (
+              <Badge variant="secondary" className="text-[9px] px-1.5 py-0 bg-primary/10 text-primary ml-1">
+                Active
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="account" className="text-xs font-semibold gap-1.5 py-2">
+            <UserCog className="size-3.5" /> Account & Security
+          </TabsTrigger>
+          <TabsTrigger value="tasks" className="text-xs font-semibold gap-1.5 py-2">
+            <ListTodo className="size-3.5" /> Tasks & Deliverables
+          </TabsTrigger>
+          <TabsTrigger value="performance" className="text-xs font-semibold gap-1.5 py-2">
+            <TrendingUp className="size-3.5" /> Performance & KPIs
+          </TabsTrigger>
+        </TabsList>
+        {/* ================= TAB: ROLES & PROFILES ================= */}
+        <TabsContent value="roles-profiles" className="space-y-6">
+          <MyRolesProfilesView />
+        </TabsContent>
+
         {/* ================= TAB 0: MY ACCOUNT ================= */}
         <TabsContent value="account" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -2439,6 +2810,27 @@ export function MyProfileClient() {
                   </div>
                   <Button variant="outline" size="sm" onClick={() => router.push('/admin/account')} className="gap-1.5 text-xs shadow-xs shrink-0">
                     <ExternalLink className="h-3.5 w-3.5" /> Full Account Editor
+                  </Button>
+                </div>
+
+                <div className="pt-3 border-t border-border/60 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                      <Layers className="h-3.5 w-3.5 text-primary" />
+                      Multiple Roles Under One Account
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Manage Customer, Business Owner, and Professional Service Provider details.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActiveTab("roles-profiles")}
+                    className="gap-1.5 text-xs shadow-xs shrink-0 cursor-pointer"
+                  >
+                    <Briefcase className="h-3.5 w-3.5 text-primary" />
+                    Manage Roles & Profiles
                   </Button>
                 </div>
               </CardContent>
@@ -3159,17 +3551,15 @@ export function MyProfileClient() {
                   <button
                     key={tab.id}
                     onClick={() => setTaskStatusTab(tab.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                      isSelected
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${isSelected
                         ? "bg-background text-foreground shadow-sm border border-border"
                         : "text-muted-foreground hover:text-foreground hover:bg-background/50"
-                    }`}
+                      }`}
                   >
                     <span>{tab.label}</span>
                     <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
-                        isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                      }`}
+                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                        }`}
                     >
                       {count}
                     </span>
@@ -3219,10 +3609,10 @@ export function MyProfileClient() {
                 const urgencyColor = urgency === "urgent"
                   ? "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30"
                   : urgency === "high"
-                  ? "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/30"
-                  : urgency === "low"
-                  ? "bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/30"
-                  : "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30";
+                    ? "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/30"
+                    : urgency === "low"
+                      ? "bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/30"
+                      : "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30";
 
                 // Total Cost calculation
                 const totalCost = subTasksList.length > 0
@@ -3232,31 +3622,31 @@ export function MyProfileClient() {
                 // Total Duration calculation
                 const totalMinutes = subTasksList.length > 0
                   ? subTasksList.reduce((sum: number, s: any) => {
-                      const h = parseFloat(s.duration_hours || s.estimated_hours) || 0;
-                      const m = parseFloat(s.duration_minutes) || 0;
-                      return sum + (h * 60) + m;
-                    }, 0)
+                    const h = parseFloat(s.duration_hours || s.estimated_hours) || 0;
+                    const m = parseFloat(s.duration_minutes) || 0;
+                    return sum + (h * 60) + m;
+                  }, 0)
                   : ((parseFloat(String(task.estimated_hours)) || 0) * 60);
 
                 const totalDurationDisplay = totalMinutes > 0
                   ? (() => {
-                      const h = Math.floor(totalMinutes / 60);
-                      const m = Math.round(totalMinutes % 60);
-                      if (h > 0 && m > 0) return `${h}h ${m}m`;
-                      if (h > 0) return `${h}h`;
-                      if (m > 0) return `${m}m`;
-                      return "0m";
-                    })()
+                    const h = Math.floor(totalMinutes / 60);
+                    const m = Math.round(totalMinutes % 60);
+                    if (h > 0 && m > 0) return `${h}h ${m}m`;
+                    if (h > 0) return `${h}h`;
+                    if (m > 0) return `${m}m`;
+                    return "0m";
+                  })()
                   : "0h";
 
                 // Deadline display
                 const deadlineDisplay = task.deadline_date
                   ? `${task.deadline_date} ${task.deadline_time || ""}`
                   : task.deadline
-                  ? new Date(task.deadline).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
-                  : task.due_date
-                  ? new Date(task.due_date).toLocaleDateString("en-IN", { month: "short", day: "numeric" })
-                  : (subTasksList.find((s: any) => s.deadline_date)?.deadline_date || "This Week");
+                    ? new Date(task.deadline).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+                    : task.due_date
+                      ? new Date(task.due_date).toLocaleDateString("en-IN", { month: "short", day: "numeric" })
+                      : (subTasksList.find((s: any) => s.deadline_date)?.deadline_date || "This Week");
 
                 // Points
                 const rewardPoints = task.points !== undefined && task.points !== null ? task.points : 20;
@@ -3530,11 +3920,10 @@ export function MyProfileClient() {
                                 {(task.due_date || task.deadline) && (
                                   <Badge
                                     variant="outline"
-                                    className={`gap-1.5 py-1 px-2.5 text-[11px] font-medium ${
-                                      isOverdue
+                                    className={`gap-1.5 py-1 px-2.5 text-[11px] font-medium ${isOverdue
                                         ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/40"
                                         : "bg-background text-foreground border"
-                                    }`}
+                                      }`}
                                   >
                                     <Clock className={`w-3.5 h-3.5 shrink-0 ${isOverdue ? "text-rose-600" : "text-amber-600"}`} />
                                     <span className="text-muted-foreground">Due Date:</span>
@@ -3661,7 +4050,7 @@ export function MyProfileClient() {
                         );
                       })()}
 
-                      </CardHeader>
+                    </CardHeader>
 
                     {/* Sub-Tasks List (if any) */}
                     {subTasksList.length > 0 && (
@@ -3730,7 +4119,7 @@ export function MyProfileClient() {
                       </div>
                     )}
 
-                    </Card>
+                  </Card>
                 );
               })}
             </div>
@@ -3758,24 +4147,24 @@ export function MyProfileClient() {
           />
 
           {/* Unified Subtask Add & Edit Modal Dialog */}
-      <SubtaskModalDialog
-        open={subtaskModalOpen}
-        onOpenChange={(open) => {
-          setSubtaskModalOpen(open);
-          if (!open) {
-            setSubtaskModalEditingSub(null);
-          }
-        }}
-        task={subtaskModalTask}
-        editingSubtask={subtaskModalEditingSub}
-        staffOptions={subtaskModalTask ? getProjectStaffOptions(subtaskModalTask) : []}
-        isStaffViewer={!canUserSeeTaskPrice(subtaskModalTask)}
-        onSaved={handleRefreshMyProfileTasks}
-        onOpenHistory={(t, s) => {
-          setHistoryModalSubtask(s || null);
-          setHistoryModalTask(t);
-        }}
-      />
+          <SubtaskModalDialog
+            open={subtaskModalOpen}
+            onOpenChange={(open) => {
+              setSubtaskModalOpen(open);
+              if (!open) {
+                setSubtaskModalEditingSub(null);
+              }
+            }}
+            task={subtaskModalTask}
+            editingSubtask={subtaskModalEditingSub}
+            staffOptions={subtaskModalTask ? getProjectStaffOptions(subtaskModalTask) : []}
+            isStaffViewer={!canUserSeeTaskPrice(subtaskModalTask)}
+            onSaved={handleRefreshMyProfileTasks}
+            onOpenHistory={(t, s) => {
+              setHistoryModalSubtask(s || null);
+              setHistoryModalTask(t);
+            }}
+          />
 
           {/* Sub-Task Upload Dialog (Images, Videos, PDF, Word, Excel) */}
           <SubTaskUploadDialog
@@ -4266,11 +4655,10 @@ export function MyProfileClient() {
                     <div className="flex items-center gap-3 shrink-0">
                       <Badge
                         variant="secondary"
-                        className={`text-xs font-bold ${
-                          q.status === "RESOLVED" || q.status === "CLOSED" ? "bg-emerald-500/10 text-emerald-600" :
-                          q.status === "IN_PROGRESS" ? "bg-blue-500/10 text-blue-600" :
-                          "bg-amber-500/10 text-amber-600"
-                        }`}
+                        className={`text-xs font-bold ${q.status === "RESOLVED" || q.status === "CLOSED" ? "bg-emerald-500/10 text-emerald-600" :
+                            q.status === "IN_PROGRESS" ? "bg-blue-500/10 text-blue-600" :
+                              "bg-amber-500/10 text-amber-600"
+                          }`}
                       >
                         {q.status || "OPEN"}
                       </Badge>
@@ -4312,47 +4700,46 @@ export function MyProfileClient() {
               {complaints.map((c) => {
                 const compDesc = c.description || c.last_message || c.subject;
                 return (
-                <Card key={c.id} className="p-4 rounded-xl border shadow-xs space-y-2">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className="text-xs font-mono font-bold text-destructive border-destructive/30 bg-destructive/5">
-                        {c.complaint_number || `#CMP-${c.id}`}
+                  <Card key={c.id} className="p-4 rounded-xl border shadow-xs space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="outline" className="text-xs font-mono font-bold text-destructive border-destructive/30 bg-destructive/5">
+                          {c.complaint_number || `#CMP-${c.id}`}
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs">{c.category || "Workplace"}</Badge>
+                        {Number(c.created_by) === Number(user?.id) && (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">Filed by You</Badge>
+                        )}
+                        {Number(c.target_user_id) === Number(user?.id) && (
+                          <Badge className="text-[10px] bg-destructive/10 text-destructive border-destructive/20">Directed to You</Badge>
+                        )}
+                        <h4 className="font-bold text-sm text-foreground">{c.subject}</h4>
+                      </div>
+
+                      <Badge
+                        className={`text-[10px] font-bold uppercase ${c.status === "RESOLVED" ? "bg-emerald-600 text-white" :
+                            c.status === "INVESTIGATING" ? "bg-blue-600 text-white" :
+                              "bg-amber-500 text-white"
+                          }`}
+                      >
+                        {c.status || "PENDING"}
                       </Badge>
-                      <Badge variant="secondary" className="text-xs">{c.category || "Workplace"}</Badge>
-                      {Number(c.created_by) === Number(user?.id) && (
-                        <Badge variant="outline" className="text-[10px] text-muted-foreground">Filed by You</Badge>
-                      )}
-                      {Number(c.target_user_id) === Number(user?.id) && (
-                        <Badge className="text-[10px] bg-destructive/10 text-destructive border-destructive/20">Directed to You</Badge>
-                      )}
-                      <h4 className="font-bold text-sm text-foreground">{c.subject}</h4>
                     </div>
 
-                    <Badge
-                      className={`text-[10px] font-bold uppercase ${
-                        c.status === "RESOLVED" ? "bg-emerald-600 text-white" :
-                        c.status === "INVESTIGATING" ? "bg-blue-600 text-white" :
-                        "bg-amber-500 text-white"
-                      }`}
-                    >
-                      {c.status || "PENDING"}
-                    </Badge>
-                  </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{compDesc}</p>
 
-                  <p className="text-xs text-muted-foreground leading-relaxed">{compDesc}</p>
+                    {c.resolution_notes && (
+                      <div className="p-3 rounded-lg bg-muted/40 border border-border text-xs space-y-1">
+                        <span className="font-bold text-foreground block">Official Resolution Remarks:</span>
+                        <p className="text-muted-foreground italic">"{c.resolution_notes}"</p>
+                      </div>
+                    )}
 
-                  {c.resolution_notes && (
-                    <div className="p-3 rounded-lg bg-muted/40 border border-border text-xs space-y-1">
-                      <span className="font-bold text-foreground block">Official Resolution Remarks:</span>
-                      <p className="text-muted-foreground italic">"{c.resolution_notes}"</p>
+                    <div className="text-[11px] text-muted-foreground pt-1 flex justify-between border-t border-border/40">
+                      <span>Filed On: {c.created_at ? new Date(c.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" }) : "Recently"}</span>
+                      <span>Priority: <strong className="capitalize">{c.priority || "Medium"}</strong></span>
                     </div>
-                  )}
-
-                  <div className="text-[11px] text-muted-foreground pt-1 flex justify-between border-t border-border/40">
-                    <span>Filed On: {c.created_at ? new Date(c.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" }) : "Recently"}</span>
-                    <span>Priority: <strong className="capitalize">{c.priority || "Medium"}</strong></span>
-                  </div>
-                </Card>
+                  </Card>
                 );
               })}
             </div>
@@ -4494,7 +4881,7 @@ export function MyProfileClient() {
         </DialogContent>
       </Dialog>
 
-      
+
 
       {/* File Complaint Modal */}
       <Dialog open={complaintDialogOpen} onOpenChange={setComplaintDialogOpen}>
@@ -4562,7 +4949,7 @@ export function MyProfileClient() {
         </DialogContent>
       </Dialog>
 
-      
+
 
       {/* Staff Create Task Dialog */}
       <Dialog open={createTaskDialogOpen} onOpenChange={setCreateTaskDialogOpen}>
@@ -4662,7 +5049,7 @@ export function MyProfileClient() {
         </DialogContent>
       </Dialog>
 
-      
+
 
       {/* Daily Check-In & Check-Out Geo-Location History Dialog */}
       <DailyGeoAttendanceHistoryDialog

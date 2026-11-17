@@ -112,16 +112,6 @@ export default function AdminSearchHistoryPage() {
               <TrendingUp className="h-4 w-4 text-primary" /> Business Analytics Hub
             </Button>
           </Link>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchSearchHistory}
-            disabled={loading}
-            className="h-9 px-3 text-xs font-bold rounded-xl gap-1.5 shadow-2xs"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-primary" : ""}`} />
-            Refresh
-          </Button>
         </div>
       </div>
 

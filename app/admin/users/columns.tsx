@@ -48,6 +48,10 @@ export type User = {
   generated_password?: string | null
   employment_status?: string | null
   show_in_team?: boolean
+  has_business_profile?: boolean
+  has_professional_profile?: boolean
+  business_name?: string | null
+  professional_name?: string | null
 }
 
 type UserColumnsOptions = {
@@ -183,11 +187,33 @@ export function buildUserColumns({
         <span className="text-muted-foreground">{row.getValue("email")}</span>
       ),
     },
-    // Role
+    // Role & Profiles
     {
       accessorKey: "roles",
-      header: "Role",
-      cell: ({ row }) => <span className="text-muted-foreground capitalize">{((row.getValue("roles") as string[]) || []).join(', ')}</span>,
+      header: "Roles & Profiles",
+      cell: ({ row }) => {
+        const user = row.original;
+        const rolesList = (row.getValue("roles") as string[]) || [];
+        return (
+          <div className="flex flex-col gap-1 py-0.5">
+            <span className="text-xs text-muted-foreground capitalize font-medium">
+              {rolesList.length > 0 ? rolesList.join(", ") : "Customer"}
+            </span>
+            <div className="flex items-center gap-1 flex-wrap">
+              {user.has_business_profile && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200">
+                  Business: {user.business_name || "Active"}
+                </Badge>
+              )}
+              {user.has_professional_profile && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200">
+                  Pro: {user.professional_name || "Active"}
+                </Badge>
+              )}
+            </div>
+          </div>
+        );
+      },
     },
     // Saved Password
     {

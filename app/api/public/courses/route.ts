@@ -4,9 +4,28 @@ import { db } from "@/lib/db/db";
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const institutionIdParam = searchParams.get("institutionId") || searchParams.get("institution_id") || searchParams.get("inst");
-    const institutionId = institutionIdParam && /^\d+$/.test(institutionIdParam) ? Number(institutionIdParam) : null;
-    const limit = Number(searchParams.get("limit")) || 20;
+    const institutionIdParam =
+      searchParams.get("institutionId") ||
+      searchParams.get("institution_id") ||
+      searchParams.get("businessId") ||
+      searchParams.get("business_id") ||
+      searchParams.get("inst");
+    const envInstId = (
+      process.env.BUSINESS_ID ||
+      process.env.NEXT_PUBLIC_BUSINESS_ID ||
+      process.env.INSTITUTION_ID ||
+      process.env.NEXT_PUBLIC_INSTITUTION_ID ||
+      ""
+    ).trim();
+    const isPlatformMode =
+      process.env.APP_MODE === "platform_admin" || process.env.APP_MODE === "platform";
+    const institutionId =
+      institutionIdParam && /^\d+$/.test(institutionIdParam)
+        ? Number(institutionIdParam)
+        : !isPlatformMode && envInstId && /^\d+$/.test(envInstId)
+        ? Number(envInstId)
+        : null;
+    const limit = Number(searchParams.get("limit")) || 50;
 
     const where: string[] = [
       "COALESCE(p.is_deleted, FALSE) = FALSE",
@@ -33,14 +52,14 @@ export async function GET(req: Request) {
       )
       SELECT
         p.id,
-        COALESCE(p.title, p.name) AS title,
-        COALESCE(p.title, p.name) AS name,
-        COALESCE(p.about, p.description, '') AS description,
-        COALESCE(p.duration_value::text || ' ' || COALESCE(p.duration_unit, 'Years'), p.duration, '1 Year') AS duration,
+        p.slug,
+        p.title,
+        p.title AS name,
+        COALESCE(p.about, '') AS description,
+        COALESCE(p.duration_value::text || ' ' || COALESCE(p.duration_unit, 'Years'), '1 Year') AS duration,
         COALESCE(p.teaching_method, 'Academic') AS degree_level,
-        COALESCE(p.fee_amount, p.annual_fee) AS annual_fee,
-        COALESCE(p.seats_available, p.seats) AS seats,
-        p.category,
+        p.fee_amount AS annual_fee,
+        p.seats_available AS seats,
         p.institution_id,
         ip.name AS institution_name,
         COALESCE(reviews_rollup.course_avg_rating, 4.8) AS rating,

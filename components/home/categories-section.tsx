@@ -11,7 +11,7 @@ const ALL_CATEGORY_META = [
   { key: "institutes", name: "Institutes & Colleges", slug: "institutes", href: "/institutes", icon: Building2, defaultDesc: "Schools, Universities & Academies" },
   { key: "practice", name: "Practice & Mock Tests", slug: "practice", href: "/practice", icon: CheckSquare, defaultDesc: "Chapter Tests & Mock Exams" },
   { key: "notes", name: "Study Notes & Materials", slug: "notes", href: "/notes", icon: BookMarked, defaultDesc: "Handouts, Formulae & Handbooks" },
-  { key: "teachers", name: "Faculty & Educators", slug: "teachers", href: "/teachers", icon: UserCheck, defaultDesc: "Subject Experts & Mentors" },
+  { key: "teachers", name: "Professionals & Experts", slug: "professionals", href: "/explore?type=professional", icon: UserCheck, defaultDesc: "Subject Experts & Mentors" },
   { key: "exams", name: "Entrance Exams", slug: "exams", href: "/exams", icon: Award, defaultDesc: "Competitive & National Assessments" },
   { key: "libraries", name: "Campus Libraries", slug: "libraries", href: "/libraries", icon: Library, defaultDesc: "Digital & Physical Catalogs" },
   { key: "hostels", name: "Hostels & Living", slug: "hostels", href: "/hostels", icon: Building2, defaultDesc: "Campus Residences & Mess" },

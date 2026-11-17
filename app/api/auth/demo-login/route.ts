@@ -29,12 +29,29 @@ const DEMO_ACCOUNTS = {
     role_code: "parent",
     phone: "9876543211",
   },
-  professional: {
-    email: "deepakdv74@gmail.com",
-    full_name: "Deepak yadav (Maa Sharda Institute)",
+  ramesh: {
+    email: "ramesh.kumar@kisanfreshmandi.com",
+    full_name: "Ramesh Kumar (Quality & Sourcing Specialist)",
     role_code: "institution_admin",
-    phone: "8887787846",
-    institution_id: 5,
+    phone: "9876543211",
+  },
+  "ramesh-kumar": {
+    email: "ramesh.kumar@kisanfreshmandi.com",
+    full_name: "Ramesh Kumar (Quality & Sourcing Specialist)",
+    role_code: "institution_admin",
+    phone: "9876543211",
+  },
+  "ramesh-kumar-supply-quality-manager": {
+    email: "ramesh.kumar@kisanfreshmandi.com",
+    full_name: "Ramesh Kumar (Quality & Sourcing Specialist)",
+    role_code: "institution_admin",
+    phone: "9876543211",
+  },
+  professional: {
+    email: "ramesh.kumar@kisanfreshmandi.com",
+    full_name: "Ramesh Kumar (Quality & Sourcing Specialist)",
+    role_code: "institution_admin",
+    phone: "9876543211",
   },
   institution_admin: {
     email: "deepakdv74@gmail.com",
@@ -70,7 +87,12 @@ export async function POST(req: Request) {
     if (roleKey === "platform_admin" || roleKey === "admin") {
       userId = 1;
       await db.query(`UPDATE users SET is_active = TRUE, is_verified = TRUE WHERE id = 1`);
-    } else if (roleKey === "professional" || roleKey === "institution_admin") {
+    } else if (
+      roleKey === "ramesh" ||
+      roleKey === "ramesh-kumar" ||
+      roleKey === "ramesh-kumar-supply-quality-manager" ||
+      roleKey === "professional"
+    ) {
       const userByEmail = await db.query<{ id: number }>(
         `SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
         [demoConfig.email]
@@ -78,26 +100,19 @@ export async function POST(req: Request) {
 
       if (userByEmail.rows.length > 0) {
         userId = userByEmail.rows[0].id;
-        await db.query(`UPDATE users SET is_active = TRUE, is_deleted = FALSE, deleted_at = NULL, is_verified = TRUE WHERE id = $1`, [userId]);
-      } else {
-        const shardaMemberRes = await db.query<{ id: number }>(
-          `SELECT u.id 
-           FROM users u 
-           JOIN institution_memberships im ON im.user_id = u.id 
-           WHERE im.institution_id = 5 
-             AND u.id <> 1
-             AND COALESCE(u.is_deleted, FALSE) = FALSE 
-           ORDER BY (CASE WHEN im.role_id = 7 THEN 0 ELSE 1 END), u.id ASC 
-           LIMIT 1`
+        await db.query(
+          `UPDATE users SET is_active = TRUE, is_deleted = FALSE, deleted_at = NULL, is_verified = TRUE WHERE id = $1`,
+          [userId]
         );
-
-        if (shardaMemberRes.rows.length > 0) {
-          userId = shardaMemberRes.rows[0].id;
-          await db.query(`UPDATE users SET is_active = TRUE, is_deleted = FALSE, deleted_at = NULL, is_verified = TRUE WHERE id = $1`, [userId]);
-        } else {
-          userId = 0;
-        }
+        // Ensure Ramesh Kumar professional profile is linked
+        await db.query(
+          `UPDATE professional_profiles SET user_id = $1 WHERE (id = 6 OR slug = 'ramesh-kumar-supply-quality-manager')`,
+          [userId]
+        );
+      } else {
+        userId = 0;
       }
+    } else if (roleKey === "institution_admin") {
     } else {
       userId = 0;
     }

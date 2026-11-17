@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   Bell,
   Loader2,
@@ -28,6 +28,7 @@ import {
   Phone,
   ClipboardList,
   Briefcase,
+  Store,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -35,7 +36,10 @@ import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { ACTIVE_CHILD_CHANGE_EVENT, getStoredActiveChildStudentId } from "@/lib/auth/active-child";
 import { toRoleRoutePath } from "@/lib/auth/role-routes";
 import { useAuthStore } from "@/store";
+import { isStaffUser, isInstitutionAdminUser, isCustomerUser, hasAdminPagePermission } from "@/lib/auth/permissions";
 import { UnifiedDashboardView, ContextOption, DashboardMetricCard, ActiveModuleItem, QuickShortcut } from "@/components/dashboard/unified-dashboard-view";
+import { PlatformAnalyticsDashboard } from "@/components/admin/dashboard/platform-analytics-dashboard";
+import { CustomerDashboard } from "@/components/customer/customer-dashboard";
 
 type DashboardCard = {
   label: string;
@@ -180,6 +184,7 @@ async function fetchDashboard(accessToken: string) {
 
 export default function AdminPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const { isReady } = useAdminGuard();
   const { accessToken, user } = useAuthStore();
   const [dashboard, setDashboard] = useState<DashboardPayload | null>(null);
@@ -208,8 +213,28 @@ export default function AdminPage() {
     };
   }, []);
 
+  const isPlatformAdmin = Boolean(user?.is_super_admin || user?.role_codes?.includes("platform_admin") || pathname?.startsWith("/platformadmin"));
+  const isStaff = Boolean(isStaffUser(user) || pathname?.startsWith("/staff"));
+  const isInstitutionAdmin = Boolean(
+    isInstitutionAdminUser(user) ||
+    user?.role_codes?.includes("institution_admin") ||
+    user?.has_business_profile ||
+    user?.has_professional_profile ||
+    pathname?.startsWith("/workspace") ||
+    pathname?.startsWith("/instituteadmin")
+  );
+  const isCustomer = Boolean(
+    !isPlatformAdmin &&
+    !isStaff &&
+    !isInstitutionAdmin &&
+    !pathname?.startsWith("/workspace") &&
+    !pathname?.startsWith("/staff") &&
+    !pathname?.startsWith("/instituteadmin") &&
+    (pathname?.startsWith("/customer") || isCustomerUser(user))
+  );
+
   useEffect(() => {
-    if (!isReady || !accessToken) return;
+    if (!isReady || !accessToken || isCustomer) return;
 
     let cancelled = false;
     async function loadDashboard() {
@@ -228,13 +253,24 @@ export default function AdminPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, activeChildVersion, isReady]);
+  }, [accessToken, activeChildVersion, isReady, isCustomer]);
 
   if (!isReady) {
     return <div className="p-8 text-center text-muted-foreground">Loading EduBird Dashboard...</div>;
   }
 
-  const role = dashboard?.role || "institution_admin";
+  if (isCustomer) {
+    return <CustomerDashboard />;
+  }
+
+  const isTeacherRole = Boolean(
+    user?.role_codes?.includes("teacher") ||
+    user?.role_codes?.includes("faculty") ||
+    user?.primary_role === "teacher"
+  );
+  const role = (pathname?.startsWith("/workspace") || pathname?.startsWith("/instituteadmin") || isInstitutionAdmin || (!isTeacherRole && isStaff))
+    ? "institution_admin"
+    : (dashboard?.role || (isStaff || pathname?.startsWith("/staff") ? "teacher" : "institution_admin"));
   const apiCards = dashboard?.cards || [];
   const notifications = dashboard?.notifications || [];
 
@@ -251,150 +287,10 @@ export default function AdminPage() {
 
   // Build role-specific configurations
   if (role === "platform_admin") {
-    const contexts: ContextOption[] = [
-      {
-        id: 1,
-        category: "Global Network",
-        title: "EduBird Central Platform Ecosystem",
-        subtitle: "Overseeing all registered institutions & platform services",
-        code: "ADM-GLOBAL-01",
-        metric: `${getCardValue(0, "15")} Institutions`,
-      },
-      {
-        id: 2,
-        category: "Premier Group",
-        title: "Apex Institute of Engineering & Tech Network",
-        subtitle: "Varanasi, Delhi NCR & Regional Campuses",
-        code: "INST-APEX-01",
-        metric: "1,850 Enrolled",
-      },
-      {
-        id: 3,
-        category: "Tech Academy",
-        title: "Technorigator School of Applied Technology",
-        subtitle: "Mumbai & Bangalore Innovation Hubs",
-        code: "INST-TECH-02",
-        metric: "2,400 Enrolled",
-      },
-    ];
-
-    const metrics: DashboardMetricCard[] = [
-      {
-        label: getCardLabel(0, "Total Institutions"),
-        value: getCardValue(0, "15"),
-        hint: getCardHint(0, "Active registered institutions"),
-        color: "emerald",
-        icon: Building2,
-      },
-      {
-        label: getCardLabel(1, "Institution Admins"),
-        value: getCardValue(1, "42"),
-        hint: getCardHint(1, "Active admin accounts"),
-        color: "primary",
-        icon: Users,
-      },
-      {
-        label: getCardLabel(2, "Open Support Tickets"),
-        value: getCardValue(2, "4"),
-        hint: getCardHint(2, "SLA response time < 15m"),
-        color: "blue",
-        icon: AlertCircle,
-      },
-      {
-        label: getCardLabel(3, "Total Assignments"),
-        value: getCardValue(3, "128"),
-        hint: getCardHint(3, "Live academic records"),
-        color: "amber",
-        icon: FileSpreadsheet,
-      },
-    ];
-
-    const activeModules: ActiveModuleItem[] = [
-      {
-        id: 1,
-        code: "INST-01",
-        title: "Apex Institute of Engineering & Technology",
-        subtitle: "Varanasi Main Campus • Registered Verified",
-        statusBadge: "99.8% Uptime",
-        progress: 95,
-        dueDate: "Active License",
-        primaryActionLabel: "Manage Institution",
-        primaryActionHref: "/admin/institutions",
-        secondaryActionLabel: "View Staff",
-        secondaryActionHref: "/admin/users",
-      },
-      {
-        id: 2,
-        code: "INST-02",
-        title: "Technorigator School of Technology",
-        subtitle: "Delhi NCR Campus • Executive Learning",
-        statusBadge: "99.5% Uptime",
-        progress: 88,
-        dueDate: "Active License",
-        primaryActionLabel: "Manage Institution",
-        primaryActionHref: "/admin/institutions",
-        secondaryActionLabel: "View Staff",
-        secondaryActionHref: "/admin/users",
-      },
-    ];
-
-    const quickShortcuts: QuickShortcut[] = [
-      {
-        title: "Institutions Directory",
-        description: "Onboard, verify, and configure partner educational institutions.",
-        href: "/admin/institutions",
-        icon: Building2,
-        colorBg: "bg-blue-500/10",
-        colorText: "text-blue-600 dark:text-blue-400",
-      },
-      {
-        title: "Platform User Directory",
-        description: "Manage global user roles, platform permissions, and credentials.",
-        href: "/admin/users",
-        icon: Users,
-        colorBg: "bg-rose-500/10",
-        colorText: "text-rose-600 dark:text-rose-400",
-      },
-      {
-        title: "Support Desk Center",
-        description: "Respond to institution tickets, bug reports, and user support.",
-        href: "/admin/support/tickets",
-        icon: AlertCircle,
-        colorBg: "bg-amber-500/10",
-        colorText: "text-amber-600 dark:text-amber-400",
-      },
-      {
-        title: "Master Data & Exams",
-        description: "Configure national exam templates, subjects, and card templates.",
-        href: "/admin/master-data/exams",
-        icon: Settings,
-        colorBg: "bg-purple-500/10",
-        colorText: "text-purple-600 dark:text-purple-400",
-      },
-    ];
-
     return (
-      <UnifiedDashboardView
-        role="platform_admin"
-        statusBadgeText="Platform Operational • Global Multi-Tenant"
-        idBadgeText="ADM-2026-GLOBAL"
-        greetingSubtitle="Overviewing global platform performance, institution registrations, system health, and student enrollments."
-        primaryButtonText="Onboard Institution"
-        primaryButtonHref="/admin/institutions"
-        primaryButtonIcon={Plus}
-        secondaryButtonText="Support Desk"
-        secondaryButtonHref="/admin/support/tickets"
-        secondaryButtonIcon={AlertCircle}
-        contextLabel="SWITCH ACTIVE SYSTEM SCOPE"
-        contexts={contexts}
-        metricsTitle="System Performance & Global Metrics"
-        metrics={metrics}
-        activeSectionTitle="Partner Institutions & Campus Status"
-        activeSectionSubtitle="Real-time operational status across onboarded academic partners."
-        activeModules={activeModules}
-        quickShortcuts={quickShortcuts}
-        notifications={notifications}
-      />
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto w-full">
+        <PlatformAnalyticsDashboard />
+      </div>
     );
   }
 
@@ -807,7 +703,20 @@ export default function AdminPage() {
       colorBg: "bg-rose-500/10",
       colorText: "text-rose-600 dark:text-rose-400",
     },
+    {
+      title: "Public Store Front",
+      description: "View your live customer-facing storefront, catalog, products/services, and reviews.",
+      href: "/storefront",
+      icon: Store,
+      colorBg: "bg-purple-500/10",
+      colorText: "text-purple-600 dark:text-purple-400",
+    },
   ];
+
+  const allowedInstShortcuts = instQuickShortcuts.filter((s) => {
+    if (s.href === "/storefront") return true;
+    return hasAdminPagePermission(user, s.href);
+  });
 
   return (
     <UnifiedDashboardView
@@ -815,11 +724,11 @@ export default function AdminPage() {
       statusBadgeText="Workspace Operational • Active Session"
       idBadgeText="INST-BIZ"
       greetingSubtitle="Managing your operations, staff workflow, tasks, finances, and client leads."
-      primaryButtonText="Create Task / Work"
-      primaryButtonHref="/admin/operations/tasks"
+      primaryButtonText={hasAdminPagePermission(user, "/admin/operations/tasks") ? "Create Task / Work" : "My Work"}
+      primaryButtonHref={hasAdminPagePermission(user, "/admin/operations/tasks") ? "/admin/operations/tasks" : "/admin/operations/tasks?scope=me"}
       primaryButtonIcon={Briefcase}
-      secondaryButtonText="Leads & Sales"
-      secondaryButtonHref="/admin/sales/pipeline"
+      secondaryButtonText={hasAdminPagePermission(user, "/admin/sales/pipeline") ? "Leads & Sales" : "My Profile"}
+      secondaryButtonHref={hasAdminPagePermission(user, "/admin/sales/pipeline") ? "/admin/sales/pipeline" : "/admin/my-profile"}
       secondaryButtonIcon={TrendingUp}
       contextLabel="SWITCH ACTIVE WORKSPACE VIEW"
       contexts={instContexts}
@@ -830,7 +739,7 @@ export default function AdminPage() {
       activeSectionTitle="Active Team Operations & Workflows"
       activeSectionSubtitle="Operations and tasks currently tracked across your organization."
       activeModules={instActiveModules}
-      quickShortcuts={instQuickShortcuts}
+      quickShortcuts={allowedInstShortcuts.length > 0 ? allowedInstShortcuts : instQuickShortcuts}
       notifications={notifications}
     />
   );

@@ -7,3 +7,4 @@
 
 export { useAuthStore } from "./slices/auth.store";
 export { useUIStore } from "./slices/ui.store";
+export { useCartStore, type CartItem } from "./slices/cart.store";

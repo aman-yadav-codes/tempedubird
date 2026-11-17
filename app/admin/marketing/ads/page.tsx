@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { ImageUploadInput } from "@/components/shared/image-upload-input";
 import {
   BarChart3,
   Calendar,
@@ -220,9 +221,6 @@ export default function AdsManagementPage() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" size="sm" onClick={fetchAds} disabled={loading} className="gap-1.5">
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Refresh
-          </Button>
           <Button onClick={handleOpenAdd} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md gap-1.5">
             <Plus className="w-4 h-4" /> Create Ad Campaign
           </Button>
@@ -418,13 +416,11 @@ export default function AdsManagementPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="ad-img">Banner Image URL *</Label>
-                <Input
-                  id="ad-img"
+                <ImageUploadInput
+                  label="Banner Creative Image *"
                   value={formImage}
-                  onChange={(e) => setFormImage(e.target.value)}
-                  placeholder="https://images.unsplash.com/... or /banners/..."
-                  required
+                  onChange={setFormImage}
+                  folder="marketing/ads"
                 />
               </div>
 

@@ -71,6 +71,7 @@ import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { isInstitutionAdminUser, isPlatformAdminUser } from "@/lib/auth/permissions";
 import type { DocumentTemplateRow } from "@/lib/types/document-template";
 import { useAuthStore } from "@/store";
+import { MasterCatalogNavTabs } from "@/components/admin/catalog/master-catalog-nav-tabs";
 
 type CategoryOption = {
   id: number;
@@ -989,6 +990,7 @@ export default function CardTemplatesPage() {
 
   return (
     <div className="space-y-6">
+      <MasterCatalogNavTabs />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Card Templates</h1>

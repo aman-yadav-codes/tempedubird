@@ -213,9 +213,6 @@ export default function OffersManagementPage() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" size="sm" onClick={fetchOffers} disabled={loading} className="gap-1.5">
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Refresh
-          </Button>
           <Button onClick={handleOpenAdd} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md gap-1.5">
             <Plus className="w-4 h-4" /> Create New Offer
           </Button>

@@ -79,11 +79,13 @@ export function getConfiguredInstitutionId() {
     return null; // Platform admin mode must never require or leak an institution ID
   }
   const config = getFrontendConfig();
-  if (config.isValid && config.mode === "institution") {
-    return config.institutionId;
+  if (config.isValid && (config.mode === "institution" || config.mode === "business")) {
+    return config.institutionId || config.businessId;
   }
   const rawId = String(
-    process.env.INSTITUTION_ID ??
+    process.env.BUSINESS_ID ??
+      process.env.NEXT_PUBLIC_BUSINESS_ID ??
+      process.env.INSTITUTION_ID ??
       process.env.NEXT_PUBLIC_INSTITUTION_ID ??
       process.env.DEFAULT_INSTITUTION_ID ??
       process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ??
@@ -134,9 +136,10 @@ export async function getInstitutionTenantByHost(db: Queryable, host: string | n
         TRUE AS is_primary,
         '{}'::jsonb AS config
       FROM institution_profiles ip
-      WHERE ip.id = $1
+      WHERE (ip.business_id = $1 OR ip.id = $1)
         AND ip.is_active = TRUE
         AND COALESCE(ip.is_deleted, FALSE) = FALSE
+      ORDER BY (ip.business_id = $1) DESC
       LIMIT 1
     `, [configuredInstitutionId]);
 

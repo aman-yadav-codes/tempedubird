@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { useAuthStore } from "@/store";
+import { MasterCatalogNavTabs } from "@/components/admin/catalog/master-catalog-nav-tabs";
 import { toast } from "sonner";
 import { MapPin, Plus, Loader2, Trash2, RefreshCw, Power, PowerOff, Edit, MoreHorizontal } from "lucide-react";
 import { StatsCards } from "@/components/master-data/stats-cards";
@@ -591,6 +592,7 @@ export default function LocationsPage() {
 
     return (
         <div className="space-y-4 sm:space-y-6">
+            <MasterCatalogNavTabs />
             <div className="flex flex-col gap-4 sm:gap-6">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
                     <div>

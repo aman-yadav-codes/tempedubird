@@ -373,7 +373,7 @@ export default function PublicJobsPage() {
 
                   <div>
                     <CardTitle className="text-lg font-bold text-foreground group-hover:text-primary transition-colors line-clamp-1">
-                      <Link href={`/jobs/${job.id}`} className="hover:underline">
+                      <Link href={`/jobs/${job.slug || job.id}`} className="hover:underline">
                         {job.title}
                       </Link>
                     </CardTitle>
@@ -417,7 +417,7 @@ export default function PublicJobsPage() {
                         variant="outline"
                         className="flex-1 h-9 text-xs font-semibold"
                       >
-                        <Link href={`/jobs/${job.id}`}>View Details</Link>
+                        <Link href={`/jobs/${job.slug || job.id}`}>View Details</Link>
                       </Button>
                       <Button
                         type="button"
@@ -582,7 +582,7 @@ export default function PublicJobsPage() {
             </Button>
             {viewingJob && (
               <Button asChild variant="outline" className="font-semibold gap-1.5">
-                <Link href={`/jobs/${viewingJob.id}`}>
+                <Link href={`/jobs/${viewingJob.slug || viewingJob.id}`}>
                   <ExternalLink className="size-3.5" />
                   Full Detail Page
                 </Link>

@@ -43,7 +43,10 @@ function canUploadAdminFile(
     canAccessAdminArea(user) ||
     user.role_codes.includes("teacher") ||
     user.role_codes.includes("institution_admin") ||
-    user.role_codes.includes("platform_admin")
+    user.role_codes.includes("platform_admin") ||
+    user.role_codes.includes("business_owner") ||
+    user.role_codes.includes("professional") ||
+    user.role_codes.includes("customer")
   );
 }
 
@@ -112,31 +115,33 @@ export async function POST(req: Request) {
     const targetFolder = requestedFolder || "crmtaskassets";
 
     // Primary: Upload to Openinary self-hosted media service
+    let uploadSuccess = false;
+    let openinaryResult: any = null;
     if (isOpeninaryConfigured() && isMediaSupportedByOpeninary(file.name, file.type)) {
       try {
-        const result = await uploadToOpeninary(file, file.name, targetFolder, file.type);
-        return NextResponse.json({
-          data: {
-            url: result.fullUrl,
-            public_id: result.path,
-            resource_type: mediaKind === "file" ? "raw" : mediaKind,
-            media_type: mediaKind,
-            file_name: file.name,
-            file_type: file.type,
-          },
-        });
+        openinaryResult = await uploadToOpeninary(file, file.name, targetFolder, file.type);
+        uploadSuccess = true;
       } catch (openinaryErr: any) {
-        console.error("Openinary upload failed:", openinaryErr);
-        const errMsg = openinaryErr?.message || "Failed to upload media to Openinary";
-        return NextResponse.json(
-          { error: `Upload to media service failed: ${errMsg}` },
-          { status: 502 }
-        );
+        console.warn("Openinary upload unreachable or failed, falling back to local storage:", openinaryErr?.message || openinaryErr);
       }
     }
 
+    if (uploadSuccess && openinaryResult) {
+      return NextResponse.json({
+        url: openinaryResult.fullUrl,
+        data: {
+          url: openinaryResult.fullUrl,
+          public_id: openinaryResult.path,
+          resource_type: mediaKind === "file" ? "raw" : mediaKind,
+          media_type: mediaKind,
+          file_name: file.name,
+          file_type: file.type,
+        },
+      });
+    }
+
     // Durable storage for document types not supported by Openinary (e.g. PDF/Office files)
-    // or when Openinary is not configured.
+    // or when Openinary is not configured or unreachable.
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const ext = path.extname(file.name) || ".png";
@@ -146,9 +151,11 @@ export async function POST(req: Request) {
     await fs.mkdir(uploadDir, { recursive: true });
     await fs.writeFile(path.join(uploadDir, uniqueFileName), buffer);
 
+    const localUrl = `/uploads/media/${uniqueFileName}`;
     return NextResponse.json({
+      url: localUrl,
       data: {
-        url: `/uploads/media/${uniqueFileName}`,
+        url: localUrl,
         public_id: `local_media_${uniqueFileName}`,
         resource_type: mediaKind === "file" ? "raw" : mediaKind,
         media_type: mediaKind,

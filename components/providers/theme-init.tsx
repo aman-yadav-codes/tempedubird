@@ -1,37 +1,27 @@
 "use client";
 
-import { useInsertionEffect } from "react";
-import { toCanonicalAdminPath } from "@/lib/auth/role-routes";
+import { useEffect } from "react";
 
 export function ThemeInit() {
-  useInsertionEffect(() => {
+  useEffect(() => {
     try {
-      const isAdminRoute = toCanonicalAdminPath(window.location.pathname).startsWith("/admin");
-      const scopedStorageKey = isAdminRoute ? "admin-theme" : "public-theme";
-      const fallbackStorageKey = isAdminRoute ? "public-theme" : "admin-theme";
-      const storedTheme =
+      const p = window.location.pathname;
+      const isAdmin = p.indexOf("/admin") === 0 || p.indexOf("/workspace") === 0;
+      const sKey = isAdmin ? "admin-theme" : "public-theme";
+      const fKey = isAdmin ? "public-theme" : "admin-theme";
+      const st =
         localStorage.getItem("app-theme") ||
-        localStorage.getItem(scopedStorageKey) ||
-        localStorage.getItem(fallbackStorageKey);
-      const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      const theme =
-        storedTheme === "light" || storedTheme === "dark"
-          ? storedTheme
-          : systemPrefersDark
-            ? "dark"
-            : "light";
+        localStorage.getItem(sKey) ||
+        localStorage.getItem(fKey);
+      const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const t = st === "light" || st === "dark" ? st : dark ? "dark" : "light";
 
-      document.documentElement.dataset.themeScope = isAdminRoute ? "admin" : "public";
-      document.documentElement.dataset.theme = theme;
-      document.documentElement.classList.toggle("dark", theme === "dark");
-      document.documentElement.style.colorScheme = theme;
-      localStorage.setItem("app-theme", theme);
-      localStorage.setItem("admin-theme", theme);
-      localStorage.setItem("public-theme", theme);
-      document.cookie = `app-theme=${theme}; path=/; max-age=31536000; SameSite=Lax`;
-    } catch {
-      // Theme boot should never block rendering.
-    }
+      document.documentElement.dataset.themeScope = isAdmin ? "admin" : "public";
+      document.documentElement.dataset.theme = t;
+      document.documentElement.classList.toggle("dark", t === "dark");
+      document.documentElement.style.colorScheme = t;
+      document.cookie = "app-theme=" + t + "; path=/; max-age=31536000; SameSite=Lax";
+    } catch {}
   }, []);
 
   return null;

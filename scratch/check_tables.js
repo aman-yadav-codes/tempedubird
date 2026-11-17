@@ -1,35 +1,12 @@
 const { Pool } = require('pg');
 require('dotenv').config({ path: '.env.local' });
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
-});
-
-async function main() {
-  try {
-    const res = await pool.query(`
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public'
-      ORDER BY table_name;
-    `);
-    console.log("Tables:", JSON.stringify(res.rows.map(r => r.table_name), null, 2));
-
-    const reviews = await pool.query(`
-      SELECT table_name, column_name, data_type
-      FROM information_schema.columns
-      WHERE table_name LIKE '%review%' OR table_name LIKE '%rating%' OR column_name LIKE '%rating%' OR column_name LIKE '%review%'
-      ORDER BY table_name, ordinal_position;
-    `);
-    console.log("Review/Rating columns:", JSON.stringify(reviews.rows, null, 2));
-  } catch (err) {
-    console.error("Error:", err);
-  } finally {
-    await pool.end();
-  }
+async function run() {
+  const bizCols = await pool.query("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'business_profiles' ORDER BY ordinal_position");
+  console.log('business_profiles columns:\n', bizCols.rows.map(r => r.column_name + ' (' + r.data_type + ')').join(', '));
+  const profCols = await pool.query("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'professional_profiles' ORDER BY ordinal_position");
+  console.log('\nprofessional_profiles columns:\n', profCols.rows.map(r => r.column_name + ' (' + r.data_type + ')').join(', '));
+  await pool.end();
 }
-
-main();
+run().catch(console.error);

@@ -24,27 +24,42 @@ type AccessTokenPayload = {
   typ?: string;
 };
 
-export async function getAuthenticatedUser(req: Request) {
+export async function getAuthenticatedUser(req?: Request) {
   let token: string | undefined;
 
-  const authHeader = req.headers.get("authorization");
-  if (authHeader) {
-    token = authHeader.split(" ").pop();
-  }
+  if (req) {
+    const authHeader = req.headers.get("authorization");
+    if (authHeader) {
+      token = authHeader.split(" ").pop();
+    }
 
-  if (!token) {
-    const cookieHeader = req.headers.get("cookie");
-    if (cookieHeader) {
-      const accessMatch = cookieHeader.match(/access_token=([^;]+)/);
-      if (accessMatch) {
-        token = accessMatch[1];
-      } else {
-        const refreshMatch = cookieHeader.match(/refresh_token=([^;]+)/);
-        if (refreshMatch) {
-          token = refreshMatch[1];
+    if (!token) {
+      const cookieHeader = req.headers.get("cookie");
+      if (cookieHeader) {
+        const accessMatch = cookieHeader.match(/access_token=([^;]+)/);
+        if (accessMatch) {
+          token = accessMatch[1];
+        } else {
+          const refreshMatch = cookieHeader.match(/refresh_token=([^;]+)/);
+          if (refreshMatch) {
+            token = refreshMatch[1];
+          }
         }
       }
     }
+  }
+
+  if (!token) {
+    try {
+      const { cookies, headers } = await import("next/headers");
+      const cookieStore = await cookies();
+      token = cookieStore.get("access_token")?.value || cookieStore.get("refresh_token")?.value;
+      if (!token) {
+        const headerStore = await headers();
+        const auth = headerStore.get("authorization");
+        if (auth) token = auth.split(" ").pop();
+      }
+    } catch {}
   }
 
   if (!token) throw new Error("Unauthorized");

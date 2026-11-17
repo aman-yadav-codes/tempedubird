@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { getAllowedInstitutionIds } from "@/lib/auth/institution-scope";
-import { hasPermission, isPlatformAdminUser } from "@/lib/auth/permissions";
+import { hasPermission, isPlatformAdminUser, isCustomerUser, isStaffUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
 import { ensureAssignmentTemplateSchema } from "@/lib/queries/assignment-templates";
 import { NotificationService } from "@/services/notificationService";
@@ -576,15 +576,25 @@ async function getParentCards(parentUserId: number, requestedStudentId: number |
 export async function GET(req: Request) {
   try {
     const currentUser = await getAuthenticatedUser(req);
-    const dashboardPermission = isStudent(currentUser)
-      ? "student.dashboard.view"
-      : isParent(currentUser)
-        ? "parent.dashboard.view"
-        : isTeacher(currentUser)
-          ? "teacher.dashboard.view"
-          : "dashboard.view";
-    if (!hasPermission(currentUser, dashboardPermission)) {
-      throw new Error("Forbidden: Dashboard access required");
+    const isCust = isCustomerUser(currentUser);
+    const isStaff = isStaffUser(currentUser);
+    const dashboardPermission = isCust
+      ? "dashboard.view"
+      : isStudent(currentUser)
+        ? "student.dashboard.view"
+        : isParent(currentUser)
+          ? "parent.dashboard.view"
+          : (isTeacher(currentUser) || isStaff)
+            ? "teacher.dashboard.view"
+            : "dashboard.view";
+    if (!isCust && !hasPermission(currentUser, dashboardPermission)) {
+      return NextResponse.json({
+        role: isCust ? "customer" : "guest",
+        cards: [],
+        notifications: [],
+        actionRequired: [],
+        latestRecords: [],
+      });
     }
     const url = new URL(req.url);
     const requestedChildId = Number(url.searchParams.get("childStudentId"));
@@ -598,21 +608,23 @@ export async function GET(req: Request) {
       : null;
 
     let institutionDetails: Awaited<ReturnType<typeof getInstitutionDashboardDetails>> | null = null;
-    if (isInstitutionAdmin(currentUser) || (!isStudent(currentUser) && !isParent(currentUser) && !isTeacher(currentUser) && !isPlatformAdminUser(currentUser))) {
+    if (!isCust && (isInstitutionAdmin(currentUser) || (!isStudent(currentUser) && !isParent(currentUser) && !isTeacher(currentUser) && !isStaff && !isPlatformAdminUser(currentUser)))) {
       institutionDetails = await getInstitutionDashboardDetails(allowedInstitutionIds);
     }
 
     const cardsPromise = isPlatformAdminUser(currentUser)
       ? getPlatformCards()
-      : institutionDetails
-        ? Promise.resolve(institutionDetails.cards)
-        : isStudent(currentUser)
-          ? getStudentCards(currentUser.id, studentEnrollment)
-          : isParent(currentUser)
-            ? getParentCards(currentUser.id, childStudentId)
-            : isTeacher(currentUser)
-              ? Promise.resolve(getTeacherCards())
-              : Promise.resolve([]);
+      : isCust
+        ? Promise.resolve([])
+        : institutionDetails
+          ? Promise.resolve(institutionDetails.cards)
+          : isStudent(currentUser)
+            ? getStudentCards(currentUser.id, studentEnrollment)
+            : isParent(currentUser)
+              ? getParentCards(currentUser.id, childStudentId)
+              : (isTeacher(currentUser) || isStaff)
+                ? Promise.resolve(getTeacherCards())
+                : Promise.resolve([]);
 
     const [cards, notifications] = await Promise.all([
       cardsPromise,
@@ -624,13 +636,15 @@ export async function GET(req: Request) {
         ? "platform_admin"
         : isInstitutionAdmin(currentUser)
           ? "institution_admin"
-          : isStudent(currentUser)
-            ? "student"
-            : isParent(currentUser)
-              ? "parent"
-              : isTeacher(currentUser)
-                ? "teacher"
-                : "admin",
+          : isCust
+            ? "customer"
+            : isStudent(currentUser)
+              ? "student"
+              : isParent(currentUser)
+                ? "parent"
+                : (isTeacher(currentUser) || isStaff)
+                  ? "teacher"
+                  : "admin",
       cards,
       notifications: notifications.items,
       institutions: institutionDetails?.institutions || [],

@@ -162,7 +162,7 @@ export async function recordMembershipLifecycle(
       `
         UPDATE institution_membership_history
         SET is_current = FALSE,
-            leave_date = COALESCE($3::timestamp, CURRENT_TIMESTAMP),
+            leave_date = GREATEST(join_date, COALESCE($3::timestamp, CURRENT_TIMESTAMP)),
             updated_by = $4,
             updated_at = CURRENT_TIMESTAMP
         WHERE user_id = $1
@@ -197,7 +197,10 @@ export async function recordMembershipLifecycle(
         $4,
         $5,
         COALESCE($6::timestamp, CURRENT_TIMESTAMP),
-        $7::timestamp,
+        CASE
+          WHEN $7::timestamp IS NULL THEN NULL
+          ELSE GREATEST(COALESCE($6::timestamp, CURRENT_TIMESTAMP), $7::timestamp)
+        END,
         $8,
         $9,
         $10,
@@ -285,7 +288,7 @@ export async function closeMembershipLifecycle(
       UPDATE institution_membership_history
       SET status = $${statusParam},
           is_current = FALSE,
-          leave_date = COALESCE(leave_date, CURRENT_TIMESTAMP),
+          leave_date = GREATEST(join_date, COALESCE(leave_date, CURRENT_TIMESTAMP)),
           updated_by = $${actorParam},
           updated_at = CURRENT_TIMESTAMP,
           remarks = COALESCE($${remarksParam}, remarks)

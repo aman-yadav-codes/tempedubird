@@ -131,7 +131,8 @@ export async function getPublicInstitutionNavItems(
 export async function getPublicNavbarBrand(
   tenant: InstitutionTenant | null,
 ): Promise<PublicNavbarBrand> {
-  if (!tenant?.institution_id) {
+  const targetId = tenant?.institution_id;
+  if (!targetId) {
     return {
       name: "EduBird",
       logoUrl: "/icons/edubird.webp",
@@ -139,31 +140,70 @@ export async function getPublicNavbarBrand(
     };
   }
 
+  // 1. Check platform_company_info for this business_id or institution_id
+  const pciRes = await db.query<{ brand_name: string | null; company_name: string | null; logo_url: string | null }>(
+    `SELECT brand_name, company_name, logo_url FROM platform_company_info
+     WHERE business_id = $1 OR institution_id = $1
+     ORDER BY (business_id = $1) DESC
+     LIMIT 1`,
+    [targetId]
+  );
+  if (pciRes.rows.length > 0) {
+    const pci = pciRes.rows[0];
+    if (pci.brand_name || pci.logo_url) {
+      return {
+        name: pci.brand_name || pci.company_name || tenant.institution_name || "Business Portal",
+        logoUrl: pci.logo_url || null,
+        isInstitution: true,
+      };
+    }
+  }
+
+  // 2. Check business_profiles
+  const bpRes = await db.query<{ name: string | null; logo_url: string | null }>(
+    `SELECT name, logo_url FROM business_profiles
+     WHERE id = $1 OR institution_profile_id = $1
+     LIMIT 1`,
+    [targetId]
+  );
+  if (bpRes.rows.length > 0 && (bpRes.rows[0].name || bpRes.rows[0].logo_url)) {
+    return {
+      name: bpRes.rows[0].name || tenant.institution_name || "Business",
+      logoUrl: bpRes.rows[0].logo_url || null,
+      isInstitution: true,
+    };
+  }
+
+  // 3. Fallback to institution_profiles + institution_media
   const result = await db.query<{ name: string | null; logo_url: string | null }>(
     `
       SELECT
         COALESCE(institution.name, institution.slug, 'Institution ' || institution.id::text) AS name,
-        (
-          SELECT media.url
-          FROM institution_media media
-          WHERE media.institution_id = institution.id
-            AND COALESCE(media.is_deleted, FALSE) = FALSE
-            AND media.url IS NOT NULL
-            AND media.url <> ''
-            AND (
-              lower(COALESCE(media.media_type, '')) = 'logo'
-              OR lower(COALESCE(media.title, '')) LIKE '%logo%'
-            )
-          ORDER BY media.sort_order ASC, media.id ASC
-          LIMIT 1
+        COALESCE(
+          institution.logo_url,
+          (
+            SELECT media.url
+            FROM institution_media media
+            WHERE media.institution_id = institution.id
+              AND COALESCE(media.is_deleted, FALSE) = FALSE
+              AND media.url IS NOT NULL
+              AND media.url <> ''
+              AND (
+                lower(COALESCE(media.media_type, '')) = 'logo'
+                OR lower(COALESCE(media.title, '')) LIKE '%logo%'
+              )
+            ORDER BY media.sort_order ASC, media.id ASC
+            LIMIT 1
+          )
         ) AS logo_url
       FROM institution_profiles institution
-      WHERE institution.id = $1
+      WHERE (institution.business_id = $1 OR institution.id = $1)
         AND institution.is_active = TRUE
         AND COALESCE(institution.is_deleted, FALSE) = FALSE
+      ORDER BY (institution.business_id = $1) DESC
       LIMIT 1
     `,
-    [tenant.institution_id],
+    [targetId],
   );
 
   const row = result.rows[0];

@@ -6,6 +6,7 @@ type RoleRouteUser = {
 } | null | undefined;
 
 const KNOWN_ROLE_PREFIXES = new Set([
+  "workspace",
   "admin",
   "platformadmin",
   "instituteadmin",
@@ -22,17 +23,22 @@ const KNOWN_ROLE_PREFIXES = new Set([
   "accountant",
   "guest",
   "client",
+  "customer",
 ]);
 const PUBLIC_TOP_LEVEL_SEGMENTS = new Set([
   "about",
   "account-suspended",
   "auth",
   "blogs",
+  "business",
+  "businesses",
   "contact",
   "copyright",
   "courses",
   "designations",
   "exams",
+  "explore",
+  "facilities",
   "faqs",
   "forgot-password",
   "gallery",
@@ -43,18 +49,26 @@ const PUBLIC_TOP_LEVEL_SEGMENTS = new Set([
   "institutes",
   "institution",
   "institutions",
+  "jobs",
   "libraries",
   "login",
   "notes",
   "packages",
   "practice",
   "privacy",
+  "products",
+  "professional",
+  "professionals",
   "refund-policy",
   "reset-password",
+  "search",
   "signup",
+  "storefront",
   "teachers",
+  "team",
   "terms",
   "test",
+  "vendors",
 ]);
 const ADMIN_CHILD_SEGMENTS = new Set([
   "access-control",
@@ -62,9 +76,14 @@ const ADMIN_CHILD_SEGMENTS = new Set([
   "account",
   "ai-settings",
   "analytics",
+  "business-type-access",
+  "categories",
+  "catalog",
   "classroom",
   "children",
+  "calendar",
   "company",
+  "complaints",
   "content",
   "dashboard",
   "finance",
@@ -73,12 +92,15 @@ const ADMIN_CHILD_SEGMENTS = new Set([
   "institution",
   "institutions",
   "inventory",
+  "locations",
   "marketing",
   "master-data",
+  "noticeboard",
   "notifications",
   "operations",
   "my-profile",
   "profile",
+  "profiles",
   "reviews",
   "sales",
   "settings",
@@ -95,13 +117,15 @@ const ROLE_PREFIX_MAP: Record<string, string> = {
   platform_admin: "platformadmin",
   accountant: "platformadmin",
   guest: "platformadmin",
-  institution_admin: "instituteadmin",
-  professional_organization: "instituteadmin",
-  school_owner: "instituteadmin",
-  college_owner: "instituteadmin",
-  university_owner: "instituteadmin",
-  library_owner: "instituteadmin",
-  pg_owner: "instituteadmin",
+  institution_admin: "workspace",
+  business_owner: "workspace",
+  professional_provider: "workspace",
+  professional_organization: "workspace",
+  school_owner: "workspace",
+  college_owner: "workspace",
+  university_owner: "workspace",
+  library_owner: "workspace",
+  pg_owner: "workspace",
   teacher: "staff",
   faculty: "staff",
   hod: "staff",
@@ -118,12 +142,15 @@ const ROLE_PREFIX_MAP: Record<string, string> = {
   guardian: "parents",
   driver: "driver",
   client: "client",
+  customer: "customer",
 };
 
 const PREFIX_PRIORITY = [
   "platform_admin",
   "accountant",
   "guest",
+  "business_owner",
+  "professional_provider",
   "institution_admin",
   "professional_organization",
   "school_owner",
@@ -147,6 +174,7 @@ const PREFIX_PRIORITY = [
   "guardian",
   "driver",
   "client",
+  "customer",
 ];
 
 export function sanitizeRolePathSegment(value: string | null | undefined) {
@@ -194,7 +222,7 @@ export function toCanonicalAdminPath(pathname: string) {
   const parts = pathOnly.split("/").filter(Boolean);
   const firstSegment = parts[0];
 
-  if (!firstSegment || firstSegment === "admin" || firstSegment === "platformadmin" || firstSegment === "instituteadmin" || firstSegment === "institutionadmin" || firstSegment === "staff" || firstSegment === "client") {
+  if (!firstSegment || firstSegment === "admin" || firstSegment === "workspace" || firstSegment === "platformadmin" || firstSegment === "instituteadmin" || firstSegment === "institutionadmin" || firstSegment === "staff" || firstSegment === "client" || firstSegment === "customer") {
     const rest = parts.slice(1).join("/");
     return `/admin${rest ? `/${rest}` : ""}${query ? `?${query}` : ""}`;
   }
@@ -205,7 +233,6 @@ export function toCanonicalAdminPath(pathname: string) {
 
   const looksLikeRolePortalPath =
     isKnownRoleRoutePrefix(firstSegment) ||
-    parts.length === 1 ||
     ADMIN_CHILD_SEGMENTS.has(parts[1]);
 
   if (looksLikeRolePortalPath) {
@@ -218,29 +245,49 @@ export function toCanonicalAdminPath(pathname: string) {
 
 export function toRoleRoutePath(pathname: string, user: RoleRouteUser) {
   let canonical = toCanonicalAdminPath(pathname);
+  if (!canonical.startsWith("/admin")) {
+    return pathname;
+  }
+
   if (canonical === "/admin/dashboard") {
     canonical = "/admin";
   } else if (canonical === "/admin/profile") {
     canonical = "/admin/account";
+  } else if (canonical === "/admin/institution/complaints") {
+    canonical = "/admin/complaints";
+  } else if (canonical === "/admin/institutions/news") {
+    canonical = "/admin/noticeboard";
   }
   const base = getRoleRouteBase(user);
+
+  if (base === "/workspace") {
+    if (canonical === "/admin") return "/workspace";
+    if (canonical.startsWith("/admin/")) return `/workspace${canonical.slice("/admin".length)}`;
+    return canonical;
+  }
 
   if (base === "/students") {
     if (canonical === "/admin") return "/students";
     if (canonical.startsWith("/admin/")) return `/students${canonical.slice("/admin".length)}`;
-    return "/students";
+    return canonical;
   }
 
   if (base === "/parents") {
     if (canonical === "/admin") return "/parents";
     if (canonical.startsWith("/admin/")) return `/parents${canonical.slice("/admin".length)}`;
-    return "/parents";
+    return canonical;
   }
 
   if (base === "/client") {
     if (canonical === "/admin" || canonical === "/admin/operations/tasks") return "/client/operations/tasks";
     if (canonical.startsWith("/admin/")) return `/client${canonical.slice("/admin".length)}`;
-    return "/client/operations/tasks";
+    return canonical;
+  }
+
+  if (base === "/customer") {
+    if (canonical === "/admin") return "/customer";
+    if (canonical.startsWith("/admin/")) return `/customer${canonical.slice("/admin".length)}`;
+    return canonical;
   }
 
   if (canonical === "/admin") {
@@ -252,6 +299,8 @@ export function toRoleRoutePath(pathname: string, user: RoleRouteUser) {
 }
 
 export function shouldUseRoleRoutePrefix(pathname: string, user: RoleRouteUser) {
+  const canonical = toCanonicalAdminPath(pathname);
+  if (!canonical.startsWith("/admin")) return false;
   const rolePath = toRoleRoutePath(pathname, user);
   return rolePath !== pathname && rolePath.startsWith("/");
 }

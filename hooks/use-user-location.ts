@@ -36,6 +36,17 @@ export function useUserLocation() {
     } catch {
       // Ignore localStorage security errors in sandbox
     }
+
+    const handleSync = (e: any) => {
+      if (e?.detail?.location) {
+        setLocationState(e.detail.location);
+        setIsDetected(Boolean(e.detail.detected));
+      }
+    };
+    window.addEventListener("edubird-location-change", handleSync);
+    return () => {
+      window.removeEventListener("edubird-location-change", handleSync);
+    };
   }, []);
 
   const setLocation = useCallback((newLoc: string, detected: boolean = false) => {
@@ -46,6 +57,9 @@ export function useUserLocation() {
       localStorage.setItem(STORAGE_KEY_LOCATION, newLoc);
       localStorage.setItem(STORAGE_KEY_DETECTED, String(detected));
       localStorage.setItem(STORAGE_KEY_PROMPTED, "true");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("edubird-location-change", { detail: { location: newLoc, detected } }));
+      }
     } catch {}
   }, []);
 

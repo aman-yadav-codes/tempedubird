@@ -249,6 +249,7 @@ const SUBTASK_URGENCIES = [
 ];
 
 const STATUS_TABS = [
+  { id: "all", label: "All Work", badgeColor: "bg-primary/10 text-primary border-primary/30" },
   { id: "pending", label: "Pending Tasks", badgeColor: "bg-slate-100 text-slate-700 border-slate-300" },
   { id: "in_progress", label: "In Progress", badgeColor: "bg-blue-100 text-blue-800 border-blue-300" },
   { id: "under_review", label: "Under Review", badgeColor: "bg-amber-100 text-amber-800 border-amber-300" },
@@ -288,22 +289,32 @@ export default function OperationsTasksPage() {
     return codes.some((r: string) => ["platform_admin", "superadmin", "super_admin", "platformadmin"].includes(String(r).toLowerCase()));
   }, [isPlatformRoute, user]);
   const isInstitutionAdmin = useMemo(() => {
-    // Platform admin and institution admin share the same simplified UI
-    if (pathname?.startsWith("/instituteadmin") || isPlatformRoute) return true;
+    // Platform admin and workspace/institution admin share the operations UI
+    if (pathname?.startsWith("/workspace") || pathname?.startsWith("/instituteadmin") || isPlatformRoute) return true;
+    if (user?.has_business_profile || user?.has_professional_profile) return true;
     const codes = (user as any)?.role_codes || [(user as any)?.role || (user as any)?.primary_role || ""];
     if (codes.some((r: string) => ["platform_admin", "super_admin"].includes(r))) return false;
-    return codes.some((r: string) => ["institution_admin", "school_owner", "college_owner", "university_owner"].includes(r));
+    return codes.some((r: string) =>
+      [
+        "institution_admin",
+        "school_owner",
+        "college_owner",
+        "university_owner",
+        "business_owner",
+        "professional_provider",
+      ].includes(r)
+    );
   }, [pathname, isPlatformRoute, user]);
   const [orgFilter, setOrgFilter] = useState<string>(isPlatformRoute ? "none" : "all");
   const effectiveInstId = useMemo(() => {
     if (orgFilter === "all") {
-      return isPlatformRoute ? null : activeInstitutionId;
+      return isPlatformRoute ? null : (activeInstitutionId || (user as any)?.institution_id || (user as any)?.under_institution_id || user?.memberships?.[0]?.institution_id || null);
     }
     if (orgFilter === "none") {
       return null;
     }
     return Number(orgFilter) || null;
-  }, [orgFilter, isPlatformRoute, activeInstitutionId]);
+  }, [orgFilter, isPlatformRoute, activeInstitutionId, user]);
   const effectiveEnvInstId = serverConfiguredInstId || envDefaultInstId || (effectiveInstId ? String(effectiveInstId) : "");
   const fetchSeqRef = React.useRef(0);
   const [tasks, setTasks] = useState<OperationTask[]>([]);
@@ -314,9 +325,10 @@ export default function OperationsTasksPage() {
 
   const isClientRole = useMemo(() => {
     if (!user) return false;
+    if (isInstitutionAdmin || isPlatformAdmin || pathname?.startsWith("/workspace")) return false;
     const codes = (user as any)?.role_codes || [(user as any)?.role || (user as any)?.primary_role || ""];
     return codes.includes("client") || (user as any)?.role === "client" || (user as any)?.primary_role === "client";
-  }, [user]);
+  }, [user, isInstitutionAdmin, isPlatformAdmin, pathname]);
 
   const isStaffRole = useMemo(() => {
     if (!user) return false;
@@ -412,8 +424,8 @@ export default function OperationsTasksPage() {
     });
   }, [modalStaffList, staffList]);
 
-  // Selected Status Tab
-  const [selectedStatusTab, setSelectedStatusTab] = useState<string>("pending");
+  // Selected Status Tab - Default to "all" so everyone sees all work
+  const [selectedStatusTab, setSelectedStatusTab] = useState<string>("all");
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -768,15 +780,41 @@ export default function OperationsTasksPage() {
   }, [formInstitutionId, institutions, activeInstitution, isPlatformRoute]);
 
   const dialogStaffList = useMemo(() => {
-    const list = modalOrgStaffList.length > 0 ? modalOrgStaffList : staffList;
+    const list = [...(modalOrgStaffList.length > 0 ? modalOrgStaffList : staffList)];
+    
+    // Ensure current business owner or admin is always included in the staff/owner picker
+    if (user?.id && (user.has_business_profile || user.role_codes?.includes("institution_admin") || user.role_codes?.includes("business_owner"))) {
+      const exists = list.some((s) => String(s.id) === String(user.id));
+      if (!exists) {
+        list.unshift({
+          id: user.id,
+          name: (user as any).full_name || (user as any).name || user.email || "Business Owner",
+          email: user.email || "",
+          phone: user.phone || "",
+          role: "Business Owner",
+          role_code: "business_owner",
+          business_name: (user as any).business_name || (user as any).institution_name || activeInstitution?.name || "pqr",
+        });
+      }
+    }
+
     const seen = new Set<string>();
-    return list.filter((s) => {
+    const deduplicated = list.filter((s) => {
       const sId = String(s.id);
       if (!s.id || seen.has(sId)) return false;
       seen.add(sId);
       return true;
     });
-  }, [modalOrgStaffList, staffList]);
+
+    // Ensure Business Owner is always sorted to the top
+    return deduplicated.sort((a, b) => {
+      const aIsOwner = a.role === "Business Owner" || a.role_code === "business_owner" || a.role_code === "institution_admin";
+      const bIsOwner = b.role === "Business Owner" || b.role_code === "business_owner" || b.role_code === "institution_admin";
+      if (aIsOwner && !bIsOwner) return -1;
+      if (bIsOwner && !aIsOwner) return 1;
+      return (a.name || "").localeCompare(b.name || "");
+    });
+  }, [modalOrgStaffList, staffList, user]);
 
   const addClientUrl = useMemo(() => {
     if (pathname?.startsWith("/platformadmin")) return "/platformadmin/sales/clients";
@@ -799,11 +837,20 @@ export default function OperationsTasksPage() {
 
   const filteredStaffList = useMemo(() => {
     if (!staffSearchQuery.trim()) return dialogStaffList;
-    const q = staffSearchQuery.toLowerCase();
+    const q = staffSearchQuery.toLowerCase().trim();
     return dialogStaffList.filter(
-      (s) => (s.name && s.name.toLowerCase().includes(q)) || (s.role && s.role.toLowerCase().includes(q))
+      (s) =>
+        (s.name && s.name.toLowerCase().includes(q)) ||
+        (s.role && s.role.toLowerCase().includes(q)) ||
+        (s.email && s.email.toLowerCase().includes(q)) ||
+        (s.phone && String(s.phone).includes(q)) ||
+        (s.role_code && s.role_code.toLowerCase().includes(q)) ||
+        (s.business_name && s.business_name.toLowerCase().includes(q)) ||
+        (s.institution_name && s.institution_name.toLowerCase().includes(q)) ||
+        ((q === "owner" || q === "business" || q === "business owner") && (s.role === "Business Owner" || s.role_code === "institution_admin" || s.role_code === "business_owner")) ||
+        (selectedOrgName && selectedOrgName.toLowerCase().includes(q) && (s.role === "Business Owner" || s.role_code === "institution_admin" || s.role_code === "business_owner"))
     );
-  }, [dialogStaffList, staffSearchQuery]);
+  }, [dialogStaffList, staffSearchQuery, selectedOrgName]);
 
   const handleFormInstitutionChange = (newInstId: string) => {
     setFormInstitutionId(newInstId);
@@ -2154,10 +2201,6 @@ export default function OperationsTasksPage() {
   };
 
   const displayedTasks = useMemo(() => {
-    const isStaffRoute = Boolean(pathname?.startsWith("/staff"));
-    const isStaffContext = isStaffRole || isStaffRoute;
-    const isClient = isClientRole || Boolean(pathname?.startsWith("/client"));
-
     let pool = tasks;
 
     if (selectedStatusTab !== "all") {
@@ -2168,12 +2211,10 @@ export default function OperationsTasksPage() {
         }
         return normalizeStatus(t.status) === selectedStatusTab;
       });
-    } else {
-      pool = pool.filter((t) => !(t.status === "completed" && !t.is_daily_recurring));
     }
 
     return pool;
-  }, [tasks, selectedStatusTab, isStaffRole, isClientRole, pathname]);
+  }, [tasks, selectedStatusTab]);
 
   const myAssignedTasksCount = useMemo(() => {
     if (isClientRole || Boolean(pathname?.startsWith("/client"))) return tasks.length;
@@ -2183,18 +2224,15 @@ export default function OperationsTasksPage() {
   // Get task count for tab across subtasks (Image 3)
   const getTabCount = (tabId: string) => {
     const pool = tasks;
+    if (tabId === "all") return pool.length;
 
     let count = 0;
     for (const t of pool) {
       const subs: SubTask[] = Array.isArray(t.sub_tasks) ? t.sub_tasks : [];
       if (subs.length > 0) {
-        if (tabId === "all") {
-          count += subs.length;
-        } else {
-          count += subs.filter((s) => normalizeStatus(s.status) === tabId).length;
-        }
+        count += subs.filter((s) => normalizeStatus(s.status) === tabId).length;
       } else {
-        if (tabId === "all" || normalizeStatus(t.status) === tabId) {
+        if (normalizeStatus(t.status) === tabId) {
           count += 1;
         }
       }
@@ -2265,9 +2303,9 @@ export default function OperationsTasksPage() {
 
               <Button
                 onClick={handleOpenCreateTask}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md gap-1.5 h-9 cursor-pointer"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md gap-1.5 h-9 cursor-pointer px-4"
               >
-                <Plus className="w-4 h-4" /> Create Work
+                <Plus className="w-4 h-4" /> Add work
               </Button>
             </div>
           );
@@ -2460,10 +2498,10 @@ export default function OperationsTasksPage() {
           {!(isClientRole || Boolean(pathname?.startsWith("/client"))) ? (
             <>
               <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                Click &quot;Create Work&quot; to add a new work, then use the Action button to add and assign multiple tasks.
+                Click &quot;Add work&quot; to add a new work, then use the Action button to add and assign multiple tasks.
               </p>
-              <Button onClick={handleOpenCreateTask} size="sm" className="mt-2 font-bold">
-                <Plus className="w-4 h-4 mr-1.5" /> Create Work
+              <Button onClick={handleOpenCreateTask} size="sm" className="mt-2 font-bold px-4">
+                <Plus className="w-4 h-4 mr-1.5" /> Add work
               </Button>
             </>
           ) : (
@@ -3948,11 +3986,14 @@ export default function OperationsTasksPage() {
                   className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring font-medium"
                 >
                   <option value="none">-- Select Work Leader (Optional) --</option>
-                  {dialogStaffList.map((s) => (
-                    <option key={s.id} value={String(s.id)}>
-                      {s.name} ({s.role || "Staff Member"})
-                    </option>
-                  ))}
+                  {dialogStaffList.map((s) => {
+                    const isOwner = s.role === "Business Owner" || s.role_code === "business_owner" || s.role_code === "institution_admin";
+                    return (
+                      <option key={s.id} value={String(s.id)}>
+                        {isOwner ? `👑 ${s.name} (Business Owner${s.business_name ? ` - ${s.business_name}` : ""})` : `${s.name} (${s.role || "Staff Member"}${s.business_name ? ` - ${s.business_name}` : ""})`}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -4063,6 +4104,7 @@ export default function OperationsTasksPage() {
                         ) : (
                           filteredStaffList.map((s) => {
                             const isChecked = formAssignedStaffIds.includes(String(s.id));
+                            const isOwner = s.role === "Business Owner" || s.role_code === "business_owner" || s.role_code === "institution_admin";
                             return (
                               <div
                                 key={s.id}
@@ -4085,13 +4127,35 @@ export default function OperationsTasksPage() {
                                     className="h-3.5 w-3.5"
                                   />
                                   <User className={`w-3.5 h-3.5 shrink-0 ${isChecked ? "text-primary" : "text-muted-foreground"}`} />
-                                  <span className="font-semibold text-foreground truncate block">
-                                    {s.name}
-                                  </span>
+                                  <div className="flex flex-col min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-semibold text-foreground truncate">
+                                        {s.name}
+                                      </span>
+                                      {s.business_name && (
+                                        <span className="text-[10px] text-muted-foreground font-normal truncate">
+                                          ({s.business_name})
+                                        </span>
+                                      )}
+                                    </div>
+                                    {s.email && (
+                                      <span className="text-[10px] text-muted-foreground truncate">
+                                        {s.email}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                                <Badge variant="outline" className="text-[10px] py-0 px-1.5 shrink-0 bg-background/50 capitalize ml-2">
-                                  {s.role || "Staff Member"}
-                                </Badge>
+                                <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                  {isOwner ? (
+                                    <Badge className="text-[10px] py-0 px-1.5 bg-amber-500/15 text-amber-700 border-amber-300 font-semibold">
+                                      👑 Business Owner
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-background/50 capitalize">
+                                      {s.role || "Staff Member"}
+                                    </Badge>
+                                  )}
+                                </div>
                               </div>
                             );
                           })

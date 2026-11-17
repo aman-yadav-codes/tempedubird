@@ -13,3 +13,4 @@ export function PlatformAdminLayout({ children }: { children: ReactNode }) {
     </div>
   );
 }
+

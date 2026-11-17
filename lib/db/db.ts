@@ -1,3 +1,5 @@
+import dns from "node:dns";
+try { dns.setDefaultResultOrder?.("ipv4first"); } catch {}
 // /lib/db.ts
 import { Pool, types, type PoolClient, type QueryConfig, type QueryResult, type QueryResultRow } from "pg";
 

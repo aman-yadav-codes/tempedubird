@@ -1,7 +1,7 @@
 import { cache } from "react";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db/db";
 import { extractIdFromSlug } from "@/lib/utils/seo-slug";
 import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
@@ -20,6 +20,26 @@ interface Props {
 const fetchInstitutionFullData = cache(async (idOrSlug: string) => {
   try {
     const { id: instIdNum } = extractIdFromSlug(idOrSlug);
+
+    // 0. Proactively check if this slug/id belongs to a Business or Professional
+    const checkRedirect = await db.query(
+      `
+      SELECT 'business' AS entity_type, slug FROM business_profiles 
+      WHERE (slug = $1 OR id = $2) AND COALESCE(is_active, TRUE) = TRUE
+      UNION ALL
+      SELECT 'professional' AS entity_type, slug FROM professional_profiles 
+      WHERE (slug = $1 OR id = $2) AND COALESCE(is_active, TRUE) = TRUE
+      LIMIT 1
+      `,
+      [idOrSlug, instIdNum || -1]
+    );
+
+    if (checkRedirect.rows.length > 0) {
+      const match = checkRedirect.rows[0];
+      return {
+        redirectUrl: `/${match.entity_type}/${match.slug || idOrSlug}`,
+      };
+    }
 
     // 1. Fetch Profile First
     const profileRes = await db.query(
@@ -49,11 +69,7 @@ const fetchInstitutionFullData = cache(async (idOrSlug: string) => {
         l.name AS location_name,
         b.name AS board_name,
         pu.name AS parent_university_name,
-        COALESCE((
-          SELECT COUNT(*)::int
-          FROM student_enrollments se
-          WHERE se.institution_id = p.id AND COALESCE(se.is_deleted, FALSE) = FALSE
-        ), 0) AS student_count,
+        0 AS student_count,
         (
           SELECT media.url
           FROM institution_media media
@@ -87,9 +103,44 @@ const fetchInstitutionFullData = cache(async (idOrSlug: string) => {
       [instIdNum || -1, idOrSlug]
     );
 
-    if (profileRes.rows.length === 0) return null;
+    if (profileRes.rows.length === 0) {
+      // Re-verify if it was a business or professional with slightly different casing/slug
+      const altCheck = await db.query(
+        `
+        (SELECT 'business' AS entity_type, slug FROM business_profiles WHERE (LOWER(slug) = LOWER($1) OR id = $2) LIMIT 1)
+        UNION ALL
+        (SELECT 'professional' AS entity_type, slug FROM professional_profiles WHERE (LOWER(slug) = LOWER($1) OR id = $2) LIMIT 1)
+        LIMIT 1
+        `,
+        [idOrSlug, instIdNum || -1]
+      );
+      if (altCheck.rows.length > 0) {
+        return {
+          redirectUrl: `/${altCheck.rows[0].entity_type}/${altCheck.rows[0].slug || idOrSlug}`,
+        };
+      }
+      return null;
+    }
+
     const profile = profileRes.rows[0];
     const institutionId = profile.id;
+
+    // Check if this institution_profile belongs to a business or professional profile
+    const instLinkCheck = await db.query(
+      `
+      (SELECT 'business' AS entity_type, slug FROM business_profiles WHERE institution_profile_id = $1 AND COALESCE(is_active, TRUE) = TRUE LIMIT 1)
+      UNION ALL
+      (SELECT 'professional' AS entity_type, slug FROM professional_profiles WHERE institution_profile_id = $1 AND COALESCE(is_active, TRUE) = TRUE LIMIT 1)
+      LIMIT 1
+      `,
+      [institutionId]
+    );
+
+    if (instLinkCheck.rows.length > 0) {
+      return {
+        redirectUrl: `/${instLinkCheck.rows[0].entity_type}/${instLinkCheck.rows[0].slug || profile.slug || idOrSlug}`,
+      };
+    }
 
     // 2. Fetch All Sub-Resources Concurrently using Promise.allSettled
     const [
@@ -362,8 +413,8 @@ const fetchInstitutionFullData = cache(async (idOrSlug: string) => {
       courses: coursesSettled.status === "fulfilled" ? coursesSettled.value.rows : [],
       relatedInstitutes: relatedSettled.status === "fulfilled" ? relatedSettled.value.rows : [],
     };
-  } catch (err) {
-    console.error("Error loading institution data:", err);
+  } catch (err: any) {
+    console.error("DEBUG fetchInstitutionFullData error:", err?.message || err);
     return null;
   }
 });
@@ -371,6 +422,12 @@ const fetchInstitutionFullData = cache(async (idOrSlug: string) => {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const resolvedParams = await params;
   const data = await fetchInstitutionFullData(resolvedParams.id);
+
+  if (data?.redirectUrl) {
+    return {
+      title: "Redirecting...",
+    };
+  }
 
   if (!data?.profile) {
     return {
@@ -399,6 +456,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function InstituteDetailPage({ params }: Props) {
   const resolvedParams = await params;
   const data = await fetchInstitutionFullData(resolvedParams.id);
+
+  if (data?.redirectUrl) {
+    redirect(data.redirectUrl);
+  }
 
   if (!data || !data.profile) {
     notFound();

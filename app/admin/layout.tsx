@@ -4,7 +4,7 @@ import "./admin-globals.css";
 
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { useUIStore } from "@/store";
+import { useUIStore, useAuthStore } from "@/store";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AdminGuard } from "@/components/admin-guard";
@@ -14,6 +14,7 @@ import { AdminNotificationCenter } from "@/components/admin-notification-center"
 import { AdminAcademicSessionSelector } from "@/components/admin-academic-session-selector";
 import { AdminActiveTaskWidget } from "@/components/admin-active-task-widget";
 import { AddBusinessProfileButton } from "@/components/business/add-business-profile-button";
+import { AdminStorefrontHeaderButton } from "@/components/business/admin-storefront-header-button";
 import { AdminFetchScope } from "@/components/admin-fetch-scope";
 import { InstitutionSubscriptionGate } from "@/components/institution-subscription-gate";
 import { TenantDeploymentScope } from "@/components/tenant-deployment-scope";
@@ -26,6 +27,17 @@ export default function AdminLayout({
 }) {
   const pathname = usePathname();
   const canonicalPathname = toCanonicalAdminPath(pathname);
+  const { user } = useAuthStore();
+  const isBusinessContext = Boolean(
+    pathname?.startsWith('/workspace') ||
+    pathname?.startsWith('/admin/company') ||
+    user?.has_business_profile ||
+    user?.has_professional_profile ||
+    user?.primary_role === 'business_owner' ||
+    user?.primary_role === 'professional' ||
+    user?.role_codes?.includes('business_owner') ||
+    user?.role_codes?.includes('professional')
+  );
   const { sidebarOpen, setSidebarOpen } = useUIStore();
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window === "undefined") {
@@ -55,11 +67,6 @@ export default function AdminLayout({
     window.dispatchEvent(new Event("public-theme-change"));
   }, [theme]);
 
-  // ✅ Login page is public — skip AdminGuard and sidebar entirely
-  if (canonicalPathname === "/admin/login") {
-    return <>{children}</>;
-  }
-
   return (
     <AdminGuard>
       <div
@@ -74,12 +81,16 @@ export default function AdminLayout({
           <div className="flex flex-1 flex-col min-h-screen min-w-0 overflow-hidden">
             <header className="sticky top-0 z-30 flex h-16 items-center border-b border-border/80 bg-background/95 backdrop-blur-md px-4 gap-3 shadow-2xs">
               <SidebarTrigger className="-ml-1 text-muted-foreground hover:text-foreground" />
-              <div className="w-px h-5 bg-border/60" />
-              <AdminAcademicSessionSelector />
+              {!isBusinessContext && (
+                <>
+                  <div className="w-px h-5 bg-border/60" />
+                  <AdminAcademicSessionSelector />
+                </>
+              )}
               <div className="w-px h-5 bg-border/60 hidden sm:block" />
               <AdminActiveTaskWidget />
-              <div className="w-px h-5 bg-border/60 hidden sm:block" />
               <AddBusinessProfileButton />
+              <AdminStorefrontHeaderButton />
 
               <div className="ml-auto flex items-center gap-2 shrink-0">
                 <button

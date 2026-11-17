@@ -73,6 +73,12 @@ export async function PUT(
       name: body.name,
       slug: body.slug,
       parentId: body.parentId,
+      category_type: body.category_type,
+      business_category_id: body.business_category_id ? Number(body.business_category_id) : null,
+      business_subcategory_id: body.business_subcategory_id ? Number(body.business_subcategory_id) : null,
+      icon_url: body.icon_url,
+      description: body.description,
+      synonyms: body.synonyms,
     });
 
     return NextResponse.json({

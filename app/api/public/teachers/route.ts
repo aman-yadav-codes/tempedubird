@@ -125,15 +125,19 @@ export async function GET(req: Request) {
     const search = searchParams.get("search")?.trim().toLowerCase() || "";
     const subject = searchParams.get("subject")?.trim().toLowerCase() || "";
     
-    // Resolve Institution ID from params, headers, tenant domain, or .env
+    // Resolve Institution / Business ID from params, headers, tenant domain, or .env
     const institutionIdParam =
       searchParams.get("institutionId") ||
       searchParams.get("institution_id") ||
+      searchParams.get("businessId") ||
+      searchParams.get("business_id") ||
       searchParams.get("inst_id") ||
       req.headers.get("x-institution-id");
     const parsedInstId = institutionIdParam && Number(institutionIdParam) > 0 ? Number(institutionIdParam) : null;
 
     const envInstIdRaw = (
+      process.env.BUSINESS_ID ||
+      process.env.NEXT_PUBLIC_BUSINESS_ID ||
       process.env.DEFAULT_INSTITUTION_ID ||
       process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ||
       process.env.INSTITUTION_ID ||

@@ -36,11 +36,15 @@ import {
   Sparkles,
   Image as ImageIcon,
   PhoneCall,
+  Briefcase,
+  Layers,
   Navigation,
   Loader2,
+  Store,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useAuthStore } from "@/store";
+import { useAuthStore, useCartStore } from "@/store";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { clearBrowserSessionData } from "@/lib/auth/clear-browser-session";
 import { cn } from "@/lib/utils";
@@ -54,6 +58,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
 import { AccountSwitcherDialog } from "@/components/auth/account-switcher-dialog";
+import { CartDrawer } from "@/components/checkout/cart-drawer";
 import { toRoleRoutePath } from "@/lib/auth/role-routes";
 import type { PublicInstitutionNavItem, PublicNavbarBrand } from "@/lib/api/public-nav";
 
@@ -70,17 +75,13 @@ type PublicNavbarProps = {
 
 const CATEGORY_ITEMS: { key: CategoryKey; label: string; href: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "courses", label: "Course", href: "/courses", icon: BookOpen },
-  { key: "institutes", label: "Institute", href: "/institutes", icon: Building2 },
-  { key: "practice", label: "Practice", href: "/practice", icon: CheckSquare },
-  { key: "notes", label: "Notes", href: "/notes", icon: BookMarked },
-  { key: "teachers", label: "Teachers", href: "/teachers", icon: UserCheck },
-  { key: "exams", label: "Exams", href: "/exams", icon: Award },
-  { key: "libraries", label: "Library", href: "/libraries", icon: Library },
-  { key: "hostels", label: "Hostel", href: "/hostels", icon: Building2 },
+  { key: "teachers", label: "Staff", href: "/teachers", icon: UserCheck },
   { key: "products", label: "Product", href: "/products", icon: ShoppingCart },
+  { key: "services", label: "Services", href: "/explore?type=service", icon: Layers },
   { key: "blogs", label: "Blogs", href: "/blogs", icon: FileText },
   { key: "gallery", label: "Gallery", href: "/gallery", icon: ImageIcon },
   { key: "contact", label: "Contact", href: "/contact", icon: PhoneCall },
+  { key: "jobs", label: "Jobs", href: "/jobs", icon: Briefcase },
 ];
 
 function getInitials(name?: string | null) {
@@ -105,15 +106,27 @@ export function PublicNavbar({
   const { user, isAuthenticated, clearAuth } = useAuthStore();
   const { activeInstitution, activeInstitutionId } = useActiveInstitution();
   const { isCategoryVisible, isInstitutionalAdmin, activeInstitutionName } = useCategoryAvailability();
+  const { getTotalCount, toggleCart } = useCartStore();
 
   const [landingViewMode, setLandingViewMode] = useState<"platform" | "institution">("platform");
   const [institutionInfo, setInstitutionInfo] = useState<any>(null);
   const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  const defaultEnvInstId = process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
-    ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
-    : null;
+  const isPlatformAdmin = Boolean(
+    user?.role_codes?.includes("platform_admin") ||
+    user?.role_codes?.includes("super_admin") ||
+    user?.is_super_admin
+  );
+
+  const defaultEnvInstId =
+    process.env.NEXT_PUBLIC_BUSINESS_ID
+      ? Number(process.env.NEXT_PUBLIC_BUSINESS_ID)
+      : process.env.NEXT_PUBLIC_INSTITUTION_ID
+      ? Number(process.env.NEXT_PUBLIC_INSTITUTION_ID)
+      : process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
+      ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
+      : null;
 
   useEffect(() => {
     setMounted(true);
@@ -149,27 +162,26 @@ export function PublicNavbar({
     institutionInfo?.name ||
     (brand?.isInstitution ? brand.name : "Institution");
 
-  // Platform marketplace: strictly the Marketplace modules (without Gallery, Contact, Library or Hostel)
+  // Platform marketplace: filtered dynamically by isCategoryVisible
   const PLATFORM_MARKETPLACE_KEYS: CategoryKey[] = [
     "courses",
-    "institutes",
-    "practice",
-    "notes",
     "teachers",
-    "exams",
     "products",
+    "services",
     "blogs",
+    "gallery",
+    "contact",
+    "jobs",
   ];
   const platformCategoryItems = CATEGORY_ITEMS.filter((item) =>
-    PLATFORM_MARKETPLACE_KEYS.includes(item.key)
+    PLATFORM_MARKETPLACE_KEYS.includes(item.key) &&
+    (!mounted || isCategoryVisible(item.key))
   );
 
-  // Institution edition menu: WITHOUT "institutes", "contact", "hostels", "libraries" as standalone items
-  // (Hostel and Library appear under About Us dropdown when added by the institute)
+  // Institution edition menu: items filtered dynamically by isCategoryVisible
   const institutionCategoryItems = CATEGORY_ITEMS.filter(
     (item) =>
       item.key !== "institutes" &&
-      item.key !== "contact" &&
       item.key !== "hostels" &&
       item.key !== "libraries" &&
       (!mounted || isCategoryVisible(item.key))
@@ -185,7 +197,7 @@ export function PublicNavbar({
   } = useUserLocation();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState("Notes");
+  const [activeTab, setActiveTab] = useState("Course");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authDialogTab, setAuthDialogTab] = useState<"signin" | "signup">("signin");
@@ -195,8 +207,14 @@ export function PublicNavbar({
     const query = searchQuery.trim();
     if (!query) return;
     const intent = parseSearchIntent(query);
-    const finalParam = intent.cleanQuery ? encodeURIComponent(intent.cleanQuery) : "";
-    const targetUrl = finalParam ? `${intent.targetRoute}?search=${finalParam}` : intent.targetRoute;
+    const finalParam = intent.cleanQuery ? encodeURIComponent(intent.cleanQuery) : encodeURIComponent(query);
+    const separator = intent.targetRoute.includes("?") ? "&" : "?";
+    const locParam = location && location !== "All Locations" ? `&location=${encodeURIComponent(location)}&city=${encodeURIComponent(location)}` : "";
+
+    const targetUrl = intent.targetRoute.startsWith("/explore")
+      ? `${intent.targetRoute}${separator}q=${finalParam}${locParam}`
+      : `${intent.targetRoute}${separator}search=${finalParam}${locParam}`;
+
     router.push(targetUrl);
   };
 
@@ -446,9 +464,26 @@ export function PublicNavbar({
             </DropdownMenu>
           )}
 
+          {/* Shopping Cart Button */}
+          <button
+            type="button"
+            onClick={toggleCart}
+            className="relative p-1.5 sm:p-2 rounded-full hover:bg-gray-100 text-gray-700 transition-colors cursor-pointer shrink-0"
+            aria-label="Shopping Cart"
+            title="View Shopping Cart"
+          >
+            <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 text-gray-700" />
+            {mounted && getTotalCount() > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white shadow-2xs animate-in zoom-in">
+                {getTotalCount()}
+              </span>
+            )}
+          </button>
+
           {/* Logged In User Profile Pill & Notifications vs Sign In Button */}
           {isAuthenticated && user ? (
             <>
+
               {/* Notification Bell */}
               <Link
                 href={toRoleRoutePath("/admin/notifications", user)}
@@ -488,6 +523,22 @@ export function PublicNavbar({
                   </div>
 
                   {/* Dropdown Items */}
+                  {!isPlatformAdmin && (
+                    <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
+                      <Link
+                        href={activeInstitutionId ? `/storefront?institutionId=${activeInstitutionId}` : "/storefront"}
+                        target="_blank"
+                        className="flex items-center justify-between w-full"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Store className="h-4 w-4 text-rose-600" />
+                          <span className="text-xs font-semibold text-gray-900">Store Front</span>
+                        </div>
+                        <span className="text-[10px] text-gray-400">Live storefront ↗</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+
                   <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
                     <Link href={toRoleRoutePath("/admin", user)} className="flex items-center justify-between w-full">
                       <div className="flex items-center gap-2.5">
@@ -789,6 +840,9 @@ export function PublicNavbar({
 
       {/* Live Location Permission Prompt Banner */}
       {!isInstitutionView && <LocationPermissionBanner />}
+
+      {/* Shopping Cart Drawer */}
+      <CartDrawer />
     </header>
   );
 }

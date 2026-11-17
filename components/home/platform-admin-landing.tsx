@@ -47,6 +47,8 @@ import {
   ArrowUpRight,
   Loader2,
   X,
+  Briefcase,
+  Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +56,7 @@ import { parseSearchIntent } from "@/lib/utils/search-intent";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { Card, CardContent } from "@/components/ui/card";
 import { CategoriesSection } from "@/components/home/categories-section";
+import { HomeCategoriesProductsSection } from "@/components/home/home-categories-products";
 import { FeaturedCoursesSection } from "@/components/home/featured-courses-section";
 import { PublicExamsSection } from "@/components/home/public-exams-section";
 import { WhyChooseUsSection } from "@/components/home/why-choose-us-section";
@@ -135,11 +138,15 @@ export function PlatformAdminLanding() {
   const { location, isDetected } = useUserLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<{
-    courses: any[];
-    institutes: any[];
-    teachers: any[];
-    practice: any[];
-    notes: any[];
+    businesses?: any[];
+    professionals?: any[];
+    products?: any[];
+    services?: any[];
+    courses?: any[];
+    institutes?: any[];
+    teachers?: any[];
+    practice?: any[];
+    notes?: any[];
   } | null>(null);
   const [searchTotal, setSearchTotal] = useState(0);
   const [isSearching, setIsSearching] = useState(false);
@@ -178,7 +185,8 @@ export function PlatformAdminLanding() {
     setIsSearching(true);
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/public/search?q=${encodeURIComponent(q)}`);
+        const locParam = location && location !== "All Locations" ? `&location=${encodeURIComponent(location)}` : "";
+        const res = await fetch(`/api/public/search?q=${encodeURIComponent(q)}${locParam}`);
         if (res.ok) {
           const data = await res.json();
           if (data.success) {
@@ -294,8 +302,14 @@ export function PlatformAdminLanding() {
     setIsSearchOpen(false);
 
     const intent = parseSearchIntent(query);
-    const finalParam = intent.cleanQuery ? encodeURIComponent(intent.cleanQuery) : "";
-    const targetUrl = finalParam ? `${intent.targetRoute}?search=${finalParam}` : intent.targetRoute;
+    const finalParam = intent.cleanQuery ? encodeURIComponent(intent.cleanQuery) : encodeURIComponent(query);
+    const separator = intent.targetRoute.includes("?") ? "&" : "?";
+    const locParam = location && location !== "All Locations" ? `&location=${encodeURIComponent(location)}&city=${encodeURIComponent(location)}` : "";
+
+    const targetUrl = intent.targetRoute.startsWith("/explore")
+      ? `${intent.targetRoute}${separator}q=${finalParam}${locParam}`
+      : `${intent.targetRoute}${separator}search=${finalParam}${locParam}`;
+
     router.push(targetUrl);
   };
 
@@ -385,6 +399,58 @@ export function PlatformAdminLanding() {
                     >
                       All ({searchTotal})
                     </button>
+                    {Boolean(searchResults?.businesses?.length) && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchCategoryFilter("businesses")}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                          searchCategoryFilter === "businesses"
+                            ? "bg-rose-600 text-white shadow-xs"
+                            : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-100"
+                        }`}
+                      >
+                        Businesses ({searchResults?.businesses.length})
+                      </button>
+                    )}
+                    {Boolean(searchResults?.professionals?.length) && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchCategoryFilter("professionals")}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                          searchCategoryFilter === "professionals"
+                            ? "bg-rose-600 text-white shadow-xs"
+                            : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-100"
+                        }`}
+                      >
+                        Professionals ({searchResults?.professionals.length})
+                      </button>
+                    )}
+                    {Boolean(searchResults?.products?.length) && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchCategoryFilter("products")}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                          searchCategoryFilter === "products"
+                            ? "bg-rose-600 text-white shadow-xs"
+                            : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-100"
+                        }`}
+                      >
+                        Products ({searchResults?.products.length})
+                      </button>
+                    )}
+                    {Boolean(searchResults?.services?.length) && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchCategoryFilter("services")}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                          searchCategoryFilter === "services"
+                            ? "bg-rose-600 text-white shadow-xs"
+                            : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-100"
+                        }`}
+                      >
+                        Services ({searchResults?.services.length})
+                      </button>
+                    )}
                     {Boolean(searchResults?.courses?.length) && (
                       <button
                         type="button"
@@ -466,6 +532,134 @@ export function PlatformAdminLanding() {
                       </div>
                     ) : (
                       <div className="space-y-3 p-1">
+                        {/* Businesses */}
+                        {(searchCategoryFilter === "all" || searchCategoryFilter === "businesses") &&
+                          searchResults?.businesses &&
+                          searchResults.businesses.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 pt-1 flex items-center gap-1.5">
+                                <Building2 className="h-3 w-3 text-rose-600" /> Businesses & Enterprises
+                              </p>
+                              {searchResults.businesses.map((item: any) => (
+                                <Link
+                                  key={`biz-${item.id}`}
+                                  href={item.href}
+                                  onClick={() => setIsSearchOpen(false)}
+                                  className="flex items-center justify-between p-2 rounded-xl hover:bg-rose-50/60 transition-colors group cursor-pointer"
+                                >
+                                  <div className="min-w-0 pr-2">
+                                    <div className="flex items-center gap-1.5">
+                                      <p className="text-xs font-bold text-gray-900 group-hover:text-rose-700 truncate">
+                                        {item.title}
+                                      </p>
+                                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-bold border-rose-200 text-rose-700 bg-rose-50/50">
+                                        Business
+                                      </Badge>
+                                    </div>
+                                    <p className="text-[11px] text-gray-500 truncate">{item.subtitle}</p>
+                                  </div>
+                                  <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-rose-600 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+
+                        {/* Professionals */}
+                        {(searchCategoryFilter === "all" || searchCategoryFilter === "professionals") &&
+                          searchResults?.professionals &&
+                          searchResults.professionals.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 pt-1 flex items-center gap-1.5">
+                                <Briefcase className="h-3 w-3 text-rose-600" /> Professionals & Specialists
+                              </p>
+                              {searchResults.professionals.map((item: any) => (
+                                <Link
+                                  key={`prof-${item.id}`}
+                                  href={item.href}
+                                  onClick={() => setIsSearchOpen(false)}
+                                  className="flex items-center justify-between p-2 rounded-xl hover:bg-rose-50/60 transition-colors group cursor-pointer"
+                                >
+                                  <div className="min-w-0 pr-2">
+                                    <div className="flex items-center gap-1.5">
+                                      <p className="text-xs font-bold text-gray-900 group-hover:text-rose-700 truncate">
+                                        {item.title}
+                                      </p>
+                                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-bold border-indigo-200 text-indigo-700 bg-indigo-50/50">
+                                        Professional
+                                      </Badge>
+                                    </div>
+                                    <p className="text-[11px] text-gray-500 truncate">{item.subtitle}</p>
+                                  </div>
+                                  <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-rose-600 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+
+                        {/* Products */}
+                        {(searchCategoryFilter === "all" || searchCategoryFilter === "products") &&
+                          searchResults?.products &&
+                          searchResults.products.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 pt-1 flex items-center gap-1.5">
+                                <Package className="h-3 w-3 text-rose-600" /> Products & Hardware
+                              </p>
+                              {searchResults.products.map((item: any) => (
+                                <Link
+                                  key={`prod-${item.id}`}
+                                  href={item.href}
+                                  onClick={() => setIsSearchOpen(false)}
+                                  className="flex items-center justify-between p-2 rounded-xl hover:bg-rose-50/60 transition-colors group cursor-pointer"
+                                >
+                                  <div className="min-w-0 pr-2">
+                                    <div className="flex items-center gap-1.5">
+                                      <p className="text-xs font-bold text-gray-900 group-hover:text-rose-700 truncate">
+                                        {item.title}
+                                      </p>
+                                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-bold border-emerald-200 text-emerald-700 bg-emerald-50/50">
+                                        Product
+                                      </Badge>
+                                    </div>
+                                    <p className="text-[11px] text-gray-500 truncate">{item.subtitle}</p>
+                                  </div>
+                                  <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-rose-600 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+
+                        {/* Services */}
+                        {(searchCategoryFilter === "all" || searchCategoryFilter === "services") &&
+                          searchResults?.services &&
+                          searchResults.services.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 pt-1 flex items-center gap-1.5">
+                                <Sparkles className="h-3 w-3 text-rose-600" /> Services & Solutions
+                              </p>
+                              {searchResults.services.map((item: any) => (
+                                <Link
+                                  key={`srv-${item.id}`}
+                                  href={item.href}
+                                  onClick={() => setIsSearchOpen(false)}
+                                  className="flex items-center justify-between p-2 rounded-xl hover:bg-rose-50/60 transition-colors group cursor-pointer"
+                                >
+                                  <div className="min-w-0 pr-2">
+                                    <div className="flex items-center gap-1.5">
+                                      <p className="text-xs font-bold text-gray-900 group-hover:text-rose-700 truncate">
+                                        {item.title}
+                                      </p>
+                                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-bold border-amber-200 text-amber-700 bg-amber-50/50">
+                                        Service
+                                      </Badge>
+                                    </div>
+                                    <p className="text-[11px] text-gray-500 truncate">{item.subtitle}</p>
+                                  </div>
+                                  <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-rose-600 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+
                         {/* Courses */}
                         {(searchCategoryFilter === "all" || searchCategoryFilter === "courses") &&
                           searchResults?.courses &&
@@ -851,6 +1045,9 @@ export function PlatformAdminLanding() {
 
       {/* 4. ACADEMIC CATEGORIES GRID (ALL 9 MODULES) */}
       <CategoriesSection />
+
+      {/* 4B. CATEGORIES WISE TOP PRODUCTS */}
+      <HomeCategoriesProductsSection />
 
       {/* 5. FEATURED & HIGHEST RATED COURSES */}
       <FeaturedCoursesSection />

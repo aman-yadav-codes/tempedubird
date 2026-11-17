@@ -176,9 +176,20 @@ export async function handlePublicCoursesGet(req: Request) {
     ? Number(url.searchParams.get("categoryId"))
     : null;
   const tenant = await getInstitutionTenantByHost(db, getRequestHost(req));
-  const requestedInstitutionId = url.searchParams.get("institutionId")
-    ? Number(url.searchParams.get("institutionId"))
-    : null;
+  const paramInstId = url.searchParams.get("institutionId") || url.searchParams.get("institution_id") || url.searchParams.get("businessId") || url.searchParams.get("business_id");
+  const requestedInstitutionId = paramInstId && /^\d+$/.test(paramInstId) ? Number(paramInstId) : null;
+  const envInstId = (
+    process.env.BUSINESS_ID ||
+    process.env.NEXT_PUBLIC_BUSINESS_ID ||
+    process.env.INSTITUTION_ID ||
+    process.env.NEXT_PUBLIC_INSTITUTION_ID ||
+    process.env.DEFAULT_INSTITUTION_ID ||
+    process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ||
+    ""
+  ).trim();
+  const defaultEnvId = envInstId && /^\d+$/.test(envInstId) ? Number(envInstId) : null;
+  const isPlatformMode = process.env.APP_MODE === "platform_admin" || process.env.APP_MODE === "platform";
+  const effectiveInstitutionId = requestedInstitutionId || (tenant ? tenant.institution_id : (!isPlatformMode ? defaultEnvId : null));
 
   const where = [
     "COALESCE(ip.is_deleted, FALSE) = FALSE",
@@ -188,11 +199,8 @@ export async function handlePublicCoursesGet(req: Request) {
   ];
   const params: unknown[] = [];
 
-  if (requestedInstitutionId && Number.isInteger(requestedInstitutionId) && requestedInstitutionId > 0) {
-    params.push(requestedInstitutionId);
-    where.push(`ip.institution_id = $${params.length}`);
-  } else if (tenant) {
-    params.push(tenant.institution_id);
+  if (effectiveInstitutionId && Number.isInteger(effectiveInstitutionId) && effectiveInstitutionId > 0) {
+    params.push(effectiveInstitutionId);
     where.push(`ip.institution_id = $${params.length}`);
   }
 
@@ -433,10 +441,20 @@ import { extractIdFromSlug } from "@/lib/utils/seo-slug";
 
 export async function getPublicCourseById(idOrSlug: number | string, opts: { host?: string | null } = {}) {
   const { id } = extractIdFromSlug(idOrSlug);
-  if (!Number.isInteger(id) || id <= 0) return null;
+  let targetId = id;
+  if (!targetId || targetId <= 0) {
+    const slugRes = await db.query(
+      `SELECT id FROM institution_programs WHERE slug = $1 OR slug ILIKE $1 LIMIT 1`,
+      [String(idOrSlug)]
+    );
+    if (slugRes.rows.length > 0) {
+      targetId = Number(slugRes.rows[0].id);
+    }
+  }
+  if (!Number.isInteger(targetId) || targetId <= 0) return null;
   await ensureProgramFeeComponentUnitColumn();
   const tenant = await getInstitutionTenantByHost(db, opts.host ?? null);
-  const params: unknown[] = [id];
+  const params: unknown[] = [targetId];
   const tenantSql = tenant ? `AND ip.institution_id = $2` : "";
   if (tenant) params.push(tenant.institution_id);
 

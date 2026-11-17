@@ -1,35 +1,19 @@
-import type { Metadata } from "next";
-import { TeachersDirectory } from "@/components/public/teachers/teachers-directory";
-
-export const metadata: Metadata = {
-  title: "Faculty & Teachers Directory | EduBird",
-  description:
-    "Explore verified teachers, subject specialists, and competitive exam faculty members across India. Connect directly with expert educators.",
-  alternates: {
-    canonical: "/teachers",
-  },
-  openGraph: {
-    title: "Faculty & Teachers Directory - EduBird",
-    description:
-      "Find verified educational faculty trusted by learners across India.",
-    url: "/teachers",
-    siteName: "EduBird",
-    type: "website",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default function PublicTeachersDirectoryPage() {
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-6 sm:px-6 lg:py-8">
-        <TeachersDirectory />
-      </div>
-    </div>
-  );
+interface Props {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }> | { [key: string]: string | string[] | undefined };
+}
+
+export default async function PublicTeachersRedirectPage({ searchParams }: Props) {
+  const sp = await searchParams;
+  const search = sp?.search || sp?.q || "";
+  const queryStr = Array.isArray(search) ? search[0] : search;
+
+  if (queryStr && queryStr.trim()) {
+    redirect(`/explore?q=${encodeURIComponent(queryStr.trim())}`);
+  }
+
+  redirect("/explore?type=professional");
 }

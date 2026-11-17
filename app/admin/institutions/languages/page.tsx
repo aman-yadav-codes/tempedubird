@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { useAuthStore } from "@/store";
+import { MasterCatalogNavTabs } from "@/components/admin/catalog/master-catalog-nav-tabs";
 import { toast } from "sonner";
 import { Plus, Loader2, MoreHorizontal, RefreshCw, Power, PowerOff, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -315,6 +316,7 @@ export default function LanguagesPage() {
 
     return (
         <div className="space-y-4">
+            <MasterCatalogNavTabs />
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-semibold">Languages</h1>
                 <div className="flex items-center gap-2">

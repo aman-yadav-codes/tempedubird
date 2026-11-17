@@ -77,10 +77,12 @@ export function getDefaultInstitutionId(): number | null {
     return null;
   }
   const config = getFrontendConfig();
-  if (config.isValid && config.mode === "institution") {
-    return config.institutionId;
+  if (config.isValid && (config.mode === "institution" || config.mode === "business")) {
+    return config.businessId ?? config.institutionId;
   }
   return parseActiveInstitutionId(
+    process.env.BUSINESS_ID ||
+    process.env.NEXT_PUBLIC_BUSINESS_ID ||
     process.env.INSTITUTION_ID ||
     process.env.NEXT_PUBLIC_INSTITUTION_ID ||
     process.env.DEFAULT_INSTITUTION_ID ||

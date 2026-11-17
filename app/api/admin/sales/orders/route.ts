@@ -120,9 +120,23 @@ export async function PATCH(req: Request) {
 
     const isPlatform = isPlatformFullAccess(user) || user.role_codes?.includes("platform_admin");
     if (!isPlatform) {
-      const activeInst = user.memberships?.find((m) => m.role_code === "institution_admin")?.institution_id;
-      if (existing.institution_id && existing.institution_id !== activeInst) {
-        return NextResponse.json({ error: "Unauthorized access to this order" }, { status: 403 });
+      const isOwnerOrSeller = Boolean(
+        user.id === existing.seller_user_id ||
+        user.id === existing.created_by ||
+        user.role_codes?.includes("business_owner") ||
+        user.role_codes?.includes("professional") ||
+        user.memberships?.some(
+          (m) =>
+            (m.institution_id && m.institution_id === existing.institution_id) ||
+            m.role_code === "business_owner" ||
+            m.role_code === "professional"
+        )
+      );
+      if (!isOwnerOrSeller) {
+        const activeInst = user.memberships?.find((m) => m.role_code === "institution_admin")?.institution_id;
+        if (existing.institution_id && existing.institution_id !== activeInst) {
+          return NextResponse.json({ error: "Unauthorized access to this order" }, { status: 403 });
+        }
       }
     }
 
@@ -157,9 +171,23 @@ export async function DELETE(req: Request) {
 
     const isPlatform = isPlatformFullAccess(user) || user.role_codes?.includes("platform_admin");
     if (!isPlatform) {
-      const activeInst = user.memberships?.find((m) => m.role_code === "institution_admin")?.institution_id;
-      if (existing.institution_id && existing.institution_id !== activeInst) {
-        return NextResponse.json({ error: "Unauthorized access to this order" }, { status: 403 });
+      const isOwnerOrSeller = Boolean(
+        user.id === existing.seller_user_id ||
+        user.id === existing.created_by ||
+        user.role_codes?.includes("business_owner") ||
+        user.role_codes?.includes("professional") ||
+        user.memberships?.some(
+          (m) =>
+            (m.institution_id && m.institution_id === existing.institution_id) ||
+            m.role_code === "business_owner" ||
+            m.role_code === "professional"
+        )
+      );
+      if (!isOwnerOrSeller) {
+        const activeInst = user.memberships?.find((m) => m.role_code === "institution_admin")?.institution_id;
+        if (existing.institution_id && existing.institution_id !== activeInst) {
+          return NextResponse.json({ error: "Unauthorized access to this order" }, { status: 403 });
+        }
       }
     }
 

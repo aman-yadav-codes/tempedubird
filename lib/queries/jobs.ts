@@ -340,8 +340,12 @@ export async function getJobsList(params: {
   };
 }
 
-export async function getJobById(id: number) {
+export async function getJobById(idOrSlug: number | string) {
   await ensureJobTables();
+
+  const isNum = typeof idOrSlug === "number" || /^\d+$/.test(String(idOrSlug));
+  const numId = isNum ? Number(idOrSlug) : -1;
+  const strSlug = String(idOrSlug);
 
   const query = `
     SELECT 
@@ -357,10 +361,11 @@ export async function getJobById(id: number) {
       FROM staff_job_applications
       GROUP BY job_id
     ) app_counts ON app_counts.job_id = j.id
-    WHERE j.id = $1
+    WHERE j.id = $1 OR j.slug = $2
+    LIMIT 1
   `;
 
-  const res = await db.query(query, [id]);
+  const res = await db.query(query, [numId, strSlug]);
   return (res.rows[0] as StaffJobPosting) || null;
 }
 

@@ -1,11 +1,12 @@
 import { getFrontendConfig } from "@/lib/config/frontend-config";
 
-export type AppDeploymentMode = "all" | "platform" | "institution" | "platform_admin";
+export type AppDeploymentMode = "all" | "platform" | "institution" | "business" | "platform_admin";
 
 const APP_DEPLOYMENT_MODES = new Set<AppDeploymentMode>([
   "all",
   "platform",
   "institution",
+  "business",
   "platform_admin",
 ]);
 
@@ -13,6 +14,7 @@ function normalizeAppMode(value: string | undefined | null): AppDeploymentMode {
   const mode = String(value ?? "").trim().toLowerCase();
   if (mode === "hybrid") return "all";
   if (mode === "platform_admin") return "platform_admin";
+  if (mode === "business") return "business";
   return APP_DEPLOYMENT_MODES.has(mode as AppDeploymentMode)
     ? (mode as AppDeploymentMode)
     : "all";
@@ -22,6 +24,7 @@ export function getAppMode(): AppDeploymentMode {
   const config = getFrontendConfig();
   if (config.isValid) {
     if (config.mode === "platform_admin") return "platform_admin";
+    if (config.mode === "business") return "business";
     if (config.mode === "institution") return "institution";
     if (config.mode === "all") return "all";
   }
@@ -43,8 +46,13 @@ export function isPlatformDeployment() {
   return mode === "platform" || mode === "platform_admin";
 }
 
+export function isBusinessDeployment() {
+  return getAppMode() === "business";
+}
+
 export function isInstitutionDeployment() {
-  return getAppMode() === "institution";
+  const mode = getAppMode();
+  return mode === "institution" || mode === "business";
 }
 
 export function isAllDeployment() {

@@ -473,9 +473,6 @@ export default function PricingPackagesPage() {
               Add Pricing Package
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={fetchData} title="Refresh" className="rounded-xl">
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin text-primary" : ""}`} />
-          </Button>
         </div>
       </div>
 

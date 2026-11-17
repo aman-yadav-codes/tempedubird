@@ -2,7 +2,7 @@
 
 import NextImage from "next/image";
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
-import { ArrowLeftRight, Gift } from "lucide-react";
+import { ArrowLeftRight, Gift, Clock } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -48,6 +48,7 @@ import {
     ChartNoAxesColumnIncreasing,
     Radar,
     ShieldCheck,
+    Package,
     ClipboardCheck,
     ClipboardList,
     Trophy,
@@ -86,6 +87,9 @@ import {
     Boxes,
     Store,
     Plus,
+    SlidersHorizontal,
+    Target,
+    User,
 } from "lucide-react";
 import { CreateBusinessProfileDialog } from "@/components/business/create-business-profile-dialog";
 import { toast } from "sonner";
@@ -157,8 +161,10 @@ import { clearBrowserSessionData } from "@/lib/auth/clear-browser-session";
 import {
     adminPathMatchesRoute,
     hasAdminPagePermission,
+    hasPermission,
     isAdminPathVisibleForRole,
     isInstitutionAdminUser,
+    isStaffUser,
     normalizeAdminPath,
 } from "@/lib/auth/permissions";
 import { toCanonicalAdminPath, toRoleRoutePath } from "@/lib/auth/role-routes";
@@ -209,12 +215,59 @@ const navItems: SidebarItem[] = [
         ],
     },
     {
-        title: "Users",
+        title: "Users & Accounts",
         url: "/admin/users",
         icon: Users,
         children: [
             { title: "All Users", url: "/admin/users", icon: UsersRound },
+            { title: "Customers", url: "/admin/users/customers", permissionPath: "/admin/users", icon: UserCheck },
+            { title: "Business Owners", url: "/admin/users/business-owners", permissionPath: "/admin/users", icon: Building2 },
+            { title: "Professional Providers", url: "/admin/users/professionals", permissionPath: "/admin/users", icon: Briefcase },
             { title: "Affiliate Records", url: "/admin/users/affiliates", permissionPath: "/admin/users", icon: Share2 },
+        ],
+    },
+    {
+        title: "Business & Professional Profiles",
+        url: "/admin/profiles",
+        icon: Building2,
+    },
+    {
+        title: "Business Type Access Management",
+        url: "/admin/business-type-access",
+        icon: SlidersHorizontal,
+    },
+    {
+        title: "Categories",
+        url: "/admin/categories?type=business",
+        icon: FolderTree,
+        children: [
+            { title: "Business Categories", url: "/admin/categories?type=business", icon: Building2 },
+            { title: "Product Categories", url: "/admin/categories?type=product", icon: Package },
+            { title: "Service Categories", url: "/admin/categories?type=service", icon: Briefcase },
+            { title: "Professional Categories", url: "/admin/categories?type=professional", icon: UserCheck },
+            { title: "Course Categories", url: "/admin/categories?type=course", icon: BookOpen },
+            { title: "Job Categories", url: "/admin/categories?type=job", icon: Briefcase },
+        ],
+    },
+    {
+        title: "Master Catalogs",
+        url: "/admin/catalog/products",
+        icon: Package,
+        children: [
+            { title: "Master Products", url: "/admin/catalog/products", icon: Package },
+            { title: "Master Services", url: "/admin/catalog/services", icon: Briefcase },
+            { title: "Master Courses", url: "/admin/catalog/courses", icon: BookOpen },
+            { title: "Master Jobs", url: "/admin/catalog/jobs", icon: Briefcase },
+            { title: "Synonyms & Keywords", url: "/admin/master-data/synonyms", icon: Sparkles },
+            { title: "Blog", url: "/admin/content/blog", icon: FileText },
+            { title: "Skills", url: "/admin/master-data/skills", icon: BookOpen },
+            { title: "Designations", url: "/admin/master-data/designations", icon: UserCog },
+            { title: "Locations", url: "/admin/master-data/locations", icon: MapPin },
+            { title: "Card Categories", url: "/admin/master-data/card-categories", icon: LibraryBig },
+            { title: "Card Templates", url: "/admin/master-data/card-templates", icon: IdCard },
+            { title: "Default Calendar", url: "/admin/master-data/default-calendar", icon: CalendarDays },
+            { title: "Languages", url: "/admin/institutions/languages", icon: BookOpen },
+            { title: "Academic & Business Sessions", url: "/admin/institutions/academic-years", icon: CalendarDays },
         ],
     },
     {
@@ -226,8 +279,6 @@ const navItems: SidebarItem[] = [
             { title: "Permissions", url: "/admin/access-control?section=permissions", permissionPath: "/admin/access-control/permissions", icon: ShieldCheck },
             { title: "Roles", url: "/admin/access-control?section=roles", permissionPath: "/admin/access-control/roles", icon: UserCog },
             { title: "Role Permissions", url: "/admin/access-control?section=role-permissions", permissionPath: "/admin/access-control/role-permissions", icon: ShieldCheck },
-            { title: "Institution Memberships", url: "/admin/access-control?section=institution-memberships", permissionPath: "/admin/access-control/institution-memberships", icon: Building },
-            { title: "Institution Role Permissions", url: "/admin/access-control?section=institution-role-permissions", permissionPath: "/admin/access-control/institution-role-permissions", icon: ShieldCheck },
         ],
     },
     {
@@ -246,10 +297,10 @@ const navItems: SidebarItem[] = [
         url: "/admin/staff",
         icon: Users,
         children: [
-            { title: "Documents", url: "/admin/staff/my-data?tab=documents", icon: FileText },
-            { title: "Noticeboard", url: "/admin/institutions/news", icon: Bell },
-            { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
             { title: "All Staff", url: "/admin/staff", icon: UsersRound },
+            { title: "Documents", url: "/admin/staff/my-data?tab=documents", icon: FileText },
+            { title: "Noticeboard", url: "/admin/noticeboard", icon: Bell },
+            { title: "Complaints", url: "/admin/complaints", icon: MessageSquareWarning },
             { title: "Staff Performance", url: "/admin/staff/performance", icon: TrendingUp },
             { title: "Leaderboard", url: "/admin/performance/leaderboard", icon: Trophy },
             { title: "Attendance", url: "/admin/staff/attendance", icon: ClipboardCheck },
@@ -302,20 +353,19 @@ const navItems: SidebarItem[] = [
             { title: "My Tasks", url: "/admin/operations/tasks?scope=me", icon: ClipboardList },
             { title: "My Salary", url: "/admin/institution/my-salary", icon: IndianRupee },
             { title: "My Letters", url: "/admin/institution/my-letters", icon: FileText },
-            { title: "Noticeboard", url: "/admin/institutions/news", icon: Bell },
+            { title: "Noticeboard", url: "/admin/noticeboard", icon: Bell },
             { title: "Inventory", url: "/admin/inventory", icon: Boxes },
             { title: "Reviews & Feedback", url: "/admin/institution/reviews", icon: MessageSquareHeart },
-            { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
+            { title: "Complaints", url: "/admin/complaints", icon: MessageSquareWarning },
         ],
     },
     {
         title: "Finance",
-        url: "/admin/finance/income",
+        url: "/admin/finance/transactions",
         icon: IndianRupee,
         children: [
+            { title: "Transactions", url: "/admin/finance/transactions", icon: ArrowLeftRight },
             { title: "Purchase & Sell Requests", url: "/admin/finance/requests", icon: ArrowLeftRight },
-            { title: "Income", url: "/admin/finance/income", icon: TrendingUp },
-            { title: "Expense", url: "/admin/finance/expense", icon: CreditCard },
             { title: "Invoice", url: "/admin/finance/invoice", icon: FileText },
             { title: "Allowance", url: "/admin/finance/allowance", icon: BadgeDollarSign },
             { title: "Recurring Expenses", url: "/admin/finance/recurring-expenses", icon: CalendarDays },
@@ -331,6 +381,8 @@ const navItems: SidebarItem[] = [
         icon: Megaphone,
         children: [
             { title: "Products", url: "/admin/marketing/products", icon: ShoppingBag },
+            { title: "Services", url: "/admin/marketing/services", icon: Briefcase },
+            { title: "Courses", url: "/admin/marketing/courses", icon: BookOpen },
             { title: "Pricing Packages", url: "/admin/marketing/packages", icon: CreditCard },
             { title: "Social Media", url: "/admin/marketing/social-media", icon: Share2 },
             { title: "Form Builder", url: "/admin/marketing/form-builder", icon: FileText },
@@ -346,6 +398,7 @@ const navItems: SidebarItem[] = [
         url: "/admin/sales/pipeline",
         icon: BadgeDollarSign,
         children: [
+            { title: "Orders & Bookings", url: "/admin/sales/orders", icon: ShoppingCart },
             { title: "Pipeline", url: "/admin/sales/pipeline", icon: TrendingUp },
             { title: "Proposals", url: "/admin/sales/proposals", icon: FileSignature },
             { title: "Clients", url: "/admin/sales/clients", icon: Building2 },
@@ -359,7 +412,6 @@ const navItems: SidebarItem[] = [
         url: "/admin/master-data",
         icon: Briefcase,
         children: [
-            { title: "Overview Hub", url: "/admin/master-data", icon: LayoutGrid },
             { title: "Category Tree", url: "/admin/content/tree", icon: FolderTree },
             { title: "Manage Categories", url: "/admin/content/categories", icon: Edit2 },
             { title: "Boards", url: "/admin/content/boards", icon: BookOpen },
@@ -370,19 +422,8 @@ const navItems: SidebarItem[] = [
             { title: "Practice Exams", url: "/admin/content/practice-exams", icon: ClipboardCheck },
             { title: "Government & Selection Exams", url: "/admin/content/exams", icon: Landmark },
             { title: "Notes", url: "/admin/content/notes", icon: StickyNote },
-            { title: "Blog", url: "/admin/content/blog", icon: FileText },
-            { title: "Skills", url: "/admin/master-data/skills", icon: BookOpen },
-            { title: "Designations", url: "/admin/master-data/designations", icon: UserCog },
-            { title: "Locations", url: "/admin/master-data/locations", icon: MapPin },
-            { title: "Card Categories", url: "/admin/master-data/card-categories", icon: LibraryBig },
-            { title: "Card Templates", url: "/admin/master-data/card-templates", icon: IdCard },
-            { title: "Default Calendar", url: "/admin/master-data/default-calendar", icon: CalendarDays },
-            { title: "Institution Types", url: "/admin/institutions/types", icon: Building },
-            { title: "Institution Subtypes", url: "/admin/institutions/subtypes", icon: Building },
-            { title: "Program Types", url: "/admin/institutions/program-types", icon: BookOpen },
+            { title: "Program & Service Types", url: "/admin/institutions/program-types", icon: BookOpen },
             { title: "Facility Types", url: "/admin/institutions/facility-types", icon: Building },
-            { title: "Languages", url: "/admin/institutions/languages", icon: BookOpen },
-            { title: "Academic Sessions", url: "/admin/institutions/academic-years", icon: CalendarDays },
         ],
     },
 
@@ -431,21 +472,27 @@ const navItems: SidebarItem[] = [
             { title: "Vendors", url: "/admin/vendors", icon: Store },
             { title: "Inventory", url: "/admin/inventory", icon: Boxes },
             { title: "Team", url: "/admin/team", icon: Users },
-            { title: "Institute Calendar", url: "/admin/master-data/institute-calendar", icon: CalendarDays },
+            { title: "Business Calendar", url: "/admin/calendar", icon: CalendarDays },
             { title: "Timetable", url: "/admin/master-data/timetable-setup", icon: CalendarDays },
             { title: "Attendance Setup", url: "/admin/master-data/attendance-setup", icon: ClipboardCheck },
-            { title: "Noticeboard", url: "/admin/institutions/news", icon: Bell },
-            { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
+            { title: "Noticeboard", url: "/admin/noticeboard", icon: Bell },
+            { title: "Complaints", url: "/admin/complaints", icon: MessageSquareWarning },
             { title: "Generate Documents", url: "/admin/administration/generate-documents", icon: Sparkles },
         ],
     },
     {
-        title: "Company & Legal",
+        title: "Details Information",
         url: "/admin/company?tab=contact-branches",
         permissionPath: "/admin/company",
         icon: Building2,
         children: [
-            { title: "Company Info & Branches", url: "/admin/company?tab=contact-branches", icon: Building2 },
+            { title: "Identity", url: "/admin/company?tab=contact-branches", icon: Building2 },
+            { title: "Address", url: "/admin/company?tab=address", icon: MapPin },
+            { title: "Working Hours", url: "/admin/company?tab=working-hours", icon: Clock },
+            { title: "About Us", url: "/admin/company?tab=about-institute", icon: Info },
+            { title: "Mission, Vision & Goal", url: "/admin/company?tab=mission-vision-goal", icon: Target },
+            { title: "About Founder", url: "/admin/company?tab=about-founder", icon: User },
+            { title: "Facilities & Infrastructure", url: "/admin/company?tab=facilities", icon: Sparkles },
             { title: "Payment Methods", url: "/admin/company?tab=payment-methods", icon: CreditCard },
             { title: "FAQs", url: "/admin/company?tab=faqs", icon: HelpCircle },
             { title: "Privacy Policy", url: "/admin/company?tab=privacy-policy", icon: ShieldCheck },
@@ -524,6 +571,21 @@ function getActiveSidebarLeaf(
 
 
 
+        if (item.url.startsWith("/admin/company")) {
+            const itemTab = item.url.includes("tab=")
+                ? item.url.split("tab=")[1]?.split("&")[0]
+                : "contact-branches";
+            const currentTab = searchTab || searchParam || "contact-branches";
+            const normPath = normalizeAdminPath(pathname);
+            if (
+                (normPath === "/admin/company" || normPath === "/workspace/company") &&
+                itemTab === currentTab
+            ) {
+                matches.push({ key: item.url, pathLength: item.url.length + 20 });
+            }
+            return;
+        }
+
         if (item.url.startsWith("/admin/my-profile")) {
             const itemTab = item.url.includes("tab=")
                 ? item.url.split("tab=")[1]?.split("&")[0]
@@ -548,6 +610,20 @@ function getActiveSidebarLeaf(
                 itemTab === currentTab
             ) {
                 matches.push({ key: item.url, pathLength: item.url.length + 10 });
+            }
+            return;
+        }
+
+        if (item.url.startsWith("/admin/categories")) {
+            const itemType = item.url.includes("type=")
+                ? item.url.split("type=")[1]?.split("&")[0]
+                : null;
+            const currentType = searchParam || searchTab || "business";
+            if (
+                normalizeAdminPath(pathname) === "/admin/categories" &&
+                itemType === currentType
+            ) {
+                matches.push({ key: item.url, pathLength: item.url.length + 15 });
             }
             return;
         }
@@ -622,7 +698,7 @@ async function getCachedInstitutionOptions(
             const rows = (json.institutions ?? []).map((inst) => ({
                 id: inst.id,
                 name: inst.name,
-                roleName: isPlatformAdmin ? "Platform Admin" : "Institution Admin",
+                roleName: isPlatformAdmin ? "Platform Admin" : "Business Workspace",
                 boardId: null,
                 boardName: null,
             }));
@@ -649,18 +725,38 @@ export function AppSidebar() {
     const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [createBusinessOpen, setCreateBusinessOpen] = useState(false);
-    const isPlatformAdmin = Boolean(user?.role_codes?.includes("platform_admin") || user?.is_super_admin);
-    const isInstitutionAdmin = Boolean((user?.role_codes?.includes("institution_admin") || isInstitutionAdminUser(user)) && !isPlatformAdmin);
+    const isPlatformAdmin = Boolean(user?.role_codes?.includes("platform_admin") || user?.is_super_admin || pathname?.startsWith("/platformadmin"));
+    const hasBusinessOrProfessional = Boolean(
+        user?.has_business_profile ||
+        user?.has_professional_profile ||
+        user?.role_codes?.includes("institution_admin") ||
+        user?.role_codes?.includes("business_owner") ||
+        user?.role_codes?.includes("professional_provider")
+    );
+    const isInstitutionAdmin = Boolean((user?.role_codes?.includes("institution_admin") || isInstitutionAdminUser(user) || hasBusinessOrProfessional) && !isPlatformAdmin);
     const isParent = Boolean(user?.role_codes?.includes("parent") && !isPlatformAdmin && !isInstitutionAdmin);
     const isStudent = Boolean((user?.role_codes?.includes("student") || (user as { roles?: string[] })?.roles?.includes("student") || user?.primary_role === "student") && !isPlatformAdmin && !isInstitutionAdmin && !isParent);
     const isTeacher = Boolean((user?.role_codes?.includes("teacher") || (user as { roles?: string[] })?.roles?.includes("teacher") || user?.primary_role === "teacher" || user?.primary_role?.toLowerCase() === "teacher") && !isPlatformAdmin && !isInstitutionAdmin);
     const isClient = Boolean((user?.role_codes?.includes("client") || (user as { roles?: string[] })?.roles?.includes("client") || user?.primary_role === "client") && !isPlatformAdmin && !isInstitutionAdmin);
+    const isStaff = isStaffUser(user as any);
+    const isCustomer = Boolean(
+        !isStaff &&
+        !isPlatformAdmin &&
+        !isInstitutionAdmin &&
+        !hasBusinessOrProfessional && (
+            user?.is_customer === true ||
+            user?.role_codes?.includes("customer") ||
+            (user as { roles?: string[] })?.roles?.includes("customer") ||
+            user?.primary_role === "customer" ||
+            (!user?.has_business_profile && !user?.has_professional_profile && !isTeacher && !isStudent && !isParent && !isClient)
+        )
+    );
     const isRoleInstitutionUser = Boolean(!isPlatformAdmin && !isInstitutionAdmin && user?.role_codes?.some((role) => ["student", "teacher", "parent", "driver"].includes(role)));
     const isHeadOfOperations = Boolean(
-        user?.role_codes?.includes("head_of_operations") ||
-        (user as any)?.role === "head_of_operations" ||
-        user?.primary_role === "head_of_operations" ||
-        (user as any)?.roles?.includes("head_of_operations")
+        user?.role_codes?.some((r: string) => ["head_of_operations", "hod", "operation_head", "operations_head"].includes(r)) ||
+        ["head_of_operations", "hod", "operation_head", "operations_head"].includes((user as any)?.role) ||
+        ["head_of_operations", "hod", "operation_head", "operations_head"].includes(user?.primary_role || "") ||
+        (user as any)?.roles?.some((r: string) => ["head_of_operations", "hod", "operation_head", "operations_head"].includes(r))
     );
     const [activeInstitutionId, setActiveInstitutionId] = useState<number | null>(() => {
         return getStoredActiveInstitutionId();
@@ -677,6 +773,7 @@ export function AppSidebar() {
     );
     const userInstitutionOptions = useMemo(() => getUserInstitutionOptions(user), [user]);
     const [fetchedInstitutions, setFetchedInstitutions] = useState<ActiveInstitutionSummary[]>([]);
+    const [disabledBusinessTypeRoutes, setDisabledBusinessTypeRoutes] = useState<string[]>([]);
 
     useEffect(() => {
         if ((!isInstitutionAdmin && !isPlatformAdmin) || !accessToken) return;
@@ -692,6 +789,7 @@ export function AppSidebar() {
         });
         return () => { cancelled = true; };
     }, [accessToken, isInstitutionAdmin, isPlatformAdmin, user?.id]);
+
     const institutionTeams = useMemo(() => {
         if (!isInstitutionAdmin && !isPlatformAdmin) return [];
         const unique = new Map<number, ActiveInstitutionSummary>();
@@ -705,6 +803,60 @@ export function AppSidebar() {
         }
         return Array.from(unique.values()).sort((a, b) => a.name.localeCompare(b.name));
     }, [isInstitutionAdmin, isPlatformAdmin, userInstitutionOptions, fetchedInstitutions]);
+
+    const activeInstitution =
+        institutionTeams.find((membership) => membership.id === activeInstitutionId) ??
+        institutionTeams[0] ??
+        null;
+    const activeInstitutionStorageId = activeInstitution?.id ?? null;
+    const effectiveInstitutionId = activeInstitutionStorageId ?? activeInstitutionId;
+
+    // Automatically sync activeInstitutionId to effective institution when user belongs to an institution
+    useEffect(() => {
+        if (activeInstitutionStorageId && activeInstitutionStorageId !== activeInstitutionId) {
+            setActiveInstitutionId(activeInstitutionStorageId);
+            setStoredActiveInstitutionId(activeInstitutionStorageId);
+        }
+    }, [activeInstitutionStorageId, activeInstitutionId]);
+
+    useEffect(() => {
+        if (!accessToken) return;
+        // If Platform Admin is viewing the platform management panel itself (and not previewing an institution in /admin), no need to filter
+        const isPlatformAdminPanel = isPlatformAdmin && Boolean(pathname?.startsWith("/platformadmin") && !effectiveInstitutionId);
+        if (isPlatformAdminPanel) {
+            setDisabledBusinessTypeRoutes([]);
+            useAuthStore.getState().setDisabledBusinessTypeRoutes([]);
+            return;
+        }
+
+        const instParam = effectiveInstitutionId ? `?institutionId=${effectiveInstitutionId}` : "";
+        fetch(`/api/admin/business-type-access/my-access${instParam}`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+        })
+            .then((r) => r.json())
+            .then((res) => {
+                if (Array.isArray(res.disabledRoutes)) {
+                    setDisabledBusinessTypeRoutes(res.disabledRoutes);
+                    useAuthStore.getState().setDisabledBusinessTypeRoutes(res.disabledRoutes);
+                } else {
+                    setDisabledBusinessTypeRoutes([]);
+                    useAuthStore.getState().setDisabledBusinessTypeRoutes([]);
+                }
+            })
+            .catch(() => {
+                setDisabledBusinessTypeRoutes([]);
+                useAuthStore.getState().setDisabledBusinessTypeRoutes([]);
+            });
+    }, [isPlatformAdmin, accessToken, effectiveInstitutionId, pathname]);
+
+    const canAddBusinessProfile = Boolean(
+        !isStaff &&
+        !isHeadOfOperations &&
+        !isPlatformAdmin &&
+        !hasBusinessOrProfessional &&
+        (user?.memberships?.length ?? 0) === 0 &&
+        institutionTeams.length === 0
+    );
     const staffInstitution = useMemo(() => {
         if (isPlatformAdmin || isInstitutionAdmin || isParent || isStudent) return null;
         return (
@@ -715,11 +867,6 @@ export function AppSidebar() {
             null
         );
     }, [isInstitutionAdmin, isParent, isPlatformAdmin, isStudent, userInstitutionOptions]);
-    const activeInstitution =
-        institutionTeams.find((membership) => membership.id === activeInstitutionId) ??
-        institutionTeams[0] ??
-        null;
-    const activeInstitutionStorageId = activeInstitution?.id ?? null;
     const activeChild =
         parentChildren.find((child) => child.studentId === activeChildStudentId) ??
         parentChildren[0] ??
@@ -735,6 +882,26 @@ export function AppSidebar() {
         studentEnrollments[0] ??
         null;
     const canPage = useCallback((pathname: string) => {
+        if (isPlatformAdmin) {
+            return true;
+        }
+        if (isInstitutionAdmin) {
+            if (pathname === "/admin/users" || pathname.startsWith("/admin/users/")) return false;
+            if (pathname === "/admin/profiles" || pathname.startsWith("/admin/profiles/")) return false;
+            if (pathname === "/admin/categories" || pathname.startsWith("/admin/categories/")) return false;
+            if (pathname === "/admin/catalog" || pathname.startsWith("/admin/catalog/")) return false;
+            if (pathname === "/admin/locations" || pathname.startsWith("/admin/locations/")) return false;
+            if (pathname === "/admin/institutions" || pathname.startsWith("/admin/institutions/")) return false;
+            if (pathname === "/admin/classroom" || pathname.startsWith("/admin/classroom/")) return false;
+            if (pathname === "/admin/students" || pathname.startsWith("/admin/students/")) return false;
+            return true;
+        }
+        if (isCustomer) {
+            return pathname === "/admin" ||
+                   pathname.startsWith("/admin/orders") ||
+                   pathname.startsWith("/admin/finance") ||
+                   pathname.startsWith("/admin/my-profile");
+        }
         if (pathname === "/admin/account" || pathname.startsWith("/admin/account")) {
             return !isStudent && !isParent;
         }
@@ -748,9 +915,33 @@ export function AppSidebar() {
             isAdminPathVisibleForRole(user, pathname) &&
             hasAdminPagePermission(user, pathname)
         );
-    }, [user, isStudent, isParent, isInstitutionAdmin]);
+    }, [user, isStudent, isParent, isInstitutionAdmin, isCustomer, isPlatformAdmin]);
     const roleAwareNavItems = useMemo(
         () => {
+            if (isCustomer) {
+                return [
+                    {
+                        title: "Dashboard",
+                        url: "/admin",
+                        icon: LayoutDashboard,
+                    },
+                    {
+                        title: "My Orders",
+                        url: "/admin/orders",
+                        icon: ShoppingCart,
+                    },
+                    {
+                        title: "My Finance & Invoices",
+                        url: "/admin/finance",
+                        icon: CreditCard,
+                    },
+                    {
+                        title: "My Profile",
+                        url: "/admin/my-profile",
+                        icon: UserCog,
+                    },
+                ];
+            }
             if (isClient) {
                 return [
                     {
@@ -766,6 +957,31 @@ export function AppSidebar() {
                 ];
             }
             return navItems.flatMap((item) => {
+                // Platform admin specific filters
+                if (isPlatformAdmin) {
+                    if (item.title === "Operations" || item.url.startsWith("/admin/operations")) return [];
+                    if (item.title === "My Profile" || item.url.startsWith("/admin/my-profile")) return [];
+                    if (item.title === "Manage Staff" || item.url.startsWith("/admin/staff")) return [];
+                    if (item.title === "Finance" || item.url.startsWith("/admin/finance")) return [];
+                    if (item.title === "Marketing" || item.url.startsWith("/admin/marketing")) return [];
+                    if (item.title === "Sales" || item.url.startsWith("/admin/sales")) return [];
+
+                    if (item.url === "/admin/classroom/attendance") return [];
+                    if (item.url === "/admin/institution/calendar") return [];
+                    if (item.url === "/admin/my-program") return [];
+                    if (item.url === "/admin/students") return [];
+                    if (item.url === "/admin/institutions") return [];
+                    if (item.url === "/admin/vendors") return [];
+                    if (item.url === "/admin/profiles") return [item];
+                    if (item.url === "/admin/business-type-access") return [item];
+                    if (item.url.startsWith("/admin/categories") || item.url === "/admin/content/categories") return [item];
+                    if (item.url === "/admin/catalog/products") return [item];
+                } else {
+                    if (item.url === "/admin/profiles") return [];
+                    if (item.url === "/admin/business-type-access") return [];
+                    if (item.url.startsWith("/admin/categories") || item.url === "/admin/content/categories") return [];
+                    if (item.url === "/admin/catalog/products") return [];
+                }
                 if (item.url === "/admin/my-profile") {
                     if (isStudent || isParent) return [];
                     return [item];
@@ -794,55 +1010,77 @@ export function AppSidebar() {
                         return [];
                     }
                     if (!isPlatformAdmin && !isInstitutionAdmin) {
-                        return [{
-                            ...item,
-                            title: "Manage Staff",
-                            children: [
-                                { title: "My Data", url: "/admin/staff/my-data", icon: Sparkles },
-                                { title: "My Attendance", url: "/admin/institution/my-attendance", icon: ClipboardCheck },
-                                { title: "My Tasks", url: "/admin/operations/tasks?scope=me", icon: ClipboardList },
-                                { title: "Staff Performance", url: "/admin/staff/performance", icon: TrendingUp },
-                                { title: "Leaderboard", url: "/admin/performance/leaderboard", icon: Trophy },
-                                { title: "My Salary", url: "/admin/institution/my-salary", icon: IndianRupee },
-                                { title: "Noticeboard", url: "/admin/institutions/news", icon: Bell },
-                                { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
-                                { title: "Queries", url: "/admin/staff/queries", icon: HelpCircle },
-                                { title: "Support", url: "/admin/support", icon: LifeBuoy },
-                            ],
-                        }];
+                        const hasStaffManagementAccess = 
+                            hasPermission(user, "managestaff.allstaff.view") || 
+                            hasPermission(user, "managestaff.view") || 
+                            hasPermission(user, "staff.view") || 
+                            hasPermission(user, "managestaff.manage") ||
+                            Boolean(user?.permissions?.some((p: string) => p.startsWith("managestaff.")));
+                        if (!hasStaffManagementAccess) {
+                            return [{
+                                ...item,
+                                title: "Manage Staff",
+                                children: [
+                                    { title: "My Data", url: "/admin/staff/my-data", icon: Sparkles },
+                                    { title: "My Attendance", url: "/admin/institution/my-attendance", icon: ClipboardCheck },
+                                    { title: "My Tasks", url: "/admin/operations/tasks?scope=me", icon: ClipboardList },
+                                    { title: "Staff Performance", url: "/admin/staff/performance", icon: TrendingUp },
+                                    { title: "Leaderboard", url: "/admin/performance/leaderboard", icon: Trophy },
+                                    { title: "My Salary", url: "/admin/institution/my-salary", icon: IndianRupee },
+                                    { title: "Noticeboard", url: "/admin/noticeboard", icon: Bell },
+                                    { title: "Complaints", url: "/admin/complaints", icon: MessageSquareWarning },
+                                    { title: "Queries", url: "/admin/staff/queries", icon: HelpCircle },
+                                    { title: "Support", url: "/admin/support", icon: LifeBuoy },
+                                ],
+                            }];
+                        }
                     }
                     return [item];
                 }
                 if (item.url === "/admin/marketing/packages") {
-                    if (!isPlatformAdmin && !isInstitutionAdmin) return [];
-                    if (isInstitutionAdmin && item.children) {
+                    const hasMarketingAccess = isPlatformAdmin || isInstitutionAdmin || 
+                        hasPermission(user, "marketing.packages.view") || 
+                        hasPermission(user, "marketing.ads.view") || 
+                        hasPermission(user, "marketing.view") || 
+                        Boolean(user?.permissions?.some((p: string) => p.startsWith("marketing.")));
+                    if (!hasMarketingAccess) return [];
+                    if (!isPlatformAdmin && item.children) {
                         return [{
                             ...item,
                             children: item.children.filter((child) => {
                                 if (child.url === "/admin/marketing/packages") return false;
-                                if (child.url === "/admin/marketing/business-analytics") return false;
-                                if (child.url === "/admin/marketing/search-history") return false;
-                                return true;
+                                if (child.url === "/admin/marketing/business-analytics") return isInstitutionAdmin;
+                                if (child.url === "/admin/marketing/search-history") return isInstitutionAdmin;
+                                return canPage(child.permissionPath ?? child.url);
                             }),
                         }];
                     }
                     return [item];
                 }
-                if (item.url === "/admin/sales/pipeline" && item.children) {
-                    if (isInstitutionAdmin) {
-                        return [{
-                            ...item,
-                            children: item.children.filter((child) => child.url !== "/admin/sales/orders"),
-                        }];
-                    }
-                    return [item];
+                if ((item.url === "/admin/sales/pipeline" || item.url === "/admin/sales/leads" || item.title === "Sales") && item.children) {
+                    const hasSalesAccess = isPlatformAdmin || isInstitutionAdmin || 
+                        hasPermission(user, "sales.leads.view") || 
+                        hasPermission(user, "sales.pipeline.view") || 
+                        hasPermission(user, "sales.orders.view") || 
+                        hasPermission(user, "sales.view") || 
+                        hasPermission(user, "leads.view") || 
+                        Boolean(user?.permissions?.some((p: string) => p.startsWith("sales.") || p.startsWith("leads.")));
+                    if (!hasSalesAccess) return [];
+                    return [{
+                        ...item,
+                        children: item.children.filter((child) => canPage(child.permissionPath ?? child.url)),
+                    }];
                 }
                 if ((item.url === "/admin/content" || item.url === "/admin/content/notes" || item.title === "Academics") && item.children) {
                     if (isPlatformAdmin || isStudent || isParent || isTeacher || isInstitutionAdmin) return [];
                     return [item];
                 }
                 if (item.url === "/admin/vendors" && item.children) {
-                    if (!isPlatformAdmin && !isInstitutionAdmin && !isHeadOfOperations) {
+                    const hasVendorAccess = isPlatformAdmin || isInstitutionAdmin || isHeadOfOperations || 
+                        hasPermission(user, "admin.vendors.view") || 
+                        hasPermission(user, "inventory.view") || 
+                        Boolean(user?.permissions?.some((p: string) => p.startsWith("vendors.") || p.startsWith("inventory.")));
+                    if (!hasVendorAccess) {
                         return [];
                     }
                     if (isPlatformAdmin || isHeadOfOperations) {
@@ -857,12 +1095,20 @@ export function AppSidebar() {
                             }),
                         }];
                     }
-                    return [item];
+                    return [{
+                        ...item,
+                        children: item.children.filter((child) => canPage(child.permissionPath ?? child.url)),
+                    }];
                 }
                 if (item.url === "/admin/sales/leads") {
-                    return isPlatformAdmin || isInstitutionAdmin ? [item] : [];
+                    const hasSalesAccess = isPlatformAdmin || isInstitutionAdmin || 
+                        hasPermission(user, "sales.leads.view") || 
+                        hasPermission(user, "sales.view") || 
+                        hasPermission(user, "leads.view") || 
+                        Boolean(user?.permissions?.some((p: string) => p.startsWith("sales.") || p.startsWith("leads.")));
+                    return hasSalesAccess ? [item] : [];
                 }
-                if (item.url === "/admin/finance/income" && item.children) {
+                if ((item.url === "/admin/finance/income" || item.url === "/admin/finance/transactions") && item.children) {
                     if (isTeacher) {
                         return [{
                             ...item,
@@ -873,7 +1119,7 @@ export function AppSidebar() {
                         }];
                     }
                     if (isInstitutionAdmin) {
-                        const children = item.children.filter((child) => child.title !== "Fee Management");
+                        const children = item.children.filter((child) => child.title !== "Fee Management" && child.title !== "Income" && child.title !== "Expense");
                         children.push({
                             title: "Fee Management",
                             url: "/admin/finance/fee-management",
@@ -887,7 +1133,7 @@ export function AppSidebar() {
                     }
                     return [item];
                 }
-                if (isRoleInstitutionUser && item.url === "/admin/institutions") {
+                if ((isRoleInstitutionUser || isInstitutionAdmin || isPlatformAdmin) && item.url === "/admin/institutions") {
                     return [];
                 }
                 if ((isPlatformAdmin || isInstitutionAdmin) && item.url === "/admin/institution/calendar") {
@@ -957,14 +1203,18 @@ export function AppSidebar() {
                     return [{
                         ...item,
                         children: item.children.filter((child) => {
-                            if (!isInstitutionAdmin && child.url === "/admin/institution/complaints") return false;
-                            if ((isStudent || isParent) && child.url === "/admin/institutions/news") return false;
+                            if (!isInstitutionAdmin && child.url === "/admin/complaints") return false;
+                            if ((isStudent || isParent) && child.url === "/admin/noticeboard") return false;
                             return true;
                         }),
                     }];
                 }
                 if (item.url === "/admin/settings" && item.children) {
-                    if (!isPlatformAdmin && !isInstitutionAdmin) {
+                    const hasSettingsAccess = isPlatformAdmin || isInstitutionAdmin || 
+                        hasPermission(user, "settings.general.view") || 
+                        hasPermission(user, "institution.general_settings.view") || 
+                        Boolean(user?.permissions?.some((p: string) => p.startsWith("settings.")));
+                    if (!hasSettingsAccess) {
                         return [];
                     }
                     const isPlatformAdminPanel = isPlatformAdmin && Boolean(pathname?.startsWith("/platformadmin"));
@@ -977,17 +1227,105 @@ export function AppSidebar() {
                             if (child.url === "/admin/settings/subscription") {
                                 return isPlatformAdminPanel;
                             }
-                            return true;
+                            return canPage(child.permissionPath ?? child.url);
                         }),
                     }];
                 }
                 return [item];
             });
         },
-        [canPage, isClient, isInstitutionAdmin, isParent, isPlatformAdmin, isRoleInstitutionUser, isStudent, isTeacher, pathname]
+        [canPage, isClient, isInstitutionAdmin, isParent, isPlatformAdmin, isRoleInstitutionUser, isStudent, isTeacher, pathname, disabledBusinessTypeRoutes]
     );
+    const businessTypeFilteredNavItems = useMemo(() => {
+        const isPlatformAdminPanel = isPlatformAdmin && Boolean(pathname?.startsWith("/platformadmin") && !activeInstitutionId);
+        if (isPlatformAdminPanel || disabledBusinessTypeRoutes.length === 0) {
+            return roleAwareNavItems;
+        }
+
+        const isRouteDisabled = (targetUrl: string | undefined): boolean => {
+            if (!targetUrl || targetUrl === "#") return false;
+            const cleanUrl = targetUrl.split("?")[0].split("#")[0];
+            const canonicalUrl = toCanonicalAdminPath(cleanUrl);
+
+            return disabledBusinessTypeRoutes.some((dr) => {
+                const cleanDr = dr.split("?")[0].split("#")[0];
+                const canonicalDr = toCanonicalAdminPath(cleanDr);
+
+                return (
+                    cleanUrl === cleanDr ||
+                    cleanUrl.startsWith(cleanDr + "/") ||
+                    canonicalUrl === canonicalDr ||
+                    canonicalUrl.startsWith(canonicalDr + "/")
+                );
+            });
+        };
+
+        return roleAwareNavItems
+            .map((item) => {
+                // Explicit check for Operations when disabled
+                if (item.title === "Operations" && (isRouteDisabled("/admin/operations") || disabledBusinessTypeRoutes.includes("/admin/operations"))) {
+                    return null;
+                }
+                // Special check for Academics title when operations_academics is disabled
+                if (item.title === "Academics" && (isRouteDisabled("/admin/institutions/academic-years") || isRouteDisabled("/admin/content"))) {
+                    return null;
+                }
+                if (item.title === "My Classroom" && (isRouteDisabled("/admin/classroom") || disabledBusinessTypeRoutes.includes("/admin/classroom"))) {
+                    return null;
+                }
+                if (item.title === "Manage Students" && (isRouteDisabled("/admin/students") || disabledBusinessTypeRoutes.includes("/admin/students"))) {
+                    return null;
+                }
+
+                // If this is a parent item with children
+                if (item.children && item.children.length > 0) {
+                    const cleanParentUrl = item.url.split("?")[0].split("#")[0];
+                    const isParentExplicitlyDisabled = disabledBusinessTypeRoutes.some((dr) => {
+                        const cleanDr = dr.split("?")[0].split("#")[0];
+                        return (
+                            cleanDr === cleanParentUrl ||
+                            cleanDr === `/admin/${item.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}` ||
+                            cleanDr === `/admin/${item.title.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`
+                        );
+                    });
+
+                    if (isParentExplicitlyDisabled) {
+                        return null;
+                    }
+
+                    // Filter child items
+                    const remainingChildren = item.children.filter((child) => !isRouteDisabled(child.url));
+
+                    // If all children are disabled, hide the parent item completely
+                    if (remainingChildren.length === 0) {
+                        return null;
+                    }
+
+                    // If the parent landing URL was pointing to a disabled child, update to first enabled child
+                    let nextLandingUrl = item.url;
+                    if (isRouteDisabled(nextLandingUrl)) {
+                        nextLandingUrl = remainingChildren[0].url;
+                    }
+
+                    return {
+                        ...item,
+                        url: nextLandingUrl,
+                        children: remainingChildren,
+                    };
+                }
+
+                // Leaf item with no children
+                if (isRouteDisabled(item.url)) {
+                    return null;
+                }
+
+                return item;
+            })
+            .filter((item): item is SidebarItem => item !== null);
+    }, [isPlatformAdmin, pathname, activeInstitutionId, disabledBusinessTypeRoutes, roleAwareNavItems]);
+
     const visibleNavItems = filterNavItems(
-        roleAwareNavItems,
+        businessTypeFilteredNavItems,
         canPage
     );
     const activeSidebarLeaf = getActiveSidebarLeaf(
@@ -1041,7 +1379,9 @@ export function AppSidebar() {
                     ? activeStudentEnrollment
                         ? `${activeStudentEnrollment.programName}${activeStudentEnrollment.sectionName ? ` • ${activeStudentEnrollment.sectionName}` : ""}`
                         : "Student"
-                    : staffInstitution?.roleName ?? activeInstitution?.roleName ?? user?.primary_role ?? (user?.role_codes?.[0] ? formatStaffRole(user.role_codes[0]) : "Staff");
+                    : isInstitutionAdmin
+                        ? (user?.has_business_profile ? "Business Owner" : user?.has_professional_profile ? "Professional Provider" : "Business & Professional Admin")
+                        : staffInstitution?.roleName ?? activeInstitution?.roleName ?? user?.primary_role ?? (user?.role_codes?.[0] ? formatStaffRole(user.role_codes[0]) : "Staff");
 
     const activeWorkspaceInitial = isPlatformAdmin ? "E" : (activeWorkspaceName[0] ?? "E").toUpperCase();
     const canSwitchInstitution = isInstitutionAdmin && !isPlatformAdmin;
@@ -1232,7 +1572,7 @@ export function AppSidebar() {
                                         sideOffset={4}
                                     >
                                         <DropdownMenuLabel className="text-xs text-muted-foreground">
-                                            {canSwitchChild ? "Children" : canSwitchStudentEnrollment ? "Enrolled Institutions & Programs" : "Institutions"}
+                                            {canSwitchChild ? "Children" : canSwitchStudentEnrollment ? "Enrolled Institutions & Programs" : "Businesses & Workspaces"}
                                         </DropdownMenuLabel>
                                         {canSwitchChild
                                             ? parentChildren.map((child) => (
@@ -1292,13 +1632,13 @@ export function AppSidebar() {
                                                                             {institution.name}
                                                                         </span>
                                                                         <span className="truncate text-xs text-muted-foreground">
-                                                                            {institution.roleName ?? "Institution"}
+                                                                            {institution.roleName ?? "Business Workspace"}
                                                                         </span>
                                                                     </div>
                                                                 </DropdownMenuCheckboxItem>
                                                             ))
                                                         )}
-                                                        {isInstitutionAdmin && (
+                                                        {canAddBusinessProfile && (
                                                             <>
                                                                 <DropdownMenuSeparator />
                                                                 <DropdownMenuItem
@@ -1362,8 +1702,8 @@ export function AppSidebar() {
                                             { title: "ID Card", url: "/admin/classroom/id-card", icon: IdCard },
                                             { title: "My Fee", url: "/admin/classroom/fees", icon: CreditCard },
                                             { title: "Calendar", url: "/admin/institution/calendar", icon: CalendarDays },
-                                            { title: "Noticeboard", url: "/admin/institutions/news", icon: Megaphone },
-                                            { title: "Complaints", url: "/admin/institution/complaints", icon: MessageSquareWarning },
+                                            { title: "Noticeboard", url: "/admin/noticeboard", icon: Megaphone },
+                                            { title: "Complaints", url: "/admin/complaints", icon: MessageSquareWarning },
                                         ],
                                     },
                                 ] : []),
@@ -1389,7 +1729,7 @@ export function AppSidebar() {
                                 { title: "Expert Faculty", url: "/teachers", icon: UserCheck },
                             ],
                         },
-                    ] : [{ label: "Platform", items: visibleNavItems }]).map((group) => (
+                    ] : [{ label: (isInstitutionAdmin || isStaff) ? "Workspace" : "Platform", items: visibleNavItems }]).map((group) => (
                         <SidebarGroup key={group.label}>
                             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
                             <SidebarMenu>

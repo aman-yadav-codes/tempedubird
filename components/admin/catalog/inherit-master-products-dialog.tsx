@@ -1,0 +1,421 @@
+"use client";
+
+import { useEffect, useState, useMemo } from "react";
+import Image from "next/image";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Package,
+  Search,
+  CheckCircle2,
+  Loader2,
+  IndianRupee,
+  Layers,
+  Sparkles,
+  Tag,
+  Boxes,
+} from "lucide-react";
+import { toast } from "sonner";
+
+export interface MasterProductItem {
+  id: number;
+  name: string;
+  slug: string;
+  category_id?: number | null;
+  category_name?: string;
+  description?: string | null;
+  default_image_url?: string | null;
+  brand?: string | null;
+  model?: string | null;
+  sku?: string | null;
+  unit?: string | null;
+  unit_of_measurement?: string | null;
+  unit_quantity?: number | null;
+  suggested_price: number;
+  stock_quantity?: number;
+  already_inherited: boolean;
+}
+
+interface InheritMasterProductsDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
+  accessToken?: string | null;
+}
+
+export function InheritMasterProductsDialog({
+  open,
+  onOpenChange,
+  onSuccess,
+  accessToken,
+}: InheritMasterProductsDialogProps) {
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [products, setProducts] = useState<MasterProductItem[]>([]);
+  const [search, setSearch] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [customPrices, setCustomPrices] = useState<Record<number, string>>({});
+
+  // Fetch master products available for inheritance
+  const fetchMasterProducts = async () => {
+    setLoading(true);
+    try {
+      const headers: Record<string, string> = {};
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+      const res = await fetch("/api/admin/catalog/products/inherit", { headers });
+      const data = await res.json();
+
+      if (data.success && Array.isArray(data.products)) {
+        setProducts(data.products);
+      } else {
+        toast.error(data.error || "Failed to load master products");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to load master products");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (open) {
+      fetchMasterProducts();
+      setSelectedIds([]);
+      setCustomPrices({});
+      setSearch("");
+      setSelectedCategoryId("all");
+    }
+  }, [open]);
+
+  // Extract unique categories
+  const categories = useMemo(() => {
+    const map = new Map<string, string>();
+    products.forEach((p) => {
+      const name = p.category_name || "General";
+      map.set(name, name);
+    });
+    return Array.from(map.values()).sort();
+  }, [products]);
+
+  // Filtered list
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      const matchSearch =
+        !search.trim() ||
+        p.name.toLowerCase().includes(search.toLowerCase()) ||
+        (p.description && p.description.toLowerCase().includes(search.toLowerCase())) ||
+        (p.brand && p.brand.toLowerCase().includes(search.toLowerCase())) ||
+        (p.sku && p.sku.toLowerCase().includes(search.toLowerCase()));
+
+      const matchCategory =
+        selectedCategoryId === "all" || (p.category_name || "General") === selectedCategoryId;
+
+      return matchSearch && matchCategory;
+    });
+  }, [products, search, selectedCategoryId]);
+
+  const availableToInherit = useMemo(() => {
+    return filteredProducts.filter((p) => !p.already_inherited);
+  }, [filteredProducts]);
+
+  const handleToggleSelect = (id: number) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    const uninheritedIds = availableToInherit.map((p) => p.id);
+    const allSelected = uninheritedIds.every((id) => selectedIds.includes(id));
+    if (allSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !uninheritedIds.includes(id)));
+    } else {
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...uninheritedIds])));
+    }
+  };
+
+  const handlePriceChange = (id: number, val: string) => {
+    setCustomPrices((prev) => ({ ...prev, [id]: val }));
+  };
+
+  const handleInheritSubmit = async () => {
+    if (selectedIds.length === 0) {
+      toast.error("Please select at least one product to inherit");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+      const parsedPrices: Record<number, number> = {};
+      Object.entries(customPrices).forEach(([id, priceStr]) => {
+        const num = parseFloat(priceStr);
+        if (!isNaN(num) && num > 0) {
+          parsedPrices[Number(id)] = num;
+        }
+      });
+
+      const res = await fetch("/api/admin/catalog/products/inherit", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          master_product_ids: selectedIds,
+          custom_prices: parsedPrices,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to inherit master products");
+      }
+
+      toast.success(data.message || `Successfully inherited ${selectedIds.length} products!`);
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to inherit products");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
+        {/* HEADER */}
+        <div className="p-5 pb-4 border-b border-border bg-card">
+          <div className="flex items-center gap-2.5">
+            <div className="size-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <Layers className="size-5" />
+            </div>
+            <div>
+              <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
+                Inherit Products from Master Catalog
+                <Badge variant="secondary" className="text-[10px] uppercase font-bold tracking-wider">
+                  Master Repository
+                </Badge>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                Browse pre-configured master products and inherit them directly into your store inventory with benchmark or custom pricing.
+              </DialogDescription>
+            </div>
+          </div>
+
+          {/* SEARCH & FILTER CONTROLS */}
+          <div className="flex flex-col sm:flex-row gap-2 mt-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                placeholder="Search products by title, SKU, brand..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 h-9 text-xs rounded-xl"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedCategoryId}
+                onChange={(e) => setSelectedCategoryId(e.target.value)}
+                className="h-9 px-3 text-xs rounded-xl border border-input bg-background font-medium"
+              >
+                <option value="all">All Categories ({products.length})</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+
+              {availableToInherit.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSelectAll}
+                  className="h-9 text-xs font-bold rounded-xl whitespace-nowrap"
+                >
+                  {availableToInherit.every((p) => selectedIds.includes(p.id))
+                    ? "Deselect All"
+                    : "Select All"}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* LIST AREA */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-3 bg-muted/20">
+          {loading ? (
+            <div className="py-20 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+              <Loader2 className="size-6 animate-spin text-primary" />
+              <span className="text-xs font-semibold">Loading master catalog...</span>
+            </div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="py-16 text-center space-y-2 bg-card rounded-2xl border border-dashed border-border p-6">
+              <Package className="size-10 text-muted-foreground/40 mx-auto" />
+              <h4 className="text-sm font-bold text-foreground">No matching master products</h4>
+              <p className="text-xs text-muted-foreground">
+                Try clearing your search query or choosing another category filter.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {filteredProducts.map((p) => {
+                const isSelected = selectedIds.includes(p.id);
+                const isInherited = p.already_inherited;
+
+                return (
+                  <div
+                    key={p.id}
+                    className={`relative flex items-start gap-3 p-3.5 rounded-2xl border transition-all ${
+                      isInherited
+                        ? "bg-muted/40 border-border opacity-70"
+                        : isSelected
+                        ? "bg-primary/5 border-primary shadow-xs ring-1 ring-primary/20"
+                        : "bg-card border-border hover:border-primary/40 hover:shadow-2xs"
+                    }`}
+                  >
+                    {/* CHECKBOX */}
+                    <div className="pt-0.5">
+                      <Checkbox
+                        checked={isInherited || isSelected}
+                        disabled={isInherited}
+                        onCheckedChange={() => handleToggleSelect(p.id)}
+                        className="rounded-md"
+                      />
+                    </div>
+
+                    {/* THUMBNAIL */}
+                    <div className="relative size-14 rounded-xl overflow-hidden bg-muted shrink-0 border border-border/60">
+                      {p.default_image_url ? (
+                        <Image
+                          src={p.default_image_url}
+                          alt={p.name}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="size-full flex items-center justify-center text-muted-foreground/50">
+                          <Package className="size-6" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* DETAILS */}
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-bold text-foreground truncate block max-w-[200px]" title={p.name}>
+                          {p.name}
+                        </span>
+                        {isInherited && (
+                          <Badge variant="outline" className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300">
+                            <CheckCircle2 className="size-3 mr-0.5" /> Added
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium">
+                          {p.category_name || "General"}
+                        </Badge>
+                        {p.unit && <span>• {p.unit}</span>}
+                        {p.sku && <span>• SKU: {p.sku}</span>}
+                      </div>
+
+                      {/* BENCHMARK PRICE & CUSTOM PRICE */}
+                      <div className="flex items-center gap-3 pt-1">
+                        <div className="text-xs">
+                          <span className="text-[10px] text-muted-foreground block">Benchmark:</span>
+                          <span className="font-bold text-foreground flex items-center text-xs">
+                            <IndianRupee className="size-3" />
+                            {p.suggested_price || 0}
+                          </span>
+                        </div>
+
+                        {!isInherited && isSelected && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] font-semibold text-primary">Store Price:</span>
+                            <div className="relative w-24">
+                              <IndianRupee className="absolute left-1.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
+                              <Input
+                                type="number"
+                                placeholder={String(p.suggested_price || 0)}
+                                value={customPrices[p.id] ?? ""}
+                                onChange={(e) => handlePriceChange(p.id, e.target.value)}
+                                className="h-7 pl-5 pr-1 text-xs rounded-lg font-bold"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* FOOTER */}
+        <div className="p-4 border-t border-border bg-card flex items-center justify-between">
+          <div className="text-xs text-muted-foreground">
+            {selectedIds.length > 0 ? (
+              <span className="font-bold text-primary">
+                {selectedIds.length} product{selectedIds.length === 1 ? "" : "s"} selected for inheritance
+              </span>
+            ) : (
+              <span>Select products to add to your store</span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+              disabled={submitting}
+              className="h-9 px-4 text-xs font-semibold rounded-xl"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleInheritSubmit}
+              disabled={submitting || selectedIds.length === 0}
+              className="h-9 px-4 text-xs font-bold rounded-xl gap-1.5 bg-primary text-primary-foreground shadow-sm"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Inheriting...
+                </>
+              ) : (
+                <>
+                  <Layers className="size-3.5" />
+                  Inherit Selected ({selectedIds.length})
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -7,13 +7,12 @@ export async function GET(
 ) {
   try {
     const { id } = await ctx.params;
-    const jobId = Number(id);
 
-    if (!jobId || !Number.isInteger(jobId)) {
-      return NextResponse.json({ error: "Invalid Job ID" }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: "Job ID or slug is required" }, { status: 400 });
     }
 
-    const job = await getJobById(jobId);
+    const job = await getJobById(id);
     if (!job || job.status !== "Active") {
       return NextResponse.json({ error: "Job vacancy not found or no longer active" }, { status: 404 });
     }

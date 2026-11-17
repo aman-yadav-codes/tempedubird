@@ -222,3 +222,94 @@ export async function assertRowsWithinInstitutionScope(
     throw new Error("Forbidden: Admin access required");
   }
 }
+
+export type UserCatalogScope = {
+  isSuperAdmin: boolean;
+  isPureProfessional: boolean;
+  businessProfileIds: number[];
+  institutionIds: number[];
+  professionalProfileIds: number[];
+  primaryBusinessId: number | null;
+  primaryInstitutionId: number | null;
+  primaryProfessionalId: number | null;
+};
+
+/**
+ * Returns tenant and business ownership scope for products & services catalog.
+ * Business owners and staff can only access catalog items belonging to their business/institution/profile.
+ * Professional account owners can only access items listed by them.
+ */
+export async function getUserCatalogScope(
+  db: Queryable,
+  user: { id: number; is_super_admin?: boolean; role_codes?: string[] }
+): Promise<UserCatalogScope> {
+  const isSuperAdmin = Boolean(
+    user.id === 1 ||
+    user.is_super_admin ||
+    user.role_codes?.includes("platform_admin")
+  );
+
+  if (isSuperAdmin) {
+    return {
+      isSuperAdmin: true,
+      isPureProfessional: false,
+      businessProfileIds: [],
+      institutionIds: [],
+      professionalProfileIds: [],
+      primaryBusinessId: null,
+      primaryInstitutionId: null,
+      primaryProfessionalId: null,
+    };
+  }
+
+  // 1. Business profiles directly owned by user
+  const bizRes = await db.query<{ id: number; institution_profile_id: number | null }>(
+    `SELECT id, institution_profile_id FROM business_profiles WHERE user_id = $1 AND COALESCE(is_active, TRUE) = TRUE`,
+    [user.id]
+  );
+  const businessProfileIds = bizRes.rows.map((r) => r.id);
+  const bizInstIds = bizRes.rows
+    .map((r) => r.institution_profile_id)
+    .filter((id): id is number => typeof id === "number" && id > 0);
+
+  // 2. Institution memberships (staff / admin)
+  const memRes = await db.query<{ institution_id: number }>(
+    `SELECT institution_id FROM institution_memberships WHERE user_id = $1 AND COALESCE(is_active, TRUE) = TRUE`,
+    [user.id]
+  );
+  const institutionIds = Array.from(new Set([...memRes.rows.map((r) => r.institution_id), ...bizInstIds]));
+
+  // Also include business profiles associated with user's institutions
+  if (institutionIds.length > 0) {
+    const instBizRes = await db.query<{ id: number }>(
+      `SELECT id FROM business_profiles WHERE institution_profile_id = ANY($1) AND COALESCE(is_active, TRUE) = TRUE`,
+      [institutionIds]
+    );
+    for (const r of instBizRes.rows) {
+      if (!businessProfileIds.includes(r.id)) {
+        businessProfileIds.push(r.id);
+      }
+    }
+  }
+
+  // 3. Professional profiles owned by user
+  const profRes = await db.query<{ id: number; business_profile_id: number | null }>(
+    `SELECT id, business_profile_id FROM professional_profiles WHERE user_id = $1 AND COALESCE(is_active, TRUE) = TRUE`,
+    [user.id]
+  );
+  const professionalProfileIds = profRes.rows.map((r) => r.id);
+
+  // Professional account owners who do not directly own a business or institution are pure professionals
+  const isPureProfessional = professionalProfileIds.length > 0 && businessProfileIds.length === 0 && institutionIds.length === 0;
+
+  return {
+    isSuperAdmin: false,
+    isPureProfessional,
+    businessProfileIds,
+    institutionIds,
+    professionalProfileIds,
+    primaryBusinessId: businessProfileIds[0] || null,
+    primaryInstitutionId: institutionIds[0] || null,
+    primaryProfessionalId: professionalProfileIds[0] || null,
+  };
+}

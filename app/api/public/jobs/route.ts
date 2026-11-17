@@ -8,7 +8,16 @@ export async function GET(req: Request) {
     const search = searchParams.get("search") || undefined;
     const department = searchParams.get("department") || undefined;
     const employmentType = searchParams.get("employmentType") || undefined;
-    const institutionId = searchParams.get("institutionId") ? Number(searchParams.get("institutionId")) : null;
+    const paramInstId = searchParams.get("institutionId") || searchParams.get("institution_id") || searchParams.get("businessId") || searchParams.get("business_id");
+    const envInstId = (
+      process.env.BUSINESS_ID ||
+      process.env.NEXT_PUBLIC_BUSINESS_ID ||
+      process.env.INSTITUTION_ID ||
+      process.env.NEXT_PUBLIC_INSTITUTION_ID ||
+      ""
+    ).trim();
+    const isPlatformMode = process.env.APP_MODE === "platform_admin" || process.env.APP_MODE === "platform";
+    const institutionId = paramInstId && /^\d+$/.test(paramInstId) ? Number(paramInstId) : (!isPlatformMode && envInstId && /^\d+$/.test(envInstId) ? Number(envInstId) : null);
     const page = Number(searchParams.get("page") || "1");
     const limit = Number(searchParams.get("limit") || "24");
 

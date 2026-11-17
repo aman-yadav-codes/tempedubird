@@ -43,6 +43,8 @@ import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
 export type UniversalEntityTarget = {
   type:
     | "institution"
+    | "business"
+    | "service"
     | "course"
     | "program"
     | "practice"
@@ -87,10 +89,12 @@ export function UniversalFeedbackDialog({
   target,
   open,
   onOpenChange,
+  onReviewSubmitted,
 }: {
   target: UniversalEntityTarget | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onReviewSubmitted?: (review: any) => void;
 }) {
   const { user } = useAuthStore();
 
@@ -173,6 +177,20 @@ export function UniversalFeedbackDialog({
       if (!res.ok) throw new Error(json.error || "Failed to submit review");
 
       toast.success("Thank you! Your verified rating and comment have been published.");
+      if (onReviewSubmitted) {
+        onReviewSubmitted({
+          id: json.id || Date.now(),
+          user_name: user?.full_name || "You",
+          reviewer_name: user?.full_name || "You",
+          reviewer_role: reviewerRole,
+          is_verified_user: true,
+          rating,
+          comment: comment.trim(),
+          review: comment.trim(),
+          title: "Verified Review",
+          created_at: new Date().toISOString(),
+        });
+      }
       setComment("");
       void fetchEntityReviews(target.type, target.id);
     } catch (err: any) {
@@ -186,6 +204,9 @@ export function UniversalFeedbackDialog({
 
   const entityTypeLabels: Record<string, { label: string; icon: any }> = {
     institution: { label: "Institution & College", icon: Building2 },
+    business: { label: "Store & Business", icon: Building2 },
+    service: { label: "Service & Consultation", icon: Sparkles },
+    product: { label: "Product & Catalog", icon: Sparkles },
     course: { label: "Course & Program", icon: BookOpen },
     program: { label: "Academic Program", icon: BookOpen },
     practice: { label: "Practice & Mock Test", icon: CheckSquare },

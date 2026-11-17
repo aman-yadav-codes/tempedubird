@@ -40,8 +40,7 @@ export async function sendAnalyticsEvent(data: {
     if (
       pathname.startsWith("/admin") ||
       pathname.startsWith("/instituteadmin") ||
-      pathname.startsWith("/platformadmin") ||
-      pathname.startsWith("/institution/login")
+      pathname.startsWith("/platformadmin")
     ) {
       return;
     }
@@ -124,8 +123,7 @@ export function AnalyticsTracker() {
   const isAdminRoute = Boolean(
     pathname?.startsWith("/admin") ||
     pathname?.startsWith("/instituteadmin") ||
-    pathname?.startsWith("/platformadmin") ||
-    pathname?.startsWith("/institution/login")
+    pathname?.startsWith("/platformadmin")
   );
 
   // 1. Track Page View & URL-based Searches on navigation

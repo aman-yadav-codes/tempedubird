@@ -13,6 +13,7 @@ import {
   type ActiveInstitutionSummary,
 } from "@/lib/auth/active-institution";
 import { useAuthStore } from "@/store";
+import { isInstitutionAdminUser } from "@/lib/auth/permissions";
 
 let cachedOptionsKey: string | null = null;
 let cachedOptions: ActiveInstitutionSummary[] | null = null;
@@ -64,7 +65,13 @@ export function useActiveInstitution() {
 
   const accessToken = useAuthStore((state) => state.accessToken);
   const isPlatformAdmin = Boolean(user?.role_codes?.includes("platform_admin") || user?.is_super_admin);
-  const isInstitutionAdmin = Boolean(user?.role_codes?.includes("institution_admin") || (user as any)?.role === "institution_admin");
+  const isInstitutionAdmin = Boolean(
+    user?.role_codes?.includes("institution_admin") ||
+    isInstitutionAdminUser(user) ||
+    user?.has_business_profile ||
+    user?.has_professional_profile ||
+    (user as any)?.role === "institution_admin"
+  );
   const userInstitutionOptions = useMemo(() => getUserInstitutionOptions(user), [user]);
 
   useEffect(() => {

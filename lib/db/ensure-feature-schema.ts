@@ -156,8 +156,56 @@ export async function ensureFeatureSchema() {
       CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
       CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
 
-      ALTER TABLE products ADD COLUMN IF NOT EXISTS category_id INTEGER REFERENCES product_categories(id) ON DELETE SET NULL;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS category_id INTEGER;
       ALTER TABLE products ADD COLUMN IF NOT EXISTS program_ids JSONB DEFAULT '[]'::jsonb;
+
+      CREATE TABLE IF NOT EXISTS service_categories (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL UNIQUE,
+        slug VARCHAR(255) NOT NULL UNIQUE,
+        description TEXT,
+        icon VARCHAR(100) DEFAULT 'Briefcase',
+        is_active BOOLEAN DEFAULT TRUE,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS services (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) UNIQUE NOT NULL,
+        description TEXT,
+        price NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+        sale_price NUMERIC(12, 2),
+        category VARCHAR(100) DEFAULT 'General',
+        category_id INTEGER REFERENCES service_categories(id) ON DELETE SET NULL,
+        image_url TEXT,
+        gallery JSONB DEFAULT '[]'::jsonb,
+        institution_id INT,
+        institution_name VARCHAR(255),
+        business_profile_id INT,
+        professional_profile_id INT,
+        badge_text VARCHAR(100),
+        features JSONB DEFAULT '[]'::jsonb,
+        pricing_model VARCHAR(50) DEFAULT 'fixed',
+        duration_minutes INT DEFAULT 60,
+        duration_unit VARCHAR(20) DEFAULT 'hours',
+        delivery_mode VARCHAR(50) DEFAULT 'online',
+        service_location VARCHAR(255),
+        program_ids JSONB DEFAULT '[]'::jsonb,
+        status VARCHAR(50) DEFAULT 'active',
+        is_featured BOOLEAN DEFAULT FALSE,
+        created_by INT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_services_institution_id ON services(institution_id);
+      CREATE INDEX IF NOT EXISTS idx_services_business_profile_id ON services(business_profile_id);
+      CREATE INDEX IF NOT EXISTS idx_services_professional_profile_id ON services(professional_profile_id);
+      CREATE INDEX IF NOT EXISTS idx_services_slug ON services(slug);
+      CREATE INDEX IF NOT EXISTS idx_services_status ON services(status);
 
       ALTER TABLE ads_campaigns ADD COLUMN IF NOT EXISTS institution_id INTEGER;
       ALTER TABLE ads_campaigns ADD COLUMN IF NOT EXISTS institution_name VARCHAR(255);
@@ -883,6 +931,58 @@ export async function ensureFeatureSchema() {
       `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS agreement_document_url TEXT`,
       `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS agreement_document_name VARCHAR(255)`,
       `ALTER TABLE operations_tasks ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE finance_income_entries ADD COLUMN IF NOT EXISTS transaction_status VARCHAR(50) DEFAULT 'completed'`,
+      `ALTER TABLE finance_income_entries ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'paid'`,
+      `ALTER TABLE finance_income_entries ADD COLUMN IF NOT EXISTS transaction_id VARCHAR(100)`,
+      `ALTER TABLE finance_income_entries ADD COLUMN IF NOT EXISTS reference_no VARCHAR(100)`,
+      `ALTER TABLE finance_expense_entries ADD COLUMN IF NOT EXISTS transaction_status VARCHAR(50) DEFAULT 'completed'`,
+      `ALTER TABLE finance_expense_entries ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'paid'`,
+      `ALTER TABLE finance_expense_entries ADD COLUMN IF NOT EXISTS transaction_id VARCHAR(100)`,
+      `ALTER TABLE finance_expense_entries ADD COLUMN IF NOT EXISTS reference_no VARCHAR(100)`,
+      `ALTER TABLE master_products ADD COLUMN IF NOT EXISTS synonyms TEXT[] DEFAULT '{}'`,
+      `ALTER TABLE products ADD COLUMN IF NOT EXISTS synonyms TEXT[] DEFAULT '{}'`,
+      `ALTER TABLE products ADD COLUMN IF NOT EXISTS brand VARCHAR(255)`,
+      `ALTER TABLE products ADD COLUMN IF NOT EXISTS model VARCHAR(255)`,
+      `ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory_id INTEGER`,
+      `ALTER TABLE products ADD COLUMN IF NOT EXISTS main_category_id INTEGER`,
+      `ALTER TABLE products ADD COLUMN IF NOT EXISTS attributes JSONB DEFAULT '{}'::jsonb`,
+      `ALTER TABLE products ADD COLUMN IF NOT EXISTS variants JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE master_services ADD COLUMN IF NOT EXISTS synonyms TEXT[] DEFAULT '{}'`,
+      `ALTER TABLE services ADD COLUMN IF NOT EXISTS synonyms TEXT[] DEFAULT '{}'`,
+      `ALTER TABLE services ADD COLUMN IF NOT EXISTS subcategory_id INTEGER`,
+      `ALTER TABLE services ADD COLUMN IF NOT EXISTS main_category_id INTEGER`,
+      `ALTER TABLE services ADD COLUMN IF NOT EXISTS attributes JSONB DEFAULT '{}'::jsonb`,
+      `ALTER TABLE services ADD COLUMN IF NOT EXISTS variants JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE products DROP CONSTRAINT IF EXISTS products_category_id_fkey`,
+      `ALTER TABLE services DROP CONSTRAINT IF EXISTS services_category_id_fkey`,
+      `ALTER TABLE categories ADD COLUMN IF NOT EXISTS synonyms TEXT[] DEFAULT '{}'`,
+      `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS synonyms TEXT[] DEFAULT '{}'`,
+      `ALTER TABLE professional_profiles ADD COLUMN IF NOT EXISTS synonyms TEXT[] DEFAULT '{}'`,
+      `CREATE TABLE IF NOT EXISTS master_jobs (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) NOT NULL,
+        business_category_id INT REFERENCES categories(id) ON DELETE SET NULL,
+        professional_category_id INT REFERENCES categories(id) ON DELETE SET NULL,
+        role_id INT REFERENCES designations(id) ON DELETE SET NULL,
+        role_title VARCHAR(255),
+        department VARCHAR(255) NOT NULL,
+        employment_type VARCHAR(100) DEFAULT 'Full-time',
+        experience_level VARCHAR(100) DEFAULT 'Mid Level (3-5 yrs)',
+        work_mode VARCHAR(100) DEFAULT 'On-site',
+        location VARCHAR(255) DEFAULT 'All India / Multiple Locations',
+        salary_range VARCHAR(255),
+        openings_count INT DEFAULT 1,
+        description TEXT NOT NULL,
+        requirements TEXT,
+        benefits TEXT,
+        skills TEXT[] DEFAULT '{}',
+        is_active BOOLEAN DEFAULT TRUE,
+        is_featured BOOLEAN DEFAULT FALSE,
+        is_deleted BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )`,
     ];
     for (const sql of criticalAlters) {
       await db.query(sql).catch((e: any) => {
@@ -1352,6 +1452,96 @@ export async function ensureFeatureSchema() {
       CREATE INDEX IF NOT EXISTS idx_system_activity_logs_user ON system_activity_logs(user_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_system_activity_logs_module ON system_activity_logs(module, created_at DESC);
     `).catch(() => {});
+
+    // Ensure all 12 main business categories are synced as Business Types in institution_types
+    const mainCategories = [
+      { name: "Healthcare & Medical", slug: "healthcare-and-medical", template: "commercial" },
+      { name: "Salons & Personal Care", slug: "salons-and-personal-care", template: "commercial" },
+      { name: "Food, Dining & Cafes", slug: "food-dining-and-cafes", template: "commercial" },
+      { name: "Retail & Shopping", slug: "retail-and-shopping", template: "commercial" },
+      { name: "Automotive & Transport", slug: "automotive-and-transport", template: "commercial" },
+      { name: "Fitness & Sports", slug: "fitness-and-sports", template: "commercial" },
+      { name: "Education & Coaching", slug: "education-and-coaching", template: "academic" },
+      { name: "Real Estate & Construction", slug: "real-estate-and-construction", template: "commercial" },
+      { name: "IT & Digital Agencies", slug: "it-and-digital-agencies", template: "commercial" },
+      { name: "Professional & Financial Services", slug: "professional-and-financial-services", template: "commercial" },
+      { name: "Hospitality & Events", slug: "hospitality-and-events", template: "commercial" },
+      { name: "Home Services & Maintenance", slug: "home-services-and-maintenance", template: "commercial" },
+    ];
+
+    for (const cat of mainCategories) {
+      const typeRes = await db.query(
+        `INSERT INTO institution_types (name, slug, is_active, is_deleted, created_at, updated_at)
+         VALUES ($1, $2, true, false, NOW(), NOW())
+         ON CONFLICT (slug) DO UPDATE 
+         SET name = EXCLUDED.name, is_active = true, is_deleted = false, updated_at = NOW()
+         RETURNING id`,
+        [cat.name, cat.slug]
+      ).catch(() => null);
+
+      if (typeRes && typeRes.rows[0]?.id) {
+        const typeId = typeRes.rows[0].id;
+        if (cat.template === "commercial") {
+          await db.query(
+            `INSERT INTO business_type_modules (business_type_id, module_id, is_enabled, created_at, updated_at)
+             SELECT 
+               $1, 
+               sm.id, 
+               NOT (
+                 sm.module_key LIKE 'classroom%' OR 
+                 sm.module_key LIKE 'academics%' OR 
+                 sm.module_key LIKE 'students%' OR 
+                 sm.module_key LIKE 'institutions%' OR 
+                 sm.module_key LIKE 'inst_%'
+               ),
+               NOW(), 
+               NOW()
+             FROM system_modules sm
+             WHERE sm.status = 'active'
+             ON CONFLICT (business_type_id, module_id) DO NOTHING`,
+            [typeId]
+          ).catch(() => {});
+
+          await db.query(
+            `INSERT INTO business_type_roles (business_type_id, role_id, is_enabled, created_at, updated_at)
+             SELECT 
+               $1, 
+               r.id, 
+               NOT (LOWER(r.code) = ANY(ARRAY[
+                 'teacher', 'student', 'parent', 'principal', 'vice_principal', 'dean',
+                 'academic_coordinator', 'faculty', 'tutor', 'teaching_assistant',
+                 'doubt_expert', 'counselor', 'admission_counselor', 'institution_accountant',
+                 'fee_collector', 'exam_controller', 'curriculum_developer', 'librarian',
+                 'lab_assistant', 'placement_officer', 'hostel_warden', 'sports_coach'
+               ])),
+               NOW(), 
+               NOW()
+             FROM roles r
+             WHERE COALESCE(r.is_deleted, false) = false AND r.code != 'platform_admin'
+             ON CONFLICT (business_type_id, role_id) DO NOTHING`,
+            [typeId]
+          ).catch(() => {});
+        } else {
+          await db.query(
+            `INSERT INTO business_type_modules (business_type_id, module_id, is_enabled, created_at, updated_at)
+             SELECT $1, sm.id, true, NOW(), NOW()
+             FROM system_modules sm
+             WHERE sm.status = 'active'
+             ON CONFLICT (business_type_id, module_id) DO NOTHING`,
+            [typeId]
+          ).catch(() => {});
+
+          await db.query(
+            `INSERT INTO business_type_roles (business_type_id, role_id, is_enabled, created_at, updated_at)
+             SELECT $1, r.id, true, NOW(), NOW()
+             FROM roles r
+             WHERE COALESCE(r.is_deleted, false) = false AND r.code != 'platform_admin'
+             ON CONFLICT (business_type_id, role_id) DO NOTHING`,
+            [typeId]
+          ).catch(() => {});
+        }
+      }
+    }
 
     schemaReady = true;
 

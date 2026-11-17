@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { CalendarDays, Loader2, Sparkles } from "lucide-react";
 
 import {
@@ -43,6 +44,18 @@ export function AdminAcademicSessionSelector() {
     user?.role_codes?.includes("platform_admin") ||
     user?.role_codes?.includes("super_admin") ||
     user?.is_super_admin
+  );
+
+  const pathname = usePathname();
+  const isBusinessContext = Boolean(
+    pathname?.startsWith("/workspace") ||
+    pathname?.startsWith("/admin/company") ||
+    user?.has_business_profile ||
+    user?.has_professional_profile ||
+    user?.primary_role === "business_owner" ||
+    user?.primary_role === "professional" ||
+    user?.role_codes?.includes("business_owner") ||
+    user?.role_codes?.includes("professional")
   );
 
   useEffect(() => {
@@ -269,20 +282,8 @@ export function AdminAcademicSessionSelector() {
     return uniqueOptions;
   }, [isStudent, uniqueStudentEnrollments, sessions, activeInstitutionId]);
 
-  if (isPlatformAdmin) {
+  if (isPlatformAdmin || isBusinessContext || !mounted) {
     return null;
-  }
-
-  if (!mounted) {
-    return (
-      <div className="flex min-w-0 items-center gap-2">
-        <div className="flex items-center gap-1.5 rounded-lg border border-border/80 bg-muted/40 px-2.5 py-1 text-xs font-bold text-foreground shadow-2xs">
-          <CalendarDays className="size-3.5 text-primary shrink-0" />
-          <span className="hidden sm:inline text-muted-foreground text-[11px] font-semibold">Session:</span>
-          <span className="text-xs font-bold text-foreground">2026-2027</span>
-        </div>
-      </div>
-    );
   }
 
   return (

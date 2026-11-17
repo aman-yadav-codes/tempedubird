@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { headers } from "next/headers";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
@@ -369,6 +369,12 @@ export default async function CourseDetailPage({ params }: Props) {
   const course = await getPublicCourseById(id, { host });
 
   if (!course) notFound();
+
+  // Redirect to canonical slug if accessed by purely numeric id
+  const canonicalCourseSlug = course.slug;
+  if (canonicalCourseSlug && /^\d+$/.test(id) && canonicalCourseSlug !== id) {
+    redirect(`/courses/${canonicalCourseSlug}`);
+  }
 
   const parsedCourse = parseCourseTitle(
     course.title,

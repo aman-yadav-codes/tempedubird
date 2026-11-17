@@ -32,13 +32,11 @@ function getStoredTenant(): TenantResponse | null {
       cachedTenantResponse = JSON.parse(raw);
       return cachedTenantResponse;
     }
-  } catch {}
+  } catch { }
   return null;
 }
 
 async function getCachedTenant(): Promise<TenantResponse | null> {
-  const existing = getStoredTenant();
-  if (existing) return existing;
   if (cachedTenantPromise) return cachedTenantPromise;
 
   cachedTenantPromise = fetch("/api/tenant/current")
@@ -50,7 +48,7 @@ async function getCachedTenant(): Promise<TenantResponse | null> {
         if (typeof window !== "undefined") {
           sessionStorage.setItem("edubird_cached_tenant", JSON.stringify(json));
         }
-      } catch {}
+      } catch { }
       return json;
     })
     .catch(() => null)
@@ -67,7 +65,7 @@ export function TenantDeploymentScope() {
   const [tenant, setTenant] = useState<TenantResponse["tenant"]>(cachedTenantResponse?.tenant ?? null);
   const [appType, setAppType] = useState<TenantResponse["appType"]>(
     cachedTenantResponse?.appType ??
-      ((process.env.NEXT_PUBLIC_APP_TYPE as TenantResponse["appType"] | undefined) ?? "all")
+    ((process.env.NEXT_PUBLIC_APP_TYPE as TenantResponse["appType"] | undefined) ?? "all")
   );
 
   useEffect(() => {
@@ -97,7 +95,7 @@ export function TenantDeploymentScope() {
     if (!isInitialized || !isAuthenticated || !user) return;
 
     const logoutToLogin = async (reason: string, message: string) => {
-      const loginPath = appType === "institution" ? "/institution/login" : "/admin/login";
+      const loginPath = "/";
       toast.error(message);
       try {
         await fetch("/api/auth/logout", { method: "POST" });
@@ -119,10 +117,19 @@ export function TenantDeploymentScope() {
     if (appType !== "institution") return;
 
     if (isPlatformAdminUser(user)) {
-      void logoutToLogin(
-        "INSTITUTION_SITE_REQUIRES_INSTITUTION_ACCOUNT",
-        "This site belongs to an institution. Please use institution admin credentials."
+      return;
+    }
+
+    // End-users (students, guardians, customers) are always permitted
+    const isEndUser =
+      user.role_codes?.some((r: string) =>
+        ["student", "guardian", "parent", "customer", "client", "guest"].includes(r.toLowerCase())
+      ) ||
+      user.roles?.some((r: any) =>
+        ["student", "guardian", "parent", "customer", "client", "guest"].includes((r.code || r.name || "").toLowerCase())
       );
+
+    if (isEndUser) {
       return;
     }
 
@@ -136,9 +143,15 @@ export function TenantDeploymentScope() {
       return;
     }
 
-    const canAccessTenant = user.memberships?.some((membership) =>
-      membership.institution_id === tenant.institution_id
-    );
+    const canAccessTenant =
+      user.memberships?.some(
+        (membership) => membership.institution_id === tenant.institution_id
+      ) ||
+      (user as any).under_institution_id === tenant.institution_id ||
+      (user as any).institution_id === tenant.institution_id ||
+      (user as any).business_id === tenant.institution_id ||
+      (tenant as any)?.created_by === user.id ||
+      (tenant as any)?.user_id === user.id;
 
     if (!canAccessTenant) {
       void logoutToLogin(

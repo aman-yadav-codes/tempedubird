@@ -10,7 +10,25 @@ export async function GET(req: Request) {
     const category = url.searchParams.get("category")?.trim();
     const tag = url.searchParams.get("tag")?.trim();
     const featured = url.searchParams.get("featured");
-    const institutionId = url.searchParams.get("institutionId");
+    const paramInstId =
+      url.searchParams.get("institutionId") ||
+      url.searchParams.get("institution_id") ||
+      url.searchParams.get("businessId") ||
+      url.searchParams.get("business_id");
+    const envInstId = (
+      process.env.BUSINESS_ID ||
+      process.env.NEXT_PUBLIC_BUSINESS_ID ||
+      process.env.INSTITUTION_ID ||
+      process.env.NEXT_PUBLIC_INSTITUTION_ID ||
+      ""
+    ).trim();
+    const effectiveInstId =
+      paramInstId && /^\d+$/.test(paramInstId)
+        ? Number(paramInstId)
+        : envInstId && /^\d+$/.test(envInstId)
+        ? Number(envInstId)
+        : null;
+
     const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
     const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get("limit") || "12", 10)));
     const offset = (page - 1) * limit;
@@ -42,9 +60,9 @@ export async function GET(req: Request) {
       where.push(`bp.is_featured = true`);
     }
 
-    if (institutionId && !isNaN(Number(institutionId))) {
-      params.push(Number(institutionId));
-      where.push(`(bp.institution_id = $${params.length} OR bp.institution_id IS NULL)`);
+    if (effectiveInstId && Number.isInteger(effectiveInstId) && effectiveInstId > 0) {
+      params.push(effectiveInstId);
+      where.push(`(bp.institution_id = $${params.length})`);
     }
 
     const whereSql = `WHERE ${where.join(" AND ")}`;
@@ -102,14 +120,71 @@ export async function GET(req: Request) {
       ),
     ]);
 
-    const total = parseInt(countResult.rows[0]?.count || "0", 10);
+    let finalBlogs = listResult.rows;
+    let finalTotal = parseInt(countResult.rows[0]?.count || "0", 10);
+
+    if (finalBlogs.length === 0 && effectiveInstId) {
+      try {
+        const newsRes = await db.query(
+          `SELECT
+             n.id,
+             n.slug,
+             n.title,
+             n.content,
+             n.published_at,
+             n.created_at,
+             n.image_urls,
+             n.target_label,
+             n.target_role_code,
+             ip.name AS institution_name,
+             ip.slug AS institution_slug
+           FROM institution_news n
+           LEFT JOIN institution_profiles ip ON ip.id = n.institution_id
+           WHERE n.institution_id = $1 AND COALESCE(n.is_deleted, FALSE) = FALSE AND COALESCE(n.is_active, TRUE) = TRUE
+           ORDER BY n.published_at DESC, n.id DESC
+           LIMIT $2 OFFSET $3`,
+          [effectiveInstId, limit, offset]
+        );
+        const countNews = await db.query(
+          `SELECT COUNT(*)::text as count FROM institution_news WHERE institution_id = $1 AND COALESCE(n.is_deleted, FALSE) = FALSE AND COALESCE(n.is_active, TRUE) = TRUE`,
+          [effectiveInstId]
+        ).catch(async () => {
+          return db.query(`SELECT COUNT(*)::text as count FROM institution_news WHERE institution_id = $1 AND COALESCE(is_deleted, FALSE) = FALSE`, [effectiveInstId]);
+        });
+        finalTotal = parseInt(countNews.rows[0]?.count || "0", 10);
+        finalBlogs = newsRes.rows.map((n: any) => ({
+          id: n.id,
+          slug: n.slug || `news-${n.id}`,
+          title: n.title,
+          category: "Campus News & Announcements",
+          sub_category: n.target_role_code || "General",
+          summary: n.content ? n.content.replace(/<[^>]*>?/gm, "").slice(0, 180) : n.title,
+          content_html: n.content,
+          cover_image: (Array.isArray(n.image_urls) && n.image_urls[0]) || "/images/placeholders/campus.jpg",
+          video_url: null,
+          tags: n.target_label || "Campus News",
+          is_featured: true,
+          read_time_mins: 3,
+          views_count: 120,
+          author_name: "Administration Desk",
+          author_role: "Campus Notice Board",
+          author_avatar: null,
+          institution_name: n.institution_name || "Campus",
+          institution_slug: n.institution_slug || null,
+          published_at: n.published_at || n.created_at,
+          created_at: n.created_at,
+        }));
+      } catch (newsErr) {
+        console.warn("Failed to query institution_news fallback:", newsErr);
+      }
+    }
 
     return NextResponse.json({
-      blogs: listResult.rows,
-      total,
+      blogs: finalBlogs,
+      total: finalTotal,
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
+      totalPages: Math.ceil(finalTotal / limit),
     });
   } catch (error: any) {
     console.error("[public/blogs/route] Error:", error);

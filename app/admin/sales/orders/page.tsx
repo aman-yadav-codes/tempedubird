@@ -25,6 +25,7 @@ import {
   AlertCircle,
   MoreVertical,
   X,
+  Check,
   CreditCard,
   Receipt,
   User,
@@ -315,6 +316,30 @@ export default function SalesOrdersPage() {
     }
   };
 
+  const handleQuickStatusChange = async (orderId: number, newStatus: string) => {
+    try {
+      const res = await fetch("/api/admin/sales/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: orderId,
+          fulfillment_status: newStatus,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Order status updated to "${newStatus}"`);
+        setOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? { ...o, fulfillment_status: newStatus as any } : o))
+        );
+      } else {
+        toast.error(data.error || "Failed to update order status");
+      }
+    } catch {
+      toast.error("Error updating order status");
+    }
+  };
+
   const handleDeleteOrder = async (id: number) => {
     if (!confirm("Are you sure you want to delete this order?")) return;
     try {
@@ -370,16 +395,6 @@ export default function SalesOrdersPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadOrders}
-            disabled={loading}
-            className="h-9 gap-1.5 text-xs font-bold"
-          >
-            <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
           <Button
             onClick={() => setCreateDialogOpen(true)}
             size="sm"
@@ -523,10 +538,12 @@ export default function SalesOrdersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Deliveries</SelectItem>
-                  <SelectItem value="Delivered">Delivered</SelectItem>
+                  <SelectItem value="Received">Received (Pending Accept)</SelectItem>
+                  <SelectItem value="Confirmed">Confirmed (Accepted)</SelectItem>
                   <SelectItem value="Processing">Processing</SelectItem>
-                  <SelectItem value="Shipped">Shipped</SelectItem>
                   <SelectItem value="Ready for Pickup">Ready for Pickup</SelectItem>
+                  <SelectItem value="Shipped">Shipped</SelectItem>
+                  <SelectItem value="Delivered">Delivered</SelectItem>
                   <SelectItem value="Cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
@@ -563,8 +580,6 @@ export default function SalesOrdersPage() {
                 <tr className="border-b border-border/80 bg-muted/40 font-bold text-muted-foreground">
                   <th className="p-3.5 pl-4">Order #</th>
                   <th className="p-3.5">Customer</th>
-                  <th className="p-3.5">Institution / Campus</th>
-                  <th className="p-3.5">Items Summary</th>
                   <th className="p-3.5 text-right">Amount</th>
                   <th className="p-3.5">Payment</th>
                   <th className="p-3.5">Fulfillment</th>
@@ -576,6 +591,11 @@ export default function SalesOrdersPage() {
                   const isPaid = ord.payment_status === "Paid";
                   const isPending = ord.payment_status === "Pending";
                   const isDelivered = ord.fulfillment_status === "Delivered";
+                  const isServiceBooking = Boolean(
+                    ord.professional_id ||
+                    ord.notes?.toLowerCase().includes("service booking") ||
+                    ord.notes?.toLowerCase().includes("service")
+                  );
 
                   return (
                     <tr key={ord.id} className="hover:bg-muted/20 transition-colors">
@@ -592,6 +612,15 @@ export default function SalesOrdersPage() {
                             year: "numeric",
                           })}
                         </div>
+                        {isServiceBooking ? (
+                          <Badge variant="outline" className="mt-1 text-[10px] font-semibold border-violet-200 text-violet-700 bg-violet-50 dark:bg-violet-950/40 dark:border-violet-800 dark:text-violet-300">
+                            Service Booking
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="mt-1 text-[10px] font-semibold border-blue-200 text-blue-700 bg-blue-50 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300">
+                            Product Order
+                          </Badge>
+                        )}
                       </td>
 
                       <td className="p-3.5">
@@ -602,25 +631,7 @@ export default function SalesOrdersPage() {
                         </div>
                       </td>
 
-                      <td className="p-3.5">
-                        <Badge variant="outline" className="text-[10px] font-semibold bg-muted/30">
-                          <Building2 className="size-3 mr-1 text-muted-foreground" />
-                          {ord.institution_name || "Campus Store"}
-                        </Badge>
-                      </td>
-
-                      <td className="p-3.5 max-w-[260px]">
-                        <p className="truncate text-foreground font-medium" title={ord.items_summary || "Store items"}>
-                          {ord.items_summary || "Store Products"}
-                        </p>
-                        {ord.notes && (
-                          <p className="text-[11px] text-muted-foreground truncate italic mt-0.5">
-                            {ord.notes}
-                          </p>
-                        )}
-                      </td>
-
-                      <td className="p-3.5 text-right font-bold text-foreground">
+                      <td className="p-3.5 text-right font-bold text-foreground font-mono">
                         {formatCurrency(Number(ord.total_amount))}
                       </td>
 
@@ -644,18 +655,71 @@ export default function SalesOrdersPage() {
                         </div>
                       </td>
 
-                      <td className="p-3.5">
-                        <Badge
-                          variant="secondary"
-                          className={`text-[10px] font-bold ${
-                            isDelivered
-                              ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
-                              : "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          <Package className="size-3 mr-1" />
-                          {ord.fulfillment_status}
-                        </Badge>
+                      <td className="p-3.5 min-w-[170px]">
+                        {ord.fulfillment_status === "Received" ? (
+                          <div className="flex flex-col gap-1.5 items-start">
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 flex items-center gap-1 animate-pulse"
+                            >
+                              <span className="size-1.5 rounded-full bg-amber-500 inline-block" />
+                              Order Received
+                            </Badge>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="sm"
+                                onClick={() => handleQuickStatusChange(ord.id, "Confirmed")}
+                                className="h-6 text-[10px] font-bold px-2 bg-emerald-600 hover:bg-emerald-700 text-white gap-1 shadow-xs"
+                                title="Accept this order (locks customer cancellation)"
+                              >
+                                <Check className="size-3" /> Accept
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleQuickStatusChange(ord.id, "Cancelled")}
+                                className="h-6 text-[10px] font-bold px-1.5 text-rose-600 border-rose-300 hover:bg-rose-50"
+                                title="Reject / Cancel this order"
+                              >
+                                <X className="size-3" /> Reject
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <Select
+                              value={ord.fulfillment_status}
+                              onValueChange={(val) => handleQuickStatusChange(ord.id, val)}
+                            >
+                              <SelectTrigger
+                                className={`h-7 text-[11px] font-bold border rounded-md px-2 gap-1.5 w-auto min-w-[130px] ${
+                                  ord.fulfillment_status === "Confirmed"
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300"
+                                    : ord.fulfillment_status === "Delivered"
+                                    ? "bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300"
+                                    : ord.fulfillment_status === "Ready for Pickup"
+                                    ? "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300"
+                                    : ord.fulfillment_status === "Shipped"
+                                    ? "bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-950/40 dark:text-indigo-300"
+                                    : ord.fulfillment_status === "Cancelled"
+                                    ? "bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/40 dark:text-rose-300"
+                                    : "bg-muted/50 text-foreground border-border"
+                                }`}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="text-xs">
+                                <SelectItem value="Received">Received (Pending Accept)</SelectItem>
+                                <SelectItem value="Confirmed">Confirmed (Accepted)</SelectItem>
+                                <SelectItem value="Processing">Processing (Preparing)</SelectItem>
+                                <SelectItem value="Ready for Pickup">Ready for Pickup</SelectItem>
+                                <SelectItem value="Shipped">Shipped (Dispatched)</SelectItem>
+                                <SelectItem value="Delivered">Delivered (Completed)</SelectItem>
+                                <SelectItem value="Cancelled">Cancelled</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                       </td>
 
                       <td className="p-3.5 text-right pr-4">
@@ -664,10 +728,10 @@ export default function SalesOrdersPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleViewReceipt(ord)}
-                            className="h-7 text-xs font-bold px-2 gap-1"
+                            className="h-7 text-xs font-bold px-2 gap-1 text-primary hover:text-primary hover:bg-primary/10"
                           >
-                            <FileText className="size-3.5 text-primary" />
-                            Invoice
+                            <FileText className="size-3.5" />
+                            Details
                           </Button>
 
                           <DropdownMenu>
@@ -1170,10 +1234,12 @@ export default function SalesOrdersPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Delivered">Delivered</SelectItem>
+                  <SelectItem value="Received">Received (Pending Accept)</SelectItem>
+                  <SelectItem value="Confirmed">Confirmed (Accepted)</SelectItem>
                   <SelectItem value="Processing">Processing</SelectItem>
-                  <SelectItem value="Shipped">Shipped</SelectItem>
                   <SelectItem value="Ready for Pickup">Ready for Pickup</SelectItem>
+                  <SelectItem value="Shipped">Shipped</SelectItem>
+                  <SelectItem value="Delivered">Delivered</SelectItem>
                   <SelectItem value="Cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
