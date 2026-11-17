@@ -301,6 +301,10 @@ export async function GET(req: Request) {
           enabledMap.set(r.id, /food|dining|cafe|restaurant|bakery|catering/i.test(bName));
         } else if (r.module_key === "marketing_rooms") {
           enabledMap.set(r.id, /hotel|resort|hospitality|lodge|stay|hostel|guest house/i.test(bName));
+        } else if (r.module_key === "sales_patients") {
+          enabledMap.set(r.id, /health|clinic|medical|doctor|hospital|dental|pharmacy/i.test(bName));
+        } else if (r.module_key === "sales_students") {
+          enabledMap.set(r.id, /coaching|school|college|university|institute|institution|education|academy/i.test(bName));
         } else {
           enabledMap.set(r.id, true);
         }

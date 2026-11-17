@@ -29,6 +29,7 @@ import {
     Car,
     UtensilsCrossed,
     BedDouble,
+    HeartPulse,
     TrendingUp,
     PieChart,
     Image,
@@ -408,6 +409,8 @@ const navItems: SidebarItem[] = [
         children: [
             { title: "Orders & Bookings", url: "/admin/sales/orders", icon: ShoppingCart },
             { title: "Pipeline", url: "/admin/sales/pipeline", icon: TrendingUp },
+            { title: "Patients", url: "/admin/sales/patients", icon: HeartPulse },
+            { title: "Students", url: "/admin/sales/students", icon: GraduationCap },
             { title: "Proposals", url: "/admin/sales/proposals", icon: FileSignature },
             { title: "Clients", url: "/admin/sales/clients", icon: Building2 },
             { title: "Enquiry", url: "/admin/sales/enquiries", icon: Mail },
