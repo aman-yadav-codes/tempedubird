@@ -78,6 +78,7 @@ interface BusinessProfileClientProps {
   reviews: any[];
   courses?: any[];
   jobs?: any[];
+  isHomePage?: boolean;
 }
 
 export function PublicBusinessProfileClient({
@@ -88,6 +89,7 @@ export function PublicBusinessProfileClient({
   reviews = [],
   courses = [],
   jobs = [],
+  isHomePage = false,
 }: BusinessProfileClientProps) {
   const { user } = useAuthStore();
   const isOwner = useMemo(() => isUserStoreOwner(user, business), [user, business]);
@@ -779,6 +781,7 @@ export function PublicBusinessProfileClient({
   return (
     <div className="min-h-screen bg-background pb-16">
       {/* ================= HERO HEADER & COVER BANNER ================= */}
+      {!isHomePage && (
       <div className="relative w-full h-56 sm:h-72 md:h-84 bg-muted overflow-hidden">
         <Image
           src={bannerImg}
@@ -818,10 +821,12 @@ export function PublicBusinessProfileClient({
           </Button>
         </div>
       </div>
+      )}
 
       {/* ================= PROFILE INFO BAR ================= */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 -mt-16 sm:-mt-20 relative z-20">
-        <div className="bg-card rounded-2xl border shadow-xl p-5 sm:p-7">
+      <div className={`max-w-6xl mx-auto px-4 sm:px-6 relative z-20 ${isHomePage ? "pt-6 sm:pt-8" : "-mt-16 sm:-mt-20"}`}>
+        {!isHomePage && (
+          <div className="bg-card rounded-2xl border shadow-xl p-5 sm:p-7">
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
             {/* Left: Avatar/Logo & Details */}
             <div className="flex flex-col sm:flex-row items-start gap-5">
@@ -973,9 +978,10 @@ export function PublicBusinessProfileClient({
             </div>
           </div>
         </div>
+        )}
 
         {/* Storefront Owner Notice Banner */}
-        {isOwner && (
+        {!isHomePage && isOwner && (
           <div className="mt-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
             <div className="flex items-start sm:items-center gap-3">
               <div className="size-9 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
@@ -1003,9 +1009,10 @@ export function PublicBusinessProfileClient({
         )}
 
         {/* ================= TABS & CONTENT SECTIONS ================= */}
-        <div className="mt-8">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="bg-card border p-1 rounded-xl h-auto gap-1 flex-wrap">
+        <div className={isHomePage ? "mt-0" : "mt-8"}>
+          <Tabs value={isHomePage ? "overview" : activeTab} onValueChange={setActiveTab} className="w-full">
+            {!isHomePage && (
+              <TabsList className="bg-card border p-1 rounded-xl h-auto gap-1 flex-wrap">
               <TabsTrigger value="overview" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
                 <Building2 className="size-3.5" />
                 <span>Overview</span>
@@ -1041,11 +1048,10 @@ export function PublicBusinessProfileClient({
                 <span>Photo Gallery ({galleryImages.length})</span>
               </TabsTrigger>
             </TabsList>
+            )}
 
             {/* ================= OVERVIEW TAB ================= */}
-
-            {/* ================= OVERVIEW TAB ================= */}
-            <TabsContent value="overview" className="mt-6 space-y-6">
+            <TabsContent value="overview" className={isHomePage ? "mt-0 space-y-6" : "mt-6 space-y-6"}>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left 2 Cols: About & Gallery */}
                 <div className="lg:col-span-2 space-y-6">

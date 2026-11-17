@@ -8,6 +8,8 @@ import { getFrontendConfig } from "@/lib/config/frontend-config";
 import { getInstitutionTenantByHost } from "@/lib/tenancy/institution-domain";
 import { db } from "@/lib/db/db";
 import { resolvePageMetadata } from "@/lib/seo/metadata";
+import { fetchBusinessFullData } from "@/app/(public)/business/[id]/page";
+import { PublicBusinessProfileClient } from "@/components/profile/public-business-profile-client";
 
 async function getHost() {
   const headerList = await headers();
@@ -46,7 +48,27 @@ export default async function HomePage() {
     return <PlatformAdminHome />;
   }
 
-  // 3. Scenario A: Institution Mode
+  // 3. Scenario C: Business Mode (Home Page)
+  if (config.mode === "business" && (config.businessId || config.institutionId)) {
+    const targetBizId = config.businessId || config.institutionId;
+    const data = await fetchBusinessFullData(String(targetBizId));
+    if (data?.business) {
+      return (
+        <PublicBusinessProfileClient
+          business={data.business}
+          products={data.products || []}
+          services={data.services || []}
+          professionals={data.professionals || []}
+          reviews={data.reviews || []}
+          courses={data.courses || []}
+          jobs={data.jobs || []}
+          isHomePage={true}
+        />
+      );
+    }
+  }
+
+  // 4. Scenario A: Institution Mode
   const host = await getHost();
   let tenant = null;
   try {

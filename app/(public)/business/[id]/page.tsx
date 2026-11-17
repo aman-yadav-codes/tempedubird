@@ -11,7 +11,7 @@ interface Props {
   params: Promise<{ id: string }> | { id: string };
 }
 
-const fetchBusinessFullData = cache(async (idOrSlug: string) => {
+export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
   try {
     const { id: numId } = extractIdFromSlug(idOrSlug);
 
@@ -33,8 +33,9 @@ const fetchBusinessFullData = cache(async (idOrSlug: string) => {
       LEFT JOIN categories sc ON sc.id = bp.subcategory_id
       LEFT JOIN institution_profiles ip ON ip.id = bp.institution_profile_id
       LEFT JOIN users u ON u.id = bp.user_id
-      WHERE (bp.slug = $1 OR bp.id = $2 OR $1 ILIKE '%' || bp.slug || '%')
+      WHERE (bp.slug = $1 OR bp.id = $2 OR bp.institution_profile_id = $2 OR $1 ILIKE '%' || bp.slug || '%')
         AND COALESCE(bp.is_active, TRUE) = TRUE
+      ORDER BY (bp.institution_profile_id = $2) DESC, (bp.id = $2) DESC
       LIMIT 1`,
       [idOrSlug, numId || -1]
     );

@@ -76,10 +76,11 @@ export default async function PublicLayout({ children }: { children: React.React
             brand={brand}
             showInstitutesLink={!tenant}
             institutionNavItems={institutionNavItems}
+            configuredInstitutionId={configuredInstId}
           />
         </Suspense>
         <main className="flex-1">{children}</main>
-        <PublicFooter />
+        <PublicFooter configuredInstitutionId={configuredInstId} />
       </LeadTrackerProvider>
     </div>
   );

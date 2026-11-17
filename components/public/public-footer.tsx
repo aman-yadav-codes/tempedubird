@@ -95,7 +95,7 @@ function LinkedinIcon() {
 let cachedSocialLinks: SocialLinksMap | null = null;
 let cachedPlatformContact: { email?: string; phone?: string; address?: string } | null = null;
 
-export function PublicFooter() {
+export function PublicFooter({ configuredInstitutionId }: { configuredInstitutionId?: number | null } = {}) {
   const pathname = usePathname();
   const { user } = useAuthStore();
   const { activeInstitution, activeInstitutionId } = useActiveInstitution();
@@ -109,13 +109,14 @@ export function PublicFooter() {
   }>(() => cachedPlatformContact || {});
 
   const defaultEnvInstId =
-    process.env.NEXT_PUBLIC_BUSINESS_ID
+    configuredInstitutionId ||
+    (process.env.NEXT_PUBLIC_BUSINESS_ID
       ? Number(process.env.NEXT_PUBLIC_BUSINESS_ID)
       : process.env.NEXT_PUBLIC_INSTITUTION_ID
       ? Number(process.env.NEXT_PUBLIC_INSTITUTION_ID)
       : process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
       ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
-      : null;
+      : null);
 
   useEffect(() => {
     setMounted(true);

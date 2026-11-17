@@ -71,6 +71,7 @@ type PublicNavbarProps = {
   brand?: PublicNavbarBrand;
   showInstitutesLink?: boolean;
   institutionNavItems?: PublicInstitutionNavItem[];
+  configuredInstitutionId?: number | null;
 };
 
 const CATEGORY_ITEMS: { key: CategoryKey; label: string; href: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -99,6 +100,9 @@ export function PublicNavbar({
     logoUrl: "/icons/edubird.webp",
     isInstitution: false,
   },
+  showInstitutesLink,
+  institutionNavItems,
+  configuredInstitutionId,
 }: PublicNavbarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -120,6 +124,7 @@ export function PublicNavbar({
   );
 
   const defaultEnvInstId =
+    configuredInstitutionId ||
     process.env.NEXT_PUBLIC_BUSINESS_ID
       ? Number(process.env.NEXT_PUBLIC_BUSINESS_ID)
       : process.env.NEXT_PUBLIC_INSTITUTION_ID
