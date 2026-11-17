@@ -91,6 +91,7 @@ export async function uploadToOpeninary(
       Authorization: `Bearer ${config.apiKey}`,
     },
     body: formData,
+    signal: AbortSignal.timeout(8000),
   });
 
   const json = await res.json().catch(() => null);

@@ -92,30 +92,31 @@ export async function POST(req: Request) {
     const targetFolder = requestedFolder || "crmtaskassets";
 
     // Primary: Upload to Openinary self-hosted media service
+    let uploadSuccess = false;
+    let openinaryResult: any = null;
     if (isOpeninaryConfigured() && isMediaSupportedByOpeninary(file.name, file.type)) {
       try {
-        const result = await uploadToOpeninary(file, file.name, targetFolder, file.type);
-        return NextResponse.json({
-          data: {
-            url: result.fullUrl,
-            public_id: result.path,
-            resource_type: file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "raw",
-            file_type: file.type,
-            file_name: file.name,
-          },
-        });
+        openinaryResult = await uploadToOpeninary(file, file.name, targetFolder, file.type);
+        uploadSuccess = true;
       } catch (openinaryErr: any) {
-        console.error("Openinary document upload failed:", openinaryErr);
-        const errMsg = openinaryErr?.message || "Failed to upload document to Openinary";
-        return NextResponse.json(
-          { error: `Upload to media service failed: ${errMsg}` },
-          { status: 502 }
-        );
+        console.warn("Openinary document upload unreachable or failed, falling back to local storage:", openinaryErr?.message || openinaryErr);
       }
     }
 
-    // Durable storage for document types not supported by Openinary (e.g. PDF, Word, Excel, CSV)
-    // or when Openinary is not configured.
+    if (uploadSuccess && openinaryResult) {
+      return NextResponse.json({
+        data: {
+          url: openinaryResult.fullUrl,
+          public_id: openinaryResult.path,
+          resource_type: file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "raw",
+          file_type: file.type,
+          file_name: file.name,
+        },
+      });
+    }
+
+    // Durable fallback storage for document types not supported by Openinary (e.g. PDF, Word, Excel, CSV)
+    // or when Openinary is not configured or unreachable.
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const fileExt = ext || (file.type.startsWith("video/") ? ".mp4" : file.type === "application/pdf" ? ".pdf" : ".png");
