@@ -45,6 +45,7 @@ import {
   BookOpen,
   SlidersHorizontal,
   CheckCircle2,
+  Users,
   X,
   ExternalLink,
   Calendar,

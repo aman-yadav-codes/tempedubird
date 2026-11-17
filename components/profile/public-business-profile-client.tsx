@@ -40,6 +40,10 @@ import {
   ArrowUpDown,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  Target,
+  Compass,
+  Award,
   GraduationCap,
   Wrench,
 } from "lucide-react";
@@ -144,6 +148,38 @@ export function PublicBusinessProfileClient({
   const [enquiryOpen, setEnquiryOpen] = useState(false);
   const [selectedGalleryImage, setSelectedGalleryImage] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
+
+  // Gallery Images
+  const galleryImages: string[] = useMemo(() => {
+    if (Array.isArray(business.gallery_images) && business.gallery_images.length > 0) {
+      return business.gallery_images.filter(Boolean);
+    }
+    const gathered = [business.banner_url, business.logo_url].filter(Boolean);
+    if (gathered.length > 0) return gathered;
+    return [
+      "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80",
+      "https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=800&q=80",
+      "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=800&q=80",
+      "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80",
+    ];
+  }, [business.gallery_images, business.banner_url, business.logo_url]);
+
+  // Home Page Top Gallery Slider State
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isSliderPaused, setIsSliderPaused] = useState(false);
+
+  // Founder Bio Preview & Modal State
+  const [isFounderBioExpanded, setIsFounderBioExpanded] = useState(false);
+  const [founderModalOpen, setFounderModalOpen] = useState(false);
+
+  // Auto-advance Top Gallery Slider
+  useEffect(() => {
+    if (!isHomePage || galleryImages.length <= 1 || isSliderPaused) return;
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % galleryImages.length);
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [isHomePage, galleryImages.length, isSliderPaused]);
 
   // Product category filter & search state
   const [selectedProductCategory, setSelectedProductCategory] = useState<string>("all");
@@ -648,20 +684,6 @@ export function PublicBusinessProfileClient({
     return allReviews.slice(0, 3);
   }, [allReviews]);
 
-  const galleryImages: string[] = useMemo(() => {
-    if (Array.isArray(business.gallery_images) && business.gallery_images.length > 0) {
-      return business.gallery_images.filter(Boolean);
-    }
-    const gathered = [business.banner_url, business.logo_url].filter(Boolean);
-    if (gathered.length > 0) return gathered;
-    return [
-      "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80",
-    ];
-  }, [business.gallery_images, business.banner_url, business.logo_url]);
-
   function handleShare() {
     if (navigator.share) {
       navigator
@@ -1052,6 +1074,135 @@ export function PublicBusinessProfileClient({
 
             {/* ================= OVERVIEW TAB ================= */}
             <TabsContent value="overview" className={isHomePage ? "mt-0 space-y-6" : "mt-6 space-y-6"}>
+              {/* Home Page Top Gallery Slider */}
+              {isHomePage && galleryImages.length > 0 && (
+                <div
+                  className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden border shadow-lg bg-black group select-none"
+                  onMouseEnter={() => setIsSliderPaused(true)}
+                  onMouseLeave={() => setIsSliderPaused(false)}
+                >
+                  {/* Slider Images with Smooth Fade & Ken-Burns Transition */}
+                  <div className="relative w-full h-[280px] sm:h-[380px] md:h-[460px] lg:h-[500px]">
+                    {galleryImages.map((imgSrc, idx) => (
+                      <div
+                        key={idx}
+                        className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+                          idx === currentSlide ? "opacity-100 z-10" : "opacity-0 z-0 pointer-events-none"
+                        }`}
+                      >
+                        <Image
+                          src={imgSrc}
+                          alt={`${business.name} gallery image ${idx + 1}`}
+                          fill
+                          priority={idx === 0}
+                          sizes="(max-width: 1280px) 100vw, 1280px"
+                          className="object-cover cursor-pointer hover:scale-105 transition-transform duration-700 ease-out"
+                          onClick={() => setSelectedGalleryImage(imgSrc)}
+                        />
+                      </div>
+                    ))}
+
+                    {/* Gradient Overlay for Text Readability */}
+                    <div className="absolute inset-0 z-10 bg-gradient-to-t from-black/90 via-black/40 to-black/15 pointer-events-none" />
+
+                    {/* Top Badges & Photo Counter */}
+                    <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between pointer-events-none">
+                      <Badge className="bg-black/60 backdrop-blur-md text-white border-white/20 px-3 py-1 text-xs font-semibold shadow-sm flex items-center gap-1.5 pointer-events-auto">
+                        <Sparkles className="size-3.5 text-amber-400" />
+                        <span>Featured Gallery</span>
+                      </Badge>
+
+                      <Badge className="bg-black/60 backdrop-blur-md text-white border-white/20 px-3 py-1 text-xs font-medium shadow-sm flex items-center gap-1.5 pointer-events-auto">
+                        <Camera className="size-3.5 text-sky-400" />
+                        <span>{currentSlide + 1} / {galleryImages.length}</span>
+                      </Badge>
+                    </div>
+
+                    {/* Prev / Next Navigation Arrows */}
+                    {galleryImages.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCurrentSlide((prev) => (prev - 1 + galleryImages.length) % galleryImages.length);
+                          }}
+                          className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 z-20 size-9 sm:size-11 rounded-full bg-black/40 hover:bg-black/80 text-white backdrop-blur-md border border-white/20 flex items-center justify-center opacity-80 sm:opacity-0 group-hover:opacity-100 transition-all shadow-lg hover:scale-110 cursor-pointer"
+                          aria-label="Previous slide"
+                        >
+                          <ChevronLeft className="size-5 sm:size-6" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCurrentSlide((prev) => (prev + 1) % galleryImages.length);
+                          }}
+                          className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 z-20 size-9 sm:size-11 rounded-full bg-black/40 hover:bg-black/80 text-white backdrop-blur-md border border-white/20 flex items-center justify-center opacity-80 sm:opacity-0 group-hover:opacity-100 transition-all shadow-lg hover:scale-110 cursor-pointer"
+                          aria-label="Next slide"
+                        >
+                          <ChevronRight className="size-5 sm:size-6" />
+                        </button>
+                      </>
+                    )}
+
+                    {/* Bottom Content Overlay */}
+                    <div className="absolute bottom-4 sm:bottom-6 left-4 sm:left-7 right-4 sm:right-7 z-20 space-y-2 sm:space-y-3 pointer-events-none">
+                      <div className="space-y-1 sm:space-y-1.5 max-w-3xl">
+                        <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white tracking-tight drop-shadow-md">
+                          {business.name}
+                        </h2>
+                        <p className="text-xs sm:text-sm md:text-base text-white/90 line-clamp-2 font-medium drop-shadow-sm max-w-2xl">
+                          {business.custom_description || business.about || "Quality education, comprehensive academic coaching, and career guidance."}
+                        </p>
+                      </div>
+
+                      {/* Meta Pills and Pagination Dots */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-1 pointer-events-auto">
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          {Boolean(business.locality || business.city) && (
+                            <span className="inline-flex items-center gap-1.5 bg-black/50 backdrop-blur-md text-white/90 px-3 py-1 rounded-full border border-white/15">
+                              <MapPin className="size-3 text-rose-400" />
+                              <span>{[business.locality, business.city].filter(Boolean).join(", ")}</span>
+                            </span>
+                          )}
+                          {business.established_year && (
+                            <span className="hidden sm:inline-flex items-center gap-1.5 bg-black/50 backdrop-blur-md text-white/90 px-3 py-1 rounded-full border border-white/15">
+                              <Clock className="size-3 text-emerald-400" />
+                              <span>Est. {business.established_year}</span>
+                            </span>
+                          )}
+                          <span className="inline-flex items-center gap-1.5 bg-black/50 backdrop-blur-md text-emerald-400 px-3 py-1 rounded-full border border-emerald-500/30 font-medium">
+                            <ShieldCheck className="size-3" />
+                            <span>Verified Campus</span>
+                          </span>
+                        </div>
+
+                        {/* Pagination Indicator Dots */}
+                        {galleryImages.length > 1 && (
+                          <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/15">
+                            {galleryImages.map((_, dotIdx) => (
+                              <button
+                                key={dotIdx}
+                                type="button"
+                                onClick={() => setCurrentSlide(dotIdx)}
+                                className={`transition-all duration-300 rounded-full cursor-pointer ${
+                                  dotIdx === currentSlide
+                                    ? "w-6 h-2 bg-primary"
+                                    : "size-2 bg-white/50 hover:bg-white/80"
+                                }`}
+                                aria-label={`Go to slide ${dotIdx + 1}`}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left 2 Cols: About & Gallery */}
                 <div className="lg:col-span-2 space-y-6">
@@ -1482,6 +1633,42 @@ export function PublicBusinessProfileClient({
                           </div>
                         </div>
 
+                        {/* Founder Bio preview with see more */}
+                        {Boolean(business.owner_about || business.founder_about) && (
+                          <div className="pt-2 border-t border-border/50 text-xs text-muted-foreground">
+                            <p className={isFounderBioExpanded ? "whitespace-pre-line leading-relaxed text-foreground/90" : "line-clamp-3 leading-relaxed"}>
+                              {business.owner_about || business.founder_about}
+                            </p>
+                            <div className="mt-2 flex items-center justify-between">
+                              <button
+                                type="button"
+                                onClick={() => setIsFounderBioExpanded(!isFounderBioExpanded)}
+                                className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                              >
+                                {isFounderBioExpanded ? (
+                                  <>
+                                    <span>See less</span>
+                                    <ChevronUp className="size-3" />
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>See more</span>
+                                    <ChevronDown className="size-3" />
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setFounderModalOpen(true)}
+                                className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer"
+                              >
+                                <span>Full story</span>
+                                <ExternalLink className="size-3" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Quick Contact & Action Buttons */}
                         <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/50">
                           {/* Call / Phone */}
@@ -1537,6 +1724,81 @@ export function PublicBusinessProfileClient({
                             </div>
                           )}
                         </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Mission, Vision & Goals Card */}
+                  {Boolean(business.mission || business.vision || business.goal) && (
+                    <Card className="rounded-2xl border shadow-xs overflow-hidden">
+                      <CardHeader className="pb-3 border-b border-border/50 bg-muted/20">
+                        <CardTitle className="text-base font-bold flex items-center justify-between">
+                          <span className="flex items-center gap-2">
+                            <Target className="size-4 text-primary" />
+                            <span>Mission, Vision & Goals</span>
+                          </span>
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                          Guiding principles & institutional roadmap
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="p-4 space-y-4">
+                        {/* Mission */}
+                        {business.mission && (
+                          <div className="space-y-1.5 p-3.5 rounded-xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-800/30">
+                            <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 font-bold text-xs uppercase tracking-wide">
+                              <Target className="size-3.5 shrink-0" />
+                              <span>Our Mission</span>
+                            </div>
+                            <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-line">
+                              {business.mission}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Vision */}
+                        {business.vision && (
+                          <div className="space-y-1.5 p-3.5 rounded-xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/50 dark:border-purple-800/30">
+                            <div className="flex items-center gap-2 text-purple-700 dark:text-purple-400 font-bold text-xs uppercase tracking-wide">
+                              <Compass className="size-3.5 shrink-0" />
+                              <span>Our Vision</span>
+                            </div>
+                            <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-line">
+                              {business.vision}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Goals */}
+                        {business.goal && (
+                          <div className="space-y-2.5 p-3.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30">
+                            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold text-xs uppercase tracking-wide">
+                              <Award className="size-3.5 shrink-0" />
+                              <span>Strategic Goals</span>
+                            </div>
+                            <div className="space-y-2">
+                              {business.goal
+                                .split("\n")
+                                .map((g: string) => g.trim())
+                                .filter(Boolean)
+                                .map((goalItem: string, idx: number) => {
+                                  const colonIdx = goalItem.indexOf(":");
+                                  const title = colonIdx > -1 ? goalItem.slice(0, colonIdx).trim() : null;
+                                  const desc = colonIdx > -1 ? goalItem.slice(colonIdx + 1).trim() : goalItem;
+
+                                  return (
+                                    <div key={idx} className="flex items-start gap-2 text-xs">
+                                      <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                                      <div className="text-foreground/85 leading-snug">
+                                        {title && <span className="font-semibold text-foreground">{title}: </span>}
+                                        <span>{desc}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   )}
@@ -3050,6 +3312,53 @@ export function PublicBusinessProfileClient({
               />
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ================= FOUNDER BIOGRAPHY DIALOG ================= */}
+      <Dialog open={founderModalOpen} onOpenChange={setFounderModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold">
+              <Users className="size-5 text-primary" />
+              <span>About {business.owner_name || business.founder_name || "Founder & Leadership"}</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {business.owner_designation || business.founder_title || "Founder"} &bull; {business.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="flex items-center gap-4 p-3.5 rounded-xl bg-muted/40 border">
+              <div className="relative size-16 rounded-full overflow-hidden border-2 border-primary/20 shrink-0 bg-muted">
+                {Boolean(business.owner_image_url || business.founder_image_url) ? (
+                  <Image
+                    src={business.owner_image_url || business.founder_image_url}
+                    alt={business.owner_name || business.founder_name || "Founder"}
+                    fill
+                    className="object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-bold text-xl">
+                    {(business.owner_name || business.founder_name || "O").charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h4 className="font-bold text-foreground text-sm sm:text-base">
+                  {business.owner_name || business.founder_name}
+                </h4>
+                <p className="text-xs font-semibold text-primary">
+                  {business.owner_designation || business.founder_title}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                  {business.name}
+                </p>
+              </div>
+            </div>
+            <div className="text-muted-foreground leading-relaxed whitespace-pre-line text-xs sm:text-sm bg-muted/20 p-4 rounded-xl border">
+              {business.owner_about || business.founder_about}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

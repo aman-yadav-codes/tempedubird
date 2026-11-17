@@ -27,11 +27,17 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
         COALESCE(ip.phone, bp.phone, u.phone) AS owner_phone,
         COALESCE(bp.whatsapp, ip.phone, bp.phone, u.phone) AS owner_whatsapp,
         COALESCE(ip.email, bp.email, u.email) AS owner_email,
-        ip.founder_about AS owner_about
+        COALESCE(ip.founder_about, bp.about) AS owner_about,
+        ip.founder_about,
+        ip.founder_name,
+        ip.founder_title,
+        ip.mission,
+        ip.vision,
+        ip.goal
       FROM business_profiles bp
       LEFT JOIN categories c ON c.id = bp.category_id
       LEFT JOIN categories sc ON sc.id = bp.subcategory_id
-      LEFT JOIN institution_profiles ip ON ip.id = bp.institution_profile_id
+      LEFT JOIN institution_profiles ip ON (ip.id = bp.institution_profile_id OR ip.id = bp.id OR ip.business_id = bp.id)
       LEFT JOIN users u ON u.id = bp.user_id
       WHERE (bp.slug = $1 OR bp.id = $2 OR bp.institution_profile_id = $2 OR $1 ILIKE '%' || bp.slug || '%')
         AND COALESCE(bp.is_active, TRUE) = TRUE
