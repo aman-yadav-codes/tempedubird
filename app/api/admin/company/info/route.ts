@@ -51,6 +51,15 @@ async function ensureCompanyInfoSchema() {
     ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS qualifications TEXT;
     ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS banner_url TEXT;
     ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS gallery_images TEXT[];
+    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_name VARCHAR(255);
+    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_title VARCHAR(255);
+    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_image_url TEXT;
+    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_about TEXT;
+    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS mission TEXT;
+    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS vision TEXT;
+    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS goal TEXT;
+    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS established_year INTEGER;
+    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS opening_hours JSONB;
     ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS subcategory_ids INTEGER[];
     ALTER TABLE professional_profiles ADD COLUMN IF NOT EXISTS subcategory_ids INTEGER[];
     ALTER TABLE professional_profiles ADD COLUMN IF NOT EXISTS gallery_images TEXT[];
@@ -72,12 +81,23 @@ async function resolveActiveBusinessId(req: Request, user?: any, body?: any): Pr
   if (qBiz && /^\d+$/.test(qBiz)) {
     return Number(qBiz);
   }
+  const qInst = url.searchParams.get("institutionId") || url.searchParams.get("institution_id");
+  if (qInst && /^\d+$/.test(qInst)) {
+    return Number(qInst);
+  }
   const headerBiz = req.headers.get("x-business-id");
   if (headerBiz && /^\d+$/.test(headerBiz)) {
     return Number(headerBiz);
   }
+  const headerInst = req.headers.get("x-institution-id");
+  if (headerInst && /^\d+$/.test(headerInst)) {
+    return Number(headerInst);
+  }
   if (body?.business_id && !isNaN(Number(body.business_id))) {
     return Number(body.business_id);
+  }
+  if (body?.institution_id && !isNaN(Number(body.institution_id))) {
+    return Number(body.institution_id);
   }
   const config = getFrontendConfig();
   if (config.mode === "business" && config.businessId) {
@@ -268,6 +288,47 @@ export async function GET(req: Request) {
       row = res.rows[0];
     }
 
+    if (!row) {
+      const resAny = await db.query(
+        `SELECT * FROM platform_company_info ORDER BY id ASC LIMIT 1`
+      );
+      row = resAny.rows[0];
+    }
+
+    // Comprehensive fallback sync from institution_profiles if founder / mission / vision / etc. are null or empty
+    const targetInstId = row?.institution_id || row?.business_id || activeBizId;
+    if (targetInstId || row?.brand_name || row?.company_name) {
+      try {
+        const ipQuery = await db.query(
+          `SELECT * FROM institution_profiles
+           WHERE (id = $1 OR business_id = $1 OR LOWER(TRIM(name)) = LOWER(TRIM($2)))
+           ORDER BY (founder_name IS NOT NULL) DESC
+           LIMIT 1`,
+          [targetInstId || 0, row?.brand_name || row?.company_name || ""]
+        );
+        if (ipQuery.rows.length > 0) {
+          const ip = ipQuery.rows[0];
+          if (row) {
+            row.founder_name = row.founder_name || ip.founder_name || "";
+            row.founder_title = row.founder_title || ip.founder_title || "";
+            row.founder_image_url = row.founder_image_url || ip.founder_image_url || "";
+            row.founder_about = row.founder_about || ip.founder_about || "";
+            row.mission = row.mission || ip.mission || "";
+            row.vision = row.vision || ip.vision || "";
+            row.goal = row.goal || ip.goal || "";
+            row.about = row.about || ip.about || "";
+            row.established_year = row.established_year || ip.established_year || "";
+            if (!row.support_email) row.support_email = ip.email || "";
+            if (!row.phone) row.phone = ip.phone || "";
+            if (!row.website_url) row.website_url = ip.website || "";
+            if (!row.logo_url || row.logo_url === "/favicon.ico") row.logo_url = ip.logo_url || row.logo_url;
+          }
+        }
+      } catch (e) {
+        console.warn("[Company Info GET] Institution profile fallback warning:", e);
+      }
+    }
+
     let initialSubcategories: any[] = [];
     if (row?.category_id) {
       const parentRes = await db.query(`SELECT category_type FROM categories WHERE id = $1 LIMIT 1`, [row.category_id]);
@@ -330,6 +391,15 @@ export async function GET(req: Request) {
         support_phone: row.phone || "",
         helpline_toll_free: row.toll_free || "",
         about_text: row.about || "",
+        about: row.about || "",
+        founder_name: row.founder_name || "",
+        founder_title: row.founder_title || "",
+        founder_image_url: row.founder_image_url || "",
+        founder_about: row.founder_about || "",
+        mission: row.mission || "",
+        vision: row.vision || "",
+        goal: row.goal || "",
+        established_year: row.established_year ? String(row.established_year) : "",
       }
       : {
         listing_type: "business",
@@ -358,6 +428,16 @@ export async function GET(req: Request) {
         address_city: "New Delhi",
         state: "Delhi",
         address_state: "Delhi",
+        about: "EduBird is a unified education management platform providing state-of-the-art tools for institutions, staff, educators, and students.",
+        about_text: "EduBird is a unified education management platform providing state-of-the-art tools for institutions, staff, educators, and students.",
+        founder_name: "",
+        founder_title: "",
+        founder_image_url: "",
+        founder_about: "",
+        mission: "",
+        vision: "",
+        goal: "",
+        established_year: "",
       };
 
     if (activeBizId) {
@@ -473,7 +553,26 @@ export async function PUT(req: Request) {
       opening_hours,
       banner_url,
       gallery_images,
+      founder_name,
+      founder_title,
+      founder_image_url,
+      founder_about,
+      mission,
+      vision,
+      goal,
+      established_year,
     } = body;
+
+    const finalFounderName = founder_name !== undefined ? (founder_name ? String(founder_name).trim() : null) : undefined;
+    const finalFounderTitle = founder_title !== undefined ? (founder_title ? String(founder_title).trim() : null) : undefined;
+    const finalFounderImageUrl = founder_image_url !== undefined ? (founder_image_url ? String(founder_image_url).trim() : null) : undefined;
+    const finalFounderAbout = founder_about !== undefined ? (founder_about ? String(founder_about).trim() : null) : undefined;
+    const finalMission = mission !== undefined ? (mission ? String(mission).trim() : null) : undefined;
+    const finalVision = vision !== undefined ? (vision ? String(vision).trim() : null) : undefined;
+    const finalGoal = goal !== undefined ? (goal ? String(goal).trim() : null) : undefined;
+    const finalEstablishedYear = established_year !== undefined && established_year !== "" && !isNaN(Number(established_year))
+      ? Number(established_year)
+      : null;
 
     const finalBannerUrl = banner_url || null;
     const finalOpeningHours = (opening_hours && typeof opening_hours === "object" && Object.keys(opening_hours).length > 0)
@@ -566,6 +665,14 @@ export async function PUT(req: Request) {
              qualifications = $28,
              banner_url = $29,
              gallery_images = $30::text[],
+             founder_name = COALESCE($34, platform_company_info.founder_name),
+             founder_title = COALESCE($35, platform_company_info.founder_title),
+             founder_image_url = COALESCE($36, platform_company_info.founder_image_url),
+             founder_about = COALESCE($37, platform_company_info.founder_about),
+             mission = COALESCE($38, platform_company_info.mission),
+             vision = COALESCE($39, platform_company_info.vision),
+             goal = COALESCE($40, platform_company_info.goal),
+             established_year = COALESCE($41::integer, platform_company_info.established_year),
              updated_at = timezone('Asia/Kolkata', NOW()),
              updated_by = $31::integer
            WHERE id = $33::integer
@@ -604,6 +711,14 @@ export async function PUT(req: Request) {
             user?.id || null,
             finalSubcatIds.length > 0 ? finalSubcatIds : null,
             existing.rows[0].id,
+            finalFounderName !== undefined ? finalFounderName : null,
+            finalFounderTitle !== undefined ? finalFounderTitle : null,
+            finalFounderImageUrl !== undefined ? finalFounderImageUrl : null,
+            finalFounderAbout !== undefined ? finalFounderAbout : null,
+            finalMission !== undefined ? finalMission : null,
+            finalVision !== undefined ? finalVision : null,
+            finalGoal !== undefined ? finalGoal : null,
+            finalEstablishedYear !== null ? finalEstablishedYear : null,
           ]
         );
       } else {
@@ -614,10 +729,12 @@ export async function PUT(req: Request) {
              support_email, phone, toll_free, website_url, headquarters_address,
              city, state, pincode, working_hours, listing_type, category_id, subcategory_id, subcategory_ids, business_type,
              experience_years, skills, qualifications, banner_url, gallery_images,
+             founder_name, founder_title, founder_image_url, founder_about, mission, vision, goal, established_year,
              updated_at, updated_by
            ) VALUES (
              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
              $22, $23, $24, $32::integer[], $25, $26, $27, $28, $29, $30::text[],
+             $33, $34, $35, $36, $37, $38, $39, $40::integer,
              timezone('Asia/Kolkata', NOW()), $31
            )
            RETURNING *`,
@@ -654,6 +771,14 @@ export async function PUT(req: Request) {
             finalGalleryImages,
             user?.id || null,
             finalSubcatIds.length > 0 ? finalSubcatIds : null,
+            finalFounderName !== undefined ? finalFounderName : null,
+            finalFounderTitle !== undefined ? finalFounderTitle : null,
+            finalFounderImageUrl !== undefined ? finalFounderImageUrl : null,
+            finalFounderAbout !== undefined ? finalFounderAbout : null,
+            finalMission !== undefined ? finalMission : null,
+            finalVision !== undefined ? finalVision : null,
+            finalGoal !== undefined ? finalGoal : null,
+            finalEstablishedYear !== null ? finalEstablishedYear : null,
           ]
         );
       }
@@ -889,6 +1014,14 @@ export async function PUT(req: Request) {
         email = COALESCE($4, email),
         website = COALESCE($5, website),
         about = COALESCE($6, about),
+             founder_name = COALESCE($8, founder_name),
+             founder_title = COALESCE($9, founder_title),
+             founder_image_url = COALESCE($10, founder_image_url),
+             founder_about = COALESCE($11, founder_about),
+             mission = COALESCE($12, mission),
+             vision = COALESCE($13, vision),
+             goal = COALESCE($14, goal),
+             established_year = COALESCE($15::integer, established_year),
         updated_at = NOW()
          WHERE id = $7 OR business_id = $7 OR id = (SELECT institution_profile_id FROM business_profiles WHERE id = $7)`,
         [
@@ -899,6 +1032,14 @@ export async function PUT(req: Request) {
           website_url || null,
           finalAbout,
           activeBizId,
+          finalFounderName !== undefined ? finalFounderName : null,
+          finalFounderTitle !== undefined ? finalFounderTitle : null,
+          finalFounderImageUrl !== undefined ? finalFounderImageUrl : null,
+          finalFounderAbout !== undefined ? finalFounderAbout : null,
+          finalMission !== undefined ? finalMission : null,
+          finalVision !== undefined ? finalVision : null,
+          finalGoal !== undefined ? finalGoal : null,
+          finalEstablishedYear !== null ? finalEstablishedYear : null,
         ]
       );
     } else {
@@ -935,6 +1076,14 @@ export async function PUT(req: Request) {
         banner_url = $29,
         gallery_images = $30::text[],
         opening_hours = CASE WHEN $31::jsonb IS NOT NULL THEN $31::jsonb ELSE opening_hours END,
+        founder_name = COALESCE($32, founder_name),
+        founder_title = COALESCE($33, founder_title),
+        founder_image_url = COALESCE($34, founder_image_url),
+        founder_about = COALESCE($35, founder_about),
+        mission = COALESCE($36, mission),
+        vision = COALESCE($37, vision),
+        goal = COALESCE($38, goal),
+        established_year = COALESCE($39::integer, established_year),
         updated_at = timezone('Asia/Kolkata', NOW()),
         updated_by = $27
          WHERE id = COALESCE(
@@ -974,6 +1123,14 @@ export async function PUT(req: Request) {
           finalBannerUrl,
           finalGalleryImages,
           finalOpeningHours,
+          finalFounderName !== undefined ? finalFounderName : null,
+          finalFounderTitle !== undefined ? finalFounderTitle : null,
+          finalFounderImageUrl !== undefined ? finalFounderImageUrl : null,
+          finalFounderAbout !== undefined ? finalFounderAbout : null,
+          finalMission !== undefined ? finalMission : null,
+          finalVision !== undefined ? finalVision : null,
+          finalGoal !== undefined ? finalGoal : null,
+          finalEstablishedYear !== null ? finalEstablishedYear : null,
         ]
       );
       updatedRow = res.rows[0];

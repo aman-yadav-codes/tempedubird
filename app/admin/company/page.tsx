@@ -129,6 +129,10 @@ const ALL_DETAILS_TABS = [
   { slug: "contact-branches", label: "Identity", icon: Building2 },
   { slug: "address", label: "Address", icon: MapPin },
   { slug: "working-hours", label: "Working Hours", icon: Clock },
+  { slug: "about-institute", label: "About Us", icon: Info },
+  { slug: "mission-vision-goal", label: "Mission, Vision & Goal", icon: Target },
+  { slug: "about-founder", label: "About Founder", icon: User },
+  { slug: "facilities", label: "Facilities & Infrastructure", icon: Sparkles },
   { slug: "payment-methods", label: "Payment Methods", icon: CreditCard },
   { slug: "faqs", label: "FAQs", icon: HelpCircle },
   { slug: "privacy-policy", label: "Privacy Policy", icon: ShieldCheck },
@@ -223,7 +227,9 @@ export default function AdminCompanyPage() {
   // Sync tab with URL
   useEffect(() => {
     if (tabFromUrl) {
-      const normalizedTab = tabFromUrl === "branches" ? "address" : tabFromUrl;
+      let normalizedTab = tabFromUrl === "branches" ? "address" : tabFromUrl;
+      if (normalizedTab === "about-us") normalizedTab = "about-institute";
+      if (normalizedTab === "mission-vision-goals") normalizedTab = "mission-vision-goal";
       if (normalizedTab !== activeTab) {
         setActiveTab(normalizedTab);
       }
@@ -620,7 +626,14 @@ export default function AdminCompanyPage() {
   const fetchCompanyInfo = useCallback(async () => {
     setLoadingCompanyInfo(true);
     try {
-      const res = await fetch("/api/admin/company/info", { headers: authHeader });
+      const activeInstId = typeof window !== "undefined" ? (localStorage.getItem("active_institution_id") || "") : "";
+      const url = activeInstId ? `/api/admin/company/info?institutionId=${encodeURIComponent(activeInstId)}` : "/api/admin/company/info";
+      const res = await fetch(url, {
+        headers: {
+          ...authHeader,
+          ...(activeInstId ? { "x-institution-id": activeInstId, "x-business-id": activeInstId } : {}),
+        },
+      });
       if (res.ok) {
         const json = await res.json();
         if (json.businessCategories || json.categories) {
@@ -643,6 +656,16 @@ export default function AdminCompanyPage() {
           setCompanyInfo((prev) => ({
             ...prev,
             ...json.data,
+            about: json.data.about || json.data.about_text || prev.about || "",
+            about_text: json.data.about_text || json.data.about || prev.about_text || "",
+            founder_name: json.data.founder_name || prev.founder_name || "",
+            founder_title: json.data.founder_title || prev.founder_title || "",
+            founder_image_url: json.data.founder_image_url || prev.founder_image_url || "",
+            founder_about: json.data.founder_about || prev.founder_about || "",
+            mission: json.data.mission || prev.mission || "",
+            vision: json.data.vision || prev.vision || "",
+            goal: json.data.goal || prev.goal || "",
+            established_year: json.data.established_year ? String(json.data.established_year) : (prev.established_year || ""),
             opening_hours: parsedHours,
             subcategory_ids: sIds,
             subcategory_id: sIds[0] || json.data.subcategory_id || null,
@@ -710,12 +733,14 @@ export default function AdminCompanyPage() {
   const handleSaveCompanyInfo = async () => {
     setSavingCompanyInfo(true);
     try {
+      const activeInstId = typeof window !== "undefined" ? (localStorage.getItem("active_institution_id") || "") : "";
       const summaryText = Object.entries(companyInfo.opening_hours || DEFAULT_OPENING_HOURS)
         .map(([day, s]: [string, any]) => `${day.slice(0, 3).toUpperCase()}: ${s.is_closed ? "Closed" : `${s.open}-${s.close}`}`)
         .join(", ");
 
       const payload = {
         ...companyInfo,
+        institution_id: activeInstId ? Number(activeInstId) : undefined,
         working_hours: companyInfo.working_hours || summaryText,
       };
 
@@ -724,6 +749,7 @@ export default function AdminCompanyPage() {
         headers: {
           "Content-Type": "application/json",
           ...authHeader,
+          ...(activeInstId ? { "x-institution-id": activeInstId, "x-business-id": activeInstId } : {}),
           ...((companyInfo as any)?.business_id ? { "x-business-id": String((companyInfo as any).business_id) } : {}),
         },
         body: JSON.stringify(payload),
@@ -878,23 +904,18 @@ export default function AdminCompanyPage() {
   // Fetch data on-demand based on active tab
   useEffect(() => {
     if (!isReady || !canAccessCompany) return;
+    void fetchCompanyInfo();
+    void fetchBranches();
+    void fetchPagesData();
+    void fetchPaymentMethods();
+    void fetchFaqsData();
+    void fetchFacilitiesData();
     if (activeTab === "hostels") {
       void fetchHostels();
     } else if (activeTab === "libraries") {
       void fetchLibraries();
-    } else if (activeTab === "address" || activeTab === "branches" || activeTab === "contact-branches" || activeTab === "about-institute" || activeTab === "mission-vision-goal" || activeTab === "about-founder") {
-      void fetchCompanyInfo();
-      void fetchBranches();
-    } else if (activeTab === "facilities") {
-      void fetchFacilitiesData();
-    } else if (activeTab === "payment-methods") {
-      void fetchPaymentMethods();
-    } else if (activeTab === "faqs") {
-      void fetchFaqsData();
-    } else {
-      void fetchPagesData();
     }
-  }, [isReady, canAccessCompany, activeTab, fetchHostels, fetchLibraries, fetchBranches, fetchCompanyInfo, fetchPaymentMethods, fetchFaqsData, fetchPagesData]);
+  }, [isReady, canAccessCompany, activeTab, fetchHostels, fetchLibraries, fetchBranches, fetchCompanyInfo, fetchPaymentMethods, fetchFaqsData, fetchPagesData, fetchFacilitiesData]);
 
   // Handle Page Form Field Changes
   const handlePageChange = (slug: string, field: string, value: any) => {
@@ -3489,9 +3510,9 @@ export default function AdminCompanyPage() {
       <Dialog open={branchDialogOpen} onOpenChange={setBranchDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingBranch ? "Edit Address / Office" : "Add Address / Office"}</DialogTitle>
-            <DialogDescription>
-              Configure official address, location on Google Maps, and contact details.
+            <DialogTitle>{editingBranch ? "Edit Branch Office" : "Add Branch Office"}</DialogTitle>
+            <DialogDescription className="sr-only">
+              Configure official address and contact details.
             </DialogDescription>
           </DialogHeader>
 
@@ -3502,7 +3523,7 @@ export default function AdminCompanyPage() {
                 id="br-name"
                 value={branchName}
                 onChange={(e) => setBranchName(e.target.value)}
-                placeholder="e.g. Head Office, Main Campus, Central Center"
+                placeholder="e.g. EduBird North Regional Office"
               />
             </div>
 
@@ -3617,7 +3638,7 @@ export default function AdminCompanyPage() {
             </Button>
             <Button onClick={handleSaveBranch} disabled={savingBranch}>
               {savingBranch ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
-              {editingBranch ? "Update Address" : "Save Address"}
+              {editingBranch ? "Update Branch" : "Save Branch"}
             </Button>
           </DialogFooter>
         </DialogContent>
