@@ -69,7 +69,7 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
     const userId = business.user_id || -1;
 
     // 2. Concurrently fetch products, services, professionals, reviews, courses, jobs, gallery
-    const [productsSettled, servicesSettled, professionalsSettled, reviewsSettled, coursesSettled, jobsSettled, gallerySettled] = await Promise.allSettled([
+    const [productsSettled, servicesSettled, professionalsSettled, reviewsSettled, coursesSettled, jobsSettled, gallerySettled, packagesSettled] = await Promise.allSettled([
       // Products: Query store products first, falling back to / unioning master_products
       db.query(
         `SELECT
@@ -287,6 +287,31 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
         LIMIT 50`,
         [instId, bizId]
       ),
+
+      // Packages: Platform Admin Packages from sales_packages
+      db.query(
+        `SELECT
+          id,
+          name,
+          package_for,
+          COALESCE(package_for_types, '[]'::jsonb) AS package_for_types,
+          CAST(price AS DOUBLE PRECISION) AS price,
+          price_unit,
+          CAST(price_monthly AS DOUBLE PRECISION) AS price_monthly,
+          CAST(price_yearly AS DOUBLE PRECISION) AS price_yearly,
+          CAST(price_once AS DOUBLE PRECISION) AS price_once,
+          CAST(storage_limit_gb AS DOUBLE PRECISION) AS storage_limit_gb,
+          validity_count,
+          validity_unit,
+          description,
+          is_active,
+          created_at
+        FROM sales_packages
+        WHERE COALESCE(is_deleted, FALSE) = FALSE
+          AND is_active = TRUE
+        ORDER BY id ASC
+        LIMIT 50`
+      ),
     ]);
 
     const galleryRows = gallerySettled.status === "fulfilled" ? gallerySettled.value.rows : [];
@@ -304,6 +329,7 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
       reviews: reviewsSettled.status === "fulfilled" ? reviewsSettled.value.rows : [],
       courses: coursesSettled.status === "fulfilled" ? coursesSettled.value.rows : [],
       jobs: jobsSettled.status === "fulfilled" ? jobsSettled.value.rows : [],
+      packages: packagesSettled.status === "fulfilled" ? packagesSettled.value.rows : [],
     };
   } catch (err: any) {
     console.error("fetchBusinessFullData error:", err?.message || err);
@@ -364,6 +390,7 @@ export default async function BusinessProfilePage({ params }: Props) {
         reviews={data.reviews}
         courses={data.courses}
         jobs={data.jobs}
+        packages={data.packages || []}
       />
     </Suspense>
   );

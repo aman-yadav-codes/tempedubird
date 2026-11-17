@@ -105,8 +105,11 @@ export async function POST(req: Request) {
 
     if (uploadSuccess && openinaryResult) {
       return NextResponse.json({
+        url: openinaryResult.fullUrl,
+        file_url: openinaryResult.fullUrl,
         data: {
           url: openinaryResult.fullUrl,
+          file_url: openinaryResult.fullUrl,
           public_id: openinaryResult.path,
           resource_type: file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "raw",
           file_type: file.type,
@@ -130,9 +133,13 @@ export async function POST(req: Request) {
     if (file.type.startsWith("image/")) resourceType = "image";
     else if (file.type.startsWith("video/")) resourceType = "video";
 
+    const localUrl = `/uploads/documents/${uniqueFileName}`;
     return NextResponse.json({
+      url: localUrl,
+      file_url: localUrl,
       data: {
-        url: `/uploads/documents/${uniqueFileName}`,
+        url: localUrl,
+        file_url: localUrl,
         public_id: `local_documents_${uniqueFileName}`,
         resource_type: resourceType,
         file_type: file.type,

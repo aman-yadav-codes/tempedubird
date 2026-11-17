@@ -154,40 +154,28 @@ export default function PublicPackagesPage() {
             {config.description}
           </p>
 
-          {/* Audience Tabs — hidden for logged-in users (auto-selected) */}
-          {!isLocked && (
-            <div className="pt-4 flex items-center justify-center gap-2 flex-wrap">
-              {(Object.keys(AUDIENCE_CONFIG) as AudienceTab[]).map((tab) => {
-                const cfg = AUDIENCE_CONFIG[tab];
-                const Icon = cfg.icon;
-                return (
-                  <button
-                    key={tab}
-                    type="button"
-                    onClick={() => setActiveTab(tab)}
-                    className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-full border text-sm font-bold transition-all duration-200 ${
-                      activeTab === tab
-                        ? `${cfg.bg} ${cfg.color} shadow-sm`
-                        : "bg-background border-border text-muted-foreground hover:border-primary/40"
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {cfg.label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Show active audience badge for logged-in users */}
-          {isLocked && (
-            <div className="pt-4 flex justify-center">
-              <div className={`inline-flex items-center gap-2 px-5 py-2 rounded-full border text-sm font-bold ${config.bg} ${config.color}`}>
-                <config.icon className="h-4 w-4" />
-                {config.label}
-              </div>
-            </div>
-          )}
+          {/* Audience Tabs */}
+          <div className="pt-4 flex items-center justify-center gap-2 flex-wrap">
+            {(Object.keys(AUDIENCE_CONFIG) as AudienceTab[]).map((tab) => {
+              const cfg = AUDIENCE_CONFIG[tab];
+              const Icon = cfg.icon;
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-full border text-sm font-bold transition-all duration-200 cursor-pointer ${
+                    activeTab === tab
+                      ? `${cfg.bg} ${cfg.color} shadow-sm`
+                      : "bg-background border-border text-muted-foreground hover:border-primary/40"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {cfg.label}
+                </button>
+              );
+            })}
+          </div>
 
           {/* Billing Tabs: Monthly / Yearly / One-Time */}
           <div className="pt-2 flex items-center justify-center">

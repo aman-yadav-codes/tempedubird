@@ -62,6 +62,7 @@ export default async function HomePage() {
           reviews={data.reviews || []}
           courses={data.courses || []}
           jobs={data.jobs || []}
+          packages={data.packages || []}
           isHomePage={true}
         />
       );

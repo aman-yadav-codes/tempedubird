@@ -42,6 +42,7 @@ import {
   Loader2,
   Store,
   ExternalLink,
+  Boxes,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore, useCartStore } from "@/store";
@@ -77,6 +78,7 @@ type PublicNavbarProps = {
 const CATEGORY_ITEMS: { key: CategoryKey; label: string; href: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "courses", label: "Courses", href: "/courses", icon: BookOpen },
   { key: "products", label: "Product", href: "/products", icon: ShoppingCart },
+  { key: "packages", label: "Packages", href: "/packages", icon: Boxes },
   { key: "teachers", label: "Staff", href: "/teachers", icon: UserCheck },
   { key: "gallery", label: "Gallery", href: "/gallery", icon: ImageIcon },
   { key: "jobs", label: "Jobs", href: "/jobs", icon: Briefcase },
@@ -171,6 +173,7 @@ export function PublicNavbar({
   const PLATFORM_MARKETPLACE_KEYS: CategoryKey[] = [
     "courses",
     "products",
+    "packages",
     "teachers",
     "gallery",
     "jobs",
