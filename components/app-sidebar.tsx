@@ -473,7 +473,6 @@ const navItems: SidebarItem[] = [
             { title: "Inventory", url: "/admin/inventory", icon: Boxes },
             { title: "Team", url: "/admin/team", icon: Users },
             { title: "Business Calendar", url: "/admin/calendar", icon: CalendarDays },
-            { title: "Timetable", url: "/admin/master-data/timetable-setup", icon: CalendarDays },
             { title: "Attendance Setup", url: "/admin/master-data/attendance-setup", icon: ClipboardCheck },
             { title: "Noticeboard", url: "/admin/noticeboard", icon: Bell },
             { title: "Complaints", url: "/admin/complaints", icon: MessageSquareWarning },
