@@ -301,6 +301,15 @@ export function PublicNavbar({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-60 p-1.5 space-y-1 bg-white border border-gray-200 shadow-xl rounded-xl">
                   <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
+                    <Link href="/about#overview" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
+                      <Building2 className="h-4 w-4 text-rose-600 shrink-0" />
+                      <div className="flex flex-col leading-tight">
+                        <span className="font-bold">Overview</span>
+                        <span className="text-[10px] text-gray-500 font-normal">Organization & campus overview</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
                     <Link href="/about#mission-vision" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
                       <Target className="h-4 w-4 text-rose-600 shrink-0" />
                       <div className="flex flex-col leading-tight">
@@ -315,24 +324,6 @@ export function PublicNavbar({
                       <div className="flex flex-col leading-tight">
                         <span className="font-bold">About Founder</span>
                         <span className="text-[10px] text-gray-500 font-normal">Leadership & founders</span>
-                      </div>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
-                    <Link href="/about#facilities" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
-                      <Sparkles className="h-4 w-4 text-rose-600 shrink-0" />
-                      <div className="flex flex-col leading-tight">
-                        <span className="font-bold">Facilities & Infrastructure</span>
-                        <span className="text-[10px] text-gray-500 font-normal">Labs, sports & campus amenities</span>
-                      </div>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
-                    <Link href="/about#institute" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
-                      <Building2 className="h-4 w-4 text-rose-600 shrink-0" />
-                      <div className="flex flex-col leading-tight">
-                        <span className="font-bold">About Institute</span>
-                        <span className="text-[10px] text-gray-500 font-normal">Overview & heritage</span>
                       </div>
                     </Link>
                   </DropdownMenuItem>
@@ -682,7 +673,15 @@ export function PublicNavbar({
                 <span className="text-xs font-bold text-[#800000] px-1 block flex items-center gap-1.5">
                   <Info className="h-3.5 w-3.5 text-[#800000]" /> About Us & Campus
                 </span>
-                <div className="grid grid-cols-2 gap-1 pt-1">
+                <div className="grid grid-cols-3 gap-1 pt-1">
+                  <Link
+                    href="/about#overview"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-1.5 p-1.5 rounded-lg text-xs font-semibold text-gray-800 hover:bg-rose-100/60"
+                  >
+                    <Building2 className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                    <span className="truncate">Overview</span>
+                  </Link>
                   <Link
                     href="/about#mission-vision"
                     onClick={() => setMobileMenuOpen(false)}
@@ -698,22 +697,6 @@ export function PublicNavbar({
                   >
                     <User className="h-3.5 w-3.5 text-rose-600 shrink-0" />
                     <span className="truncate">About Founder</span>
-                  </Link>
-                  <Link
-                    href="/about#facilities"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-1.5 p-1.5 rounded-lg text-xs font-semibold text-gray-800 hover:bg-rose-100/60"
-                  >
-                    <Sparkles className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                    <span className="truncate">Facilities</span>
-                  </Link>
-                  <Link
-                    href="/about#institute"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-1.5 p-1.5 rounded-lg text-xs font-semibold text-gray-800 hover:bg-rose-100/60"
-                  >
-                    <Building2 className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                    <span className="truncate">Institute Info</span>
                   </Link>
                 </div>
               </div>
