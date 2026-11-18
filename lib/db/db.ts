@@ -134,7 +134,7 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: str
   }
 }
 
-async function retryTransient<T>(operation: () => Promise<T>, attempts = 3, label = "db.operation") {
+async function retryTransient<T>(operation: () => Promise<T>, attempts = 2, label = "db.operation") {
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -156,7 +156,7 @@ async function retryTransient<T>(operation: () => Promise<T>, attempts = 3, labe
   throw lastError;
 }
 
-const connectTimeoutMs = getNumberEnv("DATABASE_CONNECT_TIMEOUT_MS", 20_000);
+const connectTimeoutMs = getNumberEnv("DATABASE_CONNECT_TIMEOUT_MS", 10_000);
 const queryTimeoutMs = getNumberEnv("DATABASE_QUERY_TIMEOUT_MS", 35_000);
 const useDatabaseSsl = process.env.DATABASE_SSL !== "false";
 
