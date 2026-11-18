@@ -245,6 +245,7 @@ export function PublicNavbar({
                     src={institutionInfo.logo_url}
                     alt={institutionDisplayName}
                     fill
+                    unoptimized
                     sizes="36px"
                     className="object-cover"
                   />

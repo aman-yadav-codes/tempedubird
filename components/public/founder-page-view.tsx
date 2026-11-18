@@ -145,6 +145,7 @@ export function FounderPageView({ initialProfile, companyPage }: FounderPageView
                     alt={founderName}
                     fill
                     priority
+                    unoptimized
                     sizes="(max-width: 768px) 240px, 288px"
                     className="object-cover group-hover:scale-105 transition-transform duration-500"
                   />

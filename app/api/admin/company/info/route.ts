@@ -217,7 +217,7 @@ export async function GET(req: Request) {
         );
         if (bpRes.rows.length > 0) {
           const b = bpRes.rows[0];
-          await db.query(`SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), GREATEST(COALESCE((SELECT MAX(id) FROM platform_company_info), 0) + 1, 20), true)`);
+          await db.query(`SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), GREATEST(COALESCE((SELECT MAX(id) FROM platform_company_info), 0) + 100, 1000), true)`);
           const inserted = await db.query(
             `INSERT INTO platform_company_info (
               company_name, brand_name, tagline, logo_url, favicon_url, about,
@@ -271,7 +271,7 @@ export async function GET(req: Request) {
             const pState = ip.branch_state || "";
             const pPin = ip.branch_pincode || "";
 
-            await db.query(`SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), GREATEST(COALESCE((SELECT MAX(id) FROM platform_company_info), 0) + 1, 20), true)`);
+            await db.query(`SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), GREATEST(COALESCE((SELECT MAX(id) FROM platform_company_info), 0) + 100, 1000), true)`);
             const inserted = await db.query(
               `INSERT INTO platform_company_info (
                 company_name, brand_name, tagline, logo_url, favicon_url, about,
@@ -662,10 +662,13 @@ export async function PUT(req: Request) {
           `SELECT id FROM platform_company_info
            WHERE business_id = $1
               OR institution_id = $1
+              OR institution_id = $2
+              OR business_id = $2
               OR institution_id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1)
               OR business_id IN (SELECT id FROM business_profiles WHERE institution_profile_id = $1)
-           ORDER BY (business_id = $1) DESC LIMIT 1`,
-          [activeBizId]
+              OR business_id IN (SELECT id FROM business_profiles WHERE institution_profile_id = $2)
+           ORDER BY (business_id = $1) DESC, (institution_id = $2) DESC LIMIT 1`,
+          [activeBizId, instId]
         );
       }
 
@@ -762,7 +765,7 @@ export async function PUT(req: Request) {
           ]
         );
       } else {
-        await db.query(`SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), GREATEST(COALESCE((SELECT MAX(id) FROM platform_company_info), 0) + 1, 20), true)`);
+        await db.query(`SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), GREATEST(COALESCE((SELECT MAX(id) FROM platform_company_info), 0) + 100, 1000), true)`);
         res = await db.query(
           `INSERT INTO platform_company_info (
              business_id, institution_id, company_name, brand_name, tagline, logo_url, dark_logo_url, favicon_url,

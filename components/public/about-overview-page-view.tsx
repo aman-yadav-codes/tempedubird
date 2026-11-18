@@ -209,6 +209,7 @@ export function AboutOverviewPageView({ initialProfile, companyPage }: AboutOver
                     alt={name}
                     fill
                     priority
+                    unoptimized
                     sizes="(max-width: 1024px) 100vw, 460px"
                     className="object-cover group-hover:scale-105 transition-transform duration-500"
                   />
