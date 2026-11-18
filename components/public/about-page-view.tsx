@@ -337,17 +337,22 @@ export function AboutPageView({ initialProfile, companyPage }: AboutPageViewProp
               {/* Founder Avatar / Photograph */}
               <div className="flex flex-col items-center text-center">
                 <div className="relative size-44 sm:size-48 rounded-2xl overflow-hidden bg-muted border-2 border-primary/20 shadow-md">
-                  {profile?.founder_image_url ? (
+                  {profile?.founder_image_url && !profile.founder_image_url.includes("maashardadeepak1") ? (
                     <Image
                       src={profile.founder_image_url}
                       alt={founderName}
                       fill
+                      unoptimized
                       className="object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center bg-primary/10 text-primary">
-                      <User className="size-20 opacity-80" />
-                    </div>
+                    <Image
+                      src="/uploads/media/deepak_yadav_founder.jpg"
+                      alt={founderName}
+                      fill
+                      unoptimized
+                      className="object-cover"
+                    />
                   )}
                 </div>
 

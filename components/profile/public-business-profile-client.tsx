@@ -1933,21 +1933,30 @@ export function PublicBusinessProfileClient({
                       </CardHeader>
                       <CardContent className="p-4 space-y-4">
                         <div className="flex items-center gap-3.5">
-                          <div className="relative size-14 rounded-full overflow-hidden border-2 border-primary/20 shrink-0 bg-muted">
-                            {Boolean(business.owner_image_url || business.founder_image_url) ? (
-                              <Image
-                                src={business.owner_image_url || business.founder_image_url}
-                                alt={business.owner_name || business.founder_name || business.name || "Owner"}
-                                fill
-                                sizes="56px"
-                                className="object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-bold text-lg">
-                                {(business.owner_name || business.founder_name || business.name || "O").charAt(0).toUpperCase()}
+                          {(() => {
+                            const resolvedOwnerImg =
+                              (business.owner_image_url && !business.owner_image_url.includes("maashardadeepak1") && business.owner_image_url) ||
+                              (business.founder_image_url && !business.founder_image_url.includes("maashardadeepak1") && business.founder_image_url) ||
+                              "/uploads/media/deepak_yadav_founder.jpg";
+                            return (
+                              <div className="relative size-14 rounded-full overflow-hidden border-2 border-primary/20 shrink-0 bg-muted group">
+                                {resolvedOwnerImg ? (
+                                  <Image
+                                    src={resolvedOwnerImg}
+                                    alt={business.owner_name || business.founder_name || business.name || "Owner"}
+                                    fill
+                                    unoptimized
+                                    sizes="56px"
+                                    className="object-cover group-hover:scale-105 transition-transform"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-bold text-lg">
+                                    {(business.owner_name || business.founder_name || business.name || "O").charAt(0).toUpperCase()}
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
+                            );
+                          })()}
                           <div className="min-w-0 flex-1">
                             <h4 className="text-sm font-bold text-foreground truncate">
                               {business.owner_name || business.founder_name || "Business Owner"}
@@ -3584,20 +3593,29 @@ export function PublicBusinessProfileClient({
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="flex items-center gap-4 p-3.5 rounded-xl bg-muted/40 border">
-              <div className="relative size-16 rounded-full overflow-hidden border-2 border-primary/20 shrink-0 bg-muted">
-                {Boolean(business.owner_image_url || business.founder_image_url) ? (
-                  <Image
-                    src={business.owner_image_url || business.founder_image_url}
-                    alt={business.owner_name || business.founder_name || "Founder"}
-                    fill
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-bold text-xl">
-                    {(business.owner_name || business.founder_name || "O").charAt(0).toUpperCase()}
+              {(() => {
+                const resolvedOwnerImg =
+                  (business.owner_image_url && !business.owner_image_url.includes("maashardadeepak1") && business.owner_image_url) ||
+                  (business.founder_image_url && !business.founder_image_url.includes("maashardadeepak1") && business.founder_image_url) ||
+                  "/uploads/media/deepak_yadav_founder.jpg";
+                return (
+                  <div className="relative size-16 rounded-full overflow-hidden border-2 border-primary/20 shrink-0 bg-muted">
+                    {resolvedOwnerImg ? (
+                      <Image
+                        src={resolvedOwnerImg}
+                        alt={business.owner_name || business.founder_name || "Founder"}
+                        fill
+                        unoptimized
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-bold text-xl">
+                        {(business.owner_name || business.founder_name || "O").charAt(0).toUpperCase()}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })()}
               <div className="min-w-0 flex-1">
                 <h4 className="font-bold text-foreground text-sm sm:text-base">
                   {business.owner_name || business.founder_name}

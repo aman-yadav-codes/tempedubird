@@ -57,7 +57,10 @@ export function FounderPageView({ initialProfile, companyPage }: FounderPageView
 
   const founderName = profile?.founder_name?.trim() || "Leadership & Visionary Board";
   const founderTitle = profile?.founder_title?.trim() || "Founder & Managing Director";
-  const founderImage = profile?.founder_image_url;
+  const founderImage =
+    profile?.founder_image_url && !profile.founder_image_url.includes("maashardadeepak1")
+      ? profile.founder_image_url
+      : "/uploads/media/deepak_yadav_founder.jpg";
 
   const founderAbout =
     profile?.founder_about?.trim() ||
