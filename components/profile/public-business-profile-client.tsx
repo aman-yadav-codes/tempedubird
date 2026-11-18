@@ -1631,6 +1631,181 @@ export function PublicBusinessProfileClient({
                       </CardContent>
                     </Card>
                   )}
+
+                  {/* ================= MISSION, VISION & STRATEGIC GOALS ================= */}
+                  {(() => {
+                    const missionText =
+                      business.mission?.trim() ||
+                      "At Maa Sharda Institute Pvt. Ltd., our mission is to provide quality, accessible, and career-oriented education empowering students through personalized mentorship and academic excellence.";
+                    const visionText =
+                      business.vision?.trim() ||
+                      "Our vision is to become a trusted and leading educational institution in Varanasi and beyond, fostering academic brilliance and moral leadership.";
+                    const goalText =
+                      business.goal?.trim() ||
+                      business.strategic_goals?.trim() ||
+                      "Academic Excellence: Provide high-quality education through effective teaching and modern learning practices.\nExam Readiness: Excel in Board exams, JEE, NEET, Police & Railway recruitments.\nHolistic Growth: Foster an inspiring, supportive, analytical, and disciplined academic environment.";
+
+                    const parsedGoals = goalText
+                      .split("\n")
+                      .map((g: string) => g.trim())
+                      .filter(Boolean)
+                      .map((goalLine: string, idx: number) => {
+                        const colonIdx = goalLine.indexOf(":");
+                        const title = colonIdx > -1 ? goalLine.slice(0, colonIdx).trim() : `Goal ${idx + 1}`;
+                        const desc = colonIdx > -1 ? goalLine.slice(colonIdx + 1).trim() : goalLine;
+                        return { title, desc };
+                      });
+
+                    return (
+                      <div className="space-y-4 pt-1">
+                        <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
+                                Core Principles
+                              </Badge>
+                              <span className="text-xs text-muted-foreground font-medium hidden sm:inline">• Academic Philosophy</span>
+                            </div>
+                            <h3 className="text-lg font-black text-foreground tracking-tight mt-1">
+                              Our Mission, Vision & Strategic Goals
+                            </h3>
+                          </div>
+                          <Button variant="ghost" size="sm" asChild className="h-7 text-xs font-bold text-primary hover:text-primary gap-1">
+                            <Link href="/about/mission-vision">
+                              <span>Details</span>
+                              <ChevronRight className="size-3.5" />
+                            </Link>
+                          </Button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* 1. Mission Card */}
+                          <Card className="rounded-2xl border shadow-xs overflow-hidden border-blue-200/80 dark:border-blue-900/50 bg-gradient-to-br from-blue-50/60 via-card to-card dark:from-blue-950/20 hover:shadow-md transition-all flex flex-col justify-between">
+                            <div>
+                              <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="size-9 rounded-xl bg-blue-600/10 text-blue-600 flex items-center justify-center shadow-xs">
+                                    <Target className="size-5" />
+                                  </div>
+                                  <div>
+                                    <CardTitle className="text-sm font-bold text-foreground">Our Mission</CardTitle>
+                                    <CardDescription className="text-[11px]">Core purpose & daily commitment</CardDescription>
+                                  </div>
+                                </div>
+                                <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/50">
+                                  <Link href="/about/mission-vision#mission">
+                                    <span>Details</span>
+                                    <ChevronRight className="size-3 ml-0.5" />
+                                  </Link>
+                                </Button>
+                              </CardHeader>
+                              <CardContent className="p-4 space-y-3">
+                                <blockquote className="border-l-3 border-blue-600 pl-3 py-1 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line bg-blue-50/30 dark:bg-blue-950/20 rounded-r-lg">
+                                  &ldquo;{missionText}&rdquo;
+                                </blockquote>
+                              </CardContent>
+                            </div>
+                            <div className="p-4 pt-0">
+                              <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
+                                <span className="flex items-center gap-1 text-blue-600 font-semibold">
+                                  <CheckCircle2 className="size-3.5" /> Purpose-driven
+                                </span>
+                                <span className="font-medium text-foreground">{business.name}</span>
+                              </div>
+                            </div>
+                          </Card>
+
+                          {/* 2. Vision Card */}
+                          <Card className="rounded-2xl border shadow-xs overflow-hidden border-purple-200/80 dark:border-purple-900/50 bg-gradient-to-br from-purple-50/60 via-card to-card dark:from-purple-950/20 hover:shadow-md transition-all flex flex-col justify-between">
+                            <div>
+                              <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="size-9 rounded-xl bg-purple-600/10 text-purple-600 flex items-center justify-center shadow-xs">
+                                    <Compass className="size-5" />
+                                  </div>
+                                  <div>
+                                    <CardTitle className="text-sm font-bold text-foreground">Our Vision</CardTitle>
+                                    <CardDescription className="text-[11px]">Future horizon & long-term impact</CardDescription>
+                                  </div>
+                                </div>
+                                <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/50">
+                                  <Link href="/about/mission-vision#vision">
+                                    <span>Details</span>
+                                    <ChevronRight className="size-3 ml-0.5" />
+                                  </Link>
+                                </Button>
+                              </CardHeader>
+                              <CardContent className="p-4 space-y-3">
+                                <blockquote className="border-l-3 border-purple-600 pl-3 py-1 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line bg-purple-50/30 dark:bg-purple-950/20 rounded-r-lg">
+                                  &ldquo;{visionText}&rdquo;
+                                </blockquote>
+                              </CardContent>
+                            </div>
+                            <div className="p-4 pt-0">
+                              <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
+                                <span className="flex items-center gap-1 text-purple-600 font-semibold">
+                                  <CheckCircle2 className="size-3.5" /> Future-focused
+                                </span>
+                                <span className="font-medium text-foreground">{business.name}</span>
+                              </div>
+                            </div>
+                          </Card>
+                        </div>
+
+                        {/* 3. Strategic Goals Card */}
+                        <Card className="rounded-2xl border shadow-xs overflow-hidden border-amber-200/80 dark:border-amber-900/50 bg-gradient-to-br from-amber-50/40 via-card to-card dark:from-amber-950/20 hover:shadow-md transition-all">
+                          <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
+                            <div className="flex items-center gap-2.5">
+                              <div className="size-9 rounded-xl bg-amber-600/10 text-amber-600 flex items-center justify-center shadow-xs">
+                                <Award className="size-5" />
+                              </div>
+                              <div>
+                                <CardTitle className="text-sm font-bold text-foreground">Our Strategic Goals & Milestones</CardTitle>
+                                <CardDescription className="text-[11px]">Actionable benchmarks for comprehensive learner success</CardDescription>
+                              </div>
+                            </div>
+                            <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/50">
+                              <Link href="/about/mission-vision#goals">
+                                <span>View All</span>
+                                <ChevronRight className="size-3 ml-0.5" />
+                              </Link>
+                            </Button>
+                          </CardHeader>
+                          <CardContent className="p-4 space-y-3">
+                            {parsedGoals.length > 0 ? (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {parsedGoals.map((g, idx) => (
+                                  <div key={idx} className="p-3 rounded-xl bg-card border border-border/60 shadow-2xs space-y-1">
+                                    <div className="flex items-center gap-1.5 text-amber-600 font-bold text-xs">
+                                      <Sparkles className="size-3.5 shrink-0" />
+                                      <span className="truncate">{g.title}</span>
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-3">
+                                      {g.desc}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <blockquote className="border-l-3 border-amber-600 pl-3 py-1 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line bg-amber-50/30 dark:bg-amber-950/20 rounded-r-lg">
+                                &ldquo;{goalText}&rdquo;
+                              </blockquote>
+                            )}
+
+                            <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
+                              <span className="flex items-center gap-1 text-amber-600 font-semibold">
+                                <CheckCircle2 className="size-3.5" /> Active Strategy
+                              </span>
+                              <Link href="/about/mission-vision#goals" className="font-bold text-primary hover:underline flex items-center gap-0.5 text-xs">
+                                <span>Read complete roadmap</span>
+                                <ChevronRight className="size-3" />
+                              </Link>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Right 1 Col: Reviews & Business Hours */}
@@ -1882,139 +2057,6 @@ export function PublicBusinessProfileClient({
                       </CardContent>
                     </Card>
                   )}
-
-                  {/* 1. Mission Card */}
-                  {(() => {
-                    const missionText = business.mission || "Empowering students through high-quality education, personalized mentorship, and academic excellence to build successful future careers.";
-                    return (
-                    <Card className="rounded-2xl border shadow-xs overflow-hidden hover:shadow-md transition-all border-blue-200/80 dark:border-blue-900/50 bg-gradient-to-br from-blue-50/60 via-card to-card dark:from-blue-950/20">
-                      <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
-                        <div className="flex items-center gap-2">
-                          <div className="size-8 rounded-lg bg-blue-600/10 text-blue-600 flex items-center justify-center">
-                            <Target className="size-4" />
-                          </div>
-                          <div>
-                            <CardTitle className="text-sm font-bold text-foreground">Our Mission</CardTitle>
-                            <CardDescription className="text-[11px]">Core purpose & daily commitment</CardDescription>
-                          </div>
-                        </div>
-                        <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/50">
-                          <Link href="/about/mission-vision#mission">
-                            <span>Details</span>
-                            <ChevronRight className="size-3 ml-0.5" />
-                          </Link>
-                        </Button>
-                      </CardHeader>
-                      <CardContent className="p-4 space-y-2">
-                        <blockquote className="border-l-2 border-blue-600 pl-3 py-0.5 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line">
-                          &ldquo;{missionText}&rdquo;
-                        </blockquote>
-                        <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
-                          <span className="flex items-center gap-1 text-blue-600 font-semibold">
-                            <CheckCircle2 className="size-3" /> Purpose-driven
-                          </span>
-                          <span className="font-medium">{business.name}</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    );
-                  })()}
-
-                  {/* 2. Vision Card */}
-                  {(() => {
-                    const visionText = business.vision || "To be recognized as a leading educational institute driving transformational learning, student character, and exceptional academic results.";
-                    return (
-                    <Card className="rounded-2xl border shadow-xs overflow-hidden hover:shadow-md transition-all border-purple-200/80 dark:border-purple-900/50 bg-gradient-to-br from-purple-50/60 via-card to-card dark:from-purple-950/20">
-                      <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
-                        <div className="flex items-center gap-2">
-                          <div className="size-8 rounded-lg bg-purple-600/10 text-purple-600 flex items-center justify-center">
-                            <Compass className="size-4" />
-                          </div>
-                          <div>
-                            <CardTitle className="text-sm font-bold text-foreground">Our Vision</CardTitle>
-                            <CardDescription className="text-[11px]">Future horizon & long-term impact</CardDescription>
-                          </div>
-                        </div>
-                        <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/50">
-                          <Link href="/about/mission-vision#vision">
-                            <span>Details</span>
-                            <ChevronRight className="size-3 ml-0.5" />
-                          </Link>
-                        </Button>
-                      </CardHeader>
-                      <CardContent className="p-4 space-y-2">
-                        <blockquote className="border-l-2 border-purple-600 pl-3 py-0.5 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line">
-                          &ldquo;{visionText}&rdquo;
-                        </blockquote>
-                        <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
-                          <span className="flex items-center gap-1 text-purple-600 font-semibold">
-                            <CheckCircle2 className="size-3" /> Future-focused
-                          </span>
-                          <span className="font-medium">{business.name}</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    );
-                  })()}
-
-                  {/* 3. Goal Card */}
-                  {(() => {
-                    const goalText = business.goal || business.strategic_goals || "Quality Education: Deliver concept-focused coaching and continuous mentorship.\nStudent Success: Equip students with competitive exam strategies and high scores.\nHolistic Growth: Foster an inspiring, supportive, and disciplined academic environment.";
-                    return (
-                    <Card className="rounded-2xl border shadow-xs overflow-hidden hover:shadow-md transition-all border-amber-200/80 dark:border-amber-900/50 bg-gradient-to-br from-amber-50/60 via-card to-card dark:from-amber-950/20">
-                      <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
-                        <div className="flex items-center gap-2">
-                          <div className="size-8 rounded-lg bg-amber-600/10 text-amber-600 flex items-center justify-center">
-                            <Award className="size-4" />
-                          </div>
-                          <div>
-                            <CardTitle className="text-sm font-bold text-foreground">Strategic Goals</CardTitle>
-                            <CardDescription className="text-[11px]">Milestones & active benchmarks</CardDescription>
-                          </div>
-                        </div>
-                        <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/50">
-                          <Link href="/about/mission-vision#goals">
-                            <span>View All</span>
-                            <ChevronRight className="size-3 ml-0.5" />
-                          </Link>
-                        </Button>
-                      </CardHeader>
-                      <CardContent className="p-4 space-y-2.5">
-                        <div className="space-y-2">
-                          {goalText
-                            .split("\n")
-                            .map((g: string) => g.trim())
-                            .filter(Boolean)
-                            .slice(0, 4)
-                            .map((goalItem: string, idx: number) => {
-                              const colonIdx = goalItem.indexOf(":");
-                              const title = colonIdx > -1 ? goalItem.slice(0, colonIdx).trim() : null;
-                              const desc = colonIdx > -1 ? goalItem.slice(colonIdx + 1).trim() : goalItem;
-
-                              return (
-                                <div key={idx} className="flex items-start gap-2 text-xs">
-                                  <CheckCircle2 className="size-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                                  <div className="text-foreground/90 leading-snug">
-                                    {title && <span className="font-bold text-foreground">{title}: </span>}
-                                    <span className="line-clamp-2">{desc}</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                        </div>
-                        <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
-                          <span className="flex items-center gap-1 text-amber-600 font-semibold">
-                            <CheckCircle2 className="size-3" /> Active Strategy
-                          </span>
-                          <Link href="/about/mission-vision#goals" className="font-bold text-primary hover:underline flex items-center gap-0.5">
-                            <span>Read complete roadmap</span>
-                            <ChevronRight className="size-3" />
-                          </Link>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    );
-                  })()}
                 </div>
               </div>
             </TabsContent>
