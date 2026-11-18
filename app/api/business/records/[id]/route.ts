@@ -23,7 +23,7 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
       FROM business_records br
       LEFT JOIN master_records cat ON cat.id = br.category_id
       LEFT JOIN master_records subcat ON subcat.id = br.subcategory_id
-      WHERE br.id = $1 AND br.is_deleted = FALSE AND (br.business_id = $2 OR br.institution_id = $3)
+      WHERE br.id = $1 AND br.is_deleted = FALSE AND (br.business_id = $2 OR br.institution_id = $3 OR br.business_id = $3 OR br.institution_id = $2)
       LIMIT 1
     `, [recordId, tenant.businessId, tenant.institutionId || tenant.businessId]);
 
@@ -149,7 +149,7 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
 
     // Check ownership
     const existingRes = await db.query(
-      `SELECT * FROM business_records WHERE id = $1 AND is_deleted = FALSE AND (business_id = $2 OR institution_id = $3)`,
+      `SELECT * FROM business_records WHERE id = $1 AND is_deleted = FALSE AND (business_id = $2 OR institution_id = $3 OR business_id = $3 OR institution_id = $2)`,
       [recordId, tenant.businessId, tenant.institutionId || tenant.businessId]
     );
     if (existingRes.rows.length === 0) {
@@ -601,7 +601,7 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
     const res = await db.query(`
       UPDATE business_records
       SET is_deleted = TRUE, deleted_at = NOW(), updated_by = $1, status = 'archived'
-      WHERE id = $2 AND is_deleted = FALSE AND (business_id = $3 OR institution_id = $4)
+      WHERE id = $2 AND is_deleted = FALSE AND (business_id = $3 OR institution_id = $4 OR business_id = $4 OR institution_id = $3)
       RETURNING id, title, vertical_code
     `, [tenant.userId, recordId, tenant.businessId, tenant.institutionId || tenant.businessId]);
 

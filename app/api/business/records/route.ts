@@ -33,7 +33,7 @@ export async function GET(req: Request) {
     // Tenant Isolation Filter
     const conditions: string[] = [
       "br.is_deleted = FALSE",
-      "(br.business_id = $1 OR br.institution_id = $2)"
+      "(br.business_id = $1 OR br.institution_id = $2 OR br.business_id = $2 OR br.institution_id = $1)"
     ];
     const params: any[] = [tenant.businessId, tenant.institutionId || tenant.businessId];
 

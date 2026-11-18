@@ -26,7 +26,7 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
         is_featured = COALESCE($3, is_featured),
         updated_by = $4,
         updated_at = NOW()
-      WHERE id = $5 AND is_deleted = FALSE AND (business_id = $6 OR institution_id = $7)
+      WHERE id = $5 AND is_deleted = FALSE AND (business_id = $6 OR institution_id = $7 OR business_id = $7 OR institution_id = $6)
       RETURNING id, title, status, is_active, is_featured
     `, [
       status || null,

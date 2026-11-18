@@ -3,7 +3,7 @@
 import { BedDouble } from "lucide-react";
 import { BusinessRecordManager } from "@/components/business/records/business-record-manager";
 
-export default function MarketingRoomsPage() {
+export default function MarketingRoomsPage({ isMasterCatalog }: { isMasterCatalog?: boolean } = {}) {
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-6">
       <BusinessRecordManager

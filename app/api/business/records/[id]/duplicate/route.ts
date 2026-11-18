@@ -17,7 +17,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
 
     // 1. Fetch original record
     const origRes = await db.query(
-      `SELECT * FROM business_records WHERE id = $1 AND is_deleted = FALSE AND (business_id = $2 OR institution_id = $3)`,
+      `SELECT * FROM business_records WHERE id = $1 AND is_deleted = FALSE AND (business_id = $2 OR institution_id = $3 OR business_id = $3 OR institution_id = $2)`,
       [recordId, tenant.businessId, tenant.institutionId || tenant.businessId]
     );
     if (origRes.rows.length === 0) {

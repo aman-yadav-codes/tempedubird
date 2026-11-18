@@ -74,14 +74,19 @@ export async function resolveTenantContext(req: Request): Promise<TenantContext 
   }
 
   const bizRow = await db.query(
-    `SELECT id, institution_profile_id, name FROM business_profiles WHERE id = $1 LIMIT 1`,
-    [candidateBizId]
+    `SELECT id, institution_profile_id, name FROM business_profiles 
+     WHERE id = $1 
+        OR institution_profile_id = $1 
+        OR ($2::integer IS NOT NULL AND (id = $2 OR institution_profile_id = $2))
+     ORDER BY (id = $1) DESC
+     LIMIT 1`,
+    [candidateBizId, candidateInstId]
   );
   const finalBiz = bizRow.rows[0] || { id: candidateBizId, name: "Business Workspace", institution_profile_id: candidateInstId };
 
   return {
     businessId: finalBiz.id,
-    institutionId: candidateInstId || finalBiz.institution_profile_id || finalBiz.id,
+    institutionId: finalBiz.institution_profile_id || candidateInstId || finalBiz.id,
     businessName: finalBiz.name,
     isPlatformAdmin,
     userId: user?.id || null,
