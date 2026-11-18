@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     if (scopedBusinessId) {
       try {
         const ipLookup = await db.query(
-          "SELECT id FROM institution_profiles WHERE business_id = $1 OR id = $1 LIMIT 1",
+          "SELECT id FROM institution_profiles WHERE id = $1 OR id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1) LIMIT 1",
           [scopedBusinessId]
         );
         if (ipLookup.rows.length > 0) {

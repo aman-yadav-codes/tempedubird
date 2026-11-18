@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
   Starts an encrypted SSH tunnel to the Hostinger PostgreSQL database.
 .DESCRIPTION

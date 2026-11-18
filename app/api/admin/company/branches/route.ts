@@ -28,7 +28,7 @@ async function resolveActiveBusinessId(req: Request, user?: any): Promise<number
     const instBiz = await db.query(
       `SELECT COALESCE(bp.id, ip.id) as resolved_id FROM institution_memberships im
        JOIN institution_profiles ip ON ip.id = im.institution_id
-       LEFT JOIN business_profiles bp ON bp.id = ip.business_id OR bp.institution_profile_id = ip.id
+       LEFT JOIN business_profiles bp ON bp.institution_profile_id = ip.id
        WHERE im.user_id = $1 AND im.is_active = TRUE
        LIMIT 1`,
       [user.id]

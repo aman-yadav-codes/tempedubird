@@ -37,6 +37,8 @@ async function ensureCompanyInfoSchema() {
     SELECT 1, 'EduBird Technologies Pvt. Ltd.', 'EduBird Platform', 'Next-Gen Education & Institutional Platform', '/favicon.ico', 'support@edubird.com', '+91 98765 43210', 'New Delhi', 'Delhi', '110001'
     WHERE NOT EXISTS (SELECT 1 FROM platform_company_info WHERE id = 1);
 
+    SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), COALESCE((SELECT MAX(id) FROM platform_company_info), 1), true);
+
     ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS certified_or_affiliated_with TEXT;
     ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS cin_number VARCHAR(100);
     ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS business_id INTEGER;
@@ -112,7 +114,7 @@ async function resolveActiveBusinessId(req: Request, user?: any, body?: any): Pr
     const instBiz = await db.query(
       `SELECT COALESCE(bp.id, ip.id) as resolved_id FROM institution_memberships im
        JOIN institution_profiles ip ON ip.id = im.institution_id
-       LEFT JOIN business_profiles bp ON bp.id = ip.business_id OR bp.institution_profile_id = ip.id
+       LEFT JOIN business_profiles bp ON bp.institution_profile_id = ip.id
        WHERE im.user_id = $1 AND im.is_active = TRUE
        LIMIT 1`,
       [user.id]
@@ -180,7 +182,12 @@ export async function GET(req: Request) {
     let row = null;
     if (activeBizId) {
       const res = await db.query(
-        `SELECT * FROM platform_company_info WHERE business_id = $1 OR institution_id = $1 ORDER BY (business_id = $1) DESC LIMIT 1`,
+        `SELECT * FROM platform_company_info
+         WHERE business_id = $1
+            OR institution_id = $1
+            OR institution_id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1)
+            OR business_id IN (SELECT id FROM business_profiles WHERE institution_profile_id = $1)
+         ORDER BY (business_id = $1) DESC LIMIT 1`,
         [activeBizId]
       );
       if (res.rows.length > 0) {
@@ -193,6 +200,7 @@ export async function GET(req: Request) {
         );
         if (bpRes.rows.length > 0) {
           const b = bpRes.rows[0];
+          await db.query(`SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), COALESCE((SELECT MAX(id) FROM platform_company_info), 1), true)`);
           const inserted = await db.query(
             `INSERT INTO platform_company_info (
               company_name, brand_name, tagline, logo_url, favicon_url, about,
@@ -232,7 +240,7 @@ export async function GET(req: Request) {
                     ib.phones, ib.emails
              FROM institution_profiles ip
              LEFT JOIN institution_branches ib ON ib.institution_id = ip.id AND ib.is_primary = TRUE
-             WHERE ip.id = $1 OR ip.business_id = $1
+             WHERE ip.id = $1 OR ip.id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1)
              LIMIT 1`,
             [activeBizId]
           );
@@ -245,6 +253,7 @@ export async function GET(req: Request) {
             const pState = ip.branch_state || "";
             const pPin = ip.branch_pincode || "";
 
+            await db.query(`SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), COALESCE((SELECT MAX(id) FROM platform_company_info), 1), true)`);
             const inserted = await db.query(
               `INSERT INTO platform_company_info (
                 company_name, brand_name, tagline, logo_url, favicon_url, about,
@@ -301,7 +310,7 @@ export async function GET(req: Request) {
       try {
         const ipQuery = await db.query(
           `SELECT * FROM institution_profiles
-           WHERE (id = $1 OR business_id = $1 OR LOWER(TRIM(name)) = LOWER(TRIM($2)))
+           WHERE (id = $1 OR id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1) OR LOWER(TRIM(name)) = LOWER(TRIM($2)))
            ORDER BY (founder_name IS NOT NULL) DESC
            LIMIT 1`,
           [targetInstId || 0, row?.brand_name || row?.company_name || ""]
@@ -625,7 +634,12 @@ export async function PUT(req: Request) {
       const instId = instCheck.rows[0]?.institution_profile_id || activeBizId;
 
       const existing = await db.query(
-        `SELECT id FROM platform_company_info WHERE business_id = $1 LIMIT 1`,
+        `SELECT id FROM platform_company_info
+         WHERE business_id = $1
+            OR institution_id = $1
+            OR institution_id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1)
+            OR business_id IN (SELECT id FROM business_profiles WHERE institution_profile_id = $1)
+         ORDER BY (business_id = $1) DESC LIMIT 1`,
         [activeBizId]
       );
 
@@ -722,6 +736,7 @@ export async function PUT(req: Request) {
           ]
         );
       } else {
+        await db.query(`SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), COALESCE((SELECT MAX(id) FROM platform_company_info), 1), true)`);
         res = await db.query(
           `INSERT INTO platform_company_info (
              business_id, institution_id, company_name, brand_name, tagline, logo_url, dark_logo_url, favicon_url,
@@ -1023,7 +1038,7 @@ export async function PUT(req: Request) {
              goal = COALESCE($14, goal),
              established_year = COALESCE($15::integer, established_year),
         updated_at = NOW()
-         WHERE id = $7 OR business_id = $7 OR id = (SELECT institution_profile_id FROM business_profiles WHERE id = $7)`,
+         WHERE id = $7 OR id = (SELECT institution_profile_id FROM business_profiles WHERE id = $7)`,
         [
           brand_name || company_name || null,
           logo_url || null,

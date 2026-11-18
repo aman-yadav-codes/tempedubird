@@ -147,10 +147,10 @@ export async function getInstitutionTenantByHost(db: Queryable, host: string | n
           TRUE AS is_primary,
           '{}'::jsonb AS config
         FROM institution_profiles ip
-        WHERE (ip.business_id = $1 OR ip.id = $1)
+        WHERE (ip.id = $1 OR ip.id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1))
           AND ip.is_active = TRUE
           AND COALESCE(ip.is_deleted, FALSE) = FALSE
-        ORDER BY (ip.business_id = $1) DESC
+        ORDER BY (ip.id = $1) DESC
         LIMIT 1
       `, [configuredInstitutionId]);
 

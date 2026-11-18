@@ -344,7 +344,7 @@ dbPool.query = (<T extends QueryResultRow = QueryResultRow>(
       try {
         const result = (await withTimeout(
           rawQuery(queryTextOrConfig, values),
-          connectTimeoutMs,
+          queryTimeoutMs,
           preview
         )) as QueryResult<T>;
 
