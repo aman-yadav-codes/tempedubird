@@ -278,10 +278,9 @@ export async function getCurrentPublicInstitutionProfile(host: string | null | u
                 'working_hours', ib.working_hours
               )
             )
-          )
-          FROM institution_branches ib
-          WHERE ib.institution_id = p.id AND COALESCE(ib.is_active, TRUE) = TRUE
-        ) AS branches
+            FROM institution_branches ib
+            WHERE ib.institution_id = p.id AND COALESCE(ib.is_active, TRUE) = TRUE
+          ) AS branches
       FROM institution_profiles p
       LEFT JOIN institution_types it ON it.id = p.institution_type_id
       LEFT JOIN institution_subtypes ist ON ist.id = p.institution_subtype_id
@@ -300,7 +299,8 @@ export async function getCurrentPublicInstitutionProfile(host: string | null | u
   if (profile) {
     try {
       const pciRes = await db.query(
-        `SELECT brand_name, company_name, logo_url, support_email, phone, website_url, about, headquarters_address, city, state, pincode
+        `SELECT brand_name, company_name, logo_url, support_email, phone, website_url, about, headquarters_address, city, state, pincode,
+                founder_name, founder_title, founder_image_url, founder_about, mission, vision, goal, banner_url, established_year
          FROM platform_company_info
          WHERE business_id = $1 OR institution_id = $1
          ORDER BY (business_id = $1) DESC
@@ -317,6 +317,15 @@ export async function getCurrentPublicInstitutionProfile(host: string | null | u
         if (pci.logo_url) profile.logo_url = pci.logo_url;
         if (pci.headquarters_address) profile.full_address = pci.headquarters_address;
         if (pci.city) profile.location_name = pci.city;
+        if (pci.founder_name) profile.founder_name = pci.founder_name;
+        if (pci.founder_title) profile.founder_title = pci.founder_title;
+        if (pci.founder_image_url) profile.founder_image_url = pci.founder_image_url;
+        if (pci.founder_about) profile.founder_about = pci.founder_about;
+        if (pci.mission) profile.mission = pci.mission;
+        if (pci.vision) profile.vision = pci.vision;
+        if (pci.goal) profile.goal = pci.goal;
+        if (pci.banner_url) profile.banner_url = pci.banner_url;
+        if (pci.established_year) profile.established_year = pci.established_year;
       }
 
       const branchRes = await db.query(

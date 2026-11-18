@@ -166,6 +166,15 @@ export async function GET(req: Request) {
         if (pci.city) data.city = pci.city;
         if (pci.state) data.state = pci.state;
         if (pci.pincode) data.pincode = pci.pincode;
+        if (pci.founder_name) data.founder_name = pci.founder_name;
+        if (pci.founder_title) data.founder_title = pci.founder_title;
+        if (pci.founder_image_url) data.founder_image_url = pci.founder_image_url;
+        if (pci.founder_about) data.founder_about = pci.founder_about;
+        if (pci.mission) data.mission = pci.mission;
+        if (pci.vision) data.vision = pci.vision;
+        if (pci.goal) data.goal = pci.goal;
+        if (pci.banner_url) data.banner_url = pci.banner_url;
+        if (pci.established_year) data.established_year = pci.established_year;
       }
 
       // Also overlay business_profiles logo / banner if not yet set

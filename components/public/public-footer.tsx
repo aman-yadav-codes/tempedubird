@@ -211,19 +211,18 @@ export function PublicFooter({ configuredInstitutionId }: { configuredInstitutio
     institutionInfo?.name ||
     activeInstitution?.name ||
     user?.memberships?.[0]?.institution_name ||
-    "Institution Campus";
+    "Maa Sharda Institute PVT LTD";
 
   const institutionTagline =
     institutionInfo?.about ||
-    "Verified educational institution offering comprehensive programs, dedicated faculty, and modern academic infrastructure.";
+    "Coaching institute providing quality education and mentorship for school, college, and competitive exams in Pandeypur Varanasi.";
 
   const primaryBranch = institutionInfo?.branches?.[0];
   const institutionAddress = isInstitutionView
-    ? institutionInfo?.location_name ||
-      (primaryBranch?.address
-        ? [primaryBranch.address, primaryBranch.city, primaryBranch.state].filter(Boolean).join(", ")
-        : "Orderly Bazar, Varanasi, Uttar Pradesh, India")
-    : platformContact.address || "Orderly Bazar, Varanasi, Uttar Pradesh, India";
+    ? (primaryBranch?.address
+        ? [primaryBranch.address, primaryBranch.city, primaryBranch.state, primaryBranch.pincode].filter(Boolean).join(", ")
+        : institutionInfo?.full_address || institutionInfo?.address || institutionInfo?.location_name || "Shau Bila Building, Pandeypur Road, Pandeypur, Varanasi, Uttar Pradesh - 221002")
+    : platformContact.address || "Shau Bila Building, Pandeypur Road, Pandeypur, Varanasi, Uttar Pradesh - 221002";
 
   const resolveEmail = (val: unknown): string => {
     if (!val) return "";
@@ -246,14 +245,14 @@ export function PublicFooter({ configuredInstitutionId }: { configuredInstitutio
   const institutionEmail = isInstitutionView
     ? resolveEmail(institutionInfo?.email) ||
       resolveEmail(primaryBranch?.emails?.[0]) ||
-      "support@edubird.com"
-    : platformContact.email || "support@edubird.com";
+      "deepakdv74@gmail.com"
+    : platformContact.email || "deepakdv74@gmail.com";
 
   const institutionPhone = isInstitutionView
     ? resolvePhone(institutionInfo?.phone) ||
       resolvePhone(primaryBranch?.phones?.[0]) ||
-      "+91 1234567890"
-    : platformContact.phone || "+91 1234567890";
+      "8887787846"
+    : platformContact.phone || "8887787846";
 
   const activeSocials = useMemo(() => {
     if (!socialLinks) return [];
