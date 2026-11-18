@@ -1,10 +1,24 @@
 import { db } from "@/lib/db/db";
 
 let schemaReady = false;
+let inFlightPromise: Promise<void> | null = null;
+let lastFailureTimestamp = 0;
+const SCHEMA_RETRY_COOLDOWN_MS = 60_000;
 
 export async function ensureFeatureSchema() {
   if (schemaReady) return;
-  try {
+
+  // If a recent attempt failed due to DB offline, don't spam the DB on every single request
+  if (lastFailureTimestamp && Date.now() - lastFailureTimestamp < SCHEMA_RETRY_COOLDOWN_MS) {
+    return;
+  }
+
+  if (inFlightPromise) {
+    return inFlightPromise;
+  }
+
+  inFlightPromise = (async () => {
+    try {
     await db.query(`
       CREATE TABLE IF NOT EXISTS platform_branches (
         id SERIAL PRIMARY KEY,
@@ -1544,8 +1558,14 @@ export async function ensureFeatureSchema() {
     }
 
     schemaReady = true;
-
-  } catch (error) {
-    console.error("[ensureFeatureSchema] Error updating schema:", error);
+    lastFailureTimestamp = 0;
+  } catch (error: any) {
+    lastFailureTimestamp = Date.now();
+    console.warn("[ensureFeatureSchema] Schema update deferred (cooldown 60s):", error?.message || error);
+  } finally {
+    inFlightPromise = null;
   }
+})();
+
+  return inFlightPromise;
 }

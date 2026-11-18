@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/db";
 import { ensureFeatureSchema } from "@/lib/db/ensure-feature-schema";
+import { handleDatabaseApiError } from "@/lib/db/api-error";
 
 export async function GET(req: NextRequest) {
   try {
@@ -77,8 +78,8 @@ export async function GET(req: NextRequest) {
       primaryAd: ads[0] || null,
     });
   } catch (error: any) {
-    console.error("[Public Ads API GET Error]:", error);
-    return NextResponse.json({ success: false, ads: [], primaryAd: null }, { status: 200 });
+    console.warn("[Public Ads API GET Error]:", error?.message || error);
+    return handleDatabaseApiError(error, "Failed to fetch ads");
   }
 }
 
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("[Public Ads Track Error]:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.warn("[Public Ads Track Error]:", error?.message || error);
+    return handleDatabaseApiError(error, "Failed to record ad event");
   }
 }

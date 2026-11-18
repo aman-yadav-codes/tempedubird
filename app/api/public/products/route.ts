@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/db";
+import { handleDatabaseApiError } from "@/lib/db/api-error";
 import { ensureFeatureSchema } from "@/lib/db/ensure-feature-schema";
 import { getInstitutionTenantByHost } from "@/lib/tenancy/institution-domain";
 
@@ -226,7 +227,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error("[Public Products API] Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to fetch products" }, { status: 500 });
+    console.warn("[Public Products API] Error:", error?.message || error);
+    return handleDatabaseApiError(error, "Failed to fetch products");
   }
 }

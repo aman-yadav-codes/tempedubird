@@ -1,11 +1,23 @@
 import { db } from "@/lib/db/db";
 
 let schemaEnsured = false;
+let inFlightPromise: Promise<void> | null = null;
+let lastFailureTimestamp = 0;
+const SCHEMA_RETRY_COOLDOWN_MS = 60_000;
 
 export async function ensureAnalyticsSchema() {
   if (schemaEnsured) return;
 
-  try {
+  if (lastFailureTimestamp && Date.now() - lastFailureTimestamp < SCHEMA_RETRY_COOLDOWN_MS) {
+    return;
+  }
+
+  if (inFlightPromise) {
+    return inFlightPromise;
+  }
+
+  inFlightPromise = (async () => {
+    try {
     await db.query(`
       CREATE TABLE IF NOT EXISTS analytics_visitors (
         id SERIAL PRIMARY KEY,
@@ -96,7 +108,14 @@ export async function ensureAnalyticsSchema() {
     }
 
     schemaEnsured = true;
-  } catch (err) {
-    console.warn("Analytics schema initialization skipped (DB offline):", (err as any)?.message || err);
+    lastFailureTimestamp = 0;
+  } catch (err: any) {
+    lastFailureTimestamp = Date.now();
+    console.warn("Analytics schema initialization deferred (cooldown 60s):", err?.message || err);
+  } finally {
+    inFlightPromise = null;
   }
+})();
+
+  return inFlightPromise;
 }

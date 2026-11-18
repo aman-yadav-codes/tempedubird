@@ -13,8 +13,14 @@ export type InstitutionTenant = {
 type Queryable = Pick<Pool, "query">;
 
 let schemaReady: Promise<void> | null = null;
+let lastDomainSchemaFailure = 0;
+const DOMAIN_SCHEMA_COOLDOWN_MS = 60_000;
 
 export async function ensureInstitutionDomainSchema(db: Queryable) {
+  if (lastDomainSchemaFailure && Date.now() - lastDomainSchemaFailure < DOMAIN_SCHEMA_COOLDOWN_MS) {
+    return;
+  }
+
   if (!schemaReady) {
     schemaReady = (async () => {
       try {
@@ -36,9 +42,11 @@ export async function ensureInstitutionDomainSchema(db: Queryable) {
           CREATE INDEX IF NOT EXISTS idx_institution_domains_institution
           ON institution_domains (institution_id, is_active)
         `);
+        lastDomainSchemaFailure = 0;
       } catch (error) {
+        lastDomainSchemaFailure = Date.now();
         schemaReady = null;
-        console.warn("ensureInstitutionDomainSchema fallback:", error);
+        console.warn("ensureInstitutionDomainSchema deferred (cooldown 60s):", (error as any)?.message || error);
       }
     })();
   }
