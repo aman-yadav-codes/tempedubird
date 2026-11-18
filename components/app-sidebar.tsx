@@ -231,9 +231,9 @@ const navItems: SidebarItem[] = [
         ],
     },
     {
-        title: "Business & Professional Profiles",
+        title: "Listings",
         url: "/admin/profiles",
-        icon: Building2,
+        icon: Layers,
     },
     {
         title: "Business Type Access Management",
