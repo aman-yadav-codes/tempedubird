@@ -50,7 +50,19 @@ export default async function HomePage() {
 
   // 3. Scenario C: Business Mode (Home Page)
   if (config.mode === "business" && (config.businessId || config.institutionId)) {
-    const targetBizId = config.businessId || config.institutionId;
+    let targetBizId = config.businessId || config.institutionId;
+    if (!targetBizId || targetBizId === 1) {
+      try {
+        const pciRes = await db.query(
+          `SELECT business_id, institution_id FROM platform_company_info WHERE business_id IS NOT NULL ORDER BY id DESC LIMIT 1`
+        );
+        if (pciRes.rows.length > 0 && (pciRes.rows[0].business_id || pciRes.rows[0].institution_id)) {
+          targetBizId = pciRes.rows[0].business_id || pciRes.rows[0].institution_id;
+        }
+      } catch (err) {
+        console.warn("[HomePage] Failed to resolve targetBizId from platform_company_info:", err);
+      }
+    }
     const data = await fetchBusinessFullData(String(targetBizId));
     const business = data?.business || {
       id: Number(targetBizId),

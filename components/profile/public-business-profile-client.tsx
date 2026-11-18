@@ -267,11 +267,11 @@ export function PublicBusinessProfileClient({
 
     const gathered = [business.banner_url, business.logo_url].filter(Boolean) as string[];
     const list = gathered.length > 0 ? gathered : [
-      "https://media.143gb.com/t/crmtaskassets/yd7sqf3knz8hl4ppwnow.jpg",
-      "https://media.143gb.com/t/crmtaskassets/ydmeimyh8hpo3wu2qt2l.jpg",
-      "https://media.143gb.com/t/crmtaskassets/ogteskrdpenq01r9okhd.jpg",
-      "https://media.143gb.com/t/crmtaskassets/sxficyi7vg3povffwpva.jpg",
-      "https://media.143gb.com/t/crmtaskassets/sd3emhozdpmsw37mvukc.jpg",
+      "/uploads/media/1794989894186_maashardadeepak1_f470fd16.jpeg",
+      "/uploads/media/1794995530624_WhatsApp_Image_2023-02-14_at_4_dae08d2f.jpeg",
+      "/uploads/media/1794995534700_WhatsApp_Image_2023-02-14_at_4_25db5c09.jpeg",
+      "/uploads/media/1794995538760_WhatsApp_Image_2023-02-14_at_4_be01f0f8.jpeg",
+      "/uploads/media/1794995542834_WhatsApp_Image_2023-02-14_at_4_325552bf.jpeg",
     ];
 
     return list.map((url, idx) => {
