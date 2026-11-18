@@ -484,6 +484,7 @@ const navItems: SidebarItem[] = [
             { title: "Inventory", url: "/admin/inventory", icon: Boxes },
             { title: "Team", url: "/admin/team", icon: Users },
             { title: "Business Calendar", url: "/admin/calendar", icon: CalendarDays },
+            { title: "Timetable", url: "/admin/master-data/timetable-setup", icon: CalendarDays },
             { title: "Attendance Setup", url: "/admin/master-data/attendance-setup", icon: ClipboardCheck },
             { title: "Noticeboard", url: "/admin/noticeboard", icon: Bell },
             { title: "Complaints", url: "/admin/complaints", icon: MessageSquareWarning },
@@ -517,6 +518,7 @@ const navItems: SidebarItem[] = [
         icon: Settings,
         children: [
             { title: "General", url: "/admin/settings", icon: Palette },
+            { title: "Packages", url: "/admin/settings/packages", icon: Boxes },
             { title: "Performance Settings", url: "/admin/settings/performance", icon: Trophy },
             { title: "Controls", url: "/admin/notifications/settings", permissionPath: "/admin/notifications/settings", icon: Settings },
             { title: "Support", url: "/admin/support", icon: LifeBuoy },
@@ -907,9 +909,9 @@ export function AppSidebar() {
         }
         if (isCustomer) {
             return pathname === "/admin" ||
-                   pathname.startsWith("/admin/orders") ||
-                   pathname.startsWith("/admin/finance") ||
-                   pathname.startsWith("/admin/my-profile");
+                pathname.startsWith("/admin/orders") ||
+                pathname.startsWith("/admin/finance") ||
+                pathname.startsWith("/admin/my-profile");
         }
         if (pathname === "/admin/account" || pathname.startsWith("/admin/account")) {
             return !isStudent && !isParent;
@@ -1019,10 +1021,10 @@ export function AppSidebar() {
                         return [];
                     }
                     if (!isPlatformAdmin && !isInstitutionAdmin) {
-                        const hasStaffManagementAccess = 
-                            hasPermission(user, "managestaff.allstaff.view") || 
-                            hasPermission(user, "managestaff.view") || 
-                            hasPermission(user, "staff.view") || 
+                        const hasStaffManagementAccess =
+                            hasPermission(user, "managestaff.allstaff.view") ||
+                            hasPermission(user, "managestaff.view") ||
+                            hasPermission(user, "staff.view") ||
                             hasPermission(user, "managestaff.manage") ||
                             Boolean(user?.permissions?.some((p: string) => p.startsWith("managestaff.")));
                         if (!hasStaffManagementAccess) {
@@ -1047,10 +1049,10 @@ export function AppSidebar() {
                     return [item];
                 }
                 if (item.url === "/admin/marketing/packages") {
-                    const hasMarketingAccess = isPlatformAdmin || isInstitutionAdmin || 
-                        hasPermission(user, "marketing.packages.view") || 
-                        hasPermission(user, "marketing.ads.view") || 
-                        hasPermission(user, "marketing.view") || 
+                    const hasMarketingAccess = isPlatformAdmin || isInstitutionAdmin ||
+                        hasPermission(user, "marketing.packages.view") ||
+                        hasPermission(user, "marketing.ads.view") ||
+                        hasPermission(user, "marketing.view") ||
                         Boolean(user?.permissions?.some((p: string) => p.startsWith("marketing.")));
                     if (!hasMarketingAccess) return [];
                     if (!isPlatformAdmin && item.children) {
@@ -1067,12 +1069,12 @@ export function AppSidebar() {
                     return [item];
                 }
                 if ((item.url === "/admin/sales/pipeline" || item.url === "/admin/sales/leads" || item.title === "Sales") && item.children) {
-                    const hasSalesAccess = isPlatformAdmin || isInstitutionAdmin || 
-                        hasPermission(user, "sales.leads.view") || 
-                        hasPermission(user, "sales.pipeline.view") || 
-                        hasPermission(user, "sales.orders.view") || 
-                        hasPermission(user, "sales.view") || 
-                        hasPermission(user, "leads.view") || 
+                    const hasSalesAccess = isPlatformAdmin || isInstitutionAdmin ||
+                        hasPermission(user, "sales.leads.view") ||
+                        hasPermission(user, "sales.pipeline.view") ||
+                        hasPermission(user, "sales.orders.view") ||
+                        hasPermission(user, "sales.view") ||
+                        hasPermission(user, "leads.view") ||
                         Boolean(user?.permissions?.some((p: string) => p.startsWith("sales.") || p.startsWith("leads.")));
                     if (!hasSalesAccess) return [];
                     return [{
@@ -1085,9 +1087,9 @@ export function AppSidebar() {
                     return [item];
                 }
                 if (item.url === "/admin/vendors" && item.children) {
-                    const hasVendorAccess = isPlatformAdmin || isInstitutionAdmin || isHeadOfOperations || 
-                        hasPermission(user, "admin.vendors.view") || 
-                        hasPermission(user, "inventory.view") || 
+                    const hasVendorAccess = isPlatformAdmin || isInstitutionAdmin || isHeadOfOperations ||
+                        hasPermission(user, "admin.vendors.view") ||
+                        hasPermission(user, "inventory.view") ||
                         Boolean(user?.permissions?.some((p: string) => p.startsWith("vendors.") || p.startsWith("inventory.")));
                     if (!hasVendorAccess) {
                         return [];
@@ -1110,10 +1112,10 @@ export function AppSidebar() {
                     }];
                 }
                 if (item.url === "/admin/sales/leads") {
-                    const hasSalesAccess = isPlatformAdmin || isInstitutionAdmin || 
-                        hasPermission(user, "sales.leads.view") || 
-                        hasPermission(user, "sales.view") || 
-                        hasPermission(user, "leads.view") || 
+                    const hasSalesAccess = isPlatformAdmin || isInstitutionAdmin ||
+                        hasPermission(user, "sales.leads.view") ||
+                        hasPermission(user, "sales.view") ||
+                        hasPermission(user, "leads.view") ||
                         Boolean(user?.permissions?.some((p: string) => p.startsWith("sales.") || p.startsWith("leads.")));
                     return hasSalesAccess ? [item] : [];
                 }
@@ -1219,9 +1221,9 @@ export function AppSidebar() {
                     }];
                 }
                 if (item.url === "/admin/settings" && item.children) {
-                    const hasSettingsAccess = isPlatformAdmin || isInstitutionAdmin || 
-                        hasPermission(user, "settings.general.view") || 
-                        hasPermission(user, "institution.general_settings.view") || 
+                    const hasSettingsAccess = isPlatformAdmin || isInstitutionAdmin ||
+                        hasPermission(user, "settings.general.view") ||
+                        hasPermission(user, "institution.general_settings.view") ||
                         Boolean(user?.permissions?.some((p: string) => p.startsWith("settings.")));
                     if (!hasSettingsAccess) {
                         return [];
@@ -1230,6 +1232,13 @@ export function AppSidebar() {
                     return [{
                         ...item,
                         children: item.children.filter((child) => {
+                            if (child.url === "/admin/settings/packages") {
+                                // "we need packages option in setting tab which only business owner can see and those pckages will be created by platform admin only"
+                                const isBusinessOwner = isPlatformAdmin || isInstitutionAdmin ||
+                                    Boolean(user?.role_codes?.includes("business_owner")) ||
+                                    Boolean(user?.role_codes?.includes("institution_admin"));
+                                return isBusinessOwner;
+                            }
                             if (child.url === "/admin/settings/payments") {
                                 return isPlatformAdminPanel;
                             }

@@ -54,7 +54,14 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    await requireAdmin(req);
+    const adminUser = await requireAdmin(req);
+    const isPlatformAdmin = Boolean(isPlatformFullAccess(adminUser) || adminUser?.role_codes?.includes("platform_admin"));
+    if (!isPlatformAdmin) {
+      return NextResponse.json(
+        { error: "Forbidden: Packages can only be created by Platform Admin" },
+        { status: 403 }
+      );
+    }
 
     const body = await req.json().catch(() => ({}));
     const { name, packageFor, packageForTypes, price, priceUnit, priceMonthly, priceYearly, priceOnce, storageLimitGb, validityCount, validityUnit, description, isActive } = body;
@@ -94,7 +101,8 @@ export async function POST(req: Request) {
 
 export async function PUT(req: Request) {
   try {
-    await requireAdmin(req);
+    const adminUser = await requireAdmin(req);
+    const isPlatformAdmin = Boolean(isPlatformFullAccess(adminUser) || adminUser?.role_codes?.includes("platform_admin"));
 
     const body = await req.json().catch(() => ({}));
     if (body.isProgramFee) {
@@ -105,6 +113,13 @@ export async function PUT(req: Request) {
 
       const ok = await updateProgramCourseFee(programId, feeAmount, feeUnit, admissionFee);
       return NextResponse.json({ success: ok });
+    }
+
+    if (!isPlatformAdmin) {
+      return NextResponse.json(
+        { error: "Forbidden: Packages can only be modified by Platform Admin" },
+        { status: 403 }
+      );
     }
 
     const { id, name, packageFor, packageForTypes, price, priceUnit, priceMonthly, priceYearly, priceOnce, storageLimitGb, validityCount, validityUnit, description, isActive } = body;
@@ -149,7 +164,14 @@ export async function PUT(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    await requireAdmin(req);
+    const adminUser = await requireAdmin(req);
+    const isPlatformAdmin = Boolean(isPlatformFullAccess(adminUser) || adminUser?.role_codes?.includes("platform_admin"));
+    if (!isPlatformAdmin) {
+      return NextResponse.json(
+        { error: "Forbidden: Packages can only be deleted by Platform Admin" },
+        { status: 403 }
+      );
+    }
 
     const { searchParams } = new URL(req.url);
     const id = parseInt(searchParams.get("id") ?? "0", 10);
