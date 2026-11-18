@@ -13,101 +13,75 @@ async function ensureCompanyInfoSchema() {
 
   companyInfoSchemaPromise = (async () => {
     try {
-      await db.query(`
-        CREATE TABLE IF NOT EXISTS platform_company_info (
-          id SERIAL PRIMARY KEY,
-          company_name TEXT NOT NULL DEFAULT 'EduBird Technologies Pvt. Ltd.',
-          brand_name TEXT NOT NULL DEFAULT 'EduBird Platform',
-          tagline TEXT DEFAULT 'Next-Gen Education & Institutional Platform',
-          logo_url TEXT DEFAULT '/favicon.ico',
-          dark_logo_url TEXT,
-          favicon_url TEXT DEFAULT '/favicon.ico',
-          about TEXT DEFAULT 'EduBird is a unified education management platform providing state-of-the-art tools for institutions, staff, educators, and students.',
-          registration_no TEXT DEFAULT 'U72900DL2026PTC123456',
-          cin_number TEXT DEFAULT 'U72900DL2026PTC123456',
-          gstin VARCHAR(100) DEFAULT '07AAAAA0000A1Z5',
-          certified_or_affiliated_with TEXT DEFAULT 'ISO 9001:2015 Certified, UGC Recognized Platform Partner',
-          support_email VARCHAR(255) DEFAULT 'support@edubird.com',
-          phone VARCHAR(100) DEFAULT '+91 98765 43210',
-          toll_free VARCHAR(100) DEFAULT '1800-123-EDUBIRD',
-          website_url VARCHAR(255) DEFAULT 'https://edubird.com',
-          headquarters_address TEXT DEFAULT '124, Connaught Place, Central Delhi',
-          city VARCHAR(255) DEFAULT 'New Delhi',
-          state VARCHAR(255) DEFAULT 'Delhi',
-          pincode VARCHAR(20) DEFAULT '110001',
-          working_hours TEXT DEFAULT 'Monday - Saturday: 9:00 AM - 6:00 PM IST',
-          social_links JSONB DEFAULT '{}'::jsonb,
-          updated_at TIMESTAMP DEFAULT timezone('Asia/Kolkata', NOW()),
-          updated_by INTEGER
-        );
+      // Check if table already exists first to avoid heavy DDL table locks on every request
+      const tableCheck = await db.query(
+        `SELECT 1 FROM information_schema.tables WHERE table_name = 'platform_company_info' LIMIT 1`
+      );
 
-        INSERT INTO platform_company_info (id, company_name, brand_name, tagline, logo_url, support_email, phone, city, state, pincode)
-        VALUES (1, 'EduBird Technologies Pvt. Ltd.', 'EduBird Platform', 'Next-Gen Education & Institutional Platform', '/favicon.ico', 'support@edubird.com', '+91 98765 43210', 'New Delhi', 'Delhi', '110001')
-        ON CONFLICT (id) DO NOTHING;
+      if (tableCheck.rows.length === 0) {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS platform_company_info (
+            id SERIAL PRIMARY KEY,
+            company_name TEXT NOT NULL DEFAULT 'EduBird Technologies Pvt. Ltd.',
+            brand_name TEXT NOT NULL DEFAULT 'EduBird Platform',
+            tagline TEXT DEFAULT 'Next-Gen Education & Institutional Platform',
+            logo_url TEXT DEFAULT '/favicon.ico',
+            dark_logo_url TEXT,
+            favicon_url TEXT DEFAULT '/favicon.ico',
+            about TEXT DEFAULT 'EduBird is a unified education management platform providing state-of-the-art tools for institutions, staff, educators, and students.',
+            registration_no TEXT DEFAULT 'U72900DL2026PTC123456',
+            cin_number TEXT DEFAULT 'U72900DL2026PTC123456',
+            gstin VARCHAR(100) DEFAULT '07AAAAA0000A1Z5',
+            certified_or_affiliated_with TEXT DEFAULT 'ISO 9001:2015 Certified, UGC Recognized Platform Partner',
+            support_email TEXT DEFAULT 'support@edubird.com',
+            phone TEXT DEFAULT '+91 98765 43210',
+            toll_free TEXT DEFAULT '1800-123-EDUBIRD',
+            website_url TEXT DEFAULT 'https://edubird.com',
+            headquarters_address TEXT DEFAULT '124, Connaught Place, Central Delhi',
+            city TEXT DEFAULT 'New Delhi',
+            state TEXT DEFAULT 'Delhi',
+            pincode TEXT DEFAULT '110001',
+            working_hours TEXT DEFAULT 'Monday - Saturday: 9:00 AM - 6:00 PM IST',
+            social_links JSONB DEFAULT '{}'::jsonb,
+            updated_at TIMESTAMP DEFAULT timezone('Asia/Kolkata', NOW()),
+            updated_by INTEGER,
+            business_id INTEGER,
+            institution_id INTEGER,
+            listing_type VARCHAR(50) DEFAULT 'business',
+            category_id INTEGER,
+            subcategory_id INTEGER,
+            subcategory_ids INTEGER[],
+            business_type VARCHAR(255),
+            experience_years INTEGER,
+            skills TEXT,
+            qualifications TEXT,
+            banner_url TEXT,
+            gallery_images TEXT[],
+            founder_name TEXT,
+            founder_title TEXT,
+            founder_image_url TEXT,
+            founder_about TEXT,
+            mission TEXT,
+            vision TEXT,
+            goal TEXT,
+            established_year INTEGER,
+            opening_hours JSONB
+          );
 
-        SELECT setval(
-          pg_get_serial_sequence('platform_company_info', 'id'),
-          GREATEST(COALESCE((SELECT MAX(id) FROM platform_company_info), 1), 1),
-          true
-        );
+          INSERT INTO platform_company_info (id, company_name, brand_name, tagline, logo_url, support_email, phone, city, state, pincode)
+          VALUES (1, 'EduBird Technologies Pvt. Ltd.', 'EduBird Platform', 'Next-Gen Education & Institutional Platform', '/favicon.ico', 'support@edubird.com', '+91 98765 43210', 'New Delhi', 'Delhi', '110001')
+          ON CONFLICT (id) DO NOTHING;
 
-        ALTER TABLE platform_company_info ALTER COLUMN working_hours TYPE TEXT;
-        ALTER TABLE platform_company_info ALTER COLUMN brand_name TYPE TEXT;
-        ALTER TABLE platform_company_info ALTER COLUMN company_name TYPE TEXT;
-        ALTER TABLE platform_company_info ALTER COLUMN tagline TYPE TEXT;
-        ALTER TABLE platform_company_info ALTER COLUMN registration_no TYPE TEXT;
-        ALTER TABLE platform_company_info ALTER COLUMN cin_number TYPE TEXT;
-        ALTER TABLE platform_company_info ALTER COLUMN phone TYPE VARCHAR(100);
-        ALTER TABLE platform_company_info ALTER COLUMN toll_free TYPE VARCHAR(100);
-        ALTER TABLE platform_company_info ALTER COLUMN city TYPE VARCHAR(255);
-        ALTER TABLE platform_company_info ALTER COLUMN state TYPE VARCHAR(255);
-        ALTER TABLE platform_company_info ALTER COLUMN founder_name TYPE TEXT;
-        ALTER TABLE platform_company_info ALTER COLUMN founder_title TYPE TEXT;
+          SELECT setval(
+            pg_get_serial_sequence('platform_company_info', 'id'),
+            GREATEST(COALESCE((SELECT MAX(id) FROM platform_company_info), 1) + 10, 10),
+            true
+          );
 
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS certified_or_affiliated_with TEXT;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS cin_number TEXT;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS business_id INTEGER;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS institution_id INTEGER;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS listing_type VARCHAR(50) DEFAULT 'business';
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS category_id INTEGER;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS subcategory_id INTEGER;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS subcategory_ids INTEGER[];
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS business_type VARCHAR(255);
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS experience_years INTEGER;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS skills TEXT;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS qualifications TEXT;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS banner_url TEXT;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS gallery_images TEXT[];
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_name TEXT;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_title TEXT;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_image_url TEXT;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_about TEXT;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS mission TEXT;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS vision TEXT;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS goal TEXT;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS established_year INTEGER;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS opening_hours JSONB;
-        ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS subcategory_ids INTEGER[];
-        ALTER TABLE business_profiles ALTER COLUMN locality TYPE TEXT;
-        ALTER TABLE business_profiles ALTER COLUMN email TYPE TEXT;
-        ALTER TABLE professional_profiles ADD COLUMN IF NOT EXISTS subcategory_ids INTEGER[];
-        ALTER TABLE professional_profiles ADD COLUMN IF NOT EXISTS gallery_images TEXT[];
-        ALTER TABLE professional_profiles ALTER COLUMN designation TYPE TEXT;
-        ALTER TABLE professional_profiles ALTER COLUMN professional_title TYPE TEXT;
-        ALTER TABLE professional_profiles ALTER COLUMN locality TYPE TEXT;
-        ALTER TABLE professional_profiles ALTER COLUMN email TYPE TEXT;
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_company_info_business_id ON platform_company_info(business_id) WHERE business_id IS NOT NULL;
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_company_info_business_id ON platform_company_info(business_id) WHERE business_id IS NOT NULL;
+        `);
+      }
 
-        ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS state VARCHAR(100);
-        ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS pincode VARCHAR(20);
-        ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS branch_type VARCHAR(50) DEFAULT 'Branch Office';
-        ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS is_headquarters BOOLEAN DEFAULT FALSE;
-        ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS business_id INTEGER;
-        ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS institution_id INTEGER;
-        ALTER TABLE platform_branches ALTER COLUMN manager_name TYPE TEXT;
-        ALTER TABLE platform_branches ALTER COLUMN email TYPE TEXT;
-        CREATE INDEX IF NOT EXISTS idx_platform_branches_business_id ON platform_branches(business_id);
-      `);
       companyInfoSchemaReady = true;
     } catch (err: any) {
       console.warn("[ensureCompanyInfoSchema] init:", err?.message || err);
@@ -243,7 +217,7 @@ export async function GET(req: Request) {
         );
         if (bpRes.rows.length > 0) {
           const b = bpRes.rows[0];
-          await db.query(`SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), COALESCE((SELECT MAX(id) FROM platform_company_info), 1), true)`);
+          await db.query(`SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), GREATEST(COALESCE((SELECT MAX(id) FROM platform_company_info), 0) + 1, 20), true)`);
           const inserted = await db.query(
             `INSERT INTO platform_company_info (
               company_name, brand_name, tagline, logo_url, favicon_url, about,
@@ -297,7 +271,7 @@ export async function GET(req: Request) {
             const pState = ip.branch_state || "";
             const pPin = ip.branch_pincode || "";
 
-            await db.query(`SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), COALESCE((SELECT MAX(id) FROM platform_company_info), 1), true)`);
+            await db.query(`SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), GREATEST(COALESCE((SELECT MAX(id) FROM platform_company_info), 0) + 1, 20), true)`);
             const inserted = await db.query(
               `INSERT INTO platform_company_info (
                 company_name, brand_name, tagline, logo_url, favicon_url, about,
@@ -679,16 +653,21 @@ export async function PUT(req: Request) {
       const instId = instCheck.rows[0]?.institution_profile_id || activeBizId;
 
       const targetRecordId = (body?.id && !isNaN(Number(body.id))) ? Number(body.id) : null;
-      const existing = await db.query(
-        `SELECT id FROM platform_company_info
-         WHERE ($2::integer IS NOT NULL AND id = $2::integer)
-            OR business_id = $1
-            OR institution_id = $1
-            OR institution_id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1)
-            OR business_id IN (SELECT id FROM business_profiles WHERE institution_profile_id = $1)
-         ORDER BY (id = $2::integer) DESC, (business_id = $1) DESC LIMIT 1`,
-        [activeBizId, targetRecordId]
-      );
+      let existing: any = null;
+      if (targetRecordId) {
+        existing = await db.query(`SELECT id FROM platform_company_info WHERE id = $1 LIMIT 1`, [targetRecordId]);
+      }
+      if (!existing || existing.rows.length === 0) {
+        existing = await db.query(
+          `SELECT id FROM platform_company_info
+           WHERE business_id = $1
+              OR institution_id = $1
+              OR institution_id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1)
+              OR business_id IN (SELECT id FROM business_profiles WHERE institution_profile_id = $1)
+           ORDER BY (business_id = $1) DESC LIMIT 1`,
+          [activeBizId]
+        );
+      }
 
       let res;
       if (existing.rows.length > 0) {
@@ -783,7 +762,7 @@ export async function PUT(req: Request) {
           ]
         );
       } else {
-        await db.query(`SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), COALESCE((SELECT MAX(id) FROM platform_company_info), 1), true)`);
+        await db.query(`SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), GREATEST(COALESCE((SELECT MAX(id) FROM platform_company_info), 0) + 1, 20), true)`);
         res = await db.query(
           `INSERT INTO platform_company_info (
              business_id, institution_id, company_name, brand_name, tagline, logo_url, dark_logo_url, favicon_url,
@@ -1076,42 +1055,46 @@ export async function PUT(req: Request) {
       }
 
       // Synchronize with institution_profiles
-      await db.query(
-        `UPDATE institution_profiles
-         SET name = COALESCE($1, name),
-        logo_url = COALESCE($2, logo_url),
-        phone = COALESCE($3, phone),
-        email = COALESCE($4, email),
-        website = COALESCE($5, website),
-        about = COALESCE($6, about),
-             founder_name = COALESCE($8, founder_name),
-             founder_title = COALESCE($9, founder_title),
-             founder_image_url = COALESCE($10, founder_image_url),
-             founder_about = COALESCE($11, founder_about),
-             mission = COALESCE($12, mission),
-             vision = COALESCE($13, vision),
-             goal = COALESCE($14, goal),
-             established_year = COALESCE($15::integer, established_year),
-        updated_at = NOW()
-         WHERE id = $7 OR id = (SELECT institution_profile_id FROM business_profiles WHERE id = $7)`,
-        [
-          brand_name || company_name || null,
-          logo_url || null,
-          finalPhone,
-          support_email || null,
-          website_url || null,
-          finalAbout,
-          activeBizId,
-          finalFounderName !== undefined ? finalFounderName : null,
-          finalFounderTitle !== undefined ? finalFounderTitle : null,
-          finalFounderImageUrl !== undefined ? finalFounderImageUrl : null,
-          finalFounderAbout !== undefined ? finalFounderAbout : null,
-          finalMission !== undefined ? finalMission : null,
-          finalVision !== undefined ? finalVision : null,
-          finalGoal !== undefined ? finalGoal : null,
-          finalEstablishedYear !== null ? finalEstablishedYear : null,
-        ]
-      );
+      try {
+        await db.query(
+          `UPDATE institution_profiles
+           SET name = COALESCE($1, name),
+          logo_url = COALESCE($2, logo_url),
+          phone = COALESCE($3, phone),
+          email = COALESCE($4, email),
+          website = COALESCE($5, website),
+          about = COALESCE($6, about),
+               founder_name = COALESCE($8, founder_name),
+               founder_title = COALESCE($9, founder_title),
+               founder_image_url = COALESCE($10, founder_image_url),
+               founder_about = COALESCE($11, founder_about),
+               mission = COALESCE($12, mission),
+               vision = COALESCE($13, vision),
+               goal = COALESCE($14, goal),
+               established_year = COALESCE($15::integer, established_year),
+          updated_at = NOW()
+           WHERE id = $7 OR id = (SELECT institution_profile_id FROM business_profiles WHERE id = $7)`,
+          [
+            brand_name || company_name || null,
+            logo_url || null,
+            finalPhone,
+            support_email || null,
+            website_url || null,
+            finalAbout,
+            activeBizId,
+            finalFounderName !== undefined ? finalFounderName : null,
+            finalFounderTitle !== undefined ? finalFounderTitle : null,
+            finalFounderImageUrl !== undefined ? finalFounderImageUrl : null,
+            finalFounderAbout !== undefined ? finalFounderAbout : null,
+            finalMission !== undefined ? finalMission : null,
+            finalVision !== undefined ? finalVision : null,
+            finalGoal !== undefined ? finalGoal : null,
+            finalEstablishedYear !== null ? finalEstablishedYear : null,
+          ]
+        );
+      } catch (instSyncErr) {
+        console.warn("[Company Info PUT] institution_profiles sync warning:", instSyncErr);
+      }
     } else {
       const res = await db.query(
         `UPDATE platform_company_info

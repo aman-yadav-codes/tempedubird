@@ -193,6 +193,23 @@ export async function getCurrentPublicInstitutionProfile(host: string | null | u
         config: {},
       };
     }
+    if (!tenant || tenant.institution_id === 1) {
+      try {
+        const pciFirst = await db.query(
+          `SELECT business_id, institution_id FROM platform_company_info WHERE business_id IS NOT NULL ORDER BY id DESC LIMIT 1`
+        );
+        if (pciFirst.rows.length > 0 && (pciFirst.rows[0].institution_id || pciFirst.rows[0].business_id)) {
+          tenant = {
+            institution_id: Number(pciFirst.rows[0].institution_id || pciFirst.rows[0].business_id),
+            institution_name: "Institution",
+            institution_slug: null,
+            domain: host || null,
+            is_primary: true,
+            config: {},
+          };
+        }
+      } catch {}
+    }
     if (!tenant) return null;
 
     const result = await db.query<PublicInstitutionProfile>(
@@ -319,8 +336,18 @@ export async function getCurrentPublicInstitutionProfile(host: string | null | u
           pincode: b.pincode,
           phones: b.phone ? [{ id: "1", title: "Office Phone", phone: b.phone, type: "phone" }] : [],
           emails: b.email ? [{ id: "1", title: "General Email", email: b.email }] : [],
-          working_hours: "Monday - Saturday: 9:00 AM - 6:00 PM",
+          working_hours: "Monday - Saturday: 9:00 AM - 6:00 PM IST",
         }));
+      }
+
+      if (!profile.phone && profile.branches?.[0]?.phones?.[0]?.phone) {
+        profile.phone = profile.branches[0].phones[0].phone;
+      }
+      if (!profile.email && profile.branches?.[0]?.emails?.[0]?.email) {
+        profile.email = profile.branches[0].emails[0].email;
+      }
+      if (!profile.full_address && profile.branches?.[0]?.address) {
+        profile.full_address = [profile.branches[0].address, profile.branches[0].city, profile.branches[0].state, profile.branches[0].pincode].filter(Boolean).join(", ");
       }
     } catch (err) {
       console.warn("Could not overlay company info onto institution profile:", err);
@@ -333,32 +360,44 @@ export async function getCurrentPublicInstitutionProfile(host: string | null | u
     const resolvedInstId = defaultEnvId && /^\d+$/.test(defaultEnvId.trim()) ? Number(defaultEnvId.trim()) : 160;
     return {
       id: resolvedInstId,
-      name: "Maa Sharda Institute PVT LTD",
-      slug: "maa-sharda-institute",
+      name: "Maa sharda institute PVT LTD",
+      slug: "maa-sharda-institute-pvt-ltd-1",
       type_name: "Institute",
       subtype_name: "Coaching",
-      phone: "+91 9876543210",
-      email: "contact@maasharda.com",
-      established_year: 2015,
-      website: null,
-      about: "Coaching institute providing quality education and mentorship for school, college, and competitive exams.",
+      phone: "8887787846",
+      email: "deepakdv74@gmail.com",
+      established_year: 2019,
+      website: "https://edubird.com",
+      about: "Coaching institute providing quality education and mentorship for school, college, and competitive exams in Pandeypur Varanasi.",
       mission: "Brings out the latent strengths of every student to explore their potential.",
       vision: "To be recognized as a premier institute delivering academic distinction and leadership.",
       goal: "Quality education, personalized mentorship, and comprehensive test preparation.",
-      founder_name: "Er. Arvind Yadav",
-      founder_title: "Founder & Managing Director",
-      founder_image_url: null,
-      founder_about: "Dedicated educator and visionary leader committed to transforming youth learning and competitive success.",
-      location_name: "Main Campus",
-      full_address: "Main Campus, India",
+      founder_name: "Mr. Deepak Yadav",
+      founder_title: "Founder",
+      founder_image_url: "/uploads/media/1794989894186_maashardadeepak1_f470fd16.jpeg",
+      founder_about: "Visionary educator with deep commitment to student growth and academic benchmarks in Purvanchal.",
+      location_name: "Pandeypur, Varanasi",
+      full_address: "Shau Bila Building, Pandeypur Road, Pandeypur, (Near Police Chowki and Allahabad Bank), Varanasi, Uttar Pradesh - 221002",
       board_name: null,
       parent_university_name: null,
       student_count: 500,
       course_count: 12,
-      logo_url: null,
-      banner_url: null,
-      image_url: null,
-      branches: [],
+      logo_url: "/uploads/media/1794989860085_WhatsApp_Image_2026-11-17_at_1_62356dbe.jpeg",
+      banner_url: "/uploads/media/1794989894186_maashardadeepak1_f470fd16.jpeg",
+      image_url: "/uploads/media/1794989894186_maashardadeepak1_f470fd16.jpeg",
+      branches: [
+        {
+          id: 4,
+          branch_name: "Pandeypur branch",
+          address: "Shau Bila Building, Pandeypur Road, Pandeypur, (Near Police Chowki and Allahabad Bank)",
+          city: "Varanasi",
+          state: "Uttar Pradesh",
+          pincode: "221002",
+          phones: [{ id: "1", title: "Office Phone", phone: "8887787846", type: "phone" }],
+          emails: [{ id: "1", title: "General Email", email: "deepakdv74@gmail.com" }],
+          working_hours: "Monday - Saturday: 9:00 AM - 6:00 PM IST",
+        }
+      ],
     };
   }
 }

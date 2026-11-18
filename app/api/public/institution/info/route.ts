@@ -50,7 +50,7 @@ export async function GET(req: Request) {
         p.established_year,
         p.website,
         p.is_active,
-        p.business_id,
+        p.id AS business_id,
         it.name AS type_name,
         ist.name AS subtype_name,
         l.name AS location_name,
@@ -99,9 +99,9 @@ export async function GET(req: Request) {
       LEFT JOIN locations l ON l.id = p.location_id
       LEFT JOIN boards b ON b.id = p.board_id
       LEFT JOIN institution_profiles pu ON pu.id = p.parent_university_id
-      WHERE (p.business_id = $1 OR p.id = $1 OR p.slug = $2)
+      WHERE (p.id = $1 OR p.slug = $2 OR p.id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1))
         AND COALESCE(p.is_deleted, FALSE) = FALSE
-      ORDER BY (p.business_id = $1) DESC, p.id DESC
+      ORDER BY (p.id = $1) DESC, p.id DESC
       LIMIT 1
     `;
 
@@ -184,7 +184,7 @@ export async function GET(req: Request) {
       const branchesRes = await db.query(
         `SELECT id, branch_name, address, city, state, pincode, phone, email, is_headquarters, branch_type
          FROM platform_branches
-         WHERE (business_id = $1 OR institution_id = $2) AND status = 'active'
+         WHERE (business_id = $1 OR institution_id = $2 OR business_id = $2 OR institution_id = $1) AND status = 'active'
          ORDER BY is_headquarters DESC, id ASC`,
         [resolvedBizId, data.id]
       );
@@ -196,11 +196,47 @@ export async function GET(req: Request) {
           city: b.city,
           state: b.state,
           pincode: b.pincode,
-          phones: b.phone ? [{ phone: b.phone }] : [],
-          emails: b.email ? [{ email: b.email }] : [],
+          phones: b.phone ? [{ id: "1", title: "Office Phone", phone: b.phone, type: "phone" }] : [],
+          emails: b.email ? [{ id: "1", title: "General Email", email: b.email }] : [],
           is_headquarters: b.is_headquarters,
           branch_type: b.branch_type,
+          working_hours: "Monday - Saturday: 9:00 AM - 6:00 PM IST",
         }));
+      }
+
+      if (!data.branches || data.branches.length === 0) {
+        // Fallback to institution_branches if platform_branches not yet created
+        const ibRes = await db.query(
+          `SELECT id, branch_name, address, city, state, pincode, phones, emails, working_hours, is_primary
+           FROM institution_branches
+           WHERE (institution_id = $1 OR institution_id = $2) AND COALESCE(is_active, TRUE) = TRUE
+           ORDER BY is_primary DESC, id ASC`,
+          [data.id, resolvedBizId]
+        );
+        if (ibRes.rows.length > 0) {
+          data.branches = ibRes.rows.map((ib) => ({
+            id: ib.id,
+            branch_name: ib.branch_name,
+            address: ib.address,
+            city: ib.city,
+            state: ib.state,
+            pincode: ib.pincode,
+            phones: Array.isArray(ib.phones) ? ib.phones : (ib.phones ? [ib.phones] : []),
+            emails: Array.isArray(ib.emails) ? ib.emails : (ib.emails ? [ib.emails] : []),
+            is_headquarters: ib.is_primary,
+            working_hours: ib.working_hours || "Monday - Saturday: 9:00 AM - 6:00 PM IST",
+          }));
+        }
+      }
+
+      const primary = data.branches?.[0];
+      if (primary) {
+        if (!data.phone && primary.phones?.[0]?.phone) data.phone = primary.phones[0].phone;
+        if (!data.email && primary.emails?.[0]?.email) data.email = primary.emails[0].email;
+        if (!data.address && primary.address) data.address = primary.address;
+        if (!data.location_name && (primary.city || primary.address)) {
+          data.location_name = [primary.address, primary.city, primary.state, primary.pincode].filter(Boolean).join(", ");
+        }
       }
     }
 

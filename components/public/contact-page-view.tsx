@@ -252,7 +252,7 @@ export function ContactPageView({
     return "";
   };
 
-  const branches: ContactBranch[] = isInstMode && Array.isArray(institutionInfo.branches) && institutionInfo.branches.length > 0
+  const branches: ContactBranch[] = Array.isArray(institutionInfo?.branches) && institutionInfo.branches.length > 0
     ? institutionInfo.branches
     : Array.isArray(companyPage?.metadata?.branches) && companyPage.metadata.branches.length > 0
     ? companyPage.metadata.branches
@@ -264,21 +264,20 @@ export function ContactPageView({
     resolveEmail(institutionInfo?.email) ||
     resolveEmail(primaryBranch?.emails?.[0]) ||
     companyPage?.metadata?.email ||
-    "support@edubird.com";
+    "deepakdv74@gmail.com";
 
   const primaryPhone =
     resolvePhone(institutionInfo?.phone) ||
     resolvePhone(primaryBranch?.phones?.[0]) ||
     companyPage?.metadata?.phone ||
-    "+91 1234567890";
+    "8887787846";
 
   const primaryAddress =
-    institutionInfo?.location_name ||
     (primaryBranch?.address
       ? [primaryBranch.address, primaryBranch.city, primaryBranch.state, primaryBranch.pincode].filter(Boolean).join(", ")
-      : companyPage?.metadata?.address || "Orderly Bazar, Varanasi, Uttar Pradesh, India");
+      : institutionInfo?.full_address || institutionInfo?.location_name || companyPage?.metadata?.address || "Shau Bila Building, Pandeypur Road, Pandeypur, (Near Police Chowki and Allahabad Bank), Varanasi, Uttar Pradesh - 221002");
 
-  const workingHours = primaryBranch?.working_hours || companyPage?.metadata?.working_hours || "Monday - Saturday: 9:00 AM - 6:00 PM IST";
+  const workingHours = primaryBranch?.working_hours || institutionInfo?.working_hours || companyPage?.metadata?.working_hours || "Monday - Saturday: 9:00 AM - 6:00 PM IST";
 
   return (
     <div className="bg-background min-h-screen">
