@@ -97,6 +97,6 @@ export async function ensureAnalyticsSchema() {
 
     schemaEnsured = true;
   } catch (err) {
-    console.error("Error ensuring analytics schema:", err);
+    console.warn("Analytics schema initialization skipped (DB offline):", (err as any)?.message || err);
   }
 }

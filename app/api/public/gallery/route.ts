@@ -116,7 +116,7 @@ export async function GET(req: NextRequest) {
           });
         }
       } catch (err) {
-        console.error("Error fetching media for gallery:", err);
+        console.warn("Error fetching media for gallery, using local items:", (err as any)?.message || err);
       }
     }
 
@@ -127,7 +127,7 @@ export async function GET(req: NextRequest) {
       total: galleryItems.length,
     });
   } catch (err: any) {
-    console.error("GET /api/public/gallery error:", err);
-    return NextResponse.json({ error: "Failed to fetch gallery media" }, { status: 500 });
+    console.warn("GET /api/public/gallery fallback:", err?.message || err);
+    return NextResponse.json({ success: true, data: [], categories: [], total: 0 });
   }
 }

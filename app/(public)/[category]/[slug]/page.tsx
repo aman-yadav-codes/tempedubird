@@ -388,8 +388,8 @@ const fetchProfileFromCategoryAndSlug = cache(async (category: string, slug: str
     }
 
     return null;
-  } catch (err) {
-    console.error("Error in fetchProfileFromCategoryAndSlug:", err);
+  } catch (err: any) {
+    console.warn("fetchProfileFromCategoryAndSlug fallback:", err?.message || err);
     return null;
   }
 });

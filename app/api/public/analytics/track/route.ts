@@ -113,7 +113,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
-    console.error("Analytics tracking error:", err);
-    return NextResponse.json({ error: "Failed to record event" }, { status: 500 });
+    console.warn("Analytics tracking skipped (DB offline):", (err as any)?.message || err);
+    return NextResponse.json({ success: true, skipped: true });
   }
 }
