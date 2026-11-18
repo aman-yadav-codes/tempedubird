@@ -108,7 +108,7 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-class DbTimeoutError extends Error {
+export class DbTimeoutError extends Error {
   code = "ETIMEDOUT";
 
   constructor(message: string) {
@@ -161,7 +161,8 @@ const CIRCUIT_BREAKER_WINDOW_MS = 15_000;
 
 function checkCircuitBreaker(label: string) {
   if (lastDbFailureTimestamp && Date.now() - lastDbFailureTimestamp < CIRCUIT_BREAKER_WINDOW_MS) {
-    throw new DbTimeoutError(`Database connection unavailable (circuit open) [${label}]`);
+    debugWarn("[db.circuit_open]", { label });
+    throw new DbTimeoutError("Database connection is temporarily unavailable. Please try again shortly.");
   }
 }
 
@@ -252,7 +253,11 @@ if (!globalForPg.pgPoolInitialized) {
         debugLog("[db.query.start]", { preview });
   
         try {
-          const result = (await rawQuery(queryTextOrConfig, values)) as QueryResult<T>;
+          const result = (await withTimeout(
+            rawQuery(queryTextOrConfig, values),
+            connectTimeoutMs,
+            "query"
+          )) as QueryResult<T>;
           recordDbSuccess();
           const elapsedMs = Date.now() - startedAt;
           debugLog(elapsedMs > 1_000 ? "[db.query.slow]" : "[db.query.ok]", {

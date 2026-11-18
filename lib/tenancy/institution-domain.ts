@@ -193,12 +193,12 @@ export async function getInstitutionTenantByHost(db: Queryable, host: string | n
 
     return slugResult.rows[0] ?? null;
   } catch (error) {
-    console.warn("getInstitutionTenantByHost fallback:", error);
+    console.warn("getInstitutionTenantByHost fallback:", (error as any)?.message || error);
     if (configuredInstitutionId) {
       return {
         institution_id: configuredInstitutionId,
-        institution_name: "Institution",
-        institution_slug: null,
+        institution_name: "Maa Sharda Institute PVT LTD",
+        institution_slug: "maa-sharda-institute",
         domain: host || null,
         is_primary: true,
         config: {},

@@ -153,8 +153,13 @@ export function useActiveInstitution() {
     ? Number((user as any).institution_id)
     : ((user as any)?.under_institution_id ? Number((user as any).under_institution_id) : null);
 
+  const envMode = process.env.NEXT_PUBLIC_APP_MODE || process.env.APP_MODE;
+  const isBusinessOrInstMode = envMode === "business" || envMode === "institution";
+
   const resolvedId = isPlatformAdmin
     ? (activeInstitutionId ?? activeInstitution?.id ?? null)
+    : isBusinessOrInstMode && defaultEnvId
+    ? defaultEnvId
     : (activeInstitutionId ??
        activeInstitution?.id ??
        userMembershipInstId ??

@@ -4,13 +4,32 @@ import { db } from "@/lib/db/db";
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const institutionIdParam = searchParams.get("institutionId");
+    const institutionIdParam =
+      searchParams.get("institutionId") ||
+      searchParams.get("institution_id") ||
+      searchParams.get("businessId") ||
+      searchParams.get("business_id");
     const slug = searchParams.get("slug");
 
-    const instIdNum = institutionIdParam && /^\d+$/.test(institutionIdParam) ? Number(institutionIdParam) : null;
+    const envBizId = (
+      process.env.BUSINESS_ID ||
+      process.env.NEXT_PUBLIC_BUSINESS_ID ||
+      process.env.INSTITUTION_ID ||
+      process.env.NEXT_PUBLIC_INSTITUTION_ID ||
+      process.env.DEFAULT_INSTITUTION_ID ||
+      process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID ||
+      ""
+    ).trim();
+
+    const instIdNum =
+      institutionIdParam && /^\d+$/.test(institutionIdParam)
+        ? Number(institutionIdParam)
+        : envBizId && /^\d+$/.test(envBizId)
+          ? Number(envBizId)
+          : null;
 
     if (!instIdNum && !slug) {
-      return NextResponse.json({ error: "institutionId or slug is required" }, { status: 400 });
+      return NextResponse.json({ error: "institutionId, businessId or slug is required" }, { status: 400 });
     }
 
     const query = `
@@ -192,8 +211,19 @@ export async function GET(req: Request) {
   } catch (err: any) {
     console.warn("Error in GET /api/public/institution/info, returning fallback:", err?.message || err);
     const { searchParams } = new URL(req.url);
-    const institutionIdParam = searchParams.get("institutionId");
-    const instId = institutionIdParam && /^\d+$/.test(institutionIdParam) ? Number(institutionIdParam) : 160;
+    const param =
+      searchParams.get("institutionId") ||
+      searchParams.get("institution_id") ||
+      searchParams.get("businessId") ||
+      searchParams.get("business_id");
+    const envBiz = (
+      process.env.BUSINESS_ID ||
+      process.env.NEXT_PUBLIC_BUSINESS_ID ||
+      process.env.INSTITUTION_ID ||
+      process.env.NEXT_PUBLIC_INSTITUTION_ID ||
+      "160"
+    ).trim();
+    const instId = param && /^\d+$/.test(param) ? Number(param) : Number(envBiz) || 160;
 
     return NextResponse.json({
       success: true,

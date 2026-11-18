@@ -125,22 +125,22 @@ export function PublicNavbar({
   );
 
   const defaultEnvInstId =
-    configuredInstitutionId ||
-      process.env.NEXT_PUBLIC_BUSINESS_ID
+    configuredInstitutionId ??
+    (process.env.NEXT_PUBLIC_BUSINESS_ID
       ? Number(process.env.NEXT_PUBLIC_BUSINESS_ID)
       : process.env.NEXT_PUBLIC_INSTITUTION_ID
         ? Number(process.env.NEXT_PUBLIC_INSTITUTION_ID)
         : process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
           ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
-          : null;
+          : null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Fetch institution info dynamically for logged in institution admin
+  // Fetch institution info dynamically for logged in institution admin or business storefront
   useEffect(() => {
-    const instId = activeInstitutionId || user?.memberships?.[0]?.institution_id || defaultEnvInstId;
+    const instId = defaultEnvInstId || activeInstitutionId || user?.memberships?.[0]?.institution_id;
     if (instId) {
       fetch(`/api/public/institution/info?institutionId=${instId}`)
         .then((res) => res.json())

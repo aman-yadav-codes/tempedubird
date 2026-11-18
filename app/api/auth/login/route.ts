@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { createAccessToken } from "@/lib/auth/jwt";
 import { toSessionUser } from "@/lib/auth/session-user";
 import { getSuspensionErrorCode, getSuspensionStatus } from "@/lib/auth/suspension";
-import { db } from "@/lib/db/db";
+import { db, DbTimeoutError } from "@/lib/db/db";
 import { checkDeploymentAccess, DEPLOYMENT_ACCESS_ERROR_CODE } from "@/lib/deployment/auth-policy";
 import { getUserById } from "@/lib/queries/user";
 import { getConfiguredInstitutionId, getInstitutionTenantByHost, getRequestHost, hasConfiguredInstitutionId } from "@/lib/tenancy/institution-domain";
@@ -36,6 +36,19 @@ export async function POST(req: Request) {
       const loginRes = await loginUser(email, password);
       user = loginRes.user;
     } catch (standardLoginErr: any) {
+      const standardErrMsg = String(standardLoginErr?.message || "");
+      const isDbDown =
+        standardLoginErr?.name === "DbTimeoutError" ||
+        standardLoginErr?.code === "ETIMEDOUT" ||
+        standardLoginErr?.code === "ECONNREFUSED" ||
+        standardErrMsg.includes("timed out") ||
+        standardErrMsg.includes("circuit open") ||
+        standardErrMsg.includes("Database connection");
+
+      if (isDbDown) {
+        throw new Error("Database server is currently unreachable. Please check your database connection or try again shortly.");
+      }
+
       // Check if client matches in clients table
       const cleanIdent = String(email || "").trim();
       const cleanEmail = cleanIdent.toLowerCase();
@@ -206,12 +219,25 @@ export async function POST(req: Request) {
 
     return response;
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Login failed";
+    const rawMessage = err instanceof Error ? err.message : "Login failed";
+    const isDbErr =
+      err instanceof DbTimeoutError ||
+      (err as any)?.name === "DbTimeoutError" ||
+      (err as any)?.code === "ETIMEDOUT" ||
+      (err as any)?.code === "ECONNREFUSED" ||
+      rawMessage.includes("Database connection") ||
+      rawMessage.includes("timed out") ||
+      rawMessage.includes("circuit open");
+
+    const message = isDbErr
+      ? "Database server is currently unreachable. Please check your database connection or try again shortly."
+      : rawMessage;
+
     const errorCode = getSuspensionErrorCode(message);
 
     const response = NextResponse.json(
       errorCode ? { error: message, error_code: errorCode } : { error: message },
-      { status: errorCode ? 403 : 401 }
+      { status: errorCode ? 403 : isDbErr ? 503 : 401 }
     );
     if (errorCode) {
       response.cookies.delete("refresh_token");
