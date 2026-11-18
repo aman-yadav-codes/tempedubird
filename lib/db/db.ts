@@ -156,7 +156,24 @@ async function retryTransient<T>(operation: () => Promise<T>, attempts = 2, labe
   throw lastError;
 }
 
-const connectTimeoutMs = getNumberEnv("DATABASE_CONNECT_TIMEOUT_MS", 10_000);
+let lastDbFailureTimestamp = 0;
+const CIRCUIT_BREAKER_WINDOW_MS = 15_000;
+
+function checkCircuitBreaker(label: string) {
+  if (lastDbFailureTimestamp && Date.now() - lastDbFailureTimestamp < CIRCUIT_BREAKER_WINDOW_MS) {
+    throw new DbTimeoutError(`Database connection unavailable (circuit open) [${label}]`);
+  }
+}
+
+function recordDbSuccess() {
+  lastDbFailureTimestamp = 0;
+}
+
+function recordDbFailure() {
+  lastDbFailureTimestamp = Date.now();
+}
+
+const connectTimeoutMs = getNumberEnv("DATABASE_CONNECT_TIMEOUT_MS", 3_500);
 const queryTimeoutMs = getNumberEnv("DATABASE_QUERY_TIMEOUT_MS", 35_000);
 const useDatabaseSsl = process.env.DATABASE_SSL !== "false";
 
@@ -190,6 +207,7 @@ if (!globalForPg.pgPoolInitialized) {
   const rawQuery = dbPool.query.bind(dbPool) as typeof dbPool.query;
   
   async function connectWithLogging() {
+    checkCircuitBreaker("connect");
     return retryTransient<PoolClient>(
       async () => {
         const startedAt = Date.now();
@@ -197,9 +215,11 @@ if (!globalForPg.pgPoolInitialized) {
   
         try {
           const client = await withTimeout(rawConnect(), connectTimeoutMs, "connect");
+          recordDbSuccess();
           debugLog("[db.connect.ok]", { elapsed_ms: Date.now() - startedAt });
           return client;
         } catch (error) {
+          recordDbFailure();
           debugWarn("[db.connect.error]", {
             elapsed_ms: Date.now() - startedAt,
             ...getDbErrorMeta(error),
@@ -207,7 +227,7 @@ if (!globalForPg.pgPoolInitialized) {
           throw error;
         }
       },
-      2,
+      1,
       "connect"
     );
   }
@@ -217,6 +237,7 @@ if (!globalForPg.pgPoolInitialized) {
     values?: unknown[]
   ) => {
     const preview = getQueryPreview(queryTextOrConfig);
+    checkCircuitBreaker(preview);
   
     return retryTransient(
       async () => {
@@ -232,6 +253,7 @@ if (!globalForPg.pgPoolInitialized) {
   
         try {
           const result = (await rawQuery(queryTextOrConfig, values)) as QueryResult<T>;
+          recordDbSuccess();
           const elapsedMs = Date.now() - startedAt;
           debugLog(elapsedMs > 1_000 ? "[db.query.slow]" : "[db.query.ok]", {
             elapsed_ms: elapsedMs,
@@ -240,6 +262,9 @@ if (!globalForPg.pgPoolInitialized) {
           });
           return result;
         } catch (error) {
+          if (isTransientDbError(error)) {
+            recordDbFailure();
+          }
           debugWarn("[db.query.error]", {
             elapsed_ms: Date.now() - startedAt,
             preview,
@@ -250,7 +275,7 @@ if (!globalForPg.pgPoolInitialized) {
           clearTimeout(pendingTimer);
         }
       },
-      2,
+      1,
       preview
     );
   }) as typeof dbPool.query;

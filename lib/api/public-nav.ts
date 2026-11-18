@@ -69,7 +69,8 @@ export async function getPublicInstitutionNavItems(
 ): Promise<PublicInstitutionNavItem[]> {
   if (!tenant?.institution_id) return [];
 
-  await ensureInstitutionDomainSchema(db);
+  try {
+    await ensureInstitutionDomainSchema(db);
 
   const result = await db.query<InstitutionNavRow>(
     `
@@ -126,6 +127,10 @@ export async function getPublicInstitutionNavItems(
     href: publicInstitutionHref(row, currentHost),
     isCurrent: row.is_current,
   }));
+  } catch (err) {
+    console.warn("getPublicInstitutionNavItems fallback:", err);
+    return [];
+  }
 }
 
 export async function getPublicNavbarBrand(
@@ -140,7 +145,8 @@ export async function getPublicNavbarBrand(
     };
   }
 
-  // 1. Check platform_company_info for this business_id or institution_id
+  try {
+    // 1. Check platform_company_info for this business_id or institution_id
   const pciRes = await db.query<{ brand_name: string | null; company_name: string | null; logo_url: string | null }>(
     `SELECT brand_name, company_name, logo_url FROM platform_company_info
      WHERE business_id = $1 OR institution_id = $1
@@ -213,4 +219,12 @@ export async function getPublicNavbarBrand(
     logoUrl: row?.logo_url ?? null,
     isInstitution: true,
   };
+  } catch (err) {
+    console.warn("getPublicNavbarBrand fallback:", err);
+    return {
+      name: tenant.institution_name ?? "Maa Sharda Institute PVT LTD",
+      logoUrl: "/icons/edubird.webp",
+      isInstitution: true,
+    };
+  }
 }

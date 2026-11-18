@@ -6,7 +6,12 @@ import { getInstitutionTenantByHost, getRequestHost, normalizeTenantHost } from 
 
 export async function GET(req: Request) {
   const host = getRequestHost(req);
-  const tenant = await getInstitutionTenantByHost(db, host);
+  let tenant = null;
+  try {
+    tenant = await getInstitutionTenantByHost(db, host);
+  } catch (err) {
+    console.warn("getInstitutionTenantByHost fallback:", err);
+  }
 
   return NextResponse.json({
     appType: getAppModeForHost(host),
