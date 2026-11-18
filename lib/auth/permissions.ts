@@ -740,6 +740,7 @@ export function isAdminPathVisibleForRole(
   } | null | undefined,
   pathname: string
 ) {
+  if (!user) return false;
   const normalized = normalizeAdminPath(pathname);
   if (
     normalized === "/admin/institution/complaints" ||
@@ -1604,6 +1605,7 @@ export function hasAdminPagePermission(
 ) {
   const normalized = normalizeAdminPath(pathname);
   if (!normalized.startsWith("/admin")) return true;
+  if (!user) return false;
   if (!isAdminPathVisibleForRole(user, normalized)) return false;
   if (isPlatformAdminUser(user) || isInstitutionAdminUser(user)) return true;
   if (isCustomerUser(user)) return true;
@@ -1645,7 +1647,7 @@ export function hasAdminPagePermission(
   }
 
   if (normalized === "/admin/settings/subscription" || normalized === "/admin/settings/packages") {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || user.role_codes.includes("business_owner");
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || Boolean(user?.role_codes?.includes("business_owner"));
   }
 
   if (
