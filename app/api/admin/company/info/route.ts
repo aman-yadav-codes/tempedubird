@@ -16,26 +16,26 @@ async function ensureCompanyInfoSchema() {
       await db.query(`
         CREATE TABLE IF NOT EXISTS platform_company_info (
           id SERIAL PRIMARY KEY,
-          company_name VARCHAR(255) NOT NULL DEFAULT 'EduBird Technologies Pvt. Ltd.',
-          brand_name VARCHAR(150) NOT NULL DEFAULT 'EduBird Platform',
-          tagline VARCHAR(255) DEFAULT 'Next-Gen Education & Institutional Platform',
+          company_name TEXT NOT NULL DEFAULT 'EduBird Technologies Pvt. Ltd.',
+          brand_name TEXT NOT NULL DEFAULT 'EduBird Platform',
+          tagline TEXT DEFAULT 'Next-Gen Education & Institutional Platform',
           logo_url TEXT DEFAULT '/favicon.ico',
           dark_logo_url TEXT,
           favicon_url TEXT DEFAULT '/favicon.ico',
           about TEXT DEFAULT 'EduBird is a unified education management platform providing state-of-the-art tools for institutions, staff, educators, and students.',
-          registration_no VARCHAR(100) DEFAULT 'U72900DL2026PTC123456',
-          cin_number VARCHAR(100) DEFAULT 'U72900DL2026PTC123456',
-          gstin VARCHAR(50) DEFAULT '07AAAAA0000A1Z5',
+          registration_no TEXT DEFAULT 'U72900DL2026PTC123456',
+          cin_number TEXT DEFAULT 'U72900DL2026PTC123456',
+          gstin VARCHAR(100) DEFAULT '07AAAAA0000A1Z5',
           certified_or_affiliated_with TEXT DEFAULT 'ISO 9001:2015 Certified, UGC Recognized Platform Partner',
           support_email VARCHAR(255) DEFAULT 'support@edubird.com',
-          phone VARCHAR(50) DEFAULT '+91 98765 43210',
-          toll_free VARCHAR(50) DEFAULT '1800-123-EDUBIRD',
+          phone VARCHAR(100) DEFAULT '+91 98765 43210',
+          toll_free VARCHAR(100) DEFAULT '1800-123-EDUBIRD',
           website_url VARCHAR(255) DEFAULT 'https://edubird.com',
           headquarters_address TEXT DEFAULT '124, Connaught Place, Central Delhi',
-          city VARCHAR(100) DEFAULT 'New Delhi',
-          state VARCHAR(100) DEFAULT 'Delhi',
+          city VARCHAR(255) DEFAULT 'New Delhi',
+          state VARCHAR(255) DEFAULT 'Delhi',
           pincode VARCHAR(20) DEFAULT '110001',
-          working_hours VARCHAR(150) DEFAULT 'Monday - Saturday: 9:00 AM - 6:00 PM IST',
+          working_hours TEXT DEFAULT 'Monday - Saturday: 9:00 AM - 6:00 PM IST',
           social_links JSONB DEFAULT '{}'::jsonb,
           updated_at TIMESTAMP DEFAULT timezone('Asia/Kolkata', NOW()),
           updated_by INTEGER
@@ -51,8 +51,21 @@ async function ensureCompanyInfoSchema() {
           true
         );
 
+        ALTER TABLE platform_company_info ALTER COLUMN working_hours TYPE TEXT;
+        ALTER TABLE platform_company_info ALTER COLUMN brand_name TYPE TEXT;
+        ALTER TABLE platform_company_info ALTER COLUMN company_name TYPE TEXT;
+        ALTER TABLE platform_company_info ALTER COLUMN tagline TYPE TEXT;
+        ALTER TABLE platform_company_info ALTER COLUMN registration_no TYPE TEXT;
+        ALTER TABLE platform_company_info ALTER COLUMN cin_number TYPE TEXT;
+        ALTER TABLE platform_company_info ALTER COLUMN phone TYPE VARCHAR(100);
+        ALTER TABLE platform_company_info ALTER COLUMN toll_free TYPE VARCHAR(100);
+        ALTER TABLE platform_company_info ALTER COLUMN city TYPE VARCHAR(255);
+        ALTER TABLE platform_company_info ALTER COLUMN state TYPE VARCHAR(255);
+        ALTER TABLE platform_company_info ALTER COLUMN founder_name TYPE TEXT;
+        ALTER TABLE platform_company_info ALTER COLUMN founder_title TYPE TEXT;
+
         ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS certified_or_affiliated_with TEXT;
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS cin_number VARCHAR(100);
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS cin_number TEXT;
         ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS business_id INTEGER;
         ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS institution_id INTEGER;
         ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS listing_type VARCHAR(50) DEFAULT 'business';
@@ -65,8 +78,8 @@ async function ensureCompanyInfoSchema() {
         ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS qualifications TEXT;
         ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS banner_url TEXT;
         ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS gallery_images TEXT[];
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_name VARCHAR(255);
-        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_title VARCHAR(255);
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_name TEXT;
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_title TEXT;
         ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_image_url TEXT;
         ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_about TEXT;
         ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS mission TEXT;
@@ -75,8 +88,14 @@ async function ensureCompanyInfoSchema() {
         ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS established_year INTEGER;
         ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS opening_hours JSONB;
         ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS subcategory_ids INTEGER[];
+        ALTER TABLE business_profiles ALTER COLUMN locality TYPE TEXT;
+        ALTER TABLE business_profiles ALTER COLUMN email TYPE TEXT;
         ALTER TABLE professional_profiles ADD COLUMN IF NOT EXISTS subcategory_ids INTEGER[];
         ALTER TABLE professional_profiles ADD COLUMN IF NOT EXISTS gallery_images TEXT[];
+        ALTER TABLE professional_profiles ALTER COLUMN designation TYPE TEXT;
+        ALTER TABLE professional_profiles ALTER COLUMN professional_title TYPE TEXT;
+        ALTER TABLE professional_profiles ALTER COLUMN locality TYPE TEXT;
+        ALTER TABLE professional_profiles ALTER COLUMN email TYPE TEXT;
         CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_company_info_business_id ON platform_company_info(business_id) WHERE business_id IS NOT NULL;
 
         ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS state VARCHAR(100);
@@ -85,6 +104,8 @@ async function ensureCompanyInfoSchema() {
         ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS is_headquarters BOOLEAN DEFAULT FALSE;
         ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS business_id INTEGER;
         ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS institution_id INTEGER;
+        ALTER TABLE platform_branches ALTER COLUMN manager_name TYPE TEXT;
+        ALTER TABLE platform_branches ALTER COLUMN email TYPE TEXT;
         CREATE INDEX IF NOT EXISTS idx_platform_branches_business_id ON platform_branches(business_id);
       `);
       companyInfoSchemaReady = true;

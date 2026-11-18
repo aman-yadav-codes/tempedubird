@@ -100,6 +100,11 @@ export function isTransientDbError(error: unknown): boolean {
   const message = typeof record.message === "string" ? record.message : "";
   const name = typeof record.name === "string" ? record.name : "";
 
+  // Data exceptions, constraint violations, and syntax errors are never transient connection failures
+  if (/^(2[0-3]|42)/.test(code)) {
+    return false;
+  }
+
   return (
     name === "DbTimeoutError" ||
     TRANSIENT_DB_ERROR_CODES.has(code) ||
@@ -171,8 +176,8 @@ class DatabaseCircuitBreaker {
   private halfOpenProbeInFlight = false;
   private lastProbeTimestamp = 0;
 
-  private readonly failureThreshold = getNumberEnv("CIRCUIT_BREAKER_THRESHOLD", 3);
-  private readonly cooldownMs = getNumberEnv("CIRCUIT_BREAKER_WINDOW_MS", 15_000);
+  private readonly failureThreshold = getNumberEnv("CIRCUIT_BREAKER_THRESHOLD", 6);
+  private readonly cooldownMs = getNumberEnv("CIRCUIT_BREAKER_WINDOW_MS", 6_000);
 
   public getState(): CircuitState {
     if (this.state === "OPEN" && Date.now() - this.lastFailureTimestamp > this.cooldownMs) {

@@ -101,30 +101,31 @@ async function runDiagnostics() {
   }
   console.log("");
 
-  // 3. PostgreSQL Handshake & Authentication (With SSL)
-  console.log(`🔍 [3/5] Testing PostgreSQL Connection (SSL Enabled)...`);
-  const clientSsl = new Client({
+  // 3. PostgreSQL Handshake & Authentication
+  const isSslConfigured = process.env.DATABASE_SSL !== "false";
+  console.log(`🔍 [3/5] Testing PostgreSQL Connection (SSL: ${isSslConfigured ? "Enabled" : "Disabled"})...`);
+  const client = new Client({
     host,
     port,
     database,
     user,
     password,
     connectionTimeoutMillis: 5000,
-    ssl: { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "true" },
+    ssl: isSslConfigured ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "true" } : false,
   });
 
   let pgConnected = false;
   const pgStart = Date.now();
   try {
-    await clientSsl.connect();
+    await client.connect();
     const pgElapsed = Date.now() - pgStart;
-    console.log(`   ✅ Connected via SSL in ${pgElapsed}ms!`);
+    console.log(`   ✅ Connected in ${pgElapsed}ms!`);
     pgConnected = true;
 
     // 4. Simple Query: SELECT 1
     console.log(`\n🔍 [4/5] Testing Simple Query: 'SELECT 1 AS alive, version()'...`);
     const qStart = Date.now();
-    const res = await clientSsl.query("SELECT 1 AS alive, current_database() AS db, current_user AS usr, version() AS ver;");
+    const res = await client.query("SELECT 1 AS alive, current_database() AS db, current_user AS usr, version() AS ver;");
     const qElapsed = Date.now() - qStart;
     console.log(`   ✅ Query executed successfully in ${qElapsed}ms:`);
     console.log(`      - DB: ${res.rows[0]?.db}`);
@@ -134,7 +135,7 @@ async function runDiagnostics() {
     // 5. Query Active Connections & Pool Check
     console.log(`\n🔍 [5/5] Checking Database Stats & Active Connections...`);
     try {
-      const statRes = await clientSsl.query(`
+      const statRes = await client.query(`
         SELECT count(*) as total_connections, 
                count(*) filter (where state = 'active') as active,
                count(*) filter (where state = 'idle') as idle
@@ -149,14 +150,14 @@ async function runDiagnostics() {
       console.log("   ℹ️ Unable to query pg_stat_activity (insufficient privileges, normal for restricted users).");
     }
 
-    await clientSsl.end();
+    await client.end();
   } catch (err) {
     const pgElapsed = Date.now() - pgStart;
     console.error(`   ❌ PostgreSQL Connection failed after ${pgElapsed}ms: ${err.message} (${err.code || "NO_CODE"})`);
-    await clientSsl.end().catch(() => {});
+    await client.end().catch(() => {});
 
     // Try Non-SSL test if SSL failed
-    if (tcpResult.success && !pgConnected) {
+    if (isSslConfigured && tcpResult.success) {
       console.log(`\n   Retrying without SSL...`);
       const clientPlain = new Client({
         host,
@@ -170,6 +171,7 @@ async function runDiagnostics() {
       try {
         await clientPlain.connect();
         console.log(`   ✅ Non-SSL connection succeeded! (Server may not have SSL configured)`);
+        pgConnected = true;
         await clientPlain.end();
       } catch (plainErr) {
         console.error(`   ❌ Non-SSL connection also failed: ${plainErr.message}`);
