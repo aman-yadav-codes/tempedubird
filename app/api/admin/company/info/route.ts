@@ -4,77 +4,99 @@ import { isPlatformAdminUser, isInstitutionAdminUser } from "@/lib/auth/permissi
 import { db } from "@/lib/db/db";
 import { getFrontendConfig } from "@/lib/config/frontend-config";
 
+let companyInfoSchemaReady = false;
+let companyInfoSchemaPromise: Promise<void> | null = null;
+
 async function ensureCompanyInfoSchema() {
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS platform_company_info (
-      id SERIAL PRIMARY KEY,
-      company_name VARCHAR(255) NOT NULL DEFAULT 'EduBird Technologies Pvt. Ltd.',
-      brand_name VARCHAR(150) NOT NULL DEFAULT 'EduBird Platform',
-      tagline VARCHAR(255) DEFAULT 'Next-Gen Education & Institutional Platform',
-      logo_url TEXT DEFAULT '/favicon.ico',
-      dark_logo_url TEXT,
-      favicon_url TEXT DEFAULT '/favicon.ico',
-      about TEXT DEFAULT 'EduBird is a unified education management platform providing state-of-the-art tools for institutions, staff, educators, and students.',
-      registration_no VARCHAR(100) DEFAULT 'U72900DL2026PTC123456',
-      cin_number VARCHAR(100) DEFAULT 'U72900DL2026PTC123456',
-      gstin VARCHAR(50) DEFAULT '07AAAAA0000A1Z5',
-      certified_or_affiliated_with TEXT DEFAULT 'ISO 9001:2015 Certified, UGC Recognized Platform Partner',
-      support_email VARCHAR(255) DEFAULT 'support@edubird.com',
-      phone VARCHAR(50) DEFAULT '+91 98765 43210',
-      toll_free VARCHAR(50) DEFAULT '1800-123-EDUBIRD',
-      website_url VARCHAR(255) DEFAULT 'https://edubird.com',
-      headquarters_address TEXT DEFAULT '124, Connaught Place, Central Delhi',
-      city VARCHAR(100) DEFAULT 'New Delhi',
-      state VARCHAR(100) DEFAULT 'Delhi',
-      pincode VARCHAR(20) DEFAULT '110001',
-      working_hours VARCHAR(150) DEFAULT 'Monday - Saturday: 9:00 AM - 6:00 PM IST',
-      social_links JSONB DEFAULT '{}'::jsonb,
-      updated_at TIMESTAMP DEFAULT timezone('Asia/Kolkata', NOW()),
-      updated_by INTEGER
-    );
+  if (companyInfoSchemaReady) return;
+  if (companyInfoSchemaPromise) return companyInfoSchemaPromise;
 
-    INSERT INTO platform_company_info (id, company_name, brand_name, tagline, logo_url, support_email, phone, city, state, pincode)
-    SELECT 1, 'EduBird Technologies Pvt. Ltd.', 'EduBird Platform', 'Next-Gen Education & Institutional Platform', '/favicon.ico', 'support@edubird.com', '+91 98765 43210', 'New Delhi', 'Delhi', '110001'
-    WHERE NOT EXISTS (SELECT 1 FROM platform_company_info WHERE id = 1);
+  companyInfoSchemaPromise = (async () => {
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS platform_company_info (
+          id SERIAL PRIMARY KEY,
+          company_name VARCHAR(255) NOT NULL DEFAULT 'EduBird Technologies Pvt. Ltd.',
+          brand_name VARCHAR(150) NOT NULL DEFAULT 'EduBird Platform',
+          tagline VARCHAR(255) DEFAULT 'Next-Gen Education & Institutional Platform',
+          logo_url TEXT DEFAULT '/favicon.ico',
+          dark_logo_url TEXT,
+          favicon_url TEXT DEFAULT '/favicon.ico',
+          about TEXT DEFAULT 'EduBird is a unified education management platform providing state-of-the-art tools for institutions, staff, educators, and students.',
+          registration_no VARCHAR(100) DEFAULT 'U72900DL2026PTC123456',
+          cin_number VARCHAR(100) DEFAULT 'U72900DL2026PTC123456',
+          gstin VARCHAR(50) DEFAULT '07AAAAA0000A1Z5',
+          certified_or_affiliated_with TEXT DEFAULT 'ISO 9001:2015 Certified, UGC Recognized Platform Partner',
+          support_email VARCHAR(255) DEFAULT 'support@edubird.com',
+          phone VARCHAR(50) DEFAULT '+91 98765 43210',
+          toll_free VARCHAR(50) DEFAULT '1800-123-EDUBIRD',
+          website_url VARCHAR(255) DEFAULT 'https://edubird.com',
+          headquarters_address TEXT DEFAULT '124, Connaught Place, Central Delhi',
+          city VARCHAR(100) DEFAULT 'New Delhi',
+          state VARCHAR(100) DEFAULT 'Delhi',
+          pincode VARCHAR(20) DEFAULT '110001',
+          working_hours VARCHAR(150) DEFAULT 'Monday - Saturday: 9:00 AM - 6:00 PM IST',
+          social_links JSONB DEFAULT '{}'::jsonb,
+          updated_at TIMESTAMP DEFAULT timezone('Asia/Kolkata', NOW()),
+          updated_by INTEGER
+        );
 
-    SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), COALESCE((SELECT MAX(id) FROM platform_company_info), 1), true);
+        INSERT INTO platform_company_info (id, company_name, brand_name, tagline, logo_url, support_email, phone, city, state, pincode)
+        VALUES (1, 'EduBird Technologies Pvt. Ltd.', 'EduBird Platform', 'Next-Gen Education & Institutional Platform', '/favicon.ico', 'support@edubird.com', '+91 98765 43210', 'New Delhi', 'Delhi', '110001')
+        ON CONFLICT (id) DO NOTHING;
 
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS certified_or_affiliated_with TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS cin_number VARCHAR(100);
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS business_id INTEGER;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS institution_id INTEGER;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS listing_type VARCHAR(50) DEFAULT 'business';
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS category_id INTEGER;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS subcategory_id INTEGER;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS subcategory_ids INTEGER[];
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS business_type VARCHAR(255);
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS experience_years INTEGER;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS skills TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS qualifications TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS banner_url TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS gallery_images TEXT[];
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_name VARCHAR(255);
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_title VARCHAR(255);
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_image_url TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_about TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS mission TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS vision TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS goal TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS established_year INTEGER;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS opening_hours JSONB;
-    ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS subcategory_ids INTEGER[];
-    ALTER TABLE professional_profiles ADD COLUMN IF NOT EXISTS subcategory_ids INTEGER[];
-    ALTER TABLE professional_profiles ADD COLUMN IF NOT EXISTS gallery_images TEXT[];
-    CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_company_info_business_id ON platform_company_info(business_id) WHERE business_id IS NOT NULL;
+        SELECT setval(
+          pg_get_serial_sequence('platform_company_info', 'id'),
+          GREATEST(COALESCE((SELECT MAX(id) FROM platform_company_info), 1), 1),
+          true
+        );
 
-    ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS state VARCHAR(100);
-    ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS pincode VARCHAR(20);
-    ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS branch_type VARCHAR(50) DEFAULT 'Branch Office';
-    ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS is_headquarters BOOLEAN DEFAULT FALSE;
-    ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS business_id INTEGER;
-    ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS institution_id INTEGER;
-    CREATE INDEX IF NOT EXISTS idx_platform_branches_business_id ON platform_branches(business_id);
-  `);
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS certified_or_affiliated_with TEXT;
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS cin_number VARCHAR(100);
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS business_id INTEGER;
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS institution_id INTEGER;
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS listing_type VARCHAR(50) DEFAULT 'business';
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS category_id INTEGER;
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS subcategory_id INTEGER;
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS subcategory_ids INTEGER[];
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS business_type VARCHAR(255);
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS experience_years INTEGER;
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS skills TEXT;
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS qualifications TEXT;
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS banner_url TEXT;
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS gallery_images TEXT[];
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_name VARCHAR(255);
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_title VARCHAR(255);
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_image_url TEXT;
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_about TEXT;
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS mission TEXT;
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS vision TEXT;
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS goal TEXT;
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS established_year INTEGER;
+        ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS opening_hours JSONB;
+        ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS subcategory_ids INTEGER[];
+        ALTER TABLE professional_profiles ADD COLUMN IF NOT EXISTS subcategory_ids INTEGER[];
+        ALTER TABLE professional_profiles ADD COLUMN IF NOT EXISTS gallery_images TEXT[];
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_company_info_business_id ON platform_company_info(business_id) WHERE business_id IS NOT NULL;
+
+        ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS state VARCHAR(100);
+        ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS pincode VARCHAR(20);
+        ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS branch_type VARCHAR(50) DEFAULT 'Branch Office';
+        ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS is_headquarters BOOLEAN DEFAULT FALSE;
+        ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS business_id INTEGER;
+        ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS institution_id INTEGER;
+        CREATE INDEX IF NOT EXISTS idx_platform_branches_business_id ON platform_branches(business_id);
+      `);
+      companyInfoSchemaReady = true;
+    } catch (err: any) {
+      console.warn("[ensureCompanyInfoSchema] init:", err?.message || err);
+      companyInfoSchemaReady = true;
+    } finally {
+      companyInfoSchemaPromise = null;
+    }
+  })();
+
+  return companyInfoSchemaPromise;
 }
 
 async function resolveActiveBusinessId(req: Request, user?: any, body?: any): Promise<number | null> {
@@ -208,6 +230,7 @@ export async function GET(req: Request) {
               listing_type, category_id, subcategory_id, business_type,
               business_id, institution_id, updated_at
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
+            ON CONFLICT (business_id) WHERE business_id IS NOT NULL DO NOTHING
             RETURNING *`,
             [
               b.name,
@@ -261,6 +284,7 @@ export async function GET(req: Request) {
                 listing_type, category_id, subcategory_id, business_type,
                 business_id, institution_id, updated_at
               ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
+              ON CONFLICT (business_id) WHERE business_id IS NOT NULL DO NOTHING
               RETURNING *`,
               [
                 ip.name,
@@ -633,14 +657,16 @@ export async function PUT(req: Request) {
       );
       const instId = instCheck.rows[0]?.institution_profile_id || activeBizId;
 
+      const targetRecordId = (body?.id && !isNaN(Number(body.id))) ? Number(body.id) : null;
       const existing = await db.query(
         `SELECT id FROM platform_company_info
-         WHERE business_id = $1
+         WHERE ($2::integer IS NOT NULL AND id = $2::integer)
+            OR business_id = $1
             OR institution_id = $1
             OR institution_id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1)
             OR business_id IN (SELECT id FROM business_profiles WHERE institution_profile_id = $1)
-         ORDER BY (business_id = $1) DESC LIMIT 1`,
-        [activeBizId]
+         ORDER BY (id = $2::integer) DESC, (business_id = $1) DESC LIMIT 1`,
+        [activeBizId, targetRecordId]
       );
 
       let res;
@@ -752,6 +778,14 @@ export async function PUT(req: Request) {
              $33, $34, $35, $36, $37, $38, $39, $40::integer,
              timezone('Asia/Kolkata', NOW()), $31
            )
+           ON CONFLICT (business_id) WHERE business_id IS NOT NULL
+           DO UPDATE SET
+             company_name = EXCLUDED.company_name,
+             brand_name = EXCLUDED.brand_name,
+             tagline = EXCLUDED.tagline,
+             logo_url = EXCLUDED.logo_url,
+             about = EXCLUDED.about,
+             updated_at = NOW()
            RETURNING *`,
           [
             activeBizId,
