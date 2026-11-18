@@ -94,7 +94,7 @@ const BED_TYPES = [
 
 const VIEW_TYPES = ["City View", "Sea / Pool View", "Garden View", "Mountain View", "Courtyard View"];
 
-export default function MarketingRoomsPage() {
+export default function MarketingRoomsPage({ isMasterCatalog = false }: { isMasterCatalog?: boolean } = {}) {
   const { user } = useAuthStore();
   const [rooms, setRooms] = useState<RoomRecord[]>([]);
   const [stats, setStats] = useState({ total: 0, available: 0, booked: 0, maintenance: 0 });
@@ -270,11 +270,13 @@ export default function MarketingRoomsPage() {
               <BedDouble className="size-6" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
-              Rooms, Suites & Accommodations
+              {isMasterCatalog ? "Master Rooms & Stays Catalog" : "Rooms, Suites & Accommodations"}
             </h1>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage your hotel room types, resort suites, guest stays, amenities, and nightly rates.
+            {isMasterCatalog
+              ? "Platform-wide master room types, resort suites, guest stays, and accommodation templates."
+              : "Manage your hotel room types, resort suites, guest stays, amenities, and nightly rates."}
           </p>
         </div>
 
@@ -296,7 +298,7 @@ export default function MarketingRoomsPage() {
             className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl h-9 px-4 gap-1.5 shadow-sm"
           >
             <Plus className="size-4" />
-            <span>Add Room</span>
+            <span>{isMasterCatalog ? "Add Master Room" : "Add Room"}</span>
           </Button>
         </div>
       </div>

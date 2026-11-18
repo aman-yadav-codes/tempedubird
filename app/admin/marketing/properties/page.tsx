@@ -97,7 +97,7 @@ const PROPERTY_TYPES = [
 const LISTING_TYPES = ["For Sale", "For Rent", "Commercial Lease", "PG / Co-living"];
 const FURNISHING_TYPES = ["Furnished", "Semi-Furnished", "Unfurnished"];
 
-export default function MarketingPropertiesPage() {
+export default function MarketingPropertiesPage({ isMasterCatalog = false }: { isMasterCatalog?: boolean } = {}) {
   const { user } = useAuthStore();
   const [properties, setProperties] = useState<PropertyRecord[]>([]);
   const [stats, setStats] = useState({ total: 0, available: 0, for_sale: 0, for_rent: 0 });
@@ -296,11 +296,13 @@ export default function MarketingPropertiesPage() {
               <Building2 className="size-6" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
-              Real Estate & Property Listings
+              {isMasterCatalog ? "Master Properties Catalog" : "Real Estate & Property Listings"}
             </h1>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage your commercial & residential properties, plots, rental listings, and real estate offerings.
+            {isMasterCatalog
+              ? "Platform-wide master property, residential, commercial, and rental templates."
+              : "Manage your commercial & residential properties, plots, rental listings, and real estate offerings."}
           </p>
         </div>
 
@@ -322,7 +324,7 @@ export default function MarketingPropertiesPage() {
             className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl h-9 px-4 gap-1.5 shadow-sm"
           >
             <Plus className="size-4" />
-            <span>Add Property</span>
+            <span>{isMasterCatalog ? "Add Master Property" : "Add Property"}</span>
           </Button>
         </div>
       </div>

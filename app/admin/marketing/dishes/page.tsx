@@ -92,7 +92,7 @@ const DIET_TYPES = [
 
 const SPICE_LEVELS = ["Mild", "Medium", "Spicy", "Extra Hot"];
 
-export default function MarketingDishesPage() {
+export default function MarketingDishesPage({ isMasterCatalog = false }: { isMasterCatalog?: boolean } = {}) {
   const { user } = useAuthStore();
   const [dishes, setDishes] = useState<DishRecord[]>([]);
   const [stats, setStats] = useState({ total: 0, available: 0, veg: 0, non_veg: 0 });
@@ -265,11 +265,13 @@ export default function MarketingDishesPage() {
               <UtensilsCrossed className="size-6" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
-              Restaurant Dishes & Food Menu
+              {isMasterCatalog ? "Master Dishes & Menu Catalog" : "Restaurant Dishes & Food Menu"}
             </h1>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage your food catalog, culinary specialties, beverages, appetizers, and dining menus.
+            {isMasterCatalog
+              ? "Platform-wide master dishes, food menu templates, and culinary catalog."
+              : "Manage your food catalog, culinary specialties, beverages, appetizers, and dining menus."}
           </p>
         </div>
 
@@ -291,7 +293,7 @@ export default function MarketingDishesPage() {
             className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl h-9 px-4 gap-1.5 shadow-sm"
           >
             <Plus className="size-4" />
-            <span>Add Dish / Item</span>
+            <span>{isMasterCatalog ? "Add Master Dish" : "Add Dish / Item"}</span>
           </Button>
         </div>
       </div>

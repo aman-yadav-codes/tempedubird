@@ -79,7 +79,7 @@ const VEHICLE_TYPES = ["SUV", "Sedan", "Hatchback", "Luxury", "Motorcycle", "Sco
 const FUEL_TYPES = ["Petrol", "Diesel", "Electric", "Hybrid", "CNG"];
 const TRANSMISSIONS = ["Automatic", "Manual"];
 
-export default function MarketingVehiclesPage() {
+export default function MarketingVehiclesPage({ isMasterCatalog = false }: { isMasterCatalog?: boolean } = {}) {
   const { user } = useAuthStore();
   const [vehicles, setVehicles] = useState<VehicleRecord[]>([]);
   const [stats, setStats] = useState({ total: 0, available: 0, booked: 0, maintenance: 0 });
@@ -259,11 +259,13 @@ export default function MarketingVehiclesPage() {
               <Car className="size-6" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
-              Vehicle Catalog & Fleet
+              {isMasterCatalog ? "Master Vehicles Catalog" : "Vehicle Catalog & Fleet"}
             </h1>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage your automobile listings, rentals, vehicles for sale, and fleet inventory.
+            {isMasterCatalog
+              ? "Platform-wide master vehicle fleet, models, and rental inventory templates."
+              : "Manage your automobile listings, rentals, vehicles for sale, and fleet inventory."}
           </p>
         </div>
 
@@ -285,7 +287,7 @@ export default function MarketingVehiclesPage() {
             className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl h-9 px-4 gap-1.5 shadow-sm"
           >
             <Plus className="size-4" />
-            <span>Add Vehicle</span>
+            <span>{isMasterCatalog ? "Add Master Vehicle" : "Add Vehicle"}</span>
           </Button>
         </div>
       </div>

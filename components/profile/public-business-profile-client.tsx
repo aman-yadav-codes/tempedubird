@@ -1884,7 +1884,9 @@ export function PublicBusinessProfileClient({
                   )}
 
                   {/* 1. Mission Card */}
-                  {Boolean(business.mission) && (
+                  {(() => {
+                    const missionText = business.mission || "Empowering students through high-quality education, personalized mentorship, and academic excellence to build successful future careers.";
+                    return (
                     <Card className="rounded-2xl border shadow-xs overflow-hidden hover:shadow-md transition-all border-blue-200/80 dark:border-blue-900/50 bg-gradient-to-br from-blue-50/60 via-card to-card dark:from-blue-950/20">
                       <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
                         <div className="flex items-center gap-2">
@@ -1905,7 +1907,7 @@ export function PublicBusinessProfileClient({
                       </CardHeader>
                       <CardContent className="p-4 space-y-2">
                         <blockquote className="border-l-2 border-blue-600 pl-3 py-0.5 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line">
-                          &ldquo;{business.mission}&rdquo;
+                          &ldquo;{missionText}&rdquo;
                         </blockquote>
                         <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
                           <span className="flex items-center gap-1 text-blue-600 font-semibold">
@@ -1915,10 +1917,13 @@ export function PublicBusinessProfileClient({
                         </div>
                       </CardContent>
                     </Card>
-                  )}
+                    );
+                  })()}
 
                   {/* 2. Vision Card */}
-                  {Boolean(business.vision) && (
+                  {(() => {
+                    const visionText = business.vision || "To be recognized as a leading educational institute driving transformational learning, student character, and exceptional academic results.";
+                    return (
                     <Card className="rounded-2xl border shadow-xs overflow-hidden hover:shadow-md transition-all border-purple-200/80 dark:border-purple-900/50 bg-gradient-to-br from-purple-50/60 via-card to-card dark:from-purple-950/20">
                       <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
                         <div className="flex items-center gap-2">
@@ -1939,7 +1944,7 @@ export function PublicBusinessProfileClient({
                       </CardHeader>
                       <CardContent className="p-4 space-y-2">
                         <blockquote className="border-l-2 border-purple-600 pl-3 py-0.5 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line">
-                          &ldquo;{business.vision}&rdquo;
+                          &ldquo;{visionText}&rdquo;
                         </blockquote>
                         <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
                           <span className="flex items-center gap-1 text-purple-600 font-semibold">
@@ -1949,10 +1954,13 @@ export function PublicBusinessProfileClient({
                         </div>
                       </CardContent>
                     </Card>
-                  )}
+                    );
+                  })()}
 
                   {/* 3. Goal Card */}
-                  {Boolean(business.goal) && (
+                  {(() => {
+                    const goalText = business.goal || business.strategic_goals || "Quality Education: Deliver concept-focused coaching and continuous mentorship.\nStudent Success: Equip students with competitive exam strategies and high scores.\nHolistic Growth: Foster an inspiring, supportive, and disciplined academic environment.";
+                    return (
                     <Card className="rounded-2xl border shadow-xs overflow-hidden hover:shadow-md transition-all border-amber-200/80 dark:border-amber-900/50 bg-gradient-to-br from-amber-50/60 via-card to-card dark:from-amber-950/20">
                       <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
                         <div className="flex items-center gap-2">
@@ -1973,7 +1981,7 @@ export function PublicBusinessProfileClient({
                       </CardHeader>
                       <CardContent className="p-4 space-y-2.5">
                         <div className="space-y-2">
-                          {business.goal
+                          {goalText
                             .split("\n")
                             .map((g: string) => g.trim())
                             .filter(Boolean)
@@ -2005,7 +2013,8 @@ export function PublicBusinessProfileClient({
                         </div>
                       </CardContent>
                     </Card>
-                  )}
+                    );
+                  })()}
                 </div>
               </div>
             </TabsContent>

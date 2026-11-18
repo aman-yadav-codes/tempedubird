@@ -7,7 +7,6 @@ import { useActiveInstitution } from "@/hooks/use-active-institution";
 export type CategoryKey =
   | "courses"
   | "products"
-  | "packages"
   | "services"
   | "institutes"
   | "practice"
@@ -74,7 +73,6 @@ export function useCategoryAvailability() {
 
   const isCategoryVisible = useCallback(
     (key: CategoryKey) => {
-      if (key === "packages") return true;
       if (categories) {
         return Boolean(categories[key]?.hasData);
       }

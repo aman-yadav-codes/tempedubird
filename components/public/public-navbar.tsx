@@ -758,12 +758,12 @@ export function PublicNavbar({
               {/* Add Listings Mobile Action */}
               <div className="pt-2">
                 <Link
-                  href="/packages"
+                  href="/contact"
                   onClick={() => setMobileMenuOpen(false)}
                   className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-rose-200 bg-rose-50/50 text-[#800000] font-bold text-xs hover:bg-rose-100 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
-                  <span>Add Institute / Course Listings</span>
+                  <span>Partner With Us / Enquire</span>
                 </Link>
               </div>
             </div>

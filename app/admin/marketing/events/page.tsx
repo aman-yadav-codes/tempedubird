@@ -91,7 +91,7 @@ const PRICE_MODELS = [
   { value: "per_hour", label: "Per Hour Rental" },
 ];
 
-export default function MarketingEventsPage() {
+export default function MarketingEventsPage({ isMasterCatalog = false }: { isMasterCatalog?: boolean } = {}) {
   const { user } = useAuthStore();
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [stats, setStats] = useState({ total: 0, active: 0, upcoming: 0, weddings: 0 });
@@ -263,11 +263,13 @@ export default function MarketingEventsPage() {
               <CalendarDays className="size-6" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
-              Events & Banquet Packages
+              {isMasterCatalog ? "Master Events Catalog" : "Events & Banquet Packages"}
             </h1>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Showcase your event packages, wedding lawns, corporate conference bookings, and celebrations.
+            {isMasterCatalog
+              ? "Platform-wide master event, banquet, and celebration catalog templates."
+              : "Showcase your event packages, wedding lawns, corporate conference bookings, and celebrations."}
           </p>
         </div>
 
@@ -289,7 +291,7 @@ export default function MarketingEventsPage() {
             className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl h-9 px-4 gap-1.5 shadow-sm"
           >
             <Plus className="size-4" />
-            <span>Add Event Package</span>
+            <span>{isMasterCatalog ? "Add Master Event" : "Add Event Package"}</span>
           </Button>
         </div>
       </div>

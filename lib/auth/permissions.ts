@@ -1731,7 +1731,7 @@ export function hasAdminPagePermission(
   }
 
   if (normalized === "/admin/marketing" || normalized.startsWith("/admin/marketing")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized)) || Boolean(user?.permissions?.some(p => p.startsWith("marketing.")));
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || Boolean(user?.role_codes?.includes("business_owner")) || hasPermission(user, getPageViewPermission(normalized)) || Boolean(user?.permissions?.some(p => p.startsWith("marketing.")));
   }
 
   if (normalized === "/admin/sales" || normalized.startsWith("/admin/sales")) {
