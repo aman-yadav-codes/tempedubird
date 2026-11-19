@@ -2820,114 +2820,6 @@ export default function AdminCompanyPage() {
                     </div>
                   </div>
 
-                  {/* Official Contacts & Registered Headquarters Address */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Contacts */}
-                    <div className="p-5 rounded-xl border bg-muted/20 space-y-4">
-                      <div className="flex items-center gap-2 border-b pb-3">
-                        <Mail className="h-4 w-4 text-primary" />
-                        <h3 className="font-semibold text-sm tracking-wide uppercase text-foreground">Official Contact Channels</h3>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="space-y-2">
-                          <Label htmlFor="ci-email" className="text-xs font-semibold">Support & Inquiries Email *</Label>
-                          <Input
-                            id="ci-email"
-                            type="email"
-                            value={companyInfo.support_email || ""}
-                            onChange={(e) => setCompanyInfo((prev) => ({ ...prev, support_email: e.target.value }))}
-                            placeholder="support@example.com"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div className="space-y-2">
-                            <Label htmlFor="ci-phone" className="text-xs font-semibold">Support Phone</Label>
-                            <Input
-                              id="ci-phone"
-                              value={companyInfo.support_phone || ""}
-                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, support_phone: e.target.value }))}
-                              placeholder="+91 98765 43210"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="ci-tollfree" className="text-xs font-semibold">Toll-Free Helpline</Label>
-                            <Input
-                              id="ci-tollfree"
-                              value={companyInfo.helpline_toll_free || ""}
-                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, helpline_toll_free: e.target.value }))}
-                              placeholder="1800 123 4567"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="ci-web" className="text-xs font-semibold">Official Website / Portfolio Link</Label>
-                          <Input
-                            id="ci-web"
-                            value={companyInfo.website_url || ""}
-                            onChange={(e) => setCompanyInfo((prev) => ({ ...prev, website_url: e.target.value }))}
-                            placeholder="https://example.com"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Registered Headquarters Address */}
-                    <div className="p-5 rounded-xl border bg-muted/20 space-y-4">
-                      <div className="flex items-center gap-2 border-b pb-3">
-                        <MapPin className="h-4 w-4 text-primary" />
-                        <h3 className="font-semibold text-sm tracking-wide uppercase text-foreground">
-                          {companyInfo.listing_type === "professional" ? "Primary Practice / Clinic Address" : "Registered Office / Headquarters Address"}
-                        </h3>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="space-y-2">
-                          <Label htmlFor="ci-addr-street" className="text-xs font-semibold">Street / Building Address *</Label>
-                          <Textarea
-                            id="ci-addr-street"
-                            rows={2}
-                            value={companyInfo.address_street || ""}
-                            onChange={(e) => setCompanyInfo((prev) => ({ ...prev, address_street: e.target.value }))}
-                            placeholder="e.g. Plot No. 45, Sector 62, Technology Corridor..."
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="space-y-2">
-                            <Label htmlFor="ci-addr-city" className="text-xs font-semibold">City *</Label>
-                            <Input
-                              id="ci-addr-city"
-                              value={companyInfo.address_city || ""}
-                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, address_city: e.target.value }))}
-                              placeholder="e.g. Noida"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="ci-addr-state" className="text-xs font-semibold">State</Label>
-                            <Input
-                              id="ci-addr-state"
-                              value={companyInfo.address_state || ""}
-                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, address_state: e.target.value }))}
-                              placeholder="e.g. Uttar Pradesh"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="ci-addr-pin" className="text-xs font-semibold">Pincode</Label>
-                            <Input
-                              id="ci-addr-pin"
-                              value={companyInfo.address_pincode || ""}
-                              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, address_pincode: e.target.value }))}
-                              placeholder="e.g. 201301"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
                   {/* Working Hours Section */}
                   {renderWorkingHoursEditor()}
 
@@ -2945,9 +2837,6 @@ export default function AdminCompanyPage() {
               )}
             </CardContent>
           </Card>
-
-          {/* Operating Centers & Branch Offices Directory */}
-          {renderAddressManagementCard()}
         </TabsContent>
 
         {/* Dedicated Working Hours Tab */}
