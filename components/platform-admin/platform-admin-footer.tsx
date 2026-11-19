@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Package,
   Wrench,
@@ -47,7 +48,7 @@ export function PlatformAdminFooter() {
       return;
     }
     setSubscribed(true);
-    toast.success("Thank you for subscribing to EduBird platform updates!");
+    toast.success("Thank you for subscribing to 143Panda platform updates!");
     setEmail("");
   };
 
@@ -59,7 +60,7 @@ export function PlatformAdminFooter() {
           <div className="space-y-1 text-center md:text-left">
             <div className="inline-flex items-center gap-1.5 text-xs font-bold text-primary">
               <Sparkles className="size-3.5" />
-              <span>Stay Ahead with EduBird</span>
+              <span>Stay Ahead with 143Panda</span>
             </div>
             <h3 className="text-lg sm:text-xl font-black text-foreground tracking-tight">
               Get notified about trending products, fresh jobs &amp; verified courses
@@ -95,21 +96,19 @@ export function PlatformAdminFooter() {
           {/* Brand Info (Spans 2 columns on large screens) */}
           <div className="col-span-2 space-y-4">
             <Link href="/" className="inline-flex items-center gap-2">
-              <div className="size-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-black text-lg border border-primary/20">
-                EB
-              </div>
-              <div className="flex flex-col">
-                <span className="text-lg font-black tracking-tight text-foreground">
-                  Edu<span className="text-primary">Bird</span>
-                </span>
-                <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground -mt-1">
-                  Hyperlocal Marketplace
-                </span>
+              <div className="relative h-11 w-auto flex items-center">
+                <Image
+                  src="/images/143panda-logo.png"
+                  alt="143Panda"
+                  width={140}
+                  height={50}
+                  className="h-10 w-auto object-contain"
+                />
               </div>
             </Link>
 
             <p className="text-xs text-muted-foreground leading-relaxed max-w-sm">
-              Discover and compare prices across 18+ verified local stores in Varanasi. Shop retail essentials, book skilled services, consult top professionals, and enroll in certified programs.
+              Discover and compare prices across verified local stores, book skilled services, consult top professionals, and enroll in certified programs on 143Panda.
             </p>
 
             <div className="space-y-2 pt-2 text-xs text-muted-foreground">
@@ -141,10 +140,10 @@ export function PlatformAdminFooter() {
             <div className="pt-3 space-y-2 border-t border-border/40">
               <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
                 <Smartphone className="size-3.5 text-primary" />
-                <span>EduBird App</span>
+                <span>143Panda App</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                EduBird app coming soon for faster local discovery.
+                143Panda app coming soon for faster local discovery.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 max-w-md">
                 <div className="flex items-center gap-2.5 p-2 rounded-xl border border-border/80 bg-background/80 shadow-2xs hover:border-primary/40 transition-colors">
@@ -336,7 +335,7 @@ export function PlatformAdminFooter() {
       <div className="border-t border-border/40 py-5 px-4 sm:px-6 lg:px-8 bg-muted/30">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
           <div className="flex items-center gap-3 flex-wrap justify-center sm:justify-start">
-            <span>&copy; {year} EduBird Platform. All rights reserved.</span>
+            <span>&copy; {year} 143Panda Platform. All rights reserved.</span>
             <span className="hidden sm:inline-block size-1 rounded-full bg-border" />
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
               <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />

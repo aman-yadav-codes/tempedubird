@@ -382,25 +382,23 @@ export function UnifiedMarketplaceHome() {
 
   return (
     <div className="flex-1 flex flex-col w-full bg-background">
-      {/* ================= 1. HERO SECTION (FINDMY DEER DISCOVERY THEME) ================= */}
-      <section className="relative overflow-hidden min-h-[580px] sm:min-h-[640px] lg:min-h-[720px] flex items-center py-16 sm:py-20 lg:py-24 border-b border-border/50 bg-[#060402] bg-gradient-to-r from-[#060402] via-[#0d0905] to-[#150d08]">
-        {/* Scenic Majestic Deer - Pinned strictly to the RIGHT half, flipped horizontally to face LEFT towards the search box */}
-        <div className="absolute right-0 -top-12 bottom-0 w-full sm:w-7/12 md:w-1/2 lg:w-[46%] xl:w-[42%] pointer-events-none z-0 overflow-hidden">
-          <div className="relative w-full h-[125%] -scale-x-100 -translate-y-16 lg:-translate-y-24">
-            <Image
-              src="/images/hero-deer.jpg"
-              alt="Scenic Majestic Deer"
-              fill
-              priority
-              className="object-cover object-[center_60%]"
-              sizes="(max-width: 768px) 100vw, 50vw"
-              quality={95}
-            />
-          </div>
-          {/* Subtle gradient blends so deer merges seamlessly into the left dark landscape */}
-          <div className="absolute inset-y-0 left-0 w-2/5 bg-gradient-to-r from-[#060402] via-[#060402]/85 to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[#060402] via-[#060402]/90 to-transparent" />
-          <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-[#060402] to-transparent" />
+      {/* ================= 1. HERO SECTION (143PANDA DISCOVERY THEME) ================= */}
+      <section className="relative overflow-hidden min-h-[580px] sm:min-h-[640px] lg:min-h-[720px] flex items-center py-16 sm:py-20 lg:py-24 border-b border-border/50 bg-[#060402]">
+        {/* ONE Single Majestic Panda Hero Background Image that smoothly fades away below text */}
+        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+          <Image
+            src="/images/hero-panda.jpg"
+            alt="143Panda Discovery Platform"
+            fill
+            priority
+            className="object-cover object-[right_center]"
+            sizes="100vw"
+            quality={95}
+          />
+          {/* Silky fade: completely dissolves the image below the text, headline, search box and controls */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#060402] from-35% via-[#060402]/90 via-58% to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#060402] via-[#060402]/75 via-28% to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[#060402] to-transparent" />
         </div>
 
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-amber-500/10 blur-3xl pointer-events-none z-0" />

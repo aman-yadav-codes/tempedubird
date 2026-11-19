@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   Shield,
@@ -318,23 +319,26 @@ export function PlatformAdminHeader() {
   return (
     <header className="w-full border-b border-border/40 bg-background/85 backdrop-blur-md sticky top-0 z-40 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3 lg:gap-6">
-        {/* Left: Minimal Platform Brand */}
+        {/* Left: 143Panda Platform Brand */}
         <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
           <Link
             href="/"
-            className="flex items-center gap-2.5 text-foreground hover:opacity-90 transition-opacity shrink-0"
+            className="flex items-center gap-2 text-foreground hover:opacity-90 transition-opacity shrink-0 py-0.5"
+            title="143Panda Platform Admin"
           >
-            <div className="size-8.5 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-black shadow-2xs">
-              <Shield className="size-4.5" />
+            <div className="relative h-11 w-auto flex items-center">
+              <Image
+                src="/images/143panda-logo.png"
+                alt="143Panda"
+                width={130}
+                height={46}
+                className="h-10 sm:h-11 w-auto object-contain"
+                priority
+              />
             </div>
-            <div className="flex flex-col">
-              <span className="font-extrabold tracking-tight text-base leading-tight">
-                FindMy
-              </span>
-              <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">
-                Platform Admin
-              </span>
-            </div>
+            <span className="hidden sm:inline-block text-[9px] font-bold text-muted-foreground uppercase tracking-widest px-1.5 py-0.5 rounded bg-muted/60 border border-border/40">
+              Platform Admin
+            </span>
           </Link>
         </div>
 
@@ -466,10 +470,15 @@ export function PlatformAdminHeader() {
         <DialogContent className="w-[92vw] max-w-md p-0 overflow-hidden rounded-2xl border shadow-2xl">
           <div className="p-4 border-b flex items-center justify-between bg-muted/30">
             <div className="flex items-center gap-2">
-              <div className="size-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-black">
-                <Shield className="size-4" />
+              <div className="relative h-8 w-auto flex items-center">
+                <Image
+                  src="/images/143panda-logo.png"
+                  alt="143Panda"
+                  width={110}
+                  height={38}
+                  className="h-8 w-auto object-contain"
+                />
               </div>
-              <span className="font-extrabold text-sm">FindMy Discovery</span>
             </div>
           </div>
           <div className="p-4 space-y-3 max-h-[75vh] overflow-y-auto">
