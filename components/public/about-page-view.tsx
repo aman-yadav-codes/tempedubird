@@ -23,6 +23,7 @@ import {
   Bell,
   ArrowRight,
   ExternalLink,
+  ChevronRight,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -150,7 +151,15 @@ export function AboutPageView({ initialProfile, companyPage }: AboutPageViewProp
       {/* ================= 1. HERO & OVERVIEW SECTION ================= */}
       <section id="overview" className="border-b border-border bg-gradient-to-b from-primary/5 via-card/40 to-background scroll-mt-20 relative">
         <span id="institute" className="absolute -top-24 pointer-events-none" />
-        <div className="container mx-auto grid gap-8 px-4 py-12 lg:grid-cols-[minmax(0,1fr)_440px] lg:items-center lg:py-16">
+        <div className="container mx-auto px-4 pt-8">
+          <nav className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+            <Link href="/" className="hover:text-primary transition-colors">Home</Link>
+            <ChevronRight className="h-3 w-3" />
+            <span className="text-foreground font-semibold">About Us</span>
+          </nav>
+        </div>
+
+        <div className="container mx-auto grid gap-8 px-4 py-8 lg:grid-cols-[minmax(0,1fr)_440px] lg:items-center lg:py-12">
           <div className="min-w-0">
             <Badge className="mb-4 bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 text-xs font-bold py-1 px-3">
               <ShieldCheck className="mr-1.5 size-3.5" />

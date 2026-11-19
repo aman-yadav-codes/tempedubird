@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { getCurrentPublicInstitutionProfile } from "@/lib/api/public-institutions";
 import { db } from "@/lib/db/db";
 import { getCompanyPageBySlug } from "@/lib/queries/company";
-import { AboutOverviewPageView } from "@/components/public/about-overview-page-view";
+import { AboutPageView } from "@/components/public/about-page-view";
 import { resolvePageMetadata } from "@/lib/seo/metadata";
 
 async function getHost() {
@@ -15,8 +15,8 @@ export async function generateMetadata() {
   const name = profile?.name ?? "EduBird";
 
   return resolvePageMetadata("/about", profile?.id, {
-    title: `About Us | ${name} — Organization & Campus Overview`,
-    description: profile?.about ?? "Learn more about our institution, establishment, campus infrastructure, and official certifications.",
+    title: `About Us | ${name}`,
+    description: profile?.about ?? "Learn more about our organization, mission, vision, strategic goals, and leadership.",
   });
 }
 
@@ -24,5 +24,5 @@ export default async function AboutPage() {
   const profile = await getCurrentPublicInstitutionProfile(await getHost());
   const companyPage = await getCompanyPageBySlug(db, "about-us");
 
-  return <AboutOverviewPageView initialProfile={profile} companyPage={companyPage} />;
+  return <AboutPageView initialProfile={profile} companyPage={companyPage} />;
 }

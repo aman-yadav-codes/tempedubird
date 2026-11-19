@@ -1671,7 +1671,7 @@ export function PublicBusinessProfileClient({
                             </h3>
                           </div>
                           <Button variant="ghost" size="sm" asChild className="h-7 text-xs font-bold text-primary hover:text-primary gap-1">
-                            <Link href="/about/mission-vision">
+                            <Link href="/about#mission-vision">
                               <span>Details</span>
                               <ChevronRight className="size-3.5" />
                             </Link>
@@ -1693,7 +1693,7 @@ export function PublicBusinessProfileClient({
                                   </div>
                                 </div>
                                 <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/50">
-                                  <Link href="/about/mission-vision#mission">
+                                  <Link href="/about#mission-vision">
                                     <span>Details</span>
                                     <ChevronRight className="size-3 ml-0.5" />
                                   </Link>
@@ -1729,7 +1729,7 @@ export function PublicBusinessProfileClient({
                                   </div>
                                 </div>
                                 <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/50">
-                                  <Link href="/about/mission-vision#vision">
+                                  <Link href="/about#mission-vision">
                                     <span>Details</span>
                                     <ChevronRight className="size-3 ml-0.5" />
                                   </Link>
@@ -1765,7 +1765,7 @@ export function PublicBusinessProfileClient({
                               </div>
                             </div>
                             <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/50">
-                              <Link href="/about/mission-vision#goals">
+                              <Link href="/about#mission-vision">
                                 <span>View All</span>
                                 <ChevronRight className="size-3 ml-0.5" />
                               </Link>
@@ -1796,7 +1796,7 @@ export function PublicBusinessProfileClient({
                               <span className="flex items-center gap-1 text-amber-600 font-semibold">
                                 <CheckCircle2 className="size-3.5" /> Active Strategy
                               </span>
-                              <Link href="/about/mission-vision#goals" className="font-bold text-primary hover:underline flex items-center gap-0.5 text-xs">
+                              <Link href="/about#mission-vision" className="font-bold text-primary hover:underline flex items-center gap-0.5 text-xs">
                                 <span>Read complete roadmap</span>
                                 <ChevronRight className="size-3" />
                               </Link>

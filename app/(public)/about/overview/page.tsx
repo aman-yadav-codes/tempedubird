@@ -1,1 +1,5 @@
-export { default, generateMetadata } from "../page";
+import { redirect } from "next/navigation";
+
+export default function OverviewPage() {
+  redirect("/about");
+}

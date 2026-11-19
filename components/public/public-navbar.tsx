@@ -285,53 +285,19 @@ export function PublicNavbar({
         {isInstitutionView ? (
           <div className="hidden md:flex flex-1 items-center justify-start lg:justify-center mx-2 py-1 overflow-hidden">
             <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap">
-              {/* 1. About Us Dropdown FIRST (Mission, Vision & Goal, About Founder, About Institute) */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className={cn(
-                      "flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg whitespace-nowrap text-xs font-semibold transition-all duration-200 cursor-pointer select-none outline-none shrink-0",
-                      pathname.startsWith("/about") || pathname.startsWith("/mission-vision") || pathname.startsWith("/founder")
-                        ? "bg-[#FEE2E2] text-[#991B1B] font-bold shadow-2xs border border-rose-200/60"
-                        : "text-[#800000] hover:text-[#991B1B] hover:bg-rose-100/50"
-                    )}
-                  >
-                    <Info className="h-3.5 w-3.5 shrink-0 text-[#800000]" />
-                    <span>About Us</span>
-                    <ChevronDown className="h-3 w-3 text-[#800000]/70" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-60 p-1.5 space-y-1 bg-white border border-gray-200 shadow-xl rounded-xl">
-                  <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
-                    <Link href="/about" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
-                      <Building2 className="h-4 w-4 text-rose-600 shrink-0" />
-                      <div className="flex flex-col leading-tight">
-                        <span className="font-bold">Overview</span>
-                        <span className="text-[10px] text-gray-500 font-normal">Organization & campus overview</span>
-                      </div>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
-                    <Link href="/about/mission-vision" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
-                      <Target className="h-4 w-4 text-rose-600 shrink-0" />
-                      <div className="flex flex-col leading-tight">
-                        <span className="font-bold">Mission, Vision & Goal</span>
-                        <span className="text-[10px] text-gray-500 font-normal">Core principles & aims</span>
-                      </div>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
-                    <Link href="/about/founder" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
-                      <User className="h-4 w-4 text-rose-600 shrink-0" />
-                      <div className="flex flex-col leading-tight">
-                        <span className="font-bold">About Founder</span>
-                        <span className="text-[10px] text-gray-500 font-normal">Leadership & founders</span>
-                      </div>
-                    </Link>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {/* 1. About Us Direct Link (Unified single page) */}
+              <Link
+                href="/about"
+                className={cn(
+                  "flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg whitespace-nowrap text-xs font-semibold transition-all duration-200 cursor-pointer select-none shrink-0",
+                  pathname.startsWith("/about")
+                    ? "bg-[#FEE2E2] text-[#991B1B] font-bold shadow-2xs border border-rose-200/60"
+                    : "text-[#800000] hover:text-[#991B1B] hover:bg-rose-100/50"
+                )}
+              >
+                <Info className="h-3.5 w-3.5 shrink-0 text-[#800000]" />
+                <span>About Us</span>
+              </Link>
 
               {/* Primary visible items for institution view */}
               {effectiveInstitutionItems.map((item) => {
@@ -671,38 +637,20 @@ export function PublicNavbar({
                 Campus Navigation
               </p>
 
-              {/* About Us Mobile Submenu */}
-              <div className="rounded-xl border border-rose-100 bg-rose-50/40 p-2 space-y-1">
-                <span className="text-xs font-bold text-[#800000] px-1 block flex items-center gap-1.5">
-                  <Info className="h-3.5 w-3.5 text-[#800000]" /> About Us & Campus
-                </span>
-                <div className="grid grid-cols-3 gap-1 pt-1">
-                  <Link
-                    href="/about"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-1.5 p-1.5 rounded-lg text-xs font-semibold text-gray-800 hover:bg-rose-100/60"
-                  >
-                    <Building2 className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                    <span className="truncate">Overview</span>
-                  </Link>
-                  <Link
-                    href="/about/mission-vision"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-1.5 p-1.5 rounded-lg text-xs font-semibold text-gray-800 hover:bg-rose-100/60"
-                  >
-                    <Target className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                    <span className="truncate">Mission & Vision</span>
-                  </Link>
-                  <Link
-                    href="/about/founder"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-1.5 p-1.5 rounded-lg text-xs font-semibold text-gray-800 hover:bg-rose-100/60"
-                  >
-                    <User className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                    <span className="truncate">About Founder</span>
-                  </Link>
-                </div>
-              </div>
+              {/* About Us Direct Link */}
+              <Link
+                href="/about"
+                onClick={() => setMobileMenuOpen(false)}
+                className={cn(
+                  "flex items-center gap-2 p-2.5 rounded-xl text-xs font-semibold transition-all",
+                  pathname.startsWith("/about")
+                    ? "bg-rose-100 text-rose-900 font-bold border border-rose-200"
+                    : "text-gray-800 hover:bg-gray-100"
+                )}
+              >
+                <Info className="h-4 w-4 text-[#800000]" />
+                <span>About Us</span>
+              </Link>
 
               {/* Institution Active Categories */}
               <div className="grid grid-cols-2 gap-1 pt-2">
