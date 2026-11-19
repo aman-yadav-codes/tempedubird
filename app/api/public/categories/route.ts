@@ -12,7 +12,11 @@ export async function GET(req: NextRequest) {
     const bizParam = searchParams.get("businessId") || searchParams.get("business_id");
     const bizId = bizParam && /^\d+$/.test(bizParam) ? Number(bizParam) : null;
 
-    const conditions = ["is_deleted = FALSE", "COALESCE(is_active, TRUE) = TRUE"];
+    const conditions = [
+      "is_deleted = FALSE",
+      "COALESCE(is_active, TRUE) = TRUE",
+      "COALESCE(is_seo_active, TRUE) = TRUE",
+    ];
     const params: any[] = [];
 
     if (bizId) {

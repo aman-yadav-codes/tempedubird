@@ -761,6 +761,7 @@ export function isAdminPathVisibleForRole(
     if (normalized === "/admin/users" || normalized.startsWith("/admin/users/")) return false;
     if (normalized === "/admin/profiles" || normalized.startsWith("/admin/profiles/")) return false;
     if (normalized === "/admin/business-type-access" || normalized.startsWith("/admin/business-type-access/")) return false;
+    if (normalized === "/admin/seo-locations" || normalized.startsWith("/admin/seo-locations/")) return false;
     if (normalized === "/admin/categories" || normalized.startsWith("/admin/categories/")) return false;
     if (normalized === "/admin/catalog" || normalized.startsWith("/admin/catalog/")) return false;
     if (normalized === "/admin/locations" || normalized.startsWith("/admin/locations/")) return false;

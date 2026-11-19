@@ -103,6 +103,7 @@ const ADMIN_CHILD_SEGMENTS = new Set([
   "profiles",
   "reviews",
   "sales",
+  "seo-locations",
   "settings",
   "staff",
   "students",

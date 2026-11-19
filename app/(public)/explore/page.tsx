@@ -204,6 +204,25 @@ function CustomerExplorePageContent() {
   const [sortBy, setSortBy] = useState<string>("featured");
   const [productNameSearch, setProductNameSearch] = useState<string>("");
   const [selectedBrand, setSelectedBrand] = useState<string>("all");
+  const [availableLocations, setAvailableLocations] = useState<Array<{ id: number; name: string; type: string }>>([]);
+
+  // Load active SEO locations for the location filter
+  useEffect(() => {
+    let ignore = false;
+    async function loadActiveLocations() {
+      try {
+        const res = await fetch("/api/public/locations?type=city");
+        const json = await res.json();
+        if (!ignore && json?.data) {
+          setAvailableLocations(json.data);
+        }
+      } catch (err) {
+        console.error("Failed to load active SEO locations:", err);
+      }
+    }
+    loadActiveLocations();
+    return () => { ignore = true; };
+  }, []);
 
   // Load categories dynamically based on selected Type
   useEffect(() => {
@@ -779,8 +798,8 @@ function CustomerExplorePageContent() {
           <div className={cn(
             "grid gap-3",
             activeType === "product"
-              ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
-              : "grid-cols-1 sm:grid-cols-3"
+              ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-5"
+              : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
           )}>
             {/* Filter 1: Type */}
             <div className="space-y-1.5">
@@ -878,12 +897,32 @@ function CustomerExplorePageContent() {
               </select>
             </div>
 
-            {/* Filter 4: Brand (Conditional - ONLY when Product is selected, completely hidden otherwise) */}
+            {/* Filter 4: Location / City (Populated from Activated SEO Locations) */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <MapPin className="size-3.5 text-primary" />
+                <span>4. Location {availableLocations.length > 0 ? `(${availableLocations.length})` : ""}</span>
+              </label>
+              <select
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer"
+              >
+                <option value="">All Locations</option>
+                {availableLocations.map((loc) => (
+                  <option key={loc.id} value={loc.name}>
+                    {loc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter 5: Brand (Conditional - ONLY when Product is selected, completely hidden otherwise) */}
             {activeType === "product" && (
               <div className="space-y-1.5 animate-in fade-in">
                 <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                   <Tag className="size-3.5 text-primary" />
-                  <span>4. Brand ({availableBrands.length})</span>
+                  <span>5. Brand ({availableBrands.length})</span>
                 </label>
                 <select
                   value={selectedBrand}
