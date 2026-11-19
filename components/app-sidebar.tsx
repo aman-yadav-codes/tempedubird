@@ -418,10 +418,8 @@ const navItems: SidebarItem[] = [
         children: [
             { title: "Orders & Bookings", url: "/admin/sales/orders", icon: ShoppingCart },
             { title: "Pipeline", url: "/admin/sales/pipeline", icon: TrendingUp },
-            { title: "Patients", url: "/admin/sales/patients", icon: HeartPulse },
-            { title: "Students", url: "/admin/sales/students", icon: GraduationCap },
+            { title: "Leads", url: "/admin/sales/leads", icon: UserCheck },
             { title: "Proposals", url: "/admin/sales/proposals", icon: FileSignature },
-            { title: "Clients", url: "/admin/sales/clients", icon: Building2 },
             { title: "Enquiry", url: "/admin/sales/enquiries", icon: Mail },
             { title: "Commissions", url: "/admin/sales/commissions", icon: Percent },
             { title: "Generate Documents", url: "/admin/sales/generate-documents", icon: Sparkles },
@@ -512,6 +510,9 @@ const navItems: SidebarItem[] = [
         url: "/admin/vendors",
         icon: ShieldCheck,
         children: [
+            { title: "Patients", url: "/admin/sales/patients", icon: HeartPulse },
+            { title: "Students", url: "/admin/sales/students", icon: GraduationCap },
+            { title: "Clients", url: "/admin/sales/clients", icon: Building2 },
             { title: "Vendors", url: "/admin/vendors", icon: Store },
             { title: "Inventory", url: "/admin/inventory", icon: Boxes },
             { title: "Team", url: "/admin/team", icon: Users },
