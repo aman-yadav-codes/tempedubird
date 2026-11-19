@@ -300,7 +300,8 @@ export async function getCurrentPublicInstitutionProfile(host: string | null | u
     try {
       const pciRes = await db.query(
         `SELECT brand_name, company_name, logo_url, support_email, phone, website_url, about, headquarters_address, city, state, pincode,
-                founder_name, founder_title, founder_image_url, founder_about, mission, vision, goal, banner_url, established_year
+                founder_name, founder_title, founder_image_url, founder_about, mission, vision, goal, banner_url, established_year,
+                opening_hours, working_hours, social_links, registration_no, gstin, certified_or_affiliated_with
          FROM platform_company_info
          WHERE business_id = $1 OR institution_id = $1
          ORDER BY (business_id = $1) DESC
@@ -315,7 +316,10 @@ export async function getCurrentPublicInstitutionProfile(host: string | null | u
         if (pci.website_url) profile.website = pci.website_url;
         if (pci.about) profile.about = pci.about;
         if (pci.logo_url) profile.logo_url = pci.logo_url;
-        if (pci.headquarters_address) profile.full_address = pci.headquarters_address;
+        if (pci.headquarters_address) {
+          profile.full_address = pci.headquarters_address;
+          (profile as any).address = pci.headquarters_address;
+        }
         if (pci.city) profile.location_name = pci.city;
         if (pci.founder_name) profile.founder_name = pci.founder_name;
         if (pci.founder_title) profile.founder_title = pci.founder_title;
@@ -326,6 +330,16 @@ export async function getCurrentPublicInstitutionProfile(host: string | null | u
         if (pci.goal) profile.goal = pci.goal;
         if (pci.banner_url) profile.banner_url = pci.banner_url;
         if (pci.established_year) profile.established_year = pci.established_year;
+        if (pci.opening_hours) (profile as any).opening_hours = pci.opening_hours;
+        if (pci.working_hours) (profile as any).working_hours = pci.working_hours;
+        if (pci.social_links) (profile as any).social_links = pci.social_links;
+        if (pci.registration_no) (profile as any).registration_no = pci.registration_no;
+        if (pci.gstin) (profile as any).gstin = pci.gstin;
+        if (pci.certified_or_affiliated_with) (profile as any).certified_or_affiliated_with = pci.certified_or_affiliated_with;
+      }
+
+      if (!profile.founder_image_url) {
+        profile.founder_image_url = "/uploads/media/deepak_yadav_founder.jpg";
       }
 
       const branchRes = await db.query(

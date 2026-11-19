@@ -24,6 +24,7 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
         COALESCE(ip.founder_name, u.full_name) AS owner_name,
         COALESCE(ip.founder_title, 'Founder & Managing Director') AS owner_designation,
         COALESCE(ip.founder_image_url, u.avatar_url) AS owner_image_url,
+        ip.founder_image_url,
         COALESCE(ip.phone, bp.phone, u.phone) AS owner_phone,
         COALESCE(bp.whatsapp, ip.phone, bp.phone, u.phone) AS owner_whatsapp,
         COALESCE(ip.email, bp.email, u.email) AS owner_email,
@@ -320,6 +321,54 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
       const mediaUrls = galleryRows.map((r: any) => r.url).filter(Boolean);
       business.gallery_images = Array.from(new Set([...mediaUrls, ...(Array.isArray(business.gallery_images) ? business.gallery_images : [])]));
     }
+
+    try {
+      const pciRes = await db.query(
+        `SELECT * FROM platform_company_info WHERE business_id = $1 OR institution_id = $2 OR business_id = $2 OR institution_id = $1 ORDER BY id DESC LIMIT 1`,
+        [bizId, instId]
+      );
+      if (pciRes.rows.length > 0) {
+        const pci = pciRes.rows[0];
+        if (pci.founder_name) {
+          business.owner_name = pci.founder_name;
+          business.founder_name = pci.founder_name;
+        }
+        if (pci.founder_title) {
+          business.owner_designation = pci.founder_title;
+          business.founder_title = pci.founder_title;
+        }
+        if (pci.founder_about) {
+          business.owner_about = pci.founder_about;
+          business.founder_about = pci.founder_about;
+        }
+        if (pci.founder_image_url) {
+          business.owner_image_url = pci.founder_image_url;
+          business.founder_image_url = pci.founder_image_url;
+        }
+        if (pci.brand_name) business.name = pci.brand_name;
+        if (pci.logo_url) business.logo_url = pci.logo_url;
+        if (pci.banner_url) business.banner_url = pci.banner_url;
+        if (pci.about) business.about = pci.about;
+        if (pci.mission) business.mission = pci.mission;
+        if (pci.vision) business.vision = pci.vision;
+        if (pci.goal) business.goal = pci.goal;
+        if (pci.opening_hours) business.opening_hours = pci.opening_hours;
+        if (pci.social_links) business.social_links = pci.social_links;
+        if (pci.established_year) business.established_year = pci.established_year;
+        if (pci.phone) business.phone = pci.phone;
+        if (pci.support_email) business.email = pci.support_email;
+        if (pci.website_url) business.website = pci.website_url;
+        if (pci.headquarters_address) business.address = pci.headquarters_address;
+        if (pci.city) business.city = pci.city;
+        if (pci.state) business.state = pci.state;
+        if (pci.pincode) business.postal_code = pci.pincode;
+      }
+    } catch (e) {
+      console.warn("fetchBusinessFullData pci overlay warning:", e);
+    }
+
+    if (!business.owner_image_url) business.owner_image_url = "/uploads/media/deepak_yadav_founder.jpg";
+    if (!business.founder_image_url) business.founder_image_url = "/uploads/media/deepak_yadav_founder.jpg";
 
     return {
       business,

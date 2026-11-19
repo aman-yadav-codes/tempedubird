@@ -42,7 +42,7 @@ async function syncBusinessBranches(bizId: number) {
   try {
     const branchesRes = await db.query(
       `SELECT id, branch_name as name, city, state, pincode as postal_code, address, phone, email, is_headquarters as is_main
-       FROM platform_branches WHERE business_id = $1 AND status = 'active'
+       FROM platform_branches WHERE (business_id = $1 OR institution_id = $1) AND status = 'active'
        ORDER BY is_headquarters DESC, id ASC`,
       [bizId]
     );
@@ -50,6 +50,37 @@ async function syncBusinessBranches(bizId: number) {
       `UPDATE business_profiles SET branches = $1, updated_at = NOW() WHERE id = $2 OR institution_profile_id = $2`,
       [JSON.stringify(branchesRes.rows), bizId]
     );
+
+    // Also synchronize into institution_branches
+    const instCheck = await db.query(
+      `SELECT institution_profile_id FROM business_profiles WHERE id = $1`,
+      [bizId]
+    );
+    const instId = instCheck.rows[0]?.institution_profile_id || bizId;
+    if (instId) {
+      for (const b of branchesRes.rows) {
+        const phonesJson = b.phone ? JSON.stringify([{ id: "1", title: "Phone", phone: b.phone, type: "phone" }]) : JSON.stringify([]);
+        const emailsJson = b.email ? JSON.stringify([{ id: "1", title: "Email", email: b.email }]) : JSON.stringify([]);
+        const exists = await db.query(
+          `SELECT id FROM institution_branches WHERE institution_id = $1 AND (LOWER(TRIM(branch_name)) = LOWER(TRIM($2)) OR (is_primary = TRUE AND $3 = TRUE)) LIMIT 1`,
+          [instId, b.name, Boolean(b.is_main)]
+        );
+        if (exists.rows.length > 0) {
+          await db.query(
+            `UPDATE institution_branches
+             SET branch_name = $1, address = $2, city = $3, state = $4, pincode = $5, phones = $6::jsonb, emails = $7::jsonb, is_primary = $8, is_active = TRUE, updated_at = NOW()
+             WHERE id = $9`,
+            [b.name, b.address, b.city, b.state, b.postal_code, phonesJson, emailsJson, Boolean(b.is_main), exists.rows[0].id]
+          );
+        } else {
+          await db.query(
+            `INSERT INTO institution_branches (institution_id, branch_name, address, city, state, pincode, phones, emails, is_primary, is_active, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, TRUE, NOW(), NOW())`,
+            [instId, b.name, b.address, b.city, b.state, b.postal_code, phonesJson, emailsJson, Boolean(b.is_main)]
+          );
+        }
+      }
+    }
   } catch (err) {
     console.error("Failed to sync business branches:", err);
   }

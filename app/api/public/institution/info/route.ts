@@ -175,6 +175,16 @@ export async function GET(req: Request) {
         if (pci.goal) data.goal = pci.goal;
         if (pci.banner_url) data.banner_url = pci.banner_url;
         if (pci.established_year) data.established_year = pci.established_year;
+        if (pci.opening_hours) data.opening_hours = pci.opening_hours;
+        if (pci.working_hours) data.working_hours = pci.working_hours;
+        if (pci.social_links) data.social_links = pci.social_links;
+        if (pci.registration_no) data.registration_no = pci.registration_no;
+        if (pci.gstin) data.gstin = pci.gstin;
+        if (pci.certified_or_affiliated_with) data.certified_or_affiliated_with = pci.certified_or_affiliated_with;
+      }
+
+      if (!data.founder_image_url) {
+        data.founder_image_url = "/uploads/media/deepak_yadav_founder.jpg";
       }
 
       // Also overlay business_profiles logo / banner if not yet set

@@ -46,6 +46,7 @@ import { toast } from "sonner";
 
 import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { useAuthStore } from "@/store";
+import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -157,6 +158,10 @@ export default function AdminCompanyPage() {
   const router = useRouter();
   const pathname = usePathname();
   const { user, accessToken } = useAuthStore();
+  const { activeInstitutionId, defaultEnvInstitutionId } = useActiveInstitution();
+  const effectiveInstId = useMemo(() => {
+    return activeInstitutionId || defaultEnvInstitutionId || (typeof window !== "undefined" ? (localStorage.getItem("edubird.activeInstitutionId") || localStorage.getItem("active_institution_id") || "") : "");
+  }, [activeInstitutionId, defaultEnvInstitutionId]);
   const isPlatformAdmin = isPlatformAdminUser(user);
   const isInstAdmin = isInstitutionAdminUser(user);
   const canAccessCompany = isPlatformAdmin || isInstAdmin;
@@ -576,7 +581,14 @@ export default function AdminCompanyPage() {
   const fetchPaymentMethods = useCallback(async () => {
     setLoadingPaymentMethods(true);
     try {
-      const res = await fetch("/api/admin/company/payment-methods", { headers: authHeader });
+      const activeInstId = effectiveInstId ? String(effectiveInstId) : "";
+      const url = activeInstId ? `/api/admin/company/payment-methods?institutionId=${encodeURIComponent(activeInstId)}` : "/api/admin/company/payment-methods";
+      const res = await fetch(url, {
+        headers: {
+          ...authHeader,
+          ...(activeInstId ? { "x-institution-id": activeInstId, "x-business-id": activeInstId } : {}),
+        },
+      });
       if (res.ok) {
         const json = await res.json();
         setPaymentMethods(json.data || []);
@@ -586,12 +598,19 @@ export default function AdminCompanyPage() {
     } finally {
       setLoadingPaymentMethods(false);
     }
-  }, [authHeader]);
+  }, [authHeader, effectiveInstId]);
 
   const fetchBranches = useCallback(async () => {
     setLoadingBranches(true);
     try {
-      const res = await fetch("/api/admin/company/branches", { headers: authHeader });
+      const activeInstId = effectiveInstId ? String(effectiveInstId) : "";
+      const url = activeInstId ? `/api/admin/company/branches?businessId=${encodeURIComponent(activeInstId)}` : "/api/admin/company/branches";
+      const res = await fetch(url, {
+        headers: {
+          ...authHeader,
+          ...(activeInstId ? { "x-institution-id": activeInstId, "x-business-id": activeInstId } : {}),
+        },
+      });
       if (res.ok) {
         const json = await res.json();
         setBranches(json.branches || []);
@@ -601,7 +620,7 @@ export default function AdminCompanyPage() {
     } finally {
       setLoadingBranches(false);
     }
-  }, [authHeader]);
+  }, [authHeader, effectiveInstId]);
 
   const fetchSubcategories = useCallback(async (categoryId: number | null) => {
     if (!categoryId) {
@@ -625,7 +644,7 @@ export default function AdminCompanyPage() {
   const fetchCompanyInfo = useCallback(async () => {
     setLoadingCompanyInfo(true);
     try {
-      const activeInstId = typeof window !== "undefined" ? (localStorage.getItem("active_institution_id") || "") : "";
+      const activeInstId = effectiveInstId ? String(effectiveInstId) : (typeof window !== "undefined" ? (localStorage.getItem("edubird.activeInstitutionId") || localStorage.getItem("active_institution_id") || "") : "");
       const url = activeInstId ? `/api/admin/company/info?institutionId=${encodeURIComponent(activeInstId)}` : "/api/admin/company/info";
       const res = await fetch(url, {
         headers: {
@@ -732,7 +751,7 @@ export default function AdminCompanyPage() {
   const handleSaveCompanyInfo = async () => {
     setSavingCompanyInfo(true);
     try {
-      const activeInstId = typeof window !== "undefined" ? (localStorage.getItem("active_institution_id") || "") : "";
+      const activeInstId = effectiveInstId ? String(effectiveInstId) : (typeof window !== "undefined" ? (localStorage.getItem("edubird.activeInstitutionId") || localStorage.getItem("active_institution_id") || "") : "");
       const summaryText = Object.entries(companyInfo.opening_hours || DEFAULT_OPENING_HOURS)
         .map(([day, s]: [string, any]) => `${day.slice(0, 3).toUpperCase()}: ${s.is_closed ? "Closed" : `${s.open}-${s.close}`}`)
         .join(", ");
@@ -870,7 +889,14 @@ export default function AdminCompanyPage() {
   const fetchPagesData = useCallback(async () => {
     setLoadingPages(true);
     try {
-      const pagesRes = await fetch("/api/admin/company/pages", { headers: authHeader });
+      const activeInstId = effectiveInstId ? String(effectiveInstId) : "";
+      const url = activeInstId ? `/api/admin/company/pages?institutionId=${encodeURIComponent(activeInstId)}` : "/api/admin/company/pages";
+      const pagesRes = await fetch(url, {
+        headers: {
+          ...authHeader,
+          ...(activeInstId ? { "x-institution-id": activeInstId, "x-business-id": activeInstId } : {}),
+        },
+      });
       if (pagesRes.ok) {
         const pagesJson = await pagesRes.json();
         const map: Record<string, CompanyPageData> = {};
@@ -885,12 +911,19 @@ export default function AdminCompanyPage() {
     } finally {
       setLoadingPages(false);
     }
-  }, [authHeader]);
+  }, [authHeader, effectiveInstId]);
 
   // Fetch FAQs data
   const fetchFaqsData = useCallback(async () => {
     try {
-      const faqsRes = await fetch("/api/admin/company/faqs", { headers: authHeader });
+      const activeInstId = effectiveInstId ? String(effectiveInstId) : "";
+      const url = activeInstId ? `/api/admin/company/faqs?institutionId=${encodeURIComponent(activeInstId)}` : "/api/admin/company/faqs";
+      const faqsRes = await fetch(url, {
+        headers: {
+          ...authHeader,
+          ...(activeInstId ? { "x-institution-id": activeInstId, "x-business-id": activeInstId } : {}),
+        },
+      });
       if (faqsRes.ok) {
         const faqsJson = await faqsRes.json();
         setFaqs(faqsJson.data || []);
@@ -898,7 +931,7 @@ export default function AdminCompanyPage() {
     } catch (err) {
       console.error("Failed to load FAQs:", err);
     }
-  }, [authHeader]);
+  }, [authHeader, effectiveInstId]);
 
   // Fetch data on-demand based on active tab
   useEffect(() => {
@@ -956,13 +989,16 @@ export default function AdminCompanyPage() {
 
     setSavingPage(true);
     try {
+      const activeInstId = effectiveInstId ? String(effectiveInstId) : "";
       const res = await fetch("/api/admin/company/pages", {
         method: "PUT",
         headers: {
           ...authHeader,
           "Content-Type": "application/json",
+          ...(activeInstId ? { "x-institution-id": activeInstId, "x-business-id": activeInstId } : {}),
         },
         body: JSON.stringify({
+          institution_id: activeInstId ? Number(activeInstId) : undefined,
           slug: page.slug,
           title: page.title,
           subtitle: page.subtitle,
@@ -1018,8 +1054,9 @@ export default function AdminCompanyPage() {
 
     setSavingFaq(true);
     try {
+      const activeInstId = effectiveInstId ? String(effectiveInstId) : "";
       const isEdit = Boolean(editingFaq);
-      const url = "/api/admin/company/faqs";
+      const url = activeInstId ? `/api/admin/company/faqs?institutionId=${encodeURIComponent(activeInstId)}` : "/api/admin/company/faqs";
       const method = isEdit ? "PUT" : "POST";
 
       const res = await fetch(url, {
@@ -1027,9 +1064,11 @@ export default function AdminCompanyPage() {
         headers: {
           ...authHeader,
           "Content-Type": "application/json",
+          ...(activeInstId ? { "x-institution-id": activeInstId, "x-business-id": activeInstId } : {}),
         },
         body: JSON.stringify({
           id: editingFaq?.id,
+          institution_id: activeInstId ? Number(activeInstId) : undefined,
           question: faqQuestion.trim(),
           answer: faqAnswer.trim(),
           category: faqCategory.trim() || "General",
@@ -1307,15 +1346,19 @@ export default function AdminCompanyPage() {
     }
     setSavingBranch(true);
     try {
+      const activeInstId = effectiveInstId ? String(effectiveInstId) : "";
       const method = editingBranch ? "PUT" : "POST";
       const res = await fetch("/api/admin/company/branches", {
         method,
         headers: {
           "Content-Type": "application/json",
           ...authHeader,
+          ...(activeInstId ? { "x-institution-id": activeInstId, "x-business-id": activeInstId } : {}),
         },
         body: JSON.stringify({
           id: editingBranch?.id,
+          business_id: activeInstId ? Number(activeInstId) : undefined,
+          institution_id: activeInstId ? Number(activeInstId) : undefined,
           branch_name: branchName,
           branch_type: branchType,
           city: branchCity,
@@ -3580,10 +3623,15 @@ export default function AdminCompanyPage() {
                 const method = editingPm ? "PUT" : "POST";
                 const res = await fetch("/api/admin/company/payment-methods", {
                   method,
-                  headers: { "Content-Type": "application/json", ...authHeader },
+                  headers: {
+                    "Content-Type": "application/json",
+                    ...authHeader,
+                    ...(activeInstId ? { "x-institution-id": activeInstId, "x-business-id": activeInstId } : {}),
+                  },
                   body: JSON.stringify({
                     id: editingPm?.id,
                     name: pmName.trim(),
+                    institution_id: activeInstId ? Number(activeInstId) : undefined,
                     method_type: pmMethodType,
                     display_name: pmDisplayName.trim() || pmName.trim(),
                     upi_id: pmUpiId.trim() || null,

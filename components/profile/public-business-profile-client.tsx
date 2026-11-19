@@ -1935,8 +1935,8 @@ export function PublicBusinessProfileClient({
                         <div className="flex items-center gap-3.5">
                           {(() => {
                             const resolvedOwnerImg =
-                              (business.owner_image_url && !business.owner_image_url.includes("maashardadeepak1") && business.owner_image_url) ||
-                              (business.founder_image_url && !business.founder_image_url.includes("maashardadeepak1") && business.founder_image_url) ||
+                              business.owner_image_url ||
+                              business.founder_image_url ||
                               "/uploads/media/deepak_yadav_founder.jpg";
                             return (
                               <div className="relative size-14 rounded-full overflow-hidden border-2 border-primary/20 shrink-0 bg-muted group">
@@ -3595,8 +3595,8 @@ export function PublicBusinessProfileClient({
             <div className="flex items-center gap-4 p-3.5 rounded-xl bg-muted/40 border">
               {(() => {
                 const resolvedOwnerImg =
-                  (business.owner_image_url && !business.owner_image_url.includes("maashardadeepak1") && business.owner_image_url) ||
-                  (business.founder_image_url && !business.founder_image_url.includes("maashardadeepak1") && business.founder_image_url) ||
+                  business.owner_image_url ||
+                  business.founder_image_url ||
                   "/uploads/media/deepak_yadav_founder.jpg";
                 return (
                   <div className="relative size-16 rounded-full overflow-hidden border-2 border-primary/20 shrink-0 bg-muted">

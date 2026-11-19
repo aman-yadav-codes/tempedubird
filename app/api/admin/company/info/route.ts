@@ -589,7 +589,10 @@ export async function PUT(req: Request) {
       vision,
       goal,
       established_year,
+      social_links,
     } = body;
+
+    const finalSocialLinks = (social_links && typeof social_links === "object") ? JSON.stringify(social_links) : null;
 
     const finalFounderName = founder_name !== undefined ? (founder_name ? String(founder_name).trim() : null) : undefined;
     const finalFounderTitle = founder_title !== undefined ? (founder_title ? String(founder_title).trim() : null) : undefined;
@@ -716,6 +719,8 @@ export async function PUT(req: Request) {
              vision = COALESCE($39, platform_company_info.vision),
              goal = COALESCE($40, platform_company_info.goal),
              established_year = COALESCE($41::integer, platform_company_info.established_year),
+             opening_hours = CASE WHEN $42::jsonb IS NOT NULL THEN $42::jsonb ELSE platform_company_info.opening_hours END,
+             social_links = CASE WHEN $43::jsonb IS NOT NULL THEN $43::jsonb ELSE platform_company_info.social_links END,
              updated_at = timezone('Asia/Kolkata', NOW()),
              updated_by = $31::integer
            WHERE id = $33::integer
@@ -762,6 +767,8 @@ export async function PUT(req: Request) {
             finalVision !== undefined ? finalVision : null,
             finalGoal !== undefined ? finalGoal : null,
             finalEstablishedYear !== null ? finalEstablishedYear : null,
+            finalOpeningHours,
+            finalSocialLinks,
           ]
         );
       } else {
@@ -774,11 +781,13 @@ export async function PUT(req: Request) {
              city, state, pincode, working_hours, listing_type, category_id, subcategory_id, subcategory_ids, business_type,
              experience_years, skills, qualifications, banner_url, gallery_images,
              founder_name, founder_title, founder_image_url, founder_about, mission, vision, goal, established_year,
+             opening_hours, social_links,
              updated_at, updated_by
            ) VALUES (
              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
              $22, $23, $24, $32::integer[], $25, $26, $27, $28, $29, $30::text[],
              $33, $34, $35, $36, $37, $38, $39, $40::integer,
+             $41::jsonb, $42::jsonb,
              timezone('Asia/Kolkata', NOW()), $31
            )
            ON CONFLICT (business_id) WHERE business_id IS NOT NULL
@@ -788,6 +797,8 @@ export async function PUT(req: Request) {
              tagline = EXCLUDED.tagline,
              logo_url = EXCLUDED.logo_url,
              about = EXCLUDED.about,
+             opening_hours = EXCLUDED.opening_hours,
+             social_links = EXCLUDED.social_links,
              updated_at = NOW()
            RETURNING *`,
           [
@@ -831,6 +842,8 @@ export async function PUT(req: Request) {
             finalVision !== undefined ? finalVision : null,
             finalGoal !== undefined ? finalGoal : null,
             finalEstablishedYear !== null ? finalEstablishedYear : null,
+            finalOpeningHours,
+            finalSocialLinks,
           ]
         );
       }
@@ -867,8 +880,10 @@ export async function PUT(req: Request) {
                banner_url = COALESCE($16, banner_url),
                gallery_images = CASE WHEN $17::text[] IS NOT NULL THEN $17::text[] ELSE gallery_images END,
                opening_hours = CASE WHEN $19::jsonb IS NOT NULL THEN $19::jsonb ELSE opening_hours END,
+               established_year = COALESCE($20::integer, established_year),
+               social_links = CASE WHEN $21::jsonb IS NOT NULL THEN $21::jsonb ELSE social_links END,
                updated_at = NOW()
-          WHERE id = $14 OR institution_profile_id = $14 OR user_id = $15
+          WHERE id = $14 OR institution_profile_id = $14 OR id = (SELECT id FROM business_profiles WHERE institution_profile_id = $instId LIMIT 1) OR institution_profile_id = $instId OR user_id = $15
           RETURNING id`,
           [
             brand_name || company_name || null,
@@ -890,6 +905,8 @@ export async function PUT(req: Request) {
             finalGalleryImages,
             finalSubcatIds.length > 0 ? finalSubcatIds : null,
             finalOpeningHours,
+            finalEstablishedYear !== null ? finalEstablishedYear : null,
+            finalSocialLinks,
           ]
         );
 
@@ -1076,7 +1093,10 @@ export async function PUT(req: Request) {
                goal = COALESCE($14, goal),
                established_year = COALESCE($15::integer, established_year),
           updated_at = NOW()
-           WHERE id = $7 OR id = (SELECT institution_profile_id FROM business_profiles WHERE id = $7)`,
+           WHERE id = $7 
+              OR id = $16 
+              OR id = (SELECT institution_profile_id FROM business_profiles WHERE id = $7)
+              OR id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $16)`,
           [
             brand_name || company_name || null,
             logo_url || null,
@@ -1093,10 +1113,113 @@ export async function PUT(req: Request) {
             finalVision !== undefined ? finalVision : null,
             finalGoal !== undefined ? finalGoal : null,
             finalEstablishedYear !== null ? finalEstablishedYear : null,
+            instId,
           ]
         );
       } catch (instSyncErr) {
         console.warn("[Company Info PUT] institution_profiles sync warning:", instSyncErr);
+      }
+
+      // Synchronize primary address in institution_branches and headquarters in platform_branches
+      if (instId && (finalAddress || finalCity || finalState || finalPin || finalPhone || support_email)) {
+        try {
+          const phonesJson = finalPhone ? JSON.stringify([{ id: "1", title: "Office Phone", phone: finalPhone, type: "phone" }]) : null;
+          const emailsJson = support_email ? JSON.stringify([{ id: "1", title: "General Email", email: support_email }]) : null;
+
+          const existingIb = await db.query(
+            `SELECT id FROM institution_branches WHERE institution_id = $1 AND is_primary = TRUE LIMIT 1`,
+            [instId]
+          );
+          if (existingIb.rows.length > 0) {
+            await db.query(
+              `UPDATE institution_branches
+               SET address = COALESCE($1, address),
+                   city = COALESCE($2, city),
+                   state = COALESCE($3, state),
+                   pincode = COALESCE($4, pincode),
+                   phones = CASE WHEN $5::jsonb IS NOT NULL THEN $5::jsonb ELSE phones END,
+                   emails = CASE WHEN $6::jsonb IS NOT NULL THEN $6::jsonb ELSE emails END,
+                   working_hours = COALESCE($7, working_hours),
+                   updated_at = NOW()
+               WHERE id = $8`,
+              [finalAddress, finalCity, finalState, finalPin, phonesJson, emailsJson, working_hours || null, existingIb.rows[0].id]
+            );
+          } else if (finalAddress && finalCity) {
+            await db.query(
+              `INSERT INTO institution_branches (
+                 institution_id, branch_name, address, city, state, pincode, phones, emails, working_hours, is_primary, is_active, created_at, updated_at
+               ) VALUES ($1, 'Main Branch', $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, TRUE, TRUE, NOW(), NOW())`,
+              [instId, finalAddress, finalCity, finalState, finalPin, phonesJson, emailsJson, working_hours || null]
+            );
+          }
+
+          const existingPb = await db.query(
+            `SELECT id FROM platform_branches WHERE (business_id = $1 OR institution_id = $2 OR institution_id = $1) AND is_headquarters = TRUE LIMIT 1`,
+            [activeBizId, instId]
+          );
+          if (existingPb.rows.length > 0) {
+            await db.query(
+              `UPDATE platform_branches
+               SET address = COALESCE($1, address),
+                   city = COALESCE($2, city),
+                   state = COALESCE($3, state),
+                   pincode = COALESCE($4, pincode),
+                   phone = COALESCE($5, phone),
+                   email = COALESCE($6, email),
+                   status = 'active',
+                   updated_at = NOW()
+               WHERE id = $7`,
+              [finalAddress, finalCity, finalState, finalPin, finalPhone, support_email, existingPb.rows[0].id]
+            );
+          } else if (finalAddress && finalCity) {
+            await db.query(
+              `INSERT INTO platform_branches (
+                 branch_name, city, state, pincode, address, phone, email, is_headquarters, status, business_id, institution_id, updated_at
+               ) VALUES ('Headquarters', $1, $2, $3, $4, $5, $6, TRUE, 'active', $7, $8, NOW())`,
+              [finalCity, finalState, finalPin, finalAddress, finalPhone, support_email, activeBizId, instId]
+            );
+          }
+        } catch (branchSyncErr) {
+          console.warn("[Company Info PUT] branch sync warning:", branchSyncErr);
+        }
+      }
+
+      // Synchronize logo and banner in institution_media
+      if (instId && (logo_url || finalBannerUrl)) {
+        try {
+          if (logo_url && logo_url !== "/favicon.ico") {
+            const existingLogo = await db.query(
+              `SELECT id FROM institution_media WHERE institution_id = $1 AND (media_type = 'logo' OR title = 'Logo') AND COALESCE(is_deleted, false) = false LIMIT 1`,
+              [instId]
+            );
+            if (existingLogo.rows.length > 0) {
+              await db.query(`UPDATE institution_media SET url = $1, is_deleted = false WHERE id = $2`, [logo_url, existingLogo.rows[0].id]);
+            } else {
+              await db.query(
+                `INSERT INTO institution_media (institution_id, media_type, title, url, sort_order, is_deleted, created_at)
+                 VALUES ($1, 'logo', 'Logo', $2, 0, false, NOW())`,
+                [instId, logo_url]
+              );
+            }
+          }
+          if (finalBannerUrl) {
+            const existingBanner = await db.query(
+              `SELECT id FROM institution_media WHERE institution_id = $1 AND (title LIKE '%Banner%' OR title LIKE '%Cover%') AND COALESCE(is_deleted, false) = false LIMIT 1`,
+              [instId]
+            );
+            if (existingBanner.rows.length > 0) {
+              await db.query(`UPDATE institution_media SET url = $1, is_deleted = false WHERE id = $2`, [finalBannerUrl, existingBanner.rows[0].id]);
+            } else {
+              await db.query(
+                `INSERT INTO institution_media (institution_id, media_type, title, url, sort_order, is_deleted, created_at)
+                 VALUES ($1, 'image', 'Cover Banner', $2, 1, false, NOW())`,
+                [instId, finalBannerUrl]
+              );
+            }
+          }
+        } catch (mediaSyncErr) {
+          console.warn("[Company Info PUT] media sync warning:", mediaSyncErr);
+        }
       }
     } else {
       const res = await db.query(
