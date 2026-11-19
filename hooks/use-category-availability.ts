@@ -29,6 +29,9 @@ export type CategoryAvailabilityItem = {
 
 export type CategoryAvailabilityMap = Record<CategoryKey, CategoryAvailabilityItem>;
 
+let cachedCategories: CategoryAvailabilityMap | null = null;
+let cachedTargetId: number | null = null;
+
 export function useCategoryAvailability() {
   const { user, isAuthenticated } = useAuthStore();
   const { activeInstitutionId, activeInstitution, defaultEnvInstitutionId } = useActiveInstitution();
@@ -37,8 +40,13 @@ export function useCategoryAvailability() {
   const isInstitutionalAdmin = Boolean(resolvedInstitutionId);
   const isPlatformAdmin = !isInstitutionalAdmin;
 
-  const [categories, setCategories] = useState<CategoryAvailabilityMap | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<CategoryAvailabilityMap | null>(() => {
+    if (cachedTargetId === resolvedInstitutionId && cachedCategories) {
+      return cachedCategories;
+    }
+    return null;
+  });
+  const [loading, setLoading] = useState(!categories);
 
   const targetInstitutionId = resolvedInstitutionId;
 
@@ -52,6 +60,8 @@ export function useCategoryAvailability() {
       if (res.ok) {
         const json = await res.json();
         if (json?.categories) {
+          cachedCategories = json.categories;
+          cachedTargetId = targetInstitutionId;
           setCategories(json.categories);
         }
       }
@@ -76,10 +86,10 @@ export function useCategoryAvailability() {
       if (categories) {
         return Boolean(categories[key]?.hasData);
       }
-      if (!isInstitutionalAdmin && !targetInstitutionId) return true; // Platform Admin or public marketplace guest sees all categories
-      return false; // While loading institution categories, don't show unverified categories
+      // While loading categories, default to true so menu items are stable and don't flash/disappear
+      return true;
     },
-    [isInstitutionalAdmin, targetInstitutionId, categories]
+    [categories]
   );
 
   return {

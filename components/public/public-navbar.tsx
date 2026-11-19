@@ -242,9 +242,9 @@ export function PublicNavbar({
           {isInstitutionView ? (
             <>
               <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#800000] to-rose-900 text-white font-black text-sm shadow-sm overflow-hidden border border-rose-200/50">
-                {institutionInfo?.logo_url ? (
+                {(institutionInfo?.logo_url || brand?.logoUrl) ? (
                   <Image
-                    src={institutionInfo.logo_url}
+                    src={institutionInfo?.logo_url || brand?.logoUrl || ""}
                     alt={institutionDisplayName}
                     fill
                     unoptimized
