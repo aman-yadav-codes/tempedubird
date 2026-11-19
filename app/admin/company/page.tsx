@@ -2820,9 +2820,6 @@ export default function AdminCompanyPage() {
                     </div>
                   </div>
 
-                  {/* Working Hours Section */}
-                  {renderWorkingHoursEditor()}
-
                   <div className="flex justify-end pt-2">
                     <Button
                       onClick={handleSaveCompanyInfo}

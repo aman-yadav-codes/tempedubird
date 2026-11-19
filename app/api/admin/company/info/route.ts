@@ -883,7 +883,7 @@ export async function PUT(req: Request) {
                established_year = COALESCE($20::integer, established_year),
                social_links = CASE WHEN $21::jsonb IS NOT NULL THEN $21::jsonb ELSE social_links END,
                updated_at = NOW()
-          WHERE id = $14 OR institution_profile_id = $14 OR id = (SELECT id FROM business_profiles WHERE institution_profile_id = $instId LIMIT 1) OR institution_profile_id = $instId OR user_id = $15
+          WHERE id = $14 OR institution_profile_id = $14 OR id = (SELECT id FROM business_profiles WHERE institution_profile_id = $22 LIMIT 1) OR institution_profile_id = $22 OR (user_id = $15 AND user_id IS NOT NULL)
           RETURNING id`,
           [
             brand_name || company_name || null,
@@ -907,6 +907,7 @@ export async function PUT(req: Request) {
             finalOpeningHours,
             finalEstablishedYear !== null ? finalEstablishedYear : null,
             finalSocialLinks,
+            instId,
           ]
         );
 
