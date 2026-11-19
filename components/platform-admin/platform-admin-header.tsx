@@ -44,6 +44,9 @@ import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { useAuthStore, useCartStore } from "@/store";
 import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
@@ -178,6 +181,10 @@ export function PlatformAdminHeader() {
   // Store comparison dialog (When clicked on a product from search suggestions)
   const [storesDialogOpen, setStoresDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<{ id: number | string; name: string } | null>(null);
+
+  // Location selector dialog state
+  const [locationDialogOpen, setLocationDialogOpen] = useState(false);
+  const [customLocationInput, setCustomLocationInput] = useState("");
 
   const withLocation = (url: string) => {
     if (!location || location === "All Locations") return url;
@@ -397,6 +404,23 @@ export function PlatformAdminHeader() {
               <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white shadow-xs">
                 {getTotalCount()}
               </span>
+            )}
+          </button>
+
+          {/* Location Selector Button (Circular FindMy styled pin icon) */}
+          <button
+            type="button"
+            onClick={() => setLocationDialogOpen(true)}
+            className="relative size-8.5 rounded-full border border-border/80 bg-background/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-all cursor-pointer shrink-0 shadow-2xs group flex items-center justify-center"
+            title={location ? `Location: ${location} (Click to change)` : "Select Location"}
+            aria-label="Select Location"
+          >
+            <MapPin className="size-4 text-amber-500 group-hover:scale-110 transition-transform" />
+            {isDetected && (
+              <span
+                className="absolute top-1 right-1 size-2 rounded-full bg-emerald-500 ring-2 ring-background"
+                title="GPS Live Detected"
+              />
             )}
           </button>
 
@@ -787,6 +811,145 @@ export function PlatformAdminHeader() {
         onOpenChange={setAuthDialogOpen}
         defaultTab={authDialogTab}
       />
+
+      {/* Location Modal Dialog: Detect Live GPS or Enter Any Specific Location */}
+      <Dialog open={locationDialogOpen} onOpenChange={setLocationDialogOpen}>
+        <DialogContent className="max-w-md bg-card border text-foreground rounded-3xl p-6 space-y-5 shadow-2xl">
+          <DialogHeader className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-xl font-black flex items-center gap-2">
+                <MapPin className="size-5 text-amber-500" />
+                <span>Select Your Location</span>
+              </DialogTitle>
+              {isDetected && (
+                <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px] font-bold">
+                  Live GPS Active
+                </Badge>
+              )}
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Discover verified businesses, services, products, and opportunities in your area.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Currently Selected Location Pill */}
+          <div className="p-3.5 rounded-2xl bg-muted/40 border flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">Active Location:</span>
+            <span className="font-extrabold text-foreground flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
+              <span>{location || "All Locations"}</span>
+            </span>
+          </div>
+
+          {/* 1. Detect Live GPS Button */}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={async () => {
+              await requestLocation(false);
+              setLocationDialogOpen(false);
+            }}
+            disabled={isDetecting}
+            className="w-full py-5 rounded-2xl border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-foreground font-bold text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+          >
+            {isDetecting ? (
+              <>
+                <Loader2 className="size-4 animate-spin text-amber-500" />
+                <span>Detecting your live coordinates...</span>
+              </>
+            ) : (
+              <>
+                <Navigation className="size-4 text-amber-500" />
+                <span>Use My Current Location (GPS)</span>
+              </>
+            )}
+          </Button>
+
+          {/* Divider */}
+          <div className="relative flex items-center justify-center">
+            <div className="w-full border-t border-border" />
+            <span className="absolute bg-card px-3 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+              Or Enter Location
+            </span>
+          </div>
+
+          {/* 2. Enter Any Specific Location Form */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const trimmed = customLocationInput.trim();
+              if (trimmed) {
+                setLocation(trimmed, false);
+                toast.success(`Location set to "${trimmed}"`);
+                setCustomLocationInput("");
+                setLocationDialogOpen(false);
+              }
+            }}
+            className="space-y-2.5"
+          >
+            <div className="relative flex items-center">
+              <Search className="absolute left-3.5 size-4 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Enter city, province, or area name..."
+                value={customLocationInput}
+                onChange={(e) => setCustomLocationInput(e.target.value)}
+                className="w-full h-11 pl-10 pr-24 rounded-2xl bg-background border border-border/80 text-xs sm:text-sm font-medium focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+              />
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!customLocationInput.trim()}
+                className="absolute right-1.5 h-8 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs cursor-pointer disabled:opacity-40"
+              >
+                Set
+              </Button>
+            </div>
+          </form>
+
+          {/* 3. Popular / Available Locations Quick Select */}
+          <div className="space-y-2 pt-1">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+              Popular Cities &amp; Regions
+            </span>
+            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setLocation("All Locations", false);
+                  setLocationDialogOpen(false);
+                  toast.success("Location set to All Locations");
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  !location || location === "All Locations"
+                    ? "bg-amber-500 text-black shadow-xs"
+                    : "bg-muted/60 hover:bg-muted text-foreground border border-border/60"
+                }`}
+              >
+                🌍 All Locations
+              </button>
+              {availableLocations.map((loc) => (
+                <button
+                  key={loc}
+                  type="button"
+                  onClick={() => {
+                    setLocation(loc, false);
+                    setLocationDialogOpen(false);
+                    toast.success(`Location set to ${loc}`);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    location === loc
+                      ? "bg-amber-500 text-black shadow-xs"
+                      : "bg-muted/60 hover:bg-muted text-foreground border border-border/60"
+                  }`}
+                >
+                  📍 {loc}
+                </button>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Shopping Cart Drawer */}
       <CartDrawer />
