@@ -385,25 +385,24 @@ export function UnifiedMarketplaceHome() {
       {/* ================= 1. HERO SECTION (FINDMY DEER DISCOVERY THEME) ================= */}
       <section className="relative overflow-hidden min-h-[580px] sm:min-h-[640px] lg:min-h-[720px] flex items-center py-16 sm:py-20 lg:py-24 border-b border-border/50 bg-[#060402] bg-gradient-to-r from-[#060402] via-[#0d0905] to-[#150d08]">
         {/* Scenic Majestic Deer - Pinned strictly to the RIGHT half, flipped horizontally to face LEFT towards the search box */}
-        <div className="absolute right-0 top-0 bottom-0 w-full sm:w-7/12 md:w-1/2 lg:w-[48%] pointer-events-none z-0 overflow-hidden">
-          <div className="relative w-full h-full -scale-x-100">
+        <div className="absolute right-0 -top-12 bottom-0 w-full sm:w-7/12 md:w-1/2 lg:w-[46%] xl:w-[42%] pointer-events-none z-0 overflow-hidden">
+          <div className="relative w-full h-[125%] -scale-x-100 -translate-y-16 lg:-translate-y-24">
             <Image
               src="/images/hero-deer.jpg"
               alt="Scenic Majestic Deer"
               fill
               priority
-              className="object-cover object-[center_20%] lg:object-[center_15%]"
+              className="object-cover object-[center_60%]"
               sizes="(max-width: 768px) 100vw, 50vw"
               quality={95}
             />
           </div>
           {/* Subtle gradient blends so deer merges seamlessly into the left dark landscape */}
           <div className="absolute inset-y-0 left-0 w-2/5 bg-gradient-to-r from-[#060402] via-[#060402]/85 to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#060402] to-transparent" />
-          <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#060402] to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[#060402] via-[#060402]/90 to-transparent" />
+          <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-[#060402] to-transparent" />
         </div>
 
-        {/* Ambient Warm Golden-Hour Glow on Right */}
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-amber-500/10 blur-3xl pointer-events-none z-0" />
 
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full space-y-7">
@@ -487,87 +486,6 @@ export function UnifiedMarketplaceHome() {
                 </Button>
               </div>
             </form>
-
-            {/* Location Selector Bar directly below search */}
-            <div className="flex items-center gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/45 backdrop-blur-md border border-white/20 hover:border-white/40 text-xs font-semibold text-white/95 hover:text-white transition-all cursor-pointer shadow-md"
-                  >
-                    <MapPin className="size-3.5 text-amber-400 shrink-0" />
-                    <span>{userLocation || "Cape Town"}</span>
-                    {isDetected && (
-                      <span className="size-1.5 rounded-full bg-emerald-400 ring-2 ring-emerald-400/30" title="GPS active" />
-                    )}
-                    <ChevronDown className="size-3 text-white/60 ml-0.5" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-60 p-1.5 space-y-1 z-50">
-                  <div className="px-2.5 py-1.5 bg-primary/5 rounded-lg mb-1 flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
-                        Location Filter
-                      </span>
-                      <span className="text-xs font-bold text-foreground truncate">
-                        {userLocation || "Cape Town"}
-                      </span>
-                    </div>
-                    {isDetected && (
-                      <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 px-1.5 py-0.5 rounded-full">
-                        GPS
-                      </span>
-                    )}
-                  </div>
-
-                  <DropdownMenuItem
-                    onClick={() => requestLocation(false)}
-                    disabled={isDetecting}
-                    className="cursor-pointer py-2 px-2.5 rounded-lg bg-background hover:bg-muted text-primary font-bold text-xs border border-border/50 flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-2">
-                      {isDetecting ? (
-                        <Loader2 className="size-3.5 animate-spin text-primary" />
-                      ) : (
-                        <Navigation className="size-3.5 text-primary" />
-                      )}
-                      <span>{isDetecting ? "Detecting GPS..." : "Detect Live Location"}</span>
-                    </div>
-                  </DropdownMenuItem>
-
-                  <DropdownMenuSeparator className="my-1" />
-
-                  <DropdownMenuLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-2 py-1">
-                    Select Region
-                  </DropdownMenuLabel>
-
-                  <div className="max-h-56 overflow-y-auto space-y-0.5">
-                    <DropdownMenuItem
-                      onClick={() => setUserLocation("All Locations", false)}
-                      className={cn(
-                        "cursor-pointer text-xs py-1.5 px-2.5 rounded-lg font-medium",
-                        (!userLocation || userLocation === "All Locations") && "font-bold text-primary bg-primary/10"
-                      )}
-                    >
-                      <span>All Locations (Full Catalog)</span>
-                    </DropdownMenuItem>
-                    {availableLocations.map((loc) => (
-                      <DropdownMenuItem
-                        key={loc}
-                        onClick={() => setUserLocation(loc, false)}
-                        className={cn(
-                          "cursor-pointer text-xs py-1.5 px-2.5 rounded-lg font-medium",
-                          userLocation === loc && "font-bold text-primary bg-primary/10"
-                        )}
-                      >
-                        <span>{loc}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
 
             {/* Quick Category Navigation Pills */}
             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap pt-1 text-xs">
