@@ -333,6 +333,7 @@ export async function getCurrentPublicInstitutionProfile(host: string | null | u
         if (bp.registration_no || bp.cin_number) (profile as any).registration_no = bp.registration_no || bp.cin_number;
         if (bp.gstin) (profile as any).gstin = bp.gstin;
         if (bp.certified_or_affiliated_with) (profile as any).certified_or_affiliated_with = bp.certified_or_affiliated_with;
+        if (Array.isArray(bp.gallery_images) && bp.gallery_images.length > 0) (profile as any).gallery_images = bp.gallery_images;
       }
 
       // 2. Secondary / Fallback: platform_company_info

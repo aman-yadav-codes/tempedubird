@@ -260,7 +260,9 @@ export async function GET(req: Request) {
         tagline: bpRow.tagline !== undefined && bpRow.tagline !== null ? bpRow.tagline : (row?.tagline || ""),
         logo_url: bpRow.logo_url || row?.logo_url || "/favicon.ico",
         banner_url: bpRow.banner_url || row?.banner_url || "",
-        gallery_images: Array.isArray(bpRow.gallery_images) ? bpRow.gallery_images : (Array.isArray(row?.gallery_images) ? row.gallery_images : []),
+        gallery_images: (Array.isArray(bpRow.gallery_images) && bpRow.gallery_images.length > 0)
+          ? bpRow.gallery_images
+          : (Array.isArray(row?.gallery_images) && row.gallery_images.length > 0 ? row.gallery_images : []),
         about: bpRow.about !== undefined && bpRow.about !== null ? bpRow.about : (row?.about || ""),
         about_text: bpRow.about !== undefined && bpRow.about !== null ? bpRow.about : (row?.about || ""),
         support_email: bpRow.email || row?.support_email || "",
@@ -503,6 +505,27 @@ export async function GET(req: Request) {
         }
       } catch (profErr) {
         console.warn("[Company Info GET] Profile images & credentials check warning:", profErr);
+      }
+    }
+
+    // Fallback: If gallery_images is still empty, populate from institution_media
+    if (!company.gallery_images || company.gallery_images.length === 0) {
+      try {
+        const mediaInstId = company.institution_id || activeBizId || 160;
+        const mediaRes = await db.query(
+          `SELECT url FROM institution_media
+           WHERE (institution_id = $1 OR institution_id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1))
+             AND COALESCE(is_deleted, false) = false
+             AND media_type != 'logo'
+             AND (title IS NULL OR (title NOT ILIKE '%Banner%' AND title NOT ILIKE '%Cover%'))
+           ORDER BY sort_order ASC, id ASC`,
+          [mediaInstId]
+        );
+        if (mediaRes.rows.length > 0) {
+          company.gallery_images = Array.from(new Set(mediaRes.rows.map((r: any) => r.url).filter(Boolean)));
+        }
+      } catch (mediaErr) {
+        console.warn("[Company Info GET] Gallery fallback warning:", mediaErr);
       }
     }
     return NextResponse.json({
@@ -1212,6 +1235,27 @@ export async function PUT(req: Request) {
                  VALUES ($1, 'image', 'Cover Banner', $2, 1, false, NOW())`,
                 [instId, finalBannerUrl]
               );
+            }
+          }
+
+          // Synchronize gallery images in institution_media
+          if (Array.isArray(finalGalleryImages) && finalGalleryImages.length > 0) {
+            for (let i = 0; i < finalGalleryImages.length; i++) {
+              const gUrl = finalGalleryImages[i];
+              if (!gUrl) continue;
+              const existingItem = await db.query(
+                `SELECT id FROM institution_media WHERE institution_id = $1 AND url = $2 LIMIT 1`,
+                [instId, gUrl]
+              );
+              if (existingItem.rows.length > 0) {
+                await db.query(`UPDATE institution_media SET is_deleted = false, sort_order = $1 WHERE id = $2`, [i + 2, existingItem.rows[0].id]);
+              } else {
+                await db.query(
+                  `INSERT INTO institution_media (institution_id, media_type, title, url, sort_order, is_deleted, created_at)
+                   VALUES ($1, 'gallery', 'Showcase Photo', $2, $3, false, NOW())`,
+                  [instId, gUrl, i + 2]
+                );
+              }
             }
           }
         } catch (mediaSyncErr) {
