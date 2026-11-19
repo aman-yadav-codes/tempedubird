@@ -322,6 +322,7 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
       business.gallery_images = Array.from(new Set([...mediaUrls, ...(Array.isArray(business.gallery_images) ? business.gallery_images : [])]));
     }
 
+    // Fallback: only fill fields that are empty or null from legacy platform_company_info
     try {
       const pciRes = await db.query(
         `SELECT * FROM platform_company_info WHERE business_id = $1 OR institution_id = $2 OR business_id = $2 OR institution_id = $1 ORDER BY id DESC LIMIT 1`,
@@ -329,42 +330,34 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
       );
       if (pciRes.rows.length > 0) {
         const pci = pciRes.rows[0];
-        if (pci.founder_name) {
-          business.owner_name = pci.founder_name;
-          business.founder_name = pci.founder_name;
-        }
-        if (pci.founder_title) {
-          business.owner_designation = pci.founder_title;
-          business.founder_title = pci.founder_title;
-        }
-        if (pci.founder_about) {
-          business.owner_about = pci.founder_about;
-          business.founder_about = pci.founder_about;
-        }
-        if (pci.founder_image_url) {
-          business.owner_image_url = pci.founder_image_url;
-          business.founder_image_url = pci.founder_image_url;
-        }
-        if (pci.brand_name) business.name = pci.brand_name;
-        if (pci.logo_url) business.logo_url = pci.logo_url;
-        if (pci.banner_url) business.banner_url = pci.banner_url;
-        if (pci.about) business.about = pci.about;
-        if (pci.mission) business.mission = pci.mission;
-        if (pci.vision) business.vision = pci.vision;
-        if (pci.goal) business.goal = pci.goal;
-        if (pci.opening_hours) business.opening_hours = pci.opening_hours;
-        if (pci.social_links) business.social_links = pci.social_links;
-        if (pci.established_year) business.established_year = pci.established_year;
-        if (pci.phone) business.phone = pci.phone;
-        if (pci.support_email) business.email = pci.support_email;
-        if (pci.website_url) business.website = pci.website_url;
-        if (pci.headquarters_address) business.address = pci.headquarters_address;
-        if (pci.city) business.city = pci.city;
-        if (pci.state) business.state = pci.state;
-        if (pci.pincode) business.postal_code = pci.pincode;
+        if (!business.owner_name && pci.founder_name) business.owner_name = pci.founder_name;
+        if (!business.founder_name && pci.founder_name) business.founder_name = pci.founder_name;
+        if (!business.owner_designation && pci.founder_title) business.owner_designation = pci.founder_title;
+        if (!business.founder_title && pci.founder_title) business.founder_title = pci.founder_title;
+        if (!business.owner_about && pci.founder_about) business.owner_about = pci.founder_about;
+        if (!business.founder_about && pci.founder_about) business.founder_about = pci.founder_about;
+        if (!business.owner_image_url && pci.founder_image_url) business.owner_image_url = pci.founder_image_url;
+        if (!business.founder_image_url && pci.founder_image_url) business.founder_image_url = pci.founder_image_url;
+        if (!business.name && pci.brand_name) business.name = pci.brand_name;
+        if (!business.logo_url && pci.logo_url) business.logo_url = pci.logo_url;
+        if (!business.banner_url && pci.banner_url) business.banner_url = pci.banner_url;
+        if (!business.about && pci.about) business.about = pci.about;
+        if (!business.mission && pci.mission) business.mission = pci.mission;
+        if (!business.vision && pci.vision) business.vision = pci.vision;
+        if (!business.goal && pci.goal) business.goal = pci.goal;
+        if (!business.opening_hours && (pci.opening_hours || pci.working_hours)) business.opening_hours = pci.opening_hours || pci.working_hours;
+        if (!business.social_links && pci.social_links) business.social_links = pci.social_links;
+        if (!business.established_year && pci.established_year) business.established_year = pci.established_year;
+        if (!business.phone && pci.phone) business.phone = pci.phone;
+        if (!business.email && pci.support_email) business.email = pci.support_email;
+        if (!business.website && pci.website_url) business.website = pci.website_url;
+        if (!business.address && pci.headquarters_address) business.address = pci.headquarters_address;
+        if (!business.city && pci.city) business.city = pci.city;
+        if (!business.state && pci.state) business.state = pci.state;
+        if (!business.postal_code && pci.pincode) business.postal_code = pci.pincode;
       }
     } catch (e) {
-      console.warn("fetchBusinessFullData pci overlay warning:", e);
+      console.warn("fetchBusinessFullData pci fallback warning:", e);
     }
 
     if (!business.owner_image_url) business.owner_image_url = "/uploads/media/deepak_yadav_founder.jpg";

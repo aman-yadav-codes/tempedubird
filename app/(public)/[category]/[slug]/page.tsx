@@ -23,13 +23,13 @@ const fetchProfileFromCategoryAndSlug = cache(async (category: string, slug: str
         bp.*,
         c.name AS category_name,
         sc.name AS subcategory_name,
-        COALESCE(ip.founder_name, u.full_name) AS owner_name,
-        COALESCE(ip.founder_title, 'Founder & Managing Director') AS owner_designation,
-        COALESCE(ip.founder_image_url, u.avatar_url) AS owner_image_url,
-        COALESCE(ip.phone, bp.phone, u.phone) AS owner_phone,
-        COALESCE(bp.whatsapp, ip.phone, bp.phone, u.phone) AS owner_whatsapp,
-        COALESCE(ip.email, bp.email, u.email) AS owner_email,
-        ip.founder_about AS owner_about
+        COALESCE(bp.founder_name, ip.founder_name, u.full_name) AS owner_name,
+        COALESCE(bp.founder_title, ip.founder_title, 'Founder & Managing Director') AS owner_designation,
+        COALESCE(bp.founder_image_url, ip.founder_image_url, u.avatar_url) AS owner_image_url,
+        COALESCE(bp.phone, ip.phone, u.phone) AS owner_phone,
+        COALESCE(bp.whatsapp, bp.phone, ip.phone, u.phone) AS owner_whatsapp,
+        COALESCE(bp.email, ip.email, u.email) AS owner_email,
+        COALESCE(bp.founder_about, ip.founder_about, bp.about) AS owner_about
       FROM business_profiles bp
       LEFT JOIN categories c ON c.id = bp.category_id
       LEFT JOIN categories sc ON sc.id = bp.subcategory_id

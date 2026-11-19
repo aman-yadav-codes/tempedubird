@@ -53,14 +53,14 @@ export default async function HomePage() {
     let targetBizId = config.businessId || config.institutionId;
     if (!targetBizId || targetBizId === 1) {
       try {
-        const pciRes = await db.query(
-          `SELECT business_id, institution_id FROM platform_company_info WHERE business_id IS NOT NULL ORDER BY id DESC LIMIT 1`
+        const bpRes = await db.query(
+          `SELECT id, institution_profile_id FROM business_profiles WHERE COALESCE(is_active, TRUE) = TRUE ORDER BY id ASC LIMIT 1`
         );
-        if (pciRes.rows.length > 0 && (pciRes.rows[0].business_id || pciRes.rows[0].institution_id)) {
-          targetBizId = pciRes.rows[0].business_id || pciRes.rows[0].institution_id;
+        if (bpRes.rows.length > 0) {
+          targetBizId = bpRes.rows[0].id;
         }
       } catch (err) {
-        console.warn("[HomePage] Failed to resolve targetBizId from platform_company_info:", err);
+        console.warn("[HomePage] Failed to resolve targetBizId from business_profiles:", err);
       }
     }
     const data = await fetchBusinessFullData(String(targetBizId));

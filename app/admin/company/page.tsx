@@ -674,6 +674,18 @@ export default function AdminCompanyPage() {
           setCompanyInfo((prev) => ({
             ...prev,
             ...json.data,
+            company_name: json.data.company_name || json.data.legal_name || prev.company_name || "",
+            legal_name: json.data.legal_name || json.data.company_name || prev.legal_name || "",
+            brand_name: json.data.brand_name || json.data.company_name || prev.brand_name || "",
+            tagline: json.data.tagline || prev.tagline || "",
+            cin_number: json.data.cin_number || json.data.registration_no || prev.cin_number || "",
+            registration_no: json.data.registration_no || json.data.cin_number || prev.registration_no || "",
+            gstin: json.data.gstin || prev.gstin || "",
+            certified_or_affiliated_with: json.data.certified_or_affiliated_with || prev.certified_or_affiliated_with || "",
+            website_url: json.data.website_url || json.data.website || prev.website_url || "",
+            support_email: json.data.support_email || json.data.email || prev.support_email || "",
+            support_phone: json.data.support_phone || json.data.phone || prev.support_phone || "",
+            phone: json.data.phone || json.data.support_phone || prev.phone || "",
             about: json.data.about || json.data.about_text || prev.about || "",
             about_text: json.data.about_text || json.data.about || prev.about_text || "",
             founder_name: json.data.founder_name || prev.founder_name || "",
@@ -2587,8 +2599,8 @@ export default function AdminCompanyPage() {
                           <Label htmlFor="ci-legal-name" className="text-xs font-semibold">Registered Company Legal Name *</Label>
                           <Input
                             id="ci-legal-name"
-                            value={companyInfo.company_name || ""}
-                            onChange={(e) => setCompanyInfo((prev) => ({ ...prev, company_name: e.target.value }))}
+                            value={companyInfo.legal_name || companyInfo.company_name || ""}
+                            onChange={(e) => setCompanyInfo((prev) => ({ ...prev, company_name: e.target.value, legal_name: e.target.value }))}
                             placeholder="e.g. EduBird Technologies Private Limited"
                           />
                         </div>

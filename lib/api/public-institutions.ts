@@ -195,13 +195,13 @@ export async function getCurrentPublicInstitutionProfile(host: string | null | u
     }
     if (!tenant || tenant.institution_id === 1) {
       try {
-        const pciFirst = await db.query(
-          `SELECT business_id, institution_id FROM platform_company_info WHERE business_id IS NOT NULL ORDER BY id DESC LIMIT 1`
+        const bpFirst = await db.query(
+          `SELECT id, institution_profile_id, name FROM business_profiles WHERE COALESCE(is_active, TRUE) = TRUE ORDER BY id ASC LIMIT 1`
         );
-        if (pciFirst.rows.length > 0 && (pciFirst.rows[0].institution_id || pciFirst.rows[0].business_id)) {
+        if (bpFirst.rows.length > 0) {
           tenant = {
-            institution_id: Number(pciFirst.rows[0].institution_id || pciFirst.rows[0].business_id),
-            institution_name: "Institution",
+            institution_id: Number(bpFirst.rows[0].institution_profile_id || bpFirst.rows[0].id),
+            institution_name: bpFirst.rows[0].name || "Institution",
             institution_slug: null,
             domain: host || null,
             is_primary: true,
