@@ -1,35 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
-import {
-  User,
-  BadgeCheck,
-  Bell,
-  Settings,
-  LogOut,
-  GraduationCap,
-  Users,
-  Briefcase,
-  Loader2,
-  Sparkles,
-  ChevronDown,
-  ShieldCheck,
-} from "lucide-react";
+import { LogOut, Loader2, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuthStore } from "@/store";
-import { toRoleRoutePath } from "@/lib/auth/role-routes";
-import { AccountSwitcherDialog } from "@/components/auth/account-switcher-dialog";
 
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -47,24 +28,11 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export function AdminUserProfileMenu() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const { user, setAuth, clearAuth } = useAuthStore();
+  const { user, clearAuth } = useAuthStore();
   const [logoutOpen, setLogoutOpen] = useState(false);
-  const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [switchingRole, setSwitchingRole] = useState<string | null>(null);
-
-  const isClientRole =
-    (user as any)?.role === "client" ||
-    (user as any)?.primary_role === "client" ||
-    user?.role_codes?.includes("client") ||
-    user?.roles?.some((r: any) => String(r).toLowerCase() === "client") ||
-    Boolean(pathname?.startsWith("/client"));
 
   if (!user) return null;
-
-  const roleHref = (url: string) => toRoleRoutePath(url, user);
 
   // Determine display properties
   const displayName = user.full_name || user.email?.split("@")[0] || "User";
@@ -117,39 +85,6 @@ export function AdminUserProfileMenu() {
     roleBadgeVariant = "default";
   }
 
-  const handleDemoSwitch = async (role: "student" | "guardian" | "professional" | "platform_admin") => {
-    setSwitchingRole(role);
-    try {
-      const res = await fetch("/api/auth/demo-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role }),
-      });
-
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error || "Failed to switch role");
-      }
-
-      setAuth(json.user, json.accessToken);
-      const roleName =
-        role === "student"
-          ? "Student"
-          : role === "guardian"
-          ? "Guardian"
-          : role === "professional"
-          ? "Professional"
-          : "Platform Admin";
-      toast.success(`Switched to Demo ${roleName} Account`);
-      const redirectPath = json.redirectTo || toRoleRoutePath("/admin", json.user);
-      router.push(redirectPath);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Role switch failed");
-    } finally {
-      setSwitchingRole(null);
-    }
-  };
-
   const handleConfirmLogout = async () => {
     setIsSubmitting(true);
     setLogoutOpen(false);
@@ -194,7 +129,7 @@ export function AdminUserProfileMenu() {
 
         <DropdownMenuContent className="w-64 p-2" align="end" sideOffset={8}>
           {/* User Profile Header Info */}
-          <DropdownMenuLabel className="font-normal p-2 bg-muted/40 rounded-lg mb-1">
+          <DropdownMenuLabel className="font-normal p-2 bg-muted/40 rounded-lg">
             <div className="flex items-start gap-3">
               <Avatar className="h-10 w-10 border border-border">
                 <AvatarImage src={user.avatar_url || ""} alt={displayName} />
@@ -216,17 +151,13 @@ export function AdminUserProfileMenu() {
             </div>
           </DropdownMenuLabel>
 
-          <DropdownMenuSeparator />
-
-
-
           {/* Sign Out Item */}
           <DropdownMenuItem
             onSelect={(e) => {
               e.preventDefault();
               setLogoutOpen(true);
             }}
-            className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive font-semibold"
+            className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive font-semibold mt-1"
           >
             <LogOut className="mr-2 h-4 w-4" />
             <span>Sign Out</span>
