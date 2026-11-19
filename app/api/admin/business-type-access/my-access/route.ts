@@ -291,19 +291,19 @@ export async function GET(req: Request) {
         enabledMap.set(r.id, r.is_enabled === true);
       } else {
         // Industry-specific default activation based on business type
-        if (r.module_key === "marketing_vehicles") {
+        if (r.module_key === "admin_vehicles" || r.module_key === "marketing_vehicles") {
           enabledMap.set(r.id, /automotive|transport|vehicle|car|fleet|rental/i.test(bName));
-        } else if (r.module_key === "marketing_properties") {
+        } else if (r.module_key === "admin_properties" || r.module_key === "marketing_properties") {
           enabledMap.set(r.id, /real estate|property|construction|builder|realtor/i.test(bName));
-        } else if (r.module_key === "marketing_events") {
+        } else if (r.module_key === "admin_events" || r.module_key === "marketing_events") {
           enabledMap.set(r.id, /event|hospitality|banquet|wedding|venue/i.test(bName));
-        } else if (r.module_key === "marketing_dishes") {
+        } else if (r.module_key === "admin_dishes" || r.module_key === "marketing_dishes") {
           enabledMap.set(r.id, /food|dining|cafe|restaurant|bakery|catering/i.test(bName));
-        } else if (r.module_key === "marketing_rooms") {
+        } else if (r.module_key === "admin_rooms" || r.module_key === "marketing_rooms") {
           enabledMap.set(r.id, /hotel|resort|hospitality|lodge|stay|hostel|guest house/i.test(bName));
-        } else if (r.module_key === "sales_patients") {
+        } else if (r.module_key === "admin_patients" || r.module_key === "sales_patients") {
           enabledMap.set(r.id, /health|clinic|medical|doctor|hospital|dental|pharmacy/i.test(bName));
-        } else if (r.module_key === "sales_students") {
+        } else if (r.module_key === "admin_students" || r.module_key === "sales_students") {
           enabledMap.set(r.id, /coaching|school|college|university|institute|institution|education|academy/i.test(bName));
         } else {
           enabledMap.set(r.id, true);
