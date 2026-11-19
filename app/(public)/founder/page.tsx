@@ -1,1 +1,1 @@
-export { default, generateMetadata } from "../about/founder/page";
+export { default } from "../about/founder/page";
