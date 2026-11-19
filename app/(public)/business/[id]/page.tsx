@@ -15,6 +15,12 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
   try {
     const { id: numId } = extractIdFromSlug(idOrSlug);
 
+    if (idOrSlug === "162" || numId === 162 || idOrSlug.includes("maa-sharda")) {
+      return {
+        redirectTo: "/education-coaching-institute/coaching-classes-maa-sharda-institute-in-pandeypur-varanasi",
+      };
+    }
+
     // 1. Fetch Business Profile
     const bizRes = await db.query(
       `SELECT

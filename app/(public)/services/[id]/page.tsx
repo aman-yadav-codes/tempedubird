@@ -24,6 +24,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useAuthStore, useCartStore } from "@/store";
 import { isUserStoreOwner } from "@/lib/auth/store-ownership";
+import { buildServiceSeoUrl } from "@/lib/utils/seo-slug";
 
 export default function ServiceDetailPage() {
   const params = useParams();
@@ -44,7 +45,10 @@ export default function ServiceDetailPage() {
       .then((data) => {
         if (data.service) {
           setService(data.service);
-          if (data.service.slug && /^\d+$/.test(serviceId) && data.service.slug !== serviceId) {
+          const canonicalSeoUrl = buildServiceSeoUrl(data.service);
+          if (canonicalSeoUrl && !canonicalSeoUrl.startsWith("/services/")) {
+            router.replace(canonicalSeoUrl);
+          } else if (data.service.slug && /^\d+$/.test(serviceId) && data.service.slug !== serviceId) {
             router.replace(`/services/${data.service.slug}`);
           }
         } else {

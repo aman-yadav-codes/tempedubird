@@ -33,6 +33,7 @@ import {
 import { toast } from "sonner";
 import { useAuthStore, useCartStore } from "@/store";
 import { isUserStoreOwner } from "@/lib/auth/store-ownership";
+import { buildProductSeoUrl } from "@/lib/utils/seo-slug";
 import {
   isWeightBasedProduct,
   STANDARD_WEIGHT_OPTIONS,
@@ -67,7 +68,10 @@ export default function ProductDetailPage() {
         if (data.product) {
           setProduct(data.product);
           setSelectedImage(data.product.default_image_url || "");
-          if (data.product.slug && /^\d+$/.test(productId) && data.product.slug !== productId) {
+          const canonicalSeoUrl = buildProductSeoUrl(data.product);
+          if (canonicalSeoUrl && !canonicalSeoUrl.startsWith("/products/")) {
+            router.replace(canonicalSeoUrl);
+          } else if (data.product.slug && /^\d+$/.test(productId) && data.product.slug !== productId) {
             router.replace(`/products/${data.product.slug}`);
           }
         } else {

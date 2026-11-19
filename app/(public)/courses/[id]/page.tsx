@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getPublicCourseById } from "@/lib/api/public-courses";
-import { buildInstituteUrl } from "@/lib/utils/seo-slug";
+import { buildInstituteUrl, buildCourseSeoUrl } from "@/lib/utils/seo-slug";
 import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
 import { parseCourseTitle } from "../course-parser";
 import { RelatedPopularSidebar, type SidebarCourseItem } from "./related-popular-sidebar";
@@ -370,7 +370,17 @@ export default async function CourseDetailPage({ params }: Props) {
 
   if (!course) notFound();
 
-  // Redirect to canonical slug if accessed by purely numeric id
+  // Redirect to canonical SEO URL ({category}/{course-name}-in-{location})
+  const canonicalSeoUrl = buildCourseSeoUrl({
+    id: course.id,
+    name: course.title,
+    category_name: course.selectedCategory || course.category || "Education & Coaching",
+    city: (course as any).city || "Varanasi",
+  });
+  if (canonicalSeoUrl && !canonicalSeoUrl.startsWith("/courses/")) {
+    redirect(canonicalSeoUrl);
+  }
+
   const canonicalCourseSlug = course.slug;
   if (canonicalCourseSlug && /^\d+$/.test(id) && canonicalCourseSlug !== id) {
     redirect(`/courses/${canonicalCourseSlug}`);

@@ -11,7 +11,6 @@ const KNOWN_ROLE_PREFIXES = new Set([
   "platformadmin",
   "instituteadmin",
   "institutionadmin",
-  "institution-admin",
   "institute",
   "staff",
   "teacher",

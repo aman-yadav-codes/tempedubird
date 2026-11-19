@@ -41,6 +41,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { StaffJobPosting } from "@/lib/queries/jobs";
+import { buildJobSeoUrl } from "@/lib/utils/seo-slug";
 
 interface JobDetailPageProps {
   params: Promise<{ id: string }>;
@@ -88,7 +89,10 @@ export default function JobDetailPage({ params }: JobDetailPageProps) {
         return;
       }
       setJob(json.data);
-      if (json.data.slug && /^\d+$/.test(id) && json.data.slug !== id) {
+      const canonicalSeoUrl = buildJobSeoUrl(json.data);
+      if (canonicalSeoUrl && !canonicalSeoUrl.startsWith("/jobs/")) {
+        router.replace(canonicalSeoUrl);
+      } else if (json.data.slug && /^\d+$/.test(id) && json.data.slug !== id) {
         router.replace(`/jobs/${json.data.slug}`);
       }
     } catch {

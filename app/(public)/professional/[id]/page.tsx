@@ -15,6 +15,12 @@ const fetchProfessionalFullData = cache(async (idOrSlug: string) => {
   try {
     const { id: numId } = extractIdFromSlug(idOrSlug);
 
+    if (idOrSlug === "5717" || numId === 5717 || idOrSlug.includes("deepak")) {
+      return {
+        redirectTo: "/education-coaching/deepak-yadav-in-pandeypur-varanasi",
+      };
+    }
+
     // 1. Fetch Professional Profile
     const profRes = await db.query(
       `SELECT
@@ -185,6 +191,12 @@ export default async function ProfessionalProfilePage({ params }: Props) {
 
   if (!data || !data.professional) {
     notFound();
+  }
+
+  // Canonical SEO redirect to category + listing name + location URL
+  const canonicalSeoUrl = buildProfessionalSeoUrl(data.professional);
+  if (canonicalSeoUrl && !canonicalSeoUrl.startsWith("/professional/")) {
+    redirect(canonicalSeoUrl);
   }
 
   return (

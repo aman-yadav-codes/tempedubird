@@ -63,7 +63,7 @@ import { useAuthStore, useCartStore } from "@/store";
 import { toast } from "sonner";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { buildBusinessSeoUrl, buildProfessionalSeoUrl } from "@/lib/utils/seo-slug";
+import { buildBusinessSeoUrl, buildProfessionalSeoUrl, buildCourseSeoUrl, buildJobSeoUrl } from "@/lib/utils/seo-slug";
 import { OrderCheckoutDialog, CheckoutItem } from "@/components/checkout/order-checkout-dialog";
 import { CartDrawer } from "@/components/checkout/cart-drawer";
 import { CartFloatingButton } from "@/components/checkout/cart-floating-button";
@@ -1415,9 +1415,11 @@ function CustomerExplorePageContent() {
                               {c.category_name}
                             </Badge>
                           )}
-                          <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
-                            {c.name}
-                          </h3>
+                          <Link href={buildCourseSeoUrl(c)} className="hover:text-primary transition-colors cursor-pointer block">
+                            <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
+                              {c.name}
+                            </h3>
+                          </Link>
                           {c.code && (
                             <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
                               Code: {c.code}
@@ -1456,6 +1458,15 @@ function CustomerExplorePageContent() {
                       </div>
                     </CardContent>
                     <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
+                      <Link href={buildCourseSeoUrl(c)} className="flex-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full text-xs font-semibold"
+                        >
+                          View Details
+                        </Button>
+                      </Link>
                       <Button
                         size="sm"
                         variant="default"
@@ -1470,9 +1481,9 @@ function CustomerExplorePageContent() {
                             preferredTime: "",
                           });
                         }}
-                        className="w-full text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white"
+                        className="flex-1 text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white"
                       >
-                        Enquire for Admission
+                        Enquire
                       </Button>
                     </CardFooter>
                   </Card>
@@ -1500,9 +1511,11 @@ function CustomerExplorePageContent() {
                               {j.department}
                             </Badge>
                           )}
-                          <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
-                            {j.title || j.name}
-                          </h3>
+                          <Link href={buildJobSeoUrl(j)} className="hover:text-primary transition-colors cursor-pointer block">
+                            <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
+                              {j.title || j.name}
+                            </h3>
+                          </Link>
                           {j.company_name && (
                             <p className="text-xs text-muted-foreground font-semibold mt-0.5">
                               {j.company_name}
@@ -1545,6 +1558,15 @@ function CustomerExplorePageContent() {
                       </div>
                     </CardContent>
                     <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
+                      <Link href={buildJobSeoUrl(j)} className="flex-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full text-xs font-semibold"
+                        >
+                          View Details
+                        </Button>
+                      </Link>
                       <Button
                         size="sm"
                         variant="default"
@@ -1559,9 +1581,9 @@ function CustomerExplorePageContent() {
                             preferredTime: "",
                           });
                         }}
-                        className="w-full text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white"
+                        className="flex-1 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white"
                       >
-                        Apply / Express Interest
+                        Apply Now
                       </Button>
                     </CardFooter>
                   </Card>
