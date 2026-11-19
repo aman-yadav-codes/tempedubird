@@ -2625,17 +2625,6 @@ export default function AdminCompanyPage() {
                           />
                         </div>
                       </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="ci-about" className="text-xs font-semibold">About Company / Platform Brief</Label>
-                        <Textarea
-                          id="ci-about"
-                          rows={2}
-                          value={companyInfo.about_text || ""}
-                          onChange={(e) => setCompanyInfo((prev) => ({ ...prev, about_text: e.target.value }))}
-                          placeholder="Brief summary of company vision, mission, and scope shown on platform landing pages..."
-                        />
-                      </div>
                     </div>
                   )}
 
