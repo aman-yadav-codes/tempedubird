@@ -324,7 +324,7 @@ export function PlatformAdminHeader() {
           <Link
             href="/"
             className="flex items-center gap-2 text-foreground hover:opacity-90 transition-opacity shrink-0 py-0.5"
-            title="143Panda Platform Admin"
+            title="143Panda"
           >
             <div className="relative h-11 w-auto flex items-center">
               <Image
@@ -336,9 +336,6 @@ export function PlatformAdminHeader() {
                 priority
               />
             </div>
-            <span className="hidden sm:inline-block text-[9px] font-bold text-muted-foreground uppercase tracking-widest px-1.5 py-0.5 rounded bg-muted/60 border border-border/40">
-              Platform Admin
-            </span>
           </Link>
         </div>
 
