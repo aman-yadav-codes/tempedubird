@@ -68,8 +68,6 @@ import {
   MoreVertical,
   Receipt,
   ListPlus,
-  Globe,
-  Monitor,
   Crown,
   FolderKanban,
   GitFork,
@@ -2609,9 +2607,12 @@ export default function OperationsTasksPage() {
                   {/* Top Bar: Badges row, Status & Action Button on right */}
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     {!isInstitutionAdmin ? (
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap flex-1 min-w-[200px]">
                         {getUrgencyBadge(task.urgency)}
-                        <span className="text-[11px] text-muted-foreground font-mono">#{task.id}</span>
+                        <span className="text-[11px] text-muted-foreground font-mono shrink-0">#{task.id}</span>
+                        <h3 className="text-base font-bold text-foreground leading-snug break-words">
+                          {task.title}
+                        </h3>
                         <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] gap-1 font-semibold">
                           <Sparkles className="w-3 h-3 text-amber-500" /> +{task.points || 20} / -{task.penalty_points || 10} pts
                         </Badge>
@@ -2637,8 +2638,11 @@ export default function OperationsTasksPage() {
                         )}
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono font-bold text-muted-foreground">#{task.id}</span>
+                      <div className="flex items-center gap-2.5 flex-1 min-w-[200px]">
+                        <span className="text-xs font-mono font-bold text-muted-foreground shrink-0">#{task.id}</span>
+                        <h3 className="text-base font-bold text-foreground leading-snug break-words">
+                          {task.title}
+                        </h3>
                       </div>
                     )}
 
@@ -2761,13 +2765,6 @@ export default function OperationsTasksPage() {
                     </div>
                   </div>
 
-                  {/* FULL WIDTH TASK NAMING / TITLE */}
-                  <div className="w-full pt-1">
-                    <h3 className="text-base font-bold text-foreground leading-snug break-words w-full">
-                      {task.title}
-                    </h3>
-                  </div>
-
                   {/* Assigned Clients Badges */}
                   {(Array.isArray(task.assigned_clients) && task.assigned_clients.length > 0) || task.client_name ? (
                     <div className="flex items-center gap-1.5 text-xs pt-1 flex-wrap">
@@ -2816,9 +2813,9 @@ export default function OperationsTasksPage() {
                     );
 
                     return (
-                      <div className="space-y-2 p-3 bg-muted/20 rounded-xl border text-xs">
-                        {/* Row 1: Project Leader, Teams Staff & Timeline Dates */}
-                        <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+                      <div className="p-3 bg-muted/20 rounded-xl border text-xs">
+                        {/* Project Leader, Teams Staff, Timeline Dates & Agreement Document */}
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
                             {/* Project Leader */}
                             {task.project_leader_name ? (
@@ -2848,7 +2845,7 @@ export default function OperationsTasksPage() {
                             </Badge>
                           </div>
 
-                          {/* Start Date & Due Date */}
+                          {/* Start Date, Due Date & Project Agreement Document */}
                           <div className="flex items-center gap-2 flex-wrap">
                             <Badge variant="outline" className="bg-background text-foreground border gap-1.5 py-1 px-2.5 text-[11px] font-medium">
                               <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
@@ -2871,76 +2868,59 @@ export default function OperationsTasksPage() {
                                 </span>
                               )}
                             </Badge>
-                          </div>
-                        </div>
 
-                        {/* Row 2: Live Website, Demo URL & Project Agreement Document */}
-                        <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                          {/* Live Website */}
-                          {task.live_url ? (
-                            <a
-                              href={task.live_url.startsWith("http") ? task.live_url : `https://${task.live_url}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all group shadow-2xs"
-                              title={`Open Live Website: ${task.live_url}`}
-                            >
-                              <Globe className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform shrink-0" />
-                              <span>Live Website</span>
-                              <ExternalLink className="w-2.5 h-2.5 opacity-70" />
-                            </a>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-muted-foreground/60 bg-muted/30 border border-dashed">
-                              <Globe className="w-3 h-3 opacity-40 shrink-0" />
-                              <span>No Live Website</span>
-                            </span>
-                          )}
-
-                          {/* Demo URL */}
-                          {task.demo_url ? (
-                            <a
-                              href={task.demo_url.startsWith("http") ? task.demo_url : `https://${task.demo_url}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-blue-500/10 text-blue-800 dark:text-blue-300 border border-blue-500/30 hover:bg-blue-500/20 transition-all group shadow-2xs"
-                              title={`Open Demo URL: ${task.demo_url}`}
-                            >
-                              <Monitor className="w-3.5 h-3.5 text-blue-600 group-hover:scale-110 transition-transform shrink-0" />
-                              <span>Demo URL</span>
-                              <ExternalLink className="w-2.5 h-2.5 opacity-70" />
-                            </a>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-muted-foreground/60 bg-muted/30 border border-dashed">
-                              <Monitor className="w-3 h-3 opacity-40 shrink-0" />
-                              <span>No Demo URL</span>
-                            </span>
-                          )}
-
-                          {/* Project Agreement Document */}
-                          {task.agreement_document_url ? (
-                            <div className="inline-flex items-center gap-1.5 flex-wrap">
-                              <a
-                                href={task.agreement_document_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-violet-500/10 text-violet-800 dark:text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 transition-all group shadow-2xs"
-                                title={`View/Download Agreement: ${task.agreement_document_name || "Work Agreement Document"}`}
-                              >
-                                <FileText className="w-3.5 h-3.5 text-violet-600 group-hover:scale-110 transition-transform shrink-0" />
-                                <span className="truncate max-w-[220px]">
-                                  {task.agreement_document_name || "Work Agreement Document"}
-                                </span>
-                                <ExternalLink className="w-2.5 h-2.5 opacity-70" />
-                              </a>
+                            {/* Project Agreement Document */}
+                            {task.agreement_document_url ? (
+                              <div className="inline-flex items-center gap-1.5 flex-wrap">
+                                <a
+                                  href={task.agreement_document_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-violet-500/10 text-violet-800 dark:text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 transition-all group shadow-2xs"
+                                  title={`View/Download Agreement: ${task.agreement_document_name || "Work Agreement Document"}`}
+                                >
+                                  <FileText className="w-3.5 h-3.5 text-violet-600 group-hover:scale-110 transition-transform shrink-0" />
+                                  <span className="truncate max-w-[220px]">
+                                    {task.agreement_document_name || "Work Agreement Document"}
+                                  </span>
+                                  <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                                </a>
+                                <label
+                                  className="inline-flex items-center gap-1 px-1.5 py-1 rounded-md text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/80 cursor-pointer border border-dashed border-border transition-colors"
+                                  title="Upload new version / replace agreement document"
+                                >
+                                  {directDocUploadingTaskId === task.id ? (
+                                    <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                                  ) : (
+                                    <Upload className="w-3 h-3 text-muted-foreground" />
+                                  )}
+                                  <input
+                                    type="file"
+                                    className="hidden"
+                                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.txt,.xlsx,.xls"
+                                    disabled={directDocUploadingTaskId === task.id}
+                                    onChange={(e) => {
+                                      const f = e.target.files?.[0];
+                                      if (f) handleDirectAgreementDocUpload(task.id, f);
+                                      e.target.value = "";
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                            ) : (
                               <label
-                                className="inline-flex items-center gap-1 px-1.5 py-1 rounded-md text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/80 cursor-pointer border border-dashed border-border transition-colors"
-                                title="Upload new version / replace agreement document"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-muted-foreground bg-muted/30 hover:bg-violet-500/10 hover:text-violet-700 hover:border-violet-500/40 border border-dashed cursor-pointer transition-all group shadow-2xs"
+                                title="Click here to upload agreement document"
                               >
                                 {directDocUploadingTaskId === task.id ? (
-                                  <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600 shrink-0" />
                                 ) : (
-                                  <Upload className="w-3 h-3 text-muted-foreground" />
+                                  <FileText className="w-3.5 h-3.5 opacity-60 group-hover:text-violet-600 shrink-0" />
                                 )}
+                                <span>No Agreement Doc</span>
+                                <span className="text-[10px] text-violet-600 dark:text-violet-400 font-bold underline underline-offset-2 ml-0.5">
+                                  + Upload
+                                </span>
                                 <input
                                   type="file"
                                   className="hidden"
@@ -2953,34 +2933,8 @@ export default function OperationsTasksPage() {
                                   }}
                                 />
                               </label>
-                            </div>
-                          ) : (
-                            <label
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-muted-foreground bg-muted/30 hover:bg-violet-500/10 hover:text-violet-700 hover:border-violet-500/40 border border-dashed cursor-pointer transition-all group shadow-2xs"
-                              title="Click here to upload agreement document"
-                            >
-                              {directDocUploadingTaskId === task.id ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600 shrink-0" />
-                              ) : (
-                                <FileText className="w-3.5 h-3.5 opacity-60 group-hover:text-violet-600 shrink-0" />
-                              )}
-                              <span>No Agreement Doc</span>
-                              <span className="text-[10px] text-violet-600 dark:text-violet-400 font-bold underline underline-offset-2 ml-0.5">
-                                + Upload
-                              </span>
-                              <input
-                                type="file"
-                                className="hidden"
-                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.txt,.xlsx,.xls"
-                                disabled={directDocUploadingTaskId === task.id}
-                                onChange={(e) => {
-                                  const f = e.target.files?.[0];
-                                  if (f) handleDirectAgreementDocUpload(task.id, f);
-                                  e.target.value = "";
-                                }}
-                              />
-                            </label>
-                          )}
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
