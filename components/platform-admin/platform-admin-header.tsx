@@ -373,72 +373,17 @@ export function PlatformAdminHeader() {
 
         {/* Right: + Add Listing, Location Selector, Search, Cart, Sign In */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-          {/* + Add Listing Button (FindMy styled pill button) */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8.5 px-3 rounded-full border border-border/80 bg-background/60 hover:bg-muted font-bold text-xs gap-1.5 cursor-pointer shadow-2xs shrink-0"
-              >
-                <Plus className="size-3.5 text-primary" />
-                <span>Add Listing</span>
-                <ChevronDown className="size-3 text-muted-foreground" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52 p-1.5 space-y-0.5 z-50">
-              <div className="px-2.5 py-1.5 mb-1 bg-primary/5 rounded-md">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
-                  Partner with Platform
-                </span>
-              </div>
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/admin/profiles"
-                  className="cursor-pointer text-xs py-2 px-2.5 rounded-md font-semibold flex items-center gap-2 hover:bg-muted"
-                >
-                  <Building2 className="size-3.5 text-primary" />
-                  <span>Register Business</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/admin/catalog/products"
-                  className="cursor-pointer text-xs py-2 px-2.5 rounded-md font-semibold flex items-center gap-2 hover:bg-muted"
-                >
-                  <Package className="size-3.5 text-primary" />
-                  <span>List Products</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/admin/catalog/services"
-                  className="cursor-pointer text-xs py-2 px-2.5 rounded-md font-semibold flex items-center gap-2 hover:bg-muted"
-                >
-                  <Briefcase className="size-3.5 text-primary" />
-                  <span>Offer Services</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/admin/catalog/courses"
-                  className="cursor-pointer text-xs py-2 px-2.5 rounded-md font-semibold flex items-center gap-2 hover:bg-muted"
-                >
-                  <GraduationCap className="size-3.5 text-primary" />
-                  <span>Publish Courses</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/admin/catalog/jobs"
-                  className="cursor-pointer text-xs py-2 px-2.5 rounded-md font-semibold flex items-center gap-2 hover:bg-muted"
-                >
-                  <Briefcase className="size-3.5 text-primary" />
-                  <span>Post Job Openings</span>
-                </Link>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* + Add Listing Button: Direct Link to Packages & Pricing Page */}
+          <Link href="/packages">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8.5 px-3.5 rounded-full border border-border/80 bg-background/60 hover:bg-muted font-bold text-xs gap-1.5 cursor-pointer shadow-2xs shrink-0 hover:border-primary/50 transition-all"
+            >
+              <Plus className="size-3.5 text-primary" />
+              <span>Add Listing</span>
+            </Button>
+          </Link>
           {/* Cart Button */}
           <button
             type="button"
