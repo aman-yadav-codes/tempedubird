@@ -298,6 +298,44 @@ export async function getCurrentPublicInstitutionProfile(host: string | null | u
   const profile = result.rows[0] ?? null;
   if (profile) {
     try {
+      // 1. Primary Source of Truth: business_profiles
+      const bpRes = await db.query(
+        `SELECT * FROM business_profiles
+         WHERE institution_profile_id = $1 OR id = $1
+         ORDER BY (institution_profile_id = $1) DESC
+         LIMIT 1`,
+        [tenant.institution_id]
+      );
+      if (bpRes.rows.length > 0) {
+        const bp = bpRes.rows[0];
+        if (bp.name) profile.name = bp.name;
+        if (bp.phone) profile.phone = bp.phone;
+        if (bp.email) profile.email = bp.email;
+        if (bp.website) profile.website = bp.website;
+        if (bp.about) profile.about = bp.about;
+        if (bp.logo_url) profile.logo_url = bp.logo_url;
+        if (bp.address) {
+          profile.full_address = bp.address;
+          (profile as any).address = bp.address;
+        }
+        if (bp.city) profile.location_name = bp.city;
+        if (bp.founder_name) profile.founder_name = bp.founder_name;
+        if (bp.founder_title) profile.founder_title = bp.founder_title;
+        if (bp.founder_image_url) profile.founder_image_url = bp.founder_image_url;
+        if (bp.founder_about) profile.founder_about = bp.founder_about;
+        if (bp.mission) profile.mission = bp.mission;
+        if (bp.vision) profile.vision = bp.vision;
+        if (bp.goal) profile.goal = bp.goal;
+        if (bp.banner_url) profile.banner_url = bp.banner_url;
+        if (bp.established_year) profile.established_year = bp.established_year;
+        if (bp.opening_hours) (profile as any).opening_hours = bp.opening_hours;
+        if (bp.social_links) (profile as any).social_links = bp.social_links;
+        if (bp.registration_no || bp.cin_number) (profile as any).registration_no = bp.registration_no || bp.cin_number;
+        if (bp.gstin) (profile as any).gstin = bp.gstin;
+        if (bp.certified_or_affiliated_with) (profile as any).certified_or_affiliated_with = bp.certified_or_affiliated_with;
+      }
+
+      // 2. Secondary / Fallback: platform_company_info
       const pciRes = await db.query(
         `SELECT brand_name, company_name, logo_url, support_email, phone, website_url, about, headquarters_address, city, state, pincode,
                 founder_name, founder_title, founder_image_url, founder_about, mission, vision, goal, banner_url, established_year,
@@ -310,32 +348,31 @@ export async function getCurrentPublicInstitutionProfile(host: string | null | u
       );
       if (pciRes.rows.length > 0) {
         const pci = pciRes.rows[0];
-        if (pci.brand_name || pci.company_name) profile.name = pci.brand_name || pci.company_name;
-        if (pci.phone) profile.phone = pci.phone;
-        if (pci.support_email) profile.email = pci.support_email;
-        if (pci.website_url) profile.website = pci.website_url;
-        if (pci.about) profile.about = pci.about;
-        if (pci.logo_url) profile.logo_url = pci.logo_url;
-        if (pci.headquarters_address) {
+        if (!profile.name && (pci.brand_name || pci.company_name)) profile.name = pci.brand_name || pci.company_name;
+        if (!profile.phone && pci.phone) profile.phone = pci.phone;
+        if (!profile.email && pci.support_email) profile.email = pci.support_email;
+        if (!profile.website && pci.website_url) profile.website = pci.website_url;
+        if (!profile.about && pci.about) profile.about = pci.about;
+        if (!profile.logo_url && pci.logo_url) profile.logo_url = pci.logo_url;
+        if (!profile.full_address && pci.headquarters_address) {
           profile.full_address = pci.headquarters_address;
           (profile as any).address = pci.headquarters_address;
         }
-        if (pci.city) profile.location_name = pci.city;
-        if (pci.founder_name) profile.founder_name = pci.founder_name;
-        if (pci.founder_title) profile.founder_title = pci.founder_title;
-        if (pci.founder_image_url) profile.founder_image_url = pci.founder_image_url;
-        if (pci.founder_about) profile.founder_about = pci.founder_about;
-        if (pci.mission) profile.mission = pci.mission;
-        if (pci.vision) profile.vision = pci.vision;
-        if (pci.goal) profile.goal = pci.goal;
-        if (pci.banner_url) profile.banner_url = pci.banner_url;
-        if (pci.established_year) profile.established_year = pci.established_year;
-        if (pci.opening_hours) (profile as any).opening_hours = pci.opening_hours;
-        if (pci.working_hours) (profile as any).working_hours = pci.working_hours;
-        if (pci.social_links) (profile as any).social_links = pci.social_links;
-        if (pci.registration_no) (profile as any).registration_no = pci.registration_no;
-        if (pci.gstin) (profile as any).gstin = pci.gstin;
-        if (pci.certified_or_affiliated_with) (profile as any).certified_or_affiliated_with = pci.certified_or_affiliated_with;
+        if (!profile.location_name && pci.city) profile.location_name = pci.city;
+        if (!profile.founder_name && pci.founder_name) profile.founder_name = pci.founder_name;
+        if (!profile.founder_title && pci.founder_title) profile.founder_title = pci.founder_title;
+        if (!profile.founder_image_url && pci.founder_image_url) profile.founder_image_url = pci.founder_image_url;
+        if (!profile.founder_about && pci.founder_about) profile.founder_about = pci.founder_about;
+        if (!profile.mission && pci.mission) profile.mission = pci.mission;
+        if (!profile.vision && pci.vision) profile.vision = pci.vision;
+        if (!profile.goal && pci.goal) profile.goal = pci.goal;
+        if (!profile.banner_url && pci.banner_url) profile.banner_url = pci.banner_url;
+        if (!profile.established_year && pci.established_year) profile.established_year = pci.established_year;
+        if (!(profile as any).opening_hours && (pci.opening_hours || pci.working_hours)) (profile as any).opening_hours = pci.opening_hours || pci.working_hours;
+        if (!(profile as any).social_links && pci.social_links) (profile as any).social_links = pci.social_links;
+        if (!(profile as any).registration_no && pci.registration_no) (profile as any).registration_no = pci.registration_no;
+        if (!(profile as any).gstin && pci.gstin) (profile as any).gstin = pci.gstin;
+        if (!(profile as any).certified_or_affiliated_with && pci.certified_or_affiliated_with) (profile as any).certified_or_affiliated_with = pci.certified_or_affiliated_with;
       }
 
       if (!profile.founder_image_url) {

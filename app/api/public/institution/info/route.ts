@@ -147,40 +147,78 @@ export async function GET(req: Request) {
     // Resolve linked business_id
     const resolvedBizId = data.business_id || instIdNum;
 
-    // Overlay with company info configured in workspace/company?tab=contact-branches
+    // Overlay with company info configured in workspace/company?tab=contact-branches (Single Source of Truth: business_profiles)
     if (resolvedBizId) {
+      // 1. Overlay from business_profiles
+      const bpRes = await db.query(
+        `SELECT * FROM business_profiles
+         WHERE id = $1 OR institution_profile_id = $2
+         ORDER BY (id = $1) DESC LIMIT 1`,
+        [resolvedBizId, data.id]
+      );
+      if (bpRes.rows.length > 0) {
+        const bp = bpRes.rows[0];
+        if (bp.name) data.name = bp.name;
+        if (bp.logo_url) data.logo_url = bp.logo_url;
+        if (bp.banner_url) data.banner_url = bp.banner_url;
+        if (bp.email) data.email = bp.email;
+        if (bp.phone) data.phone = bp.phone;
+        if (bp.website) data.website = bp.website;
+        if (bp.about) data.about = bp.about;
+        if (bp.address) data.address = bp.address;
+        if (bp.city) {
+          data.city = bp.city;
+          data.location_name = bp.city;
+        }
+        if (bp.state) data.state = bp.state;
+        if (bp.postal_code) data.pincode = bp.postal_code;
+        if (bp.founder_name) data.founder_name = bp.founder_name;
+        if (bp.founder_title) data.founder_title = bp.founder_title;
+        if (bp.founder_image_url) data.founder_image_url = bp.founder_image_url;
+        if (bp.founder_about) data.founder_about = bp.founder_about;
+        if (bp.mission) data.mission = bp.mission;
+        if (bp.vision) data.vision = bp.vision;
+        if (bp.goal) data.goal = bp.goal;
+        if (bp.established_year) data.established_year = bp.established_year;
+        if (bp.opening_hours) data.opening_hours = bp.opening_hours;
+        if (bp.social_links) data.social_links = bp.social_links;
+        if (bp.registration_no || bp.cin_number) data.registration_no = bp.registration_no || bp.cin_number;
+        if (bp.gstin) data.gstin = bp.gstin;
+        if (bp.certified_or_affiliated_with) data.certified_or_affiliated_with = bp.certified_or_affiliated_with;
+      }
+
+      // 2. Secondary fallback: platform_company_info
       const pciRes = await db.query(
         `SELECT * FROM platform_company_info WHERE business_id = $1 OR institution_id = $2 ORDER BY (business_id = $1) DESC LIMIT 1`,
         [resolvedBizId, data.id]
       );
       if (pciRes.rows.length > 0) {
         const pci = pciRes.rows[0];
-        data.name = pci.brand_name || pci.company_name || data.name;
-        if (pci.logo_url) data.logo_url = pci.logo_url;
-        if (pci.support_email) data.email = pci.support_email;
-        if (pci.phone) data.phone = pci.phone;
-        if (pci.website_url) data.website = pci.website_url;
-        if (pci.about) data.about = pci.about;
-        if (pci.city) data.location_name = pci.city;
-        if (pci.headquarters_address) data.address = pci.headquarters_address;
-        if (pci.city) data.city = pci.city;
-        if (pci.state) data.state = pci.state;
-        if (pci.pincode) data.pincode = pci.pincode;
-        if (pci.founder_name) data.founder_name = pci.founder_name;
-        if (pci.founder_title) data.founder_title = pci.founder_title;
-        if (pci.founder_image_url) data.founder_image_url = pci.founder_image_url;
-        if (pci.founder_about) data.founder_about = pci.founder_about;
-        if (pci.mission) data.mission = pci.mission;
-        if (pci.vision) data.vision = pci.vision;
-        if (pci.goal) data.goal = pci.goal;
-        if (pci.banner_url) data.banner_url = pci.banner_url;
-        if (pci.established_year) data.established_year = pci.established_year;
-        if (pci.opening_hours) data.opening_hours = pci.opening_hours;
-        if (pci.working_hours) data.working_hours = pci.working_hours;
-        if (pci.social_links) data.social_links = pci.social_links;
-        if (pci.registration_no) data.registration_no = pci.registration_no;
-        if (pci.gstin) data.gstin = pci.gstin;
-        if (pci.certified_or_affiliated_with) data.certified_or_affiliated_with = pci.certified_or_affiliated_with;
+        if (!data.name && (pci.brand_name || pci.company_name)) data.name = pci.brand_name || pci.company_name;
+        if (!data.logo_url && pci.logo_url) data.logo_url = pci.logo_url;
+        if (!data.email && pci.support_email) data.email = pci.support_email;
+        if (!data.phone && pci.phone) data.phone = pci.phone;
+        if (!data.website && pci.website_url) data.website = pci.website_url;
+        if (!data.about && pci.about) data.about = pci.about;
+        if (!data.location_name && pci.city) data.location_name = pci.city;
+        if (!data.address && pci.headquarters_address) data.address = pci.headquarters_address;
+        if (!data.city && pci.city) data.city = pci.city;
+        if (!data.state && pci.state) data.state = pci.state;
+        if (!data.pincode && pci.pincode) data.pincode = pci.pincode;
+        if (!data.founder_name && pci.founder_name) data.founder_name = pci.founder_name;
+        if (!data.founder_title && pci.founder_title) data.founder_title = pci.founder_title;
+        if (!data.founder_image_url && pci.founder_image_url) data.founder_image_url = pci.founder_image_url;
+        if (!data.founder_about && pci.founder_about) data.founder_about = pci.founder_about;
+        if (!data.mission && pci.mission) data.mission = pci.mission;
+        if (!data.vision && pci.vision) data.vision = pci.vision;
+        if (!data.goal && pci.goal) data.goal = pci.goal;
+        if (!data.banner_url && pci.banner_url) data.banner_url = pci.banner_url;
+        if (!data.established_year && pci.established_year) data.established_year = pci.established_year;
+        if (!data.opening_hours && (pci.opening_hours || pci.working_hours)) data.opening_hours = pci.opening_hours || pci.working_hours;
+        if (!data.social_links && pci.social_links) data.social_links = pci.social_links;
+        if (!data.registration_no && pci.registration_no) data.registration_no = pci.registration_no;
+        if (!data.gstin && pci.gstin) data.gstin = pci.gstin;
+        if (!data.certified_or_affiliated_with && pci.certified_or_affiliated_with) data.certified_or_affiliated_with = pci.certified_or_affiliated_with;
       }
 
       if (!data.founder_image_url) {
