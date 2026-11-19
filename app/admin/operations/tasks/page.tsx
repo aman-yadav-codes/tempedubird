@@ -68,8 +68,6 @@ import {
   MoreVertical,
   Receipt,
   ListPlus,
-  Globe,
-  Monitor,
   Crown,
   FolderKanban,
   GitFork,
@@ -2609,9 +2607,12 @@ export default function OperationsTasksPage() {
                   {/* Top Bar: Badges row, Status & Action Button on right */}
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     {!isInstitutionAdmin ? (
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap flex-1 min-w-[200px]">
                         {getUrgencyBadge(task.urgency)}
-                        <span className="text-[11px] text-muted-foreground font-mono">#{task.id}</span>
+                        <span className="text-[11px] text-muted-foreground font-mono shrink-0">#{task.id}</span>
+                        <h3 className="text-base font-bold text-foreground leading-snug break-words">
+                          {task.title}
+                        </h3>
                         <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] gap-1 font-semibold">
                           <Sparkles className="w-3 h-3 text-amber-500" /> +{task.points || 20} / -{task.penalty_points || 10} pts
                         </Badge>
@@ -2637,8 +2638,11 @@ export default function OperationsTasksPage() {
                         )}
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono font-bold text-muted-foreground">#{task.id}</span>
+                      <div className="flex items-center gap-2.5 flex-1 min-w-[200px]">
+                        <span className="text-xs font-mono font-bold text-muted-foreground shrink-0">#{task.id}</span>
+                        <h3 className="text-base font-bold text-foreground leading-snug break-words">
+                          {task.title}
+                        </h3>
                       </div>
                     )}
 
@@ -2701,6 +2705,39 @@ export default function OperationsTasksPage() {
                               <span>Edit</span>
                             </DropdownMenuItem>
                           )}
+                          {canEditOrRemove && (
+                            <DropdownMenuItem
+                              onClick={async () => {
+                                setAttachPipelineTask(task);
+                                const tId = task.project_type_id ? String(task.project_type_id) : "none";
+                                setAttachTypeId(tId);
+                                setAttachPipelineId(task.pipeline_id ? String(task.pipeline_id) : "none");
+                                void fetchProjectTypesForModal();
+                                if (tId !== "none") {
+                                  try {
+                                    const res = await fetch(`/api/admin/operations/project-pipelines?project_type_id=${tId}&status=active`);
+                                    if (res.ok) {
+                                      const data = await res.json();
+                                      const pls = data.pipelines || [];
+                                      setAttachAvailablePipelines(pls);
+                                      if (!task.pipeline_id) {
+                                        const def = pls.find((p: any) => p.is_default) || pls[0];
+                                        if (def) setAttachPipelineId(String(def.id));
+                                      }
+                                    }
+                                  } catch (err) {
+                                    console.error("Error loading pipelines for task:", err);
+                                  }
+                                } else {
+                                  setAttachAvailablePipelines([]);
+                                }
+                              }}
+                              className="gap-2 cursor-pointer font-medium"
+                            >
+                              <GitFork className="w-4 h-4 text-purple-600" />
+                              <span>Assign Work Type & Pipeline</span>
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem
                             onClick={() => {
                               setHistoryModalSubtask(null);
@@ -2726,13 +2763,6 @@ export default function OperationsTasksPage() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
-                  </div>
-
-                  {/* FULL WIDTH TASK NAMING / TITLE */}
-                  <div className="w-full pt-1">
-                    <h3 className="text-base font-bold text-foreground leading-snug break-words w-full">
-                      {task.title}
-                    </h3>
                   </div>
 
                   {/* Assigned Clients Badges */}
@@ -2783,9 +2813,9 @@ export default function OperationsTasksPage() {
                     );
 
                     return (
-                      <div className="space-y-2 p-3 bg-muted/20 rounded-xl border text-xs">
-                        {/* Row 1: Project Leader, Teams Staff & Timeline Dates */}
-                        <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+                      <div className="p-3 bg-muted/20 rounded-xl border text-xs">
+                        {/* Project Leader, Teams Staff, Timeline Dates & Agreement Document */}
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
                             {/* Project Leader */}
                             {task.project_leader_name ? (
@@ -2815,7 +2845,7 @@ export default function OperationsTasksPage() {
                             </Badge>
                           </div>
 
-                          {/* Start Date & Due Date */}
+                          {/* Start Date, Due Date & Project Agreement Document */}
                           <div className="flex items-center gap-2 flex-wrap">
                             <Badge variant="outline" className="bg-background text-foreground border gap-1.5 py-1 px-2.5 text-[11px] font-medium">
                               <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
@@ -2838,76 +2868,59 @@ export default function OperationsTasksPage() {
                                 </span>
                               )}
                             </Badge>
-                          </div>
-                        </div>
 
-                        {/* Row 2: Live Website, Demo URL & Project Agreement Document */}
-                        <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                          {/* Live Website */}
-                          {task.live_url ? (
-                            <a
-                              href={task.live_url.startsWith("http") ? task.live_url : `https://${task.live_url}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all group shadow-2xs"
-                              title={`Open Live Website: ${task.live_url}`}
-                            >
-                              <Globe className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform shrink-0" />
-                              <span>Live Website</span>
-                              <ExternalLink className="w-2.5 h-2.5 opacity-70" />
-                            </a>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-muted-foreground/60 bg-muted/30 border border-dashed">
-                              <Globe className="w-3 h-3 opacity-40 shrink-0" />
-                              <span>No Live Website</span>
-                            </span>
-                          )}
-
-                          {/* Demo URL */}
-                          {task.demo_url ? (
-                            <a
-                              href={task.demo_url.startsWith("http") ? task.demo_url : `https://${task.demo_url}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-blue-500/10 text-blue-800 dark:text-blue-300 border border-blue-500/30 hover:bg-blue-500/20 transition-all group shadow-2xs"
-                              title={`Open Demo URL: ${task.demo_url}`}
-                            >
-                              <Monitor className="w-3.5 h-3.5 text-blue-600 group-hover:scale-110 transition-transform shrink-0" />
-                              <span>Demo URL</span>
-                              <ExternalLink className="w-2.5 h-2.5 opacity-70" />
-                            </a>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-muted-foreground/60 bg-muted/30 border border-dashed">
-                              <Monitor className="w-3 h-3 opacity-40 shrink-0" />
-                              <span>No Demo URL</span>
-                            </span>
-                          )}
-
-                          {/* Project Agreement Document */}
-                          {task.agreement_document_url ? (
-                            <div className="inline-flex items-center gap-1.5 flex-wrap">
-                              <a
-                                href={task.agreement_document_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-violet-500/10 text-violet-800 dark:text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 transition-all group shadow-2xs"
-                                title={`View/Download Agreement: ${task.agreement_document_name || "Work Agreement Document"}`}
-                              >
-                                <FileText className="w-3.5 h-3.5 text-violet-600 group-hover:scale-110 transition-transform shrink-0" />
-                                <span className="truncate max-w-[220px]">
-                                  {task.agreement_document_name || "Work Agreement Document"}
-                                </span>
-                                <ExternalLink className="w-2.5 h-2.5 opacity-70" />
-                              </a>
+                            {/* Project Agreement Document */}
+                            {task.agreement_document_url ? (
+                              <div className="inline-flex items-center gap-1.5 flex-wrap">
+                                <a
+                                  href={task.agreement_document_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-violet-500/10 text-violet-800 dark:text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 transition-all group shadow-2xs"
+                                  title={`View/Download Agreement: ${task.agreement_document_name || "Work Agreement Document"}`}
+                                >
+                                  <FileText className="w-3.5 h-3.5 text-violet-600 group-hover:scale-110 transition-transform shrink-0" />
+                                  <span className="truncate max-w-[220px]">
+                                    {task.agreement_document_name || "Work Agreement Document"}
+                                  </span>
+                                  <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                                </a>
+                                <label
+                                  className="inline-flex items-center gap-1 px-1.5 py-1 rounded-md text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/80 cursor-pointer border border-dashed border-border transition-colors"
+                                  title="Upload new version / replace agreement document"
+                                >
+                                  {directDocUploadingTaskId === task.id ? (
+                                    <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                                  ) : (
+                                    <Upload className="w-3 h-3 text-muted-foreground" />
+                                  )}
+                                  <input
+                                    type="file"
+                                    className="hidden"
+                                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.txt,.xlsx,.xls"
+                                    disabled={directDocUploadingTaskId === task.id}
+                                    onChange={(e) => {
+                                      const f = e.target.files?.[0];
+                                      if (f) handleDirectAgreementDocUpload(task.id, f);
+                                      e.target.value = "";
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                            ) : (
                               <label
-                                className="inline-flex items-center gap-1 px-1.5 py-1 rounded-md text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/80 cursor-pointer border border-dashed border-border transition-colors"
-                                title="Upload new version / replace agreement document"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-muted-foreground bg-muted/30 hover:bg-violet-500/10 hover:text-violet-700 hover:border-violet-500/40 border border-dashed cursor-pointer transition-all group shadow-2xs"
+                                title="Click here to upload agreement document"
                               >
                                 {directDocUploadingTaskId === task.id ? (
-                                  <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600 shrink-0" />
                                 ) : (
-                                  <Upload className="w-3 h-3 text-muted-foreground" />
+                                  <FileText className="w-3.5 h-3.5 opacity-60 group-hover:text-violet-600 shrink-0" />
                                 )}
+                                <span>No Agreement Doc</span>
+                                <span className="text-[10px] text-violet-600 dark:text-violet-400 font-bold underline underline-offset-2 ml-0.5">
+                                  + Upload
+                                </span>
                                 <input
                                   type="file"
                                   className="hidden"
@@ -2920,34 +2933,8 @@ export default function OperationsTasksPage() {
                                   }}
                                 />
                               </label>
-                            </div>
-                          ) : (
-                            <label
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-muted-foreground bg-muted/30 hover:bg-violet-500/10 hover:text-violet-700 hover:border-violet-500/40 border border-dashed cursor-pointer transition-all group shadow-2xs"
-                              title="Click here to upload agreement document"
-                            >
-                              {directDocUploadingTaskId === task.id ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600 shrink-0" />
-                              ) : (
-                                <FileText className="w-3.5 h-3.5 opacity-60 group-hover:text-violet-600 shrink-0" />
-                              )}
-                              <span>No Agreement Doc</span>
-                              <span className="text-[10px] text-violet-600 dark:text-violet-400 font-bold underline underline-offset-2 ml-0.5">
-                                + Upload
-                              </span>
-                              <input
-                                type="file"
-                                className="hidden"
-                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.txt,.xlsx,.xls"
-                                disabled={directDocUploadingTaskId === task.id}
-                                onChange={(e) => {
-                                  const f = e.target.files?.[0];
-                                  if (f) handleDirectAgreementDocUpload(task.id, f);
-                                  e.target.value = "";
-                                }}
-                              />
-                            </label>
-                          )}
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -3447,105 +3434,6 @@ export default function OperationsTasksPage() {
                 />
               </div>
 
-              {/* Project Type & Pipeline Template Selection */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl border bg-muted/20">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-semibold flex items-center gap-1.5">
-                      <FolderKanban className="w-3.5 h-3.5 text-primary" />
-                      Work Type
-                    </Label>
-                    <Link
-                      href="/admin/operations/project-types"
-                      target="_blank"
-                      className="text-[10px] text-primary hover:underline font-medium"
-                    >
-                      Manage Types
-                    </Link>
-                  </div>
-                  <select
-                    value={formProjectTypeId}
-                    onChange={(e) => handleSelectProjectType(e.target.value)}
-                    className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring font-medium text-foreground cursor-pointer"
-                  >
-                    <option value="none">-- Select Work Type --</option>
-                    {projectTypesList.map((pt) => (
-                      <option key={pt.id} value={String(pt.id)}>
-                        {pt.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-semibold flex items-center gap-1.5">
-                      <GitFork className="w-3.5 h-3.5 text-primary" />
-                      Pipeline Template
-                    </Label>
-                    <Link
-                      href="/admin/operations/project-pipelines"
-                      target="_blank"
-                      className="text-[10px] text-primary hover:underline font-medium"
-                    >
-                      Manage Pipelines
-                    </Link>
-                  </div>
-                  <select
-                    value={formPipelineId}
-                    disabled={formProjectTypeId === "none" || availablePipelines.length === 0}
-                    onChange={(e) => handleSelectPipeline(e.target.value)}
-                    className="w-full h-9 px-3 text-xs rounded-md border border-input bg-background shadow-xs hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring font-medium text-foreground cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value="none">
-                      {formProjectTypeId === "none"
-                        ? "-- Select Work Type First --"
-                        : availablePipelines.length === 0
-                          ? "-- No Active Pipelines for this Type --"
-                          : "-- Select Pipeline Template --"}
-                    </option>
-                    {availablePipelines.map((pl) => (
-                      <option key={pl.id} value={String(pl.id)}>
-                        {pl.name} {pl.is_default ? "★ (Default)" : ""} ({Array.isArray(pl.phases) ? pl.phases.length : 0} phases)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Pipeline Phases Preview */}
-                {formPipelinePhases.length > 0 && (
-                  <div className="sm:col-span-2 space-y-1.5 pt-1 border-t mt-1">
-                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                      <span className="font-semibold text-foreground flex items-center gap-1">
-                        <Layers className="w-3 h-3 text-primary" />
-                        Pipeline Snapshot: {formPipelinePhases.length} Phases
-                      </span>
-                      <span className="font-mono text-[10px]">
-                        Total Est: {formPipelinePhases.reduce((acc, p) => acc + (parseFloat(String(p.estimated_duration_hours || 0)) || 0), 0)}h
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar">
-                      {formPipelinePhases.map((ph, idx) => (
-                        <div
-                          key={ph.id || idx}
-                          className="flex items-center gap-1 text-[10px] bg-background border px-2 py-1 rounded-md shrink-0 shadow-2xs"
-                        >
-                          <span className="font-mono font-bold text-primary">{idx + 1}.</span>
-                          <span className="font-medium text-foreground max-w-[120px] truncate" title={ph.name}>
-                            {ph.name}
-                          </span>
-                          {ph.requires_approval && (
-                            <span className="text-[9px] text-amber-600 bg-amber-500/15 px-1 rounded font-semibold">
-                              Approval
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Ownership: For Own Company or Client */}
               <div className="space-y-2 p-3 rounded-xl border bg-muted/20">
                 <div className="flex items-center justify-between">
@@ -3602,12 +3490,7 @@ export default function OperationsTasksPage() {
                   </button>
                 </div>
 
-                {formProjectFor === "own_company" ? (
-                  <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20 text-xs text-primary font-medium">
-                    <Building2 className="w-4 h-4 shrink-0" />
-                    <span>This work will be assigned for internal company: <strong>EduBird</strong></span>
-                  </div>
-                ) : (
+                {formProjectFor === "client" && (
                   <div className="space-y-1.5 pt-1">
                     <div className="flex items-center justify-between">
                       <Label className="text-xs font-semibold flex items-center gap-1.5">
@@ -3889,36 +3772,6 @@ export default function OperationsTasksPage() {
                     value={formCost}
                     onChange={(e) => setFormCost(e.target.value)}
                     placeholder="0.00"
-                    className="text-xs h-9 bg-background"
-                  />
-                </div>
-              </div>
-
-              {/* Live and Demo URLs */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold flex items-center gap-1.5">
-                    <ExternalLink className="w-3.5 h-3.5 text-primary" />
-                    Live Website / Portal URL
-                  </Label>
-                  <Input
-                    type="url"
-                    value={formLiveUrl}
-                    onChange={(e) => setFormLiveUrl(e.target.value)}
-                    placeholder="https://..."
-                    className="text-xs h-9 bg-background"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold flex items-center gap-1.5">
-                    <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
-                    Demo / Staging URL
-                  </Label>
-                  <Input
-                    type="url"
-                    value={formDemoUrl}
-                    onChange={(e) => setFormDemoUrl(e.target.value)}
-                    placeholder="https://staging..."
                     className="text-xs h-9 bg-background"
                   />
                 </div>
@@ -4349,7 +4202,7 @@ export default function OperationsTasksPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold">
               <GitFork className="w-5 h-5 text-primary" />
-              <span>Assign Pipeline Workflow</span>
+              <span>Assign Work Type & Pipeline</span>
             </DialogTitle>
             <DialogDescription className="text-xs">
               Work: <strong>{attachPipelineTask?.title}</strong>
@@ -4358,7 +4211,19 @@ export default function OperationsTasksPage() {
 
           <div className="space-y-3 py-2 text-xs">
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold">Select Work Type</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold flex items-center gap-1.5">
+                  <FolderKanban className="w-3.5 h-3.5 text-primary" />
+                  Work Type
+                </Label>
+                <Link
+                  href="/admin/operations/project-types"
+                  target="_blank"
+                  className="text-[10px] text-primary hover:underline font-medium"
+                >
+                  Manage Types
+                </Link>
+              </div>
               <select
                 value={attachTypeId}
                 onChange={async (e) => {
@@ -4394,7 +4259,19 @@ export default function OperationsTasksPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold">Select Pipeline Template</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold flex items-center gap-1.5">
+                  <GitFork className="w-3.5 h-3.5 text-primary" />
+                  Pipeline Template
+                </Label>
+                <Link
+                  href="/admin/operations/project-pipelines"
+                  target="_blank"
+                  className="text-[10px] text-primary hover:underline font-medium"
+                >
+                  Manage Pipelines
+                </Link>
+              </div>
               <select
                 value={attachPipelineId}
                 disabled={attachTypeId === "none" || attachAvailablePipelines.length === 0}
@@ -4405,7 +4282,7 @@ export default function OperationsTasksPage() {
                   {attachTypeId === "none"
                     ? "-- Select Work Type First --"
                     : attachAvailablePipelines.length === 0
-                    ? "-- No active pipelines --"
+                    ? "-- No active pipelines for this type --"
                     : "-- Select Pipeline Template --"}
                 </option>
                 {attachAvailablePipelines.map((pl) => (
@@ -4415,6 +4292,36 @@ export default function OperationsTasksPage() {
                 ))}
               </select>
             </div>
+
+            {/* Pipeline phases preview */}
+            {(() => {
+              const selectedPl = attachAvailablePipelines.find((p) => String(p.id) === String(attachPipelineId));
+              const phases = Array.isArray(selectedPl?.phases) ? selectedPl.phases : [];
+              if (phases.length === 0) return null;
+              return (
+                <div className="space-y-1.5 pt-2 border-t">
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span className="font-semibold text-foreground flex items-center gap-1">
+                      <Layers className="w-3 h-3 text-primary" />
+                      Pipeline Preview ({phases.length} Phases)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar">
+                    {phases.map((ph: any, idx: number) => (
+                      <div
+                        key={ph.id || idx}
+                        className="flex items-center gap-1 text-[10px] bg-muted/40 border px-2 py-1 rounded-md shrink-0"
+                      >
+                        <span className="font-mono font-bold text-primary">{idx + 1}.</span>
+                        <span className="font-medium text-foreground max-w-[120px] truncate" title={ph.name}>
+                          {ph.name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <DialogFooter className="gap-2 pt-2 border-t">
@@ -4465,7 +4372,7 @@ export default function OperationsTasksPage() {
 
                   const resData = await res.json().catch(() => ({}));
                   if (!res.ok) throw new Error(resData.error || "Failed to assign pipeline");
-                  toast.success(`Pipeline "${selPl?.name}" assigned to work!`);
+                  toast.success(`Work Type & Pipeline "${selPl?.name}" assigned!`);
                   setAttachPipelineTask(null);
                   await fetchTasks();
                 } catch (err: any) {
@@ -4476,7 +4383,7 @@ export default function OperationsTasksPage() {
               }}
               className="bg-primary text-primary-foreground font-semibold cursor-pointer"
             >
-              {savingAttachPipeline ? "Assigning..." : "Assign Pipeline"}
+              {savingAttachPipeline ? "Assigning..." : "Assign Work Type & Pipeline"}
             </Button>
           </DialogFooter>
         </DialogContent>

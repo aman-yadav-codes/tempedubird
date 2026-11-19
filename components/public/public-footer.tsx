@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { GraduationCap, School, Mail, Phone, MapPin } from "lucide-react";
+import { GraduationCap, School, Mail, Phone, MapPin, Smartphone } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useAuthStore } from "@/store";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
@@ -92,10 +92,26 @@ function LinkedinIcon() {
   );
 }
 
+function AppleIcon({ className = "size-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.62-.75 1.04-1.8 0.92-2.85-.9.04-1.99.6-2.64 1.35-.58.67-.99 1.74-.86 2.78.99.08 2.02-.53 2.58-1.28z" />
+    </svg>
+  );
+}
+
+function PlayStoreIcon({ className = "size-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M3.609 1.814L13.793 12 3.61 22.186c-.33-.31-.53-.765-.53-1.286V3.1c0-.52.2-.975.53-1.286zm11.234 11.236l2.15-2.15-11.83-6.83 9.68 8.98zm0 1.898L5.163 23.93l11.83-6.83-2.15-2.15zM18.37 11.45l2.67 1.54c.73.42.73 1.1 0 1.52l-2.67 1.54-1.73-1.73 1.73-1.37z" />
+    </svg>
+  );
+}
+
 let cachedSocialLinks: SocialLinksMap | null = null;
 let cachedPlatformContact: { email?: string; phone?: string; address?: string } | null = null;
 
-export function PublicFooter() {
+export function PublicFooter({ configuredInstitutionId }: { configuredInstitutionId?: number | null } = {}) {
   const pathname = usePathname();
   const { user } = useAuthStore();
   const { activeInstitution, activeInstitutionId } = useActiveInstitution();
@@ -109,13 +125,14 @@ export function PublicFooter() {
   }>(() => cachedPlatformContact || {});
 
   const defaultEnvInstId =
-    process.env.NEXT_PUBLIC_BUSINESS_ID
+    configuredInstitutionId ||
+    (process.env.NEXT_PUBLIC_BUSINESS_ID
       ? Number(process.env.NEXT_PUBLIC_BUSINESS_ID)
       : process.env.NEXT_PUBLIC_INSTITUTION_ID
       ? Number(process.env.NEXT_PUBLIC_INSTITUTION_ID)
       : process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
       ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
-      : null;
+      : null);
 
   useEffect(() => {
     setMounted(true);
@@ -166,13 +183,7 @@ export function PublicFooter() {
         Boolean(effectiveInstId))
   );
 
-  const isInstitutionView = Boolean(
-    effectiveInstId && effectiveInstId > 0 && (
-      (pathname === "/") ||
-      isInstitutionalAdmin ||
-      pathname.startsWith("/institution")
-    )
-  );
+  const isInstitutionView = Boolean(effectiveInstId && effectiveInstId > 0);
 
   useEffect(() => {
     if (effectiveInstId && isInstitutionView) {
@@ -191,22 +202,23 @@ export function PublicFooter() {
 
 
   const institutionDisplayName =
+    institutionInfo?.brand_name ||
+    institutionInfo?.company_name ||
     institutionInfo?.name ||
     activeInstitution?.name ||
     user?.memberships?.[0]?.institution_name ||
-    "Institution Campus";
+    "Maa Sharda Institute PVT LTD";
 
   const institutionTagline =
     institutionInfo?.about ||
-    "Verified educational institution offering comprehensive programs, dedicated faculty, and modern academic infrastructure.";
+    "Coaching institute providing quality education and mentorship for school, college, and competitive exams in Pandeypur Varanasi.";
 
   const primaryBranch = institutionInfo?.branches?.[0];
   const institutionAddress = isInstitutionView
-    ? institutionInfo?.location_name ||
-      (primaryBranch?.address
-        ? [primaryBranch.address, primaryBranch.city, primaryBranch.state].filter(Boolean).join(", ")
-        : "Orderly Bazar, Varanasi, Uttar Pradesh, India")
-    : platformContact.address || "Orderly Bazar, Varanasi, Uttar Pradesh, India";
+    ? (primaryBranch?.address
+        ? [primaryBranch.address, primaryBranch.city, primaryBranch.state, primaryBranch.pincode].filter(Boolean).join(", ")
+        : institutionInfo?.full_address || institutionInfo?.address || institutionInfo?.location_name || "Shau Bila Building, Pandeypur Road, Pandeypur, Varanasi, Uttar Pradesh - 221002")
+    : platformContact.address || "Shau Bila Building, Pandeypur Road, Pandeypur, Varanasi, Uttar Pradesh - 221002";
 
   const resolveEmail = (val: unknown): string => {
     if (!val) return "";
@@ -229,14 +241,14 @@ export function PublicFooter() {
   const institutionEmail = isInstitutionView
     ? resolveEmail(institutionInfo?.email) ||
       resolveEmail(primaryBranch?.emails?.[0]) ||
-      "support@edubird.com"
-    : platformContact.email || "support@edubird.com";
+      "deepakdv74@gmail.com"
+    : platformContact.email || "deepakdv74@gmail.com";
 
   const institutionPhone = isInstitutionView
     ? resolvePhone(institutionInfo?.phone) ||
       resolvePhone(primaryBranch?.phones?.[0]) ||
-      "+91 1234567890"
-    : platformContact.phone || "+91 1234567890";
+      "8887787846"
+    : platformContact.phone || "8887787846";
 
   const activeSocials = useMemo(() => {
     if (!socialLinks) return [];
@@ -252,15 +264,16 @@ export function PublicFooter() {
     return items.filter((item) => Boolean(item.url));
   }, [socialLinks]);
 
-  // Quick links: All Courses, Products, Blogs, Jobs, Contact Us, FAQs, Our Team
+  // Quick links: Courses, Products, Jobs, Blogs, Gallery, Staff, Contact, FAQs
   const quickLinks = [
     { label: "All Courses", href: "/courses" },
     { label: "Products & Store", href: "/products" },
-    { label: "Blogs", href: "/blogs" },
     { label: "Jobs", href: "/jobs" },
+    { label: "Blog", href: "/blogs" },
+    { label: "Gallery", href: "/gallery" },
+    { label: "Staff & Faculty", href: "/teachers" },
     { label: "Contact Us", href: "/contact" },
     { label: "FAQs", href: "/faqs" },
-    { label: "Our Team", href: "/team" },
   ];
 
   const legalLinks = [
@@ -274,7 +287,7 @@ export function PublicFooter() {
   return (
     <footer className="border-t border-border bg-background py-12">
       <div className="container mx-auto px-4">
-        <div className="grid gap-8 md:grid-cols-4">
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-5">
           {/* Brand Column */}
           <div>
             <div className="mb-4 flex items-center gap-2.5">
@@ -385,6 +398,38 @@ export function PublicFooter() {
               </li>
             </ul>
           </div>
+
+          {/* App Download Column */}
+          <div>
+            <h4 className="mb-4 font-semibold text-foreground flex items-center gap-1.5">
+              <Smartphone className="size-4 text-primary shrink-0" />
+              <span>{isInstitutionView ? `${institutionDisplayName} App` : "App"}</span>
+            </h4>
+            <p className="text-xs text-muted-foreground leading-relaxed mb-4">
+              {isInstitutionView ? `${institutionDisplayName} app coming soon for faster local discovery.` : "EduBird app coming soon for faster local discovery."}
+            </p>
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-3 p-2.5 rounded-xl border border-border/80 bg-card/80 shadow-2xs hover:border-primary/40 transition-colors">
+                <div className="size-8 rounded-lg bg-black text-white dark:bg-white dark:text-black flex items-center justify-center shrink-0">
+                  <AppleIcon className="size-4.5 fill-current" />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[11px] font-bold text-foreground leading-tight">iOS App</span>
+                  <span className="text-[10px] text-muted-foreground leading-tight truncate">Coming soon on the App Store</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-2.5 rounded-xl border border-border/80 bg-card/80 shadow-2xs hover:border-primary/40 transition-colors">
+                <div className="size-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                  <PlayStoreIcon className="size-4.5 fill-current" />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[11px] font-bold text-foreground leading-tight">Android App</span>
+                  <span className="text-[10px] text-muted-foreground leading-tight truncate">Coming soon on Google Play</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <Separator className="my-8" />
@@ -402,6 +447,9 @@ export function PublicFooter() {
             </Link>
             <Link href="/jobs" className="hover:text-foreground transition-colors">
               Jobs
+            </Link>
+            <Link href="/blogs" className="hover:text-foreground transition-colors">
+              Blog
             </Link>
             <Link href="/contact" className="hover:text-foreground transition-colors">
               Contact

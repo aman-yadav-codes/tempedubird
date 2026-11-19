@@ -44,27 +44,28 @@ export async function POST(req: Request) {
     }
 
     // Primary: Upload to Openinary self-hosted media service
+    let uploadSuccess = false;
+    let openinaryResult: any = null;
     if (isOpeninaryConfigured() && isMediaSupportedByOpeninary(file.name, file.type)) {
       try {
-        const result = await uploadToOpeninary(file, file.name, "crmtaskassets", file.type);
-        return NextResponse.json({
-          url: result.fullUrl,
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type,
-        });
+        openinaryResult = await uploadToOpeninary(file, file.name, "crmtaskassets", file.type);
+        uploadSuccess = true;
       } catch (openinaryErr: any) {
-        console.error("Openinary finance upload failed:", openinaryErr);
-        const errMsg = openinaryErr?.message || "Failed to upload file to Openinary";
-        return NextResponse.json(
-          { error: `Upload to media service failed: ${errMsg}` },
-          { status: 502 }
-        );
+        console.warn("Openinary finance upload unreachable or failed, falling back to local storage:", openinaryErr?.message || openinaryErr);
       }
     }
 
-    // Durable storage for documents not supported by Openinary (e.g. PDF, Word, Excel)
-    // or when Openinary is not configured.
+    if (uploadSuccess && openinaryResult) {
+      return NextResponse.json({
+        url: openinaryResult.fullUrl,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+      });
+    }
+
+    // Durable fallback storage for documents not supported by Openinary (e.g. PDF, Word, Excel)
+    // or when Openinary is not configured or unreachable.
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 

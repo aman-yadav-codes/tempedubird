@@ -3,6 +3,7 @@ import { getAuthUser } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
 import { ensureFeatureSchema } from "@/lib/db/ensure-feature-schema";
 import { featuredCourses } from "@/lib/data/home-data";
+import { handleDatabaseApiError } from "@/lib/db/api-error";
 
 export async function GET(req: Request) {
   try {
@@ -77,7 +78,7 @@ export async function GET(req: Request) {
       total: combinedPrograms.length,
     });
   } catch (error: any) {
-    console.error("[Product Programs Options GET] Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to fetch programs" }, { status: 500 });
+    console.warn("[Product Programs Options GET] Error:", error?.message || error);
+    return handleDatabaseApiError(error, "Failed to fetch programs");
   }
 }

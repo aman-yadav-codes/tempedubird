@@ -43,13 +43,7 @@ export type FacilityGalleryItem = {
 };
 
 const DEFAULT_ALBUM_CATEGORIES = [
-  { key: "all", label: "All Facilities" },
-  { key: "labs", label: "Laboratories & Tech" },
-  { key: "library", label: "Central Library" },
-  { key: "classrooms", label: "Smart Classrooms" },
-  { key: "sports", label: "Sports Complex" },
-  { key: "hostels", label: "Hostel Living" },
-  { key: "auditorium", label: "Auditorium" },
+  { key: "all", label: "All Photos" },
 ];
 
 export type GalleryPageViewProps = {
@@ -67,10 +61,15 @@ export function GalleryPageView({
   const { user } = useAuthStore();
   const { activeInstitution, activeInstitutionId, defaultEnvInstitutionId } = useActiveInstitution();
 
-  const instIdParam = searchParams.get("institutionId") || searchParams.get("inst");
+  const instIdParam = searchParams.get("institutionId") || searchParams.get("inst") || searchParams.get("businessId");
+  const envInstId = process.env.NEXT_PUBLIC_BUSINESS_ID
+    ? Number(process.env.NEXT_PUBLIC_BUSINESS_ID)
+    : process.env.NEXT_PUBLIC_INSTITUTION_ID
+    ? Number(process.env.NEXT_PUBLIC_INSTITUTION_ID)
+    : null;
   const resolvedInstId = instIdParam
     ? Number(instIdParam)
-    : initialProfile?.id || activeInstitutionId || defaultEnvInstitutionId || user?.memberships?.[0]?.institution_id;
+    : initialProfile?.id || activeInstitutionId || defaultEnvInstitutionId || envInstId || user?.memberships?.[0]?.institution_id;
 
   const [galleryItems, setGalleryItems] = useState<FacilityGalleryItem[]>(initialGalleryItems ?? []);
   const [categories, setCategories] = useState<{ key: string; label: string }[]>(
@@ -80,7 +79,7 @@ export function GalleryPageView({
   const [loading, setLoading] = useState(!initialGalleryItems || initialGalleryItems.length === 0);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
-  const institutionName = initialProfile?.name || activeInstitution?.name || "Campus";
+  const institutionName = initialProfile?.name || activeInstitution?.name || "Our Business";
 
   useEffect(() => {
     async function loadGallery() {
@@ -102,7 +101,7 @@ export function GalleryPageView({
           }
         }
       } catch (err) {
-        console.error("Failed to load gallery facilities:", err);
+        console.error("Failed to load gallery photos:", err);
       } finally {
         setLoading(false);
       }
@@ -136,41 +135,43 @@ export function GalleryPageView({
   return (
     <div className="bg-background min-h-screen">
       {/* Hero Header */}
-      <section className="border-b border-border bg-gradient-to-b from-card/80 via-card/40 to-background py-12 lg:py-16">
+      <section className="border-b border-border bg-gradient-to-b from-card/80 via-card/40 to-background py-10 lg:py-14">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/10 text-[#800000] border border-rose-500/20 text-xs font-bold uppercase tracking-wider">
-              <Building2 className="h-3.5 w-3.5" />
-              <span>Campus Facilities & Gallery</span>
+              <ImageIcon className="h-3.5 w-3.5" />
+              <span>Photo Gallery & Showcase</span>
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Facilities & Infrastructure at {institutionName}
+              Photo Gallery & Showcase — {institutionName}
             </h1>
             <p className="text-base text-muted-foreground leading-relaxed">
-              Explore our world-class academic facilities, high-tech research laboratories, modern lecture halls, campus libraries, and student amenities.
+              Explore photos, workspaces, products, events, and highlights from {institutionName}.
             </p>
           </div>
 
           {/* Category Filter Pills */}
-          <div className="flex flex-wrap items-center gap-2 pt-8">
-            {categories.map((cat) => {
-              const isSelected = selectedCategory === cat.key;
-              return (
-                <button
-                  key={cat.key}
-                  type="button"
-                  onClick={() => setSelectedCategory(cat.key)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer select-none ${
-                    isSelected
-                      ? "bg-[#800000] text-white shadow-md shadow-rose-950/20"
-                      : "bg-card text-foreground hover:bg-muted border border-border"
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              );
-            })}
-          </div>
+          {categories.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2 pt-6">
+              {categories.map((cat) => {
+                const isSelected = selectedCategory === cat.key;
+                return (
+                  <button
+                    key={cat.key}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat.key)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer select-none ${
+                      isSelected
+                        ? "bg-[#800000] text-white shadow-md shadow-rose-950/20"
+                        : "bg-card text-foreground hover:bg-muted border border-border"
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 
@@ -178,16 +179,13 @@ export function GalleryPageView({
       <section className="container mx-auto px-4 py-12">
         {loading ? (
           <div className="flex items-center justify-center py-24 text-muted-foreground">
-            <Sparkles className="h-6 w-6 animate-spin mr-2 text-primary" /> Loading campus facilities...
+            <Sparkles className="h-6 w-6 animate-spin mr-2 text-primary" /> Loading gallery photos...
           </div>
         ) : filteredItems.length === 0 ? (
           <div className="text-center py-20 border rounded-2xl bg-card space-y-3">
             <ImageIcon className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <h3 className="text-lg font-bold text-foreground">No facilities found in this category</h3>
-            <p className="text-xs text-muted-foreground">Select another category or view all facilities.</p>
-            <Button size="sm" onClick={() => setSelectedCategory("all")}>
-              View All Facilities
-            </Button>
+            <h3 className="text-lg font-bold text-foreground">No photos found</h3>
+            <p className="text-xs text-muted-foreground">Gallery photos will appear here once uploaded.</p>
           </div>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -209,7 +207,7 @@ export function GalleryPageView({
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
                     <div className="text-white space-y-1">
                       <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-300">
-                        <Maximize2 className="h-3.5 w-3.5" /> Click to view full facility
+                        <Maximize2 className="h-3.5 w-3.5" /> Click to view full image
                       </span>
                       {item.description && (
                         <p className="text-xs text-slate-200 line-clamp-2">{item.description}</p>
@@ -229,7 +227,7 @@ export function GalleryPageView({
                 <div className="p-4 space-y-1 border-t bg-card">
                   <div className="flex items-center justify-between gap-2">
                     <Badge variant="outline" className="text-[10px] font-semibold">
-                      {item.category_name || item.media_type || "Facility"}
+                      {item.category_name || item.media_type || "Photo"}
                     </Badge>
                   </div>
                   <h4 className="font-bold text-sm text-foreground leading-snug line-clamp-1 group-hover:text-primary transition-colors">

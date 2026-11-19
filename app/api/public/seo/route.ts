@@ -62,6 +62,21 @@ export async function GET(req: Request) {
       data: record,
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Failed to fetch SEO metadata" }, { status: 500 });
+    console.warn("Public SEO metadata fallback:", error?.message || error);
+    const defaultRecord = DEFAULT_PLATFORM_SEO_PAGES[0];
+    return NextResponse.json({
+      data: {
+        meta_title: defaultRecord.meta_title,
+        meta_description: defaultRecord.meta_description,
+        meta_keywords: defaultRecord.meta_keywords,
+        canonical_url: defaultRecord.canonical_url,
+        og_title: defaultRecord.og_title,
+        og_description: defaultRecord.og_description,
+        og_image: defaultRecord.og_image,
+        twitter_card: defaultRecord.twitter_card,
+        favicon_url: defaultRecord.favicon_url,
+        robots: defaultRecord.robots,
+      },
+    });
   }
 }

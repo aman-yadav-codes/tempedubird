@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { cn } from "@/lib/utils";
 import {
   Building2,
   MapPin,
@@ -40,8 +41,14 @@ import {
   ArrowUpDown,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  Target,
+  Compass,
+  Award,
   GraduationCap,
   Wrench,
+  Boxes,
+  ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -78,6 +85,8 @@ interface BusinessProfileClientProps {
   reviews: any[];
   courses?: any[];
   jobs?: any[];
+  packages?: any[];
+  isHomePage?: boolean;
 }
 
 export function PublicBusinessProfileClient({
@@ -88,6 +97,8 @@ export function PublicBusinessProfileClient({
   reviews = [],
   courses = [],
   jobs = [],
+  packages = [],
+  isHomePage = false,
 }: BusinessProfileClientProps) {
   const { user } = useAuthStore();
   const isOwner = useMemo(() => isUserStoreOwner(user, business), [user, business]);
@@ -98,14 +109,32 @@ export function PublicBusinessProfileClient({
   const highlightId = highlightParam ? Number(highlightParam) : null;
 
   const [activeTab, setActiveTab] = useState<string>(() => {
-    if (urlTab && ["overview", "products", "services", "courses", "jobs", "team", "reviews", "gallery"].includes(urlTab)) {
+    if (urlTab && ["overview", "products", "packages", "services", "courses", "jobs", "team", "reviews", "gallery"].includes(urlTab)) {
       return urlTab;
     }
     return "overview";
   });
 
+  const [platformPackages, setPlatformPackages] = useState<any[]>(packages);
+  const [packageAudienceFilter, setPackageAudienceFilter] = useState<string>("all");
+
   useEffect(() => {
-    if (urlTab && ["overview", "products", "services", "courses", "jobs", "team", "reviews", "gallery"].includes(urlTab)) {
+    if (!packages || packages.length === 0) {
+      fetch("/api/public/packages")
+        .then((res) => res.json())
+        .then((json) => {
+          if (json?.packages && Array.isArray(json.packages)) {
+            setPlatformPackages(json.packages);
+          }
+        })
+        .catch(() => undefined);
+    } else {
+      setPlatformPackages(packages);
+    }
+  }, [packages]);
+
+  useEffect(() => {
+    if (urlTab && ["overview", "products", "packages", "services", "courses", "jobs", "team", "reviews", "gallery"].includes(urlTab)) {
       setActiveTab(urlTab);
     }
   }, [urlTab]);
@@ -142,6 +171,142 @@ export function PublicBusinessProfileClient({
   const [enquiryOpen, setEnquiryOpen] = useState(false);
   const [selectedGalleryImage, setSelectedGalleryImage] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
+
+  // Live gallery media state (populated via props or client-side fetch fallback)
+  const [liveGalleryMedia, setLiveGalleryMedia] = useState<Array<{
+    id?: number | string;
+    url: string;
+    title?: string;
+    description?: string;
+    category?: string;
+  }>>(business.gallery_media || []);
+
+  useEffect(() => {
+    if (business.gallery_media && business.gallery_media.length > 0) {
+      setLiveGalleryMedia(business.gallery_media);
+      return;
+    }
+    const targetInstId = business.institution_profile_id || business.id || 160;
+    fetch(`/api/public/gallery?institutionId=${targetInstId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.gallery && Array.isArray(data.gallery) && data.gallery.length > 0) {
+          setLiveGalleryMedia(data.gallery);
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to fetch public gallery media", err);
+      });
+  }, [business.gallery_media, business.institution_profile_id, business.id]);
+
+  // Curated slide text for educational & commercial business showcase
+  const curatedSlideCaptions = useMemo(() => [
+    {
+      title: "Excellence in Education & Professional Guidance",
+      description: "Dedicated to student growth, state-of-the-art facilities, and comprehensive coaching across all programs.",
+      category: "Academic Excellence",
+    },
+    {
+      title: "Modern Classrooms & Collaborative Learning",
+      description: "Interactive learning environments designed to foster innovation, conceptual clarity, and critical thinking.",
+      category: "Campus Infrastructure",
+    },
+    {
+      title: "Experienced Faculty & Individual Mentorship",
+      description: "Learn from top-tier educators dedicated to personal attention and unlocking every student's full potential.",
+      category: "Expert Faculty",
+    },
+    {
+      title: "Proven Results & Competitive Preparation",
+      description: "Comprehensive study materials, regular assessments, and structured roadmaps for entrance and board exams.",
+      category: "Student Success",
+    },
+    {
+      title: "Inspiring Learning Community & Environment",
+      description: "A nurturing atmosphere where students build lifelong foundations for career and academic milestones.",
+      category: "Campus Life",
+    },
+  ], []);
+
+  // Formatted slider items
+  const sliderItems = useMemo(() => {
+    if (liveGalleryMedia.length > 0) {
+      return liveGalleryMedia.map((m, idx) => {
+        const fallback = curatedSlideCaptions[idx % curatedSlideCaptions.length];
+        const isRawName =
+          !m.title ||
+          m.title.startsWith("WhatsApp Image") ||
+          m.title.includes(".jp") ||
+          m.title.includes(".png") ||
+          m.title.toLowerCase().includes("showcase");
+        return {
+          id: m.id || idx,
+          url: m.url,
+          title: isRawName ? fallback.title : m.title,
+          description:
+            m.description && m.description.trim().length > 5
+              ? m.description
+              : fallback.description,
+          category: m.category || fallback.category,
+        };
+      });
+    }
+
+    if (Array.isArray(business.gallery_images) && business.gallery_images.length > 0) {
+      return business.gallery_images.filter(Boolean).map((imgUrl, idx) => {
+        const fallback = curatedSlideCaptions[idx % curatedSlideCaptions.length];
+        return {
+          id: idx,
+          url: imgUrl,
+          title: fallback.title,
+          description: fallback.description,
+          category: fallback.category,
+        };
+      });
+    }
+
+    const gathered = [business.banner_url, business.logo_url].filter(Boolean) as string[];
+    const list = gathered.length > 0 ? gathered : [
+      "/uploads/media/1794989894186_maashardadeepak1_f470fd16.jpeg",
+      "/uploads/media/1794995530624_WhatsApp_Image_2023-02-14_at_4_dae08d2f.jpeg",
+      "/uploads/media/1794995534700_WhatsApp_Image_2023-02-14_at_4_25db5c09.jpeg",
+      "/uploads/media/1794995538760_WhatsApp_Image_2023-02-14_at_4_be01f0f8.jpeg",
+      "/uploads/media/1794995542834_WhatsApp_Image_2023-02-14_at_4_325552bf.jpeg",
+    ];
+
+    return list.map((url, idx) => {
+      const fallback = curatedSlideCaptions[idx % curatedSlideCaptions.length];
+      return {
+        id: idx,
+        url,
+        title: fallback.title,
+        description: fallback.description,
+        category: fallback.category,
+      };
+    });
+  }, [liveGalleryMedia, business.gallery_images, business.banner_url, business.logo_url, curatedSlideCaptions]);
+
+  // Gallery Images
+  const galleryImages: string[] = useMemo(() => {
+    return sliderItems.map((item) => item.url);
+  }, [sliderItems]);
+
+  // Home Page Top Gallery Slider State
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isSliderPaused, setIsSliderPaused] = useState(false);
+
+  // Founder Bio Preview & Modal State
+  const [isFounderBioExpanded, setIsFounderBioExpanded] = useState(false);
+  const [founderModalOpen, setFounderModalOpen] = useState(false);
+
+  // Auto-advance Top Gallery Slider
+  useEffect(() => {
+    if (!isHomePage || sliderItems.length <= 1 || isSliderPaused) return;
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % sliderItems.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isHomePage, sliderItems.length, isSliderPaused]);
 
   // Product category filter & search state
   const [selectedProductCategory, setSelectedProductCategory] = useState<string>("all");
@@ -646,20 +811,6 @@ export function PublicBusinessProfileClient({
     return allReviews.slice(0, 3);
   }, [allReviews]);
 
-  const galleryImages: string[] = useMemo(() => {
-    if (Array.isArray(business.gallery_images) && business.gallery_images.length > 0) {
-      return business.gallery_images.filter(Boolean);
-    }
-    const gathered = [business.banner_url, business.logo_url].filter(Boolean);
-    if (gathered.length > 0) return gathered;
-    return [
-      "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80",
-    ];
-  }, [business.gallery_images, business.banner_url, business.logo_url]);
-
   function handleShare() {
     if (navigator.share) {
       navigator
@@ -779,6 +930,7 @@ export function PublicBusinessProfileClient({
   return (
     <div className="min-h-screen bg-background pb-16">
       {/* ================= HERO HEADER & COVER BANNER ================= */}
+      {!isHomePage && (
       <div className="relative w-full h-56 sm:h-72 md:h-84 bg-muted overflow-hidden">
         <Image
           src={bannerImg}
@@ -818,10 +970,169 @@ export function PublicBusinessProfileClient({
           </Button>
         </div>
       </div>
+      )}
+
+      {/* ================= HOME PAGE TOP GALLERY BANNER ================= */}
+      {isHomePage && sliderItems.length > 0 && (
+        <div className="w-full bg-linear-to-b from-background via-muted/20 to-background pt-3 pb-3 sm:pt-4 sm:pb-5 px-3 sm:px-6">
+          <div className="max-w-7xl mx-auto">
+            <div
+              className="relative w-full h-[360px] sm:h-[440px] md:h-[500px] lg:h-[540px] rounded-2xl sm:rounded-3xl overflow-hidden border border-border/70 shadow-2xl bg-black group select-none"
+              onMouseEnter={() => setIsSliderPaused(true)}
+              onMouseLeave={() => setIsSliderPaused(false)}
+            >
+              {/* Slider Images with Smooth Fade & Ken-Burns Zoom */}
+              {sliderItems.map((item, idx) => {
+                const isActive = idx === currentSlide;
+                return (
+                  <div
+                    key={item.id ?? idx}
+                    className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
+                      isActive ? "opacity-100 z-10" : "opacity-0 z-0 pointer-events-none"
+                    }`}
+                  >
+                    <Image
+                      src={item.url}
+                      alt={item.title || `${business.name} showcase`}
+                      fill
+                      priority={idx === 0}
+                      sizes="(max-width: 1280px) 100vw, 1400px"
+                      className={`object-cover transition-transform duration-7000 ease-out cursor-pointer ${
+                        isActive ? "scale-105" : "scale-100"
+                      }`}
+                      onClick={() => setSelectedGalleryImage(item.url)}
+                    />
+                  </div>
+                );
+              })}
+
+              {/* Gradient Overlays for Supreme Readability and Depth */}
+              <div className="absolute inset-0 z-10 bg-linear-to-t from-black/95 via-black/50 to-black/20 pointer-events-none" />
+              <div className="absolute inset-0 z-10 bg-linear-to-r from-black/85 via-black/30 to-transparent pointer-events-none" />
+
+              {/* Top Bar: Badges & Photo Counter */}
+              <div className="absolute top-4 left-4 right-4 sm:top-6 sm:left-6 sm:right-6 z-20 flex items-center justify-between pointer-events-none">
+                <div className="flex items-center gap-2 pointer-events-auto">
+                  <Badge className="bg-black/60 backdrop-blur-md text-white border-white/20 px-3 py-1.5 text-xs font-semibold shadow-md flex items-center gap-1.5">
+                    <Sparkles className="size-3.5 text-amber-400 animate-pulse" />
+                    <span>Featured Gallery</span>
+                  </Badge>
+                  {sliderItems[currentSlide]?.category && (
+                    <Badge variant="secondary" className="bg-white/20 backdrop-blur-md text-white border-white/20 px-2.5 py-1 text-xs font-medium hidden sm:inline-flex">
+                      {sliderItems[currentSlide].category}
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 pointer-events-auto">
+                  <Badge className="bg-black/60 backdrop-blur-md text-white border-white/20 px-3 py-1.5 text-xs font-semibold shadow-md flex items-center gap-1.5">
+                    <Camera className="size-3.5 text-sky-400" />
+                    <span>{currentSlide + 1} / {sliderItems.length}</span>
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Prev / Next Navigation Arrows */}
+              {sliderItems.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCurrentSlide((prev) => (prev - 1 + sliderItems.length) % sliderItems.length);
+                    }}
+                    className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 z-20 size-10 sm:size-12 rounded-full bg-black/40 hover:bg-black/80 text-white backdrop-blur-md border border-white/20 flex items-center justify-center opacity-80 sm:opacity-0 group-hover:opacity-100 transition-all shadow-xl hover:scale-110 cursor-pointer"
+                    aria-label="Previous image"
+                  >
+                    <ChevronLeft className="size-6" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCurrentSlide((prev) => (prev + 1) % sliderItems.length);
+                    }}
+                    className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 z-20 size-10 sm:size-12 rounded-full bg-black/40 hover:bg-black/80 text-white backdrop-blur-md border border-white/20 flex items-center justify-center opacity-80 sm:opacity-0 group-hover:opacity-100 transition-all shadow-xl hover:scale-110 cursor-pointer"
+                    aria-label="Next image"
+                  >
+                    <ChevronRight className="size-6" />
+                  </button>
+                </>
+              )}
+
+              {/* Bottom Content Area */}
+              <div className="absolute bottom-4 sm:bottom-6 left-4 sm:left-8 right-4 sm:right-8 z-20 space-y-3 sm:space-y-4">
+                <div className="space-y-1.5 sm:space-y-2 max-w-3xl">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-rose-400">
+                    <span className="inline-block size-2 rounded-full bg-rose-500 animate-ping" />
+                    <span className="uppercase tracking-widest">{business.name}</span>
+                  </div>
+                  <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white tracking-tight drop-shadow-lg leading-tight">
+                    {sliderItems[currentSlide]?.title || business.name}
+                  </h2>
+                  <p className="text-xs sm:text-sm md:text-base text-white/90 line-clamp-2 font-medium drop-shadow-md max-w-2xl leading-relaxed">
+                    {sliderItems[currentSlide]?.description || business.custom_description || business.about || "Quality education, comprehensive academic coaching, and career guidance."}
+                  </p>
+                </div>
+
+                {/* Quick Action Buttons & Pagination Dots */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <Link
+                      href="/products"
+                      className="inline-flex items-center gap-1.5 h-9 sm:h-10 px-4 sm:px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs sm:text-sm shadow-lg transition-transform hover:scale-105"
+                    >
+                      <Package className="size-4" />
+                      <span>Explore Products</span>
+                    </Link>
+
+                    <Link
+                      href="/gallery"
+                      className="inline-flex items-center gap-1.5 h-9 sm:h-10 px-4 sm:px-5 rounded-xl bg-white/20 hover:bg-white/30 text-white backdrop-blur-md border border-white/30 font-bold text-xs sm:text-sm shadow-md transition-transform hover:scale-105"
+                    >
+                      <Camera className="size-4" />
+                      <span>View Gallery</span>
+                    </Link>
+
+                    <Link
+                      href="/contact"
+                      className="hidden sm:inline-flex items-center gap-1.5 h-9 sm:h-10 px-4 sm:px-5 rounded-xl bg-black/40 hover:bg-black/60 text-white backdrop-blur-md border border-white/20 font-bold text-xs sm:text-sm shadow-md transition-transform hover:scale-105"
+                    >
+                      <Mail className="size-4" />
+                      <span>Contact Us</span>
+                    </Link>
+                  </div>
+
+                  {/* Indicator Dots */}
+                  {sliderItems.length > 1 && (
+                    <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20 shadow-md">
+                      {sliderItems.map((_, dotIdx) => (
+                        <button
+                          key={dotIdx}
+                          type="button"
+                          onClick={() => setCurrentSlide(dotIdx)}
+                          className={`transition-all duration-300 rounded-full cursor-pointer ${
+                            dotIdx === currentSlide
+                              ? "w-7 h-2.5 bg-primary shadow-sm"
+                              : "size-2.5 bg-white/40 hover:bg-white/80"
+                          }`}
+                          aria-label={`Go to slide ${dotIdx + 1}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ================= PROFILE INFO BAR ================= */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 -mt-16 sm:-mt-20 relative z-20">
-        <div className="bg-card rounded-2xl border shadow-xl p-5 sm:p-7">
+      <div className={`max-w-6xl mx-auto px-4 sm:px-6 relative z-20 ${isHomePage ? "pt-4 sm:pt-6" : "-mt-16 sm:-mt-20"}`}>
+        {!isHomePage && (
+          <div className="bg-card rounded-2xl border shadow-xl p-5 sm:p-7">
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
             {/* Left: Avatar/Logo & Details */}
             <div className="flex flex-col sm:flex-row items-start gap-5">
@@ -973,9 +1284,10 @@ export function PublicBusinessProfileClient({
             </div>
           </div>
         </div>
+        )}
 
         {/* Storefront Owner Notice Banner */}
-        {isOwner && (
+        {!isHomePage && isOwner && (
           <div className="mt-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
             <div className="flex items-start sm:items-center gap-3">
               <div className="size-9 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
@@ -1003,9 +1315,10 @@ export function PublicBusinessProfileClient({
         )}
 
         {/* ================= TABS & CONTENT SECTIONS ================= */}
-        <div className="mt-8">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="bg-card border p-1 rounded-xl h-auto gap-1 flex-wrap">
+        <div className={isHomePage ? "mt-0" : "mt-8"}>
+          <Tabs value={isHomePage ? "overview" : activeTab} onValueChange={setActiveTab} className="w-full">
+            {!isHomePage && (
+              <TabsList className="bg-card border p-1 rounded-xl h-auto gap-1 flex-wrap">
               <TabsTrigger value="overview" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
                 <Building2 className="size-3.5" />
                 <span>Overview</span>
@@ -1041,11 +1354,10 @@ export function PublicBusinessProfileClient({
                 <span>Photo Gallery ({galleryImages.length})</span>
               </TabsTrigger>
             </TabsList>
+            )}
 
             {/* ================= OVERVIEW TAB ================= */}
-
-            {/* ================= OVERVIEW TAB ================= */}
-            <TabsContent value="overview" className="mt-6 space-y-6">
+            <TabsContent value="overview" className={isHomePage ? "mt-0 space-y-6" : "mt-6 space-y-6"}>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left 2 Cols: About & Gallery */}
                 <div className="lg:col-span-2 space-y-6">
@@ -1319,6 +1631,181 @@ export function PublicBusinessProfileClient({
                       </CardContent>
                     </Card>
                   )}
+
+                  {/* ================= MISSION, VISION & STRATEGIC GOALS ================= */}
+                  {(() => {
+                    const missionText =
+                      business.mission?.trim() ||
+                      "At Maa Sharda Institute Pvt. Ltd., our mission is to provide quality, accessible, and career-oriented education empowering students through personalized mentorship and academic excellence.";
+                    const visionText =
+                      business.vision?.trim() ||
+                      "Our vision is to become a trusted and leading educational institution in Varanasi and beyond, fostering academic brilliance and moral leadership.";
+                    const goalText =
+                      business.goal?.trim() ||
+                      business.strategic_goals?.trim() ||
+                      "Academic Excellence: Provide high-quality education through effective teaching and modern learning practices.\nExam Readiness: Excel in Board exams, JEE, NEET, Police & Railway recruitments.\nHolistic Growth: Foster an inspiring, supportive, analytical, and disciplined academic environment.";
+
+                    const parsedGoals = goalText
+                      .split("\n")
+                      .map((g: string) => g.trim())
+                      .filter(Boolean)
+                      .map((goalLine: string, idx: number) => {
+                        const colonIdx = goalLine.indexOf(":");
+                        const title = colonIdx > -1 ? goalLine.slice(0, colonIdx).trim() : `Goal ${idx + 1}`;
+                        const desc = colonIdx > -1 ? goalLine.slice(colonIdx + 1).trim() : goalLine;
+                        return { title, desc };
+                      });
+
+                    return (
+                      <div className="space-y-4 pt-1">
+                        <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
+                                Core Principles
+                              </Badge>
+                              <span className="text-xs text-muted-foreground font-medium hidden sm:inline">• Academic Philosophy</span>
+                            </div>
+                            <h3 className="text-lg font-black text-foreground tracking-tight mt-1">
+                              Our Mission, Vision & Strategic Goals
+                            </h3>
+                          </div>
+                          <Button variant="ghost" size="sm" asChild className="h-7 text-xs font-bold text-primary hover:text-primary gap-1">
+                            <Link href="/about#mission-vision">
+                              <span>Details</span>
+                              <ChevronRight className="size-3.5" />
+                            </Link>
+                          </Button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* 1. Mission Card */}
+                          <Card className="rounded-2xl border shadow-xs overflow-hidden border-blue-200/80 dark:border-blue-900/50 bg-gradient-to-br from-blue-50/60 via-card to-card dark:from-blue-950/20 hover:shadow-md transition-all flex flex-col justify-between">
+                            <div>
+                              <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="size-9 rounded-xl bg-blue-600/10 text-blue-600 flex items-center justify-center shadow-xs">
+                                    <Target className="size-5" />
+                                  </div>
+                                  <div>
+                                    <CardTitle className="text-sm font-bold text-foreground">Our Mission</CardTitle>
+                                    <CardDescription className="text-[11px]">Core purpose & daily commitment</CardDescription>
+                                  </div>
+                                </div>
+                                <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/50">
+                                  <Link href="/about#mission-vision">
+                                    <span>Details</span>
+                                    <ChevronRight className="size-3 ml-0.5" />
+                                  </Link>
+                                </Button>
+                              </CardHeader>
+                              <CardContent className="p-4 space-y-3">
+                                <blockquote className="border-l-3 border-blue-600 pl-3 py-1 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line bg-blue-50/30 dark:bg-blue-950/20 rounded-r-lg">
+                                  &ldquo;{missionText}&rdquo;
+                                </blockquote>
+                              </CardContent>
+                            </div>
+                            <div className="p-4 pt-0">
+                              <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
+                                <span className="flex items-center gap-1 text-blue-600 font-semibold">
+                                  <CheckCircle2 className="size-3.5" /> Purpose-driven
+                                </span>
+                                <span className="font-medium text-foreground">{business.name}</span>
+                              </div>
+                            </div>
+                          </Card>
+
+                          {/* 2. Vision Card */}
+                          <Card className="rounded-2xl border shadow-xs overflow-hidden border-purple-200/80 dark:border-purple-900/50 bg-gradient-to-br from-purple-50/60 via-card to-card dark:from-purple-950/20 hover:shadow-md transition-all flex flex-col justify-between">
+                            <div>
+                              <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="size-9 rounded-xl bg-purple-600/10 text-purple-600 flex items-center justify-center shadow-xs">
+                                    <Compass className="size-5" />
+                                  </div>
+                                  <div>
+                                    <CardTitle className="text-sm font-bold text-foreground">Our Vision</CardTitle>
+                                    <CardDescription className="text-[11px]">Future horizon & long-term impact</CardDescription>
+                                  </div>
+                                </div>
+                                <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/50">
+                                  <Link href="/about#mission-vision">
+                                    <span>Details</span>
+                                    <ChevronRight className="size-3 ml-0.5" />
+                                  </Link>
+                                </Button>
+                              </CardHeader>
+                              <CardContent className="p-4 space-y-3">
+                                <blockquote className="border-l-3 border-purple-600 pl-3 py-1 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line bg-purple-50/30 dark:bg-purple-950/20 rounded-r-lg">
+                                  &ldquo;{visionText}&rdquo;
+                                </blockquote>
+                              </CardContent>
+                            </div>
+                            <div className="p-4 pt-0">
+                              <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
+                                <span className="flex items-center gap-1 text-purple-600 font-semibold">
+                                  <CheckCircle2 className="size-3.5" /> Future-focused
+                                </span>
+                                <span className="font-medium text-foreground">{business.name}</span>
+                              </div>
+                            </div>
+                          </Card>
+                        </div>
+
+                        {/* 3. Strategic Goals Card */}
+                        <Card className="rounded-2xl border shadow-xs overflow-hidden border-amber-200/80 dark:border-amber-900/50 bg-gradient-to-br from-amber-50/40 via-card to-card dark:from-amber-950/20 hover:shadow-md transition-all">
+                          <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
+                            <div className="flex items-center gap-2.5">
+                              <div className="size-9 rounded-xl bg-amber-600/10 text-amber-600 flex items-center justify-center shadow-xs">
+                                <Award className="size-5" />
+                              </div>
+                              <div>
+                                <CardTitle className="text-sm font-bold text-foreground">Our Strategic Goals & Milestones</CardTitle>
+                                <CardDescription className="text-[11px]">Actionable benchmarks for comprehensive learner success</CardDescription>
+                              </div>
+                            </div>
+                            <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/50">
+                              <Link href="/about#mission-vision">
+                                <span>View All</span>
+                                <ChevronRight className="size-3 ml-0.5" />
+                              </Link>
+                            </Button>
+                          </CardHeader>
+                          <CardContent className="p-4 space-y-3">
+                            {parsedGoals.length > 0 ? (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {parsedGoals.map((g, idx) => (
+                                  <div key={idx} className="p-3 rounded-xl bg-card border border-border/60 shadow-2xs space-y-1">
+                                    <div className="flex items-center gap-1.5 text-amber-600 font-bold text-xs">
+                                      <Sparkles className="size-3.5 shrink-0" />
+                                      <span className="truncate">{g.title}</span>
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-3">
+                                      {g.desc}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <blockquote className="border-l-3 border-amber-600 pl-3 py-1 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line bg-amber-50/30 dark:bg-amber-950/20 rounded-r-lg">
+                                &ldquo;{goalText}&rdquo;
+                              </blockquote>
+                            )}
+
+                            <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
+                              <span className="flex items-center gap-1 text-amber-600 font-semibold">
+                                <CheckCircle2 className="size-3.5" /> Active Strategy
+                              </span>
+                              <Link href="/about#mission-vision" className="font-bold text-primary hover:underline flex items-center gap-0.5 text-xs">
+                                <span>Read complete roadmap</span>
+                                <ChevronRight className="size-3" />
+                              </Link>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Right 1 Col: Reviews & Business Hours */}
@@ -1429,6 +1916,156 @@ export function PublicBusinessProfileClient({
                       )}
                     </CardContent>
                   </Card>
+
+                  {/* Owner / Leadership Details Card */}
+                  {Boolean(business.owner_name || business.founder_name || business.name) && (
+                    <Card className="rounded-2xl border shadow-xs overflow-hidden">
+                      <CardHeader className="pb-3 border-b border-border/50 bg-muted/20">
+                        <CardTitle className="text-base font-bold flex items-center justify-between">
+                          <span className="flex items-center gap-2">
+                            <Users className="size-4 text-primary" />
+                            <span>Business Owner / Leadership</span>
+                          </span>
+                          <Badge variant="outline" className="text-[10px] font-semibold bg-primary/5 text-primary border-primary/20">
+                            Verified
+                          </Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 space-y-4">
+                        <div className="flex items-center gap-3.5">
+                          {(() => {
+                            const resolvedOwnerImg =
+                              business.owner_image_url ||
+                              business.founder_image_url ||
+                              "/uploads/media/deepak_yadav_founder.jpg";
+                            return (
+                              <div className="relative size-14 rounded-full overflow-hidden border-2 border-primary/20 shrink-0 bg-muted group">
+                                {resolvedOwnerImg ? (
+                                  <Image
+                                    src={resolvedOwnerImg}
+                                    alt={business.owner_name || business.founder_name || business.name || "Owner"}
+                                    fill
+                                    unoptimized
+                                    sizes="56px"
+                                    className="object-cover group-hover:scale-105 transition-transform"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-bold text-lg">
+                                    {(business.owner_name || business.founder_name || business.name || "O").charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-sm font-bold text-foreground truncate">
+                              {business.owner_name || business.founder_name || "Business Owner"}
+                            </h4>
+                            <p className="text-xs font-medium text-muted-foreground truncate">
+                              {business.owner_designation || business.founder_title || "Founder & Business Owner"}
+                            </p>
+                            {business.name && (
+                              <p className="text-[11px] text-muted-foreground/80 truncate">
+                                {business.name}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Founder Bio preview with see more */}
+                        {Boolean(business.owner_about || business.founder_about) && (
+                          <div className="pt-2 border-t border-border/50 text-xs text-muted-foreground">
+                            <p className={isFounderBioExpanded ? "whitespace-pre-line leading-relaxed text-foreground/90" : "line-clamp-3 leading-relaxed"}>
+                              {business.owner_about || business.founder_about}
+                            </p>
+                            <div className="mt-2 flex items-center justify-between">
+                              <button
+                                type="button"
+                                onClick={() => setIsFounderBioExpanded(!isFounderBioExpanded)}
+                                className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                              >
+                                {isFounderBioExpanded ? (
+                                  <>
+                                    <span>See less</span>
+                                    <ChevronUp className="size-3" />
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>See more</span>
+                                    <ChevronDown className="size-3" />
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setFounderModalOpen(true)}
+                                className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer"
+                              >
+                                <span>Full story</span>
+                                <ExternalLink className="size-3" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Quick Contact & Action Buttons */}
+                        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/50">
+                          {/* Call / Phone */}
+                          {Boolean(business.owner_phone || business.phone) ? (
+                            <a
+                              href={`tel:${business.owner_phone || business.phone}`}
+                              className="flex flex-col items-center justify-center py-2.5 px-2 rounded-xl bg-muted/40 hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all border border-border/50 group text-center cursor-pointer"
+                              title={`Call ${business.owner_phone || business.phone}`}
+                            >
+                              <Phone className="size-4 text-primary group-hover:scale-110 transition-transform mb-1" />
+                              <span className="text-[11px] font-semibold text-foreground">Call</span>
+                            </a>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center py-2.5 px-2 rounded-xl bg-muted/20 text-muted-foreground/40 border border-border/20 text-center">
+                              <Phone className="size-4 mb-1" />
+                              <span className="text-[11px] font-semibold">Call</span>
+                            </div>
+                          )}
+
+                          {/* WhatsApp */}
+                          {Boolean((business.owner_whatsapp || business.whatsapp || business.owner_phone || business.phone)?.replace(/[^0-9]/g, "")) ? (
+                            <a
+                              href={`https://wa.me/${(business.owner_whatsapp || business.whatsapp || business.owner_phone || business.phone).replace(/[^0-9]/g, "")}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex flex-col items-center justify-center py-2.5 px-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 transition-all border border-emerald-500/20 group text-center cursor-pointer"
+                              title="Chat on WhatsApp"
+                            >
+                              <MessageCircle className="size-4 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform mb-1" />
+                              <span className="text-[11px] font-semibold">WhatsApp</span>
+                            </a>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center py-2.5 px-2 rounded-xl bg-muted/20 text-muted-foreground/40 border border-border/20 text-center">
+                              <MessageCircle className="size-4 mb-1" />
+                              <span className="text-[11px] font-semibold">WhatsApp</span>
+                            </div>
+                          )}
+
+                          {/* Email */}
+                          {Boolean(business.owner_email || business.email) ? (
+                            <a
+                              href={`mailto:${business.owner_email || business.email}`}
+                              className="flex flex-col items-center justify-center py-2.5 px-2 rounded-xl bg-muted/40 hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all border border-border/50 group text-center cursor-pointer"
+                              title={`Email ${business.owner_email || business.email}`}
+                            >
+                              <Mail className="size-4 text-primary group-hover:scale-110 transition-transform mb-1" />
+                              <span className="text-[11px] font-semibold text-foreground">Email</span>
+                            </a>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center py-2.5 px-2 rounded-xl bg-muted/20 text-muted-foreground/40 border border-border/20 text-center">
+                              <Mail className="size-4 mb-1" />
+                              <span className="text-[11px] font-semibold">Email</span>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               </div>
             </TabsContent>
@@ -2939,6 +3576,62 @@ export function PublicBusinessProfileClient({
               />
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ================= FOUNDER BIOGRAPHY DIALOG ================= */}
+      <Dialog open={founderModalOpen} onOpenChange={setFounderModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold">
+              <Users className="size-5 text-primary" />
+              <span>About {business.owner_name || business.founder_name || "Founder & Leadership"}</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {business.owner_designation || business.founder_title || "Founder"} &bull; {business.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="flex items-center gap-4 p-3.5 rounded-xl bg-muted/40 border">
+              {(() => {
+                const resolvedOwnerImg =
+                  business.owner_image_url ||
+                  business.founder_image_url ||
+                  "/uploads/media/deepak_yadav_founder.jpg";
+                return (
+                  <div className="relative size-16 rounded-full overflow-hidden border-2 border-primary/20 shrink-0 bg-muted">
+                    {resolvedOwnerImg ? (
+                      <Image
+                        src={resolvedOwnerImg}
+                        alt={business.owner_name || business.founder_name || "Founder"}
+                        fill
+                        unoptimized
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-bold text-xl">
+                        {(business.owner_name || business.founder_name || "O").charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+              <div className="min-w-0 flex-1">
+                <h4 className="font-bold text-foreground text-sm sm:text-base">
+                  {business.owner_name || business.founder_name}
+                </h4>
+                <p className="text-xs font-semibold text-primary">
+                  {business.owner_designation || business.founder_title}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                  {business.name}
+                </p>
+              </div>
+            </div>
+            <div className="text-muted-foreground leading-relaxed whitespace-pre-line text-xs sm:text-sm bg-muted/20 p-4 rounded-xl border">
+              {business.owner_about || business.founder_about}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

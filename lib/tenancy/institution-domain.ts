@@ -13,32 +13,42 @@ export type InstitutionTenant = {
 type Queryable = Pick<Pool, "query">;
 
 let schemaReady: Promise<void> | null = null;
+let lastDomainSchemaFailure = 0;
+const DOMAIN_SCHEMA_COOLDOWN_MS = 60_000;
 
 export async function ensureInstitutionDomainSchema(db: Queryable) {
+  if (lastDomainSchemaFailure && Date.now() - lastDomainSchemaFailure < DOMAIN_SCHEMA_COOLDOWN_MS) {
+    return;
+  }
+
   if (!schemaReady) {
     schemaReady = (async () => {
-      await db.query(`
-        CREATE TABLE IF NOT EXISTS institution_domains (
-          id SERIAL PRIMARY KEY,
-          institution_id INTEGER NOT NULL REFERENCES institution_profiles(id) ON DELETE CASCADE,
-          domain VARCHAR(255) NOT NULL,
-          is_primary BOOLEAN NOT NULL DEFAULT FALSE,
-          is_active BOOLEAN NOT NULL DEFAULT TRUE,
-          config JSONB NOT NULL DEFAULT '{}'::jsonb,
-          verified_at TIMESTAMP,
-          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE (domain)
-        )
-      `);
-      await db.query(`
-        CREATE INDEX IF NOT EXISTS idx_institution_domains_institution
-        ON institution_domains (institution_id, is_active)
-      `);
-    })().catch((error) => {
-      schemaReady = null;
-      throw error;
-    });
+      try {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS institution_domains (
+            id SERIAL PRIMARY KEY,
+            institution_id INTEGER NOT NULL REFERENCES institution_profiles(id) ON DELETE CASCADE,
+            domain VARCHAR(255) NOT NULL,
+            is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            config JSONB NOT NULL DEFAULT '{}'::jsonb,
+            verified_at TIMESTAMP,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (domain)
+          )
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS idx_institution_domains_institution
+          ON institution_domains (institution_id, is_active)
+        `);
+        lastDomainSchemaFailure = 0;
+      } catch (error) {
+        lastDomainSchemaFailure = Date.now();
+        schemaReady = null;
+        console.warn("ensureInstitutionDomainSchema deferred (cooldown 60s):", (error as any)?.message || error);
+      }
+    })();
   }
 
   await schemaReady;
@@ -123,11 +133,56 @@ export function getTenantSlugFromHost(host: string | null | undefined) {
   return null;
 }
 
-export async function getInstitutionTenantByHost(db: Queryable, host: string | null | undefined) {
-  await ensureInstitutionDomainSchema(db);
+export async function getInstitutionTenantByHost(db: Queryable, host: string | null | undefined): Promise<InstitutionTenant | null> {
   const configuredInstitutionId = getConfiguredInstitutionId();
-  if (configuredInstitutionId) {
-    const institutionResult = await db.query<InstitutionTenant>(`
+  try {
+    await ensureInstitutionDomainSchema(db);
+    if (configuredInstitutionId) {
+      const institutionResult = await db.query<InstitutionTenant>(`
+        SELECT
+          ip.id AS institution_id,
+          ip.name AS institution_name,
+          ip.slug AS institution_slug,
+          NULL::text AS domain,
+          TRUE AS is_primary,
+          '{}'::jsonb AS config
+        FROM institution_profiles ip
+        WHERE (ip.id = $1 OR ip.id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1))
+          AND ip.is_active = TRUE
+          AND COALESCE(ip.is_deleted, FALSE) = FALSE
+        ORDER BY (ip.id = $1) DESC
+        LIMIT 1
+      `, [configuredInstitutionId]);
+
+      return institutionResult.rows[0] ?? null;
+    }
+
+    const hostname = normalizeTenantHost(host);
+    if (!hostname || isPlatformHost(hostname)) return null;
+
+    const domainResult = await db.query<InstitutionTenant>(`
+      SELECT
+        ip.id AS institution_id,
+        ip.name AS institution_name,
+        ip.slug AS institution_slug,
+        domain.domain,
+        domain.is_primary,
+        domain.config
+      FROM institution_domains domain
+      INNER JOIN institution_profiles ip
+        ON ip.id = domain.institution_id
+        AND COALESCE(ip.is_deleted, FALSE) = FALSE
+      WHERE domain.domain = $1
+        AND domain.is_active = TRUE
+      LIMIT 1
+    `, [hostname]);
+
+    if (domainResult.rows[0]) return domainResult.rows[0];
+
+    const slug = getTenantSlugFromHost(hostname);
+    if (!slug) return null;
+
+    const slugResult = await db.query<InstitutionTenant>(`
       SELECT
         ip.id AS institution_id,
         ip.name AS institution_name,
@@ -136,59 +191,29 @@ export async function getInstitutionTenantByHost(db: Queryable, host: string | n
         TRUE AS is_primary,
         '{}'::jsonb AS config
       FROM institution_profiles ip
-      WHERE (ip.business_id = $1 OR ip.id = $1)
-        AND ip.is_active = TRUE
+      WHERE (
+          ip.slug = $1
+          OR trim(both '-' from regexp_replace(lower(trim(ip.name)), '[^a-z0-9]+', '-', 'g')) = $1
+        )
         AND COALESCE(ip.is_deleted, FALSE) = FALSE
-      ORDER BY (ip.business_id = $1) DESC
       LIMIT 1
-    `, [configuredInstitutionId]);
+    `, [slug]);
 
-    return institutionResult.rows[0] ?? null;
+    return slugResult.rows[0] ?? null;
+  } catch (error) {
+    console.warn("getInstitutionTenantByHost fallback:", (error as any)?.message || error);
+    if (configuredInstitutionId) {
+      return {
+        institution_id: configuredInstitutionId,
+        institution_name: "Maa Sharda Institute PVT LTD",
+        institution_slug: "maa-sharda-institute",
+        domain: host || null,
+        is_primary: true,
+        config: {},
+      };
+    }
+    return null;
   }
-
-  const hostname = normalizeTenantHost(host);
-  if (!hostname || isPlatformHost(hostname)) return null;
-
-  const domainResult = await db.query<InstitutionTenant>(`
-    SELECT
-      ip.id AS institution_id,
-      ip.name AS institution_name,
-      ip.slug AS institution_slug,
-      domain.domain,
-      domain.is_primary,
-      domain.config
-    FROM institution_domains domain
-    INNER JOIN institution_profiles ip
-      ON ip.id = domain.institution_id
-      AND COALESCE(ip.is_deleted, FALSE) = FALSE
-    WHERE domain.domain = $1
-      AND domain.is_active = TRUE
-    LIMIT 1
-  `, [hostname]);
-
-  if (domainResult.rows[0]) return domainResult.rows[0];
-
-  const slug = getTenantSlugFromHost(hostname);
-  if (!slug) return null;
-
-  const slugResult = await db.query<InstitutionTenant>(`
-    SELECT
-      ip.id AS institution_id,
-      ip.name AS institution_name,
-      ip.slug AS institution_slug,
-      NULL::text AS domain,
-      TRUE AS is_primary,
-      '{}'::jsonb AS config
-    FROM institution_profiles ip
-    WHERE (
-        ip.slug = $1
-        OR trim(both '-' from regexp_replace(lower(trim(ip.name)), '[^a-z0-9]+', '-', 'g')) = $1
-      )
-      AND COALESCE(ip.is_deleted, FALSE) = FALSE
-    LIMIT 1
-  `, [slug]);
-
-  return slugResult.rows[0] ?? null;
 }
 
 export function getRequestHost(req: Request) {

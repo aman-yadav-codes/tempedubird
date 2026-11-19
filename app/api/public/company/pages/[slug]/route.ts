@@ -19,7 +19,7 @@ export async function GET(
 
     return NextResponse.json({ data: page });
   } catch (err) {
-    console.error("Error in GET /api/public/company/pages/[slug]:", err);
-    return NextResponse.json({ error: "Failed to fetch page data" }, { status: 500 });
+    console.warn("Error in GET /api/public/company/pages/[slug], falling back:", err);
+    return NextResponse.json({ error: "Page temporarily unavailable" }, { status: 404 });
   }
 }

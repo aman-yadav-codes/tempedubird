@@ -98,7 +98,7 @@ export async function ensureSalesSchema(db: Queryable): Promise<void> {
     try {
       await initSalesSchemaDirect(db);
     } catch (e) {
-      console.error('Sales schema initialization error:', e);
+      console.warn('Sales schema initialization fallback (DB offline):', (e as any)?.message || e);
     }
   })();
   return salesSchemaReady;

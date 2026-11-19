@@ -282,12 +282,17 @@ export async function getAllCompanyPages(db: Queryable): Promise<CompanyPageRow[
 }
 
 export async function getCompanyPageBySlug(db: Queryable, slug: string): Promise<CompanyPageRow | null> {
-  await ensureCompanyTables(db);
-  const result = await db.query(
-    `SELECT * FROM company_pages WHERE slug = $1 LIMIT 1;`,
-    [slug]
-  );
-  return result.rows[0] ?? null;
+  try {
+    await ensureCompanyTables(db);
+    const result = await db.query(
+      `SELECT * FROM company_pages WHERE slug = $1 LIMIT 1;`,
+      [slug]
+    );
+    return result.rows[0] ?? null;
+  } catch (error) {
+    console.warn(`getCompanyPageBySlug fallback for ${slug}:`, error);
+    return null;
+  }
 }
 
 export async function updateCompanyPage(

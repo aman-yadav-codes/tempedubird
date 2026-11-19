@@ -51,6 +51,10 @@ import {
   X,
   Filter,
   BookOpen,
+  Car,
+  UtensilsCrossed,
+  BedDouble,
+  CalendarDays,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
@@ -143,7 +147,7 @@ export function CategoryManagerContent() {
   // Form State for Product / Service / Professional Category (2-step)
   const [formBizCatId, setFormBizCatId] = useState<string>("");
   const [formBizSubcatId, setFormBizSubcatId] = useState<string>("");
-  const [formType, setFormType] = useState<"product" | "service" | "professional" | "course" | "job">("product");
+  const [formType, setFormType] = useState<"product" | "service" | "professional" | "course" | "job" | "vehicle" | "property" | "event" | "dish" | "room">("product");
   const [formParentId, setFormParentId] = useState<string>("none");
   const [formName, setFormName] = useState("");
   const [formSlug, setFormSlug] = useState("");
@@ -299,8 +303,8 @@ export function CategoryManagerContent() {
     setBizSubcatDialogOpen(true);
   };
 
-  // 3. OPEN ADD PRODUCT / SERVICE / PROFESSIONAL / COURSE / JOB CATEGORY MODAL (Mandatory 2-Step)
-  const openAddCatalogCatDialog = (targetType?: "product" | "service" | "professional" | "course" | "job") => {
+  // 3. OPEN ADD PRODUCT / SERVICE / PROFESSIONAL / COURSE / JOB / VEHICLE / PROPERTY / EVENT / DISH / ROOM CATEGORY MODAL (Mandatory 2-Step)
+  const openAddCatalogCatDialog = (targetType?: "product" | "service" | "professional" | "course" | "job" | "vehicle" | "property" | "event" | "dish" | "room") => {
     const determinedType =
       targetType ||
       (activeTab === "product"
@@ -313,7 +317,17 @@ export function CategoryManagerContent() {
               ? "course"
               : activeTab === "job"
                 ? "job"
-                : "product");
+                : activeTab === "vehicle"
+                  ? "vehicle"
+                  : activeTab === "property"
+                    ? "property"
+                    : activeTab === "event"
+                      ? "event"
+                      : activeTab === "dish"
+                        ? "dish"
+                        : activeTab === "room"
+                          ? "room"
+                          : "product");
 
     setFormType(determinedType);
 
@@ -704,6 +718,46 @@ export function CategoryManagerContent() {
             >
               <Plus className="size-3.5" /> Add Job Category
             </Button>
+          ) : activeTab === "vehicle" ? (
+            <Button
+              onClick={() => openAddCatalogCatDialog("vehicle")}
+              size="sm"
+              className="gap-1.5 text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white shadow-sm h-9"
+            >
+              <Plus className="size-3.5" /> Add Vehicle Category
+            </Button>
+          ) : activeTab === "property" ? (
+            <Button
+              onClick={() => openAddCatalogCatDialog("property")}
+              size="sm"
+              className="gap-1.5 text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white shadow-sm h-9"
+            >
+              <Plus className="size-3.5" /> Add Property Category
+            </Button>
+          ) : activeTab === "event" ? (
+            <Button
+              onClick={() => openAddCatalogCatDialog("event")}
+              size="sm"
+              className="gap-1.5 text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white shadow-sm h-9"
+            >
+              <Plus className="size-3.5" /> Add Event Category
+            </Button>
+          ) : activeTab === "dish" ? (
+            <Button
+              onClick={() => openAddCatalogCatDialog("dish")}
+              size="sm"
+              className="gap-1.5 text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white shadow-sm h-9"
+            >
+              <Plus className="size-3.5" /> Add Dish Category
+            </Button>
+          ) : activeTab === "room" ? (
+            <Button
+              onClick={() => openAddCatalogCatDialog("room")}
+              size="sm"
+              className="gap-1.5 text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white shadow-sm h-9"
+            >
+              <Plus className="size-3.5" /> Add Room Category
+            </Button>
           ) : (
             // ALL ACTIONS
             <div className="flex items-center gap-2">
@@ -737,6 +791,11 @@ export function CategoryManagerContent() {
           { key: "professional", label: "Professional Categories", icon: UserCheck },
           { key: "course", label: "Course Categories", icon: BookOpen },
           { key: "job", label: "Job Categories", icon: Briefcase },
+          { key: "vehicle", label: "Vehicle Categories", icon: Car },
+          { key: "property", label: "Property Categories", icon: Building2 },
+          { key: "event", label: "Event Categories", icon: CalendarDays },
+          { key: "dish", label: "Dish Categories", icon: UtensilsCrossed },
+          { key: "room", label: "Room Categories", icon: BedDouble },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.key;
@@ -1360,10 +1419,20 @@ export function CategoryManagerContent() {
                 <BookOpen className="size-4 text-amber-600" />
               ) : formType === "job" ? (
                 <Briefcase className="size-4 text-indigo-600" />
+              ) : formType === "vehicle" ? (
+                <Car className="size-4 text-rose-600" />
+              ) : formType === "property" ? (
+                <Building2 className="size-4 text-blue-600" />
+              ) : formType === "event" ? (
+                <CalendarDays className="size-4 text-amber-600" />
+              ) : formType === "dish" ? (
+                <UtensilsCrossed className="size-4 text-emerald-600" />
+              ) : formType === "room" ? (
+                <BedDouble className="size-4 text-violet-600" />
               ) : (
                 <UserCheck className="size-4 text-purple-600" />
               )}
-              Add {formType === "course" ? "Course" : formType === "job" ? "Job" : formType.charAt(0).toUpperCase() + formType.slice(1)} Category
+              Add {formType.charAt(0).toUpperCase() + formType.slice(1)} Category
             </DialogTitle>
             <DialogDescription className="text-xs">
               First select the associated business industry classification, then specify category details.

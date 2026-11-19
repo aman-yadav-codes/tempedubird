@@ -11,47 +11,77 @@ function matchCategoryToBusinessTypeId(
   const norm = ((catName || "") + " " + (catSlug || "")).toLowerCase();
   if (!norm.trim()) return null;
 
-  // 1. IT & Digital Agency
+  // 1. Automotive & Transport
+  if (/\b(automotive|transport|vehicle|vehicles|car|cars|rental|bike|bikes|dealership|cab|fleet|auto|motor)\b/i.test(norm)) {
+    const t = instTypes.find((t) => t.slug === "automotive-and-transport" || t.name.toLowerCase().includes("automotive"));
+    if (t) return t;
+  }
+  // 2. Real Estate & Construction
+  if (/\b(real estate|property|properties|builder|construction|housing|realtor|developer|plots|flat|flats)\b/i.test(norm)) {
+    const t = instTypes.find((t) => t.slug === "real-estate-and-construction" || t.name.toLowerCase().includes("real estate"));
+    if (t) return t;
+  }
+  // 3. Hospitality & Events
+  if (/\b(hospitality|hotel|hotels|resort|resorts|guest house|homestay|hostel|lodge|events|event|banquet|wedding|venue)\b/i.test(norm)) {
+    const t = instTypes.find((t) => t.slug === "hospitality-and-events" || t.name.toLowerCase().includes("hospitality"));
+    if (t) return t;
+  }
+  // 4. Food, Dining & Cafes
+  if (/\b(food|dining|cafe|cafes|restaurant|restaurants|bakery|bakeries|catering|eatery|fast food|bar|pub|bistro|dhaba)\b/i.test(norm)) {
+    const t = instTypes.find((t) => t.slug === "food-dining-and-cafes" || t.name.toLowerCase().includes("food"));
+    if (t) return t;
+  }
+  // 5. IT & Digital Agency
   if (norm.includes("digital") || /\b(it|agency|agencies|software|tech|developer|development|cyber)\b/i.test(norm)) {
-    const t = instTypes.find((t) => t.slug === "it-digital-agency" || t.name.toLowerCase() === "it & digital agency");
+    const t = instTypes.find((t) => t.slug === "it-digital-agency" || t.name.toLowerCase() === "it & digital agency" || t.slug === "it-and-digital-agencies");
     if (t) return t;
   }
-  // 2. Healthcare & Clinic (exclude hospitality)
+  // 6. Healthcare & Clinic (exclude hospitality)
   if (/\b(health|healthcare|clinic|medical|doctor|hospital|dental|pharmacy)\b/i.test(norm) && !norm.includes("hospitality")) {
-    const t = instTypes.find((t) => t.slug === "healthcare-clinic" || t.name.toLowerCase().includes("healthcare"));
+    const t = instTypes.find((t) => t.slug === "healthcare-clinic" || t.slug === "healthcare-and-medical" || t.name.toLowerCase().includes("healthcare"));
     if (t) return t;
   }
-  // 3. Retail & Commerce
-  if (/\b(retail|shopping|commerce|store|mart|market|shop|grocer|salon|spa|boutique|cloth|fashion|automotive|transport|dining|cafe|food)\b/i.test(norm)) {
-    const t = instTypes.find((t) => t.slug === "retail-commerce" || t.name.toLowerCase().includes("retail"));
+  // 7. Salons & Personal Care
+  if (/\b(salon|salons|spa|spas|beauty|parlour|barber)\b/i.test(norm)) {
+    const t = instTypes.find((t) => t.slug === "salons-and-personal-care" || t.name.toLowerCase().includes("salon"));
     if (t) return t;
   }
-  // 4. Professional Services
-  if (/\b(professional|financial|finance|tax|legal|law|audit|consult|accounting|advocate|services|maintenance|construction|real estate)\b/i.test(norm)) {
-    const t = instTypes.find((t) => t.slug === "professional-services" || t.name.toLowerCase().includes("professional services"));
+  // 8. Fitness & Sports
+  if (/\b(fitness|gym|sports|yoga|crossfit)\b/i.test(norm)) {
+    const t = instTypes.find((t) => t.slug === "fitness-and-sports" || t.name.toLowerCase().includes("fitness"));
     if (t) return t;
   }
-  // 5. Coaching Center
+  // 9. Retail & Commerce
+  if (/\b(retail|shopping|commerce|store|mart|market|shop|grocer|boutique|cloth|fashion)\b/i.test(norm)) {
+    const t = instTypes.find((t) => t.slug === "retail-commerce" || t.slug === "retail-and-shopping" || t.name.toLowerCase().includes("retail"));
+    if (t) return t;
+  }
+  // 10. Professional Services
+  if (/\b(professional|financial|finance|tax|legal|law|audit|consult|accounting|advocate|services|maintenance)\b/i.test(norm)) {
+    const t = instTypes.find((t) => t.slug === "professional-services" || t.slug === "professional-and-financial-services" || t.name.toLowerCase().includes("professional"));
+    if (t) return t;
+  }
+  // 11. Coaching Center
   if (/\b(coaching|tuition|entrance|competitive)\b/i.test(norm)) {
-    const t = instTypes.find((t) => t.slug === "coaching" || t.name.toLowerCase().includes("coaching"));
+    const t = instTypes.find((t) => t.slug === "coaching" || t.slug === "education-and-coaching" || t.name.toLowerCase().includes("coaching"));
     if (t) return t;
   }
-  // 6. School
+  // 12. School
   if (/\b(school|k12|cbse|icse|secondary|primary|matric)\b/i.test(norm)) {
     const t = instTypes.find((t) => t.slug === "school" || t.name.toLowerCase() === "school");
     if (t) return t;
   }
-  // 7. College
+  // 13. College
   if (/\b(college|degree|undergraduate)\b/i.test(norm)) {
     const t = instTypes.find((t) => t.slug === "college" || t.name.toLowerCase() === "college");
     if (t) return t;
   }
-  // 8. University
+  // 14. University
   if (/\b(university|campus)\b/i.test(norm)) {
     const t = instTypes.find((t) => t.slug === "university" || t.name.toLowerCase() === "university");
     if (t) return t;
   }
-  // 9. Institute
+  // 15. Institute
   if (/\b(institute|institution|academy|training)\b/i.test(norm)) {
     const t = instTypes.find((t) => t.slug === "institute" || t.name.toLowerCase() === "institute");
     if (t) return t;
@@ -253,10 +283,32 @@ export async function GET(req: Request) {
     // Build parent map and initial status map
     const enabledMap = new Map<number, boolean>();
     const parentMap = new Map<number, number | null>();
+    const bName = (businessTypeName || "").toLowerCase();
 
     for (const r of modRes.rows) {
       parentMap.set(r.id, r.parent_module_id);
-      enabledMap.set(r.id, r.is_enabled !== false);
+      if (r.is_enabled !== null && r.is_enabled !== undefined) {
+        enabledMap.set(r.id, r.is_enabled === true);
+      } else {
+        // Industry-specific default activation based on business type
+        if (r.module_key === "admin_vehicles" || r.module_key === "marketing_vehicles") {
+          enabledMap.set(r.id, /automotive|transport|vehicle|car|fleet|rental/i.test(bName));
+        } else if (r.module_key === "admin_properties" || r.module_key === "marketing_properties") {
+          enabledMap.set(r.id, /real estate|property|construction|builder|realtor/i.test(bName));
+        } else if (r.module_key === "admin_events" || r.module_key === "marketing_events") {
+          enabledMap.set(r.id, /event|hospitality|banquet|wedding|venue/i.test(bName));
+        } else if (r.module_key === "admin_dishes" || r.module_key === "marketing_dishes") {
+          enabledMap.set(r.id, /food|dining|cafe|restaurant|bakery|catering/i.test(bName));
+        } else if (r.module_key === "admin_rooms" || r.module_key === "marketing_rooms") {
+          enabledMap.set(r.id, /hotel|resort|hospitality|lodge|stay|hostel|guest house/i.test(bName));
+        } else if (r.module_key === "admin_patients" || r.module_key === "sales_patients") {
+          enabledMap.set(r.id, /health|clinic|medical|doctor|hospital|dental|pharmacy/i.test(bName));
+        } else if (r.module_key === "admin_students" || r.module_key === "sales_students") {
+          enabledMap.set(r.id, /coaching|school|college|university|institute|institution|education|academy/i.test(bName));
+        } else {
+          enabledMap.set(r.id, true);
+        }
+      }
     }
 
     const enabledKeys: string[] = [];

@@ -33,7 +33,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ContactLiveChat } from "@/components/public/contact-live-chat";
 import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { useAuthStore } from "@/store";
@@ -253,7 +252,7 @@ export function ContactPageView({
     return "";
   };
 
-  const branches: ContactBranch[] = isInstMode && Array.isArray(institutionInfo.branches) && institutionInfo.branches.length > 0
+  const branches: ContactBranch[] = Array.isArray(institutionInfo?.branches) && institutionInfo.branches.length > 0
     ? institutionInfo.branches
     : Array.isArray(companyPage?.metadata?.branches) && companyPage.metadata.branches.length > 0
     ? companyPage.metadata.branches
@@ -265,21 +264,20 @@ export function ContactPageView({
     resolveEmail(institutionInfo?.email) ||
     resolveEmail(primaryBranch?.emails?.[0]) ||
     companyPage?.metadata?.email ||
-    "support@edubird.com";
+    "deepakdv74@gmail.com";
 
   const primaryPhone =
     resolvePhone(institutionInfo?.phone) ||
     resolvePhone(primaryBranch?.phones?.[0]) ||
     companyPage?.metadata?.phone ||
-    "+91 1234567890";
+    "8887787846";
 
   const primaryAddress =
-    institutionInfo?.location_name ||
     (primaryBranch?.address
       ? [primaryBranch.address, primaryBranch.city, primaryBranch.state, primaryBranch.pincode].filter(Boolean).join(", ")
-      : companyPage?.metadata?.address || "Orderly Bazar, Varanasi, Uttar Pradesh, India");
+      : institutionInfo?.full_address || institutionInfo?.location_name || companyPage?.metadata?.address || "Shau Bila Building, Pandeypur Road, Pandeypur, (Near Police Chowki and Allahabad Bank), Varanasi, Uttar Pradesh - 221002");
 
-  const workingHours = primaryBranch?.working_hours || companyPage?.metadata?.working_hours || "Monday - Saturday: 9:00 AM - 6:00 PM IST";
+  const workingHours = primaryBranch?.working_hours || institutionInfo?.working_hours || companyPage?.metadata?.working_hours || "Monday - Saturday: 9:00 AM - 6:00 PM IST";
 
   return (
     <div className="bg-background min-h-screen">
@@ -290,13 +288,13 @@ export function ContactPageView({
             <div className="space-y-1.5">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/10 text-[#800000] border border-rose-500/20 text-xs font-bold uppercase tracking-wider">
                 {isInstMode ? <School className="h-3.5 w-3.5" /> : <Building2 className="h-3.5 w-3.5" />}
-                <span>{isInstMode ? "Campus Contact Directory" : "Contact & Support"}</span>
+                <span>{isInstMode ? "Contact Directory" : "Contact & Support"}</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
-                {isInstMode ? `Contact ${displayName}` : "Contact Us & Campus Helpdesks"}
+                {isInstMode ? `Contact ${displayName}` : "Contact Us & Support"}
               </h1>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Get in touch with our admission counselors, campus branches, and support helplines.
+                Get in touch with our team, branch offices, and customer support helplines.
               </p>
             </div>
           </div>
@@ -314,10 +312,10 @@ export function ContactPageView({
                 <div>
                   <h2 className="text-2xl font-bold text-foreground flex items-center gap-2.5">
                     <Building2 className="h-6 w-6 text-primary" />
-                    Branch Offices & Campus Locations
+                    Branch Offices & Operating Locations
                   </h2>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Official regional offices, admission desks, and departmental contact points.
+                    Official regional offices, support desks, and departmental contact points.
                   </p>
                 </div>
                 <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-muted text-muted-foreground border">
@@ -341,7 +339,7 @@ export function ContactPageView({
                           <h3 className="text-base font-bold text-foreground leading-snug">{bName}</h3>
                           {branch.is_primary && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold text-amber-600 border border-amber-500/20 shrink-0">
-                              <Star className="h-3 w-3 fill-amber-500 text-amber-500" /> Main Campus
+                              <Star className="h-3 w-3 fill-amber-500 text-amber-500" /> Main Office
                             </span>
                           )}
                         </div>
@@ -437,12 +435,6 @@ export function ContactPageView({
 
 
 
-          {/* Interactive Live Chat & Support Ticket System */}
-          <div className="space-y-4">
-            <h2 className="text-xl font-bold text-foreground">Live Support Ticket</h2>
-            <ContactLiveChat />
-          </div>
-
           {/* Custom Page HTML Content (if configured in Company & Legal editor) */}
           {companyPage?.content && (
             <div
@@ -463,11 +455,11 @@ export function ContactPageView({
                   <span>Course Counseling Enquiry</span>
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  Submit your inquiry directly to the institution counseling office.
+                  Submit your inquiry directly to our customer assistance desk.
                 </p>
               </div>
               <Badge variant="secondary" className="text-[10px] bg-rose-50 text-rose-700 border border-rose-200 font-bold shrink-0">
-                Admission Desk
+                Enquiry Desk
               </Badge>
             </div>
 
@@ -479,7 +471,7 @@ export function ContactPageView({
                 <div className="space-y-1">
                   <h4 className="font-extrabold text-foreground text-lg">Enquiry Successfully Submitted!</h4>
                   <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
-                    Your inquiry for <strong className="text-foreground">{selectedProgramTitle}</strong> has been received by <strong className="text-foreground">{displayName}</strong>. Our counselors will reach out to you shortly.
+                    Your inquiry has been received by <strong className="text-foreground">{displayName}</strong>. Our team will reach out to you shortly.
                   </p>
                 </div>
                 <div className="pt-2 flex items-center justify-center gap-2">
@@ -494,34 +486,36 @@ export function ContactPageView({
               </div>
             ) : (
               <form onSubmit={handleEnquirySubmit} className="space-y-4">
-                {/* TARGET COURSE SELECTED Card */}
-                <div className="p-4 rounded-2xl border border-rose-200/60 bg-rose-50/30 flex items-center justify-between text-xs">
-                  <div className="min-w-0 pr-2 space-y-0.5">
-                    <span className="text-[10px] uppercase font-black tracking-wider text-rose-700 block">
-                      TARGET COURSE SELECTED
-                    </span>
-                    <h4 className="font-extrabold text-foreground truncate text-sm sm:text-base">
-                      {selectedProgramTitle}
-                    </h4>
-                    <p className="text-muted-foreground truncate flex items-center gap-1 text-[11px] font-medium">
-                      <Building2 className="h-3 w-3 text-rose-600 shrink-0" />
-                      <span>{displayName}</span>
-                    </p>
+                {/* TARGET COURSE / SERVICE SELECTED Card */}
+                {selectedProgramTitle && (
+                  <div className="p-4 rounded-2xl border border-rose-200/60 bg-rose-50/30 flex items-center justify-between text-xs">
+                    <div className="min-w-0 pr-2 space-y-0.5">
+                      <span className="text-[10px] uppercase font-black tracking-wider text-rose-700 block">
+                        SELECTED ITEM / OFFERING
+                      </span>
+                      <h4 className="font-extrabold text-foreground truncate text-sm sm:text-base">
+                        {selectedProgramTitle}
+                      </h4>
+                      <p className="text-muted-foreground truncate flex items-center gap-1 text-[11px] font-medium">
+                        <Building2 className="h-3 w-3 text-rose-600 shrink-0" />
+                        <span>{displayName}</span>
+                      </p>
+                    </div>
+                    {selectedProgramFee && (
+                      <Badge className="bg-[#E11D48] hover:bg-[#BE123C] text-white font-extrabold text-xs px-3 py-1 rounded-full shadow-xs shrink-0">
+                        {selectedProgramFee}
+                      </Badge>
+                    )}
                   </div>
-                  {selectedProgramFee && (
-                    <Badge className="bg-[#E11D48] hover:bg-[#BE123C] text-white font-extrabold text-xs px-3 py-1 rounded-full shadow-xs shrink-0">
-                      {selectedProgramFee}
-                    </Badge>
-                  )}
-                </div>
+                )}
 
                 {/* Account Status / Notice */}
                 {user ? (
                   <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-300">
                     <span className="font-semibold flex items-center gap-1.5 truncate">
                       <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                      <span>Enquiring as verified student:</span>
-                      <strong className="text-foreground font-bold truncate">{user.full_name || "Student"}</strong>
+                      <span>Enquiring as verified member:</span>
+                      <strong className="text-foreground font-bold truncate">{user.full_name || "User"}</strong>
                     </span>
                     <Badge variant="outline" className="text-[9px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-black uppercase shrink-0">
                       VERIFIED
@@ -531,7 +525,7 @@ export function ContactPageView({
                   <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                     <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 font-bold">
                       <Lock className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                      <span>Student / Guardian Account Required to Enquire</span>
+                      <span>Account Sign-In Required to Enquire</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Button
@@ -558,10 +552,10 @@ export function ContactPageView({
 
                 {/* Input Fields */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  {/* Student Name */}
+                  {/* Full Name */}
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-foreground flex items-center gap-1">
-                      Student Name <span className="text-rose-600 font-bold">*</span>
+                      Full Name <span className="text-rose-600 font-bold">*</span>
                     </label>
                     <Input
                       placeholder="e.g. Rahul Sharma"
@@ -636,12 +630,12 @@ export function ContactPageView({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Website Course Inquiry">Website Course Inquiry</SelectItem>
-                      <SelectItem value="Online Counseling Desk">Online Counseling Desk</SelectItem>
-                      <SelectItem value="Admission Question">Admission Question & Guidance</SelectItem>
-                      <SelectItem value="Syllabus & Curriculum">Syllabus & Curriculum Request</SelectItem>
-                      <SelectItem value="Fee & Scholarship">Fee & Scholarship Details</SelectItem>
-                      <SelectItem value="Campus Visit & Hostel">Campus Visit & Hostel Facilities</SelectItem>
+                      <SelectItem value="General Business Enquiry">General Enquiry & Information</SelectItem>
+                      <SelectItem value="Product & Order Enquiry">Product & Order Inquiry</SelectItem>
+                      <SelectItem value="Service & Consultation">Service & Consultation Request</SelectItem>
+                      <SelectItem value="Programs & Training">Courses & Programs Guidance</SelectItem>
+                      <SelectItem value="Pricing & Billing">Pricing, Quotation & Invoicing</SelectItem>
+                      <SelectItem value="Support & Assistance">Customer Support & Helpdesk</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

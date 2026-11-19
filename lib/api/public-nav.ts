@@ -69,7 +69,8 @@ export async function getPublicInstitutionNavItems(
 ): Promise<PublicInstitutionNavItem[]> {
   if (!tenant?.institution_id) return [];
 
-  await ensureInstitutionDomainSchema(db);
+  try {
+    await ensureInstitutionDomainSchema(db);
 
   const result = await db.query<InstitutionNavRow>(
     `
@@ -126,6 +127,10 @@ export async function getPublicInstitutionNavItems(
     href: publicInstitutionHref(row, currentHost),
     isCurrent: row.is_current,
   }));
+  } catch (err) {
+    console.warn("getPublicInstitutionNavItems fallback:", err);
+    return [];
+  }
 }
 
 export async function getPublicNavbarBrand(
@@ -140,39 +145,41 @@ export async function getPublicNavbarBrand(
     };
   }
 
-  // 1. Check platform_company_info for this business_id or institution_id
-  const pciRes = await db.query<{ brand_name: string | null; company_name: string | null; logo_url: string | null }>(
-    `SELECT brand_name, company_name, logo_url FROM platform_company_info
-     WHERE business_id = $1 OR institution_id = $1
-     ORDER BY (business_id = $1) DESC
-     LIMIT 1`,
-    [targetId]
-  );
-  if (pciRes.rows.length > 0) {
-    const pci = pciRes.rows[0];
-    if (pci.brand_name || pci.logo_url) {
+  try {
+    // 1. Primary Source of Truth: Check business_profiles
+    const bpRes = await db.query<{ name: string | null; logo_url: string | null }>(
+      `SELECT name, logo_url FROM business_profiles
+       WHERE id = $1 OR institution_profile_id = $1
+       ORDER BY (id = $1) DESC
+       LIMIT 1`,
+      [targetId]
+    );
+    if (bpRes.rows.length > 0 && (bpRes.rows[0].name || bpRes.rows[0].logo_url)) {
       return {
-        name: pci.brand_name || pci.company_name || tenant.institution_name || "Business Portal",
-        logoUrl: pci.logo_url || null,
+        name: bpRes.rows[0].name || tenant.institution_name || "Business",
+        logoUrl: bpRes.rows[0].logo_url || null,
         isInstitution: true,
       };
     }
-  }
 
-  // 2. Check business_profiles
-  const bpRes = await db.query<{ name: string | null; logo_url: string | null }>(
-    `SELECT name, logo_url FROM business_profiles
-     WHERE id = $1 OR institution_profile_id = $1
-     LIMIT 1`,
-    [targetId]
-  );
-  if (bpRes.rows.length > 0 && (bpRes.rows[0].name || bpRes.rows[0].logo_url)) {
-    return {
-      name: bpRes.rows[0].name || tenant.institution_name || "Business",
-      logoUrl: bpRes.rows[0].logo_url || null,
-      isInstitution: true,
-    };
-  }
+    // 2. Secondary/Fallback: platform_company_info
+    const pciRes = await db.query<{ brand_name: string | null; company_name: string | null; logo_url: string | null }>(
+      `SELECT brand_name, company_name, logo_url FROM platform_company_info
+       WHERE business_id = $1 OR institution_id = $1
+       ORDER BY (business_id = $1) DESC
+       LIMIT 1`,
+      [targetId]
+    );
+    if (pciRes.rows.length > 0) {
+      const pci = pciRes.rows[0];
+      if (pci.brand_name || pci.logo_url) {
+        return {
+          name: pci.brand_name || pci.company_name || tenant.institution_name || "Business Portal",
+          logoUrl: pci.logo_url || null,
+          isInstitution: true,
+        };
+      }
+    }
 
   // 3. Fallback to institution_profiles + institution_media
   const result = await db.query<{ name: string | null; logo_url: string | null }>(
@@ -213,4 +220,12 @@ export async function getPublicNavbarBrand(
     logoUrl: row?.logo_url ?? null,
     isInstitution: true,
   };
+  } catch (err) {
+    console.warn("getPublicNavbarBrand fallback:", err);
+    return {
+      name: tenant.institution_name ?? "Maa Sharda Institute PVT LTD",
+      logoUrl: "/icons/edubird.webp",
+      isInstitution: true,
+    };
+  }
 }

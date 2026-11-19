@@ -229,6 +229,7 @@ export const ADMIN_PERMISSION_MODULES: AdminPermissionModule[] = [
   { key: "settings.notifications", label: "Notification Settings", description: "notification types and templates", scope: "institution", page: "/admin/settings/notifications" },
   { key: "settings.payments", label: "Payment Settings", description: "student payment collection settings", scope: "institution", page: "/admin/settings/payments" },
   { key: "settings.subscription", label: "Subscription", description: "institution subscription plans and status", scope: "institution", page: "/admin/settings/subscription" },
+  { key: "settings.packages", label: "Business Packages", description: "view and manage business subscription packages", scope: "institution", page: "/admin/settings/packages" },
   { key: "settings.ai", label: "AI Settings", description: "AI settings", scope: "institution", page: "/admin/ai-settings" },
   { key: "settings.security", label: "Security Settings", description: "security settings", scope: "institution", page: "/admin/settings/security" },
   { key: "settings.logs", label: "System & Data Logs", description: "system audit trail and record modification history", scope: "institution", page: "/admin/settings/logs" },
@@ -739,6 +740,7 @@ export function isAdminPathVisibleForRole(
   } | null | undefined,
   pathname: string
 ) {
+  if (!user) return false;
   const normalized = normalizeAdminPath(pathname);
   if (
     normalized === "/admin/institution/complaints" ||
@@ -1540,6 +1542,7 @@ export function getRequestPermission(method: string, url: string) {
   if (pathname.includes("/api/admin/settings/general")) return permissionForAction("institution.general_settings", verb);
   if (pathname.includes("/api/admin/settings/socket-services")) return permissionForAction("settings.general", verb);
   if (pathname.includes("/api/admin/settings/subscription")) return permissionForAction("settings.subscription", verb);
+  if (pathname.includes("/api/admin/settings/packages")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/settings/payment-categories")) return AUTHENTICATED_LOOKUP_PERMISSION;
   if (pathname.includes("/api/admin/settings/payments")) return permissionForAction("settings.payments", verb);
   if (pathname.includes("/api/admin/tracker")) return permissionForAction("tracker.history", verb);
@@ -1602,6 +1605,7 @@ export function hasAdminPagePermission(
 ) {
   const normalized = normalizeAdminPath(pathname);
   if (!normalized.startsWith("/admin")) return true;
+  if (!user) return false;
   if (!isAdminPathVisibleForRole(user, normalized)) return false;
   if (isPlatformAdminUser(user) || isInstitutionAdminUser(user)) return true;
   if (isCustomerUser(user)) return true;
@@ -1642,8 +1646,8 @@ export function hasAdminPagePermission(
     return !isStudentUser(user) && !isParentUser(user);
   }
 
-  if (normalized === "/admin/settings/subscription") {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user);
+  if (normalized === "/admin/settings/subscription" || normalized === "/admin/settings/packages") {
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || Boolean(user?.role_codes?.includes("business_owner"));
   }
 
   if (
@@ -1729,7 +1733,7 @@ export function hasAdminPagePermission(
   }
 
   if (normalized === "/admin/marketing" || normalized.startsWith("/admin/marketing")) {
-    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || hasPermission(user, getPageViewPermission(normalized)) || Boolean(user?.permissions?.some(p => p.startsWith("marketing.")));
+    return isPlatformAdminUser(user) || isInstitutionAdminUser(user) || Boolean(user?.role_codes?.includes("business_owner")) || hasPermission(user, getPageViewPermission(normalized)) || Boolean(user?.permissions?.some(p => p.startsWith("marketing.")));
   }
 
   if (normalized === "/admin/sales" || normalized.startsWith("/admin/sales")) {

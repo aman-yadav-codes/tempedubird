@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     if (scopedBusinessId) {
       try {
         const ipLookup = await db.query(
-          "SELECT id FROM institution_profiles WHERE business_id = $1 OR id = $1 LIMIT 1",
+          "SELECT id FROM institution_profiles WHERE id = $1 OR id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1) LIMIT 1",
           [scopedBusinessId]
         );
         if (ipLookup.rows.length > 0) {
@@ -285,7 +285,84 @@ export async function GET(req: NextRequest) {
       `;
 
       const pRes = await db.query(pQuery, [...pParams, limit, offset]);
-      professionals = pRes.rows.map((r) => ({ ...r, resultType: "professional" }));
+
+      let institutionStaffRows: any[] = [];
+      if (scopedBusinessId || scopedInstitutionId) {
+        const instTargetId = scopedInstitutionId || scopedBusinessId;
+        const bizTargetId = scopedBusinessId || scopedInstitutionId;
+        const staffParams: any[] = [instTargetId, bizTargetId];
+        let staffFilterSql = "";
+
+        if (likeQ) {
+          staffParams.push(likeQ);
+          staffFilterSql += ` AND (
+            u.full_name ILIKE $${staffParams.length}
+            OR u.email ILIKE $${staffParams.length}
+            OR r.name ILIKE $${staffParams.length}
+            OR COALESCE(d.name, '') ILIKE $${staffParams.length}
+            OR COALESCE(up.designation, '') ILIKE $${staffParams.length}
+          )`;
+        }
+
+        const staffQuery = `
+          SELECT
+            u.id,
+            COALESCE(NULLIF(TRIM(u.full_name), ''), u.email) AS name,
+            COALESCE(u.id::text, '') AS slug,
+            COALESCE(d.name, up.designation, r.name, 'Staff Member') AS profession_type,
+            u.phone,
+            u.phone AS whatsapp,
+            u.email,
+            '' AS website,
+            COALESCE(loc.city, '') AS city,
+            COALESCE(loc.state, '') AS state,
+            '' AS locality,
+            COALESCE(loc.address, '') AS address,
+            COALESCE(loc.pincode, '') AS postal_code,
+            'IN' AS country_code,
+            COALESCE(up.bio, up.about, '') AS about,
+            COALESCE(up.experience_years, 0) AS experience_years,
+            COALESCE(up.avatar_url, u.avatar_url) AS avatar_url,
+            NULL AS banner_url,
+            NULL AS latitude,
+            NULL AS longitude,
+            u.is_verified,
+            false AS is_featured,
+            COALESCE(r.name, 'Staff Member') AS category_name,
+            5.0::numeric(2,1) AS avg_rating,
+            0::int AS review_count
+          FROM users u
+          JOIN institution_memberships im ON im.user_id = u.id AND im.is_active = TRUE AND COALESCE(im.is_deleted, FALSE) = FALSE
+          JOIN roles r ON r.id = im.role_id
+          LEFT JOIN user_profiles up ON up.user_id = u.id
+          LEFT JOIN designations d ON d.id = up.designation_id
+          LEFT JOIN institution_profiles ip ON ip.id = im.institution_id
+          LEFT JOIN locations loc ON loc.id = ip.location_id
+          WHERE (im.institution_id = $1 OR im.institution_id = $2)
+            AND COALESCE(u.is_deleted, FALSE) = FALSE
+            AND r.code NOT IN ('student', 'guardian', 'parent')
+            ${staffFilterSql}
+          ORDER BY u.id ASC
+        `;
+        try {
+          const sRes = await db.query(staffQuery, staffParams);
+          institutionStaffRows = sRes.rows;
+        } catch (sErr) {
+          console.error("Error querying institution staff in discovery:", sErr);
+        }
+      }
+
+      const combined = [...pRes.rows, ...institutionStaffRows];
+      const seenIds = new Set<string>();
+      const dedupedProfessionals: any[] = [];
+      for (const p of combined) {
+        const key = `${p.id}-${p.name}`;
+        if (!seenIds.has(key)) {
+          seenIds.add(key);
+          dedupedProfessionals.push({ ...p, resultType: "professional" });
+        }
+      }
+      professionals = dedupedProfessionals;
     }
 
     // 3. Search Products

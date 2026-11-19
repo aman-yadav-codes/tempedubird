@@ -3,7 +3,6 @@ import { getCurrentPublicInstitutionProfile } from "@/lib/api/public-institution
 import { db } from "@/lib/db/db";
 import { getCompanyPageBySlug } from "@/lib/queries/company";
 import { AboutPageView } from "@/components/public/about-page-view";
-
 import { resolvePageMetadata } from "@/lib/seo/metadata";
 
 async function getHost() {
@@ -16,8 +15,8 @@ export async function generateMetadata() {
   const name = profile?.name ?? "EduBird";
 
   return resolvePageMetadata("/about", profile?.id, {
-    title: `About ${name} | Mission, Vision, Goals & Leadership`,
-    description: profile?.about ?? "Learn more about our institution, mission, vision, goals, and leadership.",
+    title: `About Us | ${name}`,
+    description: profile?.about ?? "Learn more about our organization, mission, vision, strategic goals, and leadership.",
   });
 }
 

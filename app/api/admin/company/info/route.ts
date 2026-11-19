@@ -4,75 +4,111 @@ import { isPlatformAdminUser, isInstitutionAdminUser } from "@/lib/auth/permissi
 import { db } from "@/lib/db/db";
 import { getFrontendConfig } from "@/lib/config/frontend-config";
 
+let companyInfoSchemaReady = false;
+let companyInfoSchemaPromise: Promise<void> | null = null;
+
 async function ensureCompanyInfoSchema() {
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS platform_company_info (
-      id SERIAL PRIMARY KEY,
-      company_name VARCHAR(255) NOT NULL DEFAULT 'EduBird Technologies Pvt. Ltd.',
-      brand_name VARCHAR(150) NOT NULL DEFAULT 'EduBird Platform',
-      tagline VARCHAR(255) DEFAULT 'Next-Gen Education & Institutional Platform',
-      logo_url TEXT DEFAULT '/favicon.ico',
-      dark_logo_url TEXT,
-      favicon_url TEXT DEFAULT '/favicon.ico',
-      about TEXT DEFAULT 'EduBird is a unified education management platform providing state-of-the-art tools for institutions, staff, educators, and students.',
-      registration_no VARCHAR(100) DEFAULT 'U72900DL2026PTC123456',
-      cin_number VARCHAR(100) DEFAULT 'U72900DL2026PTC123456',
-      gstin VARCHAR(50) DEFAULT '07AAAAA0000A1Z5',
-      certified_or_affiliated_with TEXT DEFAULT 'ISO 9001:2015 Certified, UGC Recognized Platform Partner',
-      support_email VARCHAR(255) DEFAULT 'support@edubird.com',
-      phone VARCHAR(50) DEFAULT '+91 98765 43210',
-      toll_free VARCHAR(50) DEFAULT '1800-123-EDUBIRD',
-      website_url VARCHAR(255) DEFAULT 'https://edubird.com',
-      headquarters_address TEXT DEFAULT '124, Connaught Place, Central Delhi',
-      city VARCHAR(100) DEFAULT 'New Delhi',
-      state VARCHAR(100) DEFAULT 'Delhi',
-      pincode VARCHAR(20) DEFAULT '110001',
-      working_hours VARCHAR(150) DEFAULT 'Monday - Saturday: 9:00 AM - 6:00 PM IST',
-      social_links JSONB DEFAULT '{}'::jsonb,
-      updated_at TIMESTAMP DEFAULT timezone('Asia/Kolkata', NOW()),
-      updated_by INTEGER
-    );
+  if (companyInfoSchemaReady) return;
+  if (companyInfoSchemaPromise) return companyInfoSchemaPromise;
 
-    INSERT INTO platform_company_info (id, company_name, brand_name, tagline, logo_url, support_email, phone, city, state, pincode)
-    SELECT 1, 'EduBird Technologies Pvt. Ltd.', 'EduBird Platform', 'Next-Gen Education & Institutional Platform', '/favicon.ico', 'support@edubird.com', '+91 98765 43210', 'New Delhi', 'Delhi', '110001'
-    WHERE NOT EXISTS (SELECT 1 FROM platform_company_info WHERE id = 1);
+  companyInfoSchemaPromise = (async () => {
+    try {
+      // Check if table already exists first to avoid heavy DDL table locks on every request
+      const tableCheck = await db.query(
+        `SELECT 1 FROM information_schema.tables WHERE table_name = 'platform_company_info' LIMIT 1`
+      );
 
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS certified_or_affiliated_with TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS cin_number VARCHAR(100);
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS business_id INTEGER;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS institution_id INTEGER;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS listing_type VARCHAR(50) DEFAULT 'business';
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS category_id INTEGER;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS subcategory_id INTEGER;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS subcategory_ids INTEGER[];
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS business_type VARCHAR(255);
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS experience_years INTEGER;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS skills TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS qualifications TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS banner_url TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS gallery_images TEXT[];
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_name VARCHAR(255);
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_title VARCHAR(255);
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_image_url TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS founder_about TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS mission TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS vision TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS goal TEXT;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS established_year INTEGER;
-    ALTER TABLE platform_company_info ADD COLUMN IF NOT EXISTS opening_hours JSONB;
-    ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS subcategory_ids INTEGER[];
-    ALTER TABLE professional_profiles ADD COLUMN IF NOT EXISTS subcategory_ids INTEGER[];
-    ALTER TABLE professional_profiles ADD COLUMN IF NOT EXISTS gallery_images TEXT[];
-    CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_company_info_business_id ON platform_company_info(business_id) WHERE business_id IS NOT NULL;
+      if (tableCheck.rows.length === 0) {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS platform_company_info (
+            id SERIAL PRIMARY KEY,
+            company_name TEXT NOT NULL DEFAULT 'EduBird Technologies Pvt. Ltd.',
+            brand_name TEXT NOT NULL DEFAULT 'EduBird Platform',
+            tagline TEXT DEFAULT 'Next-Gen Education & Institutional Platform',
+            logo_url TEXT DEFAULT '/favicon.ico',
+            dark_logo_url TEXT,
+            favicon_url TEXT DEFAULT '/favicon.ico',
+            about TEXT DEFAULT 'EduBird is a unified education management platform providing state-of-the-art tools for institutions, staff, educators, and students.',
+            registration_no TEXT DEFAULT 'U72900DL2026PTC123456',
+            cin_number TEXT DEFAULT 'U72900DL2026PTC123456',
+            gstin VARCHAR(100) DEFAULT '07AAAAA0000A1Z5',
+            certified_or_affiliated_with TEXT DEFAULT 'ISO 9001:2015 Certified, UGC Recognized Platform Partner',
+            support_email TEXT DEFAULT 'support@edubird.com',
+            phone TEXT DEFAULT '+91 98765 43210',
+            toll_free TEXT DEFAULT '1800-123-EDUBIRD',
+            website_url TEXT DEFAULT 'https://edubird.com',
+            headquarters_address TEXT DEFAULT '124, Connaught Place, Central Delhi',
+            city TEXT DEFAULT 'New Delhi',
+            state TEXT DEFAULT 'Delhi',
+            pincode TEXT DEFAULT '110001',
+            working_hours TEXT DEFAULT 'Monday - Saturday: 9:00 AM - 6:00 PM IST',
+            social_links JSONB DEFAULT '{}'::jsonb,
+            updated_at TIMESTAMP DEFAULT timezone('Asia/Kolkata', NOW()),
+            updated_by INTEGER,
+            business_id INTEGER,
+            institution_id INTEGER,
+            listing_type VARCHAR(50) DEFAULT 'business',
+            category_id INTEGER,
+            subcategory_id INTEGER,
+            subcategory_ids INTEGER[],
+            business_type VARCHAR(255),
+            experience_years INTEGER,
+            skills TEXT,
+            qualifications TEXT,
+            banner_url TEXT,
+            gallery_images TEXT[],
+            founder_name TEXT,
+            founder_title TEXT,
+            founder_image_url TEXT,
+            founder_about TEXT,
+            mission TEXT,
+            vision TEXT,
+            goal TEXT,
+            established_year INTEGER,
+            opening_hours JSONB
+          );
 
-    ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS state VARCHAR(100);
-    ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS pincode VARCHAR(20);
-    ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS branch_type VARCHAR(50) DEFAULT 'Branch Office';
-    ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS is_headquarters BOOLEAN DEFAULT FALSE;
-    ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS business_id INTEGER;
-    ALTER TABLE platform_branches ADD COLUMN IF NOT EXISTS institution_id INTEGER;
-    CREATE INDEX IF NOT EXISTS idx_platform_branches_business_id ON platform_branches(business_id);
-  `);
+          INSERT INTO platform_company_info (id, company_name, brand_name, tagline, logo_url, support_email, phone, city, state, pincode)
+          VALUES (1, 'EduBird Technologies Pvt. Ltd.', 'EduBird Platform', 'Next-Gen Education & Institutional Platform', '/favicon.ico', 'support@edubird.com', '+91 98765 43210', 'New Delhi', 'Delhi', '110001')
+          ON CONFLICT (id) DO NOTHING;
+
+          SELECT setval(
+            pg_get_serial_sequence('platform_company_info', 'id'),
+            GREATEST(COALESCE((SELECT MAX(id) FROM platform_company_info), 1) + 10, 10),
+            true
+          );
+
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_company_info_business_id ON platform_company_info(business_id) WHERE business_id IS NOT NULL;
+        `);
+      }
+
+      await db.query(`
+        ALTER TABLE business_profiles
+          ADD COLUMN IF NOT EXISTS legal_name TEXT,
+          ADD COLUMN IF NOT EXISTS tagline TEXT,
+          ADD COLUMN IF NOT EXISTS registration_no TEXT,
+          ADD COLUMN IF NOT EXISTS cin_number TEXT,
+          ADD COLUMN IF NOT EXISTS gstin TEXT,
+          ADD COLUMN IF NOT EXISTS certified_or_affiliated_with TEXT,
+          ADD COLUMN IF NOT EXISTS founder_name TEXT,
+          ADD COLUMN IF NOT EXISTS founder_title TEXT,
+          ADD COLUMN IF NOT EXISTS founder_image_url TEXT,
+          ADD COLUMN IF NOT EXISTS founder_about TEXT,
+          ADD COLUMN IF NOT EXISTS mission TEXT,
+          ADD COLUMN IF NOT EXISTS vision TEXT,
+          ADD COLUMN IF NOT EXISTS goal TEXT;
+      `);
+
+      companyInfoSchemaReady = true;
+    } catch (err: any) {
+      console.warn("[ensureCompanyInfoSchema] init:", err?.message || err);
+      companyInfoSchemaReady = true;
+    } finally {
+      companyInfoSchemaPromise = null;
+    }
+  })();
+
+  return companyInfoSchemaPromise;
 }
 
 async function resolveActiveBusinessId(req: Request, user?: any, body?: any): Promise<number | null> {
@@ -112,7 +148,7 @@ async function resolveActiveBusinessId(req: Request, user?: any, body?: any): Pr
     const instBiz = await db.query(
       `SELECT COALESCE(bp.id, ip.id) as resolved_id FROM institution_memberships im
        JOIN institution_profiles ip ON ip.id = im.institution_id
-       LEFT JOIN business_profiles bp ON bp.id = ip.business_id OR bp.institution_profile_id = ip.id
+       LEFT JOIN business_profiles bp ON bp.institution_profile_id = ip.id
        WHERE im.user_id = $1 AND im.is_active = TRUE
        LIMIT 1`,
       [user.id]
@@ -120,12 +156,13 @@ async function resolveActiveBusinessId(req: Request, user?: any, body?: any): Pr
     if (instBiz.rows.length > 0) return instBiz.rows[0].resolved_id;
   }
 
+  const bpFirst = await db.query(`SELECT id FROM business_profiles WHERE COALESCE(is_active, TRUE) = TRUE ORDER BY id ASC LIMIT 1`);
+  if (bpFirst.rows.length > 0) return bpFirst.rows[0].id;
+
   const pciFirst = await db.query(`SELECT business_id FROM platform_company_info WHERE business_id IS NOT NULL ORDER BY id ASC LIMIT 1`);
   if (pciFirst.rows.length > 0 && pciFirst.rows[0].business_id) {
     return pciFirst.rows[0].business_id;
   }
-  const bpFirst = await db.query(`SELECT id FROM business_profiles ORDER BY id ASC LIMIT 1`);
-  if (bpFirst.rows.length > 0) return bpFirst.rows[0].id;
 
   return null;
 }
@@ -177,108 +214,87 @@ export async function GET(req: Request) {
       ),
     ]);
 
-    let row = null;
+    let row: any = null;
+    let bpRow: any = null;
+
     if (activeBizId) {
+      // 1. Primary Source of Truth: query business_profiles directly
+      try {
+        const bpRes = await db.query(
+          `SELECT * FROM business_profiles
+           WHERE id = $1
+              OR institution_profile_id = $1
+              OR id IN (SELECT id FROM business_profiles WHERE institution_profile_id = $1)
+           ORDER BY (id = $1) DESC LIMIT 1`,
+          [activeBizId]
+        );
+        if (bpRes.rows.length > 0) {
+          bpRow = bpRes.rows[0];
+        }
+      } catch (bpErr) {
+        console.warn("[Company Info GET] business_profiles lookup warning:", bpErr);
+      }
+
+      // 2. Query platform_company_info for fallback/secondary
       const res = await db.query(
-        `SELECT * FROM platform_company_info WHERE business_id = $1 OR institution_id = $1 ORDER BY (business_id = $1) DESC LIMIT 1`,
+        `SELECT * FROM platform_company_info
+         WHERE business_id = $1
+            OR institution_id = $1
+            OR institution_id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1)
+            OR business_id IN (SELECT id FROM business_profiles WHERE institution_profile_id = $1)
+         ORDER BY (business_id = $1) DESC LIMIT 1`,
         [activeBizId]
       );
       if (res.rows.length > 0) {
         row = res.rows[0];
-      } else {
-        // Auto-seed from business_profiles or institution_profiles
-        const bpRes = await db.query(
-          `SELECT * FROM business_profiles WHERE id = $1 LIMIT 1`,
-          [activeBizId]
-        );
-        if (bpRes.rows.length > 0) {
-          const b = bpRes.rows[0];
-          const inserted = await db.query(
-            `INSERT INTO platform_company_info (
-              company_name, brand_name, tagline, logo_url, favicon_url, about,
-              support_email, phone, website_url, headquarters_address, city, state, pincode,
-              listing_type, category_id, subcategory_id, business_type,
-              business_id, institution_id, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
-            RETURNING *`,
-            [
-              b.name,
-              b.name,
-              b.about ? b.about.slice(0, 100) : "",
-              b.logo_url || "/favicon.ico",
-              "/favicon.ico",
-              b.about || "",
-              b.email || "",
-              b.phone || "",
-              b.website || null,
-              b.address || "",
-              b.city || "",
-              b.state || "",
-              b.postal_code || "",
-              "business",
-              b.category_id || null,
-              b.subcategory_id || null,
-              b.business_type || null,
-              b.id,
-              b.institution_profile_id || null,
-            ]
-          );
-          row = inserted.rows[0];
-        } else {
-          // Check institution_profiles
-          const ipRes = await db.query(
-            `SELECT ip.*,
-                    ib.address as branch_address, ib.city as branch_city, ib.state as branch_state, ib.pincode as branch_pincode,
-                    ib.phones, ib.emails
-             FROM institution_profiles ip
-             LEFT JOIN institution_branches ib ON ib.institution_id = ip.id AND ib.is_primary = TRUE
-             WHERE ip.id = $1 OR ip.business_id = $1
-             LIMIT 1`,
-            [activeBizId]
-          );
-          if (ipRes.rows.length > 0) {
-            const ip = ipRes.rows[0];
-            const pPhone = ip.phone || ip.phones?.[0]?.phone || "";
-            const pEmail = ip.email || ip.emails?.[0]?.email || "";
-            const pAddr = ip.branch_address || "";
-            const pCity = ip.branch_city || "";
-            const pState = ip.branch_state || "";
-            const pPin = ip.branch_pincode || "";
-
-            const inserted = await db.query(
-              `INSERT INTO platform_company_info (
-                company_name, brand_name, tagline, logo_url, favicon_url, about,
-                support_email, phone, website_url, headquarters_address, city, state, pincode,
-                listing_type, category_id, subcategory_id, business_type,
-                business_id, institution_id, updated_at
-              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
-              RETURNING *`,
-              [
-                ip.name,
-                ip.name,
-                ip.about ? ip.about.slice(0, 100) : "Next-Gen Institutional Platform",
-                ip.logo_url || "/favicon.ico",
-                "/favicon.ico",
-                ip.about || "",
-                pEmail,
-                pPhone,
-                ip.website || null,
-                pAddr,
-                pCity,
-                pState,
-                pPin,
-                "business",
-                null,
-                null,
-                null,
-                activeBizId,
-                ip.id,
-              ]
-            );
-            row = inserted.rows[0];
-          }
-        }
       }
+    }
+
+    // Merge business_profiles directly as the primary source
+    if (bpRow) {
+      row = {
+        ...(row || {}),
+        company_name: bpRow.name || row?.company_name || "",
+        brand_name: bpRow.name || row?.brand_name || "",
+        legal_name: bpRow.legal_name || row?.legal_name || bpRow.name || "",
+        tagline: bpRow.tagline !== undefined && bpRow.tagline !== null ? bpRow.tagline : (row?.tagline || ""),
+        logo_url: bpRow.logo_url || row?.logo_url || "/favicon.ico",
+        banner_url: bpRow.banner_url || row?.banner_url || "",
+        gallery_images: (Array.isArray(bpRow.gallery_images) && bpRow.gallery_images.length > 0)
+          ? bpRow.gallery_images
+          : (Array.isArray(row?.gallery_images) && row.gallery_images.length > 0 ? row.gallery_images : []),
+        about: bpRow.about !== undefined && bpRow.about !== null ? bpRow.about : (row?.about || ""),
+        about_text: bpRow.about !== undefined && bpRow.about !== null ? bpRow.about : (row?.about || ""),
+        support_email: bpRow.email || row?.support_email || "",
+        phone: bpRow.phone || row?.phone || "",
+        support_phone: bpRow.phone || row?.support_phone || "",
+        website_url: bpRow.website || row?.website_url || "",
+        headquarters_address: bpRow.address || row?.headquarters_address || "",
+        city: bpRow.city || row?.city || "",
+        state: bpRow.state || row?.state || "",
+        pincode: bpRow.postal_code || row?.pincode || "",
+        listing_type: bpRow.listing_type || row?.listing_type || "business",
+        category_id: bpRow.category_id || row?.category_id || null,
+        subcategory_id: bpRow.subcategory_id || row?.subcategory_id || null,
+        subcategory_ids: Array.isArray(bpRow.subcategory_ids) ? bpRow.subcategory_ids : (row?.subcategory_ids || []),
+        business_type: bpRow.business_type || row?.business_type || "",
+        registration_no: bpRow.registration_no || row?.registration_no || "",
+        cin_number: bpRow.cin_number || bpRow.registration_no || row?.cin_number || "",
+        gstin: bpRow.gstin || row?.gstin || "",
+        certified_or_affiliated_with: bpRow.certified_or_affiliated_with || row?.certified_or_affiliated_with || "",
+        founder_name: bpRow.founder_name || row?.founder_name || "",
+        founder_title: bpRow.founder_title || row?.founder_title || "",
+        founder_image_url: bpRow.founder_image_url || row?.founder_image_url || "",
+        founder_about: bpRow.founder_about || row?.founder_about || "",
+        mission: bpRow.mission || row?.mission || "",
+        vision: bpRow.vision || row?.vision || "",
+        goal: bpRow.goal || row?.goal || "",
+        established_year: bpRow.established_year ? String(bpRow.established_year) : (row?.established_year ? String(row.established_year) : ""),
+        opening_hours: bpRow.opening_hours || row?.opening_hours || null,
+        social_links: bpRow.social_links || row?.social_links || null,
+        business_id: bpRow.id,
+        institution_id: bpRow.institution_profile_id || row?.institution_id,
+      };
     }
 
     if (!row) {
@@ -295,13 +311,13 @@ export async function GET(req: Request) {
       row = resAny.rows[0];
     }
 
-    // Comprehensive fallback sync from institution_profiles if founder / mission / vision / etc. are null or empty
+    // Fallback sync from institution_profiles only if business_profiles record was not found
     const targetInstId = row?.institution_id || row?.business_id || activeBizId;
-    if (targetInstId || row?.brand_name || row?.company_name) {
+    if (!bpRow && (targetInstId || row?.brand_name || row?.company_name)) {
       try {
         const ipQuery = await db.query(
           `SELECT * FROM institution_profiles
-           WHERE (id = $1 OR business_id = $1 OR LOWER(TRIM(name)) = LOWER(TRIM($2)))
+           WHERE (id = $1 OR id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1) OR LOWER(TRIM(name)) = LOWER(TRIM($2)))
            ORDER BY (founder_name IS NOT NULL) DESC
            LIMIT 1`,
           [targetInstId || 0, row?.brand_name || row?.company_name || ""]
@@ -491,6 +507,27 @@ export async function GET(req: Request) {
         console.warn("[Company Info GET] Profile images & credentials check warning:", profErr);
       }
     }
+
+    // Fallback: If gallery_images is still empty, populate from institution_media
+    if (!company.gallery_images || company.gallery_images.length === 0) {
+      try {
+        const mediaInstId = company.institution_id || activeBizId || 160;
+        const mediaRes = await db.query(
+          `SELECT url FROM institution_media
+           WHERE (institution_id = $1 OR institution_id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1))
+             AND COALESCE(is_deleted, false) = false
+             AND media_type != 'logo'
+             AND (title IS NULL OR (title NOT ILIKE '%Banner%' AND title NOT ILIKE '%Cover%'))
+           ORDER BY sort_order ASC, id ASC`,
+          [mediaInstId]
+        );
+        if (mediaRes.rows.length > 0) {
+          company.gallery_images = Array.from(new Set(mediaRes.rows.map((r: any) => r.url).filter(Boolean)));
+        }
+      } catch (mediaErr) {
+        console.warn("[Company Info GET] Gallery fallback warning:", mediaErr);
+      }
+    }
     return NextResponse.json({
       data: company,
       businessCategories: bizCatsRes.rows,
@@ -561,7 +598,10 @@ export async function PUT(req: Request) {
       vision,
       goal,
       established_year,
+      social_links,
     } = body;
+
+    const finalSocialLinks = (social_links && typeof social_links === "object") ? JSON.stringify(social_links) : null;
 
     const finalFounderName = founder_name !== undefined ? (founder_name ? String(founder_name).trim() : null) : undefined;
     const finalFounderTitle = founder_title !== undefined ? (founder_title ? String(founder_title).trim() : null) : undefined;
@@ -624,10 +664,25 @@ export async function PUT(req: Request) {
       );
       const instId = instCheck.rows[0]?.institution_profile_id || activeBizId;
 
-      const existing = await db.query(
-        `SELECT id FROM platform_company_info WHERE business_id = $1 LIMIT 1`,
-        [activeBizId]
-      );
+      const targetRecordId = (body?.id && !isNaN(Number(body.id))) ? Number(body.id) : null;
+      let existing: any = null;
+      if (targetRecordId) {
+        existing = await db.query(`SELECT id FROM platform_company_info WHERE id = $1 LIMIT 1`, [targetRecordId]);
+      }
+      if (!existing || existing.rows.length === 0) {
+        existing = await db.query(
+          `SELECT id FROM platform_company_info
+           WHERE business_id = $1
+              OR institution_id = $1
+              OR institution_id = $2
+              OR business_id = $2
+              OR institution_id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $1)
+              OR business_id IN (SELECT id FROM business_profiles WHERE institution_profile_id = $1)
+              OR business_id IN (SELECT id FROM business_profiles WHERE institution_profile_id = $2)
+           ORDER BY (business_id = $1) DESC, (institution_id = $2) DESC LIMIT 1`,
+          [activeBizId, instId]
+        );
+      }
 
       let res;
       if (existing.rows.length > 0) {
@@ -646,14 +701,14 @@ export async function PUT(req: Request) {
              cin_number = $10,
              gstin = $11,
              certified_or_affiliated_with = $12,
-             support_email = $13,
-             phone = $14,
-             toll_free = $15,
-             website_url = $16,
-             headquarters_address = $17,
-             city = $18,
-             state = $19,
-             pincode = $20,
+             support_email = COALESCE($13, platform_company_info.support_email),
+             phone = COALESCE($14, platform_company_info.phone),
+             toll_free = COALESCE($15, platform_company_info.toll_free),
+             website_url = COALESCE($16, platform_company_info.website_url),
+             headquarters_address = COALESCE($17, platform_company_info.headquarters_address),
+             city = COALESCE($18, platform_company_info.city),
+             state = COALESCE($19, platform_company_info.state),
+             pincode = COALESCE($20, platform_company_info.pincode),
              working_hours = $21,
              listing_type = COALESCE($22, platform_company_info.listing_type),
              category_id = $23::integer,
@@ -673,6 +728,8 @@ export async function PUT(req: Request) {
              vision = COALESCE($39, platform_company_info.vision),
              goal = COALESCE($40, platform_company_info.goal),
              established_year = COALESCE($41::integer, platform_company_info.established_year),
+             opening_hours = CASE WHEN $42::jsonb IS NOT NULL THEN $42::jsonb ELSE platform_company_info.opening_hours END,
+             social_links = CASE WHEN $43::jsonb IS NOT NULL THEN $43::jsonb ELSE platform_company_info.social_links END,
              updated_at = timezone('Asia/Kolkata', NOW()),
              updated_by = $31::integer
            WHERE id = $33::integer
@@ -719,9 +776,12 @@ export async function PUT(req: Request) {
             finalVision !== undefined ? finalVision : null,
             finalGoal !== undefined ? finalGoal : null,
             finalEstablishedYear !== null ? finalEstablishedYear : null,
+            finalOpeningHours,
+            finalSocialLinks,
           ]
         );
       } else {
+        await db.query(`SELECT setval(pg_get_serial_sequence('platform_company_info', 'id'), GREATEST(COALESCE((SELECT MAX(id) FROM platform_company_info), 0) + 100, 1000), true)`);
         res = await db.query(
           `INSERT INTO platform_company_info (
              business_id, institution_id, company_name, brand_name, tagline, logo_url, dark_logo_url, favicon_url,
@@ -730,13 +790,25 @@ export async function PUT(req: Request) {
              city, state, pincode, working_hours, listing_type, category_id, subcategory_id, subcategory_ids, business_type,
              experience_years, skills, qualifications, banner_url, gallery_images,
              founder_name, founder_title, founder_image_url, founder_about, mission, vision, goal, established_year,
+             opening_hours, social_links,
              updated_at, updated_by
            ) VALUES (
              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
              $22, $23, $24, $32::integer[], $25, $26, $27, $28, $29, $30::text[],
              $33, $34, $35, $36, $37, $38, $39, $40::integer,
+             $41::jsonb, $42::jsonb,
              timezone('Asia/Kolkata', NOW()), $31
            )
+           ON CONFLICT (business_id) WHERE business_id IS NOT NULL
+           DO UPDATE SET
+             company_name = EXCLUDED.company_name,
+             brand_name = EXCLUDED.brand_name,
+             tagline = EXCLUDED.tagline,
+             logo_url = EXCLUDED.logo_url,
+             about = EXCLUDED.about,
+             opening_hours = EXCLUDED.opening_hours,
+             social_links = EXCLUDED.social_links,
+             updated_at = NOW()
            RETURNING *`,
           [
             activeBizId,
@@ -779,6 +851,8 @@ export async function PUT(req: Request) {
             finalVision !== undefined ? finalVision : null,
             finalGoal !== undefined ? finalGoal : null,
             finalEstablishedYear !== null ? finalEstablishedYear : null,
+            finalOpeningHours,
+            finalSocialLinks,
           ]
         );
       }
@@ -797,6 +871,8 @@ export async function PUT(req: Request) {
         const bpUpdate = await db.query(
           `UPDATE business_profiles
            SET name = COALESCE($1, name),
+               legal_name = COALESCE($23, legal_name),
+               tagline = COALESCE($24, tagline),
                logo_url = COALESCE($2, logo_url),
                phone = COALESCE($3, phone),
                email = COALESCE($4, email),
@@ -815,8 +891,21 @@ export async function PUT(req: Request) {
                banner_url = COALESCE($16, banner_url),
                gallery_images = CASE WHEN $17::text[] IS NOT NULL THEN $17::text[] ELSE gallery_images END,
                opening_hours = CASE WHEN $19::jsonb IS NOT NULL THEN $19::jsonb ELSE opening_hours END,
+               established_year = COALESCE($20::integer, established_year),
+               social_links = CASE WHEN $21::jsonb IS NOT NULL THEN $21::jsonb ELSE social_links END,
+               registration_no = COALESCE($25, registration_no),
+               cin_number = COALESCE($26, cin_number),
+               gstin = COALESCE($27, gstin),
+               certified_or_affiliated_with = COALESCE($28, certified_or_affiliated_with),
+               founder_name = COALESCE($29, founder_name),
+               founder_title = COALESCE($30, founder_title),
+               founder_image_url = COALESCE($31, founder_image_url),
+               founder_about = COALESCE($32, founder_about),
+               mission = COALESCE($33, mission),
+               vision = COALESCE($34, vision),
+               goal = COALESCE($35, goal),
                updated_at = NOW()
-          WHERE id = $14 OR institution_profile_id = $14 OR user_id = $15
+          WHERE id = $14 OR institution_profile_id = $14 OR id = (SELECT id FROM business_profiles WHERE institution_profile_id = $22 LIMIT 1) OR institution_profile_id = $22 OR (user_id = $15 AND user_id IS NOT NULL)
           RETURNING id`,
           [
             brand_name || company_name || null,
@@ -838,6 +927,22 @@ export async function PUT(req: Request) {
             finalGalleryImages,
             finalSubcatIds.length > 0 ? finalSubcatIds : null,
             finalOpeningHours,
+            finalEstablishedYear !== null ? finalEstablishedYear : null,
+            finalSocialLinks,
+            instId,
+            company_name || null,
+            tagline || null,
+            finalRegNo,
+            cin_number || finalRegNo || null,
+            gstin || null,
+            certified_or_affiliated_with || null,
+            finalFounderName !== undefined ? finalFounderName : null,
+            finalFounderTitle !== undefined ? finalFounderTitle : null,
+            finalFounderImageUrl !== undefined ? finalFounderImageUrl : null,
+            finalFounderAbout !== undefined ? finalFounderAbout : null,
+            finalMission !== undefined ? finalMission : null,
+            finalVision !== undefined ? finalVision : null,
+            finalGoal !== undefined ? finalGoal : null,
           ]
         );
 
@@ -1005,43 +1110,158 @@ export async function PUT(req: Request) {
         }
       }
 
-      // Synchronize with institution_profiles
-      await db.query(
-        `UPDATE institution_profiles
-         SET name = COALESCE($1, name),
-        logo_url = COALESCE($2, logo_url),
-        phone = COALESCE($3, phone),
-        email = COALESCE($4, email),
-        website = COALESCE($5, website),
-        about = COALESCE($6, about),
-             founder_name = COALESCE($8, founder_name),
-             founder_title = COALESCE($9, founder_title),
-             founder_image_url = COALESCE($10, founder_image_url),
-             founder_about = COALESCE($11, founder_about),
-             mission = COALESCE($12, mission),
-             vision = COALESCE($13, vision),
-             goal = COALESCE($14, goal),
-             established_year = COALESCE($15::integer, established_year),
-        updated_at = NOW()
-         WHERE id = $7 OR business_id = $7 OR id = (SELECT institution_profile_id FROM business_profiles WHERE id = $7)`,
-        [
-          brand_name || company_name || null,
-          logo_url || null,
-          finalPhone,
-          support_email || null,
-          website_url || null,
-          finalAbout,
-          activeBizId,
-          finalFounderName !== undefined ? finalFounderName : null,
-          finalFounderTitle !== undefined ? finalFounderTitle : null,
-          finalFounderImageUrl !== undefined ? finalFounderImageUrl : null,
-          finalFounderAbout !== undefined ? finalFounderAbout : null,
-          finalMission !== undefined ? finalMission : null,
-          finalVision !== undefined ? finalVision : null,
-          finalGoal !== undefined ? finalGoal : null,
-          finalEstablishedYear !== null ? finalEstablishedYear : null,
-        ]
-      );
+      // Synchronize minimal core anchor fields in institution_profiles (required for FK constraints and views)
+      try {
+        await db.query(
+          `UPDATE institution_profiles
+           SET name = COALESCE($1, name),
+               logo_url = COALESCE($2, logo_url),
+               phone = COALESCE($3, phone),
+               email = COALESCE($4, email),
+               website = COALESCE($5, website),
+               about = COALESCE($6, about),
+               updated_at = NOW()
+           WHERE id = $7 
+              OR id = $8 
+              OR id = (SELECT institution_profile_id FROM business_profiles WHERE id = $7)
+              OR id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $8)`,
+          [
+            brand_name || company_name || null,
+            logo_url || null,
+            finalPhone,
+            support_email || null,
+            website_url || null,
+            finalAbout,
+            activeBizId,
+            instId,
+          ]
+        );
+      } catch (instSyncErr) {
+        console.warn("[Company Info PUT] institution_profiles minimal sync warning:", instSyncErr);
+      }
+
+      // Synchronize primary address in institution_branches and headquarters in platform_branches
+      if (instId && (finalAddress || finalCity || finalState || finalPin || finalPhone || support_email)) {
+        try {
+          const phonesJson = finalPhone ? JSON.stringify([{ id: "1", title: "Office Phone", phone: finalPhone, type: "phone" }]) : null;
+          const emailsJson = support_email ? JSON.stringify([{ id: "1", title: "General Email", email: support_email }]) : null;
+
+          const existingIb = await db.query(
+            `SELECT id FROM institution_branches WHERE institution_id = $1 AND is_primary = TRUE LIMIT 1`,
+            [instId]
+          );
+          if (existingIb.rows.length > 0) {
+            await db.query(
+              `UPDATE institution_branches
+               SET address = COALESCE($1, address),
+                   city = COALESCE($2, city),
+                   state = COALESCE($3, state),
+                   pincode = COALESCE($4, pincode),
+                   phones = CASE WHEN $5::jsonb IS NOT NULL THEN $5::jsonb ELSE phones END,
+                   emails = CASE WHEN $6::jsonb IS NOT NULL THEN $6::jsonb ELSE emails END,
+                   working_hours = COALESCE($7, working_hours),
+                   updated_at = NOW()
+               WHERE id = $8`,
+              [finalAddress, finalCity, finalState, finalPin, phonesJson, emailsJson, working_hours || null, existingIb.rows[0].id]
+            );
+          } else if (finalAddress && finalCity) {
+            await db.query(
+              `INSERT INTO institution_branches (
+                 institution_id, branch_name, address, city, state, pincode, phones, emails, working_hours, is_primary, is_active, created_at, updated_at
+               ) VALUES ($1, 'Main Branch', $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, TRUE, TRUE, NOW(), NOW())`,
+              [instId, finalAddress, finalCity, finalState, finalPin, phonesJson, emailsJson, working_hours || null]
+            );
+          }
+
+          const existingPb = await db.query(
+            `SELECT id FROM platform_branches WHERE (business_id = $1 OR institution_id = $2 OR institution_id = $1) AND is_headquarters = TRUE LIMIT 1`,
+            [activeBizId, instId]
+          );
+          if (existingPb.rows.length > 0) {
+            await db.query(
+              `UPDATE platform_branches
+               SET address = COALESCE($1, address),
+                   city = COALESCE($2, city),
+                   state = COALESCE($3, state),
+                   pincode = COALESCE($4, pincode),
+                   phone = COALESCE($5, phone),
+                   email = COALESCE($6, email),
+                   status = 'active',
+                   updated_at = NOW()
+               WHERE id = $7`,
+              [finalAddress, finalCity, finalState, finalPin, finalPhone, support_email, existingPb.rows[0].id]
+            );
+          } else if (finalAddress && finalCity) {
+            await db.query(
+              `INSERT INTO platform_branches (
+                 branch_name, city, state, pincode, address, phone, email, is_headquarters, status, business_id, institution_id, updated_at
+               ) VALUES ('Headquarters', $1, $2, $3, $4, $5, $6, TRUE, 'active', $7, $8, NOW())`,
+              [finalCity, finalState, finalPin, finalAddress, finalPhone, support_email, activeBizId, instId]
+            );
+          }
+        } catch (branchSyncErr) {
+          console.warn("[Company Info PUT] branch sync warning:", branchSyncErr);
+        }
+      }
+
+      // Synchronize logo and banner in institution_media
+      if (instId && (logo_url || finalBannerUrl)) {
+        try {
+          if (logo_url && logo_url !== "/favicon.ico") {
+            const existingLogo = await db.query(
+              `SELECT id FROM institution_media WHERE institution_id = $1 AND (media_type = 'logo' OR title = 'Logo') AND COALESCE(is_deleted, false) = false LIMIT 1`,
+              [instId]
+            );
+            if (existingLogo.rows.length > 0) {
+              await db.query(`UPDATE institution_media SET url = $1, is_deleted = false WHERE id = $2`, [logo_url, existingLogo.rows[0].id]);
+            } else {
+              await db.query(
+                `INSERT INTO institution_media (institution_id, media_type, title, url, sort_order, is_deleted, created_at)
+                 VALUES ($1, 'logo', 'Logo', $2, 0, false, NOW())`,
+                [instId, logo_url]
+              );
+            }
+          }
+          if (finalBannerUrl) {
+            const existingBanner = await db.query(
+              `SELECT id FROM institution_media WHERE institution_id = $1 AND (title LIKE '%Banner%' OR title LIKE '%Cover%') AND COALESCE(is_deleted, false) = false LIMIT 1`,
+              [instId]
+            );
+            if (existingBanner.rows.length > 0) {
+              await db.query(`UPDATE institution_media SET url = $1, is_deleted = false WHERE id = $2`, [finalBannerUrl, existingBanner.rows[0].id]);
+            } else {
+              await db.query(
+                `INSERT INTO institution_media (institution_id, media_type, title, url, sort_order, is_deleted, created_at)
+                 VALUES ($1, 'image', 'Cover Banner', $2, 1, false, NOW())`,
+                [instId, finalBannerUrl]
+              );
+            }
+          }
+
+          // Synchronize gallery images in institution_media
+          if (Array.isArray(finalGalleryImages) && finalGalleryImages.length > 0) {
+            for (let i = 0; i < finalGalleryImages.length; i++) {
+              const gUrl = finalGalleryImages[i];
+              if (!gUrl) continue;
+              const existingItem = await db.query(
+                `SELECT id FROM institution_media WHERE institution_id = $1 AND url = $2 LIMIT 1`,
+                [instId, gUrl]
+              );
+              if (existingItem.rows.length > 0) {
+                await db.query(`UPDATE institution_media SET is_deleted = false, sort_order = $1 WHERE id = $2`, [i + 2, existingItem.rows[0].id]);
+              } else {
+                await db.query(
+                  `INSERT INTO institution_media (institution_id, media_type, title, url, sort_order, is_deleted, created_at)
+                   VALUES ($1, 'gallery', 'Showcase Photo', $2, $3, false, NOW())`,
+                  [instId, gUrl, i + 2]
+                );
+              }
+            }
+          }
+        } catch (mediaSyncErr) {
+          console.warn("[Company Info PUT] media sync warning:", mediaSyncErr);
+        }
+      }
     } else {
       const res = await db.query(
         `UPDATE platform_company_info

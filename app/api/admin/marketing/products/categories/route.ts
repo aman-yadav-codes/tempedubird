@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { isPlatformAdminUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
 import { ensureFeatureSchema } from "@/lib/db/ensure-feature-schema";
+import { handleDatabaseApiError } from "@/lib/db/api-error";
 
 function slugify(text: string) {
   return text
@@ -98,8 +99,8 @@ export async function GET(req: Request) {
       categories: legacyRes.rows,
     });
   } catch (error: any) {
-    console.error("[Product Categories GET] Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to fetch product categories" }, { status: 500 });
+    console.warn("[Product Categories GET] Error:", error?.message || error);
+    return handleDatabaseApiError(error, "Failed to fetch product categories");
   }
 }
 
@@ -155,8 +156,8 @@ export async function POST(req: Request) {
       category: insertRes.rows[0],
     });
   } catch (error: any) {
-    console.error("[Product Categories POST] Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to create product category" }, { status: 500 });
+    console.warn("[Product Categories POST] Error:", error?.message || error);
+    return handleDatabaseApiError(error, "Failed to create product category");
   }
 }
 
@@ -202,8 +203,8 @@ export async function PATCH(req: Request) {
       category: updateRes.rows[0],
     });
   } catch (error: any) {
-    console.error("[Product Categories PATCH] Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to update product category" }, { status: 500 });
+    console.warn("[Product Categories PATCH] Error:", error?.message || error);
+    return handleDatabaseApiError(error, "Failed to update product category");
   }
 }
 
@@ -228,7 +229,7 @@ export async function DELETE(req: Request) {
       message: "Category deleted successfully",
     });
   } catch (error: any) {
-    console.error("[Product Categories DELETE] Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to delete product category" }, { status: 500 });
+    console.warn("[Product Categories DELETE] Error:", error?.message || error);
+    return handleDatabaseApiError(error, "Failed to delete product category");
   }
 }

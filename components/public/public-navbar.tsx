@@ -42,6 +42,7 @@ import {
   Loader2,
   Store,
   ExternalLink,
+  Boxes,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore, useCartStore } from "@/store";
@@ -71,17 +72,18 @@ type PublicNavbarProps = {
   brand?: PublicNavbarBrand;
   showInstitutesLink?: boolean;
   institutionNavItems?: PublicInstitutionNavItem[];
+  configuredInstitutionId?: number | null;
 };
 
 const CATEGORY_ITEMS: { key: CategoryKey; label: string; href: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { key: "courses", label: "Course", href: "/courses", icon: BookOpen },
-  { key: "teachers", label: "Staff", href: "/teachers", icon: UserCheck },
+  { key: "courses", label: "Courses", href: "/courses", icon: BookOpen },
   { key: "products", label: "Product", href: "/products", icon: ShoppingCart },
-  { key: "services", label: "Services", href: "/explore?type=service", icon: Layers },
-  { key: "blogs", label: "Blogs", href: "/blogs", icon: FileText },
+  { key: "teachers", label: "Staff", href: "/teachers", icon: UserCheck },
   { key: "gallery", label: "Gallery", href: "/gallery", icon: ImageIcon },
-  { key: "contact", label: "Contact", href: "/contact", icon: PhoneCall },
   { key: "jobs", label: "Jobs", href: "/jobs", icon: Briefcase },
+  { key: "blogs", label: "Blog", href: "/blogs", icon: FileText },
+  { key: "contact", label: "Contact Us", href: "/contact", icon: PhoneCall },
+  { key: "services", label: "Services", href: "/explore?type=service", icon: Layers },
 ];
 
 function getInitials(name?: string | null) {
@@ -99,6 +101,9 @@ export function PublicNavbar({
     logoUrl: "/icons/edubird.webp",
     isInstitution: false,
   },
+  showInstitutesLink,
+  institutionNavItems,
+  configuredInstitutionId,
 }: PublicNavbarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -120,21 +125,22 @@ export function PublicNavbar({
   );
 
   const defaultEnvInstId =
-    process.env.NEXT_PUBLIC_BUSINESS_ID
+    configuredInstitutionId ??
+    (process.env.NEXT_PUBLIC_BUSINESS_ID
       ? Number(process.env.NEXT_PUBLIC_BUSINESS_ID)
       : process.env.NEXT_PUBLIC_INSTITUTION_ID
-      ? Number(process.env.NEXT_PUBLIC_INSTITUTION_ID)
-      : process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
-      ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
-      : null;
+        ? Number(process.env.NEXT_PUBLIC_INSTITUTION_ID)
+        : process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID
+          ? Number(process.env.NEXT_PUBLIC_DEFAULT_INSTITUTION_ID)
+          : null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Fetch institution info dynamically for logged in institution admin
+  // Fetch institution info dynamically for logged in institution admin or business storefront
   useEffect(() => {
-    const instId = activeInstitutionId || user?.memberships?.[0]?.institution_id || defaultEnvInstId;
+    const instId = defaultEnvInstId || activeInstitutionId || user?.memberships?.[0]?.institution_id;
     if (instId) {
       fetch(`/api/public/institution/info?institutionId=${instId}`)
         .then((res) => res.json())
@@ -162,28 +168,31 @@ export function PublicNavbar({
     institutionInfo?.name ||
     (brand?.isInstitution ? brand.name : "Institution");
 
-  // Platform marketplace: filtered dynamically by isCategoryVisible
+  // Platform marketplace: filtered dynamically by isCategoryVisible (jobs & blogs moved to footer)
   const PLATFORM_MARKETPLACE_KEYS: CategoryKey[] = [
     "courses",
-    "teachers",
     "products",
-    "services",
-    "blogs",
+    "teachers",
     "gallery",
     "contact",
-    "jobs",
+    "services",
   ];
   const platformCategoryItems = CATEGORY_ITEMS.filter((item) =>
     PLATFORM_MARKETPLACE_KEYS.includes(item.key) &&
+    item.key !== "jobs" &&
+    item.key !== "blogs" &&
     (!mounted || isCategoryVisible(item.key))
   );
 
-  // Institution edition menu: items filtered dynamically by isCategoryVisible
+  // Institution edition menu: items filtered dynamically by isCategoryVisible (jobs & blogs moved to footer)
   const institutionCategoryItems = CATEGORY_ITEMS.filter(
     (item) =>
       item.key !== "institutes" &&
       item.key !== "hostels" &&
       item.key !== "libraries" &&
+      item.key !== "services" &&
+      item.key !== "jobs" &&
+      item.key !== "blogs" &&
       (!mounted || isCategoryVisible(item.key))
   );
   const effectiveInstitutionItems = institutionCategoryItems;
@@ -197,7 +206,7 @@ export function PublicNavbar({
   } = useUserLocation();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState("Course");
+  const [activeTab, setActiveTab] = useState("Courses");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authDialogTab, setAuthDialogTab] = useState<"signin" | "signup">("signin");
@@ -233,11 +242,12 @@ export function PublicNavbar({
           {isInstitutionView ? (
             <>
               <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#800000] to-rose-900 text-white font-black text-sm shadow-sm overflow-hidden border border-rose-200/50">
-                {institutionInfo?.logo_url ? (
+                {(institutionInfo?.logo_url || brand?.logoUrl) ? (
                   <Image
-                    src={institutionInfo.logo_url}
+                    src={institutionInfo?.logo_url || brand?.logoUrl || ""}
                     alt={institutionDisplayName}
                     fill
+                    unoptimized
                     sizes="36px"
                     className="object-cover"
                   />
@@ -250,7 +260,7 @@ export function PublicNavbar({
                   {institutionDisplayName}
                 </span>
                 <span className="text-[9px] font-semibold text-rose-700 uppercase tracking-wider truncate">
-                  Campus Portal
+                  {Boolean(process.env.NEXT_PUBLIC_BUSINESS_ID || process.env.NEXT_PUBLIC_APP_MODE === "business") ? "Official Portal" : "Campus Portal"}
                 </span>
               </div>
             </>
@@ -277,62 +287,19 @@ export function PublicNavbar({
         {isInstitutionView ? (
           <div className="hidden md:flex flex-1 items-center justify-start lg:justify-center mx-2 py-1 overflow-hidden">
             <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap">
-              {/* 1. About Us Dropdown FIRST (Mission, Vision & Goal, About Founder, About Institute) */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className={cn(
-                      "flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg whitespace-nowrap text-xs font-semibold transition-all duration-200 cursor-pointer select-none outline-none shrink-0",
-                      pathname.startsWith("/about")
-                        ? "bg-[#FEE2E2] text-[#991B1B] font-bold shadow-2xs border border-rose-200/60"
-                        : "text-[#800000] hover:text-[#991B1B] hover:bg-rose-100/50"
-                    )}
-                  >
-                    <Info className="h-3.5 w-3.5 shrink-0 text-[#800000]" />
-                    <span>About Us</span>
-                    <ChevronDown className="h-3 w-3 text-[#800000]/70" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-60 p-1.5 space-y-1 bg-white border border-gray-200 shadow-xl rounded-xl">
-                  <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
-                    <Link href="/about#mission-vision" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
-                      <Target className="h-4 w-4 text-rose-600 shrink-0" />
-                      <div className="flex flex-col leading-tight">
-                        <span className="font-bold">Mission, Vision & Goal</span>
-                        <span className="text-[10px] text-gray-500 font-normal">Core principles & aims</span>
-                      </div>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
-                    <Link href="/about#founder" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
-                      <User className="h-4 w-4 text-rose-600 shrink-0" />
-                      <div className="flex flex-col leading-tight">
-                        <span className="font-bold">About Founder</span>
-                        <span className="text-[10px] text-gray-500 font-normal">Leadership & founders</span>
-                      </div>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
-                    <Link href="/about#facilities" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
-                      <Sparkles className="h-4 w-4 text-rose-600 shrink-0" />
-                      <div className="flex flex-col leading-tight">
-                        <span className="font-bold">Facilities & Infrastructure</span>
-                        <span className="text-[10px] text-gray-500 font-normal">Labs, sports & campus amenities</span>
-                      </div>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild className="cursor-pointer py-2 px-3 rounded-lg hover:bg-rose-50">
-                    <Link href="/about#institute" className="flex items-center gap-2.5 w-full text-xs font-semibold text-gray-800 hover:text-rose-800">
-                      <Building2 className="h-4 w-4 text-rose-600 shrink-0" />
-                      <div className="flex flex-col leading-tight">
-                        <span className="font-bold">About Institute</span>
-                        <span className="text-[10px] text-gray-500 font-normal">Overview & heritage</span>
-                      </div>
-                    </Link>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {/* 1. About Us Direct Link (Unified single page) */}
+              <Link
+                href="/about"
+                className={cn(
+                  "flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg whitespace-nowrap text-xs font-semibold transition-all duration-200 cursor-pointer select-none shrink-0",
+                  pathname.startsWith("/about")
+                    ? "bg-[#FEE2E2] text-[#991B1B] font-bold shadow-2xs border border-rose-200/60"
+                    : "text-[#800000] hover:text-[#991B1B] hover:bg-rose-100/50"
+                )}
+              >
+                <Info className="h-3.5 w-3.5 shrink-0 text-[#800000]" />
+                <span>About Us</span>
+              </Link>
 
               {/* Primary visible items for institution view */}
               {effectiveInstitutionItems.map((item) => {
@@ -526,7 +493,7 @@ export function PublicNavbar({
                   {!isPlatformAdmin && (
                     <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
                       <Link
-                        href={activeInstitutionId ? `/storefront?institutionId=${activeInstitutionId}` : "/storefront"}
+                        href={institutionInfo?.slug ? `/institutes/${institutionInfo.slug}` : (activeInstitutionId ? `/institutes/${activeInstitutionId}` : "/explore")}
                         target="_blank"
                         className="flex items-center justify-between w-full"
                       >
@@ -672,46 +639,20 @@ export function PublicNavbar({
                 Campus Navigation
               </p>
 
-              {/* About Us Mobile Submenu */}
-              <div className="rounded-xl border border-rose-100 bg-rose-50/40 p-2 space-y-1">
-                <span className="text-xs font-bold text-[#800000] px-1 block flex items-center gap-1.5">
-                  <Info className="h-3.5 w-3.5 text-[#800000]" /> About Us & Campus
-                </span>
-                <div className="grid grid-cols-2 gap-1 pt-1">
-                  <Link
-                    href="/about#mission-vision"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-1.5 p-1.5 rounded-lg text-xs font-semibold text-gray-800 hover:bg-rose-100/60"
-                  >
-                    <Target className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                    <span className="truncate">Mission & Vision</span>
-                  </Link>
-                  <Link
-                    href="/about#founder"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-1.5 p-1.5 rounded-lg text-xs font-semibold text-gray-800 hover:bg-rose-100/60"
-                  >
-                    <User className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                    <span className="truncate">About Founder</span>
-                  </Link>
-                  <Link
-                    href="/about#facilities"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-1.5 p-1.5 rounded-lg text-xs font-semibold text-gray-800 hover:bg-rose-100/60"
-                  >
-                    <Sparkles className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                    <span className="truncate">Facilities</span>
-                  </Link>
-                  <Link
-                    href="/about#institute"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-1.5 p-1.5 rounded-lg text-xs font-semibold text-gray-800 hover:bg-rose-100/60"
-                  >
-                    <Building2 className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                    <span className="truncate">Institute Info</span>
-                  </Link>
-                </div>
-              </div>
+              {/* About Us Direct Link */}
+              <Link
+                href="/about"
+                onClick={() => setMobileMenuOpen(false)}
+                className={cn(
+                  "flex items-center gap-2 p-2.5 rounded-xl text-xs font-semibold transition-all",
+                  pathname.startsWith("/about")
+                    ? "bg-rose-100 text-rose-900 font-bold border border-rose-200"
+                    : "text-gray-800 hover:bg-gray-100"
+                )}
+              >
+                <Info className="h-4 w-4 text-[#800000]" />
+                <span>About Us</span>
+              </Link>
 
               {/* Institution Active Categories */}
               <div className="grid grid-cols-2 gap-1 pt-2">
@@ -768,12 +709,12 @@ export function PublicNavbar({
               {/* Add Listings Mobile Action */}
               <div className="pt-2">
                 <Link
-                  href="/packages"
+                  href="/contact"
                   onClick={() => setMobileMenuOpen(false)}
                   className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-rose-200 bg-rose-50/50 text-[#800000] font-bold text-xs hover:bg-rose-100 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
-                  <span>Add Institute / Course Listings</span>
+                  <span>Partner With Us / Enquire</span>
                 </Link>
               </div>
             </div>

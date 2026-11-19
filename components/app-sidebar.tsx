@@ -26,6 +26,10 @@ import {
     Receipt,
     BadgeDollarSign,
     Bus, IndianRupee,
+    Car,
+    UtensilsCrossed,
+    BedDouble,
+    HeartPulse,
     TrendingUp,
     PieChart,
     Image,
@@ -227,9 +231,9 @@ const navItems: SidebarItem[] = [
         ],
     },
     {
-        title: "Business & Professional Profiles",
+        title: "Listings",
         url: "/admin/profiles",
-        icon: Building2,
+        icon: Layers,
     },
     {
         title: "Business Type Access Management",
@@ -247,6 +251,11 @@ const navItems: SidebarItem[] = [
             { title: "Professional Categories", url: "/admin/categories?type=professional", icon: UserCheck },
             { title: "Course Categories", url: "/admin/categories?type=course", icon: BookOpen },
             { title: "Job Categories", url: "/admin/categories?type=job", icon: Briefcase },
+            { title: "Vehicle Categories", url: "/admin/categories?type=vehicle", icon: Car },
+            { title: "Property Categories", url: "/admin/categories?type=property", icon: Building2 },
+            { title: "Event Categories", url: "/admin/categories?type=event", icon: CalendarDays },
+            { title: "Dish Categories", url: "/admin/categories?type=dish", icon: UtensilsCrossed },
+            { title: "Room Categories", url: "/admin/categories?type=room", icon: BedDouble },
         ],
     },
     {
@@ -258,6 +267,11 @@ const navItems: SidebarItem[] = [
             { title: "Master Services", url: "/admin/catalog/services", icon: Briefcase },
             { title: "Master Courses", url: "/admin/catalog/courses", icon: BookOpen },
             { title: "Master Jobs", url: "/admin/catalog/jobs", icon: Briefcase },
+            { title: "Master Vehicles", url: "/admin/catalog/vehicles", icon: Car },
+            { title: "Master Properties", url: "/admin/catalog/properties", icon: Building2 },
+            { title: "Master Events", url: "/admin/catalog/events", icon: CalendarDays },
+            { title: "Master Dishes", url: "/admin/catalog/dishes", icon: UtensilsCrossed },
+            { title: "Master Rooms", url: "/admin/catalog/rooms", icon: BedDouble },
             { title: "Synonyms & Keywords", url: "/admin/master-data/synonyms", icon: Sparkles },
             { title: "Blog", url: "/admin/content/blog", icon: FileText },
             { title: "Skills", url: "/admin/master-data/skills", icon: BookOpen },
@@ -306,7 +320,6 @@ const navItems: SidebarItem[] = [
             { title: "Attendance", url: "/admin/staff/attendance", icon: ClipboardCheck },
             { title: "Queries", url: "/admin/staff/queries", icon: HelpCircle },
             { title: "Our Jobs", url: "/admin/staff/jobs", icon: Briefcase },
-            { title: "Applicant", url: "/admin/staff/applicants", icon: UserCheck },
         ],
     },
     {
@@ -377,13 +390,9 @@ const navItems: SidebarItem[] = [
     },
     {
         title: "Marketing",
-        url: "/admin/marketing/packages",
+        url: "/admin/marketing/social-media",
         icon: Megaphone,
         children: [
-            { title: "Products", url: "/admin/marketing/products", icon: ShoppingBag },
-            { title: "Services", url: "/admin/marketing/services", icon: Briefcase },
-            { title: "Courses", url: "/admin/marketing/courses", icon: BookOpen },
-            { title: "Pricing Packages", url: "/admin/marketing/packages", icon: CreditCard },
             { title: "Social Media", url: "/admin/marketing/social-media", icon: Share2 },
             { title: "Form Builder", url: "/admin/marketing/form-builder", icon: FileText },
             { title: "Email Template Builder", url: "/admin/marketing/email-templates", icon: Mail },
@@ -400,11 +409,26 @@ const navItems: SidebarItem[] = [
         children: [
             { title: "Orders & Bookings", url: "/admin/sales/orders", icon: ShoppingCart },
             { title: "Pipeline", url: "/admin/sales/pipeline", icon: TrendingUp },
+            { title: "Leads", url: "/admin/sales/leads", icon: UserCheck },
             { title: "Proposals", url: "/admin/sales/proposals", icon: FileSignature },
-            { title: "Clients", url: "/admin/sales/clients", icon: Building2 },
             { title: "Enquiry", url: "/admin/sales/enquiries", icon: Mail },
             { title: "Commissions", url: "/admin/sales/commissions", icon: Percent },
             { title: "Generate Documents", url: "/admin/sales/generate-documents", icon: Sparkles },
+        ],
+    },
+    {
+        title: "Business Records",
+        url: "/admin/business-records",
+        icon: Boxes,
+        children: [
+            { title: "Operations Hub", url: "/admin/business-records", icon: Sparkles },
+            { title: "Vehicles Inventory", url: "/admin/business-records/vehicles", icon: Car },
+            { title: "Property Listings", url: "/admin/business-records/properties", icon: Building2 },
+            { title: "Restaurant & Menu", url: "/admin/business-records/restaurants", icon: UtensilsCrossed },
+            { title: "Hotel Rooms & Stays", url: "/admin/business-records/hotels", icon: BedDouble },
+            { title: "Events & Tickets", url: "/admin/business-records/events", icon: CalendarDays },
+            { title: "Student Directory", url: "/admin/business-records/education", icon: GraduationCap },
+            { title: "Patient Directory", url: "/admin/business-records/healthcare", icon: HeartPulse },
         ],
     },
     {
@@ -412,6 +436,14 @@ const navItems: SidebarItem[] = [
         url: "/admin/master-data",
         icon: Briefcase,
         children: [
+            { title: "Master Data Hub", url: "/platformadmin/master-data", icon: Boxes },
+            { title: "Vehicle Masters", url: "/platformadmin/master-data/vehicles", icon: Car },
+            { title: "Property Masters", url: "/platformadmin/master-data/properties", icon: Building2 },
+            { title: "Restaurant Masters", url: "/platformadmin/master-data/restaurants", icon: UtensilsCrossed },
+            { title: "Hotel Masters", url: "/platformadmin/master-data/hotels", icon: BedDouble },
+            { title: "Education Masters", url: "/platformadmin/master-data/education", icon: GraduationCap },
+            { title: "Healthcare Masters", url: "/platformadmin/master-data/healthcare", icon: HeartPulse },
+            { title: "Event Masters", url: "/platformadmin/master-data/events", icon: CalendarDays },
             { title: "Category Tree", url: "/admin/content/tree", icon: FolderTree },
             { title: "Manage Categories", url: "/admin/content/categories", icon: Edit2 },
             { title: "Boards", url: "/admin/content/boards", icon: BookOpen },
@@ -469,11 +501,21 @@ const navItems: SidebarItem[] = [
         url: "/admin/vendors",
         icon: ShieldCheck,
         children: [
+            { title: "Products", url: "/admin/marketing/products", icon: ShoppingBag },
+            { title: "Services", url: "/admin/marketing/services", icon: Briefcase },
+            { title: "Courses", url: "/admin/marketing/courses", icon: BookOpen },
+            { title: "Vehicles", url: "/admin/marketing/vehicles", icon: Car },
+            { title: "Properties", url: "/admin/marketing/properties", icon: Building2 },
+            { title: "Events", url: "/admin/marketing/events", icon: CalendarDays },
+            { title: "Dishes & Menu", url: "/admin/marketing/dishes", icon: UtensilsCrossed },
+            { title: "Rooms & Stays", url: "/admin/marketing/rooms", icon: BedDouble },
+            { title: "Patients", url: "/admin/sales/patients", icon: HeartPulse },
+            { title: "Students", url: "/admin/sales/students", icon: GraduationCap },
+            { title: "Clients", url: "/admin/sales/clients", icon: Building2 },
             { title: "Vendors", url: "/admin/vendors", icon: Store },
             { title: "Inventory", url: "/admin/inventory", icon: Boxes },
             { title: "Team", url: "/admin/team", icon: Users },
             { title: "Business Calendar", url: "/admin/calendar", icon: CalendarDays },
-            { title: "Timetable", url: "/admin/master-data/timetable-setup", icon: CalendarDays },
             { title: "Attendance Setup", url: "/admin/master-data/attendance-setup", icon: ClipboardCheck },
             { title: "Noticeboard", url: "/admin/noticeboard", icon: Bell },
             { title: "Complaints", url: "/admin/complaints", icon: MessageSquareWarning },
@@ -492,7 +534,6 @@ const navItems: SidebarItem[] = [
             { title: "About Us", url: "/admin/company?tab=about-institute", icon: Info },
             { title: "Mission, Vision & Goals", url: "/admin/company?tab=mission-vision-goal", icon: Target },
             { title: "About Founder", url: "/admin/company?tab=about-founder", icon: User },
-            { title: "Facilities & Infrastructure", url: "/admin/company?tab=facilities", icon: Sparkles },
             { title: "Payment Methods", url: "/admin/company?tab=payment-methods", icon: CreditCard },
             { title: "FAQs", url: "/admin/company?tab=faqs", icon: HelpCircle },
             { title: "Privacy Policy", url: "/admin/company?tab=privacy-policy", icon: ShieldCheck },
@@ -508,6 +549,7 @@ const navItems: SidebarItem[] = [
         icon: Settings,
         children: [
             { title: "General", url: "/admin/settings", icon: Palette },
+            { title: "Packages", url: "/admin/settings/packages", icon: Boxes },
             { title: "Performance Settings", url: "/admin/settings/performance", icon: Trophy },
             { title: "Controls", url: "/admin/notifications/settings", permissionPath: "/admin/notifications/settings", icon: Settings },
             { title: "Support", url: "/admin/support", icon: LifeBuoy },
@@ -898,9 +940,9 @@ export function AppSidebar() {
         }
         if (isCustomer) {
             return pathname === "/admin" ||
-                   pathname.startsWith("/admin/orders") ||
-                   pathname.startsWith("/admin/finance") ||
-                   pathname.startsWith("/admin/my-profile");
+                pathname.startsWith("/admin/orders") ||
+                pathname.startsWith("/admin/finance") ||
+                pathname.startsWith("/admin/my-profile");
         }
         if (pathname === "/admin/account" || pathname.startsWith("/admin/account")) {
             return !isStudent && !isParent;
@@ -1010,10 +1052,10 @@ export function AppSidebar() {
                         return [];
                     }
                     if (!isPlatformAdmin && !isInstitutionAdmin) {
-                        const hasStaffManagementAccess = 
-                            hasPermission(user, "managestaff.allstaff.view") || 
-                            hasPermission(user, "managestaff.view") || 
-                            hasPermission(user, "staff.view") || 
+                        const hasStaffManagementAccess =
+                            hasPermission(user, "managestaff.allstaff.view") ||
+                            hasPermission(user, "managestaff.view") ||
+                            hasPermission(user, "staff.view") ||
                             hasPermission(user, "managestaff.manage") ||
                             Boolean(user?.permissions?.some((p: string) => p.startsWith("managestaff.")));
                         if (!hasStaffManagementAccess) {
@@ -1038,10 +1080,10 @@ export function AppSidebar() {
                     return [item];
                 }
                 if (item.url === "/admin/marketing/packages") {
-                    const hasMarketingAccess = isPlatformAdmin || isInstitutionAdmin || 
-                        hasPermission(user, "marketing.packages.view") || 
-                        hasPermission(user, "marketing.ads.view") || 
-                        hasPermission(user, "marketing.view") || 
+                    const hasMarketingAccess = isPlatformAdmin || isInstitutionAdmin ||
+                        hasPermission(user, "marketing.packages.view") ||
+                        hasPermission(user, "marketing.ads.view") ||
+                        hasPermission(user, "marketing.view") ||
                         Boolean(user?.permissions?.some((p: string) => p.startsWith("marketing.")));
                     if (!hasMarketingAccess) return [];
                     if (!isPlatformAdmin && item.children) {
@@ -1058,12 +1100,12 @@ export function AppSidebar() {
                     return [item];
                 }
                 if ((item.url === "/admin/sales/pipeline" || item.url === "/admin/sales/leads" || item.title === "Sales") && item.children) {
-                    const hasSalesAccess = isPlatformAdmin || isInstitutionAdmin || 
-                        hasPermission(user, "sales.leads.view") || 
-                        hasPermission(user, "sales.pipeline.view") || 
-                        hasPermission(user, "sales.orders.view") || 
-                        hasPermission(user, "sales.view") || 
-                        hasPermission(user, "leads.view") || 
+                    const hasSalesAccess = isPlatformAdmin || isInstitutionAdmin ||
+                        hasPermission(user, "sales.leads.view") ||
+                        hasPermission(user, "sales.pipeline.view") ||
+                        hasPermission(user, "sales.orders.view") ||
+                        hasPermission(user, "sales.view") ||
+                        hasPermission(user, "leads.view") ||
                         Boolean(user?.permissions?.some((p: string) => p.startsWith("sales.") || p.startsWith("leads.")));
                     if (!hasSalesAccess) return [];
                     return [{
@@ -1076,9 +1118,9 @@ export function AppSidebar() {
                     return [item];
                 }
                 if (item.url === "/admin/vendors" && item.children) {
-                    const hasVendorAccess = isPlatformAdmin || isInstitutionAdmin || isHeadOfOperations || 
-                        hasPermission(user, "admin.vendors.view") || 
-                        hasPermission(user, "inventory.view") || 
+                    const hasVendorAccess = isPlatformAdmin || isInstitutionAdmin || isHeadOfOperations ||
+                        hasPermission(user, "admin.vendors.view") ||
+                        hasPermission(user, "inventory.view") ||
                         Boolean(user?.permissions?.some((p: string) => p.startsWith("vendors.") || p.startsWith("inventory.")));
                     if (!hasVendorAccess) {
                         return [];
@@ -1101,10 +1143,10 @@ export function AppSidebar() {
                     }];
                 }
                 if (item.url === "/admin/sales/leads") {
-                    const hasSalesAccess = isPlatformAdmin || isInstitutionAdmin || 
-                        hasPermission(user, "sales.leads.view") || 
-                        hasPermission(user, "sales.view") || 
-                        hasPermission(user, "leads.view") || 
+                    const hasSalesAccess = isPlatformAdmin || isInstitutionAdmin ||
+                        hasPermission(user, "sales.leads.view") ||
+                        hasPermission(user, "sales.view") ||
+                        hasPermission(user, "leads.view") ||
                         Boolean(user?.permissions?.some((p: string) => p.startsWith("sales.") || p.startsWith("leads.")));
                     return hasSalesAccess ? [item] : [];
                 }
@@ -1210,9 +1252,9 @@ export function AppSidebar() {
                     }];
                 }
                 if (item.url === "/admin/settings" && item.children) {
-                    const hasSettingsAccess = isPlatformAdmin || isInstitutionAdmin || 
-                        hasPermission(user, "settings.general.view") || 
-                        hasPermission(user, "institution.general_settings.view") || 
+                    const hasSettingsAccess = isPlatformAdmin || isInstitutionAdmin ||
+                        hasPermission(user, "settings.general.view") ||
+                        hasPermission(user, "institution.general_settings.view") ||
                         Boolean(user?.permissions?.some((p: string) => p.startsWith("settings.")));
                     if (!hasSettingsAccess) {
                         return [];
@@ -1221,6 +1263,13 @@ export function AppSidebar() {
                     return [{
                         ...item,
                         children: item.children.filter((child) => {
+                            if (child.url === "/admin/settings/packages") {
+                                // "we need packages option in setting tab which only business owner can see and those pckages will be created by platform admin only"
+                                const isBusinessOwner = isPlatformAdmin || isInstitutionAdmin ||
+                                    Boolean(user?.role_codes?.includes("business_owner")) ||
+                                    Boolean(user?.role_codes?.includes("institution_admin"));
+                                return isBusinessOwner;
+                            }
                             if (child.url === "/admin/settings/payments") {
                                 return isPlatformAdminPanel;
                             }

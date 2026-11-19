@@ -22,10 +22,19 @@ const fetchProfileFromCategoryAndSlug = cache(async (category: string, slug: str
       `SELECT
         bp.*,
         c.name AS category_name,
-        sc.name AS subcategory_name
+        sc.name AS subcategory_name,
+        COALESCE(bp.founder_name, ip.founder_name, u.full_name) AS owner_name,
+        COALESCE(bp.founder_title, ip.founder_title, 'Founder & Managing Director') AS owner_designation,
+        COALESCE(bp.founder_image_url, ip.founder_image_url, u.avatar_url) AS owner_image_url,
+        COALESCE(bp.phone, ip.phone, u.phone) AS owner_phone,
+        COALESCE(bp.whatsapp, bp.phone, ip.phone, u.phone) AS owner_whatsapp,
+        COALESCE(bp.email, ip.email, u.email) AS owner_email,
+        COALESCE(bp.founder_about, ip.founder_about, bp.about) AS owner_about
       FROM business_profiles bp
       LEFT JOIN categories c ON c.id = bp.category_id
       LEFT JOIN categories sc ON sc.id = bp.subcategory_id
+      LEFT JOIN institution_profiles ip ON ip.id = bp.institution_profile_id
+      LEFT JOIN users u ON u.id = bp.user_id
       WHERE (
         bp.slug = $1 
         OR bp.id = $2 
@@ -379,8 +388,8 @@ const fetchProfileFromCategoryAndSlug = cache(async (category: string, slug: str
     }
 
     return null;
-  } catch (err) {
-    console.error("Error in fetchProfileFromCategoryAndSlug:", err);
+  } catch (err: any) {
+    console.warn("fetchProfileFromCategoryAndSlug fallback:", err?.message || err);
     return null;
   }
 });

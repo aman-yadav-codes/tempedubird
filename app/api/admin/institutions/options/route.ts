@@ -34,7 +34,9 @@ export async function GET(req: Request) {
             COALESCE(ip.name, ip.slug) as name,
             ip.slug,
             ip.logo_url,
-            it.name as type_name
+            it.name as type_name,
+            (SELECT bp.slug FROM business_profiles bp WHERE (bp.institution_profile_id = ip.id OR bp.id = ip.id) AND COALESCE(bp.is_active, TRUE) = TRUE LIMIT 1) as business_slug,
+            (SELECT pp.slug FROM professional_profiles pp WHERE (pp.institution_profile_id = ip.id OR pp.id = ip.id) AND COALESCE(pp.is_active, TRUE) = TRUE LIMIT 1) as professional_slug
           FROM institution_profiles ip
           LEFT JOIN institution_types it ON it.id = ip.institution_type_id
           WHERE COALESCE(ip.is_active, TRUE) = TRUE
@@ -59,7 +61,9 @@ export async function GET(req: Request) {
             COALESCE(ip.name, ip.slug) as name,
             ip.slug,
             ip.logo_url,
-            it.name as type_name
+            it.name as type_name,
+            (SELECT bp.slug FROM business_profiles bp WHERE (bp.institution_profile_id = ip.id OR bp.id = ip.id) AND COALESCE(bp.is_active, TRUE) = TRUE LIMIT 1) as business_slug,
+            (SELECT pp.slug FROM professional_profiles pp WHERE (pp.institution_profile_id = ip.id OR pp.id = ip.id) AND COALESCE(pp.is_active, TRUE) = TRUE LIMIT 1) as professional_slug
           FROM institution_profiles ip
           LEFT JOIN institution_types it ON it.id = ip.institution_type_id
           WHERE COALESCE(ip.is_active, TRUE) = TRUE
@@ -84,7 +88,9 @@ export async function GET(req: Request) {
           COALESCE(ip.name, ip.slug) as name,
           ip.slug,
           ip.logo_url,
-          it.name as type_name
+          it.name as type_name,
+          (SELECT bp.slug FROM business_profiles bp WHERE (bp.institution_profile_id = ip.id OR bp.id = ip.id) AND COALESCE(bp.is_active, TRUE) = TRUE LIMIT 1) as business_slug,
+          (SELECT pp.slug FROM professional_profiles pp WHERE (pp.institution_profile_id = ip.id OR pp.id = ip.id) AND COALESCE(pp.is_active, TRUE) = TRUE LIMIT 1) as professional_slug
         FROM institution_profiles ip
         LEFT JOIN institution_types it ON it.id = ip.institution_type_id
         WHERE COALESCE(ip.is_active, TRUE) = TRUE
@@ -93,7 +99,20 @@ export async function GET(req: Request) {
       `);
     }
 
-    return NextResponse.json({ institutions: res.rows });
+    const institutions = res.rows.map((row: any) => {
+      let storefront_url = row.slug ? `/institutes/${row.slug}` : `/institutes/${row.id}`;
+      if (row.business_slug) {
+        storefront_url = `/business/${row.business_slug}`;
+      } else if (row.professional_slug) {
+        storefront_url = `/professional/${row.professional_slug}`;
+      }
+      return {
+        ...row,
+        storefront_url,
+      };
+    });
+
+    return NextResponse.json({ institutions });
   } catch (err: any) {
     console.error("GET /api/admin/institutions/options error:", err);
     return NextResponse.json({ error: err.message || "Failed to fetch institutions" }, { status: 500 });

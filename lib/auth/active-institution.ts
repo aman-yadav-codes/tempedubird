@@ -12,6 +12,8 @@ export type ActiveInstitutionSummary = {
   logoUrl?: string | null;
   boardId?: number | null;
   boardName?: string | null;
+  slug?: string | null;
+  storefrontUrl?: string | null;
 };
 
 export function parseActiveInstitutionId(value: string | number | null | undefined) {
@@ -113,6 +115,8 @@ export function getStoredActiveInstitutionSummary(): ActiveInstitutionSummary | 
         logoUrl: parsed.logoUrl ?? null,
         boardId: parsed.boardId ?? null,
         boardName: parsed.boardName ?? null,
+        slug: parsed.slug ?? null,
+        storefrontUrl: parsed.storefrontUrl ?? null,
       };
     }
   } catch {
@@ -134,6 +138,8 @@ export function setStoredActiveInstitutionId(institutionId: number, summary?: Pa
         logoUrl: summary.logoUrl ?? null,
         boardId: summary.boardId ?? null,
         boardName: summary.boardName ?? null,
+        slug: summary.slug ?? null,
+        storefrontUrl: summary.storefrontUrl ?? null,
       })
     );
   }

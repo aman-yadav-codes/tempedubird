@@ -201,7 +201,7 @@ export async function handlePublicCoursesGet(req: Request) {
 
   if (effectiveInstitutionId && Number.isInteger(effectiveInstitutionId) && effectiveInstitutionId > 0) {
     params.push(effectiveInstitutionId);
-    where.push(`ip.institution_id = $${params.length}`);
+    where.push(`(ip.institution_id = $${params.length} OR ip.institution_id IN (SELECT institution_profile_id FROM business_profiles WHERE id = $${params.length}))`);
   }
 
   if (search) {

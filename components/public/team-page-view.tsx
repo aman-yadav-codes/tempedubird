@@ -47,7 +47,7 @@ const ACCESS_BADGES: Record<string, { label: string; color: string; icon: any }>
   admin: { label: "Administration Head", color: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300/40", icon: ShieldCheck },
   manager: { label: "Department Manager", color: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300/40", icon: Briefcase },
   coordinator: { label: "Coordinator", color: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-300/40", icon: Sparkles },
-  staff: { label: "Faculty & Staff", color: "bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-300/40", icon: GraduationCap },
+  staff: { label: "Staff & Specialists", color: "bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-300/40", icon: Users },
 };
 
 export function TeamPageView() {
@@ -129,14 +129,14 @@ export function TeamPageView() {
           <div className="max-w-3xl space-y-3">
             <Badge className="bg-primary text-primary-foreground font-bold px-3 py-1 text-xs gap-1.5 shadow-xs">
               <Users className="w-3.5 h-3.5" />
-              <span>Leadership &amp; Faculty Team</span>
+              <span>Leadership &amp; Staff Team</span>
             </Badge>
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-foreground tracking-tight">
               Meet Our Dedicated Team
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-              Discover the experienced administrators, visionary department heads, and esteemed educators steering{" "}
-              <strong className="text-foreground font-semibold">{institutionTitle}</strong> toward academic excellence and student success.
+              Discover the experienced professionals, department leads, and dedicated specialists steering{" "}
+              <strong className="text-foreground font-semibold">{institutionTitle}</strong> toward organizational excellence and client satisfaction.
             </p>
           </div>
 
