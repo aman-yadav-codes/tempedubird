@@ -383,23 +383,28 @@ export function UnifiedMarketplaceHome() {
   return (
     <div className="flex-1 flex flex-col w-full bg-background">
       {/* ================= 1. HERO SECTION (FINDMY DEER DISCOVERY THEME) ================= */}
-      <section className="relative overflow-hidden min-h-[580px] sm:min-h-[640px] lg:min-h-[720px] flex items-center py-16 sm:py-20 lg:py-24 border-b border-border/50">
-        {/* Scenic Deer Wildlife Nature Background Image */}
-        <div className="absolute inset-0 z-0">
-          <Image
-            src="/images/hero-deer.jpg"
-            alt="Scenic Golden Hour Nature Landscape with Majestic Deer"
-            fill
-            priority
-            className="object-cover object-[75%_center] lg:object-[82%_center]"
-            sizes="100vw"
-            quality={90}
-          />
-          {/* Gradient Overlays for High Contrast & Text Legibility */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/92 via-black/70 to-black/35 md:from-black/88 md:via-black/55 md:to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/45" />
-          <div className="absolute inset-0 bg-amber-950/10 mix-blend-color" />
+      <section className="relative overflow-hidden min-h-[580px] sm:min-h-[640px] lg:min-h-[720px] flex items-center py-16 sm:py-20 lg:py-24 border-b border-border/50 bg-[#060402] bg-gradient-to-r from-[#060402] via-[#0d0905] to-[#150d08]">
+        {/* Scenic Majestic Deer - Pinned strictly to the RIGHT half, flipped horizontally to face LEFT towards the search box */}
+        <div className="absolute right-0 top-0 bottom-0 w-full sm:w-7/12 md:w-1/2 lg:w-[48%] pointer-events-none z-0 overflow-hidden">
+          <div className="relative w-full h-full -scale-x-100">
+            <Image
+              src="/images/hero-deer.jpg"
+              alt="Scenic Majestic Deer"
+              fill
+              priority
+              className="object-cover object-[center_20%] lg:object-[center_15%]"
+              sizes="(max-width: 768px) 100vw, 50vw"
+              quality={95}
+            />
+          </div>
+          {/* Subtle gradient blends so deer merges seamlessly into the left dark landscape */}
+          <div className="absolute inset-y-0 left-0 w-2/5 bg-gradient-to-r from-[#060402] via-[#060402]/85 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#060402] to-transparent" />
+          <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#060402] to-transparent" />
         </div>
+
+        {/* Ambient Warm Golden-Hour Glow on Right */}
+        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-amber-500/10 blur-3xl pointer-events-none z-0" />
 
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full space-y-7">
           {/* Top Eyebrow Tag */}
@@ -410,11 +415,11 @@ export function UnifiedMarketplaceHome() {
             </span>
           </div>
 
-          {/* Heading & Subheading */}
-          <div className="space-y-3.5 max-w-2xl sm:max-w-3xl">
-            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white leading-[1.06] drop-shadow-xl">
-              Looking for something? <br className="hidden sm:inline" />
-              <span className="text-white">Let&apos;s find it.</span>
+          {/* Heading & Subheading - Exactly 2 rows */}
+          <div className="space-y-3.5 max-w-2xl sm:max-w-3xl lg:max-w-4xl">
+            <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-[68px] font-black tracking-tight text-white leading-[1.08] drop-shadow-xl">
+              <span className="block whitespace-nowrap">Looking for something?</span>
+              <span className="block text-white">Let&apos;s find it.</span>
             </h1>
             <p className="text-sm sm:text-base lg:text-lg text-white/90 max-w-2xl leading-relaxed drop-shadow-md font-medium">
               Discover businesses, places, services, property, courses, products, jobs and more across South Africa &amp; your region.
@@ -564,78 +569,55 @@ export function UnifiedMarketplaceHome() {
               </DropdownMenu>
             </div>
 
-            {/* "Try:" Quick Category & Search Recommendation Pills */}
+            {/* Quick Category Navigation Pills */}
             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap pt-1 text-xs">
-              <span className="text-white/80 font-bold mr-1 text-xs drop-shadow-sm">Try:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery("Italian");
-                  handleSearch(undefined, "Italian");
-                }}
-                className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 backdrop-blur-md border border-white/20 hover:border-white/40 text-white/95 font-medium transition-all cursor-pointer shadow-xs"
-              >
-                🍕 I&apos;m craving Italian
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery("2 bedroom");
-                  handleSearch(undefined, "2 bedroom");
-                }}
-                className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 backdrop-blur-md border border-white/20 hover:border-white/40 text-white/95 font-medium transition-all cursor-pointer shadow-xs"
-              >
-                🏠 2 bedroom
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery("Need a plumber");
-                  handleSearch(undefined, "Need a plumber");
-                }}
-                className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 backdrop-blur-md border border-white/20 hover:border-white/40 text-white/95 font-medium transition-all cursor-pointer shadow-xs"
-              >
-                🔧 Need a plumber
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery("Property for rent");
-                  handleSearch(undefined, "Property for rent");
-                }}
-                className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 backdrop-blur-md border border-white/20 hover:border-white/40 text-white/95 font-medium transition-all cursor-pointer shadow-xs"
-              >
-                🏢 Property for rent
-              </button>
               <Link
                 href="/explore?type=product"
-                className="px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 backdrop-blur-md border border-amber-400/40 text-amber-200 font-semibold transition-all cursor-pointer shadow-xs"
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
               >
-                📦 Products
+                <span>📦 Products</span>
               </Link>
               <Link
                 href="/explore?type=professional"
-                className="px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 backdrop-blur-md border border-amber-400/40 text-amber-200 font-semibold transition-all cursor-pointer shadow-xs"
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
               >
-                👨‍💼 Professionals
+                <span>👨‍💼 Professionals</span>
               </Link>
               <Link
                 href="/explore?type=course"
-                className="px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 backdrop-blur-md border border-amber-400/40 text-amber-200 font-semibold transition-all cursor-pointer shadow-xs"
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
               >
-                🎓 Courses
+                <span>🎓 Courses</span>
               </Link>
               <Link
                 href="/explore?type=job"
-                className="px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 backdrop-blur-md border border-amber-400/40 text-amber-200 font-semibold transition-all cursor-pointer shadow-xs"
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
               >
-                💼 Jobs
+                <span>💼 Jobs</span>
               </Link>
               <Link
                 href="/explore?type=business"
-                className="px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 backdrop-blur-md border border-amber-400/40 text-amber-200 font-semibold transition-all cursor-pointer shadow-xs"
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
               >
-                🏢 Business
+                <span>🏢 Business</span>
+              </Link>
+              <Link
+                href="/explore?categoryName=Entertainment&type=all"
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <span>🎭 Entertainment</span>
+              </Link>
+              <Link
+                href="/explore?type=vehicle"
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <span>🚗 Vehicle</span>
+              </Link>
+              <Link
+                href="/explore?type=property"
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <span>🏠 Property</span>
               </Link>
             </div>
 
