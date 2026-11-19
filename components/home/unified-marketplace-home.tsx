@@ -359,7 +359,8 @@ export function UnifiedMarketplaceHome() {
     const q = (customQuery !== undefined ? customQuery : searchQuery).trim();
     if (!q) return;
     setIsDropdownOpen(false);
-    router.push(`/explore?q=${encodeURIComponent(q)}`);
+    const locParam = userLocation && userLocation !== "All Locations" ? `&city=${encodeURIComponent(userLocation)}` : "";
+    router.push(`/explore?q=${encodeURIComponent(q)}${locParam}`);
   };
 
   // Add Product to Cart handler
@@ -928,27 +929,72 @@ export function UnifiedMarketplaceHome() {
             )}
           </div>
 
-          {/* Live Metric Stats Bar (Glassmorphic cards over hero landscape) */}
+          {/* Live Metric Stats Bar (Glassmorphic cards over hero landscape - Click opens dedicated page according to selected location) */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 pt-6 border-t border-white/20 max-w-5xl">
             {[
-              { label: "Local Products", value: "660+", sub: "18 Local Stores", icon: Package },
-              { label: "Bookable Services", value: "90+", sub: "Verified Providers", icon: Wrench },
-              { label: "Top Experts", value: "50+", sub: "Doctors & Mentors", icon: UserCheck },
-              { label: "Certified Programs", value: "170+", sub: "Degrees & Diplomas", icon: GraduationCap },
-              { label: "Career Openings", value: "Active", sub: "Local & On-site", icon: Briefcase },
-              { label: "Local Store Network", value: "18 Stores", sub: "Verified Partners", icon: Store },
+              {
+                label: "Local Products",
+                value: products.length > 0 ? `${products.length}+` : "660+",
+                sub: "18 Local Stores",
+                icon: Package,
+                type: "product",
+              },
+              {
+                label: "Bookable Services",
+                value: services.length > 0 ? `${services.length}+` : "90+",
+                sub: "Verified Providers",
+                icon: Wrench,
+                type: "service",
+              },
+              {
+                label: "Top Experts",
+                value: professionals.length > 0 ? `${professionals.length}+` : "50+",
+                sub: "Doctors & Mentors",
+                icon: UserCheck,
+                type: "professional",
+              },
+              {
+                label: "Certified Programs",
+                value: courses.length > 0 ? `${courses.length}+` : "170+",
+                sub: "Degrees & Diplomas",
+                icon: GraduationCap,
+                type: "course",
+              },
+              {
+                label: "Career Openings",
+                value: jobs.length > 0 ? `${jobs.length}+` : "Active",
+                sub: "Local & On-site",
+                icon: Briefcase,
+                type: "job",
+              },
+              {
+                label: "Local Store Network",
+                value: businesses.length > 0 ? `${businesses.length} Stores` : "18 Stores",
+                sub: "Verified Partners",
+                icon: Store,
+                type: "business",
+              },
             ].map((stat, i) => {
               const Icon = stat.icon;
+              const locParam = userLocation && userLocation !== "All Locations" ? `&city=${encodeURIComponent(userLocation)}` : "";
+              const targetUrl = `/explore?type=${stat.type}${locParam}`;
+
               return (
-                <div key={i} className="p-3 rounded-xl border border-white/20 bg-black/45 backdrop-blur-md flex items-center gap-2.5 shadow-lg">
-                  <div className="size-8 rounded-lg bg-amber-500/20 text-amber-300 flex items-center justify-center shrink-0">
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => router.push(targetUrl)}
+                  className="p-3 rounded-xl border border-white/20 bg-black/45 hover:bg-black/75 hover:border-amber-400/60 hover:scale-[1.03] active:scale-[0.98] backdrop-blur-md flex items-center gap-2.5 shadow-lg transition-all cursor-pointer text-left group"
+                  title={`Explore ${stat.label}${userLocation && userLocation !== "All Locations" ? ` in ${userLocation}` : ""}`}
+                >
+                  <div className="size-8 rounded-lg bg-amber-500/20 text-amber-300 group-hover:bg-amber-500 group-hover:text-black flex items-center justify-center shrink-0 transition-colors">
                     <Icon className="size-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm font-black text-white">{stat.value}</div>
-                    <div className="text-[10px] text-white/75 truncate">{stat.label}</div>
+                    <div className="text-sm font-black text-white group-hover:text-amber-300 transition-colors">{stat.value}</div>
+                    <div className="text-[10px] text-white/75 group-hover:text-white truncate">{stat.label}</div>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>

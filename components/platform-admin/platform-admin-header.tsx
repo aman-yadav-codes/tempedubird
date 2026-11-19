@@ -179,6 +179,12 @@ export function PlatformAdminHeader() {
   const [storesDialogOpen, setStoresDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<{ id: number | string; name: string } | null>(null);
 
+  const withLocation = (url: string) => {
+    if (!location || location === "All Locations") return url;
+    const separator = url.includes("?") ? "&" : "?";
+    return `${url}${separator}city=${encodeURIComponent(location)}`;
+  };
+
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   // Close suggestions when clicking outside
@@ -344,7 +350,7 @@ export function PlatformAdminHeader() {
                     Explore {item.label}
                   </span>
                   <Link
-                    href={item.href}
+                    href={withLocation(item.href)}
                     className="text-[10px] text-primary hover:underline font-bold"
                   >
                     View All →
@@ -353,7 +359,7 @@ export function PlatformAdminHeader() {
                 {item.subcategories.map((sub) => (
                   <DropdownMenuItem key={sub.label} asChild>
                     <Link
-                      href={sub.href}
+                      href={withLocation(sub.href)}
                       className="cursor-pointer text-xs py-1.5 px-2.5 rounded-md font-medium text-foreground hover:text-primary hover:bg-muted"
                     >
                       {sub.label}
@@ -945,7 +951,7 @@ export function PlatformAdminHeader() {
                 return (
                   <Link
                     key={item.label}
-                    href={item.href}
+                    href={withLocation(item.href)}
                     onClick={() => setMobileNavOpen(false)}
                     className="flex items-center justify-between p-2.5 rounded-xl hover:bg-muted text-sm font-bold text-foreground transition-colors"
                   >
