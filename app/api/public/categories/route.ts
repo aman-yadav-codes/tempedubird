@@ -65,7 +65,12 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (parentId !== null && !isNaN(parentId)) {
+    const idParam = searchParams.get("id");
+    const id = idParam && /^\d+$/.test(idParam) ? Number(idParam) : null;
+    if (id) {
+      params.push(id);
+      conditions.push(`id = $${params.length}`);
+    } else if (parentId !== null && !isNaN(parentId)) {
       params.push(parentId);
       conditions.push(`parent_id = $${params.length}`);
     } else if (onlyRoot) {

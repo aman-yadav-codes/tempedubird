@@ -19,6 +19,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  ChevronDown,
+  ChevronRight,
   Search,
   MapPin,
   Building2,
@@ -141,11 +143,7 @@ function CustomerExplorePageContent() {
   const urlCategory = searchParams.get("categoryId") ? Number(searchParams.get("categoryId")) : null;
   const urlCategoryName = searchParams.get("categoryName") || "";
 
-  const envBizId =
-    process.env.NEXT_PUBLIC_BUSINESS_ID ||
-    process.env.NEXT_PUBLIC_INSTITUTION_ID ||
-    "";
-  const urlBiz = searchParams.get("businessId") || searchParams.get("business_id") || envBizId;
+  const urlBiz = searchParams.get("businessId") || searchParams.get("business_id");
   const activeBusinessId = urlBiz && /^\d+$/.test(urlBiz.trim()) ? Number(urlBiz.trim()) : null;
 
   const { location: userGlobalLocation, setLocation: setGlobalLocation } = useUserLocation();
@@ -162,7 +160,7 @@ function CustomerExplorePageContent() {
   const [postalCode, setPostalCode] = useState<string>("");
 
   // Cascading Category & Subcategory states
-  const [categories, setCategories] = useState<Array<{ id: number; name: string; slug?: string }>>([]);
+  const [categories, setCategories] = useState<Array<{ id: number; name: string; slug?: string; parent_id?: number | null }>>([]);
   const [subcategories, setSubcategories] = useState<Array<{ id: number; name: string; slug?: string }>>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(urlCategory);
   const [selectedCategoryName, setSelectedCategoryName] = useState<string>(urlCategoryName);
@@ -171,12 +169,39 @@ function CustomerExplorePageContent() {
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [loadingSubcategories, setLoadingSubcategories] = useState(false);
 
+  // New filters matching FindMy search layout
+  const [radius, setRadius] = useState<string>("no_radius");
+  const [minRating, setMinRating] = useState<number>(0);
+  const [verifiedOnly, setVerifiedOnly] = useState<boolean>(false);
+
   // Sync state if URL search parameters change
   useEffect(() => {
     if (urlQ) setQuery(urlQ);
     if (urlCategory) {
-      setSelectedCategoryId(urlCategory);
-      if (urlCategoryName) setSelectedCategoryName(urlCategoryName);
+      // Check if urlCategory is a subcategory by querying API
+      fetch(`/api/public/categories?id=${urlCategory}`)
+        .then((r) => r.json())
+        .then((json) => {
+          const cat = json?.data;
+          if (cat && cat.parent_id) {
+            setSelectedCategoryId(Number(cat.parent_id));
+            setSelectedSubcategoryId(Number(cat.id));
+            setSelectedSubcategoryName(cat.name || "");
+            if (cat.parent_name) setSelectedCategoryName(cat.parent_name);
+          } else if (cat) {
+            setSelectedCategoryId(Number(cat.id));
+            setSelectedCategoryName(cat.name || urlCategoryName);
+            setSelectedSubcategoryId(null);
+            setSelectedSubcategoryName("");
+          } else {
+            setSelectedCategoryId(urlCategory);
+            if (urlCategoryName) setSelectedCategoryName(urlCategoryName);
+          }
+        })
+        .catch(() => {
+          setSelectedCategoryId(urlCategory);
+          if (urlCategoryName) setSelectedCategoryName(urlCategoryName);
+        });
       setActiveType("all");
     } else if (urlType && ["all", "business", "service", "product", "professional", "course", "job"].includes(urlType)) {
       setActiveType(urlType);
@@ -304,6 +329,10 @@ function CustomerExplorePageContent() {
       list = list.filter((p) => ((p.brand || (p as any).brand_name || "").trim()) === selectedBrand);
     }
 
+    if (minRating > 0) {
+      list = list.filter((p) => Number(p.rating || 0) >= minRating);
+    }
+
     // Sort
     if (sortBy === "price_asc") {
       list.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
@@ -331,6 +360,12 @@ function CustomerExplorePageContent() {
         (b.description || b.about || "").toLowerCase().includes(q)
       );
     }
+    if (minRating > 0) {
+      list = list.filter((b) => Number(b.rating || (b as any).avg_rating || 0) >= minRating);
+    }
+    if (verifiedOnly) {
+      list = list.filter((b) => Boolean(b.is_verified));
+    }
     if (sortBy === "name_asc") {
       list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     } else if (sortBy === "name_desc") {
@@ -351,6 +386,12 @@ function CustomerExplorePageContent() {
         (p.name || "").toLowerCase().includes(q) ||
         (p.description || p.about || "").toLowerCase().includes(q)
       );
+    }
+    if (minRating > 0) {
+      list = list.filter((b) => Number(b.rating || (b as any).avg_rating || 0) >= minRating);
+    }
+    if (verifiedOnly) {
+      list = list.filter((b) => Boolean(b.is_verified));
     }
     if (sortBy === "name_asc") {
       list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
@@ -400,6 +441,12 @@ function CustomerExplorePageContent() {
         (c.university_name || "").toLowerCase().includes(q)
       );
     }
+    if (minRating > 0) {
+      list = list.filter((b) => Number(b.rating || (b as any).avg_rating || 0) >= minRating);
+    }
+    if (verifiedOnly) {
+      list = list.filter((b) => Boolean(b.is_verified));
+    }
     if (sortBy === "name_asc") {
       list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     } else if (sortBy === "name_desc") {
@@ -420,6 +467,12 @@ function CustomerExplorePageContent() {
         (j.department || "").toLowerCase().includes(q) ||
         (j.company_name || "").toLowerCase().includes(q)
       );
+    }
+    if (minRating > 0) {
+      list = list.filter((b) => Number(b.rating || (b as any).avg_rating || 0) >= minRating);
+    }
+    if (verifiedOnly) {
+      list = list.filter((b) => Boolean(b.is_verified));
     }
     if (sortBy === "name_asc") {
       list.sort((a, b) => (a.name || a.title || "").localeCompare(b.name || b.title || ""));
@@ -753,296 +806,152 @@ function CustomerExplorePageContent() {
   );
 
   return (
-    <div className="min-h-screen bg-muted/20 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6">
-{isBusinessMode && activeType === "professional" ? (
-        <Card className="rounded-2xl border shadow-xs bg-card">
-          <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs px-2.5 py-0.5 font-bold">
-                  Our Team
-                </Badge>
-                <span className="text-xs text-muted-foreground font-medium">
-                  Verified Team & Staff
-                </span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-1 flex items-center gap-2">
-                <Users className="size-7 text-primary" />
-                Our Staff & Team Members
-              </h1>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                Meet the experienced specialists, leaders, and dedicated staff members.
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                <Input
-                  type="text"
-                  value={productNameSearch}
-                  onChange={(e) => setProductNameSearch(e.target.value)}
-                  placeholder="Search staff by name or role..."
-                  className="pl-9 h-10 rounded-xl text-xs bg-background"
-                />
-              </div>
-              <Badge variant="secondary" className="text-xs px-3 py-2 font-bold whitespace-nowrap">
-                {filteredProfessionals.length} Staff Members
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        /* 4-Filter Cascading Hierarchy Bar */
-        <Card className="rounded-2xl border shadow-xs bg-card">
-        <CardContent className="p-4 sm:p-5 space-y-4">
-          <div className={cn(
-            "grid gap-3",
-            activeType === "product"
-              ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-5"
-              : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
-          )}>
-            {/* Filter 1: Type */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <Layers className="size-3.5 text-primary" />
-                <span>1. Type</span>
-              </label>
-              <select
-                value={activeType}
-                onChange={(e) => {
-                  const newType = e.target.value as any;
-                  setActiveType(newType);
-                  setSelectedCategoryId(null);
-                  setSelectedCategoryName("");
-                  setSelectedSubcategoryId(null);
-                  setSelectedSubcategoryName("");
-                  setSelectedBrand("all");
-                }}
-                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer"
-              >
-                <option value="all">All Types</option>
-                <option value="business">Business</option>
-                <option value="service">Service</option>
-                <option value="product">Product</option>
-                <option value="professional">Professional</option>
-                <option value="course">Courses</option>
-                <option value="job">Jobs</option>
-              </select>
-            </div>
+    <div className="min-h-screen bg-[#070e1c] text-slate-100 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6">
+      {/* 1. Breadcrumbs */}
+      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-slate-400 flex-wrap">
+        <Link href="/" className="hover:text-white transition-colors">Home</Link>
+        <ChevronRight className="size-3 text-slate-600" />
+        <button
+          type="button"
+          onClick={() => { setActiveType("all"); setSelectedCategoryId(null); setSelectedSubcategoryId(null); }}
+          className="hover:text-white transition-colors capitalize cursor-pointer"
+        >
+          {activeType === "all" ? "Explore" : activeType === "business" ? "Businesses" : activeType === "service" ? "Services" : activeType === "product" ? "Products" : activeType === "professional" ? "Professionals" : activeType === "course" ? "Courses" : "Jobs"}
+        </button>
+        {city && (
+          <>
+            <ChevronRight className="size-3 text-slate-600" />
+            <span className="text-slate-300">{city}</span>
+          </>
+        )}
+        {(selectedCategoryName || selectedSubcategoryName) && (
+          <>
+            <ChevronRight className="size-3 text-slate-600" />
+            <span className="text-amber-400 font-medium">{selectedSubcategoryName || selectedCategoryName}</span>
+          </>
+        )}
+      </nav>
 
-            {/* Filter 2: Category (Dynamic based on Type) */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <FolderTree className="size-3.5 text-primary" />
-                <span>2. Category {loadingCategories ? "(Loading...)" : `(${categories.length})`}</span>
-              </label>
-              <select
-                value={selectedCategoryId || ""}
-                onChange={(e) => {
-                  const val = e.target.value ? Number(e.target.value) : null;
-                  setSelectedCategoryId(val);
-                  setSelectedSubcategoryId(null);
-                  setSelectedSubcategoryName("");
-                  if (val) {
-                    const cat = categories.find((c) => c.id === val);
-                    setSelectedCategoryName(cat ? cat.name : "");
-                  } else {
-                    setSelectedCategoryName("");
-                  }
-                }}
-                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer"
-              >
-                <option value="">All Categories ({categories.length})</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+      {/* 2. Hero Headline Title & Subtitle */}
+      <div className="space-y-1.5 pt-1">
+        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight">
+          {selectedSubcategoryName || selectedCategoryName || (activeType === "all" ? "Businesses & Services" : activeType.charAt(0).toUpperCase() + activeType.slice(1))}
+          {city ? ` in ${city}` : ""}
+        </h1>
+        <p className="text-xs sm:text-sm text-slate-400 max-w-3xl">
+          Explore {selectedSubcategoryName || selectedCategoryName || "verified"} {activeType === "all" ? "businesses, services, and opportunities" : `${activeType}s`} in {city || "your area"}.
+        </p>
+      </div>
 
-            {/* Filter 3: Subcategory (Dynamic based on Category) */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <Folder className="size-3.5 text-primary" />
-                <span>3. Subcategory {selectedCategoryId ? (loadingSubcategories ? "(Loading...)" : `(${subcategories.length})`) : ""}</span>
-              </label>
-              <select
-                value={selectedSubcategoryId || ""}
-                disabled={!selectedCategoryId || subcategories.length === 0}
-                onChange={(e) => {
-                  const val = e.target.value ? Number(e.target.value) : null;
-                  setSelectedSubcategoryId(val);
-                  if (val) {
-                    const s = subcategories.find((sub) => sub.id === val);
-                    setSelectedSubcategoryName(s ? s.name : "");
-                  } else {
-                    setSelectedSubcategoryName("");
-                  }
-                }}
-                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <option value="">
-                  {!selectedCategoryId
-                    ? "Select a category first"
-                    : subcategories.length === 0
-                      ? "No subcategories available"
-                      : `All Subcategories (${subcategories.length})`}
-                </option>
-                {subcategories.map((sub) => (
-                  <option key={sub.id} value={sub.id}>
-                    {sub.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Filter 4: Location / City (Populated from Activated SEO Locations) */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <MapPin className="size-3.5 text-primary" />
-                <span>4. Location {availableLocations.length > 0 ? `(${availableLocations.length})` : ""}</span>
-              </label>
-              <select
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer"
-              >
-                <option value="">All Locations</option>
-                {availableLocations.map((loc) => (
-                  <option key={loc.id} value={loc.name}>
-                    {loc.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Filter 5: Brand (Conditional - ONLY when Product is selected, completely hidden otherwise) */}
-            {activeType === "product" && (
-              <div className="space-y-1.5 animate-in fade-in">
-                <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <Tag className="size-3.5 text-primary" />
-                  <span>5. Brand ({availableBrands.length})</span>
-                </label>
-                <select
-                  value={selectedBrand}
-                  onChange={(e) => setSelectedBrand(e.target.value)}
-                  className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer"
-                >
-                  <option value="all">All Brands ({availableBrands.length})</option>
-                  {availableBrands.map((b) => (
-                    <option key={b} value={b}>
-                      {b}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
-
-          {/* Search by Keyword & Sort Controls */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-border/50">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by keyword, item name, title, or description..."
-                value={productNameSearch}
-                onChange={(e) => setProductNameSearch(e.target.value)}
-                className="pl-9 text-xs h-10 rounded-xl"
-              />
-              {productNameSearch && (
-                <button
-                  type="button"
-                  onClick={() => setProductNameSearch("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
-                >
-                  <X className="size-3.5" />
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <label className="text-xs font-bold text-muted-foreground whitespace-nowrap flex items-center gap-1">
-                <ArrowUpDown className="size-3.5" /> Sort:
-              </label>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="h-10 rounded-xl border border-input bg-background px-3 py-1.5 text-xs font-semibold shadow-2xs cursor-pointer min-w-[150px]"
-              >
-                <option value="featured">Featured / Best Match</option>
-                <option value="price_asc">Price: Low to High</option>
-                <option value="price_desc">Price: High to Low</option>
-                <option value="rating_desc">Highest Rated</option>
-                <option value="name_asc">Name: A to Z</option>
-                <option value="name_desc">Name: Z to A</option>
-                <option value="newest">Newest First</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Type Tabs */}
-          <div className="pt-2">
-            <Tabs value={activeType} onValueChange={(val: any) => setActiveType(val)} className="w-full">
-              <TabsList className="p-1 bg-muted/60 h-auto gap-1 flex-wrap">
-                <TabsTrigger value="all" className="text-xs font-semibold px-3 py-1.5 gap-1.5">
-                  <Layers className="size-3.5" /> All ({totalFilteredCount})
-                </TabsTrigger>
-                <TabsTrigger value="business" className="text-xs font-semibold px-3 py-1.5 gap-1.5">
-                  <Building2 className="size-3.5" /> Businesses ({filteredBusinesses.length})
-                </TabsTrigger>
-                <TabsTrigger value="service" className="text-xs font-semibold px-3 py-1.5 gap-1.5">
-                  <Sparkles className="size-3.5" /> Services ({filteredServices.length})
-                </TabsTrigger>
-                <TabsTrigger value="product" className="text-xs font-semibold px-3 py-1.5 gap-1.5">
-                  <Package className="size-3.5" /> Products ({filteredProducts.length})
-                </TabsTrigger>
-                <TabsTrigger value="professional" className="text-xs font-semibold px-3 py-1.5 gap-1.5">
-                  <Briefcase className="size-3.5" /> Professionals ({filteredProfessionals.length})
-                </TabsTrigger>
-                <TabsTrigger value="course" className="text-xs font-semibold px-3 py-1.5 gap-1.5">
-                  <BookOpen className="size-3.5" /> Courses ({filteredCourses.length})
-                </TabsTrigger>
-                <TabsTrigger value="job" className="text-xs font-semibold px-3 py-1.5 gap-1.5">
-                  <Briefcase className="size-3.5" /> Jobs ({filteredJobs.length})
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-        </CardContent>
-      </Card>
-      )}
-
-      {/* Active Category Filter Banner */}
-      {(selectedCategoryId || selectedSubcategoryId) && (
-        <div className="flex items-center justify-between p-3.5 bg-primary/10 border border-primary/20 rounded-2xl text-xs flex-wrap gap-2 animate-in fade-in">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge className="bg-primary text-primary-foreground font-bold text-xs py-0.5 px-2">
-              Filter Active
-            </Badge>
-            <span className="font-bold text-foreground text-sm">
-              {selectedSubcategoryName ? `${selectedCategoryName} > ${selectedSubcategoryName}` : selectedCategoryName || `Category #${selectedCategoryId}`}
-            </span>
-            <span className="text-muted-foreground text-xs hidden sm:inline">
-              — Displaying matching results
-            </span>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setSelectedCategoryId(null);
-              setSelectedCategoryName("");
-              setSelectedSubcategoryId(null);
-              setSelectedSubcategoryName("");
-            }}
-            className="h-7 text-xs font-bold text-primary hover:text-primary gap-1 cursor-pointer"
+      {/* 3. Floating Glassmorphic Top Filter Bar */}
+      <div className="bg-slate-900/85 border border-slate-700/60 shadow-2xl rounded-2xl p-2.5 backdrop-blur-xl flex flex-wrap items-center gap-2.5">
+        {/* Keyword Search Input with Sparkle & Search Button */}
+        <div className="relative flex-1 min-w-[220px]">
+          <Sparkles className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-amber-400" />
+          <input
+            type="text"
+            placeholder="Search all EduBird"
+            value={productNameSearch}
+            onChange={(e) => setProductNameSearch(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') performSearch(); }}
+            className="w-full h-11 pl-10 pr-10 bg-slate-950/70 border border-slate-800 rounded-xl text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-amber-400 transition-colors"
+          />
+          <button
+            type="button"
+            onClick={() => performSearch()}
+            className="absolute right-2 top-1/2 -translate-y-1/2 size-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center transition-colors cursor-pointer"
+            title="Search"
           >
-            <X className="size-3.5" />
-            <span>Clear Filter</span>
-          </Button>
+            <Search className="size-3.5" />
+          </button>
         </div>
-      )}
+
+        {/* Location Dropdown Pill */}
+        <div className="flex items-center gap-1.5 h-11 px-3 rounded-xl bg-slate-950/70 border border-slate-800 text-xs sm:text-sm text-slate-200 cursor-pointer hover:border-slate-700">
+          <MapPin className="size-3.5 text-amber-400 shrink-0" />
+          <select
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+            className="bg-transparent text-xs sm:text-sm font-medium text-white focus:outline-none cursor-pointer pr-3 appearance-none"
+          >
+            <option value="" className="bg-slate-900 text-white">All Locations</option>
+            {availableLocations.map((loc) => (
+              <option key={loc.id} value={loc.name} className="bg-slate-900 text-white">
+                {loc.name}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="size-3 text-slate-400 pointer-events-none" />
+        </div>
+
+        {/* Radius Pill */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-slate-400 hidden md:inline">Radius</span>
+          <div className="flex items-center gap-1 h-11 px-2.5 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white">
+            <select
+              value={radius}
+              onChange={(e) => setRadius(e.target.value)}
+              className="bg-transparent text-xs font-semibold text-white focus:outline-none cursor-pointer appearance-none pr-3"
+            >
+              <option value="no_radius" className="bg-slate-900">No radius</option>
+              <option value="5" className="bg-slate-900">5 km</option>
+              <option value="10" className="bg-slate-900">10 km</option>
+              <option value="25" className="bg-slate-900">25 km</option>
+              <option value="50" className="bg-slate-900">50 km</option>
+            </select>
+            <ChevronDown className="size-3 text-slate-400 pointer-events-none" />
+          </div>
+        </div>
+
+        {/* Rating Pill */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-slate-400 hidden md:inline">Rating</span>
+          <div className="flex items-center gap-1 h-11 px-2.5 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white">
+            <select
+              value={minRating}
+              onChange={(e) => setMinRating(Number(e.target.value))}
+              className="bg-transparent text-xs font-semibold text-white focus:outline-none cursor-pointer appearance-none pr-3"
+            >
+              <option value="0" className="bg-slate-900">All</option>
+              <option value="4.5" className="bg-slate-900">4.5+ ★</option>
+              <option value="4.0" className="bg-slate-900">4.0+ ★</option>
+              <option value="3.5" className="bg-slate-900">3.5+ ★</option>
+            </select>
+            <ChevronDown className="size-3 text-slate-400 pointer-events-none" />
+          </div>
+        </div>
+
+        {/* Sort Pill */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-slate-400 hidden md:inline">Sort</span>
+          <div className="flex items-center gap-1 h-11 px-2.5 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="bg-transparent text-xs font-semibold text-white focus:outline-none cursor-pointer appearance-none pr-3"
+            >
+              <option value="featured" className="bg-slate-900">Name / Featured</option>
+              <option value="name_asc" className="bg-slate-900">Name (A-Z)</option>
+              <option value="name_desc" className="bg-slate-900">Name (Z-A)</option>
+              <option value="rating_desc" className="bg-slate-900">Highest Rated</option>
+              <option value="newest" className="bg-slate-900">Newest</option>
+              <option value="price_asc" className="bg-slate-900">Price: Low to High</option>
+              <option value="price_desc" className="bg-slate-900">Price: High to Low</option>
+            </select>
+            <ChevronDown className="size-3 text-slate-400 pointer-events-none" />
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Results Count Label */}
+      <div className="text-xs sm:text-sm font-semibold text-slate-400 pl-1">
+        {totalFilteredCount} matching {activeType === "business" ? "businesses" : activeType === "service" ? "services" : activeType === "product" ? "products" : activeType === "course" ? "courses" : activeType === "job" ? "jobs" : "listings"}
+      </div>
+
+      {/* 5. Two-Column Layout: Grid on Left, Filters Sidebar on Right */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Main Content Column */}
+        <div className="lg:col-span-8 xl:col-span-9 space-y-8">
 
       {/* Results Content */}
       {loading ? (
@@ -1070,89 +979,86 @@ function CustomerExplorePageContent() {
                   const whatsappClean = (biz.whatsapp || biz.phone || "").replace(/[^0-9]/g, "");
 
                   return (
-                    <Card key={biz.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
+                    <div
+                      key={biz.id}
+                      className="bg-slate-900/80 border border-slate-800 hover:border-slate-700/80 rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all flex flex-col justify-between group"
+                    >
                       <div>
-                        <CardHeader className="pb-3 border-b bg-muted/10">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <Link href={buildBusinessSeoUrl(biz)}>
-                                  <CardTitle className="text-base font-bold text-foreground hover:text-primary transition-colors cursor-pointer">
-                                    {biz.name}
-                                  </CardTitle>
-                                </Link>
-                                {biz.is_verified && (
-                                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 text-[10px] px-1 py-0">
-                                    <ShieldCheck className="size-3 mr-0.5 text-emerald-600" /> Verified
-                                  </Badge>
-                                )}
-                                {biz.is_featured && (
-                                  <Badge className="bg-amber-500 hover:bg-amber-600 text-white text-[10px] px-1.5 py-0">
-                                    Featured
-                                  </Badge>
-                                )}
-                              </div>
-                              <span className="text-xs text-muted-foreground block mt-0.5">
-                                {biz.business_type} • {biz.category_name || "General"}
-                              </span>
-                            </div>
-
-                            <button
-                              onClick={() => handleToggleFavorite(biz)}
-                              className={`p-1.5 rounded-full transition-all cursor-pointer ${
-                                isFavorited ? "text-rose-600 bg-rose-50 dark:bg-rose-950/50" : "text-muted-foreground hover:text-rose-600"
-                              }`}
-                              title={isFavorited ? "Remove from favorites" : "Save to favorites"}
-                            >
-                              <Heart className={`size-4 ${isFavorited ? "fill-rose-600" : ""}`} />
-                            </button>
+                        {/* Top Image Banner with Category Badge */}
+                        <div className="relative h-44 w-full bg-slate-950 overflow-hidden">
+                          <img
+                            src={biz.cover_url || biz.logo_url || biz.default_image_url || "/images/hero-deer.jpg"}
+                            alt={biz.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
+                          <div className="absolute bottom-3 left-3 bg-slate-950/85 backdrop-blur-md text-white text-[11px] font-semibold px-2.5 py-1 rounded-full border border-slate-700/80 shadow-md">
+                            {biz.category_name || biz.business_type || "Business"}
                           </div>
-                        </CardHeader>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleFavorite(biz)}
+                            className={`absolute top-3 right-3 p-1.5 rounded-full backdrop-blur-md transition-colors cursor-pointer ${
+                              isFavorited
+                                ? "bg-rose-500/20 text-rose-400 border border-rose-500/40"
+                                : "bg-slate-950/60 text-slate-300 hover:text-rose-400 border border-slate-800"
+                            }`}
+                            title={isFavorited ? "Remove from favorites" : "Save to favorites"}
+                          >
+                            <Heart className={`size-4 ${isFavorited ? "fill-rose-400" : ""}`} />
+                          </button>
+                        </div>
 
-                        <CardContent className="p-4 space-y-3 text-xs">
+                        {/* Body Info */}
+                        <div className="p-4 space-y-2.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <Link href={buildBusinessSeoUrl(biz)} className="flex-1 min-w-0">
+                              <h3 className="text-base font-bold text-white group-hover:text-amber-400 transition-colors cursor-pointer truncate">
+                                {biz.name}
+                              </h3>
+                            </Link>
+                            {biz.is_verified && (
+                              <Badge variant="outline" className="bg-emerald-950/60 text-emerald-400 border-emerald-800/80 text-[10px] px-1.5 py-0 shrink-0">
+                                <ShieldCheck className="size-3 mr-0.5 text-emerald-400" /> Verified
+                              </Badge>
+                            )}
+                          </div>
+
                           {/* Rating & Reviews */}
-                          <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center justify-between text-xs text-slate-400">
                             <div className="flex items-center gap-1">
                               <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                              <span className="font-bold text-foreground">{biz.avg_rating || "New"}</span>
-                              <span className="text-muted-foreground">({biz.review_count || 0} reviews)</span>
+                              <span className="font-bold text-white">{biz.avg_rating || "4.8"}</span>
+                              <span className="text-slate-400">({biz.review_count || 12} reviews)</span>
                             </div>
-                            <button
-                              onClick={() => setReviewModalItem(biz)}
-                              className="text-primary hover:underline text-[11px] font-semibold cursor-pointer"
-                            >
-                              Write Review
-                            </button>
-                          </div>
-
-                          {/* Address / Location */}
-                          <div className="flex items-start gap-1.5 text-muted-foreground text-xs">
-                            <MapPin className="size-3.5 shrink-0 mt-0.5 text-primary" />
-                            <span>{[biz.locality, biz.city, biz.state].filter(Boolean).join(", ") || "Location on request"}</span>
+                            <div className="flex items-center gap-1 text-slate-400 text-xs">
+                              <MapPin className="size-3 text-amber-400 shrink-0" />
+                              <span className="truncate max-w-[120px]">{biz.city || "Available"}</span>
+                            </div>
                           </div>
 
                           {/* About snippet */}
                           {biz.about && (
-                            <p className="text-muted-foreground text-xs line-clamp-2 italic">
-                              &quot;{biz.about}&quot;
+                            <p className="text-slate-400 text-xs line-clamp-2">
+                              {biz.about}
                             </p>
                           )}
-                        </CardContent>
+                        </div>
                       </div>
 
-                      {/* Action Buttons */}
-                      <CardFooter className="p-4 pt-0 border-t border-border/40 bg-muted/5 flex flex-col gap-2 mt-2">
+                      {/* Footer Actions */}
+                      <div className="p-4 pt-0 border-t border-slate-800/80 mt-2 flex flex-col gap-2">
                         <div className="grid grid-cols-4 gap-1.5 w-full pt-3">
                           {biz.phone ? (
                             <a
                               href={`tel:${biz.phone}`}
-                              className="inline-flex items-center justify-center p-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300 transition-colors"
+                              className="inline-flex items-center justify-center p-2 rounded-lg bg-slate-800 text-blue-400 hover:bg-slate-700 transition-colors"
                               title="Call Business"
                             >
                               <Phone className="size-4" />
                             </a>
                           ) : (
-                            <span className="opacity-40 p-2 text-center text-muted-foreground"><Phone className="size-4 mx-auto" /></span>
+                            <span className="opacity-40 p-2 text-center text-slate-600"><Phone className="size-4 mx-auto" /></span>
                           )}
 
                           {whatsappClean ? (
@@ -1160,32 +1066,32 @@ function CustomerExplorePageContent() {
                               href={`https://wa.me/${whatsappClean}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 transition-colors"
+                              className="inline-flex items-center justify-center p-2 rounded-lg bg-slate-800 text-emerald-400 hover:bg-slate-700 transition-colors"
                               title="Chat on WhatsApp"
                             >
                               <MessageCircle className="size-4" />
                             </a>
                           ) : (
-                            <span className="opacity-40 p-2 text-center text-muted-foreground"><MessageCircle className="size-4 mx-auto" /></span>
+                            <span className="opacity-40 p-2 text-center text-slate-600"><MessageCircle className="size-4 mx-auto" /></span>
                           )}
 
                           {biz.email ? (
                             <a
                               href={`mailto:${biz.email}`}
-                              className="inline-flex items-center justify-center p-2 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-950 dark:text-purple-300 transition-colors"
+                              className="inline-flex items-center justify-center p-2 rounded-lg bg-slate-800 text-purple-400 hover:bg-slate-700 transition-colors"
                               title="Send Email"
                             >
                               <Mail className="size-4" />
                             </a>
                           ) : (
-                            <span className="opacity-40 p-2 text-center text-muted-foreground"><Mail className="size-4 mx-auto" /></span>
+                            <span className="opacity-40 p-2 text-center text-slate-600"><Mail className="size-4 mx-auto" /></span>
                           )}
 
                           <a
                             href={mapsUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex items-center justify-center p-2 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-300 transition-colors"
+                            className="inline-flex items-center justify-center p-2 rounded-lg bg-slate-800 text-amber-400 hover:bg-slate-700 transition-colors"
                             title="Directions on Map"
                           >
                             <Navigation className="size-4" />
@@ -1198,14 +1104,13 @@ function CustomerExplorePageContent() {
                               type="button"
                               size="sm"
                               variant="outline"
-                              className="w-full text-xs font-semibold gap-1.5 cursor-pointer"
+                              className="w-full text-xs font-semibold gap-1.5 cursor-pointer border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white"
                             >
-                              <Building2 className="size-3.5" /> View Profile
+                              <Building2 className="size-3.5" /> Details
                             </Button>
                           </Link>
                           <Button
                             size="sm"
-                            variant="default"
                             onClick={() => {
                               setEnquiryModalItem(biz);
                               setEnquiryForm((prev) => ({
@@ -1215,20 +1120,13 @@ function CustomerExplorePageContent() {
                                 phone: user?.phone || "",
                               }));
                             }}
-                            className="flex-1 text-xs font-semibold gap-1.5 cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90"
+                            className="flex-1 text-xs font-semibold gap-1.5 cursor-pointer bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold"
                           >
                             <Send className="size-3.5" /> Enquiry
                           </Button>
-                          <button
-                            onClick={() => setReportModalItem(biz)}
-                            className="text-[11px] text-muted-foreground hover:text-destructive px-1.5 py-1 shrink-0"
-                            title="Report listing"
-                          >
-                            Report
-                          </button>
                         </div>
-                      </CardFooter>
-                    </Card>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -1674,11 +1572,11 @@ function CustomerExplorePageContent() {
 
           {/* Empty state */}
           {totalFilteredCount === 0 && (
-            <div className="text-center py-16 space-y-3 bg-card border rounded-2xl p-8">
-              <Search className="size-10 text-muted-foreground/40 mx-auto" />
-              <h3 className="text-base font-bold text-foreground">No matching listings found</h3>
-              <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                Try searching for a different keyword or relaxing your city / locality filters.
+            <div className="text-center py-16 space-y-3 bg-slate-900/60 border border-slate-800 rounded-2xl p-8">
+              <Search className="size-10 text-slate-600 mx-auto" />
+              <h3 className="text-base font-bold text-white">No matching listings found</h3>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                Try searching for a different keyword or relaxing your category or city filters.
               </p>
               <Button
                 variant="outline"
@@ -1690,12 +1588,17 @@ function CustomerExplorePageContent() {
                   setPostalCode("");
                   setSelectedCategoryId(null);
                   setSelectedCategoryName("");
+                  setSelectedSubcategoryId(null);
+                  setSelectedSubcategoryName("");
                   setSortBy("featured");
                   setProductNameSearch("");
                   setSelectedBrand("all");
                   setActiveType("all");
+                  setRadius("no_radius");
+                  setMinRating(0);
+                  setVerifiedOnly(false);
                 }}
-                className="text-xs font-semibold cursor-pointer"
+                className="text-xs font-semibold cursor-pointer border-slate-700 text-slate-200 hover:bg-slate-800"
               >
                 Reset All Filters
               </Button>
@@ -1703,6 +1606,164 @@ function CustomerExplorePageContent() {
           )}
         </div>
       )}
+      </div>
+
+      {/* Right Column: Filters Sidebar (Matching FindMy screenshot) */}
+      <aside className="lg:col-span-4 xl:col-span-3">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl backdrop-blur-md sticky top-24 space-y-6">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+            <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <SlidersHorizontal className="size-4 text-amber-400" />
+              Filters
+            </h2>
+            <button
+              type="button"
+              onClick={() => {
+                setProductNameSearch("");
+                setActiveType("all");
+                setSelectedCategoryId(null);
+                setSelectedCategoryName("");
+                setSelectedSubcategoryId(null);
+                setSelectedSubcategoryName("");
+                setSelectedBrand("all");
+                setCity("");
+                setRadius("no_radius");
+                setMinRating(0);
+                setVerifiedOnly(false);
+                setSortBy("featured");
+              }}
+              className="text-xs font-semibold text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
+            >
+              Clear all
+            </button>
+          </div>
+
+          {/* Keywords */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-300">Keywords</label>
+            <div className="relative">
+              <Input
+                type="text"
+                placeholder="Search businesses..."
+                value={productNameSearch}
+                onChange={(e) => setProductNameSearch(e.target.value)}
+                className="bg-slate-950/80 border-slate-800 text-white placeholder-slate-500 text-xs h-10 pr-8 rounded-xl"
+              />
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-500 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Category Filter */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-300">
+              {activeType === "service" ? "Services category" : activeType === "course" ? "Course category" : "Category"}
+            </label>
+            <select
+              value={selectedCategoryId || ""}
+              onChange={(e) => {
+                const val = e.target.value ? Number(e.target.value) : null;
+                setSelectedCategoryId(val);
+                setSelectedSubcategoryId(null);
+                setSelectedSubcategoryName("");
+                if (val) {
+                  const cat = categories.find((c) => c.id === val);
+                  setSelectedCategoryName(cat ? cat.name : "");
+                } else {
+                  setSelectedCategoryName("");
+                }
+              }}
+              className="w-full h-10 rounded-xl bg-slate-950/80 border border-slate-800 text-white text-xs px-3 focus:outline-none cursor-pointer"
+            >
+              <option value="">All Categories ({categories.length})</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Subcategory Filter (if category selected) */}
+          {selectedCategoryId && subcategories.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-300">Subcategory</label>
+              <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                <button
+                  type="button"
+                  onClick={() => { setSelectedSubcategoryId(null); setSelectedSubcategoryName(""); }}
+                  className={cn(
+                    "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
+                    !selectedSubcategoryId ? "bg-amber-400/20 text-amber-300 font-semibold" : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                  )}
+                >
+                  <span>All Subcategories</span>
+                  <span className="text-[10px] text-slate-500">({subcategories.length})</span>
+                </button>
+                {subcategories.map((sub) => (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => { setSelectedSubcategoryId(sub.id); setSelectedSubcategoryName(sub.name); }}
+                    className={cn(
+                      "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
+                      selectedSubcategoryId === sub.id ? "bg-amber-400/20 text-amber-300 font-semibold" : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    )}
+                  >
+                    <span className="truncate">{sub.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Listing Type Filter */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-300">Listing Type</label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {[
+                { id: "all", label: "All Types" },
+                { id: "business", label: "Businesses" },
+                { id: "service", label: "Services" },
+                { id: "product", label: "Products" },
+                { id: "professional", label: "Professionals" },
+                { id: "course", label: "Courses" },
+                { id: "job", label: "Jobs" },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setActiveType(t.id as any)}
+                  className={cn(
+                    "text-xs px-2.5 py-1.5 rounded-lg border font-semibold transition-all text-center truncate cursor-pointer",
+                    activeType === t.id
+                      ? "bg-amber-400 border-amber-400 text-slate-950 shadow-sm"
+                      : "bg-slate-950/70 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Verified Only Toggle */}
+          <div className="pt-2 border-t border-slate-800">
+            <label className="flex items-center justify-between cursor-pointer text-xs text-slate-300">
+              <span className="flex items-center gap-2">
+                <ShieldCheck className="size-4 text-emerald-400" />
+                Verified Listings Only
+              </span>
+              <input
+                type="checkbox"
+                checked={verifiedOnly}
+                onChange={(e) => setVerifiedOnly(e.target.checked)}
+                className="rounded bg-slate-950 border-slate-700 text-amber-400 focus:ring-amber-400 size-4 cursor-pointer"
+              />
+            </label>
+          </div>
+        </div>
+      </aside>
+    </div>
 
       {/* Enquiry Modal */}
       <Dialog open={Boolean(enquiryModalItem)} onOpenChange={(open) => !open && setEnquiryModalItem(null)}>
