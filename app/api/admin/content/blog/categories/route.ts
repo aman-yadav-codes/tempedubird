@@ -77,9 +77,11 @@ export async function GET(req: Request) {
       all: result.rows,
     });
   } catch (error: any) {
+    const message = error?.message || "Failed to load categories";
+    const status = message.includes("Unauthorized") ? 401 : 500;
     return NextResponse.json(
-      { error: error?.message || "Failed to load categories" },
-      { status: 500 }
+      { error: message },
+      { status }
     );
   }
 }
