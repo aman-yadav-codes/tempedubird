@@ -320,7 +320,6 @@ const navItems: SidebarItem[] = [
             { title: "Attendance", url: "/admin/staff/attendance", icon: ClipboardCheck },
             { title: "Queries", url: "/admin/staff/queries", icon: HelpCircle },
             { title: "Our Jobs", url: "/admin/staff/jobs", icon: Briefcase },
-            { title: "Applicant", url: "/admin/staff/applicants", icon: UserCheck },
         ],
     },
     {
