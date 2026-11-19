@@ -141,10 +141,10 @@ export function PlatformAdminFooter() {
             <div className="pt-3 space-y-2 border-t border-border/40">
               <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
                 <Smartphone className="size-3.5 text-primary" />
-                <span>App</span>
+                <span>EduBird App</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                FindMy app coming soon for faster local discovery.
+                EduBird app coming soon for faster local discovery.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 max-w-md">
                 <div className="flex items-center gap-2.5 p-2 rounded-xl border border-border/80 bg-background/80 shadow-2xs hover:border-primary/40 transition-colors">

@@ -208,6 +208,8 @@ export function PublicFooter({ configuredInstitutionId }: { configuredInstitutio
 
 
   const institutionDisplayName =
+    institutionInfo?.brand_name ||
+    institutionInfo?.company_name ||
     institutionInfo?.name ||
     activeInstitution?.name ||
     user?.memberships?.[0]?.institution_name ||
@@ -405,11 +407,11 @@ export function PublicFooter({ configuredInstitutionId }: { configuredInstitutio
           {/* App Download Column */}
           <div>
             <h4 className="mb-4 font-semibold text-foreground flex items-center gap-1.5">
-              <Smartphone className="size-4 text-primary" />
-              <span>App</span>
+              <Smartphone className="size-4 text-primary shrink-0" />
+              <span>{isInstitutionView ? `${institutionDisplayName} App` : "App"}</span>
             </h4>
             <p className="text-xs text-muted-foreground leading-relaxed mb-4">
-              FindMy app coming soon for faster local discovery.
+              {isInstitutionView ? `${institutionDisplayName} app coming soon for faster local discovery.` : "EduBird app coming soon for faster local discovery."}
             </p>
             <div className="space-y-2.5">
               <div className="flex items-center gap-3 p-2.5 rounded-xl border border-border/80 bg-card/80 shadow-2xs hover:border-primary/40 transition-colors">
