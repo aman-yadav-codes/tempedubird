@@ -25,6 +25,9 @@ import {
   MapPin,
   Navigation,
   ChevronDown,
+  Plus,
+  GraduationCap,
+  Menu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -81,6 +84,69 @@ interface SearchResultsState {
   notes: SearchResultItem[];
 }
 
+const TOP_NAV_ITEMS = [
+  {
+    label: "Products",
+    href: "/explore?type=product",
+    icon: Package,
+    subcategories: [
+      { label: "All Products", href: "/explore?type=product" },
+      { label: "Electronics & Tech", href: "/explore?type=product&category=Electronics" },
+      { label: "Fashion & Apparel", href: "/explore?type=product&category=Fashion" },
+      { label: "Home & Kitchen", href: "/explore?type=product&category=Home" },
+      { label: "Groceries & Fresh", href: "/explore?type=product&category=Groceries" },
+    ],
+  },
+  {
+    label: "Professionals",
+    href: "/explore?type=professional",
+    icon: UserCheck,
+    subcategories: [
+      { label: "All Professionals", href: "/explore?type=professional" },
+      { label: "Doctors & Healthcare", href: "/explore?type=professional&category=Healthcare" },
+      { label: "Teachers & Mentors", href: "/explore?type=professional&category=Education" },
+      { label: "Legal & Financial Advisors", href: "/explore?type=professional&category=Legal" },
+      { label: "Tech & Software Consultants", href: "/explore?type=professional&category=Technology" },
+    ],
+  },
+  {
+    label: "Courses",
+    href: "/explore?type=course",
+    icon: GraduationCap,
+    subcategories: [
+      { label: "All Courses", href: "/explore?type=course" },
+      { label: "Competitive Exams (JEE / NEET)", href: "/explore?type=course&category=Competitive" },
+      { label: "Skill & Coding Bootcamps", href: "/explore?type=course&category=Technology" },
+      { label: "School Coaching (8th-12th)", href: "/explore?type=course&category=Academic" },
+      { label: "Degree & Diploma Programs", href: "/explore?type=course&category=Degree" },
+    ],
+  },
+  {
+    label: "Jobs",
+    href: "/explore?type=job",
+    icon: Briefcase,
+    subcategories: [
+      { label: "All Job Openings", href: "/explore?type=job" },
+      { label: "Full-Time Roles", href: "/explore?type=job&timing=full-time" },
+      { label: "Part-Time & Internships", href: "/explore?type=job&timing=internship" },
+      { label: "Teaching & Faculty", href: "/explore?type=job&category=Teaching" },
+      { label: "Retail & Operations", href: "/explore?type=job&category=Operations" },
+    ],
+  },
+  {
+    label: "Business",
+    href: "/explore?type=business",
+    icon: Building2,
+    subcategories: [
+      { label: "All Businesses", href: "/explore?type=business" },
+      { label: "Verified Enterprises", href: "/explore?type=business&verified=true" },
+      { label: "Retail Stores & Supermarkets", href: "/explore?type=business&category=Retail" },
+      { label: "Coaching Institutes", href: "/explore?type=business&category=Coaching" },
+      { label: "Clinics & Healthcare", href: "/explore?type=business&category=Healthcare" },
+    ],
+  },
+];
+
 export function PlatformAdminHeader() {
   const router = useRouter();
   const { user } = useAuthStore();
@@ -88,6 +154,7 @@ export function PlatformAdminHeader() {
   const [mounted, setMounted] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authDialogTab, setAuthDialogTab] = useState<"signin" | "signup">("signin");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // User Location
   const {
@@ -236,33 +303,143 @@ export function PlatformAdminHeader() {
   );
 
   return (
-    <header className="w-full border-b border-border/40 bg-background/80 backdrop-blur-md sticky top-0 z-40 transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
-        {/* Left: Minimal Platform Brand & Location Selector */}
+    <header className="w-full border-b border-border/40 bg-background/85 backdrop-blur-md sticky top-0 z-40 transition-colors">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3 lg:gap-6">
+        {/* Left: Minimal Platform Brand */}
         <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
           <Link
             href="/"
             className="flex items-center gap-2.5 text-foreground hover:opacity-90 transition-opacity shrink-0"
           >
-            <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold">
+            <div className="size-8.5 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-black shadow-2xs">
               <Shield className="size-4.5" />
             </div>
             <div className="flex flex-col">
-              <span className="font-semibold tracking-tight text-sm leading-tight">
-                EduBird Platform
+              <span className="font-extrabold tracking-tight text-base leading-tight">
+                FindMy
               </span>
-              <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">
+              <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">
                 Platform Admin
               </span>
             </div>
           </Link>
+        </div>
+
+        {/* Center: Top Navigation Menu (Products, Professionals, Courses, Jobs, Business) */}
+        <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
+          {TOP_NAV_ITEMS.map((item) => (
+            <DropdownMenu key={item.label}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-foreground/90 hover:text-primary hover:bg-muted/70 transition-colors cursor-pointer outline-none group"
+                >
+                  <span>{item.label}</span>
+                  <ChevronDown className="size-3 text-muted-foreground/60 group-hover:text-primary transition-transform group-data-[state=open]:rotate-180" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56 p-1.5 space-y-0.5 z-50">
+                <div className="px-2.5 py-1.5 mb-1 bg-primary/5 rounded-md flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                    Explore {item.label}
+                  </span>
+                  <Link
+                    href={item.href}
+                    className="text-[10px] text-primary hover:underline font-bold"
+                  >
+                    View All →
+                  </Link>
+                </div>
+                {item.subcategories.map((sub) => (
+                  <DropdownMenuItem key={sub.label} asChild>
+                    <Link
+                      href={sub.href}
+                      className="cursor-pointer text-xs py-1.5 px-2.5 rounded-md font-medium text-foreground hover:text-primary hover:bg-muted"
+                    >
+                      {sub.label}
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ))}
+        </nav>
+
+        {/* Right: + Add Listing, Location Selector, Search, Cart, Sign In */}
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          {/* + Add Listing Button (FindMy styled pill button) */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8.5 px-3 rounded-full border border-border/80 bg-background/60 hover:bg-muted font-bold text-xs gap-1.5 cursor-pointer shadow-2xs shrink-0"
+              >
+                <Plus className="size-3.5 text-primary" />
+                <span>Add Listing</span>
+                <ChevronDown className="size-3 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 p-1.5 space-y-0.5 z-50">
+              <div className="px-2.5 py-1.5 mb-1 bg-primary/5 rounded-md">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                  Partner with Platform
+                </span>
+              </div>
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/admin/profiles"
+                  className="cursor-pointer text-xs py-2 px-2.5 rounded-md font-semibold flex items-center gap-2 hover:bg-muted"
+                >
+                  <Building2 className="size-3.5 text-primary" />
+                  <span>Register Business</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/admin/catalog/products"
+                  className="cursor-pointer text-xs py-2 px-2.5 rounded-md font-semibold flex items-center gap-2 hover:bg-muted"
+                >
+                  <Package className="size-3.5 text-primary" />
+                  <span>List Products</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/admin/catalog/services"
+                  className="cursor-pointer text-xs py-2 px-2.5 rounded-md font-semibold flex items-center gap-2 hover:bg-muted"
+                >
+                  <Briefcase className="size-3.5 text-primary" />
+                  <span>Offer Services</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/admin/catalog/courses"
+                  className="cursor-pointer text-xs py-2 px-2.5 rounded-md font-semibold flex items-center gap-2 hover:bg-muted"
+                >
+                  <GraduationCap className="size-3.5 text-primary" />
+                  <span>Publish Courses</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/admin/catalog/jobs"
+                  className="cursor-pointer text-xs py-2 px-2.5 rounded-md font-semibold flex items-center gap-2 hover:bg-muted"
+                >
+                  <Briefcase className="size-3.5 text-primary" />
+                  <span>Post Job Openings</span>
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Location Selector */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/70 bg-muted/40 hover:bg-muted text-xs font-semibold text-foreground transition-all cursor-pointer outline-none shrink-0 max-w-[150px] sm:max-w-[190px]"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/70 bg-muted/40 hover:bg-muted text-xs font-semibold text-foreground transition-all cursor-pointer outline-none shrink-0 max-w-[130px] sm:max-w-[170px]"
                 title="Select location"
               >
                 <MapPin className="size-3.5 text-primary shrink-0" />
@@ -273,7 +450,7 @@ export function PlatformAdminHeader() {
                 <ChevronDown className="size-3 text-muted-foreground shrink-0 ml-auto" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56 p-1.5 space-y-1 z-50">
+            <DropdownMenuContent align="end" className="w-56 p-1.5 space-y-1 z-50">
               <div className="px-2.5 py-1.5 bg-primary/5 rounded-lg mb-1 flex items-center justify-between">
                 <div className="flex flex-col">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
@@ -337,10 +514,6 @@ export function PlatformAdminHeader() {
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
-
-        {/* Right: Quick actions */}
-        <div className="flex items-center gap-2 sm:gap-3">
           {/* Search: Replaces Theme Toggle */}
           <div ref={searchContainerRef} className="relative">
             {/* Desktop & Tablet Inline Search Bar */}
@@ -738,8 +911,69 @@ export function PlatformAdminHeader() {
               Sign In
             </Button>
           )}
+          {/* Mobile Menu Hamburger */}
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(true)}
+            className="lg:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors cursor-pointer shrink-0"
+            title="Open Menu"
+            aria-label="Open Menu"
+          >
+            <Menu className="size-5" />
+          </button>
         </div>
       </div>
+
+      {/* Mobile Navigation Drawer */}
+      <Dialog open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+        <DialogContent className="w-[92vw] max-w-md p-0 overflow-hidden rounded-2xl border shadow-2xl">
+          <div className="p-4 border-b flex items-center justify-between bg-muted/30">
+            <div className="flex items-center gap-2">
+              <div className="size-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-black">
+                <Shield className="size-4" />
+              </div>
+              <span className="font-extrabold text-sm">FindMy Discovery</span>
+            </div>
+          </div>
+          <div className="p-4 space-y-3 max-h-[75vh] overflow-y-auto">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Categories & Directory
+            </p>
+            <div className="space-y-1">
+              {TOP_NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    onClick={() => setMobileNavOpen(false)}
+                    className="flex items-center justify-between p-2.5 rounded-xl hover:bg-muted text-sm font-bold text-foreground transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="size-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                        <Icon className="size-3.5" />
+                      </div>
+                      <span>{item.label}</span>
+                    </div>
+                    <ChevronRight className="size-4 text-muted-foreground" />
+                  </Link>
+                );
+              })}
+            </div>
+
+            <div className="pt-3 border-t space-y-2">
+              <Link
+                href="/admin/profiles"
+                onClick={() => setMobileNavOpen(false)}
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-xs"
+              >
+                <Plus className="size-3.5" />
+                <span>+ Register Business / Add Listing</span>
+              </Link>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Quick Search Dialog (Mobile & Cmd/Ctrl+K) */}
       <Dialog open={searchOpen} onOpenChange={setSearchOpen}>

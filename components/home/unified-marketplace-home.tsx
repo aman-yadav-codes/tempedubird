@@ -36,11 +36,22 @@ import {
   FolderTree,
   Loader2,
   X,
+  Navigation,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { useCartStore } from "@/store/slices/cart.store";
 import { TrendingLocationCategories } from "@/components/home/trending-location-categories";
@@ -180,7 +191,14 @@ const CURATED_PRODUCT_TABS = [
 
 export function UnifiedMarketplaceHome() {
   const router = useRouter();
-  const { location: userLocation } = useUserLocation();
+  const {
+    location: userLocation,
+    setLocation: setUserLocation,
+    availableLocations,
+    requestLocation,
+    isDetecting,
+    isDetected,
+  } = useUserLocation();
   const { addItem } = useCartStore();
 
   // Unified Discovery Data
@@ -363,43 +381,57 @@ export function UnifiedMarketplaceHome() {
 
   return (
     <div className="flex-1 flex flex-col w-full bg-background">
-      {/* ================= 1. HERO SECTION ================= */}
-      <section className="relative overflow-hidden border-b border-border/50 bg-gradient-to-b from-primary/5 via-background to-background py-12 sm:py-16 lg:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          {/* Top Location & Badge Pill */}
-          <div className="flex items-center justify-center gap-2 flex-wrap text-center">
-            <Badge variant="outline" className="px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border-primary/20 gap-1.5 shadow-2xs">
-              <Sparkles className="size-3.5" />
-              <span>Hyperlocal Discovery &amp; Marketplace</span>
-            </Badge>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-muted/80 text-muted-foreground border border-border/60">
-              <MapPin className="size-3 text-primary" />
-              <span>{userLocation || "Pandeypur, Varanasi"}</span>
-            </div>
+      {/* ================= 1. HERO SECTION (FINDMY DEER DISCOVERY THEME) ================= */}
+      <section className="relative overflow-hidden min-h-[580px] sm:min-h-[640px] lg:min-h-[720px] flex items-center py-16 sm:py-20 lg:py-24 border-b border-border/50">
+        {/* Scenic Deer Wildlife Nature Background Image */}
+        <div className="absolute inset-0 z-0">
+          <Image
+            src="/images/hero-deer.jpg"
+            alt="Scenic Golden Hour Nature Landscape with Majestic Deer"
+            fill
+            priority
+            className="object-cover object-[75%_center] lg:object-[82%_center]"
+            sizes="100vw"
+            quality={90}
+          />
+          {/* Gradient Overlays for High Contrast & Text Legibility */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/92 via-black/70 to-black/35 md:from-black/88 md:via-black/55 md:to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/45" />
+          <div className="absolute inset-0 bg-amber-950/10 mix-blend-color" />
+        </div>
+
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full space-y-7">
+          {/* Top Eyebrow Tag */}
+          <div className="flex items-center gap-2">
+            <span className="text-amber-400 font-extrabold uppercase tracking-[0.2em] text-xs sm:text-sm drop-shadow-md flex items-center gap-2">
+              <Sparkles className="size-4 text-amber-400 animate-pulse" />
+              THE PREMIER LOCAL DISCOVERY PLATFORM
+            </span>
           </div>
 
           {/* Heading & Subheading */}
-          <div className="text-center max-w-3xl mx-auto space-y-3">
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-foreground leading-[1.1]">
-              Everything You Need, <br className="hidden sm:inline" />
-              <span className="text-primary">Delivered &amp; Discovered</span> Locally.
+          <div className="space-y-3.5 max-w-2xl sm:max-w-3xl">
+            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white leading-[1.06] drop-shadow-xl">
+              Looking for something? <br className="hidden sm:inline" />
+              <span className="text-white">Let&apos;s find it.</span>
             </h1>
-            <p className="text-xs sm:text-base text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Explore 660+ products with live price comparison across 18+ Varanasi stores, on-demand services, verified professionals, certified courses, and job openings.
+            <p className="text-sm sm:text-base lg:text-lg text-white/90 max-w-2xl leading-relaxed drop-shadow-md font-medium">
+              Discover businesses, places, services, property, courses, products, jobs and more across South Africa &amp; your region.
             </p>
           </div>
 
-          {/* Autocomplete Search Bar (Matches Top Header Experience) */}
-          <div ref={heroSearchContainerRef} className="relative max-w-2xl mx-auto w-full">
+          {/* Search Box & Location Selector & Suggestions */}
+          <div ref={heroSearchContainerRef} className="relative max-w-2xl w-full space-y-3.5">
+            {/* Primary Search Input */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 handleSearch();
               }}
-              className="relative group flex items-center"
+              className="relative group flex items-center bg-black/45 backdrop-blur-md border border-white/25 hover:border-white/40 focus-within:border-amber-400/90 focus-within:ring-4 focus-within:ring-amber-400/20 rounded-full px-3 sm:px-4 py-2 sm:py-2.5 shadow-2xl transition-all"
             >
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
-                <Search className="size-5" />
+              <div className="pl-1 flex items-center pointer-events-none text-amber-400">
+                <Sparkles className="size-5" />
               </div>
               <input
                 type="text"
@@ -416,13 +448,13 @@ export function UnifiedMarketplaceHome() {
                     setIsDropdownOpen(false);
                   }
                 }}
-                placeholder="Search products, stores, services, categories..."
-                className="w-full h-13 pl-12 pr-32 rounded-full border border-border/80 bg-background/95 text-foreground text-xs sm:text-sm shadow-sm hover:shadow-md focus:shadow-md focus:outline-none focus:border-primary/80 focus:ring-4 focus:ring-primary/10 transition-all placeholder:text-muted-foreground"
+                placeholder="What are you looking for today?"
+                className="w-full h-11 pl-3 pr-4 bg-transparent text-white placeholder:text-white/70 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 border-0"
               />
 
-              <div className="absolute right-2 flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0 pr-1">
                 {isSearching ? (
-                  <Loader2 className="size-4 animate-spin text-primary mr-1" />
+                  <Loader2 className="size-4 animate-spin text-amber-400 mr-1" />
                 ) : searchQuery ? (
                   <button
                     type="button"
@@ -431,23 +463,180 @@ export function UnifiedMarketplaceHome() {
                       setSearchResults(null);
                       setIsDropdownOpen(false);
                     }}
-                    className="p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer mr-1"
+                    className="p-1 rounded-full hover:bg-white/15 text-white/70 hover:text-white cursor-pointer mr-1 transition-colors"
                     title="Clear search"
                   >
                     <X className="size-4" />
                   </button>
                 ) : null}
 
+                {/* Circular Orange Search Button */}
                 <Button
                   type="submit"
-                  size="sm"
-                  className="h-9 px-4 rounded-full text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 cursor-pointer shadow-xs"
+                  size="icon"
+                  className="size-10 sm:size-11 rounded-full bg-orange-500 hover:bg-orange-600 active:scale-95 text-white shadow-lg cursor-pointer transition-transform shrink-0"
+                  title="Search"
                 >
-                  <span>Search</span>
-                  <ArrowRight className="size-3.5 hidden sm:inline" />
+                  <Search className="size-5" />
                 </Button>
               </div>
             </form>
+
+            {/* Location Selector Bar directly below search */}
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/45 backdrop-blur-md border border-white/20 hover:border-white/40 text-xs font-semibold text-white/95 hover:text-white transition-all cursor-pointer shadow-md"
+                  >
+                    <MapPin className="size-3.5 text-amber-400 shrink-0" />
+                    <span>{userLocation || "Cape Town"}</span>
+                    {isDetected && (
+                      <span className="size-1.5 rounded-full bg-emerald-400 ring-2 ring-emerald-400/30" title="GPS active" />
+                    )}
+                    <ChevronDown className="size-3 text-white/60 ml-0.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-60 p-1.5 space-y-1 z-50">
+                  <div className="px-2.5 py-1.5 bg-primary/5 rounded-lg mb-1 flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                        Location Filter
+                      </span>
+                      <span className="text-xs font-bold text-foreground truncate">
+                        {userLocation || "Cape Town"}
+                      </span>
+                    </div>
+                    {isDetected && (
+                      <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 px-1.5 py-0.5 rounded-full">
+                        GPS
+                      </span>
+                    )}
+                  </div>
+
+                  <DropdownMenuItem
+                    onClick={() => requestLocation(false)}
+                    disabled={isDetecting}
+                    className="cursor-pointer py-2 px-2.5 rounded-lg bg-background hover:bg-muted text-primary font-bold text-xs border border-border/50 flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      {isDetecting ? (
+                        <Loader2 className="size-3.5 animate-spin text-primary" />
+                      ) : (
+                        <Navigation className="size-3.5 text-primary" />
+                      )}
+                      <span>{isDetecting ? "Detecting GPS..." : "Detect Live Location"}</span>
+                    </div>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuSeparator className="my-1" />
+
+                  <DropdownMenuLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-2 py-1">
+                    Select Region
+                  </DropdownMenuLabel>
+
+                  <div className="max-h-56 overflow-y-auto space-y-0.5">
+                    <DropdownMenuItem
+                      onClick={() => setUserLocation("All Locations", false)}
+                      className={cn(
+                        "cursor-pointer text-xs py-1.5 px-2.5 rounded-lg font-medium",
+                        (!userLocation || userLocation === "All Locations") && "font-bold text-primary bg-primary/10"
+                      )}
+                    >
+                      <span>All Locations (Full Catalog)</span>
+                    </DropdownMenuItem>
+                    {availableLocations.map((loc) => (
+                      <DropdownMenuItem
+                        key={loc}
+                        onClick={() => setUserLocation(loc, false)}
+                        className={cn(
+                          "cursor-pointer text-xs py-1.5 px-2.5 rounded-lg font-medium",
+                          userLocation === loc && "font-bold text-primary bg-primary/10"
+                        )}
+                      >
+                        <span>{loc}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            {/* "Try:" Quick Category & Search Recommendation Pills */}
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap pt-1 text-xs">
+              <span className="text-white/80 font-bold mr-1 text-xs drop-shadow-sm">Try:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("Italian");
+                  handleSearch(undefined, "Italian");
+                }}
+                className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 backdrop-blur-md border border-white/20 hover:border-white/40 text-white/95 font-medium transition-all cursor-pointer shadow-xs"
+              >
+                🍕 I&apos;m craving Italian
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("2 bedroom");
+                  handleSearch(undefined, "2 bedroom");
+                }}
+                className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 backdrop-blur-md border border-white/20 hover:border-white/40 text-white/95 font-medium transition-all cursor-pointer shadow-xs"
+              >
+                🏠 2 bedroom
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("Need a plumber");
+                  handleSearch(undefined, "Need a plumber");
+                }}
+                className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 backdrop-blur-md border border-white/20 hover:border-white/40 text-white/95 font-medium transition-all cursor-pointer shadow-xs"
+              >
+                🔧 Need a plumber
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("Property for rent");
+                  handleSearch(undefined, "Property for rent");
+                }}
+                className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 backdrop-blur-md border border-white/20 hover:border-white/40 text-white/95 font-medium transition-all cursor-pointer shadow-xs"
+              >
+                🏢 Property for rent
+              </button>
+              <Link
+                href="/explore?type=product"
+                className="px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 backdrop-blur-md border border-amber-400/40 text-amber-200 font-semibold transition-all cursor-pointer shadow-xs"
+              >
+                📦 Products
+              </Link>
+              <Link
+                href="/explore?type=professional"
+                className="px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 backdrop-blur-md border border-amber-400/40 text-amber-200 font-semibold transition-all cursor-pointer shadow-xs"
+              >
+                👨‍💼 Professionals
+              </Link>
+              <Link
+                href="/explore?type=course"
+                className="px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 backdrop-blur-md border border-amber-400/40 text-amber-200 font-semibold transition-all cursor-pointer shadow-xs"
+              >
+                🎓 Courses
+              </Link>
+              <Link
+                href="/explore?type=job"
+                className="px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 backdrop-blur-md border border-amber-400/40 text-amber-200 font-semibold transition-all cursor-pointer shadow-xs"
+              >
+                💼 Jobs
+              </Link>
+              <Link
+                href="/explore?type=business"
+                className="px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 backdrop-blur-md border border-amber-400/40 text-amber-200 font-semibold transition-all cursor-pointer shadow-xs"
+              >
+                🏢 Business
+              </Link>
+            </div>
 
             {/* ================= AUTOCOMPLETE SEARCH SUGGESTIONS DROPDOWN ================= */}
             {isDropdownOpen && searchQuery.trim().length > 0 && (
@@ -739,25 +928,25 @@ export function UnifiedMarketplaceHome() {
             )}
           </div>
 
-          {/* Live Metric Stats Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-6 border-t border-border/40 max-w-5xl mx-auto">
+          {/* Live Metric Stats Bar (Glassmorphic cards over hero landscape) */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 pt-6 border-t border-white/20 max-w-5xl">
             {[
-              { label: "Local Products", value: "660+", sub: "18 Pandeypur Stores", icon: Package },
+              { label: "Local Products", value: "660+", sub: "18 Local Stores", icon: Package },
               { label: "Bookable Services", value: "90+", sub: "Verified Providers", icon: Wrench },
               { label: "Top Experts", value: "50+", sub: "Doctors & Mentors", icon: UserCheck },
               { label: "Certified Programs", value: "170+", sub: "Degrees & Diplomas", icon: GraduationCap },
               { label: "Career Openings", value: "Active", sub: "Local & On-site", icon: Briefcase },
-              { label: "Local Store Network", value: "18 Stores", sub: "Pandeypur Varanasi", icon: Store },
+              { label: "Local Store Network", value: "18 Stores", sub: "Verified Partners", icon: Store },
             ].map((stat, i) => {
               const Icon = stat.icon;
               return (
-                <div key={i} className="p-3 rounded-xl border border-border/50 bg-card/60 flex items-center gap-3">
-                  <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <div key={i} className="p-3 rounded-xl border border-white/20 bg-black/45 backdrop-blur-md flex items-center gap-2.5 shadow-lg">
+                  <div className="size-8 rounded-lg bg-amber-500/20 text-amber-300 flex items-center justify-center shrink-0">
                     <Icon className="size-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm font-black text-foreground">{stat.value}</div>
-                    <div className="text-[10px] text-muted-foreground truncate">{stat.label}</div>
+                    <div className="text-sm font-black text-white">{stat.value}</div>
+                    <div className="text-[10px] text-white/75 truncate">{stat.label}</div>
                   </div>
                 </div>
               );
