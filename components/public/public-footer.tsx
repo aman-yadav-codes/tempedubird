@@ -183,13 +183,7 @@ export function PublicFooter({ configuredInstitutionId }: { configuredInstitutio
         Boolean(effectiveInstId))
   );
 
-  const isInstitutionView = Boolean(
-    effectiveInstId && effectiveInstId > 0 && (
-      (pathname === "/") ||
-      isInstitutionalAdmin ||
-      pathname.startsWith("/institution")
-    )
-  );
+  const isInstitutionView = Boolean(effectiveInstId && effectiveInstId > 0);
 
   useEffect(() => {
     if (effectiveInstId && isInstitutionView) {
@@ -270,15 +264,16 @@ export function PublicFooter({ configuredInstitutionId }: { configuredInstitutio
     return items.filter((item) => Boolean(item.url));
   }, [socialLinks]);
 
-  // Quick links: All Courses, Products, Blogs, Jobs, Contact Us, FAQs, Our Team
+  // Quick links: Courses, Products, Jobs, Blogs, Gallery, Staff, Contact, FAQs
   const quickLinks = [
     { label: "All Courses", href: "/courses" },
     { label: "Products & Store", href: "/products" },
-    { label: "Blogs", href: "/blogs" },
     { label: "Jobs", href: "/jobs" },
+    { label: "Blog", href: "/blogs" },
+    { label: "Gallery", href: "/gallery" },
+    { label: "Staff & Faculty", href: "/teachers" },
     { label: "Contact Us", href: "/contact" },
     { label: "FAQs", href: "/faqs" },
-    { label: "Our Team", href: "/team" },
   ];
 
   const legalLinks = [
@@ -452,6 +447,9 @@ export function PublicFooter({ configuredInstitutionId }: { configuredInstitutio
             </Link>
             <Link href="/jobs" className="hover:text-foreground transition-colors">
               Jobs
+            </Link>
+            <Link href="/blogs" className="hover:text-foreground transition-colors">
+              Blog
             </Link>
             <Link href="/contact" className="hover:text-foreground transition-colors">
               Contact

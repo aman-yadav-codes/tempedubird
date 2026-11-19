@@ -168,29 +168,31 @@ export function PublicNavbar({
     institutionInfo?.name ||
     (brand?.isInstitution ? brand.name : "Institution");
 
-  // Platform marketplace: filtered dynamically by isCategoryVisible
+  // Platform marketplace: filtered dynamically by isCategoryVisible (jobs & blogs moved to footer)
   const PLATFORM_MARKETPLACE_KEYS: CategoryKey[] = [
     "courses",
     "products",
     "teachers",
     "gallery",
-    "jobs",
-    "blogs",
     "contact",
     "services",
   ];
   const platformCategoryItems = CATEGORY_ITEMS.filter((item) =>
     PLATFORM_MARKETPLACE_KEYS.includes(item.key) &&
+    item.key !== "jobs" &&
+    item.key !== "blogs" &&
     (!mounted || isCategoryVisible(item.key))
   );
 
-  // Institution edition menu: items filtered dynamically by isCategoryVisible
+  // Institution edition menu: items filtered dynamically by isCategoryVisible (jobs & blogs moved to footer)
   const institutionCategoryItems = CATEGORY_ITEMS.filter(
     (item) =>
       item.key !== "institutes" &&
       item.key !== "hostels" &&
       item.key !== "libraries" &&
       item.key !== "services" &&
+      item.key !== "jobs" &&
+      item.key !== "blogs" &&
       (!mounted || isCategoryVisible(item.key))
   );
   const effectiveInstitutionItems = institutionCategoryItems;
