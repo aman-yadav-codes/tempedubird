@@ -987,7 +987,7 @@ function CustomerExplorePageContent() {
                         {/* Top Image Banner with Category Badge */}
                         <div className="relative h-44 w-full bg-slate-950 overflow-hidden">
                           <img
-                            src={biz.cover_url || biz.logo_url || biz.default_image_url || "/images/hero-deer.jpg"}
+                            src={(biz as any).cover_url || biz.logo_url || biz.default_image_url || "/images/hero-deer.jpg"}
                             alt={biz.name}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />

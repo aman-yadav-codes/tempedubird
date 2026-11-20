@@ -48,7 +48,8 @@ export async function POST(req: Request) {
     let openinaryResult: any = null;
     if (isOpeninaryConfigured() && isMediaSupportedByOpeninary(file.name, file.type)) {
       try {
-        openinaryResult = await uploadToOpeninary(file, file.name, "crmtaskassets", file.type);
+        const targetFolder = process.env.OPENINARY_UPLOAD_FOLDER || "maa-sharda";
+        openinaryResult = await uploadToOpeninary(file, file.name, targetFolder, file.type);
         uploadSuccess = true;
       } catch (openinaryErr: any) {
         console.warn("Openinary finance upload unreachable or failed, falling back to local storage:", openinaryErr?.message || openinaryErr);

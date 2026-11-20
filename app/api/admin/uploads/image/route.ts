@@ -111,8 +111,9 @@ export async function POST(req: Request) {
       );
     }
 
-    const requestedFolder = String(formData.get("folder") ?? "crmtaskassets");
-    const targetFolder = requestedFolder || "crmtaskassets";
+    const defaultFolder = process.env.OPENINARY_UPLOAD_FOLDER || "maa-sharda";
+    const requestedFolder = String(formData.get("folder") ?? defaultFolder);
+    const targetFolder = (requestedFolder && requestedFolder !== "crmtaskassets") ? requestedFolder : defaultFolder;
 
     // Primary: Upload to Openinary self-hosted media service
     let uploadSuccess = false;

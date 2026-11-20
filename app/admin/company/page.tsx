@@ -346,6 +346,7 @@ export default function AdminCompanyPage() {
 
   const [companyInfo, setCompanyInfo] = useState({
     company_name: "EduBird Technologies Private Limited",
+    legal_name: "EduBird Technologies Private Limited",
     brand_name: "EduBird Platform",
     logo_url: "",
     favicon_url: "",
@@ -371,6 +372,9 @@ export default function AdminCompanyPage() {
     founder_about: "",
     established_year: "",
     certified_or_affiliated_with: "",
+    cin_number: "",
+    registration_no: "",
+    phone: "",
     support_email: "support@edubird.com",
     support_phone: "+91 98765 43210",
     helpline_toll_free: "1800 123 4567",
@@ -3507,6 +3511,7 @@ export default function AdminCompanyPage() {
               }
               setSavingPm(true);
               try {
+                const activeInstId = effectiveInstId ? String(effectiveInstId) : "";
                 const method = editingPm ? "PUT" : "POST";
                 const res = await fetch("/api/admin/company/payment-methods", {
                   method,

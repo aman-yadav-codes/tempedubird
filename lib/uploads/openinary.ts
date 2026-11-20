@@ -23,7 +23,7 @@ export const OPENINARY_SUPPORTED_EXTENSIONS = new Set([
 export function getOpeninaryConfig() {
   const apiUrl = (process.env.OPENINARY_API_URL || "https://media.143gb.com/api").replace(/\/+$/, "");
   const apiKey = (process.env.OPENINARY_API_KEY || "").trim();
-  const folder = (process.env.OPENINARY_UPLOAD_FOLDER || "crmtaskassets").trim();
+  const folder = (process.env.OPENINARY_UPLOAD_FOLDER || "maa-sharda").trim();
   const baseUrl = apiUrl.replace(/\/api$/, "");
 
   return {
@@ -70,7 +70,8 @@ export async function uploadToOpeninary(
     throw new Error("OPENINARY_API_KEY is not configured");
   }
 
-  const folder = folderOverride || config.folder;
+  // Use explicitly provided folder if specified and not legacy default; otherwise use configured OPENINARY_UPLOAD_FOLDER (default: maa-sharda)
+  const folder = (folderOverride && folderOverride !== "crmtaskassets") ? folderOverride : config.folder;
   const formData = new FormData();
 
   let blob: Blob;

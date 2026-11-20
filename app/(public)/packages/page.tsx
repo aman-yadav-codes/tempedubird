@@ -674,7 +674,7 @@ export default function BusinessGrowthPackagesPage() {
       <AuthModalDialog
         open={authModalOpen}
         onOpenChange={setAuthModalOpen}
-        initialTab="signin"
+        defaultTab="signin"
       />
     </div>
   );

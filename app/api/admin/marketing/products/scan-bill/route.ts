@@ -34,7 +34,8 @@ export async function POST(req: Request) {
 
         if (isOpeninaryConfigured()) {
           try {
-            const uploadRes = await uploadToOpeninary(fileBuffer, originalFileName, "bills", mimeType);
+            const targetFolder = process.env.OPENINARY_UPLOAD_FOLDER || "maa-sharda";
+            const uploadRes = await uploadToOpeninary(fileBuffer, originalFileName, targetFolder, mimeType);
             billImageUrl = uploadRes.fullUrl || uploadRes.url;
           } catch (uploadErr) {
             console.warn("[Bill Scan] Openinary upload failed, using local storage fallback:", uploadErr);

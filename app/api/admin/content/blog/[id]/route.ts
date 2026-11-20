@@ -16,6 +16,12 @@ function parsePositiveInteger(value: unknown) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function normalizeStatus(value: unknown): BlogStatus {
+  if (value === "review") return "review";
+  if (value === "published") return "published";
+  return "draft";
+}
+
 import { getFrontendConfig } from "@/lib/config/frontend-config";
 
 function checkInstitutionAccess(user: any, institutionId: number | null): boolean {

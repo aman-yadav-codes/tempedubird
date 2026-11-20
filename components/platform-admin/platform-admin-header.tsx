@@ -51,6 +51,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { useAuthStore, useCartStore } from "@/store";
+import { toast } from "sonner";
 import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
 import { CartDrawer } from "@/components/checkout/cart-drawer";
 import { parseSearchIntent } from "@/lib/utils/search-intent";

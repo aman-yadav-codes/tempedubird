@@ -73,6 +73,7 @@ import {
 import { useAuthStore } from "@/store";
 import { isPlatformAdminUser } from "@/lib/auth/permissions";
 import { getStoredActiveInstitutionId } from "@/lib/auth/active-institution";
+import { cn } from "@/lib/utils";
 
 export type BlogPost = {
   id: number;

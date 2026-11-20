@@ -51,7 +51,8 @@ async function uploadAttachment(file: File): Promise<UploadedAttachment> {
 
   if (isOpeninaryConfigured() && isMediaSupportedByOpeninary(file.name, file.type)) {
     try {
-      const result = await uploadToOpeninary(file, file.name, "crmtaskassets", file.type);
+      const targetFolder = process.env.OPENINARY_UPLOAD_FOLDER || "maa-sharda";
+      const result = await uploadToOpeninary(file, file.name, targetFolder, file.type);
       return {
         file_name: file.name,
         file_url: result.fullUrl,
