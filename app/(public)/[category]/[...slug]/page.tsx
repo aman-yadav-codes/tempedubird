@@ -383,6 +383,69 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
 
     // 4. Try finding Course / Academic Program in DB or fallback
     try {
+      // 4a. Check master_courses first (central catalog)
+      const masterCourseRes = await db.query(
+        `SELECT 
+          mc.id,
+          mc.name,
+          mc.name AS title,
+          mc.slug,
+          mc.code,
+          mc.description,
+          mc.duration_value,
+          mc.duration_unit,
+          mc.seats_available,
+          mc.authority_type,
+          mc.university_name,
+          mc.icon_url,
+          mc.thumbnail_url,
+          COALESCE(c.name, 'Digital 2D Animation') AS category_name,
+          COALESCE(c.slug, 'digital-2d-animation') AS category_slug,
+          inst.name AS institution_name,
+          inst.slug AS institution_slug,
+          inst.id AS institution_id,
+          inst.phone AS phone,
+          COALESCE(loc.city, 'Varanasi') AS city,
+          COALESCE(loc.area, 'Varanasi') AS locality
+        FROM master_courses mc
+        LEFT JOIN categories c ON c.id = mc.category_id
+        LEFT JOIN institution_courses ic ON ic.course_name = mc.name
+        LEFT JOIN institution_profiles inst ON inst.id = ic.institution_id
+        LEFT JOIN locations loc ON loc.id = inst.location_id
+        WHERE COALESCE(mc.is_active, TRUE) = TRUE
+          AND (
+            mc.slug = $1
+            OR mc.slug = $2
+            OR (mc.id = $3 AND $3 > 0)
+            OR $1 LIKE '%' || mc.slug || '%'
+            OR $2 LIKE '%' || mc.slug || '%'
+            OR mc.slug LIKE '%' || $2 || '%'
+            OR $4 LIKE '%' || mc.slug || '%'
+          )
+        ORDER BY (CASE WHEN mc.slug = $1 THEN 0 WHEN mc.slug = $2 THEN 1 ELSE 2 END), mc.id DESC
+        LIMIT 1`,
+        [targetSlug, withoutLocation, numId || -1, fullJoinedSlug]
+      );
+
+      if (masterCourseRes.rows.length > 0) {
+        const mcRow = masterCourseRes.rows[0];
+        return {
+          type: "course" as const,
+          course: mcRow,
+          institution: {
+            id: mcRow.institution_id || 162,
+            name: mcRow.institution_name || "Maa Sharda Institute PVT LTD",
+            slug: mcRow.institution_slug || "maa-sharda-institute",
+            city: mcRow.city || "Varanasi",
+            locality: mcRow.locality || "Varanasi",
+            phone: mcRow.phone || "+91 9876543210",
+          },
+          syllabus: [],
+          reviews: [],
+        };
+      }
+
+      // 4b. Check institution_programs
       const courseRes = await db.query(
         `SELECT
           ip.id,
@@ -402,10 +465,11 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
           inst.slug AS institution_slug,
           inst.id AS institution_id,
           inst.phone AS phone,
-          COALESCE(inst.city, 'Varanasi') AS city,
-          COALESCE(inst.locality, 'Pandeypur') AS locality
+          COALESCE(loc.city, 'Varanasi') AS city,
+          COALESCE(loc.area, 'Pandeypur') AS locality
         FROM institution_programs ip
         LEFT JOIN institution_profiles inst ON inst.id = ip.institution_id
+        LEFT JOIN locations loc ON loc.id = inst.location_id
         LEFT JOIN categories c ON c.id = ip.category_id
         WHERE COALESCE(ip.is_active, TRUE) = TRUE
           AND (
@@ -415,9 +479,10 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
             OR $1 LIKE '%' || ip.slug || '%'
             OR $2 LIKE '%' || ip.slug || '%'
             OR ip.slug LIKE '%' || $2 || '%'
+            OR $4 LIKE '%' || ip.slug || '%'
           )
         LIMIT 1`,
-        [targetSlug, withoutLocation, numId || -1]
+        [targetSlug, withoutLocation, numId || -1, fullJoinedSlug]
       );
 
       if (courseRes.rows.length > 0) {
@@ -437,8 +502,8 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
           reviews: [],
         };
       }
-    } catch {
-      // Continue
+    } catch (courseErr) {
+      console.error("Course lookup error in fetchSeoProfileData:", courseErr);
     }
 
     if (
