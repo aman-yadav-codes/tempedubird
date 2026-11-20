@@ -108,7 +108,7 @@ export function FeaturedCoursesSection() {
             <p className="text-xs mt-1">Use the Institution Admin Portal to add classes and programs.</p>
           </Card>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {courses.map((course) => (
               <CourseCard key={course.id || course.courseKey} {...course} />
             ))}

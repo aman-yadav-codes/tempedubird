@@ -2282,7 +2282,7 @@ export function PublicBusinessProfileClient({
                                   </Button>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
                                   {items.map((p) => (
                                     <CompactProductCard
                                       key={p.id}
@@ -2323,7 +2323,7 @@ export function PublicBusinessProfileClient({
                           </Button>
                         )}
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
                         {filteredProducts.map((p) => (
                           <CompactProductCard
                             key={p.id}
@@ -2534,7 +2534,7 @@ export function PublicBusinessProfileClient({
                                   </Button>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
                                   {items.map((s) => (
                                     <CompactServiceCard
                                       key={s.id}
@@ -2576,7 +2576,7 @@ export function PublicBusinessProfileClient({
                           </Button>
                         )}
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
                         {filteredServices.map((s) => (
                           <CompactServiceCard
                             key={s.id}
@@ -2786,7 +2786,7 @@ export function PublicBusinessProfileClient({
                                   </Button>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
                                   {items.map((c) => (
                                     <Card
                                       key={c.id}
@@ -2858,7 +2858,7 @@ export function PublicBusinessProfileClient({
                           </Button>
                         )}
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
                         {filteredCourses.map((c) => (
                           <Card
                             key={c.id}
@@ -3097,7 +3097,7 @@ export function PublicBusinessProfileClient({
                                   </Button>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
                                   {items.map((j) => (
                                     <Card
                                       key={j.id}
@@ -3169,7 +3169,7 @@ export function PublicBusinessProfileClient({
                           </Button>
                         )}
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
                         {filteredJobs.map((j) => (
                           <Card
                             key={j.id}
@@ -3225,7 +3225,7 @@ export function PublicBusinessProfileClient({
                   <p className="text-xs mt-1">Staff members and specialists associated with this profile will appear here.</p>
                 </Card>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
                   {professionals.map((prof) => (
                     <Card key={prof.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-all overflow-hidden p-5 flex flex-col justify-between">
                       <div className="flex items-start gap-4">

@@ -337,20 +337,20 @@ export function UnifiedMarketplaceHome() {
     };
   }, [userLocation]);
 
-  // Filtered Products for the curated product section (Limited to top 6, never all categories)
+  // Filtered Products for the curated product section (Limited to top 8, 4 per row)
   const displayedProducts = useMemo(() => {
     if (selectedProductTab === "all") {
-      return products.slice(0, 6);
+      return products.slice(0, 8);
     }
     const tabObj = CURATED_PRODUCT_TABS.find((t) => t.id === selectedProductTab);
     if (!tabObj || !tabObj.keywords) {
-      return products.slice(0, 6);
+      return products.slice(0, 8);
     }
     const filtered = products.filter((p) => {
       const text = `${p.name} ${p.category_name || ""} ${p.description || ""}`.toLowerCase();
       return tabObj.keywords!.some((kw) => text.includes(kw));
     });
-    return (filtered.length > 0 ? filtered : products).slice(0, 6);
+    return (filtered.length > 0 ? filtered : products).slice(0, 8);
   }, [products, selectedProductTab]);
 
   // Handle Quick Search Submission
@@ -954,8 +954,8 @@ export function UnifiedMarketplaceHome() {
             })}
           </div>
 
-          {/* Products Grid: Enforces Exactly 3 Cards Per Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-3 gap-5">
+          {/* Products Grid: Enforces Exactly 4 Cards Per Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
             {displayedProducts.map((p) => {
               const priceNum = Number(p.seller_info?.price ?? p.suggested_price_inr ?? 0);
               const storeName = p.seller_info?.business_name || "Pandeypur Stores Network";
@@ -1080,8 +1080,8 @@ export function UnifiedMarketplaceHome() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-3 gap-5">
-            {services.slice(0, 6).map((s) => {
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+            {services.slice(0, 8).map((s) => {
               const price = Number(s.suggested_price_inr ?? 0);
               const duration = s.estimated_duration || "60 mins";
               const imageUrl = s.default_image_url || "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=500&auto=format&fit=crop&q=60";
@@ -1284,8 +1284,8 @@ export function UnifiedMarketplaceHome() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-            {courses.slice(0, 3).map((c) => {
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+            {courses.slice(0, 4).map((c) => {
               const durationStr = `${c.duration_value || 1} ${c.duration_unit?.replace("_", " ") || "Year"}`;
 
               return (
@@ -1369,8 +1369,8 @@ export function UnifiedMarketplaceHome() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {jobs.slice(0, 3).map((job) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+            {jobs.slice(0, 4).map((job) => (
               <Card
                 key={job.id}
                 className="rounded-2xl border border-border/60 bg-card p-5 space-y-4 hover:border-purple-500/40 hover:shadow-md transition-all flex flex-col justify-between"
@@ -1452,7 +1452,7 @@ export function UnifiedMarketplaceHome() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
             {[
               {
                 id: 25,
@@ -1501,6 +1501,22 @@ export function UnifiedMarketplaceHome() {
                 address: "Panchkroshi Marg, Pandeypur, Varanasi",
                 phone: "+91 94152 10104",
                 slug: "banaras-sweets-dairy-parlour",
+              },
+              {
+                id: 31,
+                name: "Maa Sharda Academic & Coaching Hub",
+                category: "Coaching & Test Prep",
+                address: "Pandeypur Campus, Varanasi",
+                phone: "+91 98765 43210",
+                slug: "maa-sharda-academic-coaching-hub",
+              },
+              {
+                id: 32,
+                name: "Kashi Wellness & Spa Center",
+                category: "Salon & Personal Care",
+                address: "Ring Road, Pandeypur, Varanasi",
+                phone: "+91 94152 10109",
+                slug: "kashi-wellness-spa-center",
               },
             ].map((store) => (
               <Card

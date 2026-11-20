@@ -598,7 +598,7 @@ export function InstitutionalAdminLanding({
             </div>
 
             {/* Program Cards Grid */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {featuredPrograms.map((course: any, idx: number) => {
                 const courseTitle = course.title || course.name || `Program ${idx + 1}`;
                 const courseDuration = course.duration || "Full-Time";
@@ -895,7 +895,7 @@ export function InstitutionalAdminLanding({
               </Button>
             </div>
 
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {blogs.map((b: any) => (
                 <Card key={b.id} className="p-6 rounded-2xl border bg-card hover:border-primary/50 transition-all space-y-3">
                   <Badge variant="secondary" className="text-[10px] font-bold">

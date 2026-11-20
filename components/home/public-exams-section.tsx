@@ -154,8 +154,8 @@ export function PublicExamsSection() {
             <p className="text-xs mt-1">Platform Admin can publish government &amp; selection exams anytime.</p>
           </Card>
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredExams.slice(0, 6).map((exam) => {
+          <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {filteredExams.slice(0, 8).map((exam) => {
               const applyLink = exam.apply_url || exam.website_url;
               const formattedDate = exam.exam_date
                 ? new Date(exam.exam_date).toLocaleDateString("en-IN", {

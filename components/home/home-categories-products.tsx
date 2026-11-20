@@ -204,7 +204,7 @@ export function HomeCategoriesProductsSection() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="h-24 rounded-2xl bg-muted/40 border border-border/60 animate-pulse" />
             ))}
@@ -379,7 +379,7 @@ export function HomeCategoriesProductsSection() {
             {categoryGroups.slice(0, 3).map(({ categoryName, items }) => {
               const Icon = getCategoryIcon(categoryName);
               // Show top 3 products per category row for a clean 3-in-a-row layout
-              const previewItems = items.slice(0, 3);
+              const previewItems = items.slice(0, 4);
               return (
                 <div key={categoryName} className="space-y-4">
                   {/* Category Header */}
@@ -413,7 +413,7 @@ export function HomeCategoriesProductsSection() {
                   </div>
 
                   {/* Products Grid for this category: exactly 3 in one row */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {previewItems.map((p) => (
                       <CompactProductCard
                         key={p.id}
@@ -475,7 +475,7 @@ export function HomeCategoriesProductsSection() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {filteredProducts.map((p) => (
                 <CompactProductCard
                   key={p.id}

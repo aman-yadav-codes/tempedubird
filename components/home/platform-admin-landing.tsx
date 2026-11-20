@@ -1083,8 +1083,8 @@ export function PlatformAdminLanding() {
               </Button>
             </div>
 
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {partnerInstitutes.slice(0, 6).map((inst: any) => (
+            <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              {partnerInstitutes.slice(0, 8).map((inst: any) => (
                 <Card
                   key={inst.id}
                   className="p-6 bg-white border border-gray-200/80 rounded-2xl shadow-xs hover:shadow-xl hover:border-rose-300 transition-all flex flex-col justify-between group"
@@ -1444,7 +1444,7 @@ export function PlatformAdminLanding() {
                 </Link>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                 {platformBranches.map((b) => (
                   <div
                     key={b.id}

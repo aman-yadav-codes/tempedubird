@@ -40,7 +40,7 @@ export function CategoriesSection() {
             No active categories populated yet.
           </Card>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {visibleCategories.map((category) => {
               const Icon = category.icon;
               const catData = categories?.[category.key as CategoryKey];
