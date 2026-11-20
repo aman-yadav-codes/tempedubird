@@ -109,6 +109,11 @@ export async function PUT(req: Request, { params }: RouteParams) {
 
     const enabledSet = new Set(enabledModuleIds.map(Number));
 
+    // Support linked business types (e.g., Education & Coaching id 27 and legacy Coaching Center id 9)
+    const targetTypeIds = [typeId];
+    if (typeId === 27) targetTypeIds.push(9);
+    if (typeId === 9) targetTypeIds.push(27);
+
     // Fetch all active system modules
     const allModulesRes = await db.query(`SELECT id, parent_module_id FROM system_modules WHERE status = 'active'`);
     const allModules = allModulesRes.rows;
@@ -117,22 +122,24 @@ export async function PUT(req: Request, { params }: RouteParams) {
     try {
       await client.query("BEGIN");
 
-      for (const mod of allModules) {
-        const isEnabled = enabledSet.has(mod.id);
+      for (const tId of targetTypeIds) {
+        for (const mod of allModules) {
+          const isEnabled = enabledSet.has(mod.id);
+
+          await client.query(
+            `INSERT INTO business_type_modules (business_type_id, module_id, is_enabled, updated_at)
+             VALUES ($1, $2, $3, NOW())
+             ON CONFLICT (business_type_id, module_id) 
+             DO UPDATE SET is_enabled = $3, updated_at = NOW()`,
+            [tId, mod.id, isEnabled]
+          );
+        }
 
         await client.query(
-          `INSERT INTO business_type_modules (business_type_id, module_id, is_enabled, updated_at)
-           VALUES ($1, $2, $3, NOW())
-           ON CONFLICT (business_type_id, module_id) 
-           DO UPDATE SET is_enabled = $3, updated_at = NOW()`,
-          [typeId, mod.id, isEnabled]
+          `UPDATE institution_types SET updated_at = NOW() WHERE id = $1`,
+          [tId]
         );
       }
-
-      await client.query(
-        `UPDATE institution_types SET updated_at = NOW() WHERE id = $1`,
-        [typeId]
-      );
 
       await client.query("COMMIT");
     } catch (txErr) {
