@@ -1,1 +1,1 @@
-export { default, generateMetadata } from "../about/mission-vision/page";
+export { default } from "../about/mission-vision/page";
