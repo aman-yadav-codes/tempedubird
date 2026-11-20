@@ -33,7 +33,8 @@ import {
 import { toast } from "sonner";
 import { useAuthStore, useCartStore } from "@/store";
 import { isUserStoreOwner } from "@/lib/auth/store-ownership";
-import { buildProductSeoUrl } from "@/lib/utils/seo-slug";
+import { buildProductSeoUrl, parseDiscoverySeoSlug } from "@/lib/utils/seo-slug";
+import CustomerExplorePage from "@/app/(public)/explore/page";
 import {
   isWeightBasedProduct,
   STANDARD_WEIGHT_OPTIONS,
@@ -46,6 +47,11 @@ export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
   const productId = params?.id as string;
+
+  if (productId && (productId.includes("-in-") || productId.startsWith("all-") || productId.startsWith("in-"))) {
+    const { categorySlug, city } = parseDiscoverySeoSlug(productId);
+    return <CustomerExplorePage initialType="product" initialCategory={categorySlug} initialCity={city} />;
+  }
 
   const { user } = useAuthStore();
   const { addItem, getItemQuantity, updateQuantity, setIsOpen } = useCartStore();

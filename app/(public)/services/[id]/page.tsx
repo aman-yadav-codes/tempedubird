@@ -24,12 +24,18 @@ import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useAuthStore, useCartStore } from "@/store";
 import { isUserStoreOwner } from "@/lib/auth/store-ownership";
-import { buildServiceSeoUrl } from "@/lib/utils/seo-slug";
+import { buildServiceSeoUrl, parseDiscoverySeoSlug } from "@/lib/utils/seo-slug";
+import CustomerExplorePage from "@/app/(public)/explore/page";
 
 export default function ServiceDetailPage() {
   const params = useParams();
   const router = useRouter();
   const serviceId = params?.id as string;
+
+  if (serviceId && (serviceId.includes("-in-") || serviceId.startsWith("all-") || serviceId.startsWith("in-"))) {
+    const { categorySlug, city } = parseDiscoverySeoSlug(serviceId);
+    return <CustomerExplorePage initialType="service" initialCategory={categorySlug} initialCity={city} />;
+  }
 
   const { user } = useAuthStore();
   const { items, setIsOpen, addItem } = useCartStore();

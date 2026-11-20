@@ -53,6 +53,7 @@ import {
 import { useAuthStore, useCartStore } from "@/store";
 import { toast } from "sonner";
 import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
+import { buildDiscoverySeoUrl } from "@/lib/utils/seo-slug";
 import { CartDrawer } from "@/components/checkout/cart-drawer";
 import { parseSearchIntent } from "@/lib/utils/search-intent";
 import { ProductStoresDialog } from "@/components/public/product-stores-dialog";
@@ -93,68 +94,69 @@ interface SearchResultsState {
 const TOP_NAV_ITEMS = [
   {
     label: "Products",
-    href: "/explore?type=product",
+    type: "product",
     icon: Package,
     subcategories: [
-      { label: "All Products", href: "/explore?type=product" },
-      { label: "Electronics & Tech", href: "/explore?type=product&category=Electronics" },
-      { label: "Fashion & Apparel", href: "/explore?type=product&category=Fashion" },
-      { label: "Home & Kitchen", href: "/explore?type=product&category=Home" },
-      { label: "Groceries & Fresh", href: "/explore?type=product&category=Groceries" },
+      { label: "All Products", categorySlug: "all-products" },
+      { label: "Electronics & Tech", categorySlug: "electronics-and-gadgets" },
+      { label: "Fashion & Apparel", categorySlug: "uniforms-and-apparel" },
+      { label: "Home & Kitchen", categorySlug: "kitchenware-and-appliances" },
+      { label: "Groceries & Fresh", categorySlug: "packaged-foods-and-gourmet-groceries" },
     ],
   },
   {
     label: "Professionals",
-    href: "/explore?type=professional",
+    type: "professional",
     icon: UserCheck,
     subcategories: [
-      { label: "All Professionals", href: "/explore?type=professional" },
-      { label: "Doctors & Healthcare", href: "/explore?type=professional&category=Healthcare" },
-      { label: "Teachers & Mentors", href: "/explore?type=professional&category=Education" },
-      { label: "Legal & Financial Advisors", href: "/explore?type=professional&category=Legal" },
-      { label: "Tech & Software Consultants", href: "/explore?type=professional&category=Technology" },
+      { label: "All Professionals", categorySlug: "all-professionals" },
+      { label: "Doctors & Healthcare", categorySlug: "doctors-and-healthcare" },
+      { label: "Teachers & Mentors", categorySlug: "academic-tutors-and-education-specialists" },
+      { label: "Legal & Financial Advisors", categorySlug: "legal-law-and-compliance-experts" },
+      { label: "Tech & Software Consultants", categorySlug: "software-it-and-technology-specialists" },
     ],
   },
   {
     label: "Courses",
-    href: "/explore?type=course",
+    type: "course",
     icon: GraduationCap,
     subcategories: [
-      { label: "All Courses", href: "/explore?type=course" },
-      { label: "Competitive Exams (JEE / NEET)", href: "/explore?type=course&category=Competitive" },
-      { label: "Skill & Coding Bootcamps", href: "/explore?type=course&category=Technology" },
-      { label: "School Coaching (8th-12th)", href: "/explore?type=course&category=Academic" },
-      { label: "Degree & Diploma Programs", href: "/explore?type=course&category=Degree" },
+      { label: "All Courses", categorySlug: "all-courses" },
+      { label: "Competitive Exams (JEE / NEET)", categorySlug: "competitive-exams-jee-neet" },
+      { label: "Skill & Coding Bootcamps", categorySlug: "skill-and-coding-bootcamps" },
+      { label: "School Coaching (8th-12th)", categorySlug: "school-coaching-8th-12th" },
+      { label: "Degree & Diploma Programs", categorySlug: "degree-and-diploma-programs" },
     ],
   },
   {
     label: "Jobs",
-    href: "/explore?type=job",
+    type: "job",
     icon: Briefcase,
     subcategories: [
-      { label: "All Job Openings", href: "/explore?type=job" },
-      { label: "Full-Time Roles", href: "/explore?type=job&timing=full-time" },
-      { label: "Part-Time & Internships", href: "/explore?type=job&timing=internship" },
-      { label: "Teaching & Faculty", href: "/explore?type=job&category=Teaching" },
-      { label: "Retail & Operations", href: "/explore?type=job&category=Operations" },
+      { label: "All Job Openings", categorySlug: "all-job-openings" },
+      { label: "Full-Time Roles", categorySlug: "full-time-roles" },
+      { label: "Part-Time & Internships", categorySlug: "part-time-and-internships" },
+      { label: "Teaching & Faculty", categorySlug: "teaching-and-faculty" },
+      { label: "Retail & Operations", categorySlug: "retail-and-operations" },
     ],
   },
   {
     label: "Business",
-    href: "/explore?type=business",
+    type: "business",
     icon: Building2,
     subcategories: [
-      { label: "All Businesses", href: "/explore?type=business" },
-      { label: "Verified Enterprises", href: "/explore?type=business&verified=true" },
-      { label: "Retail Stores & Supermarkets", href: "/explore?type=business&category=Retail" },
-      { label: "Coaching Institutes", href: "/explore?type=business&category=Coaching" },
-      { label: "Clinics & Healthcare", href: "/explore?type=business&category=Healthcare" },
+      { label: "All Businesses", categorySlug: "all-businesses" },
+      { label: "Verified Enterprises", categorySlug: "verified-enterprises" },
+      { label: "Retail Stores & Supermarkets", categorySlug: "retail-and-shopping" },
+      { label: "Coaching Institutes", categorySlug: "education-and-coaching" },
+      { label: "Clinics & Healthcare", categorySlug: "healthcare-and-medical" },
     ],
   },
   {
     label: "Blog",
-    href: "/blogs",
+    type: "blog",
     icon: FileText,
+    href: "/blogs",
     subcategories: [
       { label: "All Articles & Insights", href: "/blogs" },
       { label: "Academic & Curriculum", href: "/blogs?category=Academic+%26+Curriculum" },
@@ -243,6 +245,19 @@ export function PlatformAdminHeader() {
     if (!location || location === "All Locations") return url;
     const separator = url.includes("?") ? "&" : "?";
     return `${url}${separator}city=${encodeURIComponent(location)}`;
+  };
+
+  const getNavHref = (
+    item: (typeof TOP_NAV_ITEMS)[0],
+    sub?: { label: string; categorySlug?: string; href?: string }
+  ) => {
+    if (sub?.href) return sub.href;
+    if ("href" in item && (item as any).href && !sub) return (item as any).href;
+    return buildDiscoverySeoUrl({
+      type: item.type,
+      category: sub?.categorySlug,
+      location: location && location !== "All Locations" ? location : null,
+    });
   };
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -410,7 +425,7 @@ export function PlatformAdminHeader() {
                     Explore {item.label}
                   </span>
                   <Link
-                    href={withLocation(item.href)}
+                    href={getNavHref(item)}
                     className="text-[10px] text-primary hover:underline font-bold"
                   >
                     View All →
@@ -419,7 +434,7 @@ export function PlatformAdminHeader() {
                 {item.subcategories.map((sub) => (
                   <DropdownMenuItem key={sub.label} asChild>
                     <Link
-                      href={withLocation(sub.href)}
+                      href={getNavHref(item, sub)}
                       className="cursor-pointer text-xs py-1.5 px-2.5 rounded-md font-medium text-foreground hover:text-primary hover:bg-muted"
                     >
                       {sub.label}
@@ -540,7 +555,7 @@ export function PlatformAdminHeader() {
                 return (
                   <Link
                     key={item.label}
-                    href={withLocation(item.href)}
+                    href={getNavHref(item)}
                     onClick={() => setMobileNavOpen(false)}
                     className="flex items-center justify-between p-2.5 rounded-xl hover:bg-muted text-sm font-bold text-foreground transition-colors"
                   >

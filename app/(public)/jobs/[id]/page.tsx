@@ -41,7 +41,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { StaffJobPosting } from "@/lib/queries/jobs";
-import { buildJobSeoUrl } from "@/lib/utils/seo-slug";
+import { buildJobSeoUrl, parseDiscoverySeoSlug } from "@/lib/utils/seo-slug";
+import CustomerExplorePage from "@/app/(public)/explore/page";
 
 interface JobDetailPageProps {
   params: Promise<{ id: string }>;
@@ -49,6 +50,11 @@ interface JobDetailPageProps {
 
 export default function JobDetailPage({ params }: JobDetailPageProps) {
   const { id } = use(params);
+
+  if (id && (id.includes("-in-") || id.startsWith("all-") || id.startsWith("in-"))) {
+    const { categorySlug, city } = parseDiscoverySeoSlug(id);
+    return <CustomerExplorePage initialType="job" initialCategory={categorySlug} initialCity={city} />;
+  }
   const router = useRouter();
   const [job, setJob] = useState<StaffJobPosting | null>(null);
   const [loading, setLoading] = useState(true);

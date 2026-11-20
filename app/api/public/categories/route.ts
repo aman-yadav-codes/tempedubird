@@ -68,13 +68,28 @@ export async function GET(req: NextRequest) {
     const idParam = searchParams.get("id");
     const slugParam = searchParams.get("slug") || (!/^\d+$/.test(idParam || "") && idParam ? idParam : null);
     const id = idParam && /^\d+$/.test(idParam) ? Number(idParam) : null;
+    let exactSlugParam = "";
     if (id) {
       params.push(id);
       conditions.push(`id = $${params.length}`);
     } else if (slugParam) {
-      params.push(slugParam.toLowerCase());
-      params.push(`%${slugParam.replace(/-/g, " ")}%`);
-      conditions.push(`(slug = $${params.length - 1} OR name ILIKE $${params.length})`);
+      const cleanSlug = slugParam.toLowerCase().trim();
+      exactSlugParam = cleanSlug;
+      const namePattern1 = `%${cleanSlug.replace(/-/g, " ")}%`;
+      const namePattern2 = `%${cleanSlug.replace(/-/g, " ").replace(/\band\b/g, "&")}%`;
+      const namePattern3 = `%${cleanSlug.replace(/-/g, " ").replace(/\band\b/g, "%")}%`;
+      params.push(cleanSlug);
+      params.push(`%${cleanSlug}%`);
+      params.push(namePattern1);
+      params.push(namePattern2);
+      params.push(namePattern3);
+      conditions.push(`(
+        slug = $${params.length - 4}
+        OR slug LIKE $${params.length - 3}
+        OR name ILIKE $${params.length - 2}
+        OR name ILIKE $${params.length - 1}
+        OR name ILIKE $${params.length}
+      )`);
     } else if (parentId !== null && !isNaN(parentId)) {
       params.push(parentId);
       conditions.push(`parent_id = $${params.length}`);
@@ -82,13 +97,28 @@ export async function GET(req: NextRequest) {
       conditions.push("parent_id IS NULL");
     }
 
+    const orderClause = exactSlugParam
+      ? `ORDER BY 
+          CASE 
+            WHEN slug = '${exactSlugParam.replace(/'/g, "''")}' THEN 0
+            WHEN parent_id IS NULL AND slug LIKE '${exactSlugParam.replace(/'/g, "''")}%' THEN 1
+            WHEN parent_id IS NULL AND LOWER(name) LIKE '${exactSlugParam.replace(/'/g, "''").replace(/-/g, " ")}%' THEN 2
+            WHEN parent_id IS NULL THEN 3
+            WHEN slug LIKE '${exactSlugParam.replace(/'/g, "''")}%' THEN 4
+            ELSE 5
+          END,
+          CASE WHEN name ~ '^[0-9]' THEN 1 ELSE 0 END,
+          name ASC`
+      : `ORDER BY 
+          CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END,
+          CASE WHEN name ~ '^[0-9]' THEN 1 ELSE 0 END,
+          name ASC`;
+
     const query = `
       SELECT id, name, slug, parent_id, category_type, business_category_id, business_subcategory_id, icon_url
       FROM categories
       WHERE ${conditions.join(" AND ")}
-      ORDER BY 
-        CASE WHEN name ~ '^[0-9]' THEN 1 ELSE 0 END,
-        name ASC
+      ${orderClause}
       LIMIT $${params.length + 1}
     `;
 

@@ -20,7 +20,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getPublicCourseById } from "@/lib/api/public-courses";
-import { buildInstituteUrl, buildCourseSeoUrl } from "@/lib/utils/seo-slug";
+import { buildInstituteUrl, buildCourseSeoUrl, parseDiscoverySeoSlug } from "@/lib/utils/seo-slug";
+import CustomerExplorePage from "@/app/(public)/explore/page";
 import { SeoBreadcrumbs } from "@/components/ui/seo-breadcrumbs";
 import { parseCourseTitle } from "../course-parser";
 import { RelatedPopularSidebar, type SidebarCourseItem } from "./related-popular-sidebar";
@@ -364,11 +365,20 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function CourseDetailPage({ params }: Props) {
   const { id } = await params;
+
+  if (id && (id.includes("-in-") || id.startsWith("all-") || id.startsWith("in-"))) {
+    const { categorySlug, city } = parseDiscoverySeoSlug(id);
+    return <CustomerExplorePage initialType="course" initialCategory={categorySlug} initialCity={city} />;
+  }
+
   const headerList = await headers();
   const host = headerList.get("x-forwarded-host") ?? headerList.get("host");
   const course = await getPublicCourseById(id, { host });
 
-  if (!course) notFound();
+  if (!course) {
+    const { categorySlug, city } = parseDiscoverySeoSlug(id);
+    return <CustomerExplorePage initialType="course" initialCategory={categorySlug} initialCity={city} />;
+  }
 
   // Redirect to canonical SEO URL ({category}/{course-name}-in-{location})
   const canonicalSeoUrl = buildCourseSeoUrl({

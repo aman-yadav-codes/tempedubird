@@ -63,7 +63,7 @@ import { useAuthStore, useCartStore } from "@/store";
 import { toast } from "sonner";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { buildBusinessSeoUrl, buildProfessionalSeoUrl, buildCourseSeoUrl, buildJobSeoUrl } from "@/lib/utils/seo-slug";
+import { buildBusinessSeoUrl, buildProfessionalSeoUrl, buildCourseSeoUrl, buildJobSeoUrl, buildDiscoverySeoUrl, slugify } from "@/lib/utils/seo-slug";
 import { OrderCheckoutDialog, CheckoutItem } from "@/components/checkout/order-checkout-dialog";
 import { CartDrawer } from "@/components/checkout/cart-drawer";
 import { CartFloatingButton } from "@/components/checkout/cart-floating-button";
@@ -133,27 +133,40 @@ interface DiscoveryItem {
   company_logo?: string;
 }
 
-function CustomerExplorePageContent() {
+export interface CustomerExplorePageProps {
+  initialType?: string;
+  initialCategory?: string;
+  initialSubcategory?: string;
+  initialCity?: string;
+  initialQuery?: string;
+}
+
+function CustomerExplorePageContent({
+  initialType,
+  initialCategory,
+  initialSubcategory,
+  initialCity,
+  initialQuery,
+}: CustomerExplorePageProps = {}) {
   const { user, accessToken } = useAuthStore();
   const searchParams = useSearchParams();
-  const urlQ = searchParams.get("q") || searchParams.get("query") || searchParams.get("search") || "";
-  const urlType = (searchParams.get("type") as any) || "all";
-  const urlCountry = searchParams.get("country") || "";
-  const urlCity = searchParams.get("city") || searchParams.get("location") || "";
-  const urlCategoryParam = searchParams.get("category") || searchParams.get("category_slug") || "";
-  const urlSubcategoryParam = searchParams.get("subcategory") || searchParams.get("subcategory_slug") || "";
-  const urlCategory = searchParams.get("categoryId") ? Number(searchParams.get("categoryId")) : null;
-  const urlCategoryName = searchParams.get("categoryName") || "";
+  const urlQ = searchParams?.get("q") || searchParams?.get("query") || searchParams?.get("search") || initialQuery || "";
+  const rawType = (searchParams?.get("type") as any) || initialType || "all";
+  const urlType = ["all", "business", "service", "product", "professional", "course", "job"].includes(rawType) ? rawType : "all";
+  const urlCountry = searchParams?.get("country") || "";
+  const urlCity = searchParams?.get("city") || searchParams?.get("location") || initialCity || "";
+  const urlCategoryParam = searchParams?.get("category") || searchParams?.get("category_slug") || initialCategory || "";
+  const urlSubcategoryParam = searchParams?.get("subcategory") || searchParams?.get("subcategory_slug") || initialSubcategory || "";
+  const urlCategory = searchParams?.get("categoryId") ? Number(searchParams.get("categoryId")) : null;
+  const urlCategoryName = searchParams?.get("categoryName") || "";
 
-  const urlBiz = searchParams.get("businessId") || searchParams.get("business_id");
+  const urlBiz = searchParams?.get("businessId") || searchParams?.get("business_id");
   const activeBusinessId = urlBiz && /^\d+$/.test(urlBiz.trim()) ? Number(urlBiz.trim()) : null;
 
   const { location: userGlobalLocation, setLocation: setGlobalLocation } = useUserLocation();
 
   const [query, setQuery] = useState(urlQ);
-  const [activeType, setActiveType] = useState<"all" | "business" | "service" | "product" | "professional" | "course" | "job">(
-    urlCategory || urlCategoryParam ? (["all", "business", "service", "product", "professional", "course", "job"].includes(urlType) ? urlType : "all") : (["all", "business", "service", "product", "professional", "course", "job"].includes(urlType) ? urlType : "all")
-  );
+  const [activeType, setActiveType] = useState<"all" | "business" | "service" | "product" | "professional" | "course" | "job">(urlType);
   const [country, setCountry] = useState<string>(urlCountry);
   const [city, setCity] = useState<string>(
     urlCity || (userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : "")
@@ -180,7 +193,7 @@ function CustomerExplorePageContent() {
   const [minRating, setMinRating] = useState<number>(0);
   const [verifiedOnly, setVerifiedOnly] = useState<boolean>(false);
 
-  // Helper to keep browser URL in sync using ONLY clean string parameters (no numeric IDs)
+  // Helper to keep browser URL in sync using ONLY clean structured URLs
   const syncUrlParams = useCallback(
     (overrides?: {
       type?: string;
@@ -191,55 +204,26 @@ function CustomerExplorePageContent() {
       brand?: string;
     }) => {
       if (typeof window === "undefined") return;
-      const currentParams = new URLSearchParams(window.location.search);
 
       const targetType = overrides?.type !== undefined ? overrides.type : activeType;
-      if (targetType && targetType !== "all") {
-        currentParams.set("type", targetType);
-      } else {
-        currentParams.delete("type");
-      }
-
       const targetCity = overrides?.city !== undefined ? overrides.city : city;
-      if (targetCity && targetCity.trim() && targetCity.toLowerCase() !== "all locations") {
-        currentParams.set("city", targetCity.trim());
-      } else {
-        currentParams.delete("city");
-        currentParams.delete("location");
-      }
-
       const targetCat = overrides?.category !== undefined ? overrides.category : (selectedCategorySlug || selectedCategoryName);
-      if (targetCat) {
-        currentParams.set("category", targetCat);
-        currentParams.delete("categoryId");
-        currentParams.delete("categoryName");
-      } else {
-        currentParams.delete("category");
-        currentParams.delete("categoryId");
-        currentParams.delete("categoryName");
-      }
-
       const targetSubcat = overrides?.subcategory !== undefined ? overrides.subcategory : (selectedSubcategorySlug || selectedSubcategoryName);
-      if (targetSubcat) {
-        currentParams.set("subcategory", targetSubcat);
-        currentParams.delete("subcategoryId");
-      } else {
-        currentParams.delete("subcategory");
-        currentParams.delete("subcategoryId");
-      }
-
       const targetQ = overrides?.q !== undefined ? overrides.q : query;
-      if (targetQ && targetQ.trim()) {
-        currentParams.set("q", targetQ.trim());
-      } else {
-        currentParams.delete("q");
-        currentParams.delete("query");
-        currentParams.delete("search");
-      }
 
-      const qs = currentParams.toString();
-      const newUrl = `/explore${qs ? `?${qs}` : ""}`;
-      window.history.replaceState(null, "", newUrl);
+      const newBasePath = buildDiscoverySeoUrl({
+        type: targetType,
+        category: targetCat,
+        subcategory: targetSubcat,
+        city: targetCity,
+      });
+
+      const qParam = targetQ && targetQ.trim() ? `?q=${encodeURIComponent(targetQ.trim())}` : "";
+      const finalUrl = `${newBasePath}${qParam}`;
+
+      if (window.location.pathname + window.location.search !== finalUrl) {
+        window.history.replaceState(null, "", finalUrl);
+      }
     },
     [activeType, city, selectedCategorySlug, selectedCategoryName, selectedSubcategorySlug, selectedSubcategoryName, query]
   );
@@ -249,7 +233,8 @@ function CustomerExplorePageContent() {
     if (urlQ) setQuery(urlQ);
 
     if (urlCategoryParam) {
-      fetch(`/api/public/categories?slug=${encodeURIComponent(urlCategoryParam)}`)
+      const typeParam = urlType && urlType !== "all" ? `&type=${urlType}` : "";
+      fetch(`/api/public/categories?slug=${encodeURIComponent(urlCategoryParam)}${typeParam}`)
         .then((r) => r.json())
         .then((json) => {
           const cat = Array.isArray(json?.data) ? json.data[0] : json?.data;
@@ -2315,7 +2300,7 @@ function CustomerExplorePageContent() {
   );
 }
 
-export default function CustomerExplorePage() {
+export default function CustomerExplorePage(props: CustomerExplorePageProps = {}) {
   return (
     <Suspense
       fallback={
@@ -2325,7 +2310,7 @@ export default function CustomerExplorePage() {
         </div>
       }
     >
-      <CustomerExplorePageContent />
+      <CustomerExplorePageContent {...props} />
     </Suspense>
   );
 }

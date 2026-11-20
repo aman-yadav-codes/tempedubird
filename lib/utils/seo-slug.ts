@@ -356,3 +356,85 @@ export function buildPropertySeoUrl(prop: {
 
   return `/${catSlug}/${itemPart}`;
 }
+
+/**
+ * Build structured discovery / listing SEO URL
+ * Format: /{listingType}/{category-slug}-in-{location}
+ * Example: /professionals/doctors-and-healthcare-in-varanasi
+ */
+export function buildDiscoverySeoUrl({
+  type,
+  category,
+  subcategory,
+  location,
+  city,
+  locality,
+}: {
+  type?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
+  location?: string | null;
+  city?: string | null;
+  locality?: string | null;
+}): string {
+  const normType = (type || "").toLowerCase().trim();
+  let prefix = "/explore";
+  if (normType === "professional" || normType === "professionals") prefix = "/professionals";
+  else if (normType === "product" || normType === "products") prefix = "/products";
+  else if (normType === "course" || normType === "courses") prefix = "/courses";
+  else if (normType === "job" || normType === "jobs") prefix = "/jobs";
+  else if (normType === "business" || normType === "businesses") prefix = "/businesses";
+  else if (normType === "service" || normType === "services") prefix = "/services";
+
+  const rawCat = subcategory || category || "";
+  let catSlug = slugify(rawCat);
+  if (catSlug.startsWith("all-")) catSlug = "";
+
+  const locRaw = location || [locality, city].filter(Boolean).join(" ") || city || locality || "";
+  const locSlug = locRaw && locRaw.toLowerCase() !== "all locations" ? slugify(locRaw) : "";
+
+  if (catSlug && locSlug) {
+    return `${prefix}/${catSlug}-in-${locSlug}`;
+  }
+  if (catSlug) {
+    return `${prefix}/${catSlug}`;
+  }
+  if (locSlug) {
+    return `${prefix}/in-${locSlug}`;
+  }
+  return prefix;
+}
+
+/**
+ * Parse structured discovery / listing slug
+ * Example: "doctors-and-healthcare-in-varanasi" -> { categorySlug: "doctors-and-healthcare", locationSlug: "varanasi", city: "Varanasi" }
+ */
+export function parseDiscoverySeoSlug(slug: string | undefined | null) {
+  if (!slug) return { categorySlug: "", locationSlug: "", city: "" };
+  const raw = String(slug).trim();
+
+  let categorySlug = raw;
+  let locationSlug = "";
+
+  const inIndex = raw.lastIndexOf("-in-");
+  if (inIndex !== -1) {
+    categorySlug = raw.substring(0, inIndex);
+    locationSlug = raw.substring(inIndex + 4);
+  } else if (raw.startsWith("in-")) {
+    categorySlug = "";
+    locationSlug = raw.substring(3);
+  }
+
+  if (categorySlug.startsWith("all-")) {
+    categorySlug = "";
+  }
+
+  const city = locationSlug
+    ? locationSlug
+        .split("-")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ")
+    : "";
+
+  return { categorySlug, locationSlug, city };
+}
