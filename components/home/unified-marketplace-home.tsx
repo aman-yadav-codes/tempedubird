@@ -1327,7 +1327,7 @@ export function UnifiedMarketplaceHome() {
                       className="w-full h-9 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
                     >
                       <Link href={`/courses/${c.slug || c.id}`}>
-                        <span>Explore Curriculum</span>
+                        <span>Buy Now</span>
                         <ChevronRight className="size-3.5" />
                       </Link>
                     </Button>

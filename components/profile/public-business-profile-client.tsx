@@ -2821,7 +2821,7 @@ export function PublicBusinessProfileClient({
                                           asChild
                                           className="h-7 px-3 text-xs font-bold rounded-lg bg-amber-600 hover:bg-amber-700 text-white"
                                         >
-                                          <Link href={`/courses/${c.slug || c.id}`}>View Details</Link>
+                                          <Link href={`/courses/${c.slug || c.id}`}>Buy Now</Link>
                                         </Button>
                                       </div>
                                     </Card>
@@ -2893,7 +2893,7 @@ export function PublicBusinessProfileClient({
                                 asChild
                                 className="h-7 px-3 text-xs font-bold rounded-lg bg-amber-600 hover:bg-amber-700 text-white"
                               >
-                                <Link href={`/courses/${c.slug || c.id}`}>View Details</Link>
+                                <Link href={`/courses/${c.slug || c.id}`}>Buy Now</Link>
                               </Button>
                             </div>
                           </Card>

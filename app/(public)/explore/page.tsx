@@ -1600,15 +1600,25 @@ function CustomerExplorePageContent({
                       </div>
                     </CardContent>
                     <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
-                      <Link href={buildCourseSeoUrl(c)} className="flex-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full text-xs font-semibold"
-                        >
-                          View Details
-                        </Button>
-                      </Link>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setCheckoutItem({
+                            id: c.id,
+                            name: c.name,
+                            type: "service",
+                            price: Number(c.price || c.fee || c.annual_fee || 5000),
+                            sale_price: Number(c.sale_price || c.discounted_price || c.price || c.fee || 5000),
+                            institution_id: c.institution_id || c.institution_profile_id || null,
+                            provider_name: c.university_name || c.institution_name || "Maa Sharda Institute",
+                          } as any);
+                          setCheckoutOpen(true);
+                        }}
+                        className="flex-1 text-xs font-semibold cursor-pointer border-slate-300 hover:bg-slate-100"
+                      >
+                        Buy Now
+                      </Button>
                       <Button
                         size="sm"
                         variant="default"
