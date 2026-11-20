@@ -383,45 +383,33 @@ export function UnifiedMarketplaceHome() {
   return (
     <div className="flex-1 flex flex-col w-full bg-background">
       {/* ================= 1. HERO SECTION (143PANDA DISCOVERY THEME) ================= */}
-      <section className="relative overflow-hidden min-h-[580px] sm:min-h-[640px] lg:min-h-[720px] flex items-center py-16 sm:py-20 lg:py-24 border-b border-border/50 bg-[#060402]">
-        {/* ONE Single Majestic Panda Hero Background Image that smoothly fades away below text */}
-        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-          <Image
-            src="/images/hero-panda.jpg"
-            alt="143Panda Discovery Platform"
-            fill
-            priority
-            className="object-cover object-[right_center]"
-            sizes="100vw"
-            quality={95}
-          />
-          {/* Silky fade: completely dissolves the image below the text, headline, search box and controls */}
-          <div className="absolute inset-0 bg-gradient-to-r from-[#060402] from-35% via-[#060402]/90 via-58% to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#060402] via-[#060402]/75 via-28% to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[#060402] to-transparent" />
-        </div>
+      <section className="relative overflow-hidden min-h-[580px] sm:min-h-[640px] lg:min-h-[680px] flex items-center py-14 sm:py-18 lg:py-20 border-b border-border/50 bg-[#08090d]">
+        {/* Clean ambient lighting - NO background image */}
+        <div className="absolute top-1/4 right-1/4 size-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none z-0" />
+        <div className="absolute -bottom-20 left-10 size-96 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none z-0" />
 
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-amber-500/10 blur-3xl pointer-events-none z-0" />
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full space-y-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
+            {/* Left Column: Eyebrow, Heading, Search Bar, Categories */}
+            <div className="lg:col-span-7 space-y-6 sm:space-y-7">
+              {/* Top Eyebrow Tag */}
+              <div className="flex items-center gap-2">
+                <span className="text-amber-400 font-extrabold uppercase tracking-[0.2em] text-xs sm:text-sm drop-shadow-md flex items-center gap-2">
+                  <Sparkles className="size-4 text-amber-400 animate-pulse" />
+                  THE PREMIER LOCAL DISCOVERY PLATFORM
+                </span>
+              </div>
 
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full space-y-7">
-          {/* Top Eyebrow Tag */}
-          <div className="flex items-center gap-2">
-            <span className="text-amber-400 font-extrabold uppercase tracking-[0.2em] text-xs sm:text-sm drop-shadow-md flex items-center gap-2">
-              <Sparkles className="size-4 text-amber-400 animate-pulse" />
-              THE PREMIER LOCAL DISCOVERY PLATFORM
-            </span>
-          </div>
-
-          {/* Heading & Subheading - Exactly 2 rows */}
-          <div className="space-y-3.5 max-w-2xl sm:max-w-3xl lg:max-w-4xl">
-            <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-[68px] font-black tracking-tight text-white leading-[1.08] drop-shadow-xl">
-              <span className="block whitespace-nowrap">Looking for something?</span>
-              <span className="block text-white">Let&apos;s find it.</span>
-            </h1>
-            <p className="text-sm sm:text-base lg:text-lg text-white/90 max-w-2xl leading-relaxed drop-shadow-md font-medium">
-              Discover businesses, places, services, property, courses, products, jobs and more across South Africa &amp; your region.
-            </p>
-          </div>
+              {/* Heading & Subheading - Exactly 2 rows */}
+              <div className="space-y-3.5 max-w-2xl">
+                <h1 className="text-3xl sm:text-5xl md:text-5xl lg:text-[58px] font-black tracking-tight text-white leading-[1.08] drop-shadow-xl">
+                  <span className="block whitespace-nowrap">Looking for something?</span>
+                  <span className="block text-white">Let&apos;s find it.</span>
+                </h1>
+                <p className="text-sm sm:text-base lg:text-lg text-white/90 max-w-2xl leading-relaxed drop-shadow-md font-medium">
+                  Discover businesses, places, services, property, courses, products, jobs and more across South Africa &amp; your region.
+                </p>
+              </div>
 
           {/* Search Box & Location Selector & Suggestions */}
           <div ref={heroSearchContainerRef} className="relative max-w-2xl w-full space-y-3.5">
@@ -826,9 +814,27 @@ export function UnifiedMarketplaceHome() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Right Column: Dedicated Panda Mascot on Right Side */}
+        <div className="lg:col-span-5 hidden lg:flex items-center justify-center relative">
+          <div className="relative w-full max-w-[420px] aspect-[102/120] flex items-center justify-center">
+            {/* Soft ambient aura behind panda */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-amber-500/15 via-emerald-500/10 to-amber-400/20 rounded-full blur-3xl -z-10 scale-95" />
+            <Image
+              src="/images/hero-panda-right.webp"
+              alt="143Panda Discovery"
+              fill
+              priority
+              className="object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.85)]"
+              sizes="(max-width: 1024px) 100vw, 420px"
+            />
+          </div>
+        </div>
+      </div>
 
           {/* Live Metric Stats Bar (Glassmorphic cards over hero landscape - Click opens dedicated page according to selected location) */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 pt-6 border-t border-white/20 max-w-5xl">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 pt-6 border-t border-white/20 w-full">
             {[
               {
                 label: "Local Products",
