@@ -1004,35 +1004,6 @@ function CustomerExplorePageContent({
           </button>
         </div>
 
-        {/* Listing Type Dropdown Pill in Top Bar */}
-        <div className="flex items-center gap-1.5 h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 cursor-pointer hover:border-slate-300">
-          <Layers className="size-3.5 text-amber-500 shrink-0" />
-          <select
-            value={activeType}
-            onChange={(e) => {
-              const newType = e.target.value as any;
-              setActiveType(newType);
-              setSelectedCategoryId(null);
-              setSelectedCategoryName("");
-              setSelectedCategorySlug("");
-              setSelectedSubcategoryId(null);
-              setSelectedSubcategoryName("");
-              setSelectedSubcategorySlug("");
-              syncUrlParams({ type: newType, category: null, subcategory: null });
-            }}
-            className="bg-transparent text-xs sm:text-sm font-medium text-slate-900 focus:outline-none cursor-pointer pr-3 appearance-none capitalize"
-          >
-            <option value="all" className="bg-white text-slate-900">All Types</option>
-            <option value="business" className="bg-white text-slate-900">Businesses</option>
-            <option value="service" className="bg-white text-slate-900">Services</option>
-            <option value="product" className="bg-white text-slate-900">Products</option>
-            <option value="professional" className="bg-white text-slate-900">Professionals</option>
-            <option value="course" className="bg-white text-slate-900">Courses</option>
-            <option value="job" className="bg-white text-slate-900">Jobs</option>
-          </select>
-          <ChevronDown className="size-3 text-slate-400 pointer-events-none" />
-        </div>
-
         {/* Location Dropdown Pill */}
         <div className="flex items-center gap-1.5 h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 cursor-pointer hover:border-slate-300">
           <MapPin className="size-3.5 text-amber-500 shrink-0" />
@@ -1870,21 +1841,6 @@ function CustomerExplorePageContent({
                 <option value="job">Jobs</option>
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
-            </div>
-          </div>
-
-          {/* Keywords */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-700">Keywords</label>
-            <div className="relative">
-              <Input
-                type="text"
-                placeholder="Search listings..."
-                value={productNameSearch}
-                onChange={(e) => setProductNameSearch(e.target.value)}
-                className="bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 text-xs h-10 pr-8 rounded-xl focus:bg-white"
-              />
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
             </div>
           </div>
 
