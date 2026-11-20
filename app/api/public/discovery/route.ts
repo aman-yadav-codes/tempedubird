@@ -432,6 +432,22 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
+        prodParams.push(`%${city}%`);
+        prodConditions.push(`(
+          mp.id IN (
+            SELECT bprod.master_product_id FROM business_products bprod
+            JOIN business_profiles bp ON (bp.id = bprod.business_profile_id OR bp.id = bprod.business_id)
+            WHERE (bp.city ILIKE $${prodParams.length} OR bp.locality ILIKE $${prodParams.length} OR bp.address ILIKE $${prodParams.length} OR bp.state ILIKE $${prodParams.length})
+              AND COALESCE(bprod.is_available, true) = true
+          )
+          OR mp.business_profile_id IN (
+            SELECT bp2.id FROM business_profiles bp2
+            WHERE (bp2.city ILIKE $${prodParams.length} OR bp2.locality ILIKE $${prodParams.length} OR bp2.address ILIKE $${prodParams.length} OR bp2.state ILIKE $${prodParams.length})
+          )
+        )`);
+      }
+
       const sellerScopeClause = scopedBusinessId
         ? `AND (bp.id = ${scopedBusinessId})`
         : "";
@@ -541,6 +557,28 @@ export async function GET(req: NextRequest) {
         } else {
           sConditions.push(`(ms.category_id = ANY($${sParams.length}::int[]) OR ms.subcategory_id = ANY($${sParams.length}::int[]))`);
         }
+      }
+
+      if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
+        sParams.push(`%${city}%`);
+        sConditions.push(`(
+          ms.id IN (
+            SELECT bserv.master_service_id FROM business_services bserv
+            JOIN business_profiles bp ON bp.id = bserv.business_id
+            WHERE (bp.city ILIKE $${sParams.length} OR bp.locality ILIKE $${sParams.length} OR bp.address ILIKE $${sParams.length} OR bp.state ILIKE $${sParams.length})
+              AND COALESCE(bserv.is_active, true) = true
+          )
+          OR ms.id IN (
+            SELECT ps.master_service_id FROM professional_services ps
+            JOIN professional_profiles pp ON pp.id = ps.professional_id
+            WHERE (pp.city ILIKE $${sParams.length} OR pp.locality ILIKE $${sParams.length} OR pp.address ILIKE $${sParams.length} OR pp.state ILIKE $${sParams.length})
+              AND COALESCE(ps.is_active, true) = true
+          )
+          OR ms.business_profile_id IN (
+            SELECT bp2.id FROM business_profiles bp2
+            WHERE (bp2.city ILIKE $${sParams.length} OR bp2.locality ILIKE $${sParams.length} OR bp2.address ILIKE $${sParams.length} OR bp2.state ILIKE $${sParams.length})
+          )
+        )`);
       }
 
       const providerScopeClause = scopedBusinessId

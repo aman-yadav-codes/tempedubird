@@ -58,6 +58,7 @@ import { TrendingLocationCategories } from "@/components/home/trending-location-
 import { ProductStoresDialog } from "@/components/public/product-stores-dialog";
 import { ServiceStoresDialog } from "@/components/public/service-stores-dialog";
 import { ServiceBookingDialog, BookingServiceItem } from "@/components/checkout/service-booking-dialog";
+import { buildDiscoverySeoUrl } from "@/lib/utils/seo-slug";
 import { toast } from "sonner";
 
 interface ProductData {
@@ -200,6 +201,10 @@ export function UnifiedMarketplaceHome() {
     isDetected,
   } = useUserLocation();
   const { addItem } = useCartStore();
+
+  const displayCity = useMemo(() => {
+    return userLocation && userLocation.toLowerCase() !== "all locations" ? userLocation : "Your Area";
+  }, [userLocation]);
 
   // Unified Discovery Data
   const [loading, setLoading] = useState(true);
@@ -392,12 +397,26 @@ export function UnifiedMarketplaceHome() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
             {/* Left Column: Eyebrow, Heading, Search Bar, Categories */}
             <div className="lg:col-span-7 space-y-6 sm:space-y-7">
-              {/* Top Eyebrow Tag */}
-              <div className="flex items-center gap-2">
+              {/* Top Eyebrow Tag & Location Badge */}
+              <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-amber-400 font-extrabold uppercase tracking-[0.2em] text-xs sm:text-sm drop-shadow-md flex items-center gap-2">
                   <Sparkles className="size-4 text-amber-400 animate-pulse" />
                   THE PREMIER LOCAL DISCOVERY PLATFORM
                 </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window !== "undefined") {
+                      window.dispatchEvent(new CustomEvent("edubird-open-location-dialog"));
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-amber-300 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                  title="Click to select or change location"
+                >
+                  <MapPin className="size-3 text-amber-400" />
+                  <span>Location: <strong className="text-white underline">{displayCity}</strong></span>
+                  <span className="text-[10px] text-amber-400/80 ml-0.5">Change →</span>
+                </button>
               </div>
 
               {/* Heading & Subheading - Exactly 2 rows */}
@@ -919,10 +938,10 @@ export function UnifiedMarketplaceHome() {
                 <span>Local Stores &amp; Products</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-                Trending Products from Varanasi Stores
+                Trending Products in {displayCity}
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Compare live prices across 18+ Pandeypur stores with doorstep delivery or counter pickup.
+                Compare live prices across verified local stores in {displayCity} with doorstep delivery or counter pickup.
               </p>
             </div>
 
@@ -932,8 +951,14 @@ export function UnifiedMarketplaceHome() {
               asChild
               className="text-xs font-bold h-9 px-4 rounded-xl border-primary/30 text-primary hover:bg-primary/10 transition-colors shrink-0"
             >
-              <Link href="/products" className="inline-flex items-center gap-1.5">
-                <span>View All 660+ Products</span>
+              <Link
+                href={buildDiscoverySeoUrl({
+                  type: "product",
+                  location: userLocation && userLocation !== "All Locations" ? userLocation : null,
+                })}
+                className="inline-flex items-center gap-1.5"
+              >
+                <span>View All Products</span>
                 <ArrowRight className="size-3.5" />
               </Link>
             </Button>
@@ -1066,10 +1091,10 @@ export function UnifiedMarketplaceHome() {
                 <span>On-Demand Services</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-                Professional &amp; Home Services in Your Area
+                Professional &amp; Home Services in {displayCity}
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Book certified technicians, mentors, and corporate specialists with transparent upfront pricing.
+                Book certified technicians, mentors, and corporate specialists in {displayCity} with transparent upfront pricing.
               </p>
             </div>
 
@@ -1079,8 +1104,14 @@ export function UnifiedMarketplaceHome() {
               asChild
               className="text-xs font-bold h-9 px-4 rounded-xl border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors shrink-0"
             >
-              <Link href="/explore?type=service" className="inline-flex items-center gap-1.5">
-                <span>View All 90+ Services</span>
+              <Link
+                href={buildDiscoverySeoUrl({
+                  type: "service",
+                  location: userLocation && userLocation !== "All Locations" ? userLocation : null,
+                })}
+                className="inline-flex items-center gap-1.5"
+              >
+                <span>View All Services</span>
                 <ArrowRight className="size-3.5" />
               </Link>
             </Button>
@@ -1186,10 +1217,10 @@ export function UnifiedMarketplaceHome() {
                 <span>Verified Experts</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-                Consult Verified Professionals &amp; Specialists
+                Consult Verified Professionals in {displayCity}
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Connect directly with certified doctors, legal consultants, private tutors, and supply managers.
+                Connect directly with certified doctors, legal consultants, private tutors, and specialists in {displayCity}.
               </p>
             </div>
 
@@ -1199,7 +1230,13 @@ export function UnifiedMarketplaceHome() {
               asChild
               className="text-xs font-bold h-9 px-4 rounded-xl border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 transition-colors shrink-0"
             >
-              <Link href="/explore?type=professional" className="inline-flex items-center gap-1.5">
+              <Link
+                href={buildDiscoverySeoUrl({
+                  type: "professional",
+                  location: userLocation && userLocation !== "All Locations" ? userLocation : null,
+                })}
+                className="inline-flex items-center gap-1.5"
+              >
                 <span>Browse All Professionals</span>
                 <ArrowRight className="size-3.5" />
               </Link>
@@ -1270,10 +1307,10 @@ export function UnifiedMarketplaceHome() {
                 <span>Academic &amp; Skill Programs</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-                Certified Courses &amp; Degree Programs
+                Certified Courses &amp; Degree Programs in {displayCity}
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Enroll in verified skill diplomas, college degrees, and industry-recognized certifications.
+                Enroll in verified skill diplomas, college degrees, and industry-recognized certifications in {displayCity}.
               </p>
             </div>
 
@@ -1283,8 +1320,14 @@ export function UnifiedMarketplaceHome() {
               asChild
               className="text-xs font-bold h-9 px-4 rounded-xl border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors shrink-0"
             >
-              <Link href="/courses" className="inline-flex items-center gap-1.5">
-                <span>View All 170+ Courses</span>
+              <Link
+                href={buildDiscoverySeoUrl({
+                  type: "course",
+                  location: userLocation && userLocation !== "All Locations" ? userLocation : null,
+                })}
+                className="inline-flex items-center gap-1.5"
+              >
+                <span>View All Courses</span>
                 <ArrowRight className="size-3.5" />
               </Link>
             </Button>
@@ -1355,10 +1398,10 @@ export function UnifiedMarketplaceHome() {
                 <span>Career Opportunities</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-                Active Job Openings &amp; Vacancies
+                Active Job Openings in {displayCity}
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Apply directly to verified openings in medical, tech, retail management, and academics.
+                Apply directly to verified openings in {displayCity} across medical, tech, retail management, and academics.
               </p>
             </div>
 
@@ -1368,7 +1411,13 @@ export function UnifiedMarketplaceHome() {
               asChild
               className="text-xs font-bold h-9 px-4 rounded-xl border-purple-500/30 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 transition-colors shrink-0"
             >
-              <Link href="/jobs" className="inline-flex items-center gap-1.5">
+              <Link
+                href={buildDiscoverySeoUrl({
+                  type: "job",
+                  location: userLocation && userLocation !== "All Locations" ? userLocation : null,
+                })}
+                className="inline-flex items-center gap-1.5"
+              >
                 <span>View All Openings</span>
                 <ArrowRight className="size-3.5" />
               </Link>
@@ -1428,7 +1477,7 @@ export function UnifiedMarketplaceHome() {
         </div>
       </section>
 
-      {/* ================= 7. PANDEYPUR LOCAL STORES NETWORK ================= */}
+      {/* ================= 7. LOCAL STORES NETWORK ================= */}
       <section id="stores" className="py-14 sm:py-18 border-b border-border/40 bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -1438,10 +1487,10 @@ export function UnifiedMarketplaceHome() {
                 <span>Neighborhood Commerce</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-                Shop from Verified Pandeypur Stores
+                Shop from Verified {displayCity} Stores
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Support your neighborhood businesses situated around Pandeypur, Varanasi with guaranteed quality.
+                Support your neighborhood businesses situated in {displayCity} with guaranteed quality.
               </p>
             </div>
 
@@ -1451,120 +1500,141 @@ export function UnifiedMarketplaceHome() {
               asChild
               className="text-xs font-bold h-9 px-4 rounded-xl border-primary/30 text-primary hover:bg-primary/10 transition-colors shrink-0"
             >
-              <Link href="/explore?type=business" className="inline-flex items-center gap-1.5">
-                <span>All 18 Stores</span>
+              <Link
+                href={buildDiscoverySeoUrl({
+                  type: "business",
+                  location: userLocation && userLocation !== "All Locations" ? userLocation : null,
+                })}
+                className="inline-flex items-center gap-1.5"
+              >
+                <span>All {businesses.length > 0 ? `${businesses.length}+` : "Verified"} Stores</span>
                 <ArrowRight className="size-3.5" />
               </Link>
             </Button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-            {[
+            {(businesses.length > 0 ? businesses.slice(0, 8) : [
               {
                 id: 25,
                 name: "Pandeypur Mega Department Store",
-                category: "Supermarket & Groceries",
+                category_name: "Supermarket & Groceries",
                 address: "Pandeypur Main Chauraha, Varanasi",
+                city: "Varanasi",
                 phone: "+91 94152 10103",
                 slug: "pandeypur-mega-department-store",
               },
               {
                 id: 28,
                 name: "Shiv Ganga Electronics & Appliances",
-                category: "Consumer Electronics",
+                category_name: "Consumer Electronics",
                 address: "Near Pandeypur Flyover, Varanasi",
+                city: "Varanasi",
                 phone: "+91 94152 10106",
                 slug: "shiv-ganga-electronics-appliances",
               },
               {
                 id: 27,
                 name: "Kashi Vishwanath Book Depot & Stationery",
-                category: "Books & Office Supplies",
+                category_name: "Books & Office Supplies",
                 address: "Station Road, Pandeypur, Varanasi",
+                city: "Varanasi",
                 phone: "+91 94152 10105",
                 slug: "kashi-vishwanath-book-depot",
               },
               {
                 id: 10,
                 name: "Kisan Fresh Mandi",
-                category: "Organic Fruits & Vegetables",
+                category_name: "Organic Fruits & Vegetables",
                 address: "Hukulganj Road, Pandeypur, Varanasi",
+                city: "Varanasi",
                 phone: "+91 94152 10101",
                 slug: "kisan-fresh-mandi",
               },
               {
                 id: 29,
                 name: "Aarogya Pharmacy & Wellness",
-                category: "Medicines & Health Supplements",
+                category_name: "Medicines & Health Supplements",
                 address: "Premchand Nagar Colony, Pandeypur",
+                city: "Varanasi",
                 phone: "+91 94152 10107",
                 slug: "aarogya-pharmacy-wellness",
               },
               {
                 id: 26,
                 name: "Banaras Sweets & Dairy Parlour",
-                category: "Fresh Dairy & Sweets",
+                category_name: "Fresh Dairy & Sweets",
                 address: "Panchkroshi Marg, Pandeypur, Varanasi",
+                city: "Varanasi",
                 phone: "+91 94152 10104",
                 slug: "banaras-sweets-dairy-parlour",
               },
               {
                 id: 31,
                 name: "Maa Sharda Academic & Coaching Hub",
-                category: "Coaching & Test Prep",
+                category_name: "Coaching & Test Prep",
                 address: "Pandeypur Campus, Varanasi",
+                city: "Varanasi",
                 phone: "+91 98765 43210",
                 slug: "maa-sharda-academic-coaching-hub",
               },
               {
                 id: 32,
                 name: "Kashi Wellness & Spa Center",
-                category: "Salon & Personal Care",
+                category_name: "Salon & Personal Care",
                 address: "Ring Road, Pandeypur, Varanasi",
+                city: "Varanasi",
                 phone: "+91 94152 10109",
                 slug: "kashi-wellness-spa-center",
               },
-            ].map((store) => (
-              <Card
-                key={store.id}
-                className="rounded-2xl border border-border/60 bg-card p-5 space-y-3.5 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between"
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Badge variant="secondary" className="text-[10px] font-semibold">
-                      {store.category}
-                    </Badge>
-                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                      <span className="size-1.5 rounded-full bg-emerald-500" />
-                      Open Now
-                    </span>
+            ]).map((store: any) => {
+              const storeAddress = store.address || [store.locality, store.city, store.state].filter(Boolean).join(", ") || `${displayCity}`;
+              const storeCategory = store.category_name || store.business_type || "Verified Enterprise";
+              const storeLink = store.slug ? `/business/${store.slug}` : `/business/${store.id}`;
+              return (
+                <Card
+                  key={store.id}
+                  className="rounded-2xl border border-border/60 bg-card p-5 space-y-3.5 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Badge variant="secondary" className="text-[10px] font-semibold">
+                        {storeCategory}
+                      </Badge>
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                        <span className="size-1.5 rounded-full bg-emerald-500" />
+                        Open Now
+                      </span>
+                    </div>
+
+                    <h3 className="font-bold text-base text-foreground leading-snug">
+                      {store.name}
+                    </h3>
+
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
+                      <MapPin className="size-3.5 text-primary shrink-0" />
+                      <span className="truncate">{storeAddress}</span>
+                    </p>
+                    {store.phone && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <Phone className="size-3.5 text-primary shrink-0" />
+                        <span>{store.phone}</span>
+                      </p>
+                    )}
                   </div>
 
-                  <h3 className="font-bold text-base text-foreground leading-snug">
-                    {store.name}
-                  </h3>
-
-                  <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
-                    <MapPin className="size-3.5 text-primary shrink-0" />
-                    <span className="truncate">{store.address}</span>
-                  </p>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <Phone className="size-3.5 text-primary shrink-0" />
-                    <span>{store.phone}</span>
-                  </p>
-                </div>
-
-                <Button
-                  size="sm"
-                  asChild
-                  className="w-full h-8 text-xs font-bold rounded-xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20"
-                >
-                  <Link href={`/explore?type=product`}>
-                    Browse Store Inventory
-                  </Link>
-                </Button>
-              </Card>
-            ))}
+                  <Button
+                    size="sm"
+                    asChild
+                    className="w-full h-8 text-xs font-bold rounded-xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20"
+                  >
+                    <Link href={storeLink}>
+                      Visit Store Profile →
+                    </Link>
+                  </Button>
+                </Card>
+              );
+            })}
           </div>
         </div>
       </section>

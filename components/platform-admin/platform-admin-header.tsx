@@ -211,6 +211,28 @@ export function PlatformAdminHeader() {
   }>>([]);
   const [isLoadingLocationSuggestions, setIsLoadingLocationSuggestions] = useState(false);
 
+  // Listen for global request to open location dialog
+  useEffect(() => {
+    const handleOpen = () => setLocationDialogOpen(true);
+    window.addEventListener("edubird-open-location-dialog", handleOpen);
+    return () => window.removeEventListener("edubird-open-location-dialog", handleOpen);
+  }, []);
+
+  // Always ask to share location first on visit if no location has been selected
+  useEffect(() => {
+    try {
+      const savedLoc = localStorage.getItem("edubird_user_location");
+      const hasPrompted = sessionStorage.getItem("edubird_location_prompted_first");
+      if ((!savedLoc || savedLoc === "All Locations") && !hasPrompted) {
+        sessionStorage.setItem("edubird_location_prompted_first", "true");
+        const timer = setTimeout(() => {
+          setLocationDialogOpen(true);
+        }, 500);
+        return () => clearTimeout(timer);
+      }
+    } catch {}
+  }, []);
+
   // Debounced Google Places Autocomplete for Location Modal
   useEffect(() => {
     const trimmed = customLocationInput.trim();
