@@ -212,18 +212,8 @@ export default function ProductDetailPage() {
   }
 
   if (!product) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-16 text-center space-y-4">
-        <Package className="size-12 text-muted-foreground mx-auto opacity-40" />
-        <h2 className="text-lg font-bold text-foreground">Product Not Found</h2>
-        <p className="text-xs text-muted-foreground">
-          The requested product could not be found or may have been removed.
-        </p>
-        <Button asChild size="sm">
-          <Link href="/products">Browse All Products</Link>
-        </Button>
-      </div>
-    );
+    const { categorySlug, city } = parseDiscoverySeoSlug(productId);
+    return <CustomerExplorePage initialType="product" initialCategory={categorySlug} initialCity={city} />;
   }
 
   const allImages = [

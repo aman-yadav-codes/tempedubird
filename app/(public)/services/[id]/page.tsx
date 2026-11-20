@@ -132,18 +132,8 @@ export default function ServiceDetailPage() {
   }
 
   if (!service) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-16 text-center space-y-4">
-        <Briefcase className="size-12 text-muted-foreground mx-auto opacity-40" />
-        <h2 className="text-lg font-bold text-foreground">Service Not Found</h2>
-        <p className="text-xs text-muted-foreground">
-          The requested service offering could not be found or may have been archived.
-        </p>
-        <Button asChild size="sm">
-          <Link href="/explore?type=service">Browse Services</Link>
-        </Button>
-      </div>
-    );
+    const { categorySlug, city } = parseDiscoverySeoSlug(serviceId);
+    return <CustomerExplorePage initialType="service" initialCategory={categorySlug} initialCity={city} />;
   }
 
   return (

@@ -226,21 +226,8 @@ export default function JobDetailPage({ params }: JobDetailPageProps) {
   }
 
   if (notFoundState || !job) {
-    return (
-      <div className="container mx-auto px-4 py-20 text-center max-w-md">
-        <Briefcase className="size-12 text-muted-foreground/40 mx-auto mb-3" />
-        <h2 className="text-xl font-bold text-foreground mb-1">Job Opening Not Found</h2>
-        <p className="text-sm text-muted-foreground mb-5">
-          This job vacancy is either no longer accepting applications or has been closed.
-        </p>
-        <Button asChild>
-          <Link href="/jobs" className="gap-2">
-            <ArrowLeft className="size-4" />
-            Back to All Openings
-          </Link>
-        </Button>
-      </div>
-    );
+    const { categorySlug, city } = parseDiscoverySeoSlug(id);
+    return <CustomerExplorePage initialType="job" initialCategory={categorySlug} initialCity={city} />;
   }
 
   return (

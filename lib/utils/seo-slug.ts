@@ -378,13 +378,16 @@ export function buildDiscoverySeoUrl({
   locality?: string | null;
 }): string {
   const normType = (type || "").toLowerCase().trim();
-  let prefix = "/explore";
+  let prefix = "/businesses";
   if (normType === "professional" || normType === "professionals") prefix = "/professionals";
   else if (normType === "product" || normType === "products") prefix = "/products";
   else if (normType === "course" || normType === "courses") prefix = "/courses";
   else if (normType === "job" || normType === "jobs") prefix = "/jobs";
   else if (normType === "business" || normType === "businesses") prefix = "/businesses";
   else if (normType === "service" || normType === "services") prefix = "/services";
+  else if (!normType || normType === "all") {
+    prefix = "/businesses";
+  }
 
   const rawCat = subcategory || category || "";
   let catSlug = slugify(rawCat);

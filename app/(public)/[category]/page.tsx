@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getCountryConfig, formatCountryCurrency } from "@/lib/config/country-config";
 import { db } from "@/lib/db/db";
+import { buildDiscoverySeoUrl } from "@/lib/utils/seo-slug";
 import { Search, MapPin, Building2, Briefcase, Star, Phone, MessageSquare, ExternalLink, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,23 +50,40 @@ export default async function CategoryOrCountryPage({ params, searchParams }: Pr
   if (upper !== "IN" && upper !== "US") {
     const rawCat = (category || "").toLowerCase().trim();
     const catRes = await db.query(
-      `SELECT id, name, slug FROM categories WHERE slug = $1 OR name ILIKE $2 LIMIT 1`,
+      `SELECT id, name, slug, category_type FROM categories WHERE slug = $1 OR name ILIKE $2 LIMIT 1`,
       [rawCat, `%${rawCat.replace(/-/g, " ")}%`]
     );
 
+    const sp = await searchParams;
+    const loc =
+      sp?.city && typeof sp.city === "string"
+        ? sp.city
+        : sp?.location && typeof sp.location === "string"
+        ? sp.location
+        : null;
+
     if (catRes.rows.length > 0) {
       const cat = catRes.rows[0];
-      const sp = await searchParams;
-      const qParams = new URLSearchParams();
-      qParams.set("category", cat.slug || cat.name);
-      if (sp?.type && typeof sp.type === "string") qParams.set("type", sp.type);
-      if (sp?.city && typeof sp.city === "string") qParams.set("city", sp.city);
-      if (sp?.location && typeof sp.location === "string") qParams.set("city", sp.location);
-      if (sp?.q && typeof sp.q === "string") qParams.set("q", sp.q);
-      redirect(`/explore?${qParams.toString()}`);
+      const targetType =
+        sp?.type && typeof sp.type === "string"
+          ? sp.type
+          : cat.category_type || "business";
+      const dest = buildDiscoverySeoUrl({
+        type: targetType,
+        category: cat.slug || cat.name,
+        location: loc,
+      });
+      redirect(dest);
     }
 
-    notFound();
+    // Default fallback to businesses/{slug}
+    redirect(
+      buildDiscoverySeoUrl({
+        type: sp?.type && typeof sp.type === "string" ? sp.type : "business",
+        category: rawCat,
+        location: loc,
+      })
+    );
   }
 
   const country = upper;
