@@ -16,10 +16,18 @@ function parsePositiveInteger(value: unknown) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function normalizeStatus(value: unknown): BlogStatus {
-  if (value === "review") return "review";
-  if (value === "published") return "published";
-  return "draft";
+import { getFrontendConfig } from "@/lib/config/frontend-config";
+
+function checkInstitutionAccess(user: any, institutionId: number | null): boolean {
+  if (!institutionId || isPlatformAdminUser(user)) return true;
+  const allowedInstIds = [
+    ...(user.memberships?.map((m: any) => m.institution_id) ?? []),
+    ...(user.under_institution_id ? [user.under_institution_id] : []),
+    ...(user.business_id ? [user.business_id] : []),
+  ];
+  const config = getFrontendConfig();
+  if (config.businessId) allowedInstIds.push(config.businessId);
+  return allowedInstIds.includes(institutionId);
 }
 
 export async function GET(
@@ -54,11 +62,8 @@ export async function GET(
     const post = result.rows[0];
 
     // Permission check
-    if (!isPlatformAdminUser(user) && post.institution_id) {
-      const permitted = user.memberships?.some((m) => m.institution_id === post.institution_id);
-      if (!permitted) {
-        return NextResponse.json({ error: "Forbidden: Access denied" }, { status: 403 });
-      }
+    if (!checkInstitutionAccess(user, post.institution_id)) {
+      return NextResponse.json({ error: "Forbidden: Access denied" }, { status: 403 });
     }
 
     return NextResponse.json({ data: post });
@@ -90,11 +95,8 @@ export async function PUT(
     }
 
     const currentPost = existing.rows[0];
-    if (!isPlatformAdminUser(currentUser) && currentPost.institution_id) {
-      const hasAccess = currentUser.memberships?.some((m) => m.institution_id === currentPost.institution_id);
-      if (!hasAccess) {
-        return NextResponse.json({ error: "Forbidden: Access denied" }, { status: 403 });
-      }
+    if (!checkInstitutionAccess(currentUser, currentPost.institution_id)) {
+      return NextResponse.json({ error: "Forbidden: Access denied" }, { status: 403 });
     }
 
     const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : currentPost.title;
@@ -240,11 +242,8 @@ export async function DELETE(
     }
 
     const currentPost = existing.rows[0];
-    if (!isPlatformAdminUser(currentUser) && currentPost.institution_id) {
-      const hasAccess = currentUser.memberships?.some((m) => m.institution_id === currentPost.institution_id);
-      if (!hasAccess) {
-        return NextResponse.json({ error: "Forbidden: Access denied" }, { status: 403 });
-      }
+    if (!checkInstitutionAccess(currentUser, currentPost.institution_id)) {
+      return NextResponse.json({ error: "Forbidden: Access denied" }, { status: 403 });
     }
 
     await cancelActiveJob(`blog:${postId}:publish`);

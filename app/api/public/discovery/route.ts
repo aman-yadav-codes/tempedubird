@@ -25,13 +25,8 @@ export async function GET(req: NextRequest) {
     let scopedBusinessId: number | null = null;
     if (requestedBizId) {
       scopedBusinessId = requestedBizId;
-    } else if (config.isValid && (config.mode === "business" || config.mode === "institution") && config.businessId) {
+    } else if (config.isValid && config.mode === "business" && config.businessId) {
       scopedBusinessId = config.businessId;
-    } else {
-      const envBiz = process.env.BUSINESS_ID || process.env.NEXT_PUBLIC_BUSINESS_ID || process.env.INSTITUTION_ID || process.env.NEXT_PUBLIC_INSTITUTION_ID;
-      if (envBiz && /^\d+$/.test(envBiz.trim())) {
-        scopedBusinessId = Number(envBiz.trim());
-      }
     }
 
     let scopedInstitutionId: number | null = null;
@@ -107,7 +102,7 @@ export async function GET(req: NextRequest) {
       // Business mode scope: only show the business that matches business_id
       if (scopedBusinessId) {
         bParams.push(scopedBusinessId);
-        bConditions.push(`bp.id = $${bParams.length}`);
+        bConditions.push(`(bp.id = $${bParams.length} OR bp.institution_profile_id = $${bParams.length})`);
       }
 
       if (likeQ) {
@@ -120,7 +115,7 @@ export async function GET(req: NextRequest) {
       }
       if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
         bParams.push(`%${city}%`);
-        bConditions.push(`bp.city ILIKE $${bParams.length}`);
+        bConditions.push(`(bp.city ILIKE $${bParams.length} OR bp.locality ILIKE $${bParams.length} OR bp.address ILIKE $${bParams.length} OR bp.state ILIKE $${bParams.length})`);
       }
       if (state) {
         bParams.push(`%${state}%`);
@@ -221,7 +216,7 @@ export async function GET(req: NextRequest) {
       }
       if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
         pParams.push(`%${city}%`);
-        pConditions.push(`pp.city ILIKE $${pParams.length}`);
+        pConditions.push(`(pp.city ILIKE $${pParams.length} OR pp.locality ILIKE $${pParams.length} OR pp.address ILIKE $${pParams.length} OR pp.state ILIKE $${pParams.length})`);
       }
       if (state) {
         pParams.push(`%${state}%`);
@@ -663,8 +658,91 @@ export async function GET(req: NextRequest) {
           LIMIT $${cParams.length + 1} OFFSET $${cParams.length + 2}
         `;
 
-        const cRes = await db.query(cQuery, [...cParams, limit, offset]);
-        courses = cRes.rows.map((r) => ({ ...r, resultType: "course" }));
+        let masterCoursesRows: any[] = [];
+        try {
+          const cRes = await db.query(cQuery, [...cParams, limit, offset]);
+          masterCoursesRows = cRes.rows.map((r) => ({ ...r, resultType: "course" }));
+        } catch (mcErr) {
+          console.warn("Could not query master_courses:", mcErr);
+        }
+
+        let instCoursesRows: any[] = [];
+        try {
+          const ipConditions: string[] = [
+            "COALESCE(iprog.is_active, true) = true",
+            "COALESCE(iprog.is_deleted, false) = false",
+          ];
+          const ipParams: any[] = [];
+
+          if (likeQ) {
+            ipParams.push(likeQ);
+            ipConditions.push(`(
+              iprog.title ILIKE $${ipParams.length}
+              OR COALESCE(iprog.about, '') ILIKE $${ipParams.length}
+            )`);
+          }
+
+          if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
+            ipParams.push(`%${city}%`);
+            ipConditions.push(`(
+              loc.city ILIKE $${ipParams.length}
+              OR ip.city ILIKE $${ipParams.length}
+              OR ip.address ILIKE $${ipParams.length}
+            )`);
+          }
+
+          if (categoryIds.length > 0) {
+            ipParams.push(categoryIds);
+            ipConditions.push(`(
+              iprog.institution_id IN (
+                SELECT COALESCE(institution_profile_id, id)
+                FROM business_profiles
+                WHERE category_id = ANY($${ipParams.length}::int[])
+                   OR subcategory_id = ANY($${ipParams.length}::int[])
+              )
+              OR EXISTS (
+                SELECT 1 FROM categories c
+                WHERE c.id = ANY($${ipParams.length}::int[])
+                  AND (
+                    iprog.title ILIKE '%' || c.name || '%'
+                    OR COALESCE(iprog.about, '') ILIKE '%' || c.name || '%'
+                  )
+              )
+            )`);
+          }
+
+          const ipQuery = `
+            SELECT
+              iprog.id,
+              iprog.title AS name,
+              iprog.slug,
+              NULL AS code,
+              iprog.about AS description,
+              iprog.duration_value,
+              iprog.duration_unit,
+              NULL AS thumbnail_url,
+              NULL AS icon_url,
+              COALESCE(u.name, b.name, ip.name, 'Institution') AS university_name,
+              'institution' AS authority_type,
+              COALESCE(pt.name, 'Academic & Competitive Program') AS category_name,
+              COALESCE(iprog.seats_available, 60) AS seats_available
+            FROM institution_programs iprog
+            LEFT JOIN program_types pt ON pt.id = iprog.program_type_id
+            LEFT JOIN universities u ON u.id = iprog.university_id
+            LEFT JOIN boards b ON b.id = iprog.board_id
+            LEFT JOIN institution_profiles ip ON ip.id = iprog.institution_id
+            LEFT JOIN locations loc ON loc.id = ip.location_id
+            WHERE ${ipConditions.join(" AND ")}
+            ORDER BY iprog.id DESC
+            LIMIT $${ipParams.length + 1} OFFSET $${ipParams.length + 2}
+          `;
+          const ipRes = await db.query(ipQuery, [...ipParams, limit, offset]);
+          instCoursesRows = ipRes.rows.map((r) => ({ ...r, resultType: "course" }));
+        } catch (ipErr) {
+          console.warn("Could not query institution_programs in discovery:", ipErr);
+        }
+
+        courses = [...masterCoursesRows, ...instCoursesRows];
       }
     }
 

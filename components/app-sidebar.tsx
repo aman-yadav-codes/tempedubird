@@ -241,6 +241,16 @@ const navItems: SidebarItem[] = [
         icon: SlidersHorizontal,
     },
     {
+        title: "SEO Locations",
+        url: "/platformadmin/seo-locations",
+        icon: Globe,
+    },
+    {
+        title: "Articles & Blog",
+        url: "/platformadmin/content/blog",
+        icon: FileText,
+    },
+    {
         title: "Categories",
         url: "/admin/categories?type=business",
         icon: FolderTree,
@@ -400,6 +410,7 @@ const navItems: SidebarItem[] = [
             { title: "New Offers", url: "/admin/marketing/offers", icon: Sparkles },
             { title: "SEO & Meta Tags", url: "/admin/marketing/seo", icon: Globe },
             { title: "Listing Page SEO", url: "/admin/marketing/listing-seo", icon: MapPin },
+            { title: "Articles & Blog", url: "/admin/content/blog", icon: FileText },
         ],
     },
     {
@@ -1016,11 +1027,15 @@ export function AppSidebar() {
                     if (item.url === "/admin/vendors") return [];
                     if (item.url === "/admin/profiles") return [item];
                     if (item.url === "/admin/business-type-access") return [item];
+                    if (item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [item];
+                    if (item.url === "/platformadmin/content/blog" || item.url === "/admin/content/blog") return [item];
                     if (item.url.startsWith("/admin/categories") || item.url === "/admin/content/categories") return [item];
                     if (item.url === "/admin/catalog/products") return [item];
                 } else {
                     if (item.url === "/admin/profiles") return [];
                     if (item.url === "/admin/business-type-access") return [];
+                    if (item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [];
+                    if (item.url === "/platformadmin/content/blog") return [];
                     if (item.url.startsWith("/admin/categories") || item.url === "/admin/content/categories") return [];
                     if (item.url === "/admin/catalog/products") return [];
                 }

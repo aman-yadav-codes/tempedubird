@@ -19,6 +19,7 @@ import {
   isWeightBasedProduct,
   formatWeightPrice,
 } from "@/lib/utils/weight-unit";
+import { buildProductSeoUrl } from "@/lib/utils/seo-slug";
 
 interface CompactProductCardProps {
   product: any;
@@ -172,7 +173,7 @@ export function CompactProductCard({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1">
           <Link
-            href={`/products/${productSlugOrId}`}
+            href={buildProductSeoUrl({ ...p, seller_info: effectiveBusiness })}
             onClick={handleOpenDetails}
             className="text-xs font-bold text-foreground truncate hover:text-primary transition-colors cursor-pointer block"
             title={productTitle}

@@ -27,9 +27,18 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
 
     const bt = typeRes.rows[0];
-    const isAcademic = ["school", "college", "university", "institute", "coaching"].includes(
-      bt.slug.toLowerCase()
-    );
+    const isAcademic = [
+      "school",
+      "college",
+      "university",
+      "institute",
+      "coaching",
+      "education-and-coaching",
+    ].includes(bt.slug.toLowerCase());
+
+    const targetTypeIds = [typeId];
+    if (typeId === 27) targetTypeIds.push(9);
+    if (typeId === 9) targetTypeIds.push(27);
 
     const allModulesRes = await db.query(`SELECT id, module_key FROM system_modules WHERE status = 'active'`);
     const allModules = allModulesRes.rows;
@@ -39,25 +48,27 @@ export async function POST(req: Request, { params }: RouteParams) {
     try {
       await client.query("BEGIN");
 
-      for (const mod of allModules) {
-        let isEnabled = true;
-        if (!isAcademic && academicPrefixes.some((prefix) => mod.module_key === prefix || mod.module_key.startsWith(prefix))) {
-          isEnabled = false;
+      for (const tId of targetTypeIds) {
+        for (const mod of allModules) {
+          let isEnabled = true;
+          if (!isAcademic && academicPrefixes.some((prefix) => mod.module_key === prefix || mod.module_key.startsWith(prefix))) {
+            isEnabled = false;
+          }
+
+          await client.query(
+            `INSERT INTO business_type_modules (business_type_id, module_id, is_enabled, updated_at)
+             VALUES ($1, $2, $3, NOW())
+             ON CONFLICT (business_type_id, module_id) 
+             DO UPDATE SET is_enabled = $3, updated_at = NOW()`,
+            [tId, mod.id, isEnabled]
+          );
         }
 
         await client.query(
-          `INSERT INTO business_type_modules (business_type_id, module_id, is_enabled, updated_at)
-           VALUES ($1, $2, $3, NOW())
-           ON CONFLICT (business_type_id, module_id) 
-           DO UPDATE SET is_enabled = $3, updated_at = NOW()`,
-          [typeId, mod.id, isEnabled]
+          `UPDATE institution_types SET updated_at = NOW() WHERE id = $1`,
+          [tId]
         );
       }
-
-      await client.query(
-        `UPDATE institution_types SET updated_at = NOW() WHERE id = $1`,
-        [typeId]
-      );
 
       await client.query("COMMIT");
     } catch (txErr) {

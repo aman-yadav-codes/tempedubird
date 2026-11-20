@@ -200,7 +200,7 @@ const SAMPLE_COVERS = [
 ];
 
 export default function AdminBlogStudioPage() {
-  const { user } = useAuthStore();
+  const { user, accessToken } = useAuthStore();
   const isPlatform = isPlatformAdminUser(user);
 
   const [posts, setPosts] = useState<BlogPost[]>([]);
@@ -266,7 +266,9 @@ export default function AdminBlogStudioPage() {
   // Fetch Categories
   const fetchCategories = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/content/blog/categories");
+      const res = await fetch("/api/admin/content/blog/categories", {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      });
       if (res.ok) {
         const json = await res.json();
         if (Array.isArray(json.data) && json.data.length > 0) {
@@ -276,14 +278,17 @@ export default function AdminBlogStudioPage() {
     } catch (err) {
       console.error("Error fetching categories:", err);
     }
-  }, []);
+  }, [accessToken]);
 
   // Fetch Posts
   const fetchPosts = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch("/api/admin/content/blog", {
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
       });
 
       if (res.ok) {
@@ -298,7 +303,7 @@ export default function AdminBlogStudioPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [accessToken]);
 
   useEffect(() => {
     void fetchPosts();
@@ -317,6 +322,7 @@ export default function AdminBlogStudioPage() {
 
       const res = await fetch("/api/admin/uploads/image", {
         method: "POST",
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
         body: form,
       });
       const json = await res.json();
@@ -404,7 +410,10 @@ export default function AdminBlogStudioPage() {
 
       const res = await fetch("/api/admin/content/blog/categories", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify(payload),
       });
 
@@ -524,6 +533,71 @@ export default function AdminBlogStudioPage() {
     }));
   };
 
+  const seoScore = useMemo(() => {
+    let score = 0;
+    const checks = {
+      title: false,
+      desc: false,
+      slug: false,
+      keywords: false,
+      cover: false,
+      content: false,
+    };
+
+    const titleLen = (formData.metaTitle || formData.title || "").length;
+    if (titleLen >= 35 && titleLen <= 65) {
+      score += 20;
+      checks.title = true;
+    } else if (titleLen > 0) {
+      score += 10;
+    }
+
+    const descLen = (formData.metaDescription || formData.summary || "").length;
+    if (descLen >= 110 && descLen <= 165) {
+      score += 20;
+      checks.desc = true;
+    } else if (descLen > 0) {
+      score += 10;
+    }
+
+    if (formData.slug && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(formData.slug)) {
+      score += 15;
+      checks.slug = true;
+    }
+
+    if ((formData.metaKeywords || formData.tags || "").split(",").filter(Boolean).length >= 2) {
+      score += 15;
+      checks.keywords = true;
+    }
+
+    if (formData.coverImage && formData.coverImage.startsWith("http")) {
+      score += 15;
+      checks.cover = true;
+    }
+
+    const words = (formData.contentHtml || "").replace(/<[^>]*>/g, " ").trim().split(/\s+/).filter(Boolean).length;
+    if (words >= 100) {
+      score += 15;
+      checks.content = true;
+    }
+
+    return { score: Math.min(100, score), checks, words };
+  }, [formData]);
+
+  const handleAutoOptimizeSeo = () => {
+    const plainText = (formData.contentHtml || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    const summarySnippet = formData.summary || plainText.slice(0, 155);
+
+    setFormData((prev) => ({
+      ...prev,
+      metaTitle: prev.metaTitle || prev.title.slice(0, 60),
+      metaDescription: prev.metaDescription || summarySnippet.slice(0, 160),
+      metaKeywords: prev.metaKeywords || (prev.tags ? prev.tags : `${prev.category}, ${prev.subCategory || "Education"}`),
+      canonicalUrl: prev.canonicalUrl || `https://edubird.org/blogs/${prev.slug || "article"}`,
+    }));
+    toast.success("SEO fields auto-optimized based on article content!");
+  };
+
   const handleSaveArticle = async () => {
     if (!formData.title.trim()) {
       toast.error("Please enter an article title.");
@@ -562,7 +636,10 @@ export default function AdminBlogStudioPage() {
 
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify(payload),
       });
 
@@ -588,7 +665,10 @@ export default function AdminBlogStudioPage() {
     try {
       const res = await fetch(`/api/admin/content/blog/${post.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify({ is_featured: !post.is_featured }),
       });
 
@@ -613,6 +693,7 @@ export default function AdminBlogStudioPage() {
       setDeleting(true);
       const res = await fetch(`/api/admin/content/blog/${deletePostId}`, {
         method: "DELETE",
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
 
       if (res.ok) {
@@ -665,9 +746,11 @@ export default function AdminBlogStudioPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Blog Studio</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              {isPlatform ? "Platform Blog Studio" : "Blog Studio"}
+            </h1>
             <Badge variant="outline" className="text-xs font-semibold text-primary border-primary/30">
-              Publishing Hub
+              {isPlatform ? "Platform Admin Hub" : "Publishing Hub"}
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -705,10 +788,10 @@ export default function AdminBlogStudioPage() {
           <Button
             size="sm"
             onClick={openNewArticleModal}
-            className="text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-lg shadow-sm"
+            className="text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 rounded-lg shadow-sm"
           >
             <Plus className="h-4 w-4" />
-            New Article
+            Add Blog / Article
           </Button>
         </div>
       </div>
@@ -850,8 +933,28 @@ export default function AdminBlogStudioPage() {
                 </tr>
               ) : filteredPosts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                    No articles found matching your criteria.
+                  <td colSpan={7} className="p-10 text-center text-muted-foreground">
+                    <div className="flex flex-col items-center justify-center gap-2.5">
+                      <div className="size-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                        <FileText className="size-5" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <h4 className="font-bold text-sm text-foreground">No Blog Articles Found</h4>
+                        <p className="text-xs text-muted-foreground max-w-sm">
+                          {search || selectedCategory !== "all" || selectedStatus !== "all"
+                            ? "No articles match the current filter selection."
+                            : "Publish articles and news directly to the platform public blog."}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={openNewArticleModal}
+                        className="text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 mt-2 rounded-lg h-8 px-4 cursor-pointer"
+                      >
+                        <Plus className="size-3.5" />
+                        Create First Blog Post
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -1448,6 +1551,23 @@ export default function AdminBlogStudioPage() {
 
               {/* TAB 3: AUTHOR & SCOPE */}
               <TabsContent value="publishing" className="space-y-5 pt-1">
+                {/* Publishing Scope & Attribution */}
+                <div className="rounded-xl border bg-card p-4 space-y-2">
+                  <Label className="text-xs font-bold flex items-center gap-2">
+                    <Building2 className="size-4 text-primary" />
+                    Publishing Scope & Attribution
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    {isPlatform
+                      ? "Publishing as Platform Administrator directly to the 143Panda Public Blog directory."
+                      : "Published on behalf of your active institution."}
+                  </p>
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted text-xs font-medium">
+                    <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>{formData.institutionId ? `Institution ID: ${formData.institutionId}` : "Platform Global (143Panda Public Directory)"}</span>
+                  </div>
+                </div>
+
                 {/* Author Avatar Upload Card */}
                 <div className="rounded-xl border bg-card p-5 space-y-4">
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
@@ -1585,10 +1705,140 @@ export default function AdminBlogStudioPage() {
 
               {/* TAB 4: SEO & SEARCH PREVIEW */}
               <TabsContent value="seo" className="space-y-5 pt-1">
+                {/* SEO Health Score & Checklist Header */}
+                <div className="p-4 rounded-2xl border border-border/80 bg-gradient-to-r from-card to-muted/30 shadow-2xs space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={cn(
+                          "size-12 rounded-xl flex items-center justify-center font-black text-lg border",
+                          seoScore.score >= 80
+                            ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800"
+                            : seoScore.score >= 50
+                            ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-800"
+                            : "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border-red-300 dark:border-red-800"
+                        )}
+                      >
+                        {seoScore.score}%
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-foreground">
+                            SEO Optimization Health
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "text-[10px] font-bold px-2 py-0.5",
+                              seoScore.score >= 80
+                                ? "text-emerald-600 border-emerald-300 bg-emerald-50/50"
+                                : seoScore.score >= 50
+                                ? "text-amber-600 border-amber-300 bg-amber-50/50"
+                                : "text-red-600 border-red-300 bg-red-50/50"
+                            )}
+                          >
+                            {seoScore.score >= 80 ? "Excellent" : seoScore.score >= 50 ? "Good" : "Needs Attention"}
+                          </Badge>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {seoScore.words} words &middot; est. {formData.readTimeMins} min read
+                        </p>
+                      </div>
+                    </div>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleAutoOptimizeSeo}
+                      className="text-xs font-bold gap-1.5 rounded-xl border-primary/30 hover:bg-primary/5 text-primary"
+                    >
+                      <Sparkles className="size-3.5" />
+                      Auto-Optimize SEO Fields
+                    </Button>
+                  </div>
+
+                  {/* Checklist Chips */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-border/50">
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      {seoScore.checks.title ? (
+                        <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
+                      ) : (
+                        <div className="size-3.5 rounded-full border border-muted-foreground/40 shrink-0" />
+                      )}
+                      <span className={seoScore.checks.title ? "font-semibold text-foreground" : "text-muted-foreground"}>
+                        Title Length (35-65 chars)
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      {seoScore.checks.desc ? (
+                        <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
+                      ) : (
+                        <div className="size-3.5 rounded-full border border-muted-foreground/40 shrink-0" />
+                      )}
+                      <span className={seoScore.checks.desc ? "font-semibold text-foreground" : "text-muted-foreground"}>
+                        Description (110-165 chars)
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      {seoScore.checks.slug ? (
+                        <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
+                      ) : (
+                        <div className="size-3.5 rounded-full border border-muted-foreground/40 shrink-0" />
+                      )}
+                      <span className={seoScore.checks.slug ? "font-semibold text-foreground" : "text-muted-foreground"}>
+                        SEO Slug Valid
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      {seoScore.checks.keywords ? (
+                        <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
+                      ) : (
+                        <div className="size-3.5 rounded-full border border-muted-foreground/40 shrink-0" />
+                      )}
+                      <span className={seoScore.checks.keywords ? "font-semibold text-foreground" : "text-muted-foreground"}>
+                        Keywords Defined
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      {seoScore.checks.cover ? (
+                        <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
+                      ) : (
+                        <div className="size-3.5 rounded-full border border-muted-foreground/40 shrink-0" />
+                      )}
+                      <span className={seoScore.checks.cover ? "font-semibold text-foreground" : "text-muted-foreground"}>
+                        OpenGraph Image Added
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      {seoScore.checks.content ? (
+                        <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
+                      ) : (
+                        <div className="size-3.5 rounded-full border border-muted-foreground/40 shrink-0" />
+                      )}
+                      <span className={seoScore.checks.content ? "font-semibold text-foreground" : "text-muted-foreground"}>
+                        Content Length (&gt;100 words)
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-bold">SEO Meta Title</Label>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span
+                      className={cn(
+                        "text-[10px] font-semibold",
+                        formData.metaTitle.length >= 35 && formData.metaTitle.length <= 65
+                          ? "text-emerald-600"
+                          : "text-muted-foreground"
+                      )}
+                    >
                       {formData.metaTitle.length}/60 recommended
                     </span>
                   </div>
@@ -1596,14 +1846,21 @@ export default function AdminBlogStudioPage() {
                     value={formData.metaTitle}
                     onChange={(e) => setFormData((prev) => ({ ...prev, metaTitle: e.target.value }))}
                     placeholder="Catchy SEO title for Google search results..."
-                    className="text-xs h-9"
+                    className="text-xs h-9 rounded-xl"
                   />
                 </div>
 
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-bold">SEO Meta Description</Label>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span
+                      className={cn(
+                        "text-[10px] font-semibold",
+                        formData.metaDescription.length >= 110 && formData.metaDescription.length <= 165
+                          ? "text-emerald-600"
+                          : "text-muted-foreground"
+                      )}
+                    >
                       {formData.metaDescription.length}/160 recommended
                     </span>
                   </div>
@@ -1612,36 +1869,97 @@ export default function AdminBlogStudioPage() {
                     value={formData.metaDescription}
                     onChange={(e) => setFormData((prev) => ({ ...prev, metaDescription: e.target.value }))}
                     placeholder="Search snippet summary that entices users to click on search engine listings..."
-                    className="text-xs"
+                    className="text-xs rounded-xl"
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold">SEO Meta Keywords</Label>
-                  <Input
-                    value={formData.metaKeywords}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, metaKeywords: e.target.value }))}
-                    placeholder="engineering admissions, BCA syllabus, career guide"
-                    className="text-xs h-9"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold">SEO Meta Keywords / Tags</Label>
+                    <Input
+                      value={formData.metaKeywords}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, metaKeywords: e.target.value }))}
+                      placeholder="admissions, engineering, career roadmap"
+                      className="text-xs h-9 rounded-xl"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold">Canonical URL (Optional)</Label>
+                    <Input
+                      value={formData.canonicalUrl}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, canonicalUrl: e.target.value }))}
+                      placeholder="https://edubird.org/blogs/original-article-slug"
+                      className="text-xs h-9 rounded-xl"
+                    />
+                  </div>
                 </div>
 
-                {/* Google Search Result Live Preview Snippet */}
-                <div className="p-4 rounded-xl border border-border/80 bg-muted/20 space-y-1.5">
-                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                    Google Search Result Live Preview
-                  </p>
-                  <p className="text-xs text-emerald-700 font-mono truncate">
-                    https://edubird.org/blogs/{formData.slug || "article-slug"}
-                  </p>
-                  <p className="text-sm font-bold text-blue-700 hover:underline cursor-pointer">
-                    {formData.metaTitle || formData.title || "Your Article Title"}
-                  </p>
-                  <p className="text-xs text-muted-foreground line-clamp-2">
-                    {formData.metaDescription ||
-                      formData.summary ||
-                      "Your meta description summary will appear here on search results."}
-                  </p>
+                {/* Previews: Google Search Snippet & Social OpenGraph Card */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                  {/* Google Search Result Live Preview Snippet */}
+                  <div className="p-4 rounded-xl border border-border/80 bg-muted/20 space-y-1.5 flex flex-col justify-between">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <Globe className="size-3 text-primary" />
+                        Google Search Result Preview
+                      </p>
+                      <p className="text-xs text-emerald-700 dark:text-emerald-400 font-mono truncate">
+                        https://edubird.org/blogs/{formData.slug || "article-slug"}
+                      </p>
+                      <p className="text-sm font-bold text-blue-700 dark:text-blue-400 hover:underline cursor-pointer line-clamp-1">
+                        {formData.metaTitle || formData.title || "Your Article Title"}
+                      </p>
+                      <p className="text-xs text-muted-foreground line-clamp-2">
+                        {formData.metaDescription ||
+                          formData.summary ||
+                          "Your meta description summary will appear here on search results."}
+                      </p>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground/60 italic pt-2">
+                      Simulated Google desktop search appearance
+                    </span>
+                  </div>
+
+                  {/* Social Media OpenGraph Card Preview */}
+                  <div className="p-4 rounded-xl border border-border/80 bg-muted/20 space-y-2 flex flex-col justify-between overflow-hidden">
+                    <div>
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <Share2 className="size-3 text-primary" />
+                        Social Media & WhatsApp Preview
+                      </p>
+                      <div className="rounded-lg border border-border/60 bg-card overflow-hidden shadow-2xs mt-1.5">
+                        {formData.coverImage ? (
+                          <div className="h-28 w-full bg-muted overflow-hidden relative">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={formData.coverImage}
+                              alt="Social card cover"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="h-24 w-full bg-muted/40 flex items-center justify-center text-xs text-muted-foreground">
+                            No cover image attached
+                          </div>
+                        )}
+                        <div className="p-2.5 space-y-0.5">
+                          <p className="text-[10px] text-muted-foreground font-mono uppercase">
+                            edubird.org &middot; {formData.category}
+                          </p>
+                          <p className="text-xs font-bold text-foreground line-clamp-1">
+                            {formData.metaTitle || formData.title || "Article Headline"}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground line-clamp-1">
+                            {formData.metaDescription || formData.summary || "Summary of the article..."}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground/60 italic">
+                      Rich link preview on Facebook, LinkedIn & Twitter
+                    </span>
+                  </div>
                 </div>
               </TabsContent>
             </Tabs>

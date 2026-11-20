@@ -761,6 +761,7 @@ export function isAdminPathVisibleForRole(
     if (normalized === "/admin/users" || normalized.startsWith("/admin/users/")) return false;
     if (normalized === "/admin/profiles" || normalized.startsWith("/admin/profiles/")) return false;
     if (normalized === "/admin/business-type-access" || normalized.startsWith("/admin/business-type-access/")) return false;
+    if (normalized === "/admin/seo-locations" || normalized.startsWith("/admin/seo-locations/")) return false;
     if (normalized === "/admin/categories" || normalized.startsWith("/admin/categories/")) return false;
     if (normalized === "/admin/catalog" || normalized.startsWith("/admin/catalog/")) return false;
     if (normalized === "/admin/locations" || normalized.startsWith("/admin/locations/")) return false;
@@ -1209,7 +1210,7 @@ export function hasPermission(
 ) {
   if (!user) return false;
   if (permission === AUTHENTICATED_LOOKUP_PERMISSION) return true;
-  if (user.is_super_admin || isPlatformFullAccess(user)) return true;
+  if (user.is_super_admin || isPlatformFullAccess(user) || isPlatformAdminUser(user)) return true;
   if (permission === FULL_ACCESS_PERMISSION) return false;
   if (
     permission.startsWith("settings.recycle_bin.") &&
@@ -1290,7 +1291,7 @@ export function canAccessAdminArea(
   } | null | undefined
 ) {
   if (!user) return false;
-  if (user.is_super_admin || isPlatformFullAccess(user)) return true;
+  if (user.is_super_admin || isPlatformFullAccess(user) || isPlatformAdminUser(user)) return true;
   if (isStaffUser(user)) return true;
   if (isCustomerUser(user)) return true;
   if (

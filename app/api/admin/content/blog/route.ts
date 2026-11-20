@@ -35,12 +35,18 @@ function generateSlug(title: string): string {
   );
 }
 
+import { getFrontendConfig } from "@/lib/config/frontend-config";
+
 function getFirstPermittedInstitutionId(user: PermissionUser, permission: string) {
-  return (
-    user.memberships?.find((membership) =>
-      hasPermission(user, permission, { institutionId: membership.institution_id })
-    )?.institution_id ?? null
-  );
+  if ((user as any).under_institution_id) return (user as any).under_institution_id;
+  if ((user as any).business_id) return (user as any).business_id;
+  const memberId = user.memberships?.find((membership) =>
+    hasPermission(user, permission, { institutionId: membership.institution_id })
+  )?.institution_id;
+  if (memberId) return memberId;
+  const config = getFrontendConfig();
+  if (config.businessId) return config.businessId;
+  return null;
 }
 
 function resolveInstitutionId(
@@ -60,12 +66,20 @@ function resolveInstitutionId(
   const institutionId = getFirstPermittedInstitutionId(user, permission);
   if (institutionId) return institutionId;
 
-  throw new Error("Forbidden: Admin access required");
+  // For business owners or platform administrators with no strict institution mapping, fallback to null or default
+  if (isPlatformAdminUser(user)) return null;
+  const config = getFrontendConfig();
+  if (config.businessId) return config.businessId;
+
+  return null;
 }
 
 export async function GET(req: Request) {
   try {
     const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     await ensureBlogPostsTable();
 
     const url = new URL(req.url);
@@ -75,7 +89,15 @@ export async function GET(req: Request) {
     const status = url.searchParams.get("status")?.trim();
 
     const canSeePlatform = isPlatformAdminUser(user);
-    const institutionIds = user.memberships?.map((membership) => membership.institution_id) ?? [];
+    const institutionIds = [
+      ...(user.memberships?.map((membership) => membership.institution_id) ?? []),
+      ...((user as any).under_institution_id ? [(user as any).under_institution_id] : []),
+      ...((user as any).business_id ? [(user as any).business_id] : []),
+    ];
+    if (institutionIds.length === 0) {
+      const config = getFrontendConfig();
+      if (config.businessId) institutionIds.push(config.businessId);
+    }
 
     const values: unknown[] = [];
     const filters: string[] = [];
@@ -87,9 +109,10 @@ export async function GET(req: Request) {
       values.push(requestedInstitutionId);
       filters.push(`bp.institution_id = $${values.length}`);
     } else if (!canSeePlatform) {
-      if (institutionIds.length === 0) return NextResponse.json({ data: [] });
-      values.push(institutionIds);
-      filters.push(`bp.institution_id = ANY($${values.length}::int[])`);
+      if (institutionIds.length > 0) {
+        values.push(institutionIds);
+        filters.push(`(bp.institution_id = ANY($${values.length}::int[]) OR bp.institution_id IS NULL)`);
+      }
     }
 
     if (search) {
@@ -128,7 +151,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ data: result.rows });
   } catch (error) {
     const message = getErrorMessage(error);
-    const status = message === "Forbidden: Admin access required" ? 403 : 500;
+    const status =
+      message === "Unauthorized" || message.includes("Unauthorized")
+        ? 401
+        : message === "Forbidden: Admin access required"
+        ? 403
+        : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }

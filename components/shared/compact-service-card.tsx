@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/popover";
 import { useAuthStore } from "@/store";
 import { isUserStoreOwner } from "@/lib/auth/store-ownership";
+import { buildServiceSeoUrl } from "@/lib/utils/seo-slug";
 
 interface CompactServiceCardProps {
   service: any;
@@ -128,7 +129,7 @@ export function CompactServiceCard({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1">
           <Link
-            href={`/services/${serviceSlugOrId}`}
+            href={buildServiceSeoUrl({ ...s, seller_info: effectiveBusiness })}
             onClick={handleOpenDetails}
             className="text-xs font-bold text-foreground truncate hover:text-primary transition-colors cursor-pointer block"
             title={serviceTitle}
@@ -191,7 +192,7 @@ export function CompactServiceCard({
                   Provider: {effectiveBusiness.name}
                 </span>
                 <Link
-                  href={`/services/${serviceSlugOrId}`}
+                  href={buildServiceSeoUrl({ ...s, seller_info: effectiveBusiness })}
                   onClick={handleOpenDetails}
                   className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5"
                 >

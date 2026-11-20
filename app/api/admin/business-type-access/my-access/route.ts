@@ -61,9 +61,12 @@ function matchCategoryToBusinessTypeId(
     const t = instTypes.find((t) => t.slug === "professional-services" || t.slug === "professional-and-financial-services" || t.name.toLowerCase().includes("professional"));
     if (t) return t;
   }
-  // 11. Coaching Center
-  if (/\b(coaching|tuition|entrance|competitive)\b/i.test(norm)) {
-    const t = instTypes.find((t) => t.slug === "coaching" || t.slug === "education-and-coaching" || t.name.toLowerCase().includes("coaching"));
+  // 11. Education & Coaching
+  if (/\b(education|coaching|tuition|entrance|competitive)\b/i.test(norm)) {
+    const t =
+      instTypes.find((t) => t.slug === "education-and-coaching") ||
+      instTypes.find((t) => t.slug === "coaching") ||
+      instTypes.find((t) => t.name.toLowerCase().includes("coaching") || t.name.toLowerCase().includes("education"));
     if (t) return t;
   }
   // 12. School
@@ -101,8 +104,11 @@ export async function GET(req: Request) {
     const instIdParam = searchParams.get("institutionId");
     const isPlatformAdmin = isPlatformAdminUser(user);
 
-    // Platform Admin viewing the platform-level panel without a specific institution selected
-    if (isPlatformAdmin && !instIdParam) {
+    // Platform Admin viewing the platform-level panel explicitly without an institution selected
+    const referer = req.headers.get("referer") || "";
+    const isExplicitPlatformPanel = isPlatformAdmin && !instIdParam && referer.includes("/platformadmin");
+
+    if (isExplicitPlatformPanel) {
       return NextResponse.json({
         success: true,
         isPlatformAdmin: true,
@@ -140,6 +146,11 @@ export async function GET(req: Request) {
           verifiedInstId = candidateId;
         }
       }
+    }
+
+    // Fallback to configured active institution if in admin scope and no param passed
+    if (!verifiedInstId && (process.env.BUSINESS_ID || process.env.INSTITUTION_ID)) {
+      verifiedInstId = Number(process.env.BUSINESS_ID || process.env.INSTITUTION_ID);
     }
 
     // 1. If verified institutionId available, find type from that institution
@@ -250,6 +261,15 @@ export async function GET(req: Request) {
       }
     }
 
+    // Normalize legacy coaching center (id: 9) to Education & Coaching (id: 27)
+    if (businessTypeId === 9) {
+      const modern = allTypes.find((t) => t.slug === "education-and-coaching");
+      if (modern) {
+        businessTypeId = modern.id;
+        businessTypeName = modern.name;
+      }
+    }
+
     // If still no business type found
     if (!businessTypeId) {
       return NextResponse.json({
@@ -327,6 +347,18 @@ export async function GET(req: Request) {
         }
 
         // Comprehensive route expansion for standard system modules
+        // 0. Services module disabled -> comprehensively disable all services routes
+        if (
+          r.route === "/admin/marketing/services" ||
+          r.route === "/admin/catalog/services" ||
+          r.module_key === "admin_services" ||
+          r.module_key === "catalog_services"
+        ) {
+          disabledRoutes.add("/admin/marketing/services");
+          disabledRoutes.add("/admin/catalog/services");
+          disabledRoutes.add("/admin/services");
+        }
+
         // 1. Operations module disabled -> disable all operations workflows
         if (r.route === "/admin/operations" || r.module_key === "operations") {
           disabledRoutes.add("/admin/operations");

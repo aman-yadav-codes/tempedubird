@@ -12,7 +12,11 @@ export async function GET(req: NextRequest) {
     const bizParam = searchParams.get("businessId") || searchParams.get("business_id");
     const bizId = bizParam && /^\d+$/.test(bizParam) ? Number(bizParam) : null;
 
-    const conditions = ["is_deleted = FALSE", "COALESCE(is_active, TRUE) = TRUE"];
+    const conditions = [
+      "is_deleted = FALSE",
+      "COALESCE(is_active, TRUE) = TRUE",
+      "COALESCE(is_seo_active, TRUE) = TRUE",
+    ];
     const params: any[] = [];
 
     if (bizId) {
@@ -61,7 +65,12 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (parentId !== null && !isNaN(parentId)) {
+    const idParam = searchParams.get("id");
+    const id = idParam && /^\d+$/.test(idParam) ? Number(idParam) : null;
+    if (id) {
+      params.push(id);
+      conditions.push(`id = $${params.length}`);
+    } else if (parentId !== null && !isNaN(parentId)) {
       params.push(parentId);
       conditions.push(`parent_id = $${params.length}`);
     } else if (onlyRoot) {

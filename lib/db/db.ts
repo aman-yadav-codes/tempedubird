@@ -207,6 +207,12 @@ class DatabaseCircuitBreaker {
     }
 
     if (currentState === "HALF_OPEN") {
+      if (label === "connect" && this.halfOpenProbeInFlight) {
+        // A probe is currently in flight (initiated by pool.query or withClient).
+        // The probe needs to acquire/connect a socket to execute. Allow it through!
+        return;
+      }
+
       if (this.halfOpenProbeInFlight && Date.now() - this.lastProbeTimestamp < 5000) {
         // Another concurrent request is already probing the DB within the last 5 seconds.
         // Fail-fast immediately to protect the recovering server from a thundering herd.

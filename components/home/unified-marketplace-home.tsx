@@ -36,11 +36,22 @@ import {
   FolderTree,
   Loader2,
   X,
+  Navigation,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { useCartStore } from "@/store/slices/cart.store";
 import { TrendingLocationCategories } from "@/components/home/trending-location-categories";
@@ -180,7 +191,14 @@ const CURATED_PRODUCT_TABS = [
 
 export function UnifiedMarketplaceHome() {
   const router = useRouter();
-  const { location: userLocation } = useUserLocation();
+  const {
+    location: userLocation,
+    setLocation: setUserLocation,
+    availableLocations,
+    requestLocation,
+    isDetecting,
+    isDetected,
+  } = useUserLocation();
   const { addItem } = useCartStore();
 
   // Unified Discovery Data
@@ -341,7 +359,8 @@ export function UnifiedMarketplaceHome() {
     const q = (customQuery !== undefined ? customQuery : searchQuery).trim();
     if (!q) return;
     setIsDropdownOpen(false);
-    router.push(`/explore?q=${encodeURIComponent(q)}`);
+    const locParam = userLocation && userLocation !== "All Locations" ? `&city=${encodeURIComponent(userLocation)}` : "";
+    router.push(`/explore?q=${encodeURIComponent(q)}${locParam}`);
   };
 
   // Add Product to Cart handler
@@ -363,43 +382,59 @@ export function UnifiedMarketplaceHome() {
 
   return (
     <div className="flex-1 flex flex-col w-full bg-background">
-      {/* ================= 1. HERO SECTION ================= */}
-      <section className="relative overflow-hidden border-b border-border/50 bg-gradient-to-b from-primary/5 via-background to-background py-12 sm:py-16 lg:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          {/* Top Location & Badge Pill */}
-          <div className="flex items-center justify-center gap-2 flex-wrap text-center">
-            <Badge variant="outline" className="px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border-primary/20 gap-1.5 shadow-2xs">
-              <Sparkles className="size-3.5" />
-              <span>Hyperlocal Discovery &amp; Marketplace</span>
-            </Badge>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-muted/80 text-muted-foreground border border-border/60">
-              <MapPin className="size-3 text-primary" />
-              <span>{userLocation || "Pandeypur, Varanasi"}</span>
-            </div>
+      {/* ================= 1. HERO SECTION (143PANDA DISCOVERY THEME) ================= */}
+      <section className="relative overflow-hidden min-h-[580px] sm:min-h-[640px] lg:min-h-[720px] flex items-center py-16 sm:py-20 lg:py-24 border-b border-border/50 bg-[#060402]">
+        {/* ONE Single Majestic Panda Hero Background Image that smoothly fades away below text */}
+        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+          <Image
+            src="/images/hero-panda.jpg"
+            alt="143Panda Discovery Platform"
+            fill
+            priority
+            className="object-cover object-[right_center]"
+            sizes="100vw"
+            quality={95}
+          />
+          {/* Silky fade: completely dissolves the image below the text, headline, search box and controls */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#060402] from-35% via-[#060402]/90 via-58% to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#060402] via-[#060402]/75 via-28% to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[#060402] to-transparent" />
+        </div>
+
+        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-amber-500/10 blur-3xl pointer-events-none z-0" />
+
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full space-y-7">
+          {/* Top Eyebrow Tag */}
+          <div className="flex items-center gap-2">
+            <span className="text-amber-400 font-extrabold uppercase tracking-[0.2em] text-xs sm:text-sm drop-shadow-md flex items-center gap-2">
+              <Sparkles className="size-4 text-amber-400 animate-pulse" />
+              THE PREMIER LOCAL DISCOVERY PLATFORM
+            </span>
           </div>
 
-          {/* Heading & Subheading */}
-          <div className="text-center max-w-3xl mx-auto space-y-3">
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-foreground leading-[1.1]">
-              Everything You Need, <br className="hidden sm:inline" />
-              <span className="text-primary">Delivered &amp; Discovered</span> Locally.
+          {/* Heading & Subheading - Exactly 2 rows */}
+          <div className="space-y-3.5 max-w-2xl sm:max-w-3xl lg:max-w-4xl">
+            <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-[68px] font-black tracking-tight text-white leading-[1.08] drop-shadow-xl">
+              <span className="block whitespace-nowrap">Looking for something?</span>
+              <span className="block text-white">Let&apos;s find it.</span>
             </h1>
-            <p className="text-xs sm:text-base text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Explore 660+ products with live price comparison across 18+ Varanasi stores, on-demand services, verified professionals, certified courses, and job openings.
+            <p className="text-sm sm:text-base lg:text-lg text-white/90 max-w-2xl leading-relaxed drop-shadow-md font-medium">
+              Discover businesses, places, services, property, courses, products, jobs and more across South Africa &amp; your region.
             </p>
           </div>
 
-          {/* Autocomplete Search Bar (Matches Top Header Experience) */}
-          <div ref={heroSearchContainerRef} className="relative max-w-2xl mx-auto w-full">
+          {/* Search Box & Location Selector & Suggestions */}
+          <div ref={heroSearchContainerRef} className="relative max-w-2xl w-full space-y-3.5">
+            {/* Primary Search Input */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 handleSearch();
               }}
-              className="relative group flex items-center"
+              className="relative group flex items-center bg-black/45 backdrop-blur-md border border-white/25 hover:border-white/40 focus-within:border-amber-400/90 focus-within:ring-4 focus-within:ring-amber-400/20 rounded-full px-3 sm:px-4 py-2 sm:py-2.5 shadow-2xl transition-all"
             >
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
-                <Search className="size-5" />
+              <div className="pl-1 flex items-center pointer-events-none text-amber-400">
+                <Sparkles className="size-5" />
               </div>
               <input
                 type="text"
@@ -416,13 +451,13 @@ export function UnifiedMarketplaceHome() {
                     setIsDropdownOpen(false);
                   }
                 }}
-                placeholder="Search products, stores, services, categories..."
-                className="w-full h-13 pl-12 pr-32 rounded-full border border-border/80 bg-background/95 text-foreground text-xs sm:text-sm shadow-sm hover:shadow-md focus:shadow-md focus:outline-none focus:border-primary/80 focus:ring-4 focus:ring-primary/10 transition-all placeholder:text-muted-foreground"
+                placeholder="What are you looking for today?"
+                className="w-full h-11 pl-3 pr-4 bg-transparent text-white placeholder:text-white/70 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 border-0"
               />
 
-              <div className="absolute right-2 flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0 pr-1">
                 {isSearching ? (
-                  <Loader2 className="size-4 animate-spin text-primary mr-1" />
+                  <Loader2 className="size-4 animate-spin text-amber-400 mr-1" />
                 ) : searchQuery ? (
                   <button
                     type="button"
@@ -431,23 +466,76 @@ export function UnifiedMarketplaceHome() {
                       setSearchResults(null);
                       setIsDropdownOpen(false);
                     }}
-                    className="p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer mr-1"
+                    className="p-1 rounded-full hover:bg-white/15 text-white/70 hover:text-white cursor-pointer mr-1 transition-colors"
                     title="Clear search"
                   >
                     <X className="size-4" />
                   </button>
                 ) : null}
 
+                {/* Circular Orange Search Button */}
                 <Button
                   type="submit"
-                  size="sm"
-                  className="h-9 px-4 rounded-full text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 cursor-pointer shadow-xs"
+                  size="icon"
+                  className="size-10 sm:size-11 rounded-full bg-orange-500 hover:bg-orange-600 active:scale-95 text-white shadow-lg cursor-pointer transition-transform shrink-0"
+                  title="Search"
                 >
-                  <span>Search</span>
-                  <ArrowRight className="size-3.5 hidden sm:inline" />
+                  <Search className="size-5" />
                 </Button>
               </div>
             </form>
+
+            {/* Quick Category Navigation Pills */}
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap pt-1 text-xs">
+              <Link
+                href="/explore?type=product"
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <span>📦 Products</span>
+              </Link>
+              <Link
+                href="/explore?type=professional"
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <span>👨‍💼 Professionals</span>
+              </Link>
+              <Link
+                href="/explore?type=course"
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <span>🎓 Courses</span>
+              </Link>
+              <Link
+                href="/explore?type=job"
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <span>💼 Jobs</span>
+              </Link>
+              <Link
+                href="/explore?type=business"
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <span>🏢 Business</span>
+              </Link>
+              <Link
+                href="/explore?categoryName=Entertainment&type=all"
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <span>🎭 Entertainment</span>
+              </Link>
+              <Link
+                href="/explore?type=vehicle"
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <span>🚗 Vehicle</span>
+              </Link>
+              <Link
+                href="/explore?type=property"
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <span>🏠 Property</span>
+              </Link>
+            </div>
 
             {/* ================= AUTOCOMPLETE SEARCH SUGGESTIONS DROPDOWN ================= */}
             {isDropdownOpen && searchQuery.trim().length > 0 && (
@@ -739,27 +827,72 @@ export function UnifiedMarketplaceHome() {
             )}
           </div>
 
-          {/* Live Metric Stats Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-6 border-t border-border/40 max-w-5xl mx-auto">
+          {/* Live Metric Stats Bar (Glassmorphic cards over hero landscape - Click opens dedicated page according to selected location) */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 pt-6 border-t border-white/20 max-w-5xl">
             {[
-              { label: "Local Products", value: "660+", sub: "18 Pandeypur Stores", icon: Package },
-              { label: "Bookable Services", value: "90+", sub: "Verified Providers", icon: Wrench },
-              { label: "Top Experts", value: "50+", sub: "Doctors & Mentors", icon: UserCheck },
-              { label: "Certified Programs", value: "170+", sub: "Degrees & Diplomas", icon: GraduationCap },
-              { label: "Career Openings", value: "Active", sub: "Local & On-site", icon: Briefcase },
-              { label: "Local Store Network", value: "18 Stores", sub: "Pandeypur Varanasi", icon: Store },
+              {
+                label: "Local Products",
+                value: products.length > 0 ? `${products.length}+` : "660+",
+                sub: "18 Local Stores",
+                icon: Package,
+                type: "product",
+              },
+              {
+                label: "Bookable Services",
+                value: services.length > 0 ? `${services.length}+` : "90+",
+                sub: "Verified Providers",
+                icon: Wrench,
+                type: "service",
+              },
+              {
+                label: "Top Experts",
+                value: professionals.length > 0 ? `${professionals.length}+` : "50+",
+                sub: "Doctors & Mentors",
+                icon: UserCheck,
+                type: "professional",
+              },
+              {
+                label: "Certified Programs",
+                value: courses.length > 0 ? `${courses.length}+` : "170+",
+                sub: "Degrees & Diplomas",
+                icon: GraduationCap,
+                type: "course",
+              },
+              {
+                label: "Career Openings",
+                value: jobs.length > 0 ? `${jobs.length}+` : "Active",
+                sub: "Local & On-site",
+                icon: Briefcase,
+                type: "job",
+              },
+              {
+                label: "Local Store Network",
+                value: businesses.length > 0 ? `${businesses.length} Stores` : "18 Stores",
+                sub: "Verified Partners",
+                icon: Store,
+                type: "business",
+              },
             ].map((stat, i) => {
               const Icon = stat.icon;
+              const locParam = userLocation && userLocation !== "All Locations" ? `&city=${encodeURIComponent(userLocation)}` : "";
+              const targetUrl = `/explore?type=${stat.type}${locParam}`;
+
               return (
-                <div key={i} className="p-3 rounded-xl border border-border/50 bg-card/60 flex items-center gap-3">
-                  <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => router.push(targetUrl)}
+                  className="p-3 rounded-xl border border-white/20 bg-black/45 hover:bg-black/75 hover:border-amber-400/60 hover:scale-[1.03] active:scale-[0.98] backdrop-blur-md flex items-center gap-2.5 shadow-lg transition-all cursor-pointer text-left group"
+                  title={`Explore ${stat.label}${userLocation && userLocation !== "All Locations" ? ` in ${userLocation}` : ""}`}
+                >
+                  <div className="size-8 rounded-lg bg-amber-500/20 text-amber-300 group-hover:bg-amber-500 group-hover:text-black flex items-center justify-center shrink-0 transition-colors">
                     <Icon className="size-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm font-black text-foreground">{stat.value}</div>
-                    <div className="text-[10px] text-muted-foreground truncate">{stat.label}</div>
+                    <div className="text-sm font-black text-white group-hover:text-amber-300 transition-colors">{stat.value}</div>
+                    <div className="text-[10px] text-white/75 group-hover:text-white truncate">{stat.label}</div>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
