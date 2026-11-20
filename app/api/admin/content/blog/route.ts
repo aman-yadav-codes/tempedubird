@@ -77,6 +77,9 @@ function resolveInstitutionId(
 export async function GET(req: Request) {
   try {
     const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     await ensureBlogPostsTable();
 
     const url = new URL(req.url);

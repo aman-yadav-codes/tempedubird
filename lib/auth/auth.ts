@@ -124,7 +124,7 @@ export async function requirePermission(
     return user;
   }
 
-  if (appMode === "platform" && !isPlatformAdminUser(user)) {
+  if ((appMode === "platform" || appMode === "platform_admin") && !isPlatformAdminUser(user)) {
     throw new Error(FORBIDDEN_MESSAGE);
   }
 

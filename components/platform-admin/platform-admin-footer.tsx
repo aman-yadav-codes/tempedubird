@@ -344,6 +344,9 @@ export function PlatformAdminFooter() {
           </div>
 
           <div className="flex items-center gap-4 text-xs">
+            <Link href="/blogs" className="hover:text-primary transition-colors">
+              Blog &amp; News
+            </Link>
             <Link href="/privacy" className="hover:text-primary transition-colors">
               Privacy Policy
             </Link>

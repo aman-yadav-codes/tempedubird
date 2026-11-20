@@ -200,7 +200,7 @@ const SAMPLE_COVERS = [
 ];
 
 export default function AdminBlogStudioPage() {
-  const { user } = useAuthStore();
+  const { user, accessToken } = useAuthStore();
   const isPlatform = isPlatformAdminUser(user);
 
   const [posts, setPosts] = useState<BlogPost[]>([]);
@@ -266,7 +266,9 @@ export default function AdminBlogStudioPage() {
   // Fetch Categories
   const fetchCategories = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/content/blog/categories");
+      const res = await fetch("/api/admin/content/blog/categories", {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      });
       if (res.ok) {
         const json = await res.json();
         if (Array.isArray(json.data) && json.data.length > 0) {
@@ -276,14 +278,17 @@ export default function AdminBlogStudioPage() {
     } catch (err) {
       console.error("Error fetching categories:", err);
     }
-  }, []);
+  }, [accessToken]);
 
   // Fetch Posts
   const fetchPosts = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch("/api/admin/content/blog", {
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
       });
 
       if (res.ok) {
@@ -298,7 +303,7 @@ export default function AdminBlogStudioPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [accessToken]);
 
   useEffect(() => {
     void fetchPosts();
@@ -317,6 +322,7 @@ export default function AdminBlogStudioPage() {
 
       const res = await fetch("/api/admin/uploads/image", {
         method: "POST",
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
         body: form,
       });
       const json = await res.json();
@@ -404,7 +410,10 @@ export default function AdminBlogStudioPage() {
 
       const res = await fetch("/api/admin/content/blog/categories", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify(payload),
       });
 
@@ -627,7 +636,10 @@ export default function AdminBlogStudioPage() {
 
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify(payload),
       });
 
@@ -653,7 +665,10 @@ export default function AdminBlogStudioPage() {
     try {
       const res = await fetch(`/api/admin/content/blog/${post.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify({ is_featured: !post.is_featured }),
       });
 
@@ -678,6 +693,7 @@ export default function AdminBlogStudioPage() {
       setDeleting(true);
       const res = await fetch(`/api/admin/content/blog/${deletePostId}`, {
         method: "DELETE",
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
 
       if (res.ok) {
@@ -730,9 +746,11 @@ export default function AdminBlogStudioPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Blog Studio</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              {isPlatform ? "Platform Blog Studio" : "Blog Studio"}
+            </h1>
             <Badge variant="outline" className="text-xs font-semibold text-primary border-primary/30">
-              Publishing Hub
+              {isPlatform ? "Platform Admin Hub" : "Publishing Hub"}
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -770,10 +788,10 @@ export default function AdminBlogStudioPage() {
           <Button
             size="sm"
             onClick={openNewArticleModal}
-            className="text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-lg shadow-sm"
+            className="text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 rounded-lg shadow-sm"
           >
             <Plus className="h-4 w-4" />
-            New Article
+            Add Blog / Article
           </Button>
         </div>
       </div>
@@ -915,8 +933,28 @@ export default function AdminBlogStudioPage() {
                 </tr>
               ) : filteredPosts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                    No articles found matching your criteria.
+                  <td colSpan={7} className="p-10 text-center text-muted-foreground">
+                    <div className="flex flex-col items-center justify-center gap-2.5">
+                      <div className="size-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                        <FileText className="size-5" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <h4 className="font-bold text-sm text-foreground">No Blog Articles Found</h4>
+                        <p className="text-xs text-muted-foreground max-w-sm">
+                          {search || selectedCategory !== "all" || selectedStatus !== "all"
+                            ? "No articles match the current filter selection."
+                            : "Publish articles and news directly to the platform public blog."}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={openNewArticleModal}
+                        className="text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 mt-2 rounded-lg h-8 px-4 cursor-pointer"
+                      >
+                        <Plus className="size-3.5" />
+                        Create First Blog Post
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -1513,6 +1551,23 @@ export default function AdminBlogStudioPage() {
 
               {/* TAB 3: AUTHOR & SCOPE */}
               <TabsContent value="publishing" className="space-y-5 pt-1">
+                {/* Publishing Scope & Attribution */}
+                <div className="rounded-xl border bg-card p-4 space-y-2">
+                  <Label className="text-xs font-bold flex items-center gap-2">
+                    <Building2 className="size-4 text-primary" />
+                    Publishing Scope & Attribution
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    {isPlatform
+                      ? "Publishing as Platform Administrator directly to the 143Panda Public Blog directory."
+                      : "Published on behalf of your active institution."}
+                  </p>
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted text-xs font-medium">
+                    <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>{formData.institutionId ? `Institution ID: ${formData.institutionId}` : "Platform Global (143Panda Public Directory)"}</span>
+                  </div>
+                </div>
+
                 {/* Author Avatar Upload Card */}
                 <div className="rounded-xl border bg-card p-5 space-y-4">
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">

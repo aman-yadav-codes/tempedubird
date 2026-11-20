@@ -29,6 +29,7 @@ import {
   Plus,
   GraduationCap,
   Menu,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -147,6 +148,18 @@ const TOP_NAV_ITEMS = [
       { label: "Retail Stores & Supermarkets", href: "/explore?type=business&category=Retail" },
       { label: "Coaching Institutes", href: "/explore?type=business&category=Coaching" },
       { label: "Clinics & Healthcare", href: "/explore?type=business&category=Healthcare" },
+    ],
+  },
+  {
+    label: "Blog",
+    href: "/blogs",
+    icon: FileText,
+    subcategories: [
+      { label: "All Articles & Insights", href: "/blogs" },
+      { label: "Academic & Curriculum", href: "/blogs?category=Academic+%26+Curriculum" },
+      { label: "Career & Placements", href: "/blogs?category=Placements+%26+Career" },
+      { label: "Technology & Innovation", href: "/blogs?category=Technology+%26+Innovation" },
+      { label: "Admissions & Counseling", href: "/blogs?category=Admissions+%26+Counseling" },
     ],
   },
 ];

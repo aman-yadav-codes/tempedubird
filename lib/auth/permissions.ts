@@ -1210,7 +1210,7 @@ export function hasPermission(
 ) {
   if (!user) return false;
   if (permission === AUTHENTICATED_LOOKUP_PERMISSION) return true;
-  if (user.is_super_admin || isPlatformFullAccess(user)) return true;
+  if (user.is_super_admin || isPlatformFullAccess(user) || isPlatformAdminUser(user)) return true;
   if (permission === FULL_ACCESS_PERMISSION) return false;
   if (
     permission.startsWith("settings.recycle_bin.") &&
@@ -1291,7 +1291,7 @@ export function canAccessAdminArea(
   } | null | undefined
 ) {
   if (!user) return false;
-  if (user.is_super_admin || isPlatformFullAccess(user)) return true;
+  if (user.is_super_admin || isPlatformFullAccess(user) || isPlatformAdminUser(user)) return true;
   if (isStaffUser(user)) return true;
   if (isCustomerUser(user)) return true;
   if (
