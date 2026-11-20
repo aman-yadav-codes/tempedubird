@@ -356,7 +356,7 @@ export async function GET(req: Request) {
       const complaint = await assertThreadAccess(complaintId, institutionId, user, childUserIds, academicYearId);
       complaint.can_update_status = Boolean(
         complaint.target_user_id === user.id ||
-          (!complaint.target_user_id && user.role_codes.includes(complaint.target_role))
+        (!complaint.target_user_id && user.role_codes.includes(complaint.target_role))
       );
       const messages = await db.query(
         `

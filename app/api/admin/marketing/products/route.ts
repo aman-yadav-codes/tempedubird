@@ -26,6 +26,7 @@ export async function GET(req: Request) {
     const category = searchParams.get("category");
     const categoryId = searchParams.get("category_id");
     const subcategoryId = searchParams.get("subcategory_id");
+    const businessCategoryId = searchParams.get("business_category_id") || searchParams.get("businessCategoryId");
     const brand = searchParams.get("brand");
     const sortBy = searchParams.get("sort_by") || "newest";
     const status = searchParams.get("status");
@@ -108,6 +109,17 @@ export async function GET(req: Request) {
         p.category ILIKE $${params.length} 
         OR p.category_id = (SELECT id FROM categories WHERE name ILIKE $${params.length} LIMIT 1)
         OR p.category_id = (SELECT id FROM product_categories WHERE name ILIKE $${params.length} LIMIT 1)
+      )`);
+    }
+
+    if (businessCategoryId && businessCategoryId !== "all" && /^\d+$/.test(businessCategoryId)) {
+      params.push(Number(businessCategoryId));
+      conditions.push(`(
+        c.business_category_id = $${params.length}
+        OR subc.business_category_id = $${params.length}
+        OR p.category_id IN (SELECT id FROM categories WHERE business_category_id = $${params.length})
+        OR p.main_category_id IN (SELECT id FROM categories WHERE business_category_id = $${params.length})
+        OR p.subcategory_id IN (SELECT id FROM categories WHERE business_category_id = $${params.length})
       )`);
     }
 

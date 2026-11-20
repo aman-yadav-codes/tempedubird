@@ -75,13 +75,21 @@ export function CompactServiceCard({
   const serviceTitle = s.name || s.title || "Service";
   const imageUrl = s.default_image_url || s.image_url;
   const serviceSlugOrId = s.slug || s.id;
+  const serviceDetailUrl = buildServiceSeoUrl({ ...s, seller_info: effectiveBusiness }) || `/services/${serviceSlugOrId}`;
 
   const handleOpenDetails = (e: React.MouseEvent) => {
-    e.preventDefault();
     if (onOpenDetails) {
+      e.preventDefault();
+      onOpenDetails(s);
+    }
+  };
+
+  const handleThumbnailClick = (e: React.MouseEvent) => {
+    if (onOpenDetails) {
+      e.preventDefault();
       onOpenDetails(s);
     } else {
-      router.push(`/services/${serviceSlugOrId}`);
+      router.push(serviceDetailUrl);
     }
   };
 
@@ -90,7 +98,7 @@ export function CompactServiceCard({
     if (onBook) {
       onBook(s);
     } else {
-      router.push(`/services/${serviceSlugOrId}`);
+      router.push(serviceDetailUrl);
     }
   };
 
@@ -105,7 +113,7 @@ export function CompactServiceCard({
     >
       {/* 1. Left Thumbnail Image */}
       <div
-        onClick={handleOpenDetails}
+        onClick={handleThumbnailClick}
         className="relative size-16 rounded-lg bg-sky-50 dark:bg-sky-950/40 text-sky-600 shrink-0 overflow-hidden border flex items-center justify-center cursor-pointer group/img"
         title={`View ${serviceTitle}`}
       >
@@ -129,7 +137,7 @@ export function CompactServiceCard({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1">
           <Link
-            href={buildServiceSeoUrl({ ...s, seller_info: effectiveBusiness })}
+            href={serviceDetailUrl}
             onClick={handleOpenDetails}
             className="text-xs font-bold text-foreground truncate hover:text-primary transition-colors cursor-pointer block"
             title={serviceTitle}
@@ -192,7 +200,7 @@ export function CompactServiceCard({
                   Provider: {effectiveBusiness.name}
                 </span>
                 <Link
-                  href={buildServiceSeoUrl({ ...s, seller_info: effectiveBusiness })}
+                  href={serviceDetailUrl}
                   onClick={handleOpenDetails}
                   className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5"
                 >

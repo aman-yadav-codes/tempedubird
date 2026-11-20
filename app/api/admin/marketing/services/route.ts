@@ -25,6 +25,8 @@ export async function GET(req: Request) {
     const search = searchParams.get("search")?.trim();
     const category = searchParams.get("category");
     const categoryId = searchParams.get("category_id");
+    const subcategoryId = searchParams.get("subcategory_id");
+    const businessCategoryId = searchParams.get("business_category_id") || searchParams.get("businessCategoryId");
     const status = searchParams.get("status");
     const deliveryMode = searchParams.get("delivery_mode");
     const pricingModel = searchParams.get("pricing_model");
@@ -80,12 +82,36 @@ export async function GET(req: Request) {
       conditions.push(`(s.title ILIKE $${params.length} OR s.description ILIKE $${params.length} OR s.badge_text ILIKE $${params.length})`);
     }
 
-    if (categoryId && categoryId !== "all") {
+    if (subcategoryId && subcategoryId !== "all") {
+      params.push(Number(subcategoryId));
+      conditions.push(`(s.subcategory_id = $${params.length} OR s.category_id = $${params.length})`);
+    } else if (categoryId && categoryId !== "all") {
       params.push(Number(categoryId));
-      conditions.push(`s.category_id = $${params.length}`);
+      conditions.push(`(
+        s.category_id = $${params.length}
+        OR s.main_category_id = $${params.length}
+        OR s.subcategory_id IN (SELECT id FROM categories WHERE parent_id = $${params.length})
+        OR s.category = (SELECT name FROM categories WHERE id = $${params.length} LIMIT 1)
+        OR s.category = (SELECT name FROM service_categories WHERE id = $${params.length} LIMIT 1)
+      )`);
     } else if (category && category !== "all") {
       params.push(category);
-      conditions.push(`s.category = $${params.length}`);
+      conditions.push(`(
+        s.category ILIKE $${params.length}
+        OR s.category_id = (SELECT id FROM categories WHERE name ILIKE $${params.length} LIMIT 1)
+        OR s.category_id = (SELECT id FROM service_categories WHERE name ILIKE $${params.length} LIMIT 1)
+      )`);
+    }
+
+    if (businessCategoryId && businessCategoryId !== "all" && /^\d+$/.test(businessCategoryId)) {
+      params.push(Number(businessCategoryId));
+      conditions.push(`(
+        c.business_category_id = $${params.length}
+        OR subc.business_category_id = $${params.length}
+        OR s.category_id IN (SELECT id FROM categories WHERE business_category_id = $${params.length})
+        OR s.main_category_id IN (SELECT id FROM categories WHERE business_category_id = $${params.length})
+        OR s.subcategory_id IN (SELECT id FROM categories WHERE business_category_id = $${params.length})
+      )`);
     }
 
     if (status && status !== "all") {
@@ -107,9 +133,9 @@ export async function GET(req: Request) {
     const query = `
       SELECT 
         s.*,
-        sc.name AS category_name,
-        sc.slug AS category_slug,
-        sc.icon AS category_icon,
+        COALESCE(c.name, sc.name) AS category_name,
+        COALESCE(c.slug, sc.slug) AS category_slug,
+        COALESCE(c.icon_url, sc.icon) AS category_icon,
         (
           SELECT json_agg(json_build_object('id', prog.id, 'title', prog.title))
           FROM institution_programs prog
@@ -118,6 +144,8 @@ export async function GET(req: Request) {
           )
         ) AS associated_programs
       FROM services s
+      LEFT JOIN categories c ON c.id = s.category_id
+      LEFT JOIN categories subc ON subc.id = s.subcategory_id
       LEFT JOIN service_categories sc ON sc.id = s.category_id
       ${whereClause} 
       ORDER BY s.id DESC

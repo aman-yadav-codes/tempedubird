@@ -383,7 +383,6 @@ export default function AdminCompanyPage() {
     address_city: "",
     address_state: "",
     address_pincode: "",
-    cin_number: "",
     gstin: "",
     working_hours: "Monday - Saturday: 9:00 AM - 6:00 PM",
     opening_hours: {

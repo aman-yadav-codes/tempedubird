@@ -487,6 +487,9 @@ export default function BusinessTypeAccessManagementPage() {
       if (!res.ok) throw new Error(json.error || "Failed to save configuration");
 
       toast.success(json.message || "Permissions updated successfully");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("edubird:business-type-access-change", { detail: { businessTypeId: selectedType.id } }));
+      }
       setSelectedType(null);
       loadBusinessTypes();
     } catch (err: unknown) {

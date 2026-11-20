@@ -78,6 +78,7 @@ interface MasterProduct {
   slug: string;
   description: string | null;
   main_category_id: number | null;
+  business_category_id?: number | null;
   main_category_name?: string | null;
   subcategory_id: number | null;
   subcategory_name?: string | null;
@@ -169,6 +170,7 @@ export default function MasterProductsPage() {
   const [professionalProfileId, setProfessionalProfileId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [businessCategoryFilter, setBusinessCategoryFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [countryFilter, setCountryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -252,6 +254,14 @@ export default function MasterProductsPage() {
       return String(c.business_category_id) === String(businessCategoryId);
     });
   }, [categories, businessCategoryId]);
+
+  const filterMainCategories = useMemo(() => {
+    return categories.filter((c) => {
+      if (c.parent_id) return false;
+      if (businessCategoryFilter === "all") return true;
+      return String(c.business_category_id) === String(businessCategoryFilter);
+    });
+  }, [categories, businessCategoryFilter]);
 
   const availableSubcategories = useMemo(() => {
     if (!mainCategoryId) return [];
@@ -668,6 +678,11 @@ export default function MasterProductsPage() {
         p.sku?.toLowerCase().includes(search.toLowerCase()) ||
         p.synonyms?.some((s) => s.toLowerCase().includes(search.toLowerCase()));
 
+      const matchesBusinessCategory =
+        businessCategoryFilter === "all" ||
+        String(p.business_category_id) === businessCategoryFilter ||
+        String(categories.find((c) => c.id === p.category_id || c.id === p.main_category_id)?.business_category_id) === businessCategoryFilter;
+
       const matchesCategory =
         categoryFilter === "all" ||
         String(p.main_category_id) === categoryFilter ||
@@ -683,9 +698,9 @@ export default function MasterProductsPage() {
         countryFilter === "all" ||
         (Array.isArray(p.countries) && p.countries.includes(countryFilter));
 
-      return matchesSearch && matchesCategory && matchesStatus && matchesCountry;
+      return matchesSearch && matchesBusinessCategory && matchesCategory && matchesStatus && matchesCountry;
     });
-  }, [products, search, categoryFilter, countryFilter, statusFilter]);
+  }, [products, search, businessCategoryFilter, categoryFilter, countryFilter, statusFilter, categories]);
 
   return (
     <div className="space-y-6">
@@ -725,15 +740,35 @@ export default function MasterProductsPage() {
                 className="pl-9 h-9 text-xs"
               />
             </div>
+            <Select
+              value={businessCategoryFilter}
+              onValueChange={(val) => {
+                setBusinessCategoryFilter(val);
+                setCategoryFilter("all");
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-[190px] h-9 text-xs font-semibold">
+                <SelectValue placeholder="All Business Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Business Types ({businessCategories.length})</SelectItem>
+                {businessCategories.map((bc) => (
+                  <SelectItem key={bc.id} value={String(bc.id)}>
+                    {bc.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-full sm:w-[200px] h-9 text-xs">
+              <SelectTrigger className="w-full sm:w-[190px] h-9 text-xs font-semibold">
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {mainCategories.map((c) => (
+                <SelectItem value="all">All Categories ({filterMainCategories.length})</SelectItem>
+                {filterMainCategories.map((c) => (
                   <SelectItem key={c.id} value={String(c.id)}>
-                    {c.name} (Main)
+                    {c.name}
                   </SelectItem>
                 ))}
               </SelectContent>

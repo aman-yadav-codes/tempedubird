@@ -47,6 +47,7 @@ export function useAdminGuard() {
       toast.error(errorMsg, {
         id: "permission-required",
       });
+      router.replace("/admin");
       return;
     }
 

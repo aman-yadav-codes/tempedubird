@@ -176,6 +176,8 @@ export default function AdminProductsPage() {
   });
 
   const [search, setSearch] = useState("");
+  const [businessCategories, setBusinessCategories] = useState<Array<{ id: number; name: string }>>([]);
+  const [selectedBusinessCategoryId, setSelectedBusinessCategoryId] = useState("all");
   const [selectedCategoryId, setSelectedCategoryId] = useState("all");
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState("all");
   const [selectedBrand, setSelectedBrand] = useState("all");
@@ -388,6 +390,7 @@ export default function AdminProductsPage() {
       if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
       const params = new URLSearchParams();
       if (search.trim()) params.set("search", search.trim());
+      if (selectedBusinessCategoryId !== "all") params.set("business_category_id", selectedBusinessCategoryId);
       if (selectedCategoryId !== "all") params.set("category_id", selectedCategoryId);
       if (selectedSubcategoryId !== "all") params.set("subcategory_id", selectedSubcategoryId);
       if (selectedBrand !== "all") params.set("brand", selectedBrand);
@@ -407,7 +410,18 @@ export default function AdminProductsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, selectedCategoryId, selectedSubcategoryId, selectedBrand, selectedStatus, sortBy, accessToken]);
+  }, [search, selectedBusinessCategoryId, selectedCategoryId, selectedSubcategoryId, selectedBrand, selectedStatus, sortBy, accessToken]);
+
+  useEffect(() => {
+    fetch("/api/admin/categories?type=business&onlyRoot=true&limit=100")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.data && Array.isArray(d.data)) {
+          setBusinessCategories(d.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchCategories();
@@ -418,12 +432,13 @@ export default function AdminProductsPage() {
     fetchProducts();
   }, [fetchProducts]);
 
-  // Root categories vs subcategories
+  // Root categories vs subcategories filtered by selected business category
   const rootCategories = useMemo(() => {
-    // If some have parent_id, separate them, otherwise show all
     const roots = categories.filter((c) => !c.parent_id);
-    return roots.length > 0 ? roots : categories;
-  }, [categories]);
+    const pool = roots.length > 0 ? roots : categories;
+    if (selectedBusinessCategoryId === "all") return pool;
+    return pool.filter((c) => String(c.business_category_id) === String(selectedBusinessCategoryId));
+  }, [categories, selectedBusinessCategoryId]);
 
   const availableSubcategories = useMemo(() => {
     if (selectedCategoryId === "all") return [];
@@ -728,9 +743,36 @@ export default function AdminProductsPage() {
           </div>
         </div>
 
-        {/* Cascading Filter Controls: Category -> Subcategory -> Brand -> Status */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-border/60">
-          {/* Category Filter */}
+        {/* Cascading Filter Controls: Business Category -> Particular Category -> Subcategory -> Brand -> Status */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-2 border-t border-border/60">
+          {/* Main Business Category Filter */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              Business Category
+            </label>
+            <Select
+              value={selectedBusinessCategoryId}
+              onValueChange={(val) => {
+                setSelectedBusinessCategoryId(val);
+                setSelectedCategoryId("all");
+                setSelectedSubcategoryId("all");
+              }}
+            >
+              <SelectTrigger className="w-full h-8 text-xs font-semibold bg-background rounded-lg">
+                <SelectValue placeholder="All Business Types" />
+              </SelectTrigger>
+              <SelectContent position="popper" className="max-h-80 w-[240px]">
+                <SelectItem value="all">All Business Types ({businessCategories.length})</SelectItem>
+                {businessCategories.map((bc) => (
+                  <SelectItem key={bc.id} value={String(bc.id)}>
+                    <span className="truncate">{bc.name}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Particular Category Filter (Filtered by Business Category) */}
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
               Category ({rootCategories.length})

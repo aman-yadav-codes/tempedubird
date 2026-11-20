@@ -109,10 +109,11 @@ export async function PUT(req: Request, { params }: RouteParams) {
 
     const enabledSet = new Set(enabledModuleIds.map(Number));
 
-    // Support linked business types (e.g., Education & Coaching id 27 and legacy Coaching Center id 9)
+    // Support linked business types (e.g., Education & Coaching id 27, legacy Coaching Center id 9, Institute id 8)
     const targetTypeIds = [typeId];
-    if (typeId === 27) targetTypeIds.push(9);
-    if (typeId === 9) targetTypeIds.push(27);
+    if (typeId === 27) targetTypeIds.push(9, 8);
+    if (typeId === 9) targetTypeIds.push(27, 8);
+    if (typeId === 8) targetTypeIds.push(27, 9);
 
     // Fetch all active system modules
     const allModulesRes = await db.query(`SELECT id, parent_module_id FROM system_modules WHERE status = 'active'`);

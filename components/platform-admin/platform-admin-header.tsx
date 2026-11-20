@@ -181,7 +181,6 @@ export function PlatformAdminHeader() {
     isDetecting,
     setLocation,
     requestLocation,
-    availableLocations,
   } = useUserLocation();
 
   // Search state
@@ -200,6 +199,45 @@ export function PlatformAdminHeader() {
   // Location selector dialog state
   const [locationDialogOpen, setLocationDialogOpen] = useState(false);
   const [customLocationInput, setCustomLocationInput] = useState("");
+  const [locationSuggestions, setLocationSuggestions] = useState<Array<{
+    id: string;
+    place_id: string;
+    name: string;
+    description: string;
+    secondary_text?: string;
+    source?: string;
+  }>>([]);
+  const [isLoadingLocationSuggestions, setIsLoadingLocationSuggestions] = useState(false);
+
+  // Debounced Google Places Autocomplete for Location Modal
+  useEffect(() => {
+    const trimmed = customLocationInput.trim();
+    if (trimmed.length < 2) {
+      setLocationSuggestions([]);
+      setIsLoadingLocationSuggestions(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsLoadingLocationSuggestions(true);
+      try {
+        const res = await fetch(`/api/public/places/autocomplete?input=${encodeURIComponent(trimmed)}`);
+        const data = await res.json();
+        if (data?.predictions && Array.isArray(data.predictions)) {
+          setLocationSuggestions(data.predictions);
+        } else {
+          setLocationSuggestions([]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch location suggestions:", err);
+        setLocationSuggestions([]);
+      } finally {
+        setIsLoadingLocationSuggestions(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [customLocationInput]);
 
   const withLocation = (url: string) => {
     if (!location || location === "All Locations") return url;
@@ -332,7 +370,7 @@ export function PlatformAdminHeader() {
 
   return (
     <header className="w-full border-b border-border/40 bg-background/85 backdrop-blur-md sticky top-0 z-40 transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3 lg:gap-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-3 lg:gap-6">
         {/* Left: 143Panda Platform Brand */}
         <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
           <Link
@@ -340,13 +378,13 @@ export function PlatformAdminHeader() {
             className="flex items-center gap-2 text-foreground hover:opacity-90 transition-opacity shrink-0 py-0.5"
             title="143Panda"
           >
-            <div className="relative h-11 w-auto flex items-center">
+            <div className="relative h-13 sm:h-16 w-auto flex items-center">
               <Image
                 src="/images/143panda-logo.png"
                 alt="143Panda"
-                width={130}
-                height={46}
-                className="h-10 sm:h-11 w-auto object-contain"
+                width={200}
+                height={70}
+                className="h-12 sm:h-15 w-auto object-contain hover:scale-105 transition-transform"
                 priority
               />
             </div>
@@ -833,7 +871,16 @@ export function PlatformAdminHeader() {
       />
 
       {/* Location Modal Dialog: Detect Live GPS or Enter Any Specific Location */}
-      <Dialog open={locationDialogOpen} onOpenChange={setLocationDialogOpen}>
+      <Dialog
+        open={locationDialogOpen}
+        onOpenChange={(open) => {
+          setLocationDialogOpen(open);
+          if (!open) {
+            setCustomLocationInput("");
+            setLocationSuggestions([]);
+          }
+        }}
+      >
         <DialogContent className="max-w-md bg-card border text-foreground rounded-3xl p-6 space-y-5 shadow-2xl">
           <DialogHeader className="space-y-1.5">
             <div className="flex items-center justify-between">
@@ -855,10 +902,24 @@ export function PlatformAdminHeader() {
           {/* Currently Selected Location Pill */}
           <div className="p-3.5 rounded-2xl bg-muted/40 border flex items-center justify-between text-xs">
             <span className="text-muted-foreground">Active Location:</span>
-            <span className="font-extrabold text-foreground flex items-center gap-1.5">
-              <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
-              <span>{location || "All Locations"}</span>
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-foreground flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
+                <span>{location || "All Locations"}</span>
+              </span>
+              {location && location !== "All Locations" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocation("All Locations", false);
+                    toast.success("Location set to All Locations");
+                  }}
+                  className="text-[10px] text-muted-foreground hover:text-amber-500 font-bold underline cursor-pointer ml-1"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
 
           {/* 1. Detect Live GPS Button */}
@@ -902,10 +963,11 @@ export function PlatformAdminHeader() {
                 setLocation(trimmed, false);
                 toast.success(`Location set to "${trimmed}"`);
                 setCustomLocationInput("");
+                setLocationSuggestions([]);
                 setLocationDialogOpen(false);
               }
             }}
-            className="space-y-2.5"
+            className="space-y-3"
           >
             <div className="relative flex items-center">
               <Search className="absolute left-3.5 size-4 text-muted-foreground pointer-events-none" />
@@ -916,6 +978,11 @@ export function PlatformAdminHeader() {
                 onChange={(e) => setCustomLocationInput(e.target.value)}
                 className="w-full h-11 pl-10 pr-24 rounded-2xl bg-background border border-border/80 text-xs sm:text-sm font-medium focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
               />
+              {isLoadingLocationSuggestions && (
+                <div className="absolute right-14 flex items-center justify-center pointer-events-none">
+                  <Loader2 className="size-4 animate-spin text-amber-500" />
+                </div>
+              )}
               <Button
                 type="submit"
                 size="sm"
@@ -925,49 +992,49 @@ export function PlatformAdminHeader() {
                 Set
               </Button>
             </div>
-          </form>
 
-          {/* 3. Popular / Available Locations Quick Select */}
-          <div className="space-y-2 pt-1">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
-              Popular Cities &amp; Regions
-            </span>
-            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setLocation("All Locations", false);
-                  setLocationDialogOpen(false);
-                  toast.success("Location set to All Locations");
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  !location || location === "All Locations"
-                    ? "bg-amber-500 text-black shadow-xs"
-                    : "bg-muted/60 hover:bg-muted text-foreground border border-border/60"
-                }`}
-              >
-                🌍 All Locations
-              </button>
-              {availableLocations.map((loc) => (
-                <button
-                  key={loc}
-                  type="button"
-                  onClick={() => {
-                    setLocation(loc, false);
-                    setLocationDialogOpen(false);
-                    toast.success(`Location set to ${loc}`);
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                    location === loc
-                      ? "bg-amber-500 text-black shadow-xs"
-                      : "bg-muted/60 hover:bg-muted text-foreground border border-border/60"
-                  }`}
-                >
-                  📍 {loc}
-                </button>
-              ))}
-            </div>
-          </div>
+            {/* Google Places Autocomplete Suggestions */}
+            {locationSuggestions.length > 0 && (
+              <div className="space-y-1 max-h-60 overflow-y-auto rounded-2xl border border-border/70 bg-card p-1.5 shadow-lg animate-in fade-in-50 duration-200">
+                <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/40 pb-1">
+                  <span className="flex items-center gap-1.5">
+                    <MapPin className="size-3 text-amber-500" />
+                    Location Suggestions
+                  </span>
+                  <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full font-bold">
+                    Google Places
+                  </span>
+                </div>
+                {locationSuggestions.map((item) => (
+                  <button
+                    key={item.id || item.place_id}
+                    type="button"
+                    onClick={() => {
+                      const chosenLocation = item.name || item.description.split(",")[0].trim();
+                      setLocation(chosenLocation, false);
+                      toast.success(`Location set to "${chosenLocation}"`);
+                      setCustomLocationInput("");
+                      setLocationSuggestions([]);
+                      setLocationDialogOpen(false);
+                    }}
+                    className="w-full text-left p-2.5 rounded-xl hover:bg-amber-500/10 transition-colors flex items-start gap-2.5 group cursor-pointer"
+                  >
+                    <div className="size-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-amber-500 group-hover:text-black transition-colors">
+                      <MapPin className="size-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-foreground group-hover:text-amber-600 transition-colors truncate">
+                        {item.name}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground truncate">
+                        {item.secondary_text || item.description}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </form>
         </DialogContent>
       </Dialog>
 

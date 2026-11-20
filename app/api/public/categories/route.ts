@@ -66,10 +66,15 @@ export async function GET(req: NextRequest) {
     }
 
     const idParam = searchParams.get("id");
+    const slugParam = searchParams.get("slug") || (!/^\d+$/.test(idParam || "") && idParam ? idParam : null);
     const id = idParam && /^\d+$/.test(idParam) ? Number(idParam) : null;
     if (id) {
       params.push(id);
       conditions.push(`id = $${params.length}`);
+    } else if (slugParam) {
+      params.push(slugParam.toLowerCase());
+      params.push(`%${slugParam.replace(/-/g, " ")}%`);
+      conditions.push(`(slug = $${params.length - 1} OR name ILIKE $${params.length})`);
     } else if (parentId !== null && !isNaN(parentId)) {
       params.push(parentId);
       conditions.push(`parent_id = $${params.length}`);

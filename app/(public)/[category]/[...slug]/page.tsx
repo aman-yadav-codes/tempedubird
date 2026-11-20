@@ -36,8 +36,17 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
     const rawCategory = (categoryParam || "").toLowerCase().trim();
     const targetSlug = slugSegments[slugSegments.length - 1]?.toLowerCase().trim() || "";
     const fullJoinedSlug = slugSegments.join("-").toLowerCase().trim();
-    const withoutLocation = targetSlug.includes("-in-") ? targetSlug.split("-in-")[0] : targetSlug;
-    const { id: numId } = extractIdFromSlug(targetSlug);
+    let withoutLocation = targetSlug;
+    const lastInIndex = targetSlug.lastIndexOf("-in-");
+    if (lastInIndex !== -1) {
+      const afterIn = targetSlug.substring(lastInIndex + 4);
+      if (!/\d+$/.test(afterIn) && !afterIn.includes("-store") && afterIn !== "store") {
+        withoutLocation = targetSlug.substring(0, lastInIndex);
+      }
+    }
+    const { id: rawNumId } = extractIdFromSlug(targetSlug);
+    const { id: withoutLocId } = extractIdFromSlug(withoutLocation);
+    const numId = rawNumId || withoutLocId || 0;
 
     // 0. Special Handling for institution-admin or ID 5717: Deepak Yadav
     if (
@@ -272,13 +281,12 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
             bp.slug = $1
             OR bp.slug = $2
             OR (bp.id = $3 AND $3 > 0)
-            OR $1 LIKE '%' || bp.slug || '%'
-            OR $2 LIKE '%' || bp.slug || '%'
-            OR $4 LIKE '%' || bp.slug || '%'
+            OR $1 = sc.slug || '-' || bp.slug
+            OR $2 = sc.slug || '-' || bp.slug
           )
-        ORDER BY (CASE WHEN bp.slug = $1 THEN 0 WHEN bp.slug = $2 THEN 1 ELSE 2 END), LENGTH(bp.slug) DESC
+        ORDER BY (CASE WHEN bp.slug = $1 THEN 0 WHEN bp.slug = $2 THEN 1 ELSE 2 END), bp.id DESC
         LIMIT 1`,
-        [targetSlug, withoutLocation, numId || -1, fullJoinedSlug]
+        [targetSlug, withoutLocation, numId || -1]
       );
 
       if (bizRes.rows.length > 0) {
@@ -306,11 +314,29 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
           ),
         ]);
 
+        let resolvedServices = servicesSettled.status === "fulfilled" ? servicesSettled.value.rows : [];
+        try {
+          const targetInstId = instId > 0 ? instId : bizId;
+          const disabledCheck = await db.query(
+            `SELECT 1 FROM business_type_modules btm
+             JOIN system_modules sm ON sm.id = btm.module_id
+             JOIN institution_profiles ip ON (ip.institution_type_id = btm.business_type_id OR btm.business_type_id = 27)
+             WHERE ip.id = $1 AND (sm.route = '/admin/marketing/services' OR sm.module_key = 'admin_services' OR sm.route = '/admin/catalog/services') AND btm.is_enabled = FALSE
+             LIMIT 1`,
+            [targetInstId]
+          );
+          if (disabledCheck.rows.length > 0) {
+            resolvedServices = [];
+          }
+        } catch {
+          // ignore
+        }
+
         return {
           type: "business" as const,
           business,
           products: productsSettled.status === "fulfilled" ? productsSettled.value.rows : [],
-          services: servicesSettled.status === "fulfilled" ? servicesSettled.value.rows : [],
+          services: resolvedServices,
           professionals: professionalsSettled.status === "fulfilled" ? professionalsSettled.value.rows : [],
           reviews: reviewsSettled.status === "fulfilled" ? reviewsSettled.value.rows : [],
         };
@@ -416,7 +442,7 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
           AND (
             mc.slug = $1
             OR mc.slug = $2
-            OR (mc.id = $3 AND $3 > 0)
+            OR (mc.id = $3 AND $3 > 0 AND ($1 = $3::text OR $1 LIKE $3 || '-%' OR mc.slug LIKE '%' || $2 || '%' OR $2 LIKE '%' || mc.slug || '%'))
             OR $1 LIKE '%' || mc.slug || '%'
             OR $2 LIKE '%' || mc.slug || '%'
             OR mc.slug LIKE '%' || $2 || '%'
@@ -475,7 +501,7 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
           AND (
             ip.slug = $1
             OR ip.slug = $2
-            OR (ip.id = $3 AND $3 > 0)
+            OR (ip.id = $3 AND $3 > 0 AND ($1 = $3::text OR $1 LIKE $3 || '-%' OR ip.slug LIKE '%' || $2 || '%' OR $2 LIKE '%' || ip.slug || '%'))
             OR $1 LIKE '%' || ip.slug || '%'
             OR $2 LIKE '%' || ip.slug || '%'
             OR ip.slug LIKE '%' || $2 || '%'
@@ -612,7 +638,214 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
       };
     }
 
-    // 6. Try finding Service
+    // 6. Try finding Service in DB or catalog
+    try {
+      const serviceRes = await db.query(
+        `SELECT
+          s.id,
+          s.title,
+          s.title AS name,
+          s.slug,
+          s.description,
+          s.image_url,
+          s.image_url AS default_image_url,
+          s.gallery,
+          COALESCE(s.pricing_model, 'fixed_price') AS pricing_model,
+          COALESCE(s.duration_minutes, 60) AS duration_minutes,
+          COALESCE(s.duration_unit, 'minutes') AS duration_unit,
+          COALESCE(s.price, 0) AS price,
+          COALESCE(s.sale_price, s.price, 0) AS sale_price,
+          COALESCE(s.price, 0) AS regular_price,
+          COALESCE(s.price, 0) AS suggested_price_inr,
+          s.service_location,
+          s.delivery_mode,
+          s.business_profile_id,
+          s.professional_profile_id,
+          s.institution_id,
+          bp.name AS business_name,
+          bp.slug AS business_slug,
+          bp.logo_url AS business_logo_url,
+          bp.address AS business_address,
+          bp.city AS business_city,
+          bp.locality AS business_locality,
+          bp.state AS business_state,
+          bp.phone AS business_phone,
+          bp.whatsapp AS business_whatsapp,
+          pp.name AS professional_name,
+          pp.slug AS professional_slug,
+          pp.phone AS professional_phone,
+          pp.city AS professional_city,
+          COALESCE(c.name, s.category, 'Services') AS category_name,
+          COALESCE(c.slug, 'services') AS category_slug,
+          COALESCE(sc.name, '') AS subcategory_name,
+          COALESCE(sc.slug, '') AS subcategory_slug
+        FROM services s
+        LEFT JOIN categories c ON c.id = s.category_id
+        LEFT JOIN categories sc ON sc.id = s.subcategory_id
+        LEFT JOIN business_profiles bp ON bp.id = s.business_profile_id
+        LEFT JOIN professional_profiles pp ON pp.id = s.professional_profile_id
+        WHERE COALESCE(s.status, 'active') = 'active'
+          AND (
+            s.slug = $1
+            OR s.slug = $2
+            OR (s.id = $3 AND $3 > 0)
+            OR (s.master_service_id = $3 AND $3 > 0)
+            OR $1 LIKE s.slug || '%'
+            OR $2 LIKE s.slug || '%'
+            OR s.slug LIKE '%' || $2 || '%'
+            OR $1 LIKE '%' || s.slug || '%'
+            OR $2 LIKE '%' || s.slug || '%'
+          )
+        ORDER BY (CASE WHEN s.slug = $1 THEN 0 WHEN s.slug = $2 THEN 1 ELSE 2 END), s.id DESC
+        LIMIT 1`,
+        [targetSlug, withoutLocation, numId || -1]
+      );
+
+      if (serviceRes.rows.length > 0) {
+        const sRow = serviceRes.rows[0];
+        const isProfessional = Boolean(sRow.professional_profile_id && !sRow.business_profile_id);
+        const provider = isProfessional
+          ? {
+              id: sRow.professional_profile_id,
+              name: sRow.professional_name || "Verified Professional",
+              slug: sRow.professional_slug || "",
+              phone: sRow.professional_phone || "+91 9876543210",
+              city: sRow.professional_city || "Varanasi",
+              locality: "Varanasi",
+              state: "Uttar Pradesh",
+            }
+          : {
+              id: sRow.business_profile_id || 0,
+              name: sRow.business_name || "Verified Service Center",
+              slug: sRow.business_slug || "",
+              phone: sRow.business_phone || "+91 9876543210",
+              whatsapp: sRow.business_whatsapp || sRow.business_phone || "+91 9876543210",
+              city: sRow.business_city || "Varanasi",
+              locality: sRow.business_locality || "Varanasi",
+              state: sRow.business_state || "Uttar Pradesh",
+              address: sRow.business_address || "",
+              logo_url: sRow.business_logo_url || null,
+            };
+
+        let serviceReviews: any[] = [];
+        try {
+          if (sRow.business_profile_id) {
+            const revRes = await db.query(
+              `SELECT pr.*, u.full_name AS user_name 
+               FROM platform_reviews pr 
+               LEFT JOIN users u ON u.id = pr.user_id 
+               WHERE pr.business_id = $1 AND COALESCE(pr.is_approved, TRUE) = TRUE 
+               ORDER BY pr.id DESC LIMIT 10`,
+              [sRow.business_profile_id]
+            );
+            serviceReviews = revRes.rows;
+          }
+        } catch {
+          // ignore
+        }
+
+        return {
+          type: "service" as const,
+          service: sRow,
+          provider,
+          providerType: isProfessional ? ("professional" as const) : ("business" as const),
+          reviews: serviceReviews,
+        };
+      }
+
+      // Check master_services as well
+      const msRes = await db.query(
+        `SELECT
+          ms.id,
+          ms.name,
+          ms.name AS title,
+          ms.slug,
+          ms.description,
+          ms.default_image_url,
+          ms.default_image_url AS image_url,
+          COALESCE(ms.additional_images, '{}') AS additional_images,
+          ms.pricing_model,
+          ms.duration_minutes,
+          ms.duration_unit,
+          COALESCE(ms.suggested_price, ms.suggested_price_inr, 0) AS price,
+          COALESCE(ms.suggested_price_inr, 0) AS suggested_price_inr,
+          COALESCE(ms.suggested_max_price, ms.regular_price, 0) AS regular_price,
+          ms.service_location,
+          ms.business_profile_id,
+          ms.professional_profile_id,
+          bp.name AS business_name,
+          bp.slug AS business_slug,
+          bp.logo_url AS business_logo_url,
+          bp.address AS business_address,
+          bp.city AS business_city,
+          bp.locality AS business_locality,
+          bp.state AS business_state,
+          bp.phone AS business_phone,
+          bp.whatsapp AS business_whatsapp,
+          pp.name AS professional_name,
+          pp.slug AS professional_slug,
+          pp.phone AS professional_phone,
+          pp.city AS professional_city,
+          COALESCE(c.name, 'Services') AS category_name,
+          COALESCE(c.slug, 'services') AS category_slug
+        FROM master_services ms
+        LEFT JOIN categories c ON c.id = COALESCE(ms.main_category_id, ms.category_id)
+        LEFT JOIN business_profiles bp ON bp.id = ms.business_profile_id
+        LEFT JOIN professional_profiles pp ON pp.id = ms.professional_profile_id
+        WHERE COALESCE(ms.is_active, TRUE) = TRUE
+          AND (
+            ms.slug = $1
+            OR ms.slug = $2
+            OR (ms.id = $3 AND $3 > 0)
+            OR $1 LIKE ms.slug || '%'
+            OR $2 LIKE ms.slug || '%'
+            OR ms.slug LIKE '%' || $2 || '%'
+            OR $1 LIKE '%' || ms.slug || '%'
+            OR $2 LIKE '%' || ms.slug || '%'
+          )
+        ORDER BY (CASE WHEN ms.slug = $1 THEN 0 WHEN ms.slug = $2 THEN 1 ELSE 2 END), ms.id DESC
+        LIMIT 1`,
+        [targetSlug, withoutLocation, numId || -1]
+      );
+
+      if (msRes.rows.length > 0) {
+        const msRow = msRes.rows[0];
+        const isProfessional = Boolean(msRow.professional_profile_id && !msRow.business_profile_id);
+        const provider = isProfessional
+          ? {
+              id: msRow.professional_profile_id,
+              name: msRow.professional_name || "Verified Professional",
+              slug: msRow.professional_slug || "",
+              phone: msRow.professional_phone || "+91 9876543210",
+              city: msRow.professional_city || "Varanasi",
+              locality: "Varanasi",
+              state: "Uttar Pradesh",
+            }
+          : {
+              id: msRow.business_profile_id || 0,
+              name: msRow.business_name || "Verified Service Center",
+              slug: msRow.business_slug || "",
+              phone: msRow.business_phone || "+91 9876543210",
+              whatsapp: msRow.business_whatsapp || msRow.business_phone || "+91 9876543210",
+              city: msRow.business_city || "Varanasi",
+              locality: msRow.business_locality || "Varanasi",
+              state: msRow.business_state || "Uttar Pradesh",
+              address: msRow.business_address || "",
+              logo_url: msRow.business_logo_url || null,
+            };
+
+        return {
+          type: "service" as const,
+          service: msRow,
+          provider,
+          providerType: isProfessional ? ("professional" as const) : ("business" as const),
+          reviews: [],
+        };
+      }
+    } catch (sErr) {
+      console.error("Service lookup error in fetchSeoProfileData:", sErr);
+    }
+
     if (
       rawCategory === "services" ||
       rawCategory.includes("service") ||
@@ -667,56 +900,131 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
       };
     }
 
-    // 7. Try finding Product
-    if (
-      rawCategory === "products" ||
-      targetSlug.includes("book") ||
-      targetSlug.includes("module") ||
-      targetSlug.includes("kit") ||
-      targetSlug.includes("product")
-    ) {
-      const product = {
-        id: numId > 0 ? numId : 1,
-        name: "NEET & JEE Complete Physics Study Module Set",
-        title: "NEET & JEE Complete Physics Study Module Set",
-        slug: "neet-jee-physics-module-set",
-        brand_name: "Maa Sharda Publications",
-        category_name: "Books & Study Material",
-        price: 1499,
-        regular_price: 2499,
-        unit: "set",
-        stock_quantity: 45,
-        city: "Varanasi",
-        locality: "Pandeypur",
-        description:
-          "Official 5-volume Physics module set prepared by senior faculty at Maa Sharda Institute. Covers full Class 11 and 12 syllabus with 3500+ solved numericals, previous 15-year questions, and full formula handbooks.",
-      };
+    // 7. Try finding Product in DB or catalog
+    try {
+      const prodRes = await db.query(
+        `SELECT
+          p.id,
+          p.title,
+          p.title AS name,
+          p.slug,
+          p.description,
+          p.image_url,
+          p.image_url AS default_image_url,
+          p.gallery,
+          COALESCE(p.sale_price, p.price, 0) AS price,
+          COALESCE(p.sale_price, p.price, 0) AS sale_price,
+          COALESCE(p.price, 0) AS regular_price,
+          COALESCE(p.stock_quantity, 0) AS stock_quantity,
+          p.business_profile_id,
+          p.institution_id,
+          bp.name AS business_name,
+          bp.slug AS business_slug,
+          bp.city AS business_city,
+          bp.locality AS business_locality,
+          bp.state AS business_state,
+          bp.phone AS business_phone,
+          COALESCE(c.name, p.category, 'Products') AS category_name,
+          COALESCE(c.slug, 'products') AS category_slug
+        FROM products p
+        LEFT JOIN categories c ON c.id = p.category_id
+        LEFT JOIN business_profiles bp ON bp.id = p.business_profile_id
+        WHERE COALESCE(p.status, 'active') = 'active'
+          AND (
+            p.slug = $1
+            OR p.slug = $2
+            OR (p.id = $3 AND $3 > 0)
+            OR $1 LIKE p.slug || '%'
+            OR $2 LIKE p.slug || '%'
+            OR p.slug LIKE '%' || $2 || '%'
+            OR $1 LIKE '%' || p.slug || '%'
+            OR $2 LIKE '%' || p.slug || '%'
+          )
+        ORDER BY (CASE WHEN p.slug = $1 THEN 0 WHEN p.slug = $2 THEN 1 ELSE 2 END), p.id DESC
+        LIMIT 1`,
+        [targetSlug, withoutLocation, numId || -1]
+      );
 
-      const seller = {
-        id: 162,
-        name: "Maa Sharda Institute PVT LTD",
-        slug: "maa-sharda-institute",
-        phone: "+91 9876543210",
-        locality: "Pandeypur",
-        city: "Varanasi",
-        state: "Uttar Pradesh",
-        about: "Premier educational institution and publication house in Varanasi.",
-      };
+      if (prodRes.rows.length > 0) {
+        const pRow = prodRes.rows[0];
+        const seller = {
+          id: pRow.business_profile_id || 0,
+          name: pRow.business_name || "Verified Local Store",
+          slug: pRow.business_slug || "",
+          phone: pRow.business_phone || "+91 9876543210",
+          city: pRow.business_city || "Varanasi",
+          locality: pRow.business_locality || "Pandeypur",
+          state: pRow.business_state || "Uttar Pradesh",
+        };
 
-      return {
-        type: "product" as const,
-        product,
-        seller,
-        reviews: [
-          {
-            id: 1,
-            user_name: "Vikas Dubey",
-            rating: 5,
-            title: "Best practice questions",
-            review: "The numericals and chapter-wise formula sheet helped me clear all Physics doubts.",
-          },
-        ],
-      };
+        return {
+          type: "product" as const,
+          product: pRow,
+          seller,
+          reviews: [],
+        };
+      }
+
+      // Check master_products
+      const mpRes = await db.query(
+        `SELECT
+          mp.id,
+          mp.name,
+          mp.name AS title,
+          mp.slug,
+          mp.description,
+          mp.brand,
+          COALESCE(mp.discounted_price, mp.suggested_price, mp.suggested_price_inr, 0) AS price,
+          COALESCE(mp.regular_price, 0) AS regular_price,
+          mp.business_profile_id,
+          bp.name AS business_name,
+          bp.slug AS business_slug,
+          bp.city AS business_city,
+          bp.locality AS business_locality,
+          bp.state AS business_state,
+          bp.phone AS business_phone,
+          COALESCE(c.name, 'Products') AS category_name,
+          COALESCE(c.slug, 'products') AS category_slug
+        FROM master_products mp
+        LEFT JOIN categories c ON c.id = COALESCE(mp.main_category_id, mp.category_id)
+        LEFT JOIN business_profiles bp ON bp.id = mp.business_profile_id
+        WHERE COALESCE(mp.is_active, TRUE) = TRUE
+          AND (
+            mp.slug = $1
+            OR mp.slug = $2
+            OR (mp.id = $3 AND $3 > 0)
+            OR $1 LIKE mp.slug || '%'
+            OR $2 LIKE mp.slug || '%'
+            OR mp.slug LIKE '%' || $2 || '%'
+            OR $1 LIKE '%' || mp.slug || '%'
+            OR $2 LIKE '%' || mp.slug || '%'
+          )
+        ORDER BY (CASE WHEN mp.slug = $1 THEN 0 WHEN mp.slug = $2 THEN 1 ELSE 2 END), mp.id DESC
+        LIMIT 1`,
+        [targetSlug, withoutLocation, numId || -1]
+      );
+
+      if (mpRes.rows.length > 0) {
+        const mpRow = mpRes.rows[0];
+        const seller = {
+          id: mpRow.business_profile_id || 0,
+          name: mpRow.business_name || "Verified Local Store",
+          slug: mpRow.business_slug || "",
+          phone: mpRow.business_phone || "+91 9876543210",
+          city: mpRow.business_city || "Varanasi",
+          locality: mpRow.business_locality || "Pandeypur",
+          state: mpRow.business_state || "Uttar Pradesh",
+        };
+
+        return {
+          type: "product" as const,
+          product: mpRow,
+          seller,
+          reviews: [],
+        };
+      }
+    } catch (pErr) {
+      console.error("Product lookup error in fetchSeoProfileData:", pErr);
     }
 
     // 8. Try finding Property (Real Estate)
@@ -762,6 +1070,74 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
         property,
         owner,
       };
+    }
+
+    // 9. Fallback loose Business Profile matching (if nothing else matched)
+    try {
+      const looseBizRes = await db.query(
+        `SELECT
+          bp.*,
+          c.name AS category_name,
+          c.slug AS category_slug,
+          sc.name AS subcategory_name,
+          sc.slug AS subcategory_slug,
+          COALESCE(bp.founder_name, ip.founder_name, u.full_name) AS owner_name,
+          COALESCE(bp.founder_title, ip.founder_title, 'Founder & Managing Director') AS owner_designation,
+          COALESCE(bp.founder_image_url, ip.founder_image_url, u.avatar_url) AS owner_image_url,
+          COALESCE(bp.phone, ip.phone, u.phone) AS owner_phone,
+          COALESCE(bp.whatsapp, bp.phone, ip.phone, u.phone) AS owner_whatsapp,
+          COALESCE(bp.email, ip.email, u.email) AS owner_email,
+          COALESCE(bp.founder_about, ip.founder_about, bp.about) AS owner_about
+        FROM business_profiles bp
+        LEFT JOIN categories c ON c.id = bp.category_id
+        LEFT JOIN categories sc ON sc.id = bp.subcategory_id
+        LEFT JOIN institution_profiles ip ON ip.id = bp.institution_profile_id
+        LEFT JOIN users u ON u.id = bp.user_id
+        WHERE COALESCE(bp.is_active, TRUE) = TRUE
+          AND (
+            $1 LIKE '%' || bp.slug || '%'
+            OR $2 LIKE '%' || bp.slug || '%'
+            OR $3 LIKE '%' || bp.slug || '%'
+          )
+        ORDER BY LENGTH(bp.slug) DESC
+        LIMIT 1`,
+        [targetSlug, withoutLocation, fullJoinedSlug]
+      );
+
+      if (looseBizRes.rows.length > 0) {
+        const business = looseBizRes.rows[0];
+        const bizId = business.id;
+        const instId = business.institution_profile_id || -1;
+        const [productsSettled, servicesSettled, professionalsSettled, reviewsSettled] = await Promise.allSettled([
+          db.query(
+            `SELECT p.* FROM products p WHERE (p.business_profile_id = $1 OR (p.institution_id IS NOT NULL AND p.institution_id = $2)) AND COALESCE(p.status, 'active') = 'active' ORDER BY p.id DESC`,
+            [bizId, instId]
+          ),
+          db.query(
+            `SELECT s.* FROM services s WHERE (s.business_profile_id = $1 OR (s.institution_id IS NOT NULL AND s.institution_id = $2)) AND COALESCE(s.status, 'active') = 'active' ORDER BY s.id DESC`,
+            [bizId, instId]
+          ),
+          db.query(
+            `SELECT pp.* FROM professional_profiles pp WHERE (pp.business_profile_id = $1 OR pp.institution_profile_id = $2) AND COALESCE(pp.is_active, TRUE) = TRUE ORDER BY pp.id DESC`,
+            [bizId, instId]
+          ),
+          db.query(
+            `SELECT pr.*, u.full_name AS user_name FROM platform_reviews pr LEFT JOIN users u ON u.id = pr.user_id WHERE pr.business_id = $1 AND COALESCE(pr.is_approved, TRUE) = TRUE ORDER BY pr.id DESC LIMIT 20`,
+            [bizId]
+          ),
+        ]);
+
+        return {
+          type: "business" as const,
+          business,
+          products: productsSettled.status === "fulfilled" ? productsSettled.value.rows : [],
+          services: servicesSettled.status === "fulfilled" ? servicesSettled.value.rows : [],
+          professionals: professionalsSettled.status === "fulfilled" ? professionalsSettled.value.rows : [],
+          reviews: reviewsSettled.status === "fulfilled" ? reviewsSettled.value.rows : [],
+        };
+      }
+    } catch {
+      // ignore
     }
 
     return null;

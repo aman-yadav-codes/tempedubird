@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
+import { useAdminGuard } from "@/hooks/use-admin-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -96,6 +97,8 @@ export type ServiceCategory = {
   description?: string | null;
   icon?: string | null;
   is_active: boolean;
+  parent_id?: number | null;
+  business_category_id?: number | null;
   services_count?: number;
 };
 
@@ -159,6 +162,7 @@ function formatCurrency(val: number | string | null | undefined) {
 }
 
 export default function AdminServicesPage() {
+  const { isReady, isForbidden } = useAdminGuard();
   const { user, accessToken } = useAuthStore();
   const [services, setServices] = useState<ServiceRecord[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
@@ -172,6 +176,8 @@ export default function AdminServicesPage() {
   });
 
   const [search, setSearch] = useState("");
+  const [businessCategories, setBusinessCategories] = useState<Array<{ id: number; name: string }>>([]);
+  const [selectedBusinessCategoryId, setSelectedBusinessCategoryId] = useState("all");
   const [selectedCategoryId, setSelectedCategoryId] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedDeliveryMode, setSelectedDeliveryMode] = useState("all");
@@ -295,6 +301,7 @@ export default function AdminServicesPage() {
       if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
       const params = new URLSearchParams();
       if (search.trim()) params.set("search", search.trim());
+      if (selectedBusinessCategoryId !== "all") params.set("business_category_id", selectedBusinessCategoryId);
       if (selectedCategoryId !== "all") params.set("category_id", selectedCategoryId);
       if (selectedStatus !== "all") params.set("status", selectedStatus);
       if (selectedDeliveryMode !== "all") params.set("delivery_mode", selectedDeliveryMode);
@@ -312,7 +319,18 @@ export default function AdminServicesPage() {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, search, selectedCategoryId, selectedStatus, selectedDeliveryMode]);
+  }, [accessToken, search, selectedBusinessCategoryId, selectedCategoryId, selectedStatus, selectedDeliveryMode]);
+
+  useEffect(() => {
+    fetch("/api/admin/categories?type=business&onlyRoot=true&limit=100")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.data && Array.isArray(d.data)) {
+          setBusinessCategories(d.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchCategories();
@@ -325,6 +343,14 @@ export default function AdminServicesPage() {
     }, 250);
     return () => clearTimeout(timer);
   }, [fetchServices]);
+
+  // Root categories filtered by selected business category
+  const rootCategories = useMemo(() => {
+    const roots = categories.filter((c) => !c.parent_id);
+    const pool = roots.length > 0 ? roots : categories;
+    if (selectedBusinessCategoryId === "all") return pool;
+    return pool.filter((c) => String(c.business_category_id) === String(selectedBusinessCategoryId));
+  }, [categories, selectedBusinessCategoryId]);
 
   const handleOpenCreate = () => {
     setEditingService(null);
@@ -445,6 +471,17 @@ export default function AdminServicesPage() {
     }
   };
 
+  if (!isReady || isForbidden) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">Checking module access permissions...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       {/* HEADER SECTION */}
@@ -550,13 +587,33 @@ export default function AdminServicesPage() {
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
+          <Select
+            value={selectedBusinessCategoryId}
+            onValueChange={(val) => {
+              setSelectedBusinessCategoryId(val);
+              setSelectedCategoryId("all");
+            }}
+          >
+            <SelectTrigger className="w-[180px] h-9 text-xs font-bold bg-background rounded-lg">
+              <SelectValue placeholder="All Business Types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Business Types ({businessCategories.length})</SelectItem>
+              {businessCategories.map((bc) => (
+                <SelectItem key={bc.id} value={String(bc.id)}>
+                  {bc.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
             <SelectTrigger className="w-[180px] h-9 text-xs font-bold bg-background rounded-lg">
               <SelectValue placeholder="All Categories" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Categories ({categories.length})</SelectItem>
-              {categories.map((c) => (
+              <SelectItem value="all">All Categories ({rootCategories.length})</SelectItem>
+              {rootCategories.map((c) => (
                 <SelectItem key={c.id} value={String(c.id)}>
                   {c.name}
                 </SelectItem>

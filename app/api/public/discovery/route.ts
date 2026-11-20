@@ -12,7 +12,24 @@ export async function GET(req: NextRequest) {
     const city = searchParams.get("city") || "";
     const locality = searchParams.get("locality") || "";
     const postalCode = searchParams.get("postalCode") || searchParams.get("zip") || searchParams.get("pincode") || "";
-    const categoryId = searchParams.get("categoryId") ? Number(searchParams.get("categoryId")) : null;
+    let categoryId = searchParams.get("categoryId") ? Number(searchParams.get("categoryId")) : null;
+    const categoryParam = (searchParams.get("category") || searchParams.get("category_slug") || searchParams.get("categoryName") || "").trim();
+    const subcategoryParam = (searchParams.get("subcategory") || searchParams.get("subcategory_slug") || "").trim();
+
+    if (!categoryId && (subcategoryParam || categoryParam)) {
+      try {
+        const targetStr = subcategoryParam || categoryParam;
+        const catLookup = await db.query(
+          `SELECT id FROM categories WHERE slug = $1 OR name ILIKE $2 OR name ILIKE $1 LIMIT 1`,
+          [targetStr.toLowerCase(), `%${targetStr.replace(/-/g, " ")}%`]
+        );
+        if (catLookup.rows.length > 0) {
+          categoryId = Number(catLookup.rows[0].id);
+        }
+      } catch (err) {
+        console.error("Error resolving string category in discovery:", err);
+      }
+    }
     const page = Math.max(1, Number(searchParams.get("page")) || 1);
     const limit = Math.max(1, Math.min(50, Number(searchParams.get("limit")) || 20));
     const offset = (page - 1) * limit;

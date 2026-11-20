@@ -369,10 +369,28 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
     if (!business.owner_image_url) business.owner_image_url = "/uploads/media/deepak_yadav_founder.jpg";
     if (!business.founder_image_url) business.founder_image_url = "/uploads/media/deepak_yadav_founder.jpg";
 
+    let resolvedServices = servicesSettled.status === "fulfilled" ? servicesSettled.value.rows : [];
+    try {
+      const targetInstId = instId > 0 ? instId : bizId;
+      const disabledCheck = await db.query(
+        `SELECT 1 FROM business_type_modules btm
+         JOIN system_modules sm ON sm.id = btm.module_id
+         JOIN institution_profiles ip ON (ip.institution_type_id = btm.business_type_id OR btm.business_type_id = 27)
+         WHERE ip.id = $1 AND (sm.route = '/admin/marketing/services' OR sm.module_key = 'admin_services' OR sm.route = '/admin/catalog/services') AND btm.is_enabled = FALSE
+         LIMIT 1`,
+        [targetInstId]
+      );
+      if (disabledCheck.rows.length > 0) {
+        resolvedServices = [];
+      }
+    } catch {
+      // ignore
+    }
+
     return {
       business,
       products: productsSettled.status === "fulfilled" ? productsSettled.value.rows : [],
-      services: servicesSettled.status === "fulfilled" ? servicesSettled.value.rows : [],
+      services: resolvedServices,
       professionals: professionalsSettled.status === "fulfilled" ? professionalsSettled.value.rows : [],
       reviews: reviewsSettled.status === "fulfilled" ? reviewsSettled.value.rows : [],
       courses: coursesSettled.status === "fulfilled" ? coursesSettled.value.rows : [],

@@ -71,6 +71,7 @@ interface MasterService {
   name: string;
   slug: string;
   main_category_id: number | null;
+  business_category_id?: number | null;
   main_category_name?: string | null;
   subcategory_id: number | null;
   subcategory_name?: string | null;
@@ -153,6 +154,7 @@ export default function MasterServicesPage() {
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [businessCategoryFilter, setBusinessCategoryFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [countryFilter, setCountryFilter] = useState("all");
@@ -258,6 +260,14 @@ export default function MasterServicesPage() {
       return String(c.business_category_id) === String(businessCategoryId);
     });
   }, [categories, businessCategoryId]);
+
+  const filterMainCategories = useMemo(() => {
+    return categories.filter((c) => {
+      if (c.parent_id) return false;
+      if (businessCategoryFilter === "all") return true;
+      return String(c.business_category_id) === String(businessCategoryFilter);
+    });
+  }, [categories, businessCategoryFilter]);
 
   const availableSubcategories = useMemo(() => {
     if (!mainCategoryId) return [];
@@ -812,6 +822,11 @@ export default function MasterServicesPage() {
         s.pricing_model?.toLowerCase().includes(search.toLowerCase()) ||
         s.synonyms?.some((syn) => syn.toLowerCase().includes(search.toLowerCase()));
 
+      const matchesBusinessCategory =
+        businessCategoryFilter === "all" ||
+        String(s.business_category_id) === businessCategoryFilter ||
+        String(categories.find((c) => c.id === s.category_id || c.id === s.main_category_id)?.business_category_id) === businessCategoryFilter;
+
       const matchesCategory =
         categoryFilter === "all" ||
         String(s.main_category_id) === categoryFilter ||
@@ -827,9 +842,9 @@ export default function MasterServicesPage() {
         countryFilter === "all" ||
         (Array.isArray(s.countries) && s.countries.includes(countryFilter));
 
-      return matchesSearch && matchesCategory && matchesStatus && matchesCountry;
+      return matchesSearch && matchesBusinessCategory && matchesCategory && matchesStatus && matchesCountry;
     });
-  }, [services, search, categoryFilter, statusFilter, countryFilter]);
+  }, [services, search, businessCategoryFilter, categoryFilter, statusFilter, countryFilter, categories]);
 
   return (
     <div className="space-y-6">
@@ -898,13 +913,33 @@ export default function MasterServicesPage() {
                 className="pl-9 h-9 text-xs"
               />
             </div>
+            <Select
+              value={businessCategoryFilter}
+              onValueChange={(val) => {
+                setBusinessCategoryFilter(val);
+                setCategoryFilter("all");
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-[190px] h-9 text-xs font-semibold">
+                <SelectValue placeholder="All Business Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Business Types ({businessCategories.length})</SelectItem>
+                {businessCategories.map((bc) => (
+                  <SelectItem key={bc.id} value={String(bc.id)}>
+                    {bc.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-full sm:w-[200px] h-9 text-xs">
+              <SelectTrigger className="w-full sm:w-[190px] h-9 text-xs font-semibold">
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {mainCategories.map((c) => (
+                <SelectItem value="all">All Categories ({filterMainCategories.length})</SelectItem>
+                {filterMainCategories.map((c) => (
                   <SelectItem key={c.id} value={String(c.id)}>
                     {c.name}
                   </SelectItem>

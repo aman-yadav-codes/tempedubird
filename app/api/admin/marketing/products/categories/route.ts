@@ -40,6 +40,12 @@ export async function GET(req: Request) {
       }
     }
 
+    const businessCategoryIdParam = url.searchParams.get("business_category_id") || url.searchParams.get("businessCategoryId");
+    if (businessCategoryIdParam && businessCategoryIdParam !== "all" && /^\d+$/.test(businessCategoryIdParam)) {
+      params.push(Number(businessCategoryIdParam));
+      conditions.push(`c.business_category_id = $${params.length}`);
+    }
+
     const whereClause = `WHERE ${conditions.join(" AND ")}`;
     const query = `
       SELECT 

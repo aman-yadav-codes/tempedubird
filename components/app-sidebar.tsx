@@ -826,7 +826,9 @@ export function AppSidebar() {
     );
     const userInstitutionOptions = useMemo(() => getUserInstitutionOptions(user), [user]);
     const [fetchedInstitutions, setFetchedInstitutions] = useState<ActiveInstitutionSummary[]>([]);
-    const [disabledBusinessTypeRoutes, setDisabledBusinessTypeRoutes] = useState<string[]>([]);
+    const [disabledBusinessTypeRoutes, setDisabledBusinessTypeRoutes] = useState<string[]>(() => {
+        return useAuthStore.getState().disabledBusinessTypeRoutes || [];
+    });
 
     useEffect(() => {
         if ((!isInstitutionAdmin && !isPlatformAdmin) || !accessToken) return;

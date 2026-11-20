@@ -44,7 +44,9 @@ export async function GET(
       LEFT JOIN categories c ON c.id = s.category_id
       LEFT JOIN business_profiles bp ON bp.id = s.business_profile_id
       LEFT JOIN professional_profiles pp ON pp.id = s.professional_profile_id
-      WHERE s.id = $1 OR s.slug = $2
+      WHERE (s.id = $1 AND $1 > 0)
+         OR s.slug = $2
+         OR (s.master_service_id = $1 AND $1 > 0)
       LIMIT 1`,
       [isNaN(numId) ? -1 : numId, id]
     );

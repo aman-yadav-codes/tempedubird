@@ -20,9 +20,63 @@ export async function GET(req: Request) {
     await ensureFeatureSchema();
     const url = new URL(req.url);
     const activeOnly = url.searchParams.get("active") === "true";
+    const parentIdParam = url.searchParams.get("parentId");
+    const businessCategoryIdParam = url.searchParams.get("business_category_id") || url.searchParams.get("businessCategoryId");
 
-    const whereClause = activeOnly ? "WHERE sc.is_active = TRUE" : "";
+    const conditions: string[] = ["category_type = 'service'", "COALESCE(is_deleted, false) = false"];
+    const params: any[] = [];
+
+    if (activeOnly) {
+      conditions.push("is_active = TRUE");
+    }
+
+    if (parentIdParam !== null && parentIdParam !== undefined && parentIdParam !== "") {
+      if (parentIdParam === "null" || parentIdParam === "root") {
+        conditions.push("parent_id IS NULL");
+      } else {
+        params.push(Number(parentIdParam));
+        conditions.push(`parent_id = $${params.length}`);
+      }
+    }
+
+    if (businessCategoryIdParam && businessCategoryIdParam !== "all" && /^\d+$/.test(businessCategoryIdParam)) {
+      params.push(Number(businessCategoryIdParam));
+      conditions.push(`business_category_id = $${params.length}`);
+    }
+
+    const whereClause = `WHERE ${conditions.join(" AND ")}`;
     const query = `
+      SELECT 
+        c.id,
+        c.name,
+        c.slug,
+        c.description,
+        COALESCE(c.icon_url, '') AS icon,
+        c.is_active,
+        c.parent_id,
+        c.business_category_id,
+        (
+          SELECT COUNT(*)::int 
+          FROM services s 
+          WHERE s.category_id = c.id OR s.subcategory_id = c.id OR s.category = c.name
+        ) AS services_count
+      FROM categories c
+      ${whereClause}
+      ORDER BY c.parent_id NULLS FIRST, c.name ASC
+    `;
+
+    const res = await db.query(query, params);
+
+    if (res.rows.length > 0) {
+      return NextResponse.json({
+        success: true,
+        categories: res.rows,
+      });
+    }
+
+    // Fallback to legacy service_categories if unified categories returned empty
+    const legacyWhere = activeOnly ? "WHERE sc.is_active = TRUE" : "";
+    const legacyQuery = `
       SELECT 
         sc.id,
         sc.name,
@@ -38,15 +92,15 @@ export async function GET(req: Request) {
           WHERE s.category_id = sc.id OR s.category = sc.name
         ) AS services_count
       FROM service_categories sc
-      ${whereClause}
+      ${legacyWhere}
       ORDER BY sc.sort_order ASC, sc.id ASC
     `;
 
-    const res = await db.query(query);
+    const legacyRes = await db.query(legacyQuery);
 
     return NextResponse.json({
       success: true,
-      categories: res.rows,
+      categories: legacyRes.rows,
     });
   } catch (error: any) {
     console.error("[Service Categories GET] Error:", error);

@@ -5,6 +5,7 @@
  * and uploads them to the Openinary self-hosted media service under the
  * configured folder (OPENINARY_UPLOAD_FOLDER, default: "maa-sharda").
  *
+ * Honors Openinary rate limits (max 100 req/min) with automatic backoff and retry.
  * Saves a local mapping `public/uploads/openinary-sync-map.json` and
  * updates database columns referencing the local paths.
  */
@@ -28,6 +29,10 @@ const SUPPORTED_IMAGE_EXTENSIONS = new Set([
 ]);
 
 const MAP_FILE_PATH = path.join(process.cwd(), 'public', 'uploads', 'openinary-sync-map.json');
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 function loadSyncMap() {
   if (fs.existsSync(MAP_FILE_PATH)) {
@@ -111,7 +116,9 @@ async function uploadToOpeninary(filePath, relativePath, targetFolder) {
 
   if (!res.ok || !json?.success || !Array.isArray(json.files) || json.files.length === 0) {
     const errMsg = json?.errors?.[0]?.error || json?.message || json?.error || `HTTP ${res.status}`;
-    throw new Error(errMsg);
+    const err = new Error(errMsg);
+    (err).status = res.status;
+    throw err;
   }
 
   const uploaded = json.files[0];
@@ -123,6 +130,25 @@ async function uploadToOpeninary(filePath, relativePath, targetFolder) {
     path: uploaded.path || `${targetFolder}/${filename}`,
   };
 }
+
+const DB_COLUMNS_TO_UPDATE = [
+  { table: 'institution_profiles', column: 'founder_image_url' },
+  { table: 'institution_profiles', column: 'logo_url' },
+  { table: 'institution_media', column: 'url' },
+  { table: 'users', column: 'avatar_url' },
+  { table: 'vendors', column: 'profile_image' },
+  { table: 'platform_company_info', column: 'banner_url' },
+  { table: 'platform_company_info', column: 'founder_image_url' },
+  { table: 'platform_company_info', column: 'logo_url' },
+  { table: 'businesses', column: 'founder_image_url' },
+  { table: 'businesses_and_professionals', column: 'founder_image_url' },
+  { table: 'business_profiles', column: 'logo_url' },
+  { table: 'business_profiles', column: 'banner_url' },
+  { table: 'business_profiles', column: 'founder_image_url' },
+  { table: 'business_profiles', column: 'cover_image_url' },
+  { table: 'professional_profiles', column: 'avatar_url' },
+  { table: 'professional_profiles', column: 'banner_url' },
+];
 
 async function updateDatabaseReferences(syncMap) {
   if (!process.env.DATABASE_URL) {
@@ -137,51 +163,27 @@ async function updateDatabaseReferences(syncMap) {
     return;
   }
 
-  console.log(`\n[DB] Checking database references for ${entries.length} mapped images...`);
+  console.log(`\n[DB] Updating database references across all tables for ${entries.length} uploaded files...`);
+  let updatedTotal = 0;
 
   try {
-    for (const [localUrl, openinaryUrl] of entries) {
-      // 1. Institution profiles
-      await pool.query(
-        `UPDATE institution_profiles SET logo_url = $1 WHERE logo_url = $2`,
-        [openinaryUrl, localUrl]
-      ).catch(() => {});
-      await pool.query(
-        `UPDATE institution_profiles SET founder_image_url = $1 WHERE founder_image_url = $2`,
-        [openinaryUrl, localUrl]
-      ).catch(() => {});
-
-      // 2. Business profiles
-      await pool.query(
-        `UPDATE business_profiles SET logo_url = $1 WHERE logo_url = $2`,
-        [openinaryUrl, localUrl]
-      ).catch(() => {});
-      await pool.query(
-        `UPDATE business_profiles SET cover_image_url = $1 WHERE cover_image_url = $2`,
-        [openinaryUrl, localUrl]
-      ).catch(() => {});
-      await pool.query(
-        `UPDATE business_profiles SET founder_image_url = $1 WHERE founder_image_url = $2`,
-        [openinaryUrl, localUrl]
-      ).catch(() => {});
-
-      // 3. Professional profiles
-      await pool.query(
-        `UPDATE professional_profiles SET avatar_url = $1 WHERE avatar_url = $2`,
-        [openinaryUrl, localUrl]
-      ).catch(() => {});
-      await pool.query(
-        `UPDATE professional_profiles SET banner_url = $1 WHERE banner_url = $2`,
-        [openinaryUrl, localUrl]
-      ).catch(() => {});
-
-      // 4. Users
-      await pool.query(
-        `UPDATE users SET avatar_url = $1 WHERE avatar_url = $2`,
-        [openinaryUrl, localUrl]
-      ).catch(() => {});
+    for (const { table, column } of DB_COLUMNS_TO_UPDATE) {
+      for (const [localUrl, openinaryUrl] of entries) {
+        try {
+          const res = await pool.query(
+            `UPDATE "${table}" SET "${column}" = $1 WHERE "${column}" = $2 OR "${column}" LIKE '%' || $3`,
+            [openinaryUrl, localUrl, path.basename(localUrl)]
+          );
+          if (res.rowCount && res.rowCount > 0) {
+            updatedTotal += res.rowCount;
+            console.log(`[DB] Updated ${res.rowCount} row(s) in "${table}"."${column}" -> ${openinaryUrl}`);
+          }
+        } catch {
+          // Ignore if table/column does not exist
+        }
+      }
     }
-    console.log('[DB] Database references updated successfully.');
+    console.log(`[DB] Finished updating database. Total rows modified: ${updatedTotal}`);
   } catch (dbErr) {
     console.warn('[DB] Warning updating database references:', dbErr.message);
   } finally {
@@ -213,44 +215,64 @@ async function main() {
   console.log(`Found ${allImages.length} local images in public/uploads/`);
 
   const syncMap = loadSyncMap();
-  const alreadySynced = Object.keys(syncMap).length;
-  console.log(`Already synced previously: ${alreadySynced} images`);
+  let alreadySynced = 0;
+
+  const pendingImages = allImages.filter((filePath) => {
+    const rel = path.relative(path.join(process.cwd(), 'public'), filePath).replace(/\\/g, '/');
+    const webUrl = `/${rel}`;
+    if (syncMap[webUrl]) {
+      alreadySynced++;
+      return false;
+    }
+    return true;
+  });
+
+  console.log(`Already synced: ${alreadySynced} images`);
+  console.log(`Remaining to upload: ${pendingImages.length} images to folder "${OPENINARY_UPLOAD_FOLDER}"...\n`);
 
   let successCount = 0;
   let failCount = 0;
-  let skippedCount = 0;
   const errors = [];
 
-  for (let i = 0; i < allImages.length; i++) {
-    const filePath = allImages[i];
-    // Form relative web URL, e.g. "/uploads/media/deepak_yadav_founder.jpg"
+  for (let i = 0; i < pendingImages.length; i++) {
+    const filePath = pendingImages[i];
     const rel = path.relative(path.join(process.cwd(), 'public'), filePath).replace(/\\/g, '/');
     const webUrl = `/${rel}`;
-
-    if (syncMap[webUrl]) {
-      skippedCount++;
-      continue;
-    }
-
     const filename = path.basename(filePath);
-    process.stdout.write(`[${i + 1}/${allImages.length}] Uploading ${filename} to "${OPENINARY_UPLOAD_FOLDER}"... `);
 
-    try {
-      const result = await uploadToOpeninary(filePath, webUrl, OPENINARY_UPLOAD_FOLDER);
-      syncMap[webUrl] = result.url;
-      successCount++;
-      console.log(`✓ DONE => ${result.url}`);
-      saveSyncMap(syncMap);
-    } catch (err) {
-      failCount++;
-      console.log(`✗ FAILED: ${err.message}`);
-      errors.push({ file: filename, webUrl, error: err.message });
-      // If server MinIO is unreachable, stop spamming the server and report clearly
-      if (err.message.includes('EHOSTUNREACH') || err.message.includes('ECONNREFUSED')) {
-        console.warn(`\n[ABORT] Media server storage backend (${err.message}) is currently unreachable.`);
-        console.warn('Stopping further uploads. Once the media storage backend is running, re-run:');
-        console.warn('  npm run openinary:sync\n');
-        break;
+    let attempts = 0;
+    let uploaded = false;
+
+    while (attempts < 3 && !uploaded) {
+      attempts++;
+      try {
+        const result = await uploadToOpeninary(filePath, webUrl, OPENINARY_UPLOAD_FOLDER);
+        syncMap[webUrl] = result.url;
+        successCount++;
+        uploaded = true;
+        saveSyncMap(syncMap);
+        console.log(`[${i + 1}/${pendingImages.length}] ✓ ${filename} -> ${result.url}`);
+        // Small pacing delay to stay safely under 100 req/60s
+        await sleep(650);
+      } catch (err) {
+        const errMsg = err.message || '';
+        if (errMsg.includes('Rate limit') || err.status === 429) {
+          console.warn(`[RATE LIMIT] Hit rate limit on attempt ${attempts}. Pausing for 62s to reset window...`);
+          await sleep(62000);
+          // Loop will retry
+        } else if (errMsg.includes('EHOSTUNREACH') || errMsg.includes('ECONNREFUSED')) {
+          console.error(`[ABORT] Media server storage is unreachable (${errMsg}). Halting.`);
+          i = pendingImages.length;
+          break;
+        } else {
+          console.error(`[${i + 1}/${pendingImages.length}] ✗ ${filename} (attempt ${attempts}): ${errMsg}`);
+          if (attempts >= 3) {
+            failCount++;
+            errors.push({ file: filename, webUrl, error: errMsg });
+          } else {
+            await sleep(2000);
+          }
+        }
       }
     }
   }
@@ -259,18 +281,19 @@ async function main() {
 
   console.log('\n====================================================');
   console.log(' Sync Summary:');
-  console.log(` - Total Found:   ${allImages.length}`);
-  console.log(` - Already Synced:${skippedCount}`);
-  console.log(` - Newly Synced:  ${successCount}`);
-  console.log(` - Failed/Pending:${failCount}`);
+  console.log(` - Total Local Images: ${allImages.length}`);
+  console.log(` - Previously Synced:  ${alreadySynced}`);
+  console.log(` - Newly Synced:       ${successCount}`);
+  console.log(` - Total Active Sync:  ${Object.keys(syncMap).length}`);
+  console.log(` - Failed:             ${failCount}`);
   console.log('====================================================\n');
 
-  if (successCount > 0) {
+  if (Object.keys(syncMap).length > 0) {
     await updateDatabaseReferences(syncMap);
   }
 
   if (errors.length > 0) {
-    console.log('Failures detail:');
+    console.log('\nFailures detail:');
     errors.forEach((e) => console.log(`  - ${e.file}: ${e.error}`));
   }
 }

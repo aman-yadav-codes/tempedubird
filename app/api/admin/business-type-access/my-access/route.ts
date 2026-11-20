@@ -136,9 +136,13 @@ export async function GET(req: Request) {
         verifiedInstId = candidateId;
       } else {
         const belongsRes = await db.query(
-          `SELECT 1 FROM institution_memberships WHERE user_id = $1 AND institution_id = $2 AND is_active = true
+          `SELECT 1 FROM institution_memberships im
+           JOIN institution_profiles ip ON ip.id = im.institution_id AND ip.is_active = true AND COALESCE(ip.is_deleted, false) = false
+           WHERE im.user_id = $1 AND im.institution_id = $2 AND im.is_active = true
            UNION
-           SELECT 1 FROM business_profiles WHERE user_id = $1 AND institution_profile_id = $2
+           SELECT 1 FROM business_profiles bp
+           JOIN institution_profiles ip ON ip.id = bp.institution_profile_id AND ip.is_active = true AND COALESCE(ip.is_deleted, false) = false
+           WHERE bp.user_id = $1 AND bp.institution_profile_id = $2
            LIMIT 1`,
           [user.id, candidateId]
         );
@@ -261,8 +265,8 @@ export async function GET(req: Request) {
       }
     }
 
-    // Normalize legacy coaching center (id: 9) to Education & Coaching (id: 27)
-    if (businessTypeId === 9) {
+    // Normalize legacy coaching center (id: 9) or institute (id: 8) to Education & Coaching (id: 27)
+    if (businessTypeId === 9 || businessTypeId === 8) {
       const modern = allTypes.find((t) => t.slug === "education-and-coaching");
       if (modern) {
         businessTypeId = modern.id;
@@ -357,6 +361,9 @@ export async function GET(req: Request) {
           disabledRoutes.add("/admin/marketing/services");
           disabledRoutes.add("/admin/catalog/services");
           disabledRoutes.add("/admin/services");
+          disabledRoutes.add("/workspace/marketing/services");
+          disabledRoutes.add("/workspace/catalog/services");
+          disabledRoutes.add("/workspace/services");
         }
 
         // 1. Operations module disabled -> disable all operations workflows

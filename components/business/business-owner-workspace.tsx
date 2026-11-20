@@ -33,6 +33,7 @@ import {
   Search,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuthStore } from "@/store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +61,8 @@ import {
 const DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 export function BusinessOwnerWorkspace() {
+  const disabledBusinessTypeRoutes = useAuthStore((s) => s.disabledBusinessTypeRoutes) || [];
+  const isServicesDisabled = disabledBusinessTypeRoutes.some((r) => r.includes("/services"));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [businessProfiles, setBusinessProfiles] = useState<any[]>([]);
@@ -481,7 +484,7 @@ export function BusinessOwnerWorkspace() {
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {selectedBusiness.city ? `${selectedBusiness.city}, ` : ""}{selectedBusiness.country_code || "India"} • {products.length} Products • {services.length} Services • {enquiries.length} Enquiries
+            {selectedBusiness.city ? `${selectedBusiness.city}, ` : ""}{selectedBusiness.country_code || "India"} • {products.length} Products{!isServicesDisabled ? ` • ${services.length} Services` : ""} • {enquiries.length} Enquiries
           </p>
         </div>
 
@@ -538,9 +541,11 @@ export function BusinessOwnerWorkspace() {
           <TabsTrigger value="products" className="text-xs gap-1.5">
             <Package className="size-3.5" /> Products ({products.length})
           </TabsTrigger>
-          <TabsTrigger value="services" className="text-xs gap-1.5">
-            <Briefcase className="size-3.5" /> Services ({services.length})
-          </TabsTrigger>
+          {!isServicesDisabled && (
+            <TabsTrigger value="services" className="text-xs gap-1.5">
+              <Briefcase className="size-3.5" /> Services ({services.length})
+            </TabsTrigger>
+          )}
           <TabsTrigger value="enquiries" className="text-xs gap-1.5">
             <MessageSquare className="size-3.5" /> Enquiries ({enquiries.length})
           </TabsTrigger>
@@ -1117,6 +1122,7 @@ export function BusinessOwnerWorkspace() {
         </TabsContent>
 
         {/* ================= TAB 5: SERVICES ================= */}
+        {!isServicesDisabled && (
         <TabsContent value="services" className="space-y-4">
           <Card>
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
@@ -1220,6 +1226,7 @@ export function BusinessOwnerWorkspace() {
             </CardContent>
           </Card>
         </TabsContent>
+        )}
 
         {/* ================= TAB 6: ENQUIRIES ================= */}
         <TabsContent value="enquiries" className="space-y-4">

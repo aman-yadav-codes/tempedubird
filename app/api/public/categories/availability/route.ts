@@ -84,9 +84,18 @@ export async function GET(req: NextRequest) {
           ).catch(() => ({ rows: [{ count: 0 }] }));
         }),
 
-        // 4. Services
+        // 4. Services (checks existence and respects business-type-access module configuration)
         db.query(
-          `SELECT COUNT(*)::int AS count FROM business_services WHERE business_id = $1`,
+          `SELECT 
+             CASE 
+               WHEN EXISTS (
+                 SELECT 1 FROM business_type_modules btm
+                 JOIN system_modules sm ON sm.id = btm.module_id
+                 JOIN institution_profiles ip ON (ip.id = $1 OR ip.institution_type_id = btm.business_type_id)
+                 WHERE ip.id = $1 AND (sm.route = '/admin/marketing/services' OR sm.module_key = 'admin_services' OR sm.route = '/admin/catalog/services') AND btm.is_enabled = FALSE
+               ) THEN 0
+               ELSE (SELECT COUNT(*)::int FROM business_services WHERE business_id = $1)
+             END AS count`,
           [targetId]
         ).catch(() => ({ rows: [{ count: 0 }] })),
 

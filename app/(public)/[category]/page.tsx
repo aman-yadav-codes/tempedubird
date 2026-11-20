@@ -42,7 +42,7 @@ export async function generateMetadata({ params }: Props) {
   };
 }
 
-export default async function CategoryOrCountryPage({ params }: Props) {
+export default async function CategoryOrCountryPage({ params, searchParams }: Props) {
   const { category } = await params;
   const upper = category.toUpperCase();
 
@@ -55,7 +55,14 @@ export default async function CategoryOrCountryPage({ params }: Props) {
 
     if (catRes.rows.length > 0) {
       const cat = catRes.rows[0];
-      redirect(`/explore?categoryId=${cat.id}&categoryName=${encodeURIComponent(cat.name)}&type=all`);
+      const sp = await searchParams;
+      const qParams = new URLSearchParams();
+      qParams.set("category", cat.slug || cat.name);
+      if (sp?.type && typeof sp.type === "string") qParams.set("type", sp.type);
+      if (sp?.city && typeof sp.city === "string") qParams.set("city", sp.city);
+      if (sp?.location && typeof sp.location === "string") qParams.set("city", sp.location);
+      if (sp?.q && typeof sp.q === "string") qParams.set("q", sp.q);
+      redirect(`/explore?${qParams.toString()}`);
     }
 
     notFound();

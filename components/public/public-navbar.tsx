@@ -181,7 +181,7 @@ export function PublicNavbar({
     PLATFORM_MARKETPLACE_KEYS.includes(item.key) &&
     item.key !== "jobs" &&
     item.key !== "blogs" &&
-    (!mounted || isCategoryVisible(item.key))
+    (item.key === "services" ? (mounted && isCategoryVisible("services")) : (!mounted || isCategoryVisible(item.key)))
   );
 
   // Institution edition menu: items filtered dynamically by isCategoryVisible (jobs & blogs moved to footer)
@@ -204,6 +204,36 @@ export function PublicNavbar({
     requestLocation,
     availableLocations,
   } = useUserLocation();
+
+  const [navLocationQuery, setNavLocationQuery] = useState("");
+  const [navLocationSuggestions, setNavLocationSuggestions] = useState<any[]>([]);
+  const [navIsLoadingLocations, setNavIsLoadingLocations] = useState(false);
+
+  useEffect(() => {
+    const trimmed = navLocationQuery.trim();
+    if (trimmed.length < 2) {
+      setNavLocationSuggestions([]);
+      setNavIsLoadingLocations(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setNavIsLoadingLocations(true);
+      try {
+        const res = await fetch(`/api/public/places/autocomplete?input=${encodeURIComponent(trimmed)}`);
+        const data = await res.json();
+        if (data?.predictions && Array.isArray(data.predictions)) {
+          setNavLocationSuggestions(data.predictions);
+        } else {
+          setNavLocationSuggestions([]);
+        }
+      } catch {
+        setNavLocationSuggestions([]);
+      } finally {
+        setNavIsLoadingLocations(false);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [navLocationQuery]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("Courses");
@@ -266,19 +296,16 @@ export function PublicNavbar({
             </>
           ) : (
             <>
-              <div className="relative flex h-9 w-9 shrink-0 items-center justify-center">
+              <div className="relative flex h-12 sm:h-14 w-auto shrink-0 items-center">
                 <Image
-                  src="/icons/edubird.webp"
-                  alt="EduBird logo"
-                  fill
-                  sizes="36px"
+                  src="/images/143panda-logo.png"
+                  alt="143Panda"
+                  width={180}
+                  height={64}
                   priority
-                  className="object-contain"
+                  className="h-11 sm:h-13 w-auto object-contain hover:scale-105 transition-transform"
                 />
               </div>
-              <span className="text-xl font-bold text-gray-900 tracking-tight font-sans group-hover:text-rose-700 transition-colors">
-                EduBird
-              </span>
             </>
           )}
         </Link>
@@ -408,6 +435,50 @@ export function PublicNavbar({
                 </DropdownMenuItem>
 
                 <DropdownMenuSeparator className="my-1" />
+
+                {/* Google Location Autocomplete Search */}
+                <div className="px-1 py-1" onClick={(e) => e.stopPropagation()}>
+                  <div className="relative flex items-center">
+                    <Search className="absolute left-2.5 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Search city, area (Google)..."
+                      value={navLocationQuery}
+                      onChange={(e) => setNavLocationQuery(e.target.value)}
+                      className="w-full h-8 pl-8 pr-7 text-xs rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:border-rose-500 font-medium"
+                    />
+                    {navIsLoadingLocations && (
+                      <Loader2 className="absolute right-2 h-3 w-3 animate-spin text-rose-600 pointer-events-none" />
+                    )}
+                  </div>
+                </div>
+
+                {navLocationSuggestions.length > 0 && (
+                  <div className="max-h-48 overflow-y-auto space-y-0.5 border-b border-gray-100 pb-1">
+                    <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider px-2 py-0.5 flex items-center justify-between">
+                      <span>Google Suggestions</span>
+                      <span className="text-rose-600">Google Places</span>
+                    </div>
+                    {navLocationSuggestions.map((item) => (
+                      <DropdownMenuItem
+                        key={item.id || item.place_id}
+                        onClick={() => {
+                          const chosen = item.name || item.description.split(",")[0].trim();
+                          setLocation(chosen, false);
+                          setNavLocationQuery("");
+                          setNavLocationSuggestions([]);
+                        }}
+                        className="cursor-pointer text-xs py-1.5 px-2 rounded-lg flex items-start gap-1.5"
+                      >
+                        <MapPin className="h-3 w-3 text-rose-500 shrink-0 mt-0.5" />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-gray-800 truncate">{item.name}</div>
+                          <div className="text-[10px] text-gray-400 truncate">{item.secondary_text || item.description}</div>
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                  </div>
+                )}
 
                 <DropdownMenuLabel className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 py-1">
                   Choose City

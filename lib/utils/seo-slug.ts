@@ -17,22 +17,51 @@ export function slugify(text: string | null | undefined): string {
 }
 
 /**
- * Extract numeric ID from a slugified parameter (e.g. "155-apex-institute-varanasi" -> 155, or "155" -> 155)
+ * Extract numeric ID from a slugified parameter (e.g. "155-apex-institute-varanasi" -> 155, "item-title-51" -> 51, or "155" -> 155)
  */
 export function extractIdFromSlug(param: string | number | undefined): { id: number; slug: string } {
   if (!param) return { id: 0, slug: "" };
   const str = String(param).trim();
-  const match = str.match(/^(\d+)(?:-(.*))?$/);
-  if (match) {
+
+  // Strip trailing -in-location if present for ID extraction purposes
+  let cleanStr = str;
+  const lastInIdx = str.lastIndexOf("-in-");
+  if (lastInIdx !== -1) {
+    const afterIn = str.substring(lastInIdx + 4);
+    // Location suffix should not end with digits (IDs) and not be part of phrases like "-in-store-"
+    if (!/\d+$/.test(afterIn) && !afterIn.includes("-store") && afterIn !== "store") {
+      cleanStr = str.substring(0, lastInIdx);
+    }
+  }
+
+  // 1. Pure number: e.g. "155"
+  if (/^\d+$/.test(cleanStr)) {
+    return { id: parseInt(cleanStr, 10), slug: "" };
+  }
+
+  // 2. Leading number: e.g. "155-apex-institute-varanasi"
+  const leadingMatch = cleanStr.match(/^(\d+)-(.*)$/);
+  if (leadingMatch) {
     return {
-      id: parseInt(match[1], 10),
-      slug: match[2] || "",
+      id: parseInt(leadingMatch[1], 10),
+      slug: leadingMatch[2] || "",
     };
   }
-  const numeric = parseInt(str, 10);
+
+  // 3. Trailing number: e.g. "service-title-varanasi-51" or "product-item-1278"
+  const trailingMatch = cleanStr.match(/^(.*)-(\d+)$/);
+  if (trailingMatch) {
+    return {
+      id: parseInt(trailingMatch[2], 10),
+      slug: trailingMatch[1] || "",
+    };
+  }
+
+  // 4. Fallback parseInt if str starts with digits
+  const numeric = parseInt(cleanStr, 10);
   return {
     id: isNaN(numeric) ? 0 : numeric,
-    slug: "",
+    slug: cleanStr,
   };
 }
 
