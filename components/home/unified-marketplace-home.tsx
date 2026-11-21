@@ -432,147 +432,147 @@ export function UnifiedMarketplaceHome() {
                 </p>
               </div>
 
-          {/* Search Box & Location Selector & Suggestions */}
-          <div ref={heroSearchContainerRef} className="relative max-w-2xl w-full space-y-3.5">
-            {/* Primary Search Input */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSearch();
-              }}
-              className="relative group flex items-center bg-white rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.12)] border border-sky-100 px-3 sm:px-4 py-2 sm:py-2.5 transition-all focus-within:ring-4 focus-within:ring-sky-400/20"
-            >
-              <div className="pl-1 flex items-center pointer-events-none text-sky-500">
-                <Search className="size-5" />
-              </div>
-              <input
-                type="text"
-                value={searchQuery}
-                onFocus={() => {
-                  if (searchQuery.trim()) setIsDropdownOpen(true);
-                }}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setSearchQuery(val);
-                  if (val.trim()) {
-                    setIsDropdownOpen(true);
-                  } else {
-                    setIsDropdownOpen(false);
-                  }
-                }}
-                placeholder="What are you looking for today?"
-                className="w-full h-11 pl-3 pr-4 bg-transparent text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 border-0"
-              />
-
-              <div className="flex items-center gap-1.5 shrink-0 pr-1">
-                {isSearching ? (
-                  <Loader2 className="size-4 animate-spin text-sky-500 mr-1" />
-                ) : searchQuery ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearchQuery("");
-                      setSearchResults(null);
-                      setIsDropdownOpen(false);
+              {/* Search Box & Location Selector & Suggestions */}
+              <div ref={heroSearchContainerRef} className="relative max-w-2xl w-full space-y-3.5">
+                {/* Primary Search Input */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleSearch();
+                  }}
+                  className="relative group flex items-center bg-white rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.12)] border border-sky-100 px-3 sm:px-4 py-2 sm:py-2.5 transition-all focus-within:ring-4 focus-within:ring-sky-400/20"
+                >
+                  <div className="pl-1 flex items-center pointer-events-none text-sky-500">
+                    <Search className="size-5" />
+                  </div>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onFocus={() => {
+                      if (searchQuery.trim()) setIsDropdownOpen(true);
                     }}
-                    className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer mr-1 transition-colors"
-                    title="Clear search"
-                  >
-                    <X className="size-4" />
-                  </button>
-                ) : null}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSearchQuery(val);
+                      if (val.trim()) {
+                        setIsDropdownOpen(true);
+                      } else {
+                        setIsDropdownOpen(false);
+                      }
+                    }}
+                    placeholder="What are you looking for today?"
+                    className="w-full h-11 pl-3 pr-4 bg-transparent text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 border-0"
+                  />
 
-                {/* Circular Bright Blue Search Button matching mockup */}
-                <Button
-                  type="submit"
-                  size="icon"
-                  className="size-10 sm:size-11 rounded-full bg-[#0080ff] hover:bg-[#0070e0] active:scale-95 text-white shadow-md cursor-pointer transition-transform shrink-0"
-                  title="Search"
-                >
-                  <Search className="size-5" />
-                </Button>
-              </div>
-            </form>
+                  <div className="flex items-center gap-1.5 shrink-0 pr-1">
+                    {isSearching ? (
+                      <Loader2 className="size-4 animate-spin text-sky-500 mr-1" />
+                    ) : searchQuery ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery("");
+                          setSearchResults(null);
+                          setIsDropdownOpen(false);
+                        }}
+                        className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer mr-1 transition-colors"
+                        title="Clear search"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    ) : null}
 
-            {/* Quick Category Navigation Pills (Arranged in 2 clean horizontal rows matching mockup) */}
-            <div className="space-y-2 pt-1">
-              {/* Row 1 */}
-              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-xs">
-                <Link
-                  href="/businesses"
-                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-amber-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                >
-                  <span className="text-amber-500">💼</span>
-                  <span>Businesses</span>
-                </Link>
-                <Link
-                  href="/professionals"
-                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-sky-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                >
-                  <span className="text-sky-500">👥</span>
-                  <span>Professionals</span>
-                </Link>
-                <Link
-                  href="/courses"
-                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-emerald-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                >
-                  <span className="text-emerald-500">🎓</span>
-                  <span>Courses</span>
-                </Link>
-                <Link
-                  href="/jobs"
-                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-purple-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                >
-                  <span className="text-purple-500">💼</span>
-                  <span>Jobs</span>
-                </Link>
-                <Link
-                  href="/businesses"
-                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-cyan-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                >
-                  <span className="text-cyan-600">🏢</span>
-                  <span>Property</span>
-                </Link>
-                <Link
-                  href="/explore?type=all&category=events"
-                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-rose-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                >
-                  <span className="text-rose-500">📅</span>
-                  <span>Events</span>
-                </Link>
-              </div>
+                    {/* Circular Bright Blue Search Button matching mockup */}
+                    <Button
+                      type="submit"
+                      size="icon"
+                      className="size-10 sm:size-11 rounded-full bg-[#0080ff] hover:bg-[#0070e0] active:scale-95 text-white shadow-md cursor-pointer transition-transform shrink-0"
+                      title="Search"
+                    >
+                      <Search className="size-5" />
+                    </Button>
+                  </div>
+                </form>
 
-              {/* Row 2 */}
-              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-xs">
-                <Link
-                  href="/products"
-                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-blue-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                >
-                  <span className="text-blue-600">📦</span>
-                  <span>Products</span>
-                </Link>
-                <Link
-                  href="/services"
-                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-emerald-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                >
-                  <span className="text-emerald-600">🏠</span>
-                  <span>Services</span>
-                </Link>
-                <Link
-                  href="/explore?categoryName=Entertainment&type=all"
-                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-red-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                >
-                  <span className="text-red-500">▶️</span>
-                  <span>Entertainment</span>
-                </Link>
-                <Link
-                  href="/businesses"
-                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-slate-400 text-slate-700 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                >
-                  <span>&amp; More...</span>
-                </Link>
-              </div>
-            </div>
+                {/* Quick Category Navigation Pills (Arranged in 2 clean horizontal rows matching mockup) */}
+                <div className="space-y-2 pt-1">
+                  {/* Row 1 */}
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-xs">
+                    <Link
+                      href="/businesses"
+                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-amber-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                    >
+                      <span className="text-amber-500">💼</span>
+                      <span>Businesses</span>
+                    </Link>
+                    <Link
+                      href="/professionals"
+                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-sky-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                    >
+                      <span className="text-sky-500">👥</span>
+                      <span>Professionals</span>
+                    </Link>
+                    <Link
+                      href="/courses"
+                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-emerald-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                    >
+                      <span className="text-emerald-500">🎓</span>
+                      <span>Courses</span>
+                    </Link>
+                    <Link
+                      href="/jobs"
+                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-purple-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                    >
+                      <span className="text-purple-500">💼</span>
+                      <span>Jobs</span>
+                    </Link>
+                    <Link
+                      href="/businesses"
+                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-cyan-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                    >
+                      <span className="text-cyan-600">🏢</span>
+                      <span>Property</span>
+                    </Link>
+                    <Link
+                      href="/explore?type=all&category=events"
+                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-rose-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                    >
+                      <span className="text-rose-500">📅</span>
+                      <span>Events</span>
+                    </Link>
+                  </div>
+
+                  {/* Row 2 */}
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-xs">
+                    <Link
+                      href="/products"
+                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-blue-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                    >
+                      <span className="text-blue-600">📦</span>
+                      <span>Products</span>
+                    </Link>
+                    <Link
+                      href="/services"
+                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-emerald-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                    >
+                      <span className="text-emerald-600">🏠</span>
+                      <span>Services</span>
+                    </Link>
+                    <Link
+                      href="/explore?categoryName=Entertainment&type=all"
+                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-red-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                    >
+                      <span className="text-red-500">▶️</span>
+                      <span>Entertainment</span>
+                    </Link>
+                    <Link
+                      href="/businesses"
+                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-slate-400 text-slate-700 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                    >
+                      <span>&amp; More...</span>
+                    </Link>
+                  </div>
+                </div>
 
                 {/* Quick Category Navigation Pills */}
                 <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap pt-1 text-xs">
@@ -909,908 +909,908 @@ export function UnifiedMarketplaceHome() {
               </div>
             </div>
 
-        {/* Right Column: 3D Baby Panda with Magnifying Glass & Directional Signpost */}
-        <div className="lg:col-span-5 hidden lg:flex items-center justify-center relative">
-          <div className="relative w-full max-w-[480px] aspect-[484/452] flex items-center justify-center">
-            <Image
-              src="/images/hero-panda-3d-clean.webp"
-              alt="143Panda 3D Discovery Mascot & Navigation"
-              width={484}
-              height={452}
-              priority
-              className="w-full h-auto object-contain drop-shadow-[0_20px_40px_rgba(0,80,180,0.18)]"
-            />
-          </div>
+            {/* Right Column: 3D Baby Panda with Magnifying Glass & Directional Signpost */}
+            <div className="lg:col-span-5 hidden lg:flex items-center justify-center relative">
+              <div className="relative w-full max-w-[480px] aspect-[484/452] flex items-center justify-center">
+                <Image
+                  src="/images/hero-panda-3d-clean.webp"
+                  alt="143Panda 3D Discovery Mascot & Navigation"
+                  width={484}
+                  height={452}
+                  priority
+                  className="w-full h-auto object-contain drop-shadow-[0_20px_40px_rgba(0,80,180,0.18)]"
+                />
+              </div>
         </div>
       </div>
 
-          {/* Live Metric Stats Bar (Glassmorphic cards over hero landscape - Click opens dedicated page according to selected location) */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 pt-6 border-t border-white/50 w-full relative z-20">
-            {[
-              {
-                label: "Local Products",
-                value: products.length > 0 ? `${products.length}+` : "660+",
-                sub: "18 Local Stores",
-                icon: Package,
-                type: "product",
-              },
-              {
-                label: "Bookable Services",
-                value: services.length > 0 ? `${services.length}+` : "90+",
-                sub: "Verified Providers",
-                icon: Wrench,
-                type: "service",
-              },
-              {
-                label: "Top Experts",
-                value: professionals.length > 0 ? `${professionals.length}+` : "50+",
-                sub: "Doctors & Mentors",
-                icon: UserCheck,
-                type: "professional",
-              },
-              {
-                label: "Certified Programs",
-                value: courses.length > 0 ? `${courses.length}+` : "170+",
-                sub: "Degrees & Diplomas",
-                icon: GraduationCap,
-                type: "course",
-              },
-              {
-                label: "Career Openings",
-                value: jobs.length > 0 ? `${jobs.length}+` : "Active",
-                sub: "Local & On-site",
-                icon: Briefcase,
-                type: "job",
-              },
-              {
-                label: "Local Store Network",
-                value: businesses.length > 0 ? `${businesses.length} Stores` : "18 Stores",
-                sub: "Verified Partners",
-                icon: Store,
-                type: "business",
-              },
-            ].map((stat, i) => {
-              const Icon = stat.icon;
-              const locParam = userLocation && userLocation !== "All Locations" ? `&city=${encodeURIComponent(userLocation)}` : "";
-              const targetUrl = `/explore?type=${stat.type}${locParam}`;
+              {/* Live Metric Stats Bar (Glassmorphic cards over hero landscape - Click opens dedicated page according to selected location) */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 pt-6 border-t border-white/50 w-full relative z-20">
+                {[
+                  {
+                    label: "Local Products",
+                    value: products.length > 0 ? `${products.length}+` : "660+",
+                    sub: "18 Local Stores",
+                    icon: Package,
+                    type: "product",
+                  },
+                  {
+                    label: "Bookable Services",
+                    value: services.length > 0 ? `${services.length}+` : "90+",
+                    sub: "Verified Providers",
+                    icon: Wrench,
+                    type: "service",
+                  },
+                  {
+                    label: "Top Experts",
+                    value: professionals.length > 0 ? `${professionals.length}+` : "50+",
+                    sub: "Doctors & Mentors",
+                    icon: UserCheck,
+                    type: "professional",
+                  },
+                  {
+                    label: "Certified Programs",
+                    value: courses.length > 0 ? `${courses.length}+` : "170+",
+                    sub: "Degrees & Diplomas",
+                    icon: GraduationCap,
+                    type: "course",
+                  },
+                  {
+                    label: "Career Openings",
+                    value: jobs.length > 0 ? `${jobs.length}+` : "Active",
+                    sub: "Local & On-site",
+                    icon: Briefcase,
+                    type: "job",
+                  },
+                  {
+                    label: "Local Store Network",
+                    value: businesses.length > 0 ? `${businesses.length} Stores` : "18 Stores",
+                    sub: "Verified Partners",
+                    icon: Store,
+                    type: "business",
+                  },
+                ].map((stat, i) => {
+                  const Icon = stat.icon;
+                  const locParam = userLocation && userLocation !== "All Locations" ? `&city=${encodeURIComponent(userLocation)}` : "";
+                  const targetUrl = `/explore?type=${stat.type}${locParam}`;
 
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => router.push(targetUrl)}
-                  className="p-3 rounded-2xl border border-white/80 bg-white/85 hover:bg-white hover:border-sky-300 hover:scale-[1.03] active:scale-[0.98] backdrop-blur-md flex items-center gap-2.5 shadow-[0_4px_16px_rgba(0,0,0,0.06)] transition-all cursor-pointer text-left group"
-                  title={`Explore ${stat.label}${userLocation && userLocation !== "All Locations" ? ` in ${userLocation}` : ""}`}
-                >
-                  <div className="size-8 rounded-xl bg-sky-500/10 text-sky-600 group-hover:bg-sky-500 group-hover:text-white flex items-center justify-center shrink-0 transition-colors">
-                    <Icon className="size-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-black text-slate-900 group-hover:text-sky-600 transition-colors">{stat.value}</div>
-                    <div className="text-[10px] text-slate-600 group-hover:text-slate-900 truncate font-medium">{stat.label}</div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Curved Wave Divider at Bottom of Hero */}
-        <div className="absolute -bottom-1 left-0 right-0 overflow-hidden leading-none pointer-events-none z-10">
-          <svg
-            viewBox="0 0 1440 90"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className="w-full h-10 sm:h-14 md:h-16"
-            preserveAspectRatio="none"
-          >
-            <path
-              d="M0,32 C360,75 720,10 1080,48 C1260,66 1380,38 1440,32 L1440,90 L0,90 Z"
-              fill="#0284c7"
-              opacity="0.25"
-            />
-            <path
-              d="M0,48 C320,85 700,24 1060,58 C1240,74 1360,52 1440,48 L1440,90 L0,90 Z"
-              fill="white"
-            />
-          </svg>
-        </div>
-      </section>
-
-      {/* ================= TRENDING CATEGORIES ACCORDING TO USER LOCATION ================= */}
-      <TrendingLocationCategories location={userLocation} />
-
-      {/* ================= 2. FEATURED PRODUCTS (CURATED TABS - NEVER ALL CATEGORIES) ================= */}
-      <section id="products" className="py-14 sm:py-18 border-b border-border/40 bg-muted/15">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          {/* Section Header */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div className="space-y-1.5 max-w-2xl">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">
-                <Package className="size-3.5" />
-                <span>Local Stores &amp; Products</span>
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-                Trending Products in {displayCity}
-              </h2>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                Compare live prices across verified local stores in {displayCity} with doorstep delivery or counter pickup.
-              </p>
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className="text-xs font-bold h-9 px-4 rounded-xl border-primary/30 text-primary hover:bg-primary/10 transition-colors shrink-0"
-            >
-              <Link
-                href={buildDiscoverySeoUrl({
-                  type: "product",
-                  location: userLocation && userLocation !== "All Locations" ? userLocation : null,
-                })}
-                className="inline-flex items-center gap-1.5"
-              >
-                <span>View All Products</span>
-                <ArrowRight className="size-3.5" />
-              </Link>
-            </Button>
-          </div>
-
-          {/* Curated Product Category Tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-            {CURATED_PRODUCT_TABS.map((tab) => {
-              const isSelected = selectedProductTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setSelectedProductTab(tab.id)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${isSelected
-                    ? "bg-primary text-primary-foreground shadow-xs"
-                    : "bg-card hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60"
-                    }`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Products Grid: Enforces Exactly 4 Cards Per Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-            {displayedProducts.map((p) => {
-              const priceNum = Number(p.seller_info?.price ?? p.suggested_price_inr ?? 0);
-              const storeName = p.seller_info?.business_name || "Pandeypur Stores Network";
-              const imageUrl = p.default_image_url || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60";
-
-              return (
-                <Card
-                  key={p.id}
-                  className="group rounded-2xl border border-border/60 bg-card overflow-hidden hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between"
-                >
-                  <CardContent className="p-4 space-y-3 flex-1 flex flex-col justify-between">
-                    <div className="space-y-3">
-                      {/* Product Image & Badges */}
-                      <div className="relative aspect-4/3 w-full rounded-xl overflow-hidden bg-muted border border-border/40">
-                        <Image
-                          src={imageUrl}
-                          alt={p.name}
-                          fill
-                          className="object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        <div className="absolute top-2 left-2 flex items-center gap-1.5">
-                          <Badge className="bg-background/90 text-foreground text-[10px] font-bold backdrop-blur-xs shadow-2xs border border-border/50">
-                            {p.brand || "Verified Brand"}
-                          </Badge>
-                        </div>
-                        {p.category_name && (
-                          <div className="absolute bottom-2 left-2">
-                            <Badge variant="secondary" className="text-[10px] font-semibold bg-background/80 backdrop-blur-xs">
-                              {p.category_name}
-                            </Badge>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Product Title & Store */}
-                      <div className="space-y-1">
-                        <h3 className="font-bold text-sm text-foreground group-hover:text-primary transition-colors line-clamp-2 leading-snug">
-                          {p.name}
-                        </h3>
-                        <p className="text-[11px] text-muted-foreground flex items-center gap-1 truncate">
-                          <Store className="size-3 text-primary shrink-0" />
-                          <span>{storeName}</span>
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Pricing & Actions */}
-                    <div className="space-y-3 pt-2 border-t border-border/40">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="text-base font-black text-foreground">
-                            ₹{priceNum.toLocaleString("en-IN")}
-                          </div>
-                          <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-0.5">
-                            <TrendingDown className="size-2.5" />
-                            <span>18 Local Stores Selling</span>
-                          </div>
-                        </div>
-
-                        {/* Multi-Store Compare Button */}
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedProductForStores({ id: p.id, name: p.name });
-                            setProductStoresDialogOpen(true);
-                          }}
-                          className="h-8 px-2.5 text-[11px] font-bold rounded-lg border border-border/60 gap-1 cursor-pointer hover:border-primary/40"
-                        >
-                          <span>Compare Stores</span>
-                          <ChevronRight className="size-3" />
-                        </Button>
-                      </div>
-
-                      {/* Direct Add to Cart */}
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => handleAddToCart(p)}
-                        className="w-full h-9 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 shadow-2xs cursor-pointer"
-                      >
-                        <ShoppingCart className="size-3.5" />
-                        <span>Add to Cart</span>
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ================= 3. ON-DEMAND LOCAL SERVICES ================= */}
-      <section id="services" className="py-14 sm:py-18 border-b border-border/40 bg-background">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div className="space-y-1.5 max-w-2xl">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                <Wrench className="size-3.5" />
-                <span>On-Demand Services</span>
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-                Professional &amp; Home Services in {displayCity}
-              </h2>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                Book certified technicians, mentors, and corporate specialists in {displayCity} with transparent upfront pricing.
-              </p>
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className="text-xs font-bold h-9 px-4 rounded-xl border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors shrink-0"
-            >
-              <Link
-                href={buildDiscoverySeoUrl({
-                  type: "service",
-                  location: userLocation && userLocation !== "All Locations" ? userLocation : null,
-                })}
-                className="inline-flex items-center gap-1.5"
-              >
-                <span>View All Services</span>
-                <ArrowRight className="size-3.5" />
-              </Link>
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-            {services.slice(0, 8).map((s) => {
-              const price = Number(s.suggested_price_inr ?? 0);
-              const duration = s.estimated_duration || "60 mins";
-              const imageUrl = s.default_image_url || "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=500&auto=format&fit=crop&q=60";
-
-              return (
-                <Card
-                  key={s.id}
-                  className="group rounded-2xl border border-border/60 bg-card overflow-hidden hover:border-emerald-500/40 hover:shadow-md transition-all flex flex-col justify-between"
-                >
-                  <CardContent className="p-4 space-y-3 flex-1 flex flex-col justify-between">
-                    <div className="space-y-3">
-                      <div className="relative aspect-16/10 w-full rounded-xl overflow-hidden bg-muted border border-border/40">
-                        <Image
-                          src={imageUrl}
-                          alt={s.name}
-                          fill
-                          className="object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        <div className="absolute top-2 left-2">
-                          <Badge className="bg-background/90 text-foreground text-[10px] font-bold backdrop-blur-xs border border-border/50">
-                            {s.category_name || "General Service"}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <h3 className="font-bold text-sm text-foreground group-hover:text-primary transition-colors line-clamp-2 leading-snug">
-                          {s.name}
-                        </h3>
-                        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                          {s.description || "Certified expert service with guaranteed satisfaction and flexible appointment scheduling."}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3 pt-2 border-t border-border/40">
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <Clock className="size-3.5 text-primary" />
-                          <span>{duration}</span>
-                        </div>
-                        <div className="text-sm font-black text-foreground">
-                          {price > 0 ? `₹${price.toLocaleString("en-IN")}` : "Free Consultation"}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedServiceForStores({ id: s.id, name: s.name });
-                            setServiceStoresDialogOpen(true);
-                          }}
-                          className="h-8 text-[11px] font-bold rounded-lg border-border/70 hover:border-primary/50 cursor-pointer"
-                        >
-                          Compare (19)
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedServiceForBooking({
-                              id: s.id,
-                              name: s.name,
-                              price: price,
-                              regular_price: price,
-                              estimated_duration: duration,
-                              default_image_url: imageUrl,
-                            });
-                            setServiceBookingDialogOpen(true);
-                          }}
-                          className="h-8 text-[11px] font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white gap-1 cursor-pointer"
-                        >
-                          <Calendar className="size-3" />
-                          <span>Book</span>
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ================= 4. VERIFIED PROFESSIONALS SPOTLIGHT ================= */}
-      <section id="professionals" className="py-14 sm:py-18 border-b border-border/40 bg-muted/15">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div className="space-y-1.5 max-w-2xl">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                <UserCheck className="size-3.5" />
-                <span>Verified Experts</span>
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-                Consult Verified Professionals in {displayCity}
-              </h2>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                Connect directly with certified doctors, legal consultants, private tutors, and specialists in {displayCity}.
-              </p>
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className="text-xs font-bold h-9 px-4 rounded-xl border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 transition-colors shrink-0"
-            >
-              <Link
-                href={buildDiscoverySeoUrl({
-                  type: "professional",
-                  location: userLocation && userLocation !== "All Locations" ? userLocation : null,
-                })}
-                className="inline-flex items-center gap-1.5"
-              >
-                <span>Browse All Professionals</span>
-                <ArrowRight className="size-3.5" />
-              </Link>
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {professionals.slice(0, 4).map((prof) => {
-              const avatar = prof.avatar_url || "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80";
-
-              return (
-                <Card
-                  key={prof.id}
-                  className="rounded-2xl border border-border/60 bg-card p-5 space-y-4 hover:border-blue-500/40 hover:shadow-md transition-all flex flex-col justify-between"
-                >
-                  <div className="space-y-3.5 text-center flex flex-col items-center">
-                    <div className="relative size-20 rounded-full overflow-hidden border-2 border-primary/20 bg-muted">
-                      <Image src={avatar} alt={prof.name} fill className="object-cover" />
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-center gap-1">
-                        <h3 className="font-bold text-sm text-foreground truncate">{prof.name}</h3>
-                        {prof.is_verified && <CheckCircle2 className="size-3.5 text-blue-500 shrink-0" />}
-                      </div>
-                      <Badge variant="secondary" className="text-[10px] font-bold text-primary bg-primary/10">
-                        {prof.profession_type || prof.category_name || "Specialist"}
-                      </Badge>
-                      <p className="text-[11px] text-muted-foreground pt-1 line-clamp-2">
-                        {prof.about || "Dedicated professional committed to delivering high quality consultations."}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2.5 pt-3 border-t border-border/40 text-xs">
-                    <div className="flex items-center justify-between text-muted-foreground text-[11px]">
-                      <span>Experience:</span>
-                      <span className="font-semibold text-foreground">{prof.experience_years || 5}+ Years</span>
-                    </div>
-                    <div className="flex items-center justify-between text-muted-foreground text-[11px]">
-                      <span>Location:</span>
-                      <span className="font-semibold text-foreground">{prof.city || "Varanasi"}</span>
-                    </div>
-                    <Button
-                      size="sm"
-                      asChild
-                      className="w-full h-8 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => router.push(targetUrl)}
+                      className="p-3 rounded-2xl border border-white/80 bg-white/85 hover:bg-white hover:border-sky-300 hover:scale-[1.03] active:scale-[0.98] backdrop-blur-md flex items-center gap-2.5 shadow-[0_4px_16px_rgba(0,0,0,0.06)] transition-all cursor-pointer text-left group"
+                      title={`Explore ${stat.label}${userLocation && userLocation !== "All Locations" ? ` in ${userLocation}` : ""}`}
                     >
-                      <Link href={`/explore?type=professional&q=${encodeURIComponent(prof.name)}`}>
-                        View Profile
-                      </Link>
-                    </Button>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ================= 5. ACCREDITED COURSES & DEGREE PROGRAMS ================= */}
-      <section id="courses" className="py-14 sm:py-18 border-b border-border/40 bg-background">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div className="space-y-1.5 max-w-2xl">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                <GraduationCap className="size-3.5" />
-                <span>Academic &amp; Skill Programs</span>
+                      <div className="size-8 rounded-xl bg-sky-500/10 text-sky-600 group-hover:bg-sky-500 group-hover:text-white flex items-center justify-center shrink-0 transition-colors">
+                        <Icon className="size-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-black text-slate-900 group-hover:text-sky-600 transition-colors">{stat.value}</div>
+                        <div className="text-[10px] text-slate-600 group-hover:text-slate-900 truncate font-medium">{stat.label}</div>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-                Certified Courses &amp; Degree Programs in {displayCity}
-              </h2>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                Enroll in verified skill diplomas, college degrees, and industry-recognized certifications in {displayCity}.
-              </p>
             </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className="text-xs font-bold h-9 px-4 rounded-xl border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors shrink-0"
-            >
-              <Link
-                href={buildDiscoverySeoUrl({
-                  type: "course",
-                  location: userLocation && userLocation !== "All Locations" ? userLocation : null,
-                })}
-                className="inline-flex items-center gap-1.5"
+            {/* Curved Wave Divider at Bottom of Hero */}
+            <div className="absolute -bottom-1 left-0 right-0 overflow-hidden leading-none pointer-events-none z-10">
+              <svg
+                viewBox="0 0 1440 90"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                className="w-full h-10 sm:h-14 md:h-16"
+                preserveAspectRatio="none"
               >
-                <span>View All Courses</span>
-                <ArrowRight className="size-3.5" />
-              </Link>
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-            {courses.slice(0, 4).map((c) => {
-              const durationStr = `${c.duration_value || 1} ${c.duration_unit?.replace("_", " ") || "Year"}`;
-
-              return (
-                <Card
-                  key={c.id}
-                  className="rounded-2xl border border-border/60 bg-card p-5 space-y-4 hover:border-amber-500/40 hover:shadow-md transition-all flex flex-col justify-between"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-[10px] font-bold">
-                        {c.authority_type || "Certified Program"}
-                      </Badge>
-                      <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
-                        <Clock className="size-3" />
-                        {durationStr}
-                      </span>
-                    </div>
-
-                    <h3 className="font-bold text-base text-foreground leading-snug line-clamp-2">
-                      {c.name}
-                    </h3>
-
-                    <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
-                      {c.description || "Comprehensive academic syllabus and live project training designed to accelerate your career."}
-                    </p>
-                  </div>
-
-                  <div className="space-y-3 pt-3 border-t border-border/40">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Seats Available:</span>
-                      <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                        {c.seats_available || 60} Seats
-                      </span>
-                    </div>
-
-                    <Button
-                      size="sm"
-                      asChild
-                      className="w-full h-9 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
-                    >
-                      <Link href={`/courses/${c.slug || c.id}`}>
-                        <span>Buy Now</span>
-                        <ChevronRight className="size-3.5" />
-                      </Link>
-                    </Button>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ================= 6. LATEST CAREER & JOB OPENINGS ================= */}
-      <section id="jobs" className="py-14 sm:py-18 border-b border-border/40 bg-muted/15">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div className="space-y-1.5 max-w-2xl">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                <Briefcase className="size-3.5" />
-                <span>Career Opportunities</span>
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-                Active Job Openings in {displayCity}
-              </h2>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                Apply directly to verified openings in {displayCity} across medical, tech, retail management, and academics.
-              </p>
+                <path
+                  d="M0,32 C360,75 720,10 1080,48 C1260,66 1380,38 1440,32 L1440,90 L0,90 Z"
+                  fill="#0284c7"
+                  opacity="0.25"
+                />
+                <path
+                  d="M0,48 C320,85 700,24 1060,58 C1240,74 1360,52 1440,48 L1440,90 L0,90 Z"
+                  fill="white"
+                />
+              </svg>
             </div>
+          </section>
 
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className="text-xs font-bold h-9 px-4 rounded-xl border-purple-500/30 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 transition-colors shrink-0"
-            >
-              <Link
-                href={buildDiscoverySeoUrl({
-                  type: "job",
-                  location: userLocation && userLocation !== "All Locations" ? userLocation : null,
-                })}
-                className="inline-flex items-center gap-1.5"
-              >
-                <span>View All Openings</span>
-                <ArrowRight className="size-3.5" />
-              </Link>
-            </Button>
-          </div>
+          {/* ================= TRENDING CATEGORIES ACCORDING TO USER LOCATION ================= */}
+          <TrendingLocationCategories location={userLocation} />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-            {jobs.slice(0, 4).map((job) => (
-              <Card
-                key={job.id}
-                className="rounded-2xl border border-border/60 bg-card p-5 space-y-4 hover:border-purple-500/40 hover:shadow-md transition-all flex flex-col justify-between"
-              >
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <Badge variant="outline" className="text-[10px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20">
-                      {job.department || "General"}
-                    </Badge>
-                    <span className="text-[11px] font-semibold text-muted-foreground">
-                      {job.work_mode || "On-site"}
-                    </span>
+          {/* ================= 2. FEATURED PRODUCTS (CURATED TABS - NEVER ALL CATEGORIES) ================= */}
+          <section id="products" className="py-14 sm:py-18 border-b border-border/40 bg-muted/15">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+              {/* Section Header */}
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div className="space-y-1.5 max-w-2xl">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">
+                    <Package className="size-3.5" />
+                    <span>Local Stores &amp; Products</span>
                   </div>
-
-                  <h3 className="font-bold text-base text-foreground leading-snug line-clamp-2">
-                    {job.title || job.name}
-                  </h3>
-
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Building2 className="size-3.5 text-primary shrink-0" />
-                    <span>{job.company_name || "Verified Organization"}</span>
+                  <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
+                    Trending Products in {displayCity}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    Compare live prices across verified local stores in {displayCity} with doorstep delivery or counter pickup.
                   </p>
                 </div>
 
-                <div className="space-y-3 pt-3 border-t border-border/40 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Salary:</span>
-                    <span className="font-black text-foreground">{job.salary_range || "Negotiable"}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Location:</span>
-                    <span className="font-semibold text-foreground">{job.location || "Varanasi / Delhi"}</span>
-                  </div>
-
-                  <Button
-                    size="sm"
-                    asChild
-                    className="w-full h-8 text-xs font-bold rounded-xl bg-purple-600 hover:bg-purple-700 text-white gap-1"
-                  >
-                    <Link href={`/jobs/${job.slug || job.id}`}>
-                      <span>Apply Now</span>
-                      <ArrowRight className="size-3" />
-                    </Link>
-                  </Button>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ================= 7. LOCAL STORES NETWORK ================= */}
-      <section id="stores" className="py-14 sm:py-18 border-b border-border/40 bg-background">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div className="space-y-1.5 max-w-2xl">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">
-                <Store className="size-3.5" />
-                <span>Neighborhood Commerce</span>
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-                Shop from Verified {displayCity} Stores
-              </h2>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                Support your neighborhood businesses situated in {displayCity} with guaranteed quality.
-              </p>
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className="text-xs font-bold h-9 px-4 rounded-xl border-primary/30 text-primary hover:bg-primary/10 transition-colors shrink-0"
-            >
-              <Link
-                href={buildDiscoverySeoUrl({
-                  type: "business",
-                  location: userLocation && userLocation !== "All Locations" ? userLocation : null,
-                })}
-                className="inline-flex items-center gap-1.5"
-              >
-                <span>All {businesses.length > 0 ? `${businesses.length}+` : "Verified"} Stores</span>
-                <ArrowRight className="size-3.5" />
-              </Link>
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-            {(businesses.length > 0 ? businesses.slice(0, 8) : [
-              {
-                id: 25,
-                name: "Pandeypur Mega Department Store",
-                category_name: "Supermarket & Groceries",
-                address: "Pandeypur Main Chauraha, Varanasi",
-                city: "Varanasi",
-                phone: "+91 94152 10103",
-                slug: "pandeypur-mega-department-store",
-              },
-              {
-                id: 28,
-                name: "Shiv Ganga Electronics & Appliances",
-                category_name: "Consumer Electronics",
-                address: "Near Pandeypur Flyover, Varanasi",
-                city: "Varanasi",
-                phone: "+91 94152 10106",
-                slug: "shiv-ganga-electronics-appliances",
-              },
-              {
-                id: 27,
-                name: "Kashi Vishwanath Book Depot & Stationery",
-                category_name: "Books & Office Supplies",
-                address: "Station Road, Pandeypur, Varanasi",
-                city: "Varanasi",
-                phone: "+91 94152 10105",
-                slug: "kashi-vishwanath-book-depot",
-              },
-              {
-                id: 10,
-                name: "Kisan Fresh Mandi",
-                category_name: "Organic Fruits & Vegetables",
-                address: "Hukulganj Road, Pandeypur, Varanasi",
-                city: "Varanasi",
-                phone: "+91 94152 10101",
-                slug: "kisan-fresh-mandi",
-              },
-              {
-                id: 29,
-                name: "Aarogya Pharmacy & Wellness",
-                category_name: "Medicines & Health Supplements",
-                address: "Premchand Nagar Colony, Pandeypur",
-                city: "Varanasi",
-                phone: "+91 94152 10107",
-                slug: "aarogya-pharmacy-wellness",
-              },
-              {
-                id: 26,
-                name: "Banaras Sweets & Dairy Parlour",
-                category_name: "Fresh Dairy & Sweets",
-                address: "Panchkroshi Marg, Pandeypur, Varanasi",
-                city: "Varanasi",
-                phone: "+91 94152 10104",
-                slug: "banaras-sweets-dairy-parlour",
-              },
-              {
-                id: 31,
-                name: "Maa Sharda Academic & Coaching Hub",
-                category_name: "Coaching & Test Prep",
-                address: "Pandeypur Campus, Varanasi",
-                city: "Varanasi",
-                phone: "+91 98765 43210",
-                slug: "maa-sharda-academic-coaching-hub",
-              },
-              {
-                id: 32,
-                name: "Kashi Wellness & Spa Center",
-                category_name: "Salon & Personal Care",
-                address: "Ring Road, Pandeypur, Varanasi",
-                city: "Varanasi",
-                phone: "+91 94152 10109",
-                slug: "kashi-wellness-spa-center",
-              },
-            ]).map((store: any) => {
-              const storeAddress = store.address || [store.locality, store.city, store.state].filter(Boolean).join(", ") || `${displayCity}`;
-              const storeCategory = store.category_name || store.business_type || "Verified Enterprise";
-              const storeLink = store.slug ? `/business/${store.slug}` : `/business/${store.id}`;
-              return (
-                <Card
-                  key={store.id}
-                  className="rounded-2xl border border-border/60 bg-card p-5 space-y-3.5 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between"
+                <Button
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  className="text-xs font-bold h-9 px-4 rounded-xl border-primary/30 text-primary hover:bg-primary/10 transition-colors shrink-0"
                 >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Badge variant="secondary" className="text-[10px] font-semibold">
-                        {storeCategory}
-                      </Badge>
-                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                        <span className="size-1.5 rounded-full bg-emerald-500" />
-                        Open Now
-                      </span>
+                  <Link
+                    href={buildDiscoverySeoUrl({
+                      type: "product",
+                      location: userLocation && userLocation !== "All Locations" ? userLocation : null,
+                    })}
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    <span>View All Products</span>
+                    <ArrowRight className="size-3.5" />
+                  </Link>
+                </Button>
+              </div>
+
+              {/* Curated Product Category Tabs */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                {CURATED_PRODUCT_TABS.map((tab) => {
+                  const isSelected = selectedProductTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setSelectedProductTab(tab.id)}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${isSelected
+                        ? "bg-primary text-primary-foreground shadow-xs"
+                        : "bg-card hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60"
+                        }`}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Products Grid: Enforces Exactly 4 Cards Per Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                {displayedProducts.map((p) => {
+                  const priceNum = Number(p.seller_info?.price ?? p.suggested_price_inr ?? 0);
+                  const storeName = p.seller_info?.business_name || "Pandeypur Stores Network";
+                  const imageUrl = p.default_image_url || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60";
+
+                  return (
+                    <Card
+                      key={p.id}
+                      className="group rounded-2xl border border-border/60 bg-card overflow-hidden hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between"
+                    >
+                      <CardContent className="p-4 space-y-3 flex-1 flex flex-col justify-between">
+                        <div className="space-y-3">
+                          {/* Product Image & Badges */}
+                          <div className="relative aspect-4/3 w-full rounded-xl overflow-hidden bg-muted border border-border/40">
+                            <Image
+                              src={imageUrl}
+                              alt={p.name}
+                              fill
+                              className="object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                            <div className="absolute top-2 left-2 flex items-center gap-1.5">
+                              <Badge className="bg-background/90 text-foreground text-[10px] font-bold backdrop-blur-xs shadow-2xs border border-border/50">
+                                {p.brand || "Verified Brand"}
+                              </Badge>
+                            </div>
+                            {p.category_name && (
+                              <div className="absolute bottom-2 left-2">
+                                <Badge variant="secondary" className="text-[10px] font-semibold bg-background/80 backdrop-blur-xs">
+                                  {p.category_name}
+                                </Badge>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Product Title & Store */}
+                          <div className="space-y-1">
+                            <h3 className="font-bold text-sm text-foreground group-hover:text-primary transition-colors line-clamp-2 leading-snug">
+                              {p.name}
+                            </h3>
+                            <p className="text-[11px] text-muted-foreground flex items-center gap-1 truncate">
+                              <Store className="size-3 text-primary shrink-0" />
+                              <span>{storeName}</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Pricing & Actions */}
+                        <div className="space-y-3 pt-2 border-t border-border/40">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-base font-black text-foreground">
+                                ₹{priceNum.toLocaleString("en-IN")}
+                              </div>
+                              <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-0.5">
+                                <TrendingDown className="size-2.5" />
+                                <span>18 Local Stores Selling</span>
+                              </div>
+                            </div>
+
+                            {/* Multi-Store Compare Button */}
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedProductForStores({ id: p.id, name: p.name });
+                                setProductStoresDialogOpen(true);
+                              }}
+                              className="h-8 px-2.5 text-[11px] font-bold rounded-lg border border-border/60 gap-1 cursor-pointer hover:border-primary/40"
+                            >
+                              <span>Compare Stores</span>
+                              <ChevronRight className="size-3" />
+                            </Button>
+                          </div>
+
+                          {/* Direct Add to Cart */}
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => handleAddToCart(p)}
+                            className="w-full h-9 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 shadow-2xs cursor-pointer"
+                          >
+                            <ShoppingCart className="size-3.5" />
+                            <span>Add to Cart</span>
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          {/* ================= 3. ON-DEMAND LOCAL SERVICES ================= */}
+          <section id="services" className="py-14 sm:py-18 border-b border-border/40 bg-background">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div className="space-y-1.5 max-w-2xl">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    <Wrench className="size-3.5" />
+                    <span>On-Demand Services</span>
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
+                    Professional &amp; Home Services in {displayCity}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    Book certified technicians, mentors, and corporate specialists in {displayCity} with transparent upfront pricing.
+                  </p>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  className="text-xs font-bold h-9 px-4 rounded-xl border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors shrink-0"
+                >
+                  <Link
+                    href={buildDiscoverySeoUrl({
+                      type: "service",
+                      location: userLocation && userLocation !== "All Locations" ? userLocation : null,
+                    })}
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    <span>View All Services</span>
+                    <ArrowRight className="size-3.5" />
+                  </Link>
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                {services.slice(0, 8).map((s) => {
+                  const price = Number(s.suggested_price_inr ?? 0);
+                  const duration = s.estimated_duration || "60 mins";
+                  const imageUrl = s.default_image_url || "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=500&auto=format&fit=crop&q=60";
+
+                  return (
+                    <Card
+                      key={s.id}
+                      className="group rounded-2xl border border-border/60 bg-card overflow-hidden hover:border-emerald-500/40 hover:shadow-md transition-all flex flex-col justify-between"
+                    >
+                      <CardContent className="p-4 space-y-3 flex-1 flex flex-col justify-between">
+                        <div className="space-y-3">
+                          <div className="relative aspect-16/10 w-full rounded-xl overflow-hidden bg-muted border border-border/40">
+                            <Image
+                              src={imageUrl}
+                              alt={s.name}
+                              fill
+                              className="object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                            <div className="absolute top-2 left-2">
+                              <Badge className="bg-background/90 text-foreground text-[10px] font-bold backdrop-blur-xs border border-border/50">
+                                {s.category_name || "General Service"}
+                              </Badge>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <h3 className="font-bold text-sm text-foreground group-hover:text-primary transition-colors line-clamp-2 leading-snug">
+                              {s.name}
+                            </h3>
+                            <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                              {s.description || "Certified expert service with guaranteed satisfaction and flexible appointment scheduling."}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3 pt-2 border-t border-border/40">
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-1 text-muted-foreground">
+                              <Clock className="size-3.5 text-primary" />
+                              <span>{duration}</span>
+                            </div>
+                            <div className="text-sm font-black text-foreground">
+                              {price > 0 ? `₹${price.toLocaleString("en-IN")}` : "Free Consultation"}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedServiceForStores({ id: s.id, name: s.name });
+                                setServiceStoresDialogOpen(true);
+                              }}
+                              className="h-8 text-[11px] font-bold rounded-lg border-border/70 hover:border-primary/50 cursor-pointer"
+                            >
+                              Compare (19)
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedServiceForBooking({
+                                  id: s.id,
+                                  name: s.name,
+                                  price: price,
+                                  regular_price: price,
+                                  estimated_duration: duration,
+                                  default_image_url: imageUrl,
+                                });
+                                setServiceBookingDialogOpen(true);
+                              }}
+                              className="h-8 text-[11px] font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white gap-1 cursor-pointer"
+                            >
+                              <Calendar className="size-3" />
+                              <span>Book</span>
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          {/* ================= 4. VERIFIED PROFESSIONALS SPOTLIGHT ================= */}
+          <section id="professionals" className="py-14 sm:py-18 border-b border-border/40 bg-muted/15">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div className="space-y-1.5 max-w-2xl">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                    <UserCheck className="size-3.5" />
+                    <span>Verified Experts</span>
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
+                    Consult Verified Professionals in {displayCity}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    Connect directly with certified doctors, legal consultants, private tutors, and specialists in {displayCity}.
+                  </p>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  className="text-xs font-bold h-9 px-4 rounded-xl border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 transition-colors shrink-0"
+                >
+                  <Link
+                    href={buildDiscoverySeoUrl({
+                      type: "professional",
+                      location: userLocation && userLocation !== "All Locations" ? userLocation : null,
+                    })}
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    <span>Browse All Professionals</span>
+                    <ArrowRight className="size-3.5" />
+                  </Link>
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                {professionals.slice(0, 4).map((prof) => {
+                  const avatar = prof.avatar_url || "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80";
+
+                  return (
+                    <Card
+                      key={prof.id}
+                      className="rounded-2xl border border-border/60 bg-card p-5 space-y-4 hover:border-blue-500/40 hover:shadow-md transition-all flex flex-col justify-between"
+                    >
+                      <div className="space-y-3.5 text-center flex flex-col items-center">
+                        <div className="relative size-20 rounded-full overflow-hidden border-2 border-primary/20 bg-muted">
+                          <Image src={avatar} alt={prof.name} fill className="object-cover" />
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-center gap-1">
+                            <h3 className="font-bold text-sm text-foreground truncate">{prof.name}</h3>
+                            {prof.is_verified && <CheckCircle2 className="size-3.5 text-blue-500 shrink-0" />}
+                          </div>
+                          <Badge variant="secondary" className="text-[10px] font-bold text-primary bg-primary/10">
+                            {prof.profession_type || prof.category_name || "Specialist"}
+                          </Badge>
+                          <p className="text-[11px] text-muted-foreground pt-1 line-clamp-2">
+                            {prof.about || "Dedicated professional committed to delivering high quality consultations."}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2.5 pt-3 border-t border-border/40 text-xs">
+                        <div className="flex items-center justify-between text-muted-foreground text-[11px]">
+                          <span>Experience:</span>
+                          <span className="font-semibold text-foreground">{prof.experience_years || 5}+ Years</span>
+                        </div>
+                        <div className="flex items-center justify-between text-muted-foreground text-[11px]">
+                          <span>Location:</span>
+                          <span className="font-semibold text-foreground">{prof.city || "Varanasi"}</span>
+                        </div>
+                        <Button
+                          size="sm"
+                          asChild
+                          className="w-full h-8 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                          <Link href={`/explore?type=professional&q=${encodeURIComponent(prof.name)}`}>
+                            View Profile
+                          </Link>
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          {/* ================= 5. ACCREDITED COURSES & DEGREE PROGRAMS ================= */}
+          <section id="courses" className="py-14 sm:py-18 border-b border-border/40 bg-background">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div className="space-y-1.5 max-w-2xl">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    <GraduationCap className="size-3.5" />
+                    <span>Academic &amp; Skill Programs</span>
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
+                    Certified Courses &amp; Degree Programs in {displayCity}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    Enroll in verified skill diplomas, college degrees, and industry-recognized certifications in {displayCity}.
+                  </p>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  className="text-xs font-bold h-9 px-4 rounded-xl border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors shrink-0"
+                >
+                  <Link
+                    href={buildDiscoverySeoUrl({
+                      type: "course",
+                      location: userLocation && userLocation !== "All Locations" ? userLocation : null,
+                    })}
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    <span>View All Courses</span>
+                    <ArrowRight className="size-3.5" />
+                  </Link>
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                {courses.slice(0, 4).map((c) => {
+                  const durationStr = `${c.duration_value || 1} ${c.duration_unit?.replace("_", " ") || "Year"}`;
+
+                  return (
+                    <Card
+                      key={c.id}
+                      className="rounded-2xl border border-border/60 bg-card p-5 space-y-4 hover:border-amber-500/40 hover:shadow-md transition-all flex flex-col justify-between"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-[10px] font-bold">
+                            {c.authority_type || "Certified Program"}
+                          </Badge>
+                          <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+                            <Clock className="size-3" />
+                            {durationStr}
+                          </span>
+                        </div>
+
+                        <h3 className="font-bold text-base text-foreground leading-snug line-clamp-2">
+                          {c.name}
+                        </h3>
+
+                        <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+                          {c.description || "Comprehensive academic syllabus and live project training designed to accelerate your career."}
+                        </p>
+                      </div>
+
+                      <div className="space-y-3 pt-3 border-t border-border/40">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">Seats Available:</span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                            {c.seats_available || 60} Seats
+                          </span>
+                        </div>
+
+                        <Button
+                          size="sm"
+                          asChild
+                          className="w-full h-9 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
+                        >
+                          <Link href={`/courses/${c.slug || c.id}`}>
+                            <span>Buy Now</span>
+                            <ChevronRight className="size-3.5" />
+                          </Link>
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          {/* ================= 6. LATEST CAREER & JOB OPENINGS ================= */}
+          <section id="jobs" className="py-14 sm:py-18 border-b border-border/40 bg-muted/15">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div className="space-y-1.5 max-w-2xl">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                    <Briefcase className="size-3.5" />
+                    <span>Career Opportunities</span>
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
+                    Active Job Openings in {displayCity}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    Apply directly to verified openings in {displayCity} across medical, tech, retail management, and academics.
+                  </p>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  className="text-xs font-bold h-9 px-4 rounded-xl border-purple-500/30 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 transition-colors shrink-0"
+                >
+                  <Link
+                    href={buildDiscoverySeoUrl({
+                      type: "job",
+                      location: userLocation && userLocation !== "All Locations" ? userLocation : null,
+                    })}
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    <span>View All Openings</span>
+                    <ArrowRight className="size-3.5" />
+                  </Link>
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                {jobs.slice(0, 4).map((job) => (
+                  <Card
+                    key={job.id}
+                    className="rounded-2xl border border-border/60 bg-card p-5 space-y-4 hover:border-purple-500/40 hover:shadow-md transition-all flex flex-col justify-between"
+                  >
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <Badge variant="outline" className="text-[10px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20">
+                          {job.department || "General"}
+                        </Badge>
+                        <span className="text-[11px] font-semibold text-muted-foreground">
+                          {job.work_mode || "On-site"}
+                        </span>
+                      </div>
+
+                      <h3 className="font-bold text-base text-foreground leading-snug line-clamp-2">
+                        {job.title || job.name}
+                      </h3>
+
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Building2 className="size-3.5 text-primary shrink-0" />
+                        <span>{job.company_name || "Verified Organization"}</span>
+                      </p>
                     </div>
 
-                    <h3 className="font-bold text-base text-foreground leading-snug">
-                      {store.name}
-                    </h3>
+                    <div className="space-y-3 pt-3 border-t border-border/40 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Salary:</span>
+                        <span className="font-black text-foreground">{job.salary_range || "Negotiable"}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Location:</span>
+                        <span className="font-semibold text-foreground">{job.location || "Varanasi / Delhi"}</span>
+                      </div>
 
-                    <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
-                      <MapPin className="size-3.5 text-primary shrink-0" />
-                      <span className="truncate">{storeAddress}</span>
-                    </p>
-                    {store.phone && (
-                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                        <Phone className="size-3.5 text-primary shrink-0" />
-                        <span>{store.phone}</span>
-                      </p>
-                    )}
+                      <Button
+                        size="sm"
+                        asChild
+                        className="w-full h-8 text-xs font-bold rounded-xl bg-purple-600 hover:bg-purple-700 text-white gap-1"
+                      >
+                        <Link href={`/jobs/${job.slug || job.id}`}>
+                          <span>Apply Now</span>
+                          <ArrowRight className="size-3" />
+                        </Link>
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* ================= 7. LOCAL STORES NETWORK ================= */}
+          <section id="stores" className="py-14 sm:py-18 border-b border-border/40 bg-background">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div className="space-y-1.5 max-w-2xl">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">
+                    <Store className="size-3.5" />
+                    <span>Neighborhood Commerce</span>
                   </div>
-
-                  <Button
-                    size="sm"
-                    asChild
-                    className="w-full h-8 text-xs font-bold rounded-xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20"
-                  >
-                    <Link href={storeLink}>
-                      Visit Store Profile →
-                    </Link>
-                  </Button>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ================= 8. WHY CHOOSE EDUBIRD PLATFORM ================= */}
-      <section className="py-14 sm:py-18 bg-muted/15">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
-          <div className="text-center max-w-2xl mx-auto space-y-2">
-            <Badge variant="outline" className="text-xs font-bold text-primary bg-primary/10 border-primary/20">
-              Platform Guarantee
-            </Badge>
-            <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
-              Why Thousands Trust EduBird
-            </h2>
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              Built to make local commerce, skill education, and professional consultations transparent and effortless.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {[
-              {
-                title: "18+ Verified Stores",
-                desc: "Compare identical goods across local stores and buy at the lowest verified market price.",
-                icon: Store,
-              },
-              {
-                title: "100% Vetted Profiles",
-                desc: "Every professional and service provider undergoes credential verification before listing.",
-                icon: ShieldCheck,
-              },
-              {
-                title: "Fast Local Delivery",
-                desc: "Same-day delivery and convenient store counter pickup across Pandeypur and Varanasi.",
-                icon: Zap,
-              },
-              {
-                title: "Direct Support & Return",
-                desc: "Dedicated support team ensuring smooth order tracking, refunds, and resolution.",
-                icon: CheckCircle2,
-              },
-            ].map((feature, i) => {
-              const Icon = feature.icon;
-              return (
-                <div key={i} className="p-5 rounded-2xl border border-border/60 bg-card space-y-2.5 text-center flex flex-col items-center">
-                  <div className="size-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                    <Icon className="size-6" />
-                  </div>
-                  <h3 className="font-bold text-sm text-foreground">{feature.title}</h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{feature.desc}</p>
+                  <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
+                    Shop from Verified {displayCity} Stores
+                  </h2>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    Support your neighborhood businesses situated in {displayCity} with guaranteed quality.
+                  </p>
                 </div>
-              );
-            })}
-          </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  className="text-xs font-bold h-9 px-4 rounded-xl border-primary/30 text-primary hover:bg-primary/10 transition-colors shrink-0"
+                >
+                  <Link
+                    href={buildDiscoverySeoUrl({
+                      type: "business",
+                      location: userLocation && userLocation !== "All Locations" ? userLocation : null,
+                    })}
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    <span>All {businesses.length > 0 ? `${businesses.length}+` : "Verified"} Stores</span>
+                    <ArrowRight className="size-3.5" />
+                  </Link>
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                {(businesses.length > 0 ? businesses.slice(0, 8) : [
+                  {
+                    id: 25,
+                    name: "Pandeypur Mega Department Store",
+                    category_name: "Supermarket & Groceries",
+                    address: "Pandeypur Main Chauraha, Varanasi",
+                    city: "Varanasi",
+                    phone: "+91 94152 10103",
+                    slug: "pandeypur-mega-department-store",
+                  },
+                  {
+                    id: 28,
+                    name: "Shiv Ganga Electronics & Appliances",
+                    category_name: "Consumer Electronics",
+                    address: "Near Pandeypur Flyover, Varanasi",
+                    city: "Varanasi",
+                    phone: "+91 94152 10106",
+                    slug: "shiv-ganga-electronics-appliances",
+                  },
+                  {
+                    id: 27,
+                    name: "Kashi Vishwanath Book Depot & Stationery",
+                    category_name: "Books & Office Supplies",
+                    address: "Station Road, Pandeypur, Varanasi",
+                    city: "Varanasi",
+                    phone: "+91 94152 10105",
+                    slug: "kashi-vishwanath-book-depot",
+                  },
+                  {
+                    id: 10,
+                    name: "Kisan Fresh Mandi",
+                    category_name: "Organic Fruits & Vegetables",
+                    address: "Hukulganj Road, Pandeypur, Varanasi",
+                    city: "Varanasi",
+                    phone: "+91 94152 10101",
+                    slug: "kisan-fresh-mandi",
+                  },
+                  {
+                    id: 29,
+                    name: "Aarogya Pharmacy & Wellness",
+                    category_name: "Medicines & Health Supplements",
+                    address: "Premchand Nagar Colony, Pandeypur",
+                    city: "Varanasi",
+                    phone: "+91 94152 10107",
+                    slug: "aarogya-pharmacy-wellness",
+                  },
+                  {
+                    id: 26,
+                    name: "Banaras Sweets & Dairy Parlour",
+                    category_name: "Fresh Dairy & Sweets",
+                    address: "Panchkroshi Marg, Pandeypur, Varanasi",
+                    city: "Varanasi",
+                    phone: "+91 94152 10104",
+                    slug: "banaras-sweets-dairy-parlour",
+                  },
+                  {
+                    id: 31,
+                    name: "Maa Sharda Academic & Coaching Hub",
+                    category_name: "Coaching & Test Prep",
+                    address: "Pandeypur Campus, Varanasi",
+                    city: "Varanasi",
+                    phone: "+91 98765 43210",
+                    slug: "maa-sharda-academic-coaching-hub",
+                  },
+                  {
+                    id: 32,
+                    name: "Kashi Wellness & Spa Center",
+                    category_name: "Salon & Personal Care",
+                    address: "Ring Road, Pandeypur, Varanasi",
+                    city: "Varanasi",
+                    phone: "+91 94152 10109",
+                    slug: "kashi-wellness-spa-center",
+                  },
+                ]).map((store: any) => {
+                  const storeAddress = store.address || [store.locality, store.city, store.state].filter(Boolean).join(", ") || `${displayCity}`;
+                  const storeCategory = store.category_name || store.business_type || "Verified Enterprise";
+                  const storeLink = store.slug ? `/business/${store.slug}` : `/business/${store.id}`;
+                  return (
+                    <Card
+                      key={store.id}
+                      className="rounded-2xl border border-border/60 bg-card p-5 space-y-3.5 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Badge variant="secondary" className="text-[10px] font-semibold">
+                            {storeCategory}
+                          </Badge>
+                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                            <span className="size-1.5 rounded-full bg-emerald-500" />
+                            Open Now
+                          </span>
+                        </div>
+
+                        <h3 className="font-bold text-base text-foreground leading-snug">
+                          {store.name}
+                        </h3>
+
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
+                          <MapPin className="size-3.5 text-primary shrink-0" />
+                          <span className="truncate">{storeAddress}</span>
+                        </p>
+                        {store.phone && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                            <Phone className="size-3.5 text-primary shrink-0" />
+                            <span>{store.phone}</span>
+                          </p>
+                        )}
+                      </div>
+
+                      <Button
+                        size="sm"
+                        asChild
+                        className="w-full h-8 text-xs font-bold rounded-xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20"
+                      >
+                        <Link href={storeLink}>
+                          Visit Store Profile →
+                        </Link>
+                      </Button>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          {/* ================= 8. WHY CHOOSE EDUBIRD PLATFORM ================= */}
+          <section className="py-14 sm:py-18 bg-muted/15">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+              <div className="text-center max-w-2xl mx-auto space-y-2">
+                <Badge variant="outline" className="text-xs font-bold text-primary bg-primary/10 border-primary/20">
+                  Platform Guarantee
+                </Badge>
+                <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
+                  Why Thousands Trust EduBird
+                </h2>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  Built to make local commerce, skill education, and professional consultations transparent and effortless.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                {[
+                  {
+                    title: "18+ Verified Stores",
+                    desc: "Compare identical goods across local stores and buy at the lowest verified market price.",
+                    icon: Store,
+                  },
+                  {
+                    title: "100% Vetted Profiles",
+                    desc: "Every professional and service provider undergoes credential verification before listing.",
+                    icon: ShieldCheck,
+                  },
+                  {
+                    title: "Fast Local Delivery",
+                    desc: "Same-day delivery and convenient store counter pickup across Pandeypur and Varanasi.",
+                    icon: Zap,
+                  },
+                  {
+                    title: "Direct Support & Return",
+                    desc: "Dedicated support team ensuring smooth order tracking, refunds, and resolution.",
+                    icon: CheckCircle2,
+                  },
+                ].map((feature, i) => {
+                  const Icon = feature.icon;
+                  return (
+                    <div key={i} className="p-5 rounded-2xl border border-border/60 bg-card space-y-2.5 text-center flex flex-col items-center">
+                      <div className="size-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                        <Icon className="size-6" />
+                      </div>
+                      <h3 className="font-bold text-sm text-foreground">{feature.title}</h3>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{feature.desc}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          {/* ================= DIALOGS ================= */}
+          {/* 1. Multi-Store Product Comparison Dialog */}
+          <ProductStoresDialog
+            productId={selectedProductForStores?.id ?? null}
+            productName={selectedProductForStores?.name}
+            open={productStoresDialogOpen}
+            onOpenChange={setProductStoresDialogOpen}
+          />
+
+          {/* 2. Multi-Store Service Comparison Dialog */}
+          <ServiceStoresDialog
+            serviceId={selectedServiceForStores?.id ?? null}
+            serviceName={selectedServiceForStores?.name}
+            open={serviceStoresDialogOpen}
+            onOpenChange={setServiceStoresDialogOpen}
+            onBookService={(bookingItem) => {
+              setSelectedServiceForBooking(bookingItem);
+              setServiceBookingDialogOpen(true);
+            }}
+          />
+
+          {/* 3. Instant Service Booking Dialog */}
+          <ServiceBookingDialog
+            open={serviceBookingDialogOpen}
+            onOpenChange={setServiceBookingDialogOpen}
+            service={selectedServiceForBooking}
+          />
         </div>
-      </section>
-
-      {/* ================= DIALOGS ================= */}
-      {/* 1. Multi-Store Product Comparison Dialog */}
-      <ProductStoresDialog
-        productId={selectedProductForStores?.id ?? null}
-        productName={selectedProductForStores?.name}
-        open={productStoresDialogOpen}
-        onOpenChange={setProductStoresDialogOpen}
-      />
-
-      {/* 2. Multi-Store Service Comparison Dialog */}
-      <ServiceStoresDialog
-        serviceId={selectedServiceForStores?.id ?? null}
-        serviceName={selectedServiceForStores?.name}
-        open={serviceStoresDialogOpen}
-        onOpenChange={setServiceStoresDialogOpen}
-        onBookService={(bookingItem) => {
-          setSelectedServiceForBooking(bookingItem);
-          setServiceBookingDialogOpen(true);
-        }}
-      />
-
-      {/* 3. Instant Service Booking Dialog */}
-      <ServiceBookingDialog
-        open={serviceBookingDialogOpen}
-        onOpenChange={setServiceBookingDialogOpen}
-        service={selectedServiceForBooking}
-      />
-    </div>
-  );
+        );
 }

@@ -1351,7 +1351,7 @@ export function CategoryManagerContent() {
       {/* DIALOG 1: ADD BUSINESS CATEGORY (ROOT) */}
       {/* ───────────────────────────────────────────────────────────── */}
       <Dialog open={bizCatDialogOpen} onOpenChange={setBizCatDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2">
               <Building2 className="size-4 text-rose-600" />
@@ -1430,7 +1430,7 @@ export function CategoryManagerContent() {
       {/* DIALOG 2: ADD BUSINESS SUBCATEGORY */}
       {/* ───────────────────────────────────────────────────────────── */}
       <Dialog open={bizSubcatDialogOpen} onOpenChange={setBizSubcatDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2">
               <Building2 className="size-4 text-rose-600" />
@@ -1526,7 +1526,7 @@ export function CategoryManagerContent() {
       {/* MANDATORY 2-STEP FLOW: CHOOSE BUSINESS CLASSIFICATION FIRST */}
       {/* ───────────────────────────────────────────────────────────── */}
       <Dialog open={catalogCatDialogOpen} onOpenChange={setCatalogCatDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2">
               {formType === "product" ? (
@@ -1559,9 +1559,9 @@ export function CategoryManagerContent() {
 
           <form onSubmit={handleSaveCatalogCategory} className="space-y-4 pt-1">
             {/* STEP 1: BUSINESS CLASSIFICATION (REQUIRED) */}
-            <div className="rounded-xl border border-rose-200 bg-rose-50/50 dark:bg-rose-950/10 p-3.5 space-y-2">
+            <div className="rounded-xl border border-rose-200/80 bg-rose-50/40 dark:bg-rose-950/20 p-3.5 space-y-2.5">
               <div className="flex items-center gap-2">
-                <div className="size-5 rounded-full bg-[#d9232e] text-white flex items-center justify-center text-[10px] font-black">
+                <div className="size-5 rounded-full bg-[#d9232e] text-white flex items-center justify-center text-[10px] font-black shrink-0">
                   1
                 </div>
                 <div>
@@ -1569,42 +1569,43 @@ export function CategoryManagerContent() {
                     Business Classification (Required)
                   </h4>
                   <p className="text-[11px] text-muted-foreground">
-                    Map this category to its root industry sector.
+                    Map this category to its industry sector and optional parent hierarchy.
                   </p>
                 </div>
               </div>
 
-              <div>
-                <Label className="text-[11px] font-semibold text-foreground">
-                  Business Category *
-                </Label>
-                <Select
-                  value={formBizCatId}
-                  onValueChange={(val) => {
-                    setFormBizCatId(val);
-                    setFormBizSubcatId("");
-                    if (val) {
-                      loadBusinessSubcategories(Number(val));
-                    }
-                  }}
-                >
-                  <SelectTrigger className="mt-1 h-9 text-xs bg-background">
-                    <SelectValue placeholder="Select Business Category..." />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-56">
-                    {businessRootCategories.map((bc) => (
-                      <SelectItem key={bc.id} value={String(bc.id)}>
-                        {bc.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {formBizCatId && currentFormSubcategories.length > 0 && (
-                <div className="pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
                   <Label className="text-[11px] font-semibold text-foreground">
-                    Business Subcategory (Optional)
+                    Business Category *
+                  </Label>
+                  <Select
+                    value={formBizCatId}
+                    onValueChange={(val) => {
+                      setFormBizCatId(val);
+                      setFormBizSubcatId("");
+                      setFormParentId("none");
+                      if (val) {
+                        loadBusinessSubcategories(Number(val));
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="mt-1 h-8 text-xs bg-background">
+                      <SelectValue placeholder="Select Business Category..." />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-56">
+                      {businessRootCategories.map((bc) => (
+                        <SelectItem key={bc.id} value={String(bc.id)}>
+                          {bc.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="text-[11px] font-semibold text-foreground">
+                    Business Subcategory
                   </Label>
                   <Select
                     value={formBizSubcatId}
@@ -1612,9 +1613,10 @@ export function CategoryManagerContent() {
                       setFormBizSubcatId(val === "none" ? "" : val);
                       setFormParentId("none");
                     }}
+                    disabled={!formBizCatId || loadingSubcategories}
                   >
-                    <SelectTrigger className="mt-1 h-9 text-xs bg-background">
-                      <SelectValue placeholder="Select Business Subcategory..." />
+                    <SelectTrigger className="mt-1 h-8 text-xs bg-background">
+                      <SelectValue placeholder="None / General" />
                     </SelectTrigger>
                     <SelectContent className="max-h-56">
                       <SelectItem value="none">None / General</SelectItem>
@@ -1626,15 +1628,15 @@ export function CategoryManagerContent() {
                     </SelectContent>
                   </Select>
                 </div>
-              )}
+              </div>
 
               {formBizCatId && (
-                <div className="pt-1">
+                <div>
                   <Label className="text-[11px] font-semibold text-foreground">
                     Parent Category (Optional)
                   </Label>
                   <Select value={formParentId} onValueChange={setFormParentId}>
-                    <SelectTrigger className="mt-1 h-9 text-xs bg-background">
+                    <SelectTrigger className="mt-1 h-8 text-xs bg-background">
                       <SelectValue placeholder="None (Root Category)" />
                     </SelectTrigger>
                     <SelectContent className="max-h-56">
@@ -1664,36 +1666,41 @@ export function CategoryManagerContent() {
             {/* STEP 2: CATEGORY DETAILS */}
             <div className="space-y-3 pt-1">
               <div className="flex items-center gap-2">
-                <div className="size-5 rounded-full bg-muted text-foreground flex items-center justify-center text-[10px] font-black">
+                <div className="size-5 rounded-full bg-muted text-foreground flex items-center justify-center text-[10px] font-black shrink-0">
                   2
                 </div>
                 <h4 className="text-xs font-bold text-foreground">Category Details</h4>
               </div>
 
-              <div>
-                <Label className="text-xs font-semibold">
-                  {formType === "course" ? "Course" : formType === "job" ? "Job" : formType.charAt(0).toUpperCase() + formType.slice(1)} Category Name *
-                </Label>
-                <Input
-                  placeholder={
-                    formType === "course"
-                      ? "e.g. IIT-JEE Physics Coaching, Computer Science & Engineering"
-                      : formType === "job"
-                        ? "e.g. Senior Faculty, Lab Technician, Software Developer"
-                        : formType === "product"
-                          ? "e.g. Brake Systems & Components"
-                          : formType === "service"
-                            ? "e.g. Engine Diagnostics & Repair"
-                            : "e.g. Certified Auto Mechanic"
-                  }
-                  value={formName}
-                  onChange={(e) => {
-                    setFormName(e.target.value);
-                    setFormSlug(generateSlug(e.target.value));
-                  }}
-                  className="mt-1 h-9 text-xs"
-                  required
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">
+                    {formType === "course" ? "Course" : formType === "job" ? "Job" : formType.charAt(0).toUpperCase() + formType.slice(1)} Category Name *
+                  </Label>
+                  <Input
+                    placeholder={
+                      formType === "course"
+                        ? "e.g. IIT-JEE Physics Coaching"
+                        : "e.g. Category Name"
+                    }
+                    value={formName}
+                    onChange={(e) => {
+                      setFormName(e.target.value);
+                      setFormSlug(generateSlug(e.target.value));
+                    }}
+                    className="h-8 text-xs"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">URL Slug</Label>
+                  <Input
+                    placeholder="auto-generated-slug"
+                    value={formSlug}
+                    onChange={(e) => setFormSlug(e.target.value)}
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
               </div>
 
               <div>
@@ -1705,25 +1712,25 @@ export function CategoryManagerContent() {
                 />
               </div>
 
-              <div>
+              <div className="space-y-1">
                 <Label className="text-xs font-semibold">Description (Optional)</Label>
                 <Input
                   placeholder="Short description of this category..."
                   value={formDesc}
                   onChange={(e) => setFormDesc(e.target.value)}
-                  className="mt-1 h-9 text-xs"
+                  className="h-8 text-xs"
                 />
               </div>
 
-              <div>
+              <div className="space-y-1">
                 <Label className="text-xs font-semibold">Synonyms &amp; Search Keywords (Optional)</Label>
                 <Input
-                  placeholder="e.g. potato, batata, aloo, alu (comma-separated)"
+                  placeholder="e.g. jee, iit, engineering entrance, pcm (comma-separated)"
                   value={formSynonyms}
                   onChange={(e) => setFormSynonyms(e.target.value)}
-                  className="mt-1 h-9 text-xs"
+                  className="h-8 text-xs"
                 />
-                <p className="text-[11px] text-muted-foreground mt-1">
+                <p className="text-[10px] text-muted-foreground mt-0.5">
                   Alternate names and regional terms customers search for that match this category.
                 </p>
               </div>
@@ -1751,7 +1758,7 @@ export function CategoryManagerContent() {
       {/* DIALOG 4: EDIT CATEGORY */}
       {/* ───────────────────────────────────────────────────────────── */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2">
               <Edit2 className="size-4 text-primary" />

@@ -68,9 +68,9 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
-        style={{ translate: "-50% -50%", ...props.style }}
+        style={props.style}
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:w-full sm:p-6 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:slide-in-from-left-1/2 data-open:slide-in-from-top-1/2 data-closed:slide-out-to-left-1/2 data-closed:slide-out-to-top-1/2",
+          "fixed top-1/2 left-1/2 z-50 grid w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:w-full sm:p-6 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           !hasCustomMaxWidth && "sm:max-w-md",
           className
         )}

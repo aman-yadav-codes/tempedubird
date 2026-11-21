@@ -1864,114 +1864,117 @@ function CustomerExplorePageContent({
               </div>
             </div>
 
-          {/* Main Business Category Filter (Only for business or all types) */}
-          {(activeType === "all" || activeType === "business") && (
+            {/* Main Business Category Filter (Only for business or all types) */}
+            {(activeType === "all" || activeType === "business") && (
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-700">
+                  Main Business Category
+                </label>
+                <select
+                  value={selectedBusinessCategoryId || ""}
+                  onChange={(e) => {
+                    const val = e.target.value ? Number(e.target.value) : null;
+                    setSelectedBusinessCategoryId(val);
+                    setSelectedCategoryId(null);
+                    setSelectedCategoryName("");
+                    setSelectedCategorySlug("");
+                    setSelectedSubcategoryId(null);
+                    setSelectedSubcategoryName("");
+                    setSelectedSubcategorySlug("");
+                    syncUrlParams({ category: null, subcategory: null });
+                  }}
+                  className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 focus:outline-none focus:bg-white cursor-pointer"
+                >
+                  <option value="">All Business Types ({businessCategories.length})</option>
+                  {businessCategories.map((bc) => (
+                    <option key={bc.id} value={bc.id}>
+                      {bc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Particular Category Filter (Related to Selected Type) */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-slate-700">
-                Main Business Category
+                {activeType === "service" ? "Service Category" : activeType === "course" ? "Course Category" : activeType === "professional" ? "Profession Category" : activeType === "job" ? "Job Domain" : "Category"}
               </label>
               <select
-                value={selectedBusinessCategoryId || ""}
+                value={selectedCategoryId || ""}
                 onChange={(e) => {
                   const val = e.target.value ? Number(e.target.value) : null;
-                  setSelectedBusinessCategoryId(val);
-                  setSelectedCategoryId(null);
-                  setSelectedCategoryName("");
-                  setSelectedCategorySlug("");
+                  setSelectedCategoryId(val);
                   setSelectedSubcategoryId(null);
                   setSelectedSubcategoryName("");
                   setSelectedSubcategorySlug("");
-                  syncUrlParams({ category: null, subcategory: null });
+                  if (val) {
+                    const cat = categories.find((c) => c.id === val);
+                    const catName = cat ? cat.name : "";
+                    const catSlug = cat ? (cat.slug || cat.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")) : "";
+                    setSelectedCategoryName(catName);
+                    setSelectedCategorySlug(catSlug);
+                    syncUrlParams({ category: catSlug || catName, subcategory: null });
+                  } else {
+                    setSelectedCategoryName("");
+                    setSelectedCategorySlug("");
+                    syncUrlParams({ category: null, subcategory: null });
+                  }
                 }}
                 className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 focus:outline-none focus:bg-white cursor-pointer"
               >
-                <option value="">All Business Types ({businessCategories.length})</option>
-                {businessCategories.map((bc) => (
-                  <option key={bc.id} value={bc.id}>
-                    {bc.name}
+                <option value="">All Categories ({filteredCategories.length})</option>
+                {filteredCategories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
                   </option>
                 ))}
               </select>
             </div>
-          )}
 
-          {/* Particular Category Filter (Related to Selected Type) */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-700">
-              {activeType === "service" ? "Service Category" : activeType === "course" ? "Course Category" : activeType === "professional" ? "Profession Category" : activeType === "job" ? "Job Domain" : "Category"}
-            </label>
-            <select
-              value={selectedCategoryId || ""}
-              onChange={(e) => {
-                const val = e.target.value ? Number(e.target.value) : null;
-                setSelectedCategoryId(val);
-                setSelectedSubcategoryId(null);
-                setSelectedSubcategoryName("");
-                setSelectedSubcategorySlug("");
-                if (val) {
-                  const cat = categories.find((c) => c.id === val);
-                  const catName = cat ? cat.name : "";
-                  const catSlug = cat ? (cat.slug || cat.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")) : "";
-                  setSelectedCategoryName(catName);
-                  setSelectedCategorySlug(catSlug);
-                  syncUrlParams({ category: catSlug || catName, subcategory: null });
-                } else {
-                  setSelectedCategoryName("");
-                  setSelectedCategorySlug("");
-                  syncUrlParams({ category: null, subcategory: null });
-                }
-              }}
-              className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 focus:outline-none focus:bg-white cursor-pointer"
-            >
-              <option value="">All Categories ({filteredCategories.length})</option>
-              {filteredCategories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Subcategory Filter (if category selected) */}
-          {selectedCategoryId && subcategories.length > 0 && (
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-700">Subcategory</label>
-              <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedSubcategoryId(null);
-                    setSelectedSubcategoryName("");
-                    setSelectedSubcategorySlug("");
-                    syncUrlParams({ subcategory: null });
-                  }}
-                  className={cn(
-                    "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
-                    !selectedSubcategoryId ? "bg-amber-100 text-amber-900 font-semibold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  )}
-                >
-                  <span>All Subcategories</span>
-                  <span className="text-[10px] text-slate-400">({subcategories.length})</span>
-                </button>
-                {subcategories.map((sub) => (
+            {/* Subcategory Filter (if category selected) */}
+            {selectedCategoryId && subcategories.length > 0 && (
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-700">Subcategory</label>
+                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
                   <button
                     key={sub.id}
                       type="button"
                       onClick={() => {
-                        setSelectedSubcategoryId(sub.id);
-                        setSelectedSubcategoryName(sub.name);
-                        const subSlug = sub.slug || sub.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-                        setSelectedSubcategorySlug(subSlug);
-                        syncUrlParams({ subcategory: subSlug });
+                        setSelectedSubcategoryId(null);
+                        setSelectedSubcategoryName("");
+                        setSelectedSubcategorySlug("");
+                        syncUrlParams({ subcategory: null });
                       }}
                       className={cn(
                         "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
-                        selectedSubcategoryId === sub.id ? "bg-amber-100 text-amber-900 font-semibold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                        !selectedSubcategoryId ? "bg-amber-100 text-amber-900 font-semibold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                       )}
                     >
-                      <span className="truncate">{sub.name}</span>
+                      <span>All Subcategories</span>
+                      <span className="text-[10px] text-slate-400">({subcategories.length})</span>
                     </button>
-                  ))}
+                  {
+                      subcategories.map((sub) => (
+                        <button
+                          key={sub.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSubcategoryId(sub.id);
+                            setSelectedSubcategoryName(sub.name);
+                            const subSlug = sub.slug || sub.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+                            setSelectedSubcategorySlug(subSlug);
+                            syncUrlParams({ subcategory: subSlug });
+                          }}
+                          className={cn(
+                            "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
+                            selectedSubcategoryId === sub.id ? "bg-amber-100 text-amber-900 font-semibold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                          )}
+                        >
+                          <span className="truncate">{sub.name}</span>
+                        </button>
+                      ))
+                    }
                 </div>
               </div>
             )}

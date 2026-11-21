@@ -369,8 +369,12 @@ export const insertCategory = async (
         data.seo_title || null,
         data.meta_description || null,
         data.display_order || 0,
-        JSON.stringify(data.countries || ["IN", "US"]),
-        JSON.stringify(data.synonyms || [])
+        Array.isArray(data.countries) && data.countries.length > 0 ? data.countries : ["IN", "US"],
+        Array.isArray(data.synonyms)
+          ? data.synonyms
+          : (typeof data.synonyms === "string"
+              ? data.synonyms.split(",").map((s) => s.trim()).filter(Boolean)
+              : []),
       ]
     );
 
