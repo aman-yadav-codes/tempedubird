@@ -574,57 +574,7 @@ export function UnifiedMarketplaceHome() {
                   </div>
                 </div>
 
-                {/* Quick Category Navigation Pills */}
-                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap pt-1 text-xs">
-                  <Link
-                    href="/explore?type=product"
-                    className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-                  >
-                    <span>📦 Products</span>
-                  </Link>
-                  <Link
-                    href="/explore?type=professional"
-                    className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-                  >
-                    <span>👨‍💼 Professionals</span>
-                  </Link>
-                  <Link
-                    href="/explore?type=course"
-                    className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-                  >
-                    <span>🎓 Courses</span>
-                  </Link>
-                  <Link
-                    href="/explore?type=job"
-                    className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-                  >
-                    <span>💼 Jobs</span>
-                  </Link>
-                  <Link
-                    href="/explore?type=business"
-                    className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-                  >
-                    <span>🏢 Business</span>
-                  </Link>
-                  <Link
-                    href="/explore?categoryName=Entertainment&type=all"
-                    className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-                  >
-                    <span>🎭 Entertainment</span>
-                  </Link>
-                  <Link
-                    href="/explore?type=vehicle"
-                    className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-                  >
-                    <span>🚗 Vehicle</span>
-                  </Link>
-                  <Link
-                    href="/explore?type=property"
-                    className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-                  >
-                    <span>🏠 Property</span>
-                  </Link>
-                </div>
+
 
                 {/* ================= AUTOCOMPLETE SEARCH SUGGESTIONS DROPDOWN ================= */}
                 {isDropdownOpen && searchQuery.trim().length > 0 && (
