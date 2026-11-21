@@ -77,11 +77,80 @@ export interface BusinessPackage {
   is_custom_enterprise?: boolean;
 }
 
+const DEFAULT_PACKAGES: BusinessPackage[] = [
+  {
+    id: 34,
+    name: "Launch",
+    tier: "launch",
+    price: 399,
+    price_monthly: 399,
+    price_unit: "INR",
+    billing_cycle: "Monthly",
+    database_allowance: "250 MB",
+    file_storage_allowance: "2 GB",
+    monthly_bandwidth: "10 GB",
+    compute_allowance: "100 units",
+    seo_service: "Basic SEO support",
+    description: "Ideal for early-stage startups and individual projects launching with essential database, storage, and SEO.",
+    features_list: ["250 MB Database Allowance", "2 GB File Storage", "10 GB Monthly Bandwidth", "100 Compute Units", "Basic SEO support"],
+  },
+  {
+    id: 35,
+    name: "Growth",
+    tier: "growth",
+    price: 999,
+    price_monthly: 999,
+    price_unit: "INR",
+    billing_cycle: "Monthly",
+    database_allowance: "1 GB",
+    file_storage_allowance: "10 GB",
+    monthly_bandwidth: "50 GB",
+    compute_allowance: "500 units",
+    seo_service: "Local SEO support",
+    is_popular: true,
+    description: "Designed for fast-growing businesses needing expanded storage, regional visibility, and active compute headroom.",
+    features_list: ["1 GB Database Allowance", "10 GB File Storage", "50 GB Monthly Bandwidth", "500 Compute Units", "Local SEO support"],
+  },
+  {
+    id: 36,
+    name: "Professional",
+    tier: "professional",
+    price: 2499,
+    price_monthly: 2499,
+    price_unit: "INR",
+    billing_cycle: "Monthly",
+    database_allowance: "5 GB",
+    file_storage_allowance: "50 GB",
+    monthly_bandwidth: "250 GB",
+    compute_allowance: "2,000 units",
+    seo_service: "Advanced SEO support",
+    description: "Complete professional platform tier for scale, high traffic, dedicated compute, and comprehensive advanced SEO support.",
+    features_list: ["5 GB Database Allowance", "50 GB File Storage", "250 GB Monthly Bandwidth", "2,000 Compute Units", "Advanced SEO support"],
+  },
+  {
+    id: 37,
+    name: "Enterprise",
+    tier: "enterprise",
+    price: 4999,
+    price_monthly: 4999,
+    price_unit: "INR",
+    billing_cycle: "Monthly",
+    database_allowance: "Custom",
+    file_storage_allowance: "Custom",
+    monthly_bandwidth: "Custom",
+    compute_allowance: "Custom",
+    seo_service: "Enterprise SEO and marketing services",
+    is_custom_enterprise: true,
+    description: "Custom enterprise tier starting at ₹4,999 with bespoke database, compute, unmetered bandwidth, and managed marketing.",
+    features_list: ["Custom Database Allowance", "Custom File Storage", "Custom Monthly Bandwidth", "Custom Compute Units", "Enterprise SEO & marketing services"],
+  },
+];
+
 export default function BusinessGrowthPackagesPage() {
   const { isAuthenticated, user } = useAuthStore();
-  const [packages, setPackages] = useState<BusinessPackage[]>([]);
+  const [packages, setPackages] = useState<BusinessPackage[]>(DEFAULT_PACKAGES);
   const [currentSub, setCurrentSub] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   
   // Checkout & Enterprise dialogs
@@ -100,7 +169,7 @@ export default function BusinessGrowthPackagesPage() {
 
   const loadCurrentSub = async () => {
     try {
-      const res = await fetch("/api/subscriptions/current");
+      const res = await fetch(`/api/subscriptions/current?_t=${Date.now()}`, { cache: "no-store" });
       const json = await res.json();
       if (json.success && json.subscription) {
         setCurrentSub(json.subscription);
@@ -112,10 +181,22 @@ export default function BusinessGrowthPackagesPage() {
 
   const loadPackages = async () => {
     try {
-      const res = await fetch("/api/public/packages");
+      let fetchedPackages: BusinessPackage[] = [];
+      const res = await fetch(`/api/public/packages?_t=${Date.now()}`, { cache: "no-store" });
       const json = await res.json();
-      if (json.success && json.packages?.length > 0) {
-        setPackages(json.packages);
+      if (json.success && Array.isArray(json.packages) && json.packages.length > 0) {
+        fetchedPackages = json.packages;
+      } else {
+        // Fallback to platformadmin endpoint
+        const fbRes = await fetch(`/api/platformadmin/packages?_t=${Date.now()}`, { cache: "no-store" });
+        const fbJson = await fbRes.json();
+        if (fbJson.success && Array.isArray(fbJson.packages) && fbJson.packages.length > 0) {
+          fetchedPackages = fbJson.packages;
+        }
+      }
+
+      if (fetchedPackages.length > 0) {
+        setPackages(fetchedPackages);
       }
     } catch (err) {
       console.error("Failed to load packages:", err);
@@ -343,27 +424,47 @@ export default function BusinessGrowthPackagesPage() {
           </p>
         </div>
 
-        {loading ? (
-          <div className="py-24 flex flex-col items-center justify-center gap-3">
-            <Loader2 className="size-8 animate-spin text-amber-400" />
-            <p className="text-sm text-slate-400 font-medium">Loading subscription packages...</p>
+        {packages.length === 0 ? (
+          <div className="text-center py-16 bg-slate-50 rounded-3xl border border-slate-200 p-8 space-y-3">
+            <Package className="size-10 text-muted-foreground mx-auto" />
+            <h3 className="text-base font-bold text-slate-800">No Packages Found</h3>
+            <p className="text-xs text-muted-foreground">Unable to fetch packages right now.</p>
+            <Button size="sm" variant="outline" onClick={loadPackages} className="cursor-pointer">
+              Retry Loading
+            </Button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 items-stretch">
             {packages.map((pkg) => {
-              const isPopular = pkg.is_popular || pkg.tier === "growth" || pkg.name.toLowerCase() === "growth";
-              const isEnterprise = pkg.tier === "enterprise" || pkg.is_custom_enterprise || pkg.name.toLowerCase() === "enterprise";
+              const pkgName = pkg.name || "";
+              const pkgTier = pkg.tier || "";
+              const isPopular = pkg.is_popular || pkgTier.toLowerCase() === "growth" || pkgName.toLowerCase() === "growth";
+              const isEnterprise = pkgTier.toLowerCase() === "enterprise" || Boolean(pkg.is_custom_enterprise) || pkgName.toLowerCase() === "enterprise";
               const isCurrentPlan = Boolean(
                 currentSub && (
                   currentSub.package_id === pkg.id ||
-                  (currentSub.plan_name || currentSub.package_name || "").toLowerCase() === pkg.name.toLowerCase() ||
-                  (currentSub.tier || "").toLowerCase() === (pkg.tier || "").toLowerCase()
+                  (currentSub.plan_name || currentSub.package_name || "").toLowerCase() === pkgName.toLowerCase() ||
+                  (currentSub.tier || "").toLowerCase() === pkgTier.toLowerCase()
                 )
               );
               const displayPrice =
                 billingCycle === "yearly"
-                  ? Math.round(Number(pkg.price_annual || pkg.price * 10) / 12)
-                  : Number(pkg.price_monthly || pkg.price);
+                  ? Math.round(Number(pkg.price_annual || (pkg.price || 0) * 10) / 12)
+                  : Number(pkg.price_monthly || pkg.price || 0);
+
+              const rawFeatures = pkg.features_list;
+              const features: string[] = Array.isArray(rawFeatures)
+                ? rawFeatures
+                : typeof rawFeatures === "string"
+                ? (() => {
+                    try {
+                      const parsed = JSON.parse(rawFeatures);
+                      return Array.isArray(parsed) ? parsed : [];
+                    } catch {
+                      return [];
+                    }
+                  })()
+                : [];
 
               return (
                 <div
@@ -466,13 +567,13 @@ export default function BusinessGrowthPackagesPage() {
                     </div>
 
                     {/* Features List */}
-                    {pkg.features_list && pkg.features_list.length > 0 && (
+                    {features && features.length > 0 && (
                       <div className="space-y-2.5 flex-1 pt-1">
                         <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
                           Included Features:
                         </span>
                         <ul className="space-y-2 text-xs text-slate-700">
-                          {pkg.features_list.map((feature, idx) => (
+                          {features.map((feature, idx) => (
                             <li key={idx} className="flex items-start gap-2">
                               <CheckCircle2
                                 className={`size-3.5 shrink-0 mt-0.5 ${
