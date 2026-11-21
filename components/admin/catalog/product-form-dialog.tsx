@@ -150,6 +150,60 @@ export function ProductFormDialog({
   const [uploadingDefaultImage, setUploadingDefaultImage] = useState(false);
   const [uploadingAdditional, setUploadingAdditional] = useState(false);
 
+  // Product auto-suggestions when typing
+  const [productSuggestions, setProductSuggestions] = useState<any[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  useEffect(() => {
+    const trimmed = name.trim();
+    if (trimmed.length < 2) {
+      setProductSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setLoadingSuggestions(true);
+      try {
+        const res = await fetch(`/api/admin/catalog/products/autocomplete?q=${encodeURIComponent(trimmed)}`);
+        const json = await res.json();
+        if (json?.success && Array.isArray(json.suggestions)) {
+          setProductSuggestions(json.suggestions);
+          setShowSuggestions(json.suggestions.length > 0);
+        } else {
+          setProductSuggestions([]);
+          setShowSuggestions(false);
+        }
+      } catch (err) {
+        console.warn("Product autocomplete fetch error:", err);
+      } finally {
+        setLoadingSuggestions(false);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [name]);
+
+  const handleSelectSuggestion = (s: any) => {
+    setName(s.name);
+    if (s.slug) setSlug(s.slug);
+    if (s.description && !description) setDescription(s.description);
+    if (s.unit_of_measurement && !unitOfMeasurement) setUnitOfMeasurement(s.unit_of_measurement);
+    if (s.suggested_price_inr && (!price || price === "0")) setPrice(String(s.suggested_price_inr));
+    if (s.default_image_url && !defaultImageUrl) setDefaultImageUrl(s.default_image_url);
+    if (s.synonyms && Array.isArray(s.synonyms) && s.synonyms.length > 0 && !synonymsText) {
+      setSynonymsText(s.synonyms.join(", "));
+    }
+    if (s.category_id && !mainCategoryId) {
+      setMainCategoryId(String(s.category_id));
+    }
+    if (s.subcategory_id && !subcategoryId) {
+      setSubcategoryId(String(s.subcategory_id));
+    }
+    setShowSuggestions(false);
+  };
+
   // Slug auto-generation
   const handleNameChange = (val: string) => {
     setName(val);
@@ -538,15 +592,70 @@ export function ProductFormDialog({
             {/* TAB 2: BASIC INFO */}
             <TabsContent value="basic" className="space-y-3 pt-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold">Product Name *</Label>
+                <div className="space-y-1 relative">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold">Product Name *</Label>
+                    {loadingSuggestions && (
+                      <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <Loader2 className="size-2.5 animate-spin text-primary" /> Searching...
+                      </span>
+                    )}
+                  </div>
                   <Input
                     placeholder="e.g. Premium Cotton Polo T-Shirt"
                     value={name}
-                    onChange={(e) => handleNameChange(e.target.value)}
+                    onChange={(e) => {
+                      handleNameChange(e.target.value);
+                      setShowSuggestions(true);
+                    }}
+                    onFocus={() => {
+                      if (productSuggestions.length > 0) setShowSuggestions(true);
+                    }}
                     required
                     className="h-8 text-xs"
                   />
+
+                  {/* Auto-suggestions dropdown */}
+                  {showSuggestions && productSuggestions.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-popover text-popover-foreground border rounded-xl shadow-xl max-h-56 overflow-y-auto p-1 space-y-0.5 animate-in fade-in-50 duration-150">
+                      <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b">
+                        Available Products ({productSuggestions.length})
+                      </div>
+                      {productSuggestions.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleSelectSuggestion(s);
+                          }}
+                          className="w-full text-left p-2 rounded-lg hover:bg-muted transition-colors flex items-center gap-2.5 text-xs cursor-pointer group"
+                        >
+                          {s.default_image_url ? (
+                            <img
+                              src={s.default_image_url}
+                              alt=""
+                              className="size-7 rounded-md object-cover bg-muted shrink-0"
+                            />
+                          ) : (
+                            <div className="size-7 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                              <Package className="size-3.5" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-foreground truncate group-hover:text-primary">
+                              {s.name}
+                            </div>
+                            {s.unit_of_measurement && (
+                              <div className="text-[10px] text-muted-foreground">
+                                Unit: {s.unit_of_measurement} {s.suggested_price_inr ? `• ₹${s.suggested_price_inr}` : ""}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs font-bold">URL Slug *</Label>
@@ -556,69 +665,6 @@ export function ProductFormDialog({
                     onChange={(e) => setSlug(e.target.value)}
                     className="h-8 text-xs font-mono"
                   />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium">Brand (Optional)</Label>
-                  <Input
-                    placeholder="e.g. Nike, Apple, Samsung"
-                    value={brand}
-                    onChange={(e) => setBrand(e.target.value)}
-                    className="h-8 text-xs"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium">Model (Optional)</Label>
-                  <Input
-                    placeholder="e.g. AirMax 2026, Pro Max"
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    className="h-8 text-xs"
-                  />
-                </div>
-              </div>
-
-              <div className="p-3 bg-muted/40 border border-muted/70 rounded-lg space-y-2.5">
-                <div className="flex items-center gap-1.5 font-bold text-xs text-foreground">
-                  <Briefcase className="size-3.5 text-primary" />
-                  <span>Store & Professional Assignment</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold">Assigned Store / Business Profile</Label>
-                    <Select value={businessProfileId} onValueChange={setBusinessProfileId}>
-                      <SelectTrigger className="h-8 text-xs bg-background">
-                        <SelectValue placeholder="Unassigned" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Unassigned / General</SelectItem>
-                        {availableBusinesses.map((b) => (
-                          <SelectItem key={b.id} value={String(b.id)}>
-                            {b.name} {b.city ? `(${b.city})` : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold">Assigned Professional Profile</Label>
-                    <Select value={professionalProfileId} onValueChange={setProfessionalProfileId}>
-                      <SelectTrigger className="h-8 text-xs bg-background">
-                        <SelectValue placeholder="Unassigned" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Unassigned / General</SelectItem>
-                        {availableProfessionals.map((p) => (
-                          <SelectItem key={p.id} value={String(p.id)}>
-                            {p.name} {p.designation ? `— ${p.designation}` : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
               </div>
 
