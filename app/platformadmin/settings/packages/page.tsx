@@ -58,7 +58,6 @@ interface SalesPackage {
 export default function PlatformAdminSettingsPackagesPage() {
   const [packages, setPackages] = useState<SalesPackage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedFilter, setSelectedFilter] = useState<"hosting" | "all">("hosting");
 
   // Edit / Create Dialog State
   const [editPackage, setEditPackage] = useState<Partial<SalesPackage> | null>(null);
@@ -153,17 +152,6 @@ export default function PlatformAdminSettingsPackagesPage() {
     }
   };
 
-  const filteredPackages = packages.filter((pkg) => {
-    if (selectedFilter === "hosting") {
-      return (
-        pkg.package_category === "hosting_growth" ||
-        ["launch", "growth", "professional", "enterprise"].includes(pkg.tier?.toLowerCase() || "") ||
-        ["Launch", "Growth", "Professional", "Enterprise"].includes(pkg.name)
-      );
-    }
-    return true;
-  });
-
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Header Bar */}
@@ -222,32 +210,6 @@ export default function PlatformAdminSettingsPackagesPage() {
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setSelectedFilter("hosting")}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            selectedFilter === "hosting"
-              ? "bg-slate-900 text-white shadow-xs"
-              : "bg-white dark:bg-slate-900 text-slate-600 hover:text-slate-900 border border-border"
-          }`}
-        >
-          Hosting &amp; Growth Packages ({packages.filter((p) => p.package_category === "hosting_growth" || ["Launch", "Growth", "Professional", "Enterprise"].includes(p.name)).length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setSelectedFilter("all")}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            selectedFilter === "all"
-              ? "bg-slate-900 text-white shadow-xs"
-              : "bg-white dark:bg-slate-900 text-slate-600 hover:text-slate-900 border border-border"
-          }`}
-        >
-          All System Packages ({packages.length})
-        </button>
-      </div>
-
       {/* Loading Skeleton */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -255,7 +217,7 @@ export default function PlatformAdminSettingsPackagesPage() {
             <Card key={i} className="animate-pulse h-96 bg-muted/40 rounded-2xl border" />
           ))}
         </div>
-      ) : filteredPackages.length === 0 ? (
+      ) : packages.length === 0 ? (
         <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border p-8 space-y-3">
           <Package className="size-10 text-muted-foreground mx-auto" />
           <h3 className="text-base font-bold text-foreground">No Packages Found</h3>
@@ -263,7 +225,7 @@ export default function PlatformAdminSettingsPackagesPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {filteredPackages.map((pkg) => {
+          {packages.map((pkg) => {
             const isToggling = togglingId === pkg.id;
             return (
               <Card

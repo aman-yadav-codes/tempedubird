@@ -49,7 +49,7 @@ export async function GET(req: Request) {
       sql += ` AND package_category = $${params.length}`;
     }
 
-    sql += ` ORDER BY price ASC`;
+    sql += ` ORDER BY COALESCE(price_monthly, price, 0) ASC, id ASC`;
 
     const res = await db.query(sql, params);
 
