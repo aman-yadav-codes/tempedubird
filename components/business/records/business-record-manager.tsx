@@ -63,6 +63,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuthStore } from "@/store/slices/auth.store";
+import { useBusinessCurrency } from "@/hooks/use-business-currency";
 
 export interface BusinessRecordManagerProps {
   vertical: "vehicles" | "properties" | "restaurants" | "hotels" | "events" | "education" | "healthcare";
@@ -86,6 +87,7 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
   }, [accessToken]);
 
   // Data States
+  const { countryCode, currencyCode, currencySymbol, formatPrice: formatCurrencyPrice } = useBusinessCurrency();
   const [records, setRecords] = useState<any[]>([]);
   const [stats, setStats] = useState({ total: 0, published: 0, draft: 0, archived: 0 });
   const [loading, setLoading] = useState(true);
@@ -122,6 +124,12 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
     custom_attributes: {} as Record<string, any>,
     media: [] as Array<{ url: string; title: string; is_featured?: boolean }>,
   });
+
+  useEffect(() => {
+    if (currencyCode && formData.currency === "INR" && currencyCode !== "INR") {
+      setFormData((prev) => ({ ...prev, currency: currencyCode }));
+    }
+  }, [currencyCode]);
 
   // Import State
   const [importText, setImportText] = useState("");
@@ -192,7 +200,7 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
       status: "published",
       is_active: true,
       is_featured: false,
-      currency: "INR",
+      currency: currencyCode || "INR",
       price: "",
       featured_image: "",
       details: {},
@@ -226,7 +234,7 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
           status: full.status || "published",
           is_active: Boolean(full.is_active),
           is_featured: Boolean(full.is_featured),
-          currency: full.currency || "INR",
+          currency: full.currency || currencyCode || "INR",
           price: full.price ? String(full.price) : "",
           featured_image: full.featured_image || "",
           details: full.details || {},
@@ -706,8 +714,7 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
                       <td className="p-3.5">
                         {r.price !== null && r.price !== undefined ? (
                           <span className="font-semibold text-foreground">
-                            {r.currency === "INR" ? "₹" : "$"}
-                            {Number(r.price).toLocaleString()}
+                            {formatCurrencyPrice(r.price, r.currency)}
                           </span>
                         ) : (
                           <span className="text-xs text-muted-foreground">Included</span>
@@ -803,7 +810,7 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
 
                   <div className="pt-2 flex items-center justify-between border-t text-sm">
                     <span className="font-bold text-foreground">
-                      {r.currency === "INR" ? "₹" : "$"}{Number(r.price || 0).toLocaleString()}
+                      {formatCurrencyPrice(r.price, r.currency)}
                     </span>
                     <Switch checked={Boolean(r.is_active)} onCheckedChange={() => handleToggleActive(r)} />
                   </div>
@@ -860,10 +867,10 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>Selling Price / Standard Fee (INR)</Label>
+                  <Label>Selling Price / Standard Fee ({currencyCode || "INR"})</Label>
                   <Input
                     type="number"
-                    placeholder="e.g. 4500000"
+                    placeholder={`e.g. ${currencySymbol}4500000`}
                     value={formData.price}
                     onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                   />
@@ -1616,7 +1623,7 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label>Discounted Price (INR)</Label>
+                      <Label>Discounted Price ({currencyCode || "INR"})</Label>
                       <Input
                         type="number"
                         placeholder="e.g. 280"
@@ -1695,7 +1702,7 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
                             />
                             <Input
                               type="number"
-                              placeholder="Price (INR)"
+                              placeholder={`Price (${currencyCode || "INR"})`}
                               value={v.price || ""}
                               onChange={(e) => {
                                 const copy = [...formData.details.variants];
@@ -1901,7 +1908,7 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label>Weekend Price Per Night (INR)</Label>
+                    <Label>Weekend Price Per Night ({currencyCode || "INR"})</Label>
                     <Input
                       type="number"
                       placeholder="e.g. 5200"
@@ -1911,7 +1918,7 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label>Seasonal Price Per Night (INR)</Label>
+                    <Label>Seasonal Price Per Night ({currencyCode || "INR"})</Label>
                     <Input
                       type="number"
                       placeholder="e.g. 6500"
@@ -1921,7 +1928,7 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label>Extra Guest Charge (INR)</Label>
+                    <Label>Extra Guest Charge ({currencyCode || "INR"})</Label>
                     <Input
                       type="number"
                       placeholder="e.g. 800"
@@ -2169,7 +2176,7 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
                               />
                               <Input
                                 type="number"
-                                placeholder="Price (INR)"
+                                placeholder={`Price (${currencyCode || "INR"})`}
                                 value={t.price || ""}
                                 onChange={(e) => {
                                   const copy = [...formData.details.tickets];
@@ -2392,7 +2399,7 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-muted-foreground">Selling / Booking Price</span>
                   <span className="text-xl font-bold text-primary">
-                    {selectedRecord.currency === "INR" ? "₹" : "$"}{Number(selectedRecord.price || 0).toLocaleString()}
+                    {formatCurrencyPrice(selectedRecord.price, selectedRecord.currency)}
                   </span>
                 </div>
                 {selectedRecord.description && (

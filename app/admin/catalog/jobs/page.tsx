@@ -55,6 +55,7 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useBusinessCurrency } from "@/hooks/use-business-currency";
 import { useAuthStore } from "@/store";
 
 interface MasterJob {
@@ -106,6 +107,7 @@ interface DesignationOption {
 
 export default function MasterJobsPage() {
   const { accessToken } = useAuthStore();
+  const { currencySymbol } = useBusinessCurrency();
   const [jobs, setJobs] = useState<MasterJob[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -926,7 +928,7 @@ export default function MasterJobsPage() {
                 <div>
                   <Label className="text-xs font-semibold">Salary / Compensation Range</Label>
                   <Input
-                    placeholder="e.g. ₹12,00,000 - ₹20,00,000 P.A."
+                    placeholder={`e.g. ${currencySymbol}12,00,000 - ${currencySymbol}20,00,000 P.A.`}
                     value={salaryRange}
                     onChange={(e) => setSalaryRange(e.target.value)}
                     className="mt-1 h-9 text-xs"

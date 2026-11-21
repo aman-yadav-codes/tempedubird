@@ -85,6 +85,7 @@ import { InheritMasterProductsDialog } from "@/components/admin/catalog/inherit-
 import { ProductFormDialog, COMMON_UOM_OPTIONS } from "@/components/admin/catalog/product-form-dialog";
 import { UpdateStockBillDialog } from "@/components/admin/catalog/update-stock-bill-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useBusinessCurrency } from "@/hooks/use-business-currency";
 
 export type ProductCategory = {
   id: number;
@@ -157,13 +158,9 @@ const FORM_TABS = [
 
 type FormTabId = (typeof FORM_TABS)[number]["id"];
 
-function formatCurrency(val: number | string | null | undefined) {
-  const num = Number(val) || 0;
-  return `₹${num.toLocaleString("en-IN")}`;
-}
-
 export default function AdminProductsPage() {
   const { user, accessToken } = useAuthStore();
+  const { currencyCode, currencySymbol, formatPrice } = useBusinessCurrency();
   const [products, setProducts] = useState<ProductRecord[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [programOptions, setProgramOptions] = useState<ProgramOption[]>([]);
@@ -705,7 +702,7 @@ export default function AdminProductsPage() {
 
         <Card className="p-4 bg-card border-border shadow-2xs rounded-2xl">
           <p className="text-xs font-bold text-muted-foreground uppercase">Inventory Value</p>
-          <p className="text-2xl font-black text-foreground mt-1">{formatCurrency(stats.totalInventoryValue)}</p>
+          <p className="text-2xl font-black text-foreground mt-1">{formatPrice(stats.totalInventoryValue)}</p>
           <span className="text-[10px] text-muted-foreground">Stock valuation</span>
         </Card>
       </div>
@@ -945,7 +942,7 @@ export default function AdminProductsPage() {
                   {/* Pricing & Stock */}
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="text-xs font-black text-foreground">
-                      ₹{currentPrice.toLocaleString("en-IN")}
+                      {formatPrice(currentPrice, prod.currency || currencyCode)}
                     </span>
                     <span className="text-[10px] font-semibold text-muted-foreground truncate">
                       / {rawUnit}
@@ -957,7 +954,7 @@ export default function AdminProductsPage() {
                     )}
                     {prod.sale_price && Number(prod.sale_price) < Number(prod.price) && (
                       <span className="text-[10px] text-muted-foreground line-through">
-                        ₹{Number(prod.price).toLocaleString("en-IN")}
+                        {formatPrice(prod.price, prod.currency || currencyCode)}
                       </span>
                     )}
                   </div>
@@ -1002,7 +999,7 @@ export default function AdminProductsPage() {
                         <div className="space-y-2">
                           <div className="font-bold text-foreground text-xs line-clamp-1 border-b pb-1.5 flex items-center justify-between">
                             <span>{prod.title}</span>
-                            <span className="text-[10px] text-primary font-black">₹{currentPrice}</span>
+                            <span className="text-[10px] text-primary font-black">{formatPrice(currentPrice, prod.currency || currencyCode)}</span>
                           </div>
                           <p className="text-muted-foreground text-[11px] leading-relaxed">
                             {prod.description || "No description provided."}

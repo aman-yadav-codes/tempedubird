@@ -40,6 +40,7 @@ import {
   IndianRupee,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useBusinessCurrency } from "@/hooks/use-business-currency";
 
 export const PRICING_MODEL_OPTIONS = [
   { value: "fixed_price", label: "Fixed Price" },
@@ -107,6 +108,7 @@ export function ServiceFormDialog({
   apiEndpoint = "/api/admin/marketing/services",
   accessToken,
 }: ServiceFormDialogProps) {
+  const { currencyCode, currencySymbol } = useBusinessCurrency();
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("category");
 
@@ -378,6 +380,7 @@ export function ServiceFormDialog({
         delivery_mode: deliveryMode || "online",
         service_location: serviceLocation.trim() || null,
         price: parseFloat(price) || 0,
+        currency: currencyCode || "INR",
         suggested_price: parseFloat(price) || 0,
         suggested_price_inr: parseFloat(price) || 0,
         sale_price: salePrice ? parseFloat(salePrice) : null,
@@ -902,7 +905,7 @@ export function ServiceFormDialog({
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-[11px] font-semibold">Service Rate / Base Price (₹) *</Label>
+                    <Label className="text-[11px] font-semibold">Service Rate / Base Price ({currencySymbol}) *</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -914,7 +917,7 @@ export function ServiceFormDialog({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-[11px] font-semibold">Regular / MRP Price (₹)</Label>
+                    <Label className="text-[11px] font-semibold">Regular / MRP Price ({currencySymbol})</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -969,8 +972,8 @@ export function ServiceFormDialog({
                   <div className="space-y-2">
                     <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-muted-foreground px-1">
                       <span className="col-span-4">Package Name</span>
-                      <span className="col-span-2">Price (₹) *</span>
-                      <span className="col-span-2">Regular (₹)</span>
+                      <span className="col-span-2">Price ({currencySymbol}) *</span>
+                      <span className="col-span-2">Regular ({currencySymbol})</span>
                       <span className="col-span-3">Features / Inclusions</span>
                       <span className="col-span-1 text-right">Action</span>
                     </div>

@@ -460,13 +460,14 @@ export async function GET(req: Request) {
       try {
         if (company.listing_type === "professional") {
           const profRes = await db.query(
-            `SELECT avatar_url, banner_url, portfolio_images, gallery_images, experience_years, skills, qualifications, about, working_hours FROM professional_profiles
+            `SELECT country_code, avatar_url, banner_url, portfolio_images, gallery_images, experience_years, skills, qualifications, about, working_hours FROM professional_profiles
              WHERE business_profile_id = $1 OR user_id = $2 OR institution_profile_id = $1
              LIMIT 1`,
             [activeBizId, user?.id || null]
           );
           if (profRes.rows.length > 0) {
             const prof = profRes.rows[0];
+            if (prof.country_code) company.country_code = prof.country_code;
             if (!company.logo_url && prof.avatar_url) company.logo_url = prof.avatar_url;
             if (!company.banner_url && prof.banner_url) company.banner_url = prof.banner_url;
             const g = prof.gallery_images || prof.portfolio_images;
@@ -486,13 +487,14 @@ export async function GET(req: Request) {
           }
         } else {
           const bizRes = await db.query(
-            `SELECT logo_url, banner_url, gallery_images, opening_hours FROM business_profiles
+            `SELECT country_code, logo_url, banner_url, gallery_images, opening_hours FROM business_profiles
              WHERE id = $1 OR institution_profile_id = $1 OR user_id = $2
              LIMIT 1`,
             [activeBizId, user?.id || null]
           );
           if (bizRes.rows.length > 0) {
             const b = bizRes.rows[0];
+            if (b.country_code) company.country_code = b.country_code;
             if (!company.logo_url && b.logo_url) company.logo_url = b.logo_url;
             if (!company.banner_url && b.banner_url) company.banner_url = b.banner_url;
             if ((!company.gallery_images || company.gallery_images.length === 0) && b.gallery_images) {

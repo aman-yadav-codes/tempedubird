@@ -26,6 +26,7 @@ import {
   Boxes,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useBusinessCurrency } from "@/hooks/use-business-currency";
 
 export interface MasterProductItem {
   id: number;
@@ -59,6 +60,7 @@ export function InheritMasterProductsDialog({
   onSuccess,
   accessToken,
 }: InheritMasterProductsDialogProps) {
+  const { currencySymbol, currencyCode } = useBusinessCurrency();
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [products, setProducts] = useState<MasterProductItem[]>([]);
@@ -175,6 +177,7 @@ export function InheritMasterProductsDialog({
         body: JSON.stringify({
           master_product_ids: selectedIds,
           custom_prices: parsedPrices,
+          currency: currencyCode || "INR",
         }),
       });
 
@@ -342,7 +345,7 @@ export function InheritMasterProductsDialog({
                         <div className="text-xs">
                           <span className="text-[10px] text-muted-foreground block">Benchmark:</span>
                           <span className="font-bold text-foreground flex items-center text-xs">
-                            <IndianRupee className="size-3" />
+                            <span className="mr-0.5">{currencySymbol}</span>
                             {p.suggested_price || 0}
                           </span>
                         </div>
@@ -351,7 +354,9 @@ export function InheritMasterProductsDialog({
                           <div className="flex items-center gap-1">
                             <span className="text-[10px] font-semibold text-primary">Store Price:</span>
                             <div className="relative w-24">
-                              <IndianRupee className="absolute left-1.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
+                              <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground pointer-events-none">
+                                {currencySymbol}
+                              </span>
                               <Input
                                 type="number"
                                 placeholder={String(p.suggested_price || 0)}

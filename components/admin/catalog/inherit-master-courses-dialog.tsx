@@ -26,6 +26,7 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useBusinessCurrency } from "@/hooks/use-business-currency";
 
 export interface MasterCourseItem {
   id: number;
@@ -59,6 +60,7 @@ export function InheritMasterCoursesDialog({
   onSuccess,
   accessToken,
 }: InheritMasterCoursesDialogProps) {
+  const { currencySymbol, currencyCode } = useBusinessCurrency();
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [courses, setCourses] = useState<MasterCourseItem[]>([]);
@@ -167,6 +169,7 @@ export function InheritMasterCoursesDialog({
         body: JSON.stringify({
           master_course_ids: selectedIds,
           custom_fees: customFees,
+          currency: currencyCode || "INR",
         }),
       });
 
@@ -359,7 +362,7 @@ export function InheritMasterCoursesDialog({
                         <div className="flex items-center gap-1.5">
                           <span className="text-[11px] font-semibold text-muted-foreground">Fee:</span>
                           <div className="relative w-28">
-                            <IndianRupee className="size-3.5 absolute left-2 top-2.5 text-muted-foreground" />
+                            <span className="text-xs font-bold absolute left-2.5 top-2 text-muted-foreground pointer-events-none">{currencySymbol}</span>
                             <Input
                               type="number"
                               min="0"

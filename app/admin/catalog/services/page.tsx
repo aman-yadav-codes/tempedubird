@@ -65,6 +65,7 @@ import {
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
 import { CATALOG_AVAILABLE_COUNTRIES, getCatalogCountryMeta } from "@/lib/config/country-config";
+import { useBusinessCurrency } from "@/hooks/use-business-currency";
 
 interface MasterService {
   id: number;
@@ -150,6 +151,7 @@ const DURATION_UNITS = ["minutes", "hours", "days", "weeks"];
 
 export default function MasterServicesPage() {
   const { accessToken } = useAuthStore();
+  const { currencySymbol, currencyCode } = useBusinessCurrency();
   const [services, setServices] = useState<MasterService[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1831,7 +1833,7 @@ export default function MasterServicesPage() {
                     <div className="space-y-2">
                       <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-muted-foreground px-1">
                         <span className="col-span-4">Package / Tier Name</span>
-                        <span className="col-span-2">Price (₹) *</span>
+                        <span className="col-span-2">Price ({currencySymbol}) *</span>
                         <span className="col-span-2">Duration</span>
                         <span className="col-span-3">Description / Inclusions</span>
                         <span className="col-span-1 text-right">Action</span>
@@ -1854,7 +1856,7 @@ export default function MasterServicesPage() {
                             <Input
                               type="number"
                               step="0.01"
-                              placeholder="₹ Price"
+                              placeholder={`${currencySymbol} Price`}
                               value={v.price}
                               onChange={(e) => {
                                 const copy = [...variants];

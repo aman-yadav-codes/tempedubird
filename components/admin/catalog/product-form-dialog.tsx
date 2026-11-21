@@ -39,6 +39,7 @@ import {
   IndianRupee,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useBusinessCurrency } from "@/hooks/use-business-currency";
 
 export const COMMON_UOM_OPTIONS = [
   "Piece",
@@ -112,6 +113,7 @@ export function ProductFormDialog({
   apiEndpoint = "/api/admin/marketing/products",
   accessToken,
 }: ProductFormDialogProps) {
+  const { countryCode, currencyCode, currencySymbol, formatPrice } = useBusinessCurrency();
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("category");
 
@@ -443,6 +445,7 @@ export function ProductFormDialog({
         price: parseFloat(price) || 0,
         suggested_price: parseFloat(price) || 0,
         suggested_price_inr: parseFloat(price) || 0,
+        currency: currencyCode || "INR",
         sale_price: salePrice ? parseFloat(salePrice) : null,
         stock_quantity: parseInt(stockQuantity) || 100,
         status: isActive ? "active" : "draft",
@@ -938,11 +941,11 @@ export function ProductFormDialog({
               {/* BASE STORE PRICING */}
               <div className="p-3.5 border rounded-xl bg-muted/10 border-border space-y-3">
                 <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <IndianRupee className="size-3.5 text-primary" /> Store Pricing & Inventory
+                  <span className="text-primary font-bold text-xs">{currencySymbol}</span> Store Pricing & Inventory ({currencyCode})
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-[11px] font-semibold">Store Price (₹) *</Label>
+                    <Label className="text-[11px] font-semibold">Store Price ({currencySymbol}) *</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -954,7 +957,7 @@ export function ProductFormDialog({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-[11px] font-semibold">MRP / Regular Price (₹)</Label>
+                    <Label className="text-[11px] font-semibold">MRP / Regular Price ({currencySymbol})</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -1019,7 +1022,7 @@ export function ProductFormDialog({
                   <div className="space-y-2">
                     <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-muted-foreground px-1">
                       <span className="col-span-4">Variant Name / Pack</span>
-                      <span className="col-span-2">Price (₹) *</span>
+                      <span className="col-span-2">Price ({currencySymbol}) *</span>
                       <span className="col-span-2">MRP / Reg Price</span>
                       <span className="col-span-2">Unit</span>
                       <span className="col-span-2 text-right">Action</span>

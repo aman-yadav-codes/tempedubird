@@ -89,6 +89,7 @@ import {
 import { InheritMasterServicesDialog } from "@/components/admin/catalog/inherit-master-services-dialog";
 import { ServiceFormDialog } from "@/components/admin/catalog/service-form-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useBusinessCurrency } from "@/hooks/use-business-currency";
 
 export type ServiceCategory = {
   id: number;
@@ -156,14 +157,10 @@ const FORM_TABS = [
 
 type FormTabId = (typeof FORM_TABS)[number]["id"];
 
-function formatCurrency(val: number | string | null | undefined) {
-  const num = Number(val) || 0;
-  return `₹${num.toLocaleString("en-IN")}`;
-}
-
 export default function AdminServicesPage() {
   const { isReady, isForbidden } = useAdminGuard();
   const { user, accessToken } = useAuthStore();
+  const { currencyCode, currencySymbol, formatPrice } = useBusinessCurrency();
   const [services, setServices] = useState<ServiceRecord[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [programOptions, setProgramOptions] = useState<ProgramOption[]>([]);
@@ -569,7 +566,7 @@ export default function AdminServicesPage() {
 
         <Card className="p-4 bg-card border-border shadow-2xs rounded-2xl">
           <p className="text-xs font-bold text-muted-foreground uppercase">Avg. Fee / Session</p>
-          <p className="text-2xl font-black text-foreground mt-1">{formatCurrency(stats.avgPrice)}</p>
+          <p className="text-2xl font-black text-foreground mt-1">{formatPrice(stats.avgPrice)}</p>
           <span className="text-[10px] text-muted-foreground">Standard pricing</span>
         </Card>
       </div>
@@ -725,11 +722,11 @@ export default function AdminServicesPage() {
                   {/* Pricing */}
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="text-xs font-black text-foreground">
-                      ₹{currentPrice.toLocaleString("en-IN")}
+                      {formatPrice(currentPrice, srv.currency || currencyCode)}
                     </span>
                     {hasSale && (
                       <span className="text-[10px] text-muted-foreground line-through">
-                        ₹{Number(srv.price).toLocaleString("en-IN")}
+                        {formatPrice(srv.price, srv.currency || currencyCode)}
                       </span>
                     )}
                   </div>
@@ -768,7 +765,7 @@ export default function AdminServicesPage() {
                         <div className="space-y-2">
                           <div className="font-bold text-foreground text-xs line-clamp-1 border-b pb-1.5 flex items-center justify-between">
                             <span>{srv.title}</span>
-                            <span className="text-[10px] text-sky-600 font-black">₹{currentPrice}</span>
+                            <span className="text-[10px] text-sky-600 font-black">{formatPrice(currentPrice, srv.currency || currencyCode)}</span>
                           </div>
                           <p className="text-muted-foreground text-[11px] leading-relaxed">
                             {srv.description || "No description provided."}

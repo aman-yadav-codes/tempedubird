@@ -167,6 +167,9 @@ export async function GET(req: Request) {
         businessId: tenant.businessId,
         institutionId: tenant.institutionId,
         businessName: tenant.businessName,
+        countryCode: tenant.countryCode,
+        currencyCode: tenant.currencyCode,
+        currencySymbol: tenant.currencySymbol,
       }
     });
   } catch (err: any) {
@@ -192,7 +195,7 @@ export async function POST(req: Request) {
       status = "published",
       is_active = true,
       is_featured = false,
-      currency = "INR",
+      currency,
       price,
       featured_image,
       metadata = {},
@@ -254,7 +257,7 @@ export async function POST(req: Request) {
       status,
       Boolean(is_active),
       Boolean(is_featured),
-      currency,
+      currency || tenant.currencyCode || "INR",
       price !== undefined && price !== "" ? Number(price) : null,
       featured_image || null,
       metadata,

@@ -71,6 +71,7 @@ import {
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
 import { CATALOG_AVAILABLE_COUNTRIES, getCatalogCountryMeta } from "@/lib/config/country-config";
+import { useBusinessCurrency } from "@/hooks/use-business-currency";
 
 interface MasterProduct {
   id: number;
@@ -160,6 +161,7 @@ const COMMON_UOM_OPTIONS = [
 
 export default function MasterProductsPage() {
   const { accessToken } = useAuthStore();
+  const { currencySymbol, currencyCode } = useBusinessCurrency();
   const [products, setProducts] = useState<MasterProduct[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [businessCategories, setBusinessCategories] = useState<BusinessCategoryOption[]>([]);
@@ -1641,8 +1643,8 @@ export default function MasterProductsPage() {
                     <div className="space-y-2">
                       <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-muted-foreground px-1">
                         <span className="col-span-4">Variant Name / Pack</span>
-                        <span className="col-span-2">Price (₹) *</span>
-                        <span className="col-span-2">MRP / Reg Price</span>
+                        <span className="col-span-2">Price ({currencySymbol}) *</span>
+                        <span className="col-span-2">MRP / Reg Price ({currencySymbol})</span>
                         <span className="col-span-2">Unit</span>
                         <span className="col-span-2 text-right">Action</span>
                       </div>
@@ -1664,7 +1666,7 @@ export default function MasterProductsPage() {
                             <Input
                               type="number"
                               step="0.01"
-                              placeholder="₹ Price"
+                              placeholder={`${currencySymbol} Price`}
                               value={v.price}
                               onChange={(e) => {
                                 const copy = [...variants];
@@ -1678,7 +1680,7 @@ export default function MasterProductsPage() {
                             <Input
                               type="number"
                               step="0.01"
-                              placeholder="₹ Reg Price"
+                              placeholder={`${currencySymbol} Reg Price`}
                               value={v.regular_price}
                               onChange={(e) => {
                                 const copy = [...variants];

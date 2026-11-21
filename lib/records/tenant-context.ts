@@ -1,6 +1,7 @@
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { getFrontendConfig } from "@/lib/config/frontend-config";
 import { db } from "@/lib/db/db";
+import { getCatalogCountryMeta } from "@/lib/config/country-config";
 
 export type TenantContext = {
   businessId: number;
@@ -8,6 +9,9 @@ export type TenantContext = {
   businessName: string;
   isPlatformAdmin: boolean;
   userId: number | null;
+  countryCode: string;
+  currencyCode: string;
+  currencySymbol: string;
 };
 
 export async function resolveTenantContext(req: Request): Promise<TenantContext | null> {
@@ -33,7 +37,7 @@ export async function resolveTenantContext(req: Request): Promise<TenantContext 
   if (user?.id && !isPlatformAdmin) {
     // 2. Fetch all businesses and institutions owned by this authenticated user
     const userBizRes = await db.query(
-      `SELECT id, institution_profile_id, name FROM business_profiles WHERE user_id = $1 ORDER BY id DESC`,
+      `SELECT id, institution_profile_id, name, country_code FROM business_profiles WHERE user_id = $1 ORDER BY id DESC`,
       [user.id]
     );
 
@@ -62,9 +66,9 @@ export async function resolveTenantContext(req: Request): Promise<TenantContext 
       } else {
         // User has no business profile yet: auto-create an isolated business profile for this user
         const newBiz = await db.query(
-          `INSERT INTO business_profiles (user_id, name, is_active, created_at, updated_at)
-           VALUES ($1, $2, TRUE, NOW(), NOW())
-           RETURNING id, name`,
+          `INSERT INTO business_profiles (user_id, name, country_code, is_active, created_at, updated_at)
+           VALUES ($1, $2, 'IN', TRUE, NOW(), NOW())
+           RETURNING id, name, country_code`,
           [user.id, (user as any).name ? `${(user as any).name}'s Business` : `My Business`]
         );
         candidateBizId = newBiz.rows[0].id;
@@ -75,7 +79,10 @@ export async function resolveTenantContext(req: Request): Promise<TenantContext 
       id: candidateBizId,
       name: (user as any).name ? `${(user as any).name}'s Business` : "My Business",
       institution_profile_id: candidateInstId,
+      country_code: "IN",
     };
+
+    const cMeta = getCatalogCountryMeta(currentBiz.country_code || "IN");
 
     return {
       businessId: candidateBizId,
@@ -83,6 +90,9 @@ export async function resolveTenantContext(req: Request): Promise<TenantContext 
       businessName: currentBiz.name,
       isPlatformAdmin: false,
       userId: user.id,
+      countryCode: cMeta.code,
+      currencyCode: cMeta.currencyCode,
+      currencySymbol: cMeta.currencySymbol,
     };
   }
 
@@ -95,7 +105,7 @@ export async function resolveTenantContext(req: Request): Promise<TenantContext 
       }
     }
     if (!candidateBizId) {
-      const firstBiz = await db.query(`SELECT id, institution_profile_id, name FROM business_profiles ORDER BY id ASC LIMIT 1`);
+      const firstBiz = await db.query(`SELECT id, institution_profile_id, name, country_code FROM business_profiles ORDER BY id ASC LIMIT 1`);
       if (firstBiz.rows.length > 0) {
         candidateBizId = firstBiz.rows[0].id;
         candidateInstId = candidateInstId || firstBiz.rows[0].institution_profile_id;
@@ -104,16 +114,21 @@ export async function resolveTenantContext(req: Request): Promise<TenantContext 
 
     if (candidateBizId) {
       const bizRow = await db.query(
-        `SELECT id, institution_profile_id, name FROM business_profiles WHERE id = $1 LIMIT 1`,
+        `SELECT id, institution_profile_id, name, country_code FROM business_profiles WHERE id = $1 LIMIT 1`,
         [candidateBizId]
       );
-      const biz = bizRow.rows[0] || { id: candidateBizId, name: "Platform Admin Workspace", institution_profile_id: candidateInstId };
+      const biz = bizRow.rows[0] || { id: candidateBizId, name: "Platform Admin Workspace", institution_profile_id: candidateInstId, country_code: "IN" };
+      const cMeta = getCatalogCountryMeta(biz.country_code || "IN");
+
       return {
         businessId: biz.id,
         institutionId: biz.institution_profile_id || candidateInstId || biz.id,
         businessName: biz.name,
         isPlatformAdmin: true,
         userId: user?.id || null,
+        countryCode: cMeta.code,
+        currencyCode: cMeta.currencyCode,
+        currencySymbol: cMeta.currencySymbol,
       };
     }
   }
