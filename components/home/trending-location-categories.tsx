@@ -16,6 +16,9 @@ import {
   ChevronRight,
   Layers,
   Loader2,
+  Building2,
+  Building,
+  Calendar,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +28,7 @@ export interface TrendingCategoryItem {
   id: number;
   name: string;
   slug: string;
-  vertical: "product" | "service" | "professional" | "course" | "job";
+  vertical: "product" | "service" | "professional" | "course" | "job" | "business" | "property" | "event";
   itemCount: number;
   storeCount?: number | null;
   providerCount?: number | null;
@@ -42,6 +45,9 @@ interface TrendingCategoriesResponse {
     professionals: number;
     courses: number;
     jobs: number;
+    businesses: number;
+    properties: number;
+    events: number;
     total: number;
   };
   categories: {
@@ -50,6 +56,9 @@ interface TrendingCategoriesResponse {
     professionals: TrendingCategoryItem[];
     courses: TrendingCategoryItem[];
     jobs: TrendingCategoryItem[];
+    businesses: TrendingCategoryItem[];
+    properties: TrendingCategoryItem[];
+    events: TrendingCategoryItem[];
   };
 }
 
@@ -108,9 +117,39 @@ const VERTICAL_CONFIGS = {
     badgeLabel: "Career Track",
     exploreAllUrl: "/jobs",
   },
+  business: {
+    label: "Business",
+    pluralLabel: "Businesses",
+    icon: Building2,
+    colorClass: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
+    borderHover: "hover:border-indigo-500/40",
+    btnColor: "text-indigo-600 hover:text-indigo-700 dark:text-indigo-400",
+    badgeLabel: "Business Entity",
+    exploreAllUrl: "/businesses",
+  },
+  property: {
+    label: "Property",
+    pluralLabel: "Properties",
+    icon: Building,
+    colorClass: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20",
+    borderHover: "hover:border-cyan-500/40",
+    btnColor: "text-cyan-600 hover:text-cyan-700 dark:text-cyan-400",
+    badgeLabel: "Real Estate",
+    exploreAllUrl: "/explore?type=property",
+  },
+  event: {
+    label: "Event",
+    pluralLabel: "Events",
+    icon: Calendar,
+    colorClass: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
+    borderHover: "hover:border-rose-500/40",
+    btnColor: "text-rose-600 hover:text-rose-700 dark:text-rose-400",
+    badgeLabel: "Live Event",
+    exploreAllUrl: "/explore?type=all&category=events",
+  },
 };
 
-type ActiveTab = "all" | "products" | "services" | "professionals" | "courses" | "jobs";
+type ActiveTab = "all" | "products" | "services" | "professionals" | "courses" | "jobs" | "businesses" | "properties" | "events";
 
 export function TrendingLocationCategories({ location }: TrendingLocationCategoriesProps) {
   const [data, setData] = useState<TrendingCategoriesResponse | null>(null);
@@ -155,16 +194,22 @@ export function TrendingLocationCategories({ location }: TrendingLocationCategor
     if (activeTab === "professionals") return data.categories.professionals || [];
     if (activeTab === "courses") return data.categories.courses || [];
     if (activeTab === "jobs") return data.categories.jobs || [];
+    if (activeTab === "businesses") return data.categories.businesses || [];
+    if (activeTab === "properties") return data.categories.properties || [];
+    if (activeTab === "events") return data.categories.events || [];
 
-    // "all": Interleave categories from all 5 verticals
+    // "all": Interleave categories from all verticals
     const p = data.categories.products || [];
     const s = data.categories.services || [];
     const prof = data.categories.professionals || [];
     const c = data.categories.courses || [];
     const j = data.categories.jobs || [];
+    const b = data.categories.businesses || [];
+    const prop = data.categories.properties || [];
+    const ev = data.categories.events || [];
 
     const result: TrendingCategoryItem[] = [];
-    const maxLen = Math.max(p.length, s.length, prof.length, c.length, j.length);
+    const maxLen = Math.max(p.length, s.length, prof.length, c.length, j.length, b.length, prop.length, ev.length);
 
     for (let i = 0; i < maxLen; i++) {
       if (p[i]) result.push(p[i]);
@@ -172,9 +217,12 @@ export function TrendingLocationCategories({ location }: TrendingLocationCategor
       if (prof[i]) result.push(prof[i]);
       if (c[i]) result.push(c[i]);
       if (j[i]) result.push(j[i]);
+      if (b[i]) result.push(b[i]);
+      if (prop[i]) result.push(prop[i]);
+      if (ev[i]) result.push(ev[i]);
     }
 
-    return result.slice(0, 15);
+    return result.slice(0, 16);
   }, [data, activeTab]);
 
   const counts = data?.counts || {
@@ -183,6 +231,9 @@ export function TrendingLocationCategories({ location }: TrendingLocationCategor
     professionals: 0,
     courses: 0,
     jobs: 0,
+    businesses: 0,
+    properties: 0,
+    events: 0,
     total: 0,
   };
 
@@ -348,6 +399,66 @@ export function TrendingLocationCategories({ location }: TrendingLocationCategor
               }`}
             >
               {counts.jobs}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("businesses")}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+              activeTab === "businesses"
+                ? "bg-indigo-600 text-white shadow-xs"
+                : "bg-card hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60"
+            }`}
+          >
+            <Building2 className="size-3.5 text-indigo-500" />
+            <span>Businesses</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                activeTab === "businesses" ? "bg-white/20 text-white" : "bg-muted text-foreground"
+              }`}
+            >
+              {counts.businesses}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("properties")}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+              activeTab === "properties"
+                ? "bg-cyan-600 text-white shadow-xs"
+                : "bg-card hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60"
+            }`}
+          >
+            <Building className="size-3.5 text-cyan-500" />
+            <span>Property</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                activeTab === "properties" ? "bg-white/20 text-white" : "bg-muted text-foreground"
+              }`}
+            >
+              {counts.properties}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("events")}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+              activeTab === "events"
+                ? "bg-rose-600 text-white shadow-xs"
+                : "bg-card hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60"
+            }`}
+          >
+            <Calendar className="size-3.5 text-rose-500" />
+            <span>Events</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                activeTab === "events" ? "bg-white/20 text-white" : "bg-muted text-foreground"
+              }`}
+            >
+              {counts.events}
             </span>
           </button>
         </div>

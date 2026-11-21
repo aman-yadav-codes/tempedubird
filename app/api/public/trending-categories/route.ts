@@ -391,6 +391,164 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // ==========================================
+    // 6. BUSINESS CATEGORIES
+    // ==========================================
+    const bizLocSql = buildLocClause("bp", ["city", "locality", "address", "state"], 1);
+    const bizParams = hasLocation ? [...locValues] : [];
+
+    let bizRes = await db.query(
+      `
+      SELECT
+        c.id,
+        c.name,
+        c.slug,
+        'business' AS category_type,
+        COUNT(DISTINCT bp.id)::int AS item_count,
+        (
+          SELECT ARRAY_AGG(sub.bname)
+          FROM (
+            SELECT DISTINCT bp2.name AS bname
+            FROM business_profiles bp2
+            WHERE bp2.category_id = c.id
+              AND ${hasLocation ? buildLocClause("bp2", ["city", "locality", "address", "state"], 1) : "TRUE"}
+            LIMIT 3
+          ) sub
+        ) AS sample_items
+      FROM categories c
+      JOIN business_profiles bp ON bp.category_id = c.id
+      WHERE COALESCE(bp.is_active, TRUE) = TRUE
+        AND ${bizLocSql}
+      GROUP BY c.id, c.name, c.slug
+      ORDER BY item_count DESC
+      LIMIT $${bizParams.length + 1}
+      `,
+      [...bizParams, limit]
+    );
+
+    if (bizRes.rows.length === 0) {
+      bizRes = await db.query(
+        `
+        SELECT
+          c.id,
+          c.name,
+          c.slug,
+          'business' AS category_type,
+          COUNT(DISTINCT bp.id)::int AS item_count,
+          (
+            SELECT ARRAY_AGG(sub.bname)
+            FROM (
+              SELECT DISTINCT bp2.name AS bname
+              FROM business_profiles bp2
+              WHERE bp2.category_id = c.id
+              LIMIT 3
+            ) sub
+          ) AS sample_items
+        FROM categories c
+        LEFT JOIN business_profiles bp ON bp.category_id = c.id
+        WHERE c.category_type = 'business'
+        GROUP BY c.id, c.name, c.slug
+        ORDER BY item_count DESC, c.name ASC
+        LIMIT $1
+        `,
+        [limit]
+      );
+    }
+
+    // ==========================================
+    // 7. PROPERTY CATEGORIES
+    // ==========================================
+    const propLocSql = buildLocClause("bp", ["city", "locality", "address", "state"], 1);
+    const propParams = hasLocation ? [...locValues] : [];
+
+    let propRes = await db.query(
+      `
+      SELECT
+        c.id,
+        c.name,
+        c.slug,
+        'property' AS category_type,
+        COALESCE(
+          NULLIF(COUNT(DISTINCT br.id), 0),
+          (
+            SELECT COUNT(*)::int
+            FROM business_records br_loc
+            JOIN business_profiles bp_loc ON bp_loc.id = br_loc.business_id
+            WHERE br_loc.vertical_code = 'properties'
+              AND COALESCE(br_loc.is_active, TRUE) = TRUE
+              AND ${hasLocation ? buildLocClause("bp_loc", ["city", "locality", "address", "state"], 1) : "TRUE"}
+          ),
+          1
+        )::int AS item_count,
+        (
+          SELECT ARRAY_AGG(sub.title)
+          FROM (
+            SELECT DISTINCT br2.title
+            FROM business_records br2
+            JOIN business_profiles bp2 ON bp2.id = br2.business_id
+            WHERE br2.vertical_code = 'properties'
+              AND ${hasLocation ? buildLocClause("bp2", ["city", "locality", "address", "state"], 1) : "TRUE"}
+            LIMIT 3
+          ) sub
+        ) AS sample_items
+      FROM categories c
+      LEFT JOIN business_records br ON (br.category_id = c.id OR br.subcategory_id = c.id) AND br.vertical_code = 'properties'
+      LEFT JOIN business_profiles bp ON bp.id = br.business_id AND ${propLocSql}
+      WHERE c.category_type = 'property'
+      GROUP BY c.id, c.name, c.slug
+      ORDER BY item_count DESC, c.name ASC
+      LIMIT $${propParams.length + 1}
+      `,
+      [...propParams, limit]
+    );
+
+    // ==========================================
+    // 8. EVENT CATEGORIES
+    // ==========================================
+    const evtLocSql = buildLocClause("bp", ["city", "locality", "address", "state"], 1);
+    const evtParams = hasLocation ? [...locValues] : [];
+
+    let eventRes = await db.query(
+      `
+      SELECT
+        c.id,
+        c.name,
+        c.slug,
+        'event' AS category_type,
+        COALESCE(
+          NULLIF(COUNT(DISTINCT br.id), 0),
+          (
+            SELECT COUNT(*)::int
+            FROM business_records br_loc
+            JOIN business_profiles bp_loc ON bp_loc.id = br_loc.business_id
+            WHERE br_loc.vertical_code = 'events'
+              AND COALESCE(br_loc.is_active, TRUE) = TRUE
+              AND ${hasLocation ? buildLocClause("bp_loc", ["city", "locality", "address", "state"], 1) : "TRUE"}
+          ),
+          1
+        )::int AS item_count,
+        (
+          SELECT ARRAY_AGG(sub.title)
+          FROM (
+            SELECT DISTINCT br2.title
+            FROM business_records br2
+            JOIN business_profiles bp2 ON bp2.id = br2.business_id
+            WHERE br2.vertical_code = 'events'
+              AND ${hasLocation ? buildLocClause("bp2", ["city", "locality", "address", "state"], 1) : "TRUE"}
+            LIMIT 3
+          ) sub
+        ) AS sample_items
+      FROM categories c
+      LEFT JOIN business_records br ON (br.category_id = c.id OR br.subcategory_id = c.id) AND br.vertical_code = 'events'
+      LEFT JOIN business_profiles bp ON bp.id = br.business_id AND ${evtLocSql}
+      WHERE c.category_type = 'event'
+      GROUP BY c.id, c.name, c.slug
+      ORDER BY item_count DESC, c.name ASC
+      LIMIT $${evtParams.length + 1}
+      `,
+      [...evtParams, limit]
+    );
+
     // Format output with navigation links
     const formatCategories = (rows: any[], verticalType: string) => {
       return rows.map((r) => {
@@ -399,6 +557,12 @@ export async function GET(req: NextRequest) {
           href = `/courses?category=${encodeURIComponent(r.name)}`;
         } else if (verticalType === "job") {
           href = `/jobs?department=${encodeURIComponent(r.name)}`;
+        } else if (verticalType === "business") {
+          href = `/businesses?category=${encodeURIComponent(r.name)}`;
+        } else if (verticalType === "property") {
+          href = `/explore?type=property&categoryId=${r.id}&categoryName=${encodeURIComponent(r.name)}`;
+        } else if (verticalType === "event") {
+          href = `/explore?type=all&category=events&categoryName=${encodeURIComponent(r.name)}`;
         }
 
         return {
@@ -420,6 +584,9 @@ export async function GET(req: NextRequest) {
     const formattedProfessionals = formatCategories(profRes.rows, "professional");
     const formattedCourses = formatCategories(courseRes.rows, "course");
     const formattedJobs = formatCategories(jobRes.rows, "job");
+    const formattedBusinesses = formatCategories(bizRes.rows, "business");
+    const formattedProperties = formatCategories(propRes.rows, "property");
+    const formattedEvents = formatCategories(eventRes.rows, "event");
 
     return NextResponse.json({
       success: true,
@@ -431,12 +598,18 @@ export async function GET(req: NextRequest) {
         professionals: formattedProfessionals.length,
         courses: formattedCourses.length,
         jobs: formattedJobs.length,
+        businesses: formattedBusinesses.length,
+        properties: formattedProperties.length,
+        events: formattedEvents.length,
         total:
           formattedProducts.length +
           formattedServices.length +
           formattedProfessionals.length +
           formattedCourses.length +
-          formattedJobs.length,
+          formattedJobs.length +
+          formattedBusinesses.length +
+          formattedProperties.length +
+          formattedEvents.length,
       },
       categories: {
         products: formattedProducts,
@@ -444,6 +617,9 @@ export async function GET(req: NextRequest) {
         professionals: formattedProfessionals,
         courses: formattedCourses,
         jobs: formattedJobs,
+        businesses: formattedBusinesses,
+        properties: formattedProperties,
+        events: formattedEvents,
       },
     });
   } catch (err: unknown) {
