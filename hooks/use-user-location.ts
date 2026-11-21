@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { detectCityFromCoordinates, ALL_AVAILABLE_LOCATIONS } from "@/lib/utils/geo-location";
+import {
+  detectCityFromCoordinates,
+  detectLocationDetails,
+  resolveCountryFromLocation,
+  ALL_AVAILABLE_LOCATIONS,
+} from "@/lib/utils/geo-location";
+import { getCatalogCountryMeta } from "@/lib/config/country-config";
 import { toast } from "sonner";
 
 const STORAGE_KEY_LOCATION = "edubird_user_location";
@@ -49,16 +55,36 @@ export function useUserLocation() {
     };
   }, []);
 
-  const setLocation = useCallback((newLoc: string, detected: boolean = false) => {
+  const setLocation = useCallback((newLoc: string, detected: boolean = false, explicitCountryCode?: string | null) => {
     setLocationState(newLoc);
     setIsDetected(detected);
     setShowPrompt(false);
+
+    // Auto-resolve country and currency from location name or explicit country
+    const targetCountry = (explicitCountryCode || resolveCountryFromLocation(newLoc) || "").trim().toUpperCase();
+
     try {
       localStorage.setItem(STORAGE_KEY_LOCATION, newLoc);
       localStorage.setItem(STORAGE_KEY_DETECTED, String(detected));
       localStorage.setItem(STORAGE_KEY_PROMPTED, "true");
+
+      if (targetCountry) {
+        localStorage.setItem("edubird_user_country", targetCountry);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("edubird-country-change", {
+              detail: { countryCode: targetCountry },
+            })
+          );
+        }
+      }
+
       if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("edubird-location-change", { detail: { location: newLoc, detected } }));
+        window.dispatchEvent(
+          new CustomEvent("edubird-location-change", {
+            detail: { location: newLoc, detected, countryCode: targetCountry || undefined },
+          })
+        );
       }
     } catch {}
   }, []);
@@ -82,14 +108,15 @@ export function useUserLocation() {
         try {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
-          const detectedCity = await detectCityFromCoordinates(lat, lng);
+          const detail = await detectLocationDetails(lat, lng);
+          const countryMeta = getCatalogCountryMeta(detail.countryCode);
 
-          setLocation(detectedCity, true);
-          toast.success(`Location detected: ${detectedCity}`, {
-            description: "Showing institutions and courses near you.",
+          setLocation(detail.city, true, detail.countryCode);
+          toast.success(`Location detected: ${detail.city} (${countryMeta.flag} ${countryMeta.name})`, {
+            description: `Country & currency set to ${countryMeta.currencyCode} (${countryMeta.currencySymbol})`,
           });
         } catch {
-          setLocation("Varanasi", true);
+          setLocation("Varanasi", true, "IN");
         } finally {
           setIsDetecting(false);
           setShowPrompt(false);

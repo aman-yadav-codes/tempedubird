@@ -416,7 +416,7 @@ export function UnifiedMarketplaceHome() {
                   title="Click to select or change location"
                 >
                   <MapPin className="size-3.5 text-amber-400" />
-                  <span>Location: <strong className="text-white">{displayCity || "South Africa"}</strong></span>
+                  <span>Location: <strong className="text-white">{displayCity}</strong></span>
                   <span className="text-[11px] text-amber-400/90 ml-0.5">Change ⌵</span>
                 </button>
               </div>

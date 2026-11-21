@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     const action = url.searchParams.get("action");
     const input = url.searchParams.get("input") || url.searchParams.get("q") || "";
     const placeId = url.searchParams.get("place_id");
-    const country = url.searchParams.get("country") || "in";
+    const country = url.searchParams.get("country");
 
     // 1. Place Details Lookup
     if (action === "details" && placeId) {
@@ -92,7 +92,7 @@ export async function GET(req: Request) {
     // A. Primary: Google Places Autocomplete API
     if (GOOGLE_API_KEY) {
       try {
-        const countryFilter = country ? `&components=country:${country.toLowerCase()}` : "";
+        const countryFilter = country && country.toLowerCase() !== "all" ? `&components=country:${country.toLowerCase()}` : "";
         const googleRes = await fetch(
           `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
             trimmedInput
@@ -119,7 +119,7 @@ export async function GET(req: Request) {
 
     // B. Fallback: OpenStreetMap Nominatim
     try {
-      const countryFilter = country === "in" ? "&countrycodes=in" : "";
+      const countryFilter = country && country.toLowerCase() !== "all" ? `&countrycodes=${country.toLowerCase()}` : "";
       const nomRes = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6${countryFilter}&q=${encodeURIComponent(
           trimmedInput

@@ -47,6 +47,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { useUserCountry } from "@/hooks/use-user-country";
+import { resolveCountryFromLocation } from "@/lib/utils/geo-location";
+import { getCatalogCountryMeta } from "@/lib/config/country-config";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -264,7 +266,7 @@ export function PlatformAdminHeader() {
     const timer = setTimeout(async () => {
       setIsLoadingLocationSuggestions(true);
       try {
-        const res = await fetch(`/api/public/places/autocomplete?input=${encodeURIComponent(trimmed)}`);
+        const res = await fetch(`/api/public/places/autocomplete?input=${encodeURIComponent(trimmed)}&country=${encodeURIComponent(country.code || "")}`);
         const data = await res.json();
         if (data?.predictions && Array.isArray(data.predictions)) {
           setLocationSuggestions(data.predictions);
@@ -1126,8 +1128,17 @@ export function PlatformAdminHeader() {
               e.preventDefault();
               const trimmed = customLocationInput.trim();
               if (trimmed) {
-                setLocation(trimmed, false);
-                toast.success(`Location set to "${trimmed}"`);
+                const resolvedCountry = resolveCountryFromLocation(trimmed);
+                setLocation(trimmed, false, resolvedCountry);
+                if (resolvedCountry) {
+                  setCountry(resolvedCountry);
+                  const cm = getCatalogCountryMeta(resolvedCountry);
+                  toast.success(`Location set to "${trimmed}"`, {
+                    description: `Country & Currency set to ${cm.name} (${cm.currencyCode} ${cm.currencySymbol})`,
+                  });
+                } else {
+                  toast.success(`Location set to "${trimmed}"`);
+                }
                 setCustomLocationInput("");
                 setLocationSuggestions([]);
                 setLocationDialogOpen(false);
@@ -1184,8 +1195,17 @@ export function PlatformAdminHeader() {
                           chosenLocation = `${chosenLocation}, ${cityPart}`;
                         }
                       }
-                      setLocation(chosenLocation, false);
-                      toast.success(`Location set to "${chosenLocation}"`);
+                      const resolvedCountry = resolveCountryFromLocation(item.description || item.secondary_text || chosenLocation);
+                      setLocation(chosenLocation, false, resolvedCountry);
+                      if (resolvedCountry) {
+                        setCountry(resolvedCountry);
+                        const cm = getCatalogCountryMeta(resolvedCountry);
+                        toast.success(`Location set to "${chosenLocation}"`, {
+                          description: `Country & Currency set to ${cm.name} (${cm.currencyCode} ${cm.currencySymbol})`,
+                        });
+                      } else {
+                        toast.success(`Location set to "${chosenLocation}"`);
+                      }
                       setCustomLocationInput("");
                       setLocationSuggestions([]);
                       setLocationDialogOpen(false);
