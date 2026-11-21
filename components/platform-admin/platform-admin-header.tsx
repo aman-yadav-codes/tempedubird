@@ -46,6 +46,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useUserLocation } from "@/hooks/use-user-location";
+import { useUserCountry } from "@/hooks/use-user-country";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -199,6 +200,9 @@ export function PlatformAdminHeader() {
     setLocation,
     requestLocation,
   } = useUserLocation();
+
+  // User Country & Currency
+  const { country, setCountry, availableCountries } = useUserCountry();
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -521,37 +525,45 @@ export function PlatformAdminHeader() {
             )}
           </button>
 
-          {/* Country Flag Selector (South Africa 🇿🇦 / India 🇮🇳) */}
+          {/* Country Flag Selector (Dynamic Country & Currency: ZA 🇿🇦, IN 🇮🇳, US 🇺🇸 etc.) */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="flex items-center gap-1 p-1 sm:px-2 sm:py-1 rounded-full hover:bg-sky-100/60 transition-colors cursor-pointer text-xs font-bold text-slate-700 shrink-0"
-                title="Select Country"
+                className="flex items-center gap-1.5 p-1 sm:px-2.5 sm:py-1 rounded-full hover:bg-sky-100/60 transition-colors cursor-pointer text-xs font-bold text-slate-700 shrink-0 border border-sky-100/80 bg-white shadow-2xs"
+                title={`Country: ${country.name} (${country.currencyCode} ${country.currencySymbol})`}
               >
-                <span className="text-base leading-none">🇿🇦</span>
+                <span className="text-base leading-none">{country.flag}</span>
+                <span className="text-[11px] font-black text-slate-800 hidden sm:inline">{country.code}</span>
                 <ChevronDown className="size-3 text-slate-400" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44 p-1.5 rounded-xl shadow-lg border-sky-100">
-              <DropdownMenuItem
-                onClick={() => {
-                  toast.success("Country set to South Africa 🇿🇦");
-                }}
-                className="cursor-pointer text-xs font-medium gap-2 py-2"
-              >
-                <span className="text-base">🇿🇦</span>
-                <span>South Africa</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  toast.success("Country set to India 🇮🇳");
-                }}
-                className="cursor-pointer text-xs font-medium gap-2 py-2"
-              >
-                <span className="text-base">🇮🇳</span>
-                <span>India</span>
-              </DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-52 p-1.5 rounded-xl shadow-lg border-sky-100 max-h-80 overflow-y-auto">
+              <DropdownMenuLabel className="text-[10px] uppercase font-bold text-slate-400 px-2 py-1">
+                Select Country &amp; Currency
+              </DropdownMenuLabel>
+              {availableCountries.map((c) => (
+                <DropdownMenuItem
+                  key={c.code}
+                  onClick={() => {
+                    setCountry(c.code);
+                    toast.success(`Country set to ${c.name} ${c.flag}`, {
+                      description: `Currency: ${c.currencyCode} (${c.currencySymbol})`,
+                    });
+                  }}
+                  className={`cursor-pointer text-xs font-medium gap-2.5 py-2 px-2.5 rounded-lg flex items-center justify-between ${
+                    country.code === c.code ? "bg-sky-50 text-sky-700 font-bold" : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{c.flag}</span>
+                    <span>{c.name}</span>
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-bold font-mono">
+                    {c.currencySymbol} {c.currencyCode}
+                  </span>
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
 

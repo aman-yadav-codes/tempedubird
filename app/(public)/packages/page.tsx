@@ -36,6 +36,7 @@ import {
   Server,
   Clock,
   CreditCard,
+  Globe,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +52,7 @@ import {
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
 import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
+import { useUserCountry } from "@/hooks/use-user-country";
 
 export interface BusinessPackage {
   id: number;
@@ -61,6 +63,8 @@ export interface BusinessPackage {
   price_monthly: number;
   price_annual?: number;
   price_unit: string;
+  currency_symbol?: string;
+  country_code?: string;
   billing_cycle?: string;
   database_allowance?: string;
   file_storage_allowance?: string;
@@ -148,6 +152,7 @@ const DEFAULT_PACKAGES: BusinessPackage[] = [
 
 export default function BusinessGrowthPackagesPage() {
   const { isAuthenticated, user } = useAuthStore();
+  const { country, setCountry, availableCountries } = useUserCountry();
   const [packages, setPackages] = useState<BusinessPackage[]>(DEFAULT_PACKAGES);
   const [currentSub, setCurrentSub] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -179,16 +184,17 @@ export default function BusinessGrowthPackagesPage() {
     }
   };
 
-  const loadPackages = async () => {
+  const loadPackages = async (targetCountryCode?: string) => {
     try {
+      const cCode = (targetCountryCode || country.code || "IN").toUpperCase();
       let fetchedPackages: BusinessPackage[] = [];
-      const res = await fetch(`/api/public/packages?_t=${Date.now()}`, { cache: "no-store" });
+      const res = await fetch(`/api/public/packages?country=${encodeURIComponent(cCode)}&_t=${Date.now()}`, { cache: "no-store" });
       const json = await res.json();
       if (json.success && Array.isArray(json.packages) && json.packages.length > 0) {
         fetchedPackages = json.packages;
       } else {
         // Fallback to platformadmin endpoint
-        const fbRes = await fetch(`/api/platformadmin/packages?_t=${Date.now()}`, { cache: "no-store" });
+        const fbRes = await fetch(`/api/platformadmin/packages?country=${encodeURIComponent(cCode)}&_t=${Date.now()}`, { cache: "no-store" });
         const fbJson = await fbRes.json();
         if (fbJson.success && Array.isArray(fbJson.packages) && fbJson.packages.length > 0) {
           fetchedPackages = fbJson.packages;
@@ -207,9 +213,9 @@ export default function BusinessGrowthPackagesPage() {
 
   // Fetch Packages & Current Subscription
   useEffect(() => {
-    loadPackages();
+    loadPackages(country.code);
     loadCurrentSub();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, country.code]);
 
   // Handle Subscribe
   const handleSubscribe = async () => {
@@ -298,7 +304,7 @@ export default function BusinessGrowthPackagesPage() {
           </div>
 
           {/* Billing Toggle: Monthly vs Yearly */}
-          <div className="pt-8 flex items-center justify-center gap-3">
+          <div className="pt-8 flex flex-col items-center justify-center gap-3">
             <div className="bg-slate-100 border border-slate-200 p-1 rounded-full flex items-center shadow-inner">
               <button
                 type="button"
@@ -325,6 +331,39 @@ export default function BusinessGrowthPackagesPage() {
                   Save 20%
                 </span>
               </button>
+            </div>
+
+            {/* Country & Currency Switcher Bar */}
+            <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+              <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
+                <Globe className="size-3.5 text-amber-500" />
+                Country Pricing:
+              </span>
+              <div className="inline-flex items-center gap-1 p-1 rounded-full bg-slate-100 border border-slate-200 shadow-2xs">
+                {[
+                  { code: "IN", name: "India", flag: "🇮🇳", cur: "₹ INR" },
+                  { code: "ZA", name: "South Africa", flag: "🇿🇦", cur: "R ZAR" },
+                  { code: "US", name: "United States", flag: "🇺🇸", cur: "$ USD" },
+                ].map((c) => {
+                  const active = country.code === c.code;
+                  return (
+                    <button
+                      key={c.code}
+                      type="button"
+                      onClick={() => setCountry(c.code)}
+                      className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        active
+                          ? "bg-white text-slate-900 shadow-xs border border-slate-200"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                      }`}
+                    >
+                      <span>{c.flag}</span>
+                      <span>{c.name}</span>
+                      <span className="text-[10px] text-slate-500 font-mono">({c.cur})</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -356,10 +395,10 @@ export default function BusinessGrowthPackagesPage() {
 
                 <div className="flex items-baseline gap-1.5 text-slate-900">
                   <span className="text-3xl sm:text-4xl font-black">
-                    ₹{Number(currentSub.price || 0).toLocaleString("en-IN")}
+                    {currentSub.currency_symbol || country.currencySymbol || "₹"}{Number(currentSub.price || 0).toLocaleString()}
                   </span>
                   <span className="text-xs text-slate-500 font-semibold">
-                    / {currentSub.billing_cycle || "monthly"}
+                    {currentSub.price_unit || country.currencyCode || "INR"} / {currentSub.billing_cycle || "Monthly"}
                   </span>
                 </div>
               </div>
@@ -511,17 +550,19 @@ export default function BusinessGrowthPackagesPage() {
                       )}
                     </div>
 
-                    {/* Price in INR */}
+                    {/* Price with Country-Specific Currency */}
                     <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                      <div className="flex items-baseline gap-1">
+                      <div className="flex items-baseline gap-1.5">
                         <span className="text-3xl sm:text-4xl font-black text-slate-900">
-                          ₹{displayPrice.toLocaleString("en-IN")}
+                          {pkg.currency_symbol || country.currencySymbol || "₹"}{displayPrice.toLocaleString()}
                         </span>
-                        <span className="text-xs text-slate-500 font-medium">/ month</span>
+                        <span className="text-xs text-slate-500 font-medium">
+                          {pkg.price_unit || country.currencyCode || "INR"} / month
+                        </span>
                       </div>
                       {billingCycle === "yearly" && pkg.price_annual && (
                         <p className="text-[11px] font-semibold text-emerald-600">
-                          Billed annually (₹{Number(pkg.price_annual).toLocaleString("en-IN")}/yr)
+                          Billed annually ({pkg.currency_symbol || country.currencySymbol || "₹"}{Number(pkg.price_annual).toLocaleString()} {pkg.price_unit || country.currencyCode || "INR"}/yr)
                         </p>
                       )}
                     </div>
@@ -781,7 +822,8 @@ export default function BusinessGrowthPackagesPage() {
               <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-sm">
                 <span className="font-bold text-slate-900">Amount Due Today:</span>
                 <span className="text-lg font-black text-amber-600">
-                  ₹{Number(billingCycle === "yearly" && selectedPackage.price_annual ? selectedPackage.price_annual : selectedPackage.price_monthly).toLocaleString("en-IN")}
+                  {selectedPackage.currency_symbol || country.currencySymbol || "₹"}
+                  {Number(billingCycle === "yearly" && selectedPackage.price_annual ? selectedPackage.price_annual : selectedPackage.price_monthly).toLocaleString()} {selectedPackage.price_unit || country.currencyCode || "INR"}
                 </span>
               </div>
             </div>

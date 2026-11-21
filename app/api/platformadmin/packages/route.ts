@@ -6,6 +6,7 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
+    const country = searchParams.get("country")?.trim().toUpperCase();
 
     let sql = `
       SELECT 
@@ -17,7 +18,9 @@ export async function GET(req: Request) {
         CAST(price AS DOUBLE PRECISION) AS price,
         CAST(price_monthly AS DOUBLE PRECISION) AS price_monthly,
         CAST(price_annual AS DOUBLE PRECISION) AS price_annual,
-        price_unit,
+        COALESCE(price_unit, 'INR') AS price_unit,
+        COALESCE(currency_symbol, '₹') AS currency_symbol,
+        COALESCE(country_code, 'IN') AS country_code,
         billing_cycle,
         database_allowance,
         file_storage_allowance,
@@ -49,7 +52,12 @@ export async function GET(req: Request) {
       sql += ` AND package_category = $${params.length}`;
     }
 
-    sql += ` ORDER BY COALESCE(price_monthly, price, 0) ASC, id ASC`;
+    if (country && country !== "ALL") {
+      params.push(country);
+      sql += ` AND (UPPER(country_code) = $${params.length} OR country_code = 'ALL')`;
+    }
+
+    sql += ` ORDER BY COALESCE(country_code, 'IN') ASC, COALESCE(price_monthly, price, 0) ASC, id ASC`;
 
     const res = await db.query(sql, params);
 
@@ -75,6 +83,8 @@ export async function POST(req: Request) {
       price_monthly = 999.0,
       price_annual = null,
       price_unit = "INR",
+      currency_symbol = "₹",
+      country_code = "IN",
       billing_cycle = "Monthly",
       database_allowance = "",
       file_storage_allowance = "",
@@ -98,25 +108,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "Package name is required" }, { status: 400 });
     }
 
-    // If marked popular, unmark any previous popular in same category
+    // If marked popular, unmark any previous popular in same category and country
     if (is_popular) {
-      await db.query(`UPDATE sales_packages SET is_popular = FALSE WHERE package_category = $1`, [package_category]);
+      await db.query(
+        `UPDATE sales_packages SET is_popular = FALSE WHERE package_category = $1 AND COALESCE(country_code, 'IN') = $2`,
+        [package_category, (country_code || "IN").toUpperCase()]
+      );
     }
 
     const res = await db.query(
       `
       INSERT INTO sales_packages (
         name, package_for, tier, package_category, price, price_monthly, price_annual, price_unit,
+        currency_symbol, country_code,
         billing_cycle, database_allowance, file_storage_allowance, monthly_bandwidth, compute_allowance, seo_service,
         listing_limit_monthly, is_popular, is_active, target_audience,
         description, features_list, services_list, overage_price_per_listing, auto_overage_enabled,
         trial_days, validity_count, validity_unit, is_custom_enterprise, created_at, updated_at
       ) VALUES (
         $1, $2, $3, $4, $5, $5, $6, $7,
-        $8, $9, $10, $11, $12, $13,
-        $14, $15, $16, $17,
-        $18, $19::jsonb, $20::jsonb, $21, $22,
-        $23, 1, 'month', $24, NOW(), NOW()
+        $8, $9,
+        $10, $11, $12, $13, $14, $15,
+        $16, $17, $18, $19,
+        $20, $21::jsonb, $22::jsonb, $23, $24,
+        $25, 1, 'month', $26, NOW(), NOW()
       ) RETURNING *
       `,
       [
@@ -126,7 +141,9 @@ export async function POST(req: Request) {
         package_category,
         price_monthly,
         price_annual,
-        price_unit,
+        price_unit || "INR",
+        currency_symbol || "₹",
+        (country_code || "IN").toUpperCase(),
         billing_cycle,
         database_allowance,
         file_storage_allowance,
@@ -168,6 +185,8 @@ export async function PUT(req: Request) {
       price_monthly,
       price_annual,
       price_unit,
+      currency_symbol,
+      country_code,
       billing_cycle,
       database_allowance,
       file_storage_allowance,
@@ -190,7 +209,10 @@ export async function PUT(req: Request) {
     }
 
     if (is_popular) {
-      await db.query(`UPDATE sales_packages SET is_popular = FALSE WHERE package_category = 'hosting_growth' AND id != $1`, [id]);
+      await db.query(
+        `UPDATE sales_packages SET is_popular = FALSE WHERE package_category = 'hosting_growth' AND id != $1 AND COALESCE(country_code, 'IN') = $2`,
+        [id, (country_code || "IN").toUpperCase()]
+      );
     }
 
     const res = await db.query(
@@ -201,23 +223,25 @@ export async function PUT(req: Request) {
         price_monthly = COALESCE($2, price_monthly),
         price_annual = COALESCE($3, price_annual),
         price_unit = COALESCE($4, price_unit),
-        billing_cycle = COALESCE($5, billing_cycle),
-        database_allowance = COALESCE($6, database_allowance),
-        file_storage_allowance = COALESCE($7, file_storage_allowance),
-        monthly_bandwidth = COALESCE($8, monthly_bandwidth),
-        compute_allowance = COALESCE($9, compute_allowance),
-        seo_service = COALESCE($10, seo_service),
-        listing_limit_monthly = COALESCE($11, listing_limit_monthly),
-        is_popular = COALESCE($12, is_popular),
-        is_active = COALESCE($13, is_active),
-        target_audience = COALESCE($14, target_audience),
-        description = COALESCE($15, description),
-        features_list = COALESCE($16::jsonb, features_list),
-        overage_price_per_listing = COALESCE($17, overage_price_per_listing),
-        auto_overage_enabled = COALESCE($18, auto_overage_enabled),
-        trial_days = COALESCE($19, trial_days),
+        currency_symbol = COALESCE($5, currency_symbol),
+        country_code = COALESCE($6, country_code),
+        billing_cycle = COALESCE($7, billing_cycle),
+        database_allowance = COALESCE($8, database_allowance),
+        file_storage_allowance = COALESCE($9, file_storage_allowance),
+        monthly_bandwidth = COALESCE($10, monthly_bandwidth),
+        compute_allowance = COALESCE($11, compute_allowance),
+        seo_service = COALESCE($12, seo_service),
+        listing_limit_monthly = COALESCE($13, listing_limit_monthly),
+        is_popular = COALESCE($14, is_popular),
+        is_active = COALESCE($15, is_active),
+        target_audience = COALESCE($16, target_audience),
+        description = COALESCE($17, description),
+        features_list = COALESCE($18::jsonb, features_list),
+        overage_price_per_listing = COALESCE($19, overage_price_per_listing),
+        auto_overage_enabled = COALESCE($20, auto_overage_enabled),
+        trial_days = COALESCE($21, trial_days),
         updated_at = NOW()
-      WHERE id = $20
+      WHERE id = $22
       RETURNING *
       `,
       [
@@ -225,6 +249,8 @@ export async function PUT(req: Request) {
         price_monthly !== undefined ? price_monthly : null,
         price_annual !== undefined ? price_annual : null,
         price_unit,
+        currency_symbol,
+        country_code ? country_code.toUpperCase() : null,
         billing_cycle,
         database_allowance,
         file_storage_allowance,
@@ -269,7 +295,7 @@ export async function PATCH(req: Request) {
       `UPDATE sales_packages 
        SET is_active = $1, updated_at = NOW() 
        WHERE id = $2 
-       RETURNING id, name, is_active`,
+       RETURNING id, name, is_active, country_code, price_unit, currency_symbol`,
       [Boolean(is_active), id]
     );
 

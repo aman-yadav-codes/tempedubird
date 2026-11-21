@@ -9,6 +9,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
     const tier = searchParams.get("tier");
+    const country = searchParams.get("country")?.trim().toUpperCase();
 
     let query = `
       SELECT 
@@ -21,6 +22,8 @@ export async function GET(req: Request) {
         CAST(COALESCE(price_monthly, price, 0) AS DOUBLE PRECISION) AS price_monthly,
         CAST(price_annual AS DOUBLE PRECISION) AS price_annual,
         COALESCE(price_unit, 'INR') AS price_unit,
+        COALESCE(currency_symbol, '₹') AS currency_symbol,
+        COALESCE(country_code, 'IN') AS country_code,
         billing_cycle,
         database_allowance,
         file_storage_allowance,
@@ -56,11 +59,43 @@ export async function GET(req: Request) {
       query += ` AND tier = $${params.length}`;
     }
 
+    if (country && country !== "ALL") {
+      params.push(country);
+      query += ` AND (UPPER(country_code) = $${params.length} OR country_code = 'ALL')`;
+    }
+
     query += ` ORDER BY COALESCE(price_monthly, price, 0) ASC, id ASC`;
 
     let res = await db.query(query, params);
 
-    // If query returned 0 rows, fallback to all active non-deleted packages
+    // If filtered by country and returned 0 rows, fallback to India (or any active packages)
+    if (res.rows.length === 0 && country && country !== "ALL") {
+      const fallbackRes = await db.query(
+        `SELECT 
+          id, name, package_for, tier, package_category,
+          CAST(COALESCE(price_monthly, price, 0) AS DOUBLE PRECISION) AS price,
+          CAST(COALESCE(price_monthly, price, 0) AS DOUBLE PRECISION) AS price_monthly,
+          CAST(price_annual AS DOUBLE PRECISION) AS price_annual,
+          COALESCE(price_unit, 'INR') AS price_unit,
+          COALESCE(currency_symbol, '₹') AS currency_symbol,
+          COALESCE(country_code, 'IN') AS country_code,
+          billing_cycle, database_allowance, file_storage_allowance,
+          monthly_bandwidth, compute_allowance, seo_service,
+          listing_limit_monthly, is_popular, is_active, target_audience,
+          description, features_list, services_list,
+          CAST(overage_price_per_listing AS DOUBLE PRECISION) AS overage_price_per_listing,
+          auto_overage_enabled, trial_days, validity_count, validity_unit,
+          is_custom_enterprise
+        FROM sales_packages
+        WHERE COALESCE(is_deleted, FALSE) = FALSE AND UPPER(COALESCE(country_code, 'IN')) = 'IN'
+        ORDER BY COALESCE(price_monthly, price, 0) ASC, id ASC`
+      );
+      if (fallbackRes.rows.length > 0) {
+        res = fallbackRes;
+      }
+    }
+
+    // Ultimate fallback if still 0
     if (res.rows.length === 0) {
       res = await db.query(
         `SELECT 
@@ -69,6 +104,8 @@ export async function GET(req: Request) {
           CAST(COALESCE(price_monthly, price, 0) AS DOUBLE PRECISION) AS price_monthly,
           CAST(price_annual AS DOUBLE PRECISION) AS price_annual,
           COALESCE(price_unit, 'INR') AS price_unit,
+          COALESCE(currency_symbol, '₹') AS currency_symbol,
+          COALESCE(country_code, 'IN') AS country_code,
           billing_cycle, database_allowance, file_storage_allowance,
           monthly_bandwidth, compute_allowance, seo_service,
           listing_limit_monthly, is_popular, is_active, target_audience,
@@ -85,6 +122,7 @@ export async function GET(req: Request) {
     return NextResponse.json(
       {
         success: true,
+        country: country || "IN",
         packages: res.rows,
       },
       {
@@ -101,7 +139,6 @@ export async function GET(req: Request) {
       {
         success: false,
         error: "Failed to fetch packages",
-        packages: [],
       },
       { status: 500 }
     );
