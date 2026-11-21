@@ -1250,34 +1250,6 @@ function CustomerExplorePageContent({
                                 <Navigation className="size-4" />
                               </a>
                             </div>
-
-                            <div className="flex items-center gap-2 w-full pt-1">
-                              <Link href={buildBusinessSeoUrl(biz)} className="flex-1">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  className="w-full text-xs font-semibold gap-1.5 cursor-pointer border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900"
-                                >
-                                  <Building2 className="size-3.5" /> Details
-                                </Button>
-                              </Link>
-                              <Button
-                                size="sm"
-                                onClick={() => {
-                                  setEnquiryModalItem(biz);
-                                  setEnquiryForm((prev) => ({
-                                    ...prev,
-                                    name: user?.full_name || "",
-                                    email: user?.email || "",
-                                    phone: user?.phone || "",
-                                  }));
-                                }}
-                                className="flex-1 text-xs font-semibold gap-1.5 cursor-pointer bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold"
-                              >
-                                <Send className="size-3.5" /> Enquiry
-                              </Button>
-                            </div>
                           </div>
                         </div>
                       );
