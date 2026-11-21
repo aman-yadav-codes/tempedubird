@@ -15,11 +15,22 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       return NextResponse.json({ error: "Tenant context required" }, { status: 401 });
     }
 
-    // 1. Fetch original record
-    const origRes = await db.query(
-      `SELECT * FROM business_records WHERE id = $1 AND is_deleted = FALSE AND (business_id = $2 OR institution_id = $3 OR business_id = $3 OR institution_id = $2)`,
-      [recordId, tenant.businessId, tenant.institutionId || tenant.businessId]
-    );
+    // 1. Fetch original record with strict user isolation
+    let origSql = `SELECT * FROM business_records WHERE id = $1 AND is_deleted = FALSE`;
+    const origParams: any[] = [recordId];
+
+    if (!tenant.isPlatformAdmin) {
+      origParams.push(tenant.userId, tenant.businessId);
+      origSql += ` AND (
+        created_by = $2 
+        OR (
+          business_id = $3 
+          AND business_id IN (SELECT id FROM business_profiles WHERE user_id = $2)
+        )
+      )`;
+    }
+
+    const origRes = await db.query(origSql, origParams);
     if (origRes.rows.length === 0) {
       return NextResponse.json({ error: "Record not found or access denied" }, { status: 404 });
     }

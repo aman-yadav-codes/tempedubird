@@ -24,71 +24,100 @@ export async function resolveTenantContext(req: Request): Promise<TenantContext 
   const headerBiz = req.headers.get("x-business-id");
   const headerInst = req.headers.get("x-institution-id");
 
-  // 1. Check explicit query or header parameter
+  // 1. Candidate IDs from query or header
   let candidateBizId = (qBiz && /^\d+$/.test(qBiz)) ? Number(qBiz) : ((headerBiz && /^\d+$/.test(headerBiz)) ? Number(headerBiz) : null);
   let candidateInstId = (qInst && /^\d+$/.test(qInst)) ? Number(qInst) : ((headerInst && /^\d+$/.test(headerInst)) ? Number(headerInst) : null);
 
-  // 2. Check frontend config (Business Mode in env)
-  if (!candidateBizId) {
-    const config = getFrontendConfig();
-    if (config.mode === "business" && config.businessId) {
-      candidateBizId = config.businessId;
-    }
-  }
-
-  // 3. Check authenticated user's ownership or membership
-  if (!candidateBizId && user?.id) {
-    const userBiz = await db.query(
-      `SELECT id, institution_profile_id, name FROM business_profiles WHERE user_id = $1 ORDER BY id DESC LIMIT 1`,
+  // If user is NOT platform admin and user is authenticated:
+  // User can ONLY access their own business/records, never other users' records!
+  if (user?.id && !isPlatformAdmin) {
+    // 2. Fetch all businesses and institutions owned by this authenticated user
+    const userBizRes = await db.query(
+      `SELECT id, institution_profile_id, name FROM business_profiles WHERE user_id = $1 ORDER BY id DESC`,
       [user.id]
     );
-    if (userBiz.rows.length > 0) {
-      candidateBizId = userBiz.rows[0].id;
-      candidateInstId = candidateInstId || userBiz.rows[0].institution_profile_id;
-    } else if (user.memberships?.length > 0) {
-      const instMem = user.memberships.find((m: any) => m.institution_id);
-      if (instMem) {
-        candidateInstId = Number(instMem.institution_id);
-        const bp = await db.query(
-          `SELECT id, name FROM business_profiles WHERE institution_profile_id = $1 LIMIT 1`,
-          [candidateInstId]
+
+    const ownedBizIds = userBizRes.rows.map((r: any) => r.id);
+    const ownedInstIds = userBizRes.rows.map((r: any) => r.institution_profile_id).filter(Boolean);
+
+    if (Array.isArray(user.memberships) && user.memberships.length > 0) {
+      user.memberships.forEach((m: any) => {
+        if (m.institution_id) ownedInstIds.push(Number(m.institution_id));
+      });
+    }
+
+    // Validate candidate IDs: if candidate does NOT belong to this user, ignore it!
+    if (candidateBizId && !ownedBizIds.includes(candidateBizId)) {
+      candidateBizId = null;
+    }
+    if (candidateInstId && !ownedInstIds.includes(candidateInstId)) {
+      candidateInstId = null;
+    }
+
+    // Select the user's primary owned business
+    if (!candidateBizId) {
+      if (userBizRes.rows.length > 0) {
+        candidateBizId = userBizRes.rows[0].id;
+        candidateInstId = candidateInstId || userBizRes.rows[0].institution_profile_id;
+      } else {
+        // User has no business profile yet: auto-create an isolated business profile for this user
+        const newBiz = await db.query(
+          `INSERT INTO business_profiles (user_id, name, is_active, created_at, updated_at)
+           VALUES ($1, $2, TRUE, NOW(), NOW())
+           RETURNING id, name`,
+          [user.id, (user as any).name ? `${(user as any).name}'s Business` : `My Business`]
         );
-        if (bp.rows.length > 0) {
-          candidateBizId = bp.rows[0].id;
-        }
+        candidateBizId = newBiz.rows[0].id;
       }
     }
+
+    const currentBiz = userBizRes.rows.find((r: any) => r.id === candidateBizId) || {
+      id: candidateBizId,
+      name: (user as any).name ? `${(user as any).name}'s Business` : "My Business",
+      institution_profile_id: candidateInstId,
+    };
+
+    return {
+      businessId: candidateBizId,
+      institutionId: currentBiz.institution_profile_id || candidateInstId || candidateBizId,
+      businessName: currentBiz.name,
+      isPlatformAdmin: false,
+      userId: user.id,
+    };
   }
 
-  // 4. Default fallback: first business profile
-  if (!candidateBizId) {
-    const firstBiz = await db.query(`SELECT id, institution_profile_id, name FROM business_profiles ORDER BY id ASC LIMIT 1`);
-    if (firstBiz.rows.length > 0) {
-      candidateBizId = firstBiz.rows[0].id;
-      candidateInstId = candidateInstId || firstBiz.rows[0].institution_profile_id;
+  // If user is Platform Admin:
+  if (isPlatformAdmin) {
+    if (!candidateBizId) {
+      const config = getFrontendConfig();
+      if (config.mode === "business" && config.businessId) {
+        candidateBizId = config.businessId;
+      }
+    }
+    if (!candidateBizId) {
+      const firstBiz = await db.query(`SELECT id, institution_profile_id, name FROM business_profiles ORDER BY id ASC LIMIT 1`);
+      if (firstBiz.rows.length > 0) {
+        candidateBizId = firstBiz.rows[0].id;
+        candidateInstId = candidateInstId || firstBiz.rows[0].institution_profile_id;
+      }
+    }
+
+    if (candidateBizId) {
+      const bizRow = await db.query(
+        `SELECT id, institution_profile_id, name FROM business_profiles WHERE id = $1 LIMIT 1`,
+        [candidateBizId]
+      );
+      const biz = bizRow.rows[0] || { id: candidateBizId, name: "Platform Admin Workspace", institution_profile_id: candidateInstId };
+      return {
+        businessId: biz.id,
+        institutionId: biz.institution_profile_id || candidateInstId || biz.id,
+        businessName: biz.name,
+        isPlatformAdmin: true,
+        userId: user?.id || null,
+      };
     }
   }
 
-  if (!candidateBizId) {
-    return null;
-  }
-
-  const bizRow = await db.query(
-    `SELECT id, institution_profile_id, name FROM business_profiles 
-     WHERE id = $1 
-        OR institution_profile_id = $1 
-        OR ($2::integer IS NOT NULL AND (id = $2 OR institution_profile_id = $2))
-     ORDER BY (id = $1) DESC
-     LIMIT 1`,
-    [candidateBizId, candidateInstId]
-  );
-  const finalBiz = bizRow.rows[0] || { id: candidateBizId, name: "Business Workspace", institution_profile_id: candidateInstId };
-
-  return {
-    businessId: finalBiz.id,
-    institutionId: finalBiz.institution_profile_id || candidateInstId || finalBiz.id,
-    businessName: finalBiz.name,
-    isPlatformAdmin,
-    userId: user?.id || null,
-  };
+  // Unauthenticated user
+  return null;
 }

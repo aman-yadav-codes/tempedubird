@@ -157,7 +157,7 @@ export default function BusinessGrowthPackagesPage() {
   const [currentSub, setCurrentSub] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
-  
+
   // Checkout & Enterprise dialogs
   const [selectedPackage, setSelectedPackage] = useState<BusinessPackage | null>(null);
   const [subscribing, setSubscribing] = useState(false);
@@ -309,22 +309,20 @@ export default function BusinessGrowthPackagesPage() {
               <button
                 type="button"
                 onClick={() => setBillingCycle("monthly")}
-                className={`px-5 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                  billingCycle === "monthly"
-                    ? "bg-amber-500 text-black shadow-md"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
+                className={`px-5 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${billingCycle === "monthly"
+                  ? "bg-amber-500 text-black shadow-md"
+                  : "text-slate-600 hover:text-slate-900"
+                  }`}
               >
                 Monthly Billing
               </button>
               <button
                 type="button"
                 onClick={() => setBillingCycle("yearly")}
-                className={`px-5 py-2 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                  billingCycle === "yearly"
-                    ? "bg-amber-500 text-black shadow-md"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
+                className={`px-5 py-2 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${billingCycle === "yearly"
+                  ? "bg-amber-500 text-black shadow-md"
+                  : "text-slate-600 hover:text-slate-900"
+                  }`}
               >
                 <span>Annual Billing</span>
                 <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500 text-black">
@@ -495,7 +493,7 @@ export default function BusinessGrowthPackagesPage() {
               const features: string[] = Array.isArray(rawFeatures)
                 ? rawFeatures
                 : typeof rawFeatures === "string"
-                ? (() => {
+                  ? (() => {
                     try {
                       const parsed = JSON.parse(rawFeatures);
                       return Array.isArray(parsed) ? parsed : [];
@@ -503,18 +501,17 @@ export default function BusinessGrowthPackagesPage() {
                       return [];
                     }
                   })()
-                : [];
+                  : [];
 
               return (
                 <div
                   key={pkg.id}
-                  className={`relative rounded-3xl flex flex-col transition-all duration-300 ${
-                    isCurrentPlan
-                      ? "bg-emerald-50/40 border-2 border-emerald-500 shadow-xl shadow-emerald-500/10 lg:-translate-y-2"
-                      : isPopular
+                  className={`relative rounded-3xl flex flex-col transition-all duration-300 ${isCurrentPlan
+                    ? "bg-emerald-50/40 border-2 border-emerald-500 shadow-xl shadow-emerald-500/10 lg:-translate-y-2"
+                    : isPopular
                       ? "bg-amber-50/50 border-2 border-amber-500 shadow-xl shadow-amber-500/10 lg:-translate-y-2"
                       : "bg-white border border-slate-200 hover:border-slate-300 hover:shadow-lg shadow-sm"
-                  }`}
+                    }`}
                 >
                   {/* Current Active Badge or Most Popular Badge */}
                   {isCurrentPlan ? (
@@ -617,13 +614,12 @@ export default function BusinessGrowthPackagesPage() {
                           {features.map((feature, idx) => (
                             <li key={idx} className="flex items-start gap-2">
                               <CheckCircle2
-                                className={`size-3.5 shrink-0 mt-0.5 ${
-                                  isCurrentPlan
-                                    ? "text-emerald-500"
-                                    : isPopular
+                                className={`size-3.5 shrink-0 mt-0.5 ${isCurrentPlan
+                                  ? "text-emerald-500"
+                                  : isPopular
                                     ? "text-amber-500"
                                     : "text-emerald-500"
-                                }`}
+                                  }`}
                               />
                               <span className="leading-snug">{feature}</span>
                             </li>
@@ -650,11 +646,10 @@ export default function BusinessGrowthPackagesPage() {
                       ) : (
                         <Button
                           onClick={() => setSelectedPackage(pkg)}
-                          className={`w-full py-6 rounded-xl font-black text-xs sm:text-sm cursor-pointer transition-all ${
-                            isPopular
-                              ? "bg-amber-500 hover:bg-amber-400 text-black shadow-xl shadow-amber-500/20 active:scale-95"
-                              : "bg-slate-900 hover:bg-slate-800 text-white border border-slate-800"
-                          }`}
+                          className={`w-full py-6 rounded-xl font-black text-xs sm:text-sm cursor-pointer transition-all ${isPopular
+                            ? "bg-amber-500 hover:bg-amber-400 text-black shadow-xl shadow-amber-500/20 active:scale-95"
+                            : "bg-slate-900 hover:bg-slate-800 text-white border border-slate-800"
+                            }`}
                         >
                           <span>Switch to {pkg.name}</span>
                           <ArrowRight className="size-4 ml-1.5" />

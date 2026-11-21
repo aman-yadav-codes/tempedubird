@@ -15,17 +15,31 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
       return NextResponse.json({ error: "Tenant context required" }, { status: 401 });
     }
 
-    // Ownership check
-    const recRes = await db.query(`
+    // Ownership check: user can only see their own records, never others
+    let querySql = `
       SELECT br.*,
              cat.name as category_name,
              subcat.name as subcategory_name
       FROM business_records br
       LEFT JOIN master_records cat ON cat.id = br.category_id
       LEFT JOIN master_records subcat ON subcat.id = br.subcategory_id
-      WHERE br.id = $1 AND br.is_deleted = FALSE AND (br.business_id = $2 OR br.institution_id = $3 OR br.business_id = $3 OR br.institution_id = $2)
-      LIMIT 1
-    `, [recordId, tenant.businessId, tenant.institutionId || tenant.businessId]);
+      WHERE br.id = $1 AND br.is_deleted = FALSE
+    `;
+    const queryParams: any[] = [recordId];
+
+    if (!tenant.isPlatformAdmin) {
+      queryParams.push(tenant.userId, tenant.businessId);
+      querySql += ` AND (
+        br.created_by = $2 
+        OR (
+          br.business_id = $3 
+          AND br.business_id IN (SELECT id FROM business_profiles WHERE user_id = $2)
+        )
+      )`;
+    }
+
+    querySql += ` LIMIT 1`;
+    const recRes = await db.query(querySql, queryParams);
 
     if (recRes.rows.length === 0) {
       return NextResponse.json({ error: "Record not found or access denied" }, { status: 404 });
@@ -147,11 +161,22 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
       return NextResponse.json({ error: "Tenant context required" }, { status: 401 });
     }
 
-    // Check ownership
-    const existingRes = await db.query(
-      `SELECT * FROM business_records WHERE id = $1 AND is_deleted = FALSE AND (business_id = $2 OR institution_id = $3 OR business_id = $3 OR institution_id = $2)`,
-      [recordId, tenant.businessId, tenant.institutionId || tenant.businessId]
-    );
+    // Check ownership: user can only update their own records
+    let checkSql = `SELECT * FROM business_records WHERE id = $1 AND is_deleted = FALSE`;
+    const checkParams: any[] = [recordId];
+
+    if (!tenant.isPlatformAdmin) {
+      checkParams.push(tenant.userId, tenant.businessId);
+      checkSql += ` AND (
+        created_by = $2 
+        OR (
+          business_id = $3 
+          AND business_id IN (SELECT id FROM business_profiles WHERE user_id = $2)
+        )
+      )`;
+    }
+
+    const existingRes = await db.query(checkSql, checkParams);
     if (existingRes.rows.length === 0) {
       return NextResponse.json({ error: "Record not found or access denied" }, { status: 404 });
     }
@@ -597,13 +622,27 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
       return NextResponse.json({ error: "Tenant context required" }, { status: 401 });
     }
 
-    // Soft delete
-    const res = await db.query(`
+    // Soft delete: user can only delete their own records
+    let delSql = `
       UPDATE business_records
       SET is_deleted = TRUE, deleted_at = NOW(), updated_by = $1, status = 'archived'
-      WHERE id = $2 AND is_deleted = FALSE AND (business_id = $3 OR institution_id = $4 OR business_id = $4 OR institution_id = $3)
-      RETURNING id, title, vertical_code
-    `, [tenant.userId, recordId, tenant.businessId, tenant.institutionId || tenant.businessId]);
+      WHERE id = $2 AND is_deleted = FALSE
+    `;
+    const delParams: any[] = [tenant.userId, recordId];
+
+    if (!tenant.isPlatformAdmin) {
+      delParams.push(tenant.userId, tenant.businessId);
+      delSql += ` AND (
+        created_by = $3 
+        OR (
+          business_id = $4 
+          AND business_id IN (SELECT id FROM business_profiles WHERE user_id = $3)
+        )
+      )`;
+    }
+
+    delSql += ` RETURNING id, title, vertical_code`;
+    const res = await db.query(delSql, delParams);
 
     if (res.rows.length === 0) {
       return NextResponse.json({ error: "Record not found or access denied" }, { status: 404 });

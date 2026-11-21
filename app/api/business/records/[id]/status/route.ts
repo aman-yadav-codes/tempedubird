@@ -18,7 +18,7 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
     const body = await req.json();
     const { status, is_active, is_featured } = body;
 
-    const res = await db.query(`
+    let updateSql = `
       UPDATE business_records
       SET
         status = COALESCE($1, status),
@@ -26,17 +26,29 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
         is_featured = COALESCE($3, is_featured),
         updated_by = $4,
         updated_at = NOW()
-      WHERE id = $5 AND is_deleted = FALSE AND (business_id = $6 OR institution_id = $7 OR business_id = $7 OR institution_id = $6)
-      RETURNING id, title, status, is_active, is_featured
-    `, [
+      WHERE id = $5 AND is_deleted = FALSE
+    `;
+    const updateParams: any[] = [
       status || null,
       is_active !== undefined ? Boolean(is_active) : null,
       is_featured !== undefined ? Boolean(is_featured) : null,
       tenant.userId,
       recordId,
-      tenant.businessId,
-      tenant.institutionId || tenant.businessId,
-    ]);
+    ];
+
+    if (!tenant.isPlatformAdmin) {
+      updateParams.push(tenant.userId, tenant.businessId);
+      updateSql += ` AND (
+        created_by = $6 
+        OR (
+          business_id = $7 
+          AND business_id IN (SELECT id FROM business_profiles WHERE user_id = $6)
+        )
+      )`;
+    }
+
+    updateSql += ` RETURNING id, title, status, is_active, is_featured`;
+    const res = await db.query(updateSql, updateParams);
 
     if (res.rows.length === 0) {
       return NextResponse.json({ error: "Record not found or access denied" }, { status: 404 });

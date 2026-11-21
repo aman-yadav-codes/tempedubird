@@ -12,11 +12,22 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const vertical = url.searchParams.get("vertical")?.trim().toLowerCase();
 
-    const conditions: string[] = [
-      "br.is_deleted = FALSE",
-      "(br.business_id = $1 OR br.institution_id = $2)"
-    ];
-    const params: any[] = [tenant.businessId, tenant.institutionId || tenant.businessId];
+    const conditions: string[] = ["br.is_deleted = FALSE"];
+    const params: any[] = [];
+
+    if (!tenant.isPlatformAdmin) {
+      params.push(tenant.userId, tenant.businessId);
+      conditions.push(`(
+        br.created_by = $1 
+        OR (
+          br.business_id = $2 
+          AND br.business_id IN (SELECT id FROM business_profiles WHERE user_id = $1)
+        )
+      )`);
+    } else {
+      params.push(tenant.businessId, tenant.institutionId || tenant.businessId);
+      conditions.push(`(br.business_id = $1 OR br.institution_id = $2)`);
+    }
 
     if (vertical) {
       params.push(vertical);

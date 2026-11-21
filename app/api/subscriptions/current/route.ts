@@ -23,15 +23,18 @@ async function getAuthUserId(req: Request): Promise<number | null> {
 
 export async function GET(req: Request) {
   try {
-    let userId = await getAuthUserId(req);
+    const userId = await getAuthUserId(req);
 
-    // If unauthenticated, fallback to a default demo or first business user
+    // If unauthenticated, user has no active subscription session
     if (!userId) {
-      const demoUser = await db.query(`SELECT id FROM users ORDER BY id ASC LIMIT 1`);
-      userId = demoUser.rows[0]?.id || 1;
+      return NextResponse.json({
+        success: true,
+        authenticated: false,
+        subscription: null,
+      });
     }
 
-    // 1. Get current active subscription
+    // 1. Get current user's active subscription only
     const subRes = await db.query(
       `
       SELECT 

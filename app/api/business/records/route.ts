@@ -30,12 +30,32 @@ export async function GET(req: Request) {
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") || 20)));
     const offset = (page - 1) * limit;
 
-    // Tenant Isolation Filter
-    const conditions: string[] = [
-      "br.is_deleted = FALSE",
-      "(br.business_id = $1 OR br.institution_id = $2 OR br.business_id = $2 OR br.institution_id = $1)"
-    ];
-    const params: any[] = [tenant.businessId, tenant.institutionId || tenant.businessId];
+    // Tenant & User Isolation Filter: User can ONLY see their own records, never others
+    const conditions: string[] = ["br.is_deleted = FALSE"];
+    const params: any[] = [];
+
+    if (!tenant.isPlatformAdmin) {
+      // Strict user isolation for non-platform admins
+      params.push(tenant.userId);
+      const userParamIdx = params.length;
+
+      params.push(tenant.businessId);
+      const bizParamIdx = params.length;
+
+      conditions.push(`(
+        br.created_by = $${userParamIdx} 
+        OR (
+          br.business_id = $${bizParamIdx} 
+          AND br.business_id IN (SELECT id FROM business_profiles WHERE user_id = $${userParamIdx})
+        )
+      )`);
+    } else {
+      // Platform admin can view all or filter by business
+      if (tenant.businessId) {
+        params.push(tenant.businessId, tenant.institutionId || tenant.businessId);
+        conditions.push(`(br.business_id = $${params.length - 1} OR br.institution_id = $${params.length} OR br.business_id = $${params.length} OR br.institution_id = $${params.length - 1})`);
+      }
+    }
 
     if (vertical) {
       params.push(vertical);
