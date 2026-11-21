@@ -869,43 +869,6 @@ export function CategoryManagerContent() {
         </div>
       </div>
 
-      {/* CATEGORY TYPE TABS */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-border/50 text-xs font-semibold">
-        {[
-          { key: "all", label: "All Categories", icon: Layers },
-          { key: "business", label: "Business Categories", icon: Building2 },
-          { key: "product", label: "Product Categories", icon: Package },
-          { key: "service", label: "Service Categories", icon: Briefcase },
-          { key: "professional", label: "Professional Categories", icon: UserCheck },
-          { key: "course", label: "Course Categories", icon: BookOpen },
-          { key: "job", label: "Job Categories", icon: Briefcase },
-          { key: "vehicle", label: "Vehicle Categories", icon: Car },
-          { key: "property", label: "Property Categories", icon: Building2 },
-          { key: "event", label: "Event Categories", icon: CalendarDays },
-          { key: "dish", label: "Dish Categories", icon: UtensilsCrossed },
-          { key: "room", label: "Room Categories", icon: BedDouble },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => handleTabChange(tab.key)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap",
-                isActive
-                  ? "bg-[#d9232e] text-white font-bold shadow-xs"
-                  : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Icon className="size-3.5 shrink-0" />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
       {/* SEARCH & FILTERS ROW */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2.5">
         <div className="relative flex-1">
