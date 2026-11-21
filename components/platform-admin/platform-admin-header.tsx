@@ -593,6 +593,15 @@ export function PlatformAdminHeader() {
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link
+                  href="/packages"
+                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
+                >
+                  <Package className="size-4 text-amber-500" />
+                  <span>My Packages</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link
                   href="/workspace"
                   className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
                 >

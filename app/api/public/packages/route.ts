@@ -4,7 +4,7 @@ import { db } from "@/lib/db/db";
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const category = searchParams.get("category") || "business_growth";
+    const category = searchParams.get("category");
     const tier = searchParams.get("tier");
 
     let query = `
@@ -14,10 +14,16 @@ export async function GET(req: Request) {
         package_for,
         tier,
         package_category,
-        CAST(price AS DOUBLE PRECISION) AS price,
-        CAST(price_monthly AS DOUBLE PRECISION) AS price_monthly,
+        CAST(COALESCE(price_monthly, price, 0) AS DOUBLE PRECISION) AS price,
+        CAST(COALESCE(price_monthly, price, 0) AS DOUBLE PRECISION) AS price_monthly,
         CAST(price_annual AS DOUBLE PRECISION) AS price_annual,
-        price_unit,
+        COALESCE(price_unit, 'INR') AS price_unit,
+        billing_cycle,
+        database_allowance,
+        file_storage_allowance,
+        monthly_bandwidth,
+        compute_allowance,
+        seo_service,
         listing_limit_monthly,
         is_popular,
         is_active,
@@ -37,7 +43,7 @@ export async function GET(req: Request) {
 
     const params: any[] = [];
 
-    if (category) {
+    if (category && category !== "all" && category !== "business_growth") {
       params.push(category);
       query += ` AND package_category = $${params.length}`;
     }
@@ -47,7 +53,7 @@ export async function GET(req: Request) {
       query += ` AND tier = $${params.length}`;
     }
 
-    query += ` ORDER BY price ASC`;
+    query += ` ORDER BY COALESCE(price_monthly, price, 0) ASC, id ASC`;
 
     const res = await db.query(query, params);
 

@@ -30,6 +30,12 @@ import {
   FileText,
   BadgePercent,
   Plus,
+  HardDrive,
+  Cpu,
+  Activity,
+  Server,
+  Clock,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,24 +55,32 @@ import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
 export interface BusinessPackage {
   id: number;
   name: string;
-  tier: "starter" | "growth" | "professional" | "enterprise";
+  tier: string;
+  package_category?: string;
   price: number;
   price_monthly: number;
-  price_annual: number;
+  price_annual?: number;
   price_unit: string;
-  listing_limit_monthly: number;
-  is_popular: boolean;
-  target_audience: string;
-  description: string;
-  features_list: string[];
-  services_list: { title: string; desc: string }[];
-  overage_price_per_listing: number;
-  is_custom_enterprise: boolean;
+  billing_cycle?: string;
+  database_allowance?: string;
+  file_storage_allowance?: string;
+  monthly_bandwidth?: string;
+  compute_allowance?: string;
+  seo_service?: string;
+  listing_limit_monthly?: number;
+  is_popular?: boolean;
+  target_audience?: string;
+  description?: string;
+  features_list?: string[];
+  services_list?: { title: string; desc: string }[];
+  overage_price_per_listing?: number;
+  is_custom_enterprise?: boolean;
 }
 
 export default function BusinessGrowthPackagesPage() {
   const { isAuthenticated, user } = useAuthStore();
   const [packages, setPackages] = useState<BusinessPackage[]>([]);
+  const [currentSub, setCurrentSub] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   
@@ -84,23 +98,37 @@ export default function BusinessGrowthPackagesPage() {
     message: "",
   });
 
-  // Fetch Packages from DB
-  useEffect(() => {
-    async function loadPackages() {
-      try {
-        const res = await fetch("/api/public/packages?category=business_growth");
-        const json = await res.json();
-        if (json.success && json.packages?.length > 0) {
-          setPackages(json.packages);
-        }
-      } catch (err) {
-        console.error("Failed to load packages:", err);
-      } finally {
-        setLoading(false);
+  const loadCurrentSub = async () => {
+    try {
+      const res = await fetch("/api/subscriptions/current");
+      const json = await res.json();
+      if (json.success && json.subscription) {
+        setCurrentSub(json.subscription);
       }
+    } catch (err) {
+      console.error("Failed to load current subscription:", err);
     }
+  };
+
+  const loadPackages = async () => {
+    try {
+      const res = await fetch("/api/public/packages");
+      const json = await res.json();
+      if (json.success && json.packages?.length > 0) {
+        setPackages(json.packages);
+      }
+    } catch (err) {
+      console.error("Failed to load packages:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch Packages & Current Subscription
+  useEffect(() => {
     loadPackages();
-  }, []);
+    loadCurrentSub();
+  }, [isAuthenticated]);
 
   // Handle Subscribe
   const handleSubscribe = async () => {
@@ -131,7 +159,7 @@ export default function BusinessGrowthPackagesPage() {
       if (data.success) {
         toast.success(data.message || `Subscribed to ${selectedPackage.name}!`);
         setSelectedPackage(null);
-        window.location.href = "/workspace/subscription";
+        await loadCurrentSub();
       } else {
         toast.error(data.error || "Subscription failed. Please try again.");
       }
@@ -223,6 +251,98 @@ export default function BusinessGrowthPackagesPage() {
 
       {/* ================= 2. FOUR PRICING CARDS ================= */}
       <section id="plans" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
+        {/* ================= CURRENT ACTIVE PACKAGE CARD ================= */}
+        {currentSub && (
+          <div className="mb-12 p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border-2 border-emerald-500/30 relative overflow-hidden shadow-xs">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-emerald-500 text-white font-extrabold text-[11px] px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
+                    <CheckCircle2 className="size-3.5" />
+                    <span>Current Active Package</span>
+                  </Badge>
+                  <span className="text-xs font-semibold text-emerald-700 bg-emerald-100/80 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    Active &amp; Verified
+                  </span>
+                </div>
+
+                <h2 className="text-2xl sm:text-3xl font-black text-slate-900 flex items-center gap-2 pt-1">
+                  <span>{currentSub.plan_name || currentSub.package_name || "Launch Plan"}</span>
+                  <Badge variant="outline" className="text-xs uppercase font-bold text-slate-600 bg-white">
+                    {currentSub.tier || "launch"}
+                  </Badge>
+                </h2>
+
+                <div className="flex items-baseline gap-1.5 text-slate-900">
+                  <span className="text-3xl sm:text-4xl font-black">
+                    ₹{Number(currentSub.price || 0).toLocaleString("en-IN")}
+                  </span>
+                  <span className="text-xs text-slate-500 font-semibold">
+                    / {currentSub.billing_cycle || "monthly"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Active Plan Specifications */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 bg-white p-4 rounded-2xl border border-emerald-200 shadow-2xs text-xs">
+                <div className="space-y-0.5">
+                  <span className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
+                    <Database className="size-3 text-amber-500" /> Database
+                  </span>
+                  <strong className="font-bold text-slate-900 block truncate">
+                    {currentSub.database_allowance || "250 MB"}
+                  </strong>
+                </div>
+
+                <div className="space-y-0.5">
+                  <span className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
+                    <HardDrive className="size-3 text-blue-500" /> Storage
+                  </span>
+                  <strong className="font-bold text-slate-900 block truncate">
+                    {currentSub.file_storage_allowance || "2 GB"}
+                  </strong>
+                </div>
+
+                <div className="space-y-0.5">
+                  <span className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
+                    <Activity className="size-3 text-emerald-500" /> Bandwidth
+                  </span>
+                  <strong className="font-bold text-slate-900 block truncate">
+                    {currentSub.monthly_bandwidth || "10 GB"}
+                  </strong>
+                </div>
+
+                <div className="space-y-0.5">
+                  <span className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
+                    <Cpu className="size-3 text-purple-500" /> Compute
+                  </span>
+                  <strong className="font-bold text-slate-900 block truncate">
+                    {currentSub.compute_allowance || "100 units"}
+                  </strong>
+                </div>
+
+                <div className="space-y-0.5 col-span-2 sm:col-span-1">
+                  <span className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
+                    <Search className="size-3 text-sky-500" /> SEO Support
+                  </span>
+                  <strong className="font-bold text-slate-900 block truncate">
+                    {currentSub.seo_service || "Basic SEO support"}
+                  </strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="text-center max-w-3xl mx-auto mb-10 space-y-2">
+          <h2 className="text-2xl sm:text-3xl font-black text-slate-900">
+            {currentSub ? "Available Packages & Upgrades" : "Available Subscription Packages"}
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-600">
+            Choose or upgrade your plan anytime. All tiers include dedicated database and storage allowances, compute headroom, and SEO services.
+          </p>
+        </div>
+
         {loading ? (
           <div className="py-24 flex flex-col items-center justify-center gap-3">
             <Loader2 className="size-8 animate-spin text-amber-400" />
@@ -231,8 +351,15 @@ export default function BusinessGrowthPackagesPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 items-stretch">
             {packages.map((pkg) => {
-              const isPopular = pkg.is_popular || pkg.tier === "growth";
-              const isEnterprise = pkg.tier === "enterprise" || pkg.is_custom_enterprise;
+              const isPopular = pkg.is_popular || pkg.tier === "growth" || pkg.name.toLowerCase() === "growth";
+              const isEnterprise = pkg.tier === "enterprise" || pkg.is_custom_enterprise || pkg.name.toLowerCase() === "enterprise";
+              const isCurrentPlan = Boolean(
+                currentSub && (
+                  currentSub.package_id === pkg.id ||
+                  (currentSub.plan_name || currentSub.package_name || "").toLowerCase() === pkg.name.toLowerCase() ||
+                  (currentSub.tier || "").toLowerCase() === (pkg.tier || "").toLowerCase()
+                )
+              );
               const displayPrice =
                 billingCycle === "yearly"
                   ? Math.round(Number(pkg.price_annual || pkg.price * 10) / 12)
@@ -242,19 +369,27 @@ export default function BusinessGrowthPackagesPage() {
                 <div
                   key={pkg.id}
                   className={`relative rounded-3xl flex flex-col transition-all duration-300 ${
-                    isPopular
+                    isCurrentPlan
+                      ? "bg-emerald-50/40 border-2 border-emerald-500 shadow-xl shadow-emerald-500/10 lg:-translate-y-2"
+                      : isPopular
                       ? "bg-amber-50/50 border-2 border-amber-500 shadow-xl shadow-amber-500/10 lg:-translate-y-2"
                       : "bg-white border border-slate-200 hover:border-slate-300 hover:shadow-lg shadow-sm"
                   }`}
                 >
-                  {/* Most Popular Badge */}
-                  {isPopular && (
+                  {/* Current Active Badge or Most Popular Badge */}
+                  {isCurrentPlan ? (
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-20">
+                      <span className="bg-emerald-500 text-white font-black text-[11px] uppercase tracking-wider px-3.5 py-1 rounded-full shadow-lg flex items-center gap-1">
+                        <CheckCircle2 className="size-3" /> Current Active Plan
+                      </span>
+                    </div>
+                  ) : isPopular ? (
                     <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-20">
                       <span className="bg-gradient-to-r from-amber-500 to-orange-500 text-black font-black text-[11px] uppercase tracking-wider px-3.5 py-1 rounded-full shadow-lg flex items-center gap-1">
                         <Sparkles className="size-3 fill-black text-black" /> Most Popular Choice
                       </span>
                     </div>
-                  )}
+                  ) : null}
 
                   <div className="p-6 sm:p-7 flex-1 flex flex-col space-y-6">
                     {/* Header: Name & Audience */}
@@ -265,59 +400,104 @@ export default function BusinessGrowthPackagesPage() {
                           variant="outline"
                           className="capitalize text-[10px] font-bold border-slate-300 text-slate-700 bg-slate-50"
                         >
-                          {pkg.tier}
+                          {pkg.tier || pkg.name}
                         </Badge>
                       </div>
-                      <p className="text-xs text-slate-500 font-medium mt-1.5 min-h-[32px] line-clamp-2">
-                        {pkg.target_audience}
-                      </p>
+                      {pkg.description && (
+                        <p className="text-xs text-slate-500 font-medium mt-1.5 min-h-[32px] line-clamp-2">
+                          {pkg.description}
+                        </p>
+                      )}
                     </div>
 
-                    {/* Price and Allowance Highlight */}
+                    {/* Price in INR */}
                     <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                       <div className="flex items-baseline gap-1">
                         <span className="text-3xl sm:text-4xl font-black text-slate-900">
-                          ${displayPrice}
+                          ₹{displayPrice.toLocaleString("en-IN")}
                         </span>
                         <span className="text-xs text-slate-500 font-medium">/ month</span>
                       </div>
-                      {billingCycle === "yearly" && (
+                      {billingCycle === "yearly" && pkg.price_annual && (
                         <p className="text-[11px] font-semibold text-emerald-600">
-                          Billed annually (${pkg.price_annual}/yr)
+                          Billed annually (₹{Number(pkg.price_annual).toLocaleString("en-IN")}/yr)
                         </p>
                       )}
+                    </div>
 
-                      {/* Listing Limit Highlight (Core Pricing Factor) */}
-                      <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-xs">
-                        <span className="text-slate-500 font-medium">Monthly Listings:</span>
-                        <span className="font-extrabold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-200">
-                          {pkg.listing_limit_monthly.toLocaleString()}+ listings
+                    {/* 5 Core Allowance Specifications */}
+                    <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-2 text-xs">
+                      <div className="flex items-center justify-between text-slate-700">
+                        <span className="flex items-center gap-1.5 text-slate-500">
+                          <Database className="size-3.5 text-amber-500" /> Database
+                        </span>
+                        <strong className="font-bold text-slate-900">{pkg.database_allowance || "Custom"}</strong>
+                      </div>
+
+                      <div className="flex items-center justify-between text-slate-700">
+                        <span className="flex items-center gap-1.5 text-slate-500">
+                          <HardDrive className="size-3.5 text-blue-500" /> File Storage
+                        </span>
+                        <strong className="font-bold text-slate-900">{pkg.file_storage_allowance || "Custom"}</strong>
+                      </div>
+
+                      <div className="flex items-center justify-between text-slate-700">
+                        <span className="flex items-center gap-1.5 text-slate-500">
+                          <Activity className="size-3.5 text-emerald-500" /> Bandwidth
+                        </span>
+                        <strong className="font-bold text-slate-900">{pkg.monthly_bandwidth || "Custom"}</strong>
+                      </div>
+
+                      <div className="flex items-center justify-between text-slate-700">
+                        <span className="flex items-center gap-1.5 text-slate-500">
+                          <Cpu className="size-3.5 text-purple-500" /> Compute
+                        </span>
+                        <strong className="font-bold text-slate-900">{pkg.compute_allowance || "Custom"}</strong>
+                      </div>
+
+                      <div className="pt-1.5 border-t border-slate-200 text-slate-700 flex flex-col">
+                        <span className="flex items-center gap-1.5 text-slate-500 text-[11px] pb-0.5">
+                          <Search className="size-3 text-sky-500" /> SEO Support
+                        </span>
+                        <span className="font-bold text-[11px] text-slate-900 truncate">
+                          {pkg.seo_service || "Basic SEO support"}
                         </span>
                       </div>
                     </div>
 
-                    {/* Key Services & Capabilities */}
-                    <div className="space-y-3 flex-1">
-                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                        Included Ecosystem Features:
-                      </span>
-                      <ul className="space-y-2.5 text-xs text-slate-700">
-                        {pkg.features_list?.map((feature, idx) => (
-                          <li key={idx} className="flex items-start gap-2.5">
-                            <CheckCircle2
-                              className={`size-4 shrink-0 mt-0.5 ${
-                                isPopular ? "text-amber-500" : "text-emerald-500"
-                              }`}
-                            />
-                            <span className="leading-snug">{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    {/* Features List */}
+                    {pkg.features_list && pkg.features_list.length > 0 && (
+                      <div className="space-y-2.5 flex-1 pt-1">
+                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                          Included Features:
+                        </span>
+                        <ul className="space-y-2 text-xs text-slate-700">
+                          {pkg.features_list.map((feature, idx) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <CheckCircle2
+                                className={`size-3.5 shrink-0 mt-0.5 ${
+                                  isCurrentPlan
+                                    ? "text-emerald-500"
+                                    : isPopular
+                                    ? "text-amber-500"
+                                    : "text-emerald-500"
+                                }`}
+                              />
+                              <span className="leading-snug">{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
                     {/* Action Button */}
-                    <div className="pt-4">
-                      {isEnterprise ? (
+                    <div className="pt-4 mt-auto">
+                      {isCurrentPlan ? (
+                        <div className="w-full py-4 rounded-xl font-black text-xs sm:text-sm bg-emerald-500/15 border-2 border-emerald-500 text-emerald-800 flex items-center justify-center gap-2 select-none shadow-xs">
+                          <CheckCircle2 className="size-4 text-emerald-600" />
+                          <span>Current Active Plan</span>
+                        </div>
+                      ) : isEnterprise ? (
                         <Button
                           onClick={() => setEnterpriseModalOpen(true)}
                           className="w-full py-6 rounded-xl font-black text-xs sm:text-sm bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-black shadow-lg cursor-pointer"
@@ -334,7 +514,7 @@ export default function BusinessGrowthPackagesPage() {
                               : "bg-slate-900 hover:bg-slate-800 text-white border border-slate-800"
                           }`}
                         >
-                          <span>Choose {pkg.name}</span>
+                          <span>Switch to {pkg.name}</span>
                           <ArrowRight className="size-4 ml-1.5" />
                         </Button>
                       )}
@@ -518,19 +698,35 @@ export default function BusinessGrowthPackagesPage() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 text-xs">
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
               <div className="flex justify-between items-center text-slate-700">
                 <span>Billing Frequency:</span>
                 <span className="font-bold text-slate-900 capitalize">{billingCycle}</span>
               </div>
               <div className="flex justify-between items-center text-slate-700">
-                <span>Monthly Allowance:</span>
-                <span className="font-extrabold text-amber-700">{selectedPackage.listing_limit_monthly.toLocaleString()} listings</span>
+                <span>Database Allowance:</span>
+                <span className="font-extrabold text-slate-900">{selectedPackage.database_allowance || "Custom"}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-700">
+                <span>File Storage Allowance:</span>
+                <span className="font-extrabold text-slate-900">{selectedPackage.file_storage_allowance || "Custom"}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-700">
+                <span>Monthly Bandwidth:</span>
+                <span className="font-extrabold text-slate-900">{selectedPackage.monthly_bandwidth || "Custom"}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-700">
+                <span>Compute Units:</span>
+                <span className="font-extrabold text-slate-900">{selectedPackage.compute_allowance || "Custom"}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-700">
+                <span>SEO Service:</span>
+                <span className="font-extrabold text-slate-900">{selectedPackage.seo_service || "Basic SEO support"}</span>
               </div>
               <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-sm">
                 <span className="font-bold text-slate-900">Amount Due Today:</span>
                 <span className="text-lg font-black text-amber-600">
-                  ${billingCycle === "yearly" ? selectedPackage.price_annual : selectedPackage.price_monthly}
+                  ₹{Number(billingCycle === "yearly" && selectedPackage.price_annual ? selectedPackage.price_annual : selectedPackage.price_monthly).toLocaleString("en-IN")}
                 </span>
               </div>
             </div>

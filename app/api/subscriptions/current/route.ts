@@ -36,13 +36,20 @@ export async function GET(req: Request) {
       `
       SELECT 
         s.*,
-        p.name AS package_name,
-        p.tier,
+        COALESCE(p.name, s.plan_name) AS package_name,
+        COALESCE(p.tier, 'growth') AS tier,
+        COALESCE(p.database_allowance, '1 GB') AS database_allowance,
+        COALESCE(p.file_storage_allowance, '10 GB') AS file_storage_allowance,
+        COALESCE(p.monthly_bandwidth, '50 GB') AS monthly_bandwidth,
+        COALESCE(p.compute_allowance, '500 units') AS compute_allowance,
+        COALESCE(p.seo_service, 'Local SEO support') AS seo_service,
+        COALESCE(p.price_monthly, s.price, 999) AS price_monthly,
+        COALESCE(p.billing_cycle, 'Monthly') AS package_billing_cycle,
         p.listing_limit_monthly,
         p.overage_price_per_listing,
         p.auto_overage_enabled,
-        p.features_list,
-        p.services_list
+        COALESCE(p.features_list, '[]'::jsonb) AS features_list,
+        COALESCE(p.services_list, '[]'::jsonb) AS services_list
       FROM subscriptions s
       LEFT JOIN sales_packages p ON s.package_id = p.id
       WHERE s.user_id = $1 AND s.status IN ('active', 'trialing')
@@ -54,36 +61,62 @@ export async function GET(req: Request) {
 
     let subscription = subRes.rows[0];
 
-    // If no subscription exists, provide a default Starter plan
-    if (!subscription) {
-      const starterPkg = await db.query(
-        `SELECT * FROM sales_packages WHERE tier = 'starter' AND package_category = 'business_growth' LIMIT 1`
+    // If no valid active subscription exists, provide or create default Growth plan
+    if (!subscription || !subscription.package_id) {
+      const activePkgRes = await db.query(
+        `SELECT * FROM sales_packages WHERE is_active = TRUE AND COALESCE(is_deleted, FALSE) = FALSE ORDER BY id ASC LIMIT 1`
       );
-      const pkg = starterPkg.rows[0];
-      const pkgId = pkg?.id || null;
+      const pkg = activePkgRes.rows[0];
+      const pkgId = pkg?.id || 34;
       const allowance = pkg?.listing_limit_monthly || 100;
+      const price = Number(pkg?.price_monthly || pkg?.price || 399);
 
-      const newSub = await db.query(
-        `
-        INSERT INTO subscriptions (
-          user_id, package_id, plan_name, status, starts_at, expires_at,
-          price, price_unit, billing_cycle, listing_allowance, listings_used, additional_credits
-        ) VALUES (
-          $1, $2, $3, 'active', CURRENT_DATE, (CURRENT_DATE + INTERVAL '1 month')::date,
-          $4, 'USD', 'monthly', $5, 0, 0
-        ) RETURNING *
-        `,
-        [userId, pkgId, pkg?.name || "Starter", pkg?.price || 49.0, allowance]
-      );
+      if (subscription?.id) {
+        // Update existing row to link to active package
+        await db.query(
+          `UPDATE subscriptions SET package_id = $1, plan_name = $2, price = $3, price_unit = 'INR', updated_at = NOW() WHERE id = $4`,
+          [pkgId, pkg?.name || "Launch", price, subscription.id]
+        );
+        subscription.package_id = pkgId;
+        subscription.package_name = pkg?.name || "Launch";
+        subscription.tier = pkg?.tier || "launch";
+        subscription.price = price;
+        subscription.price_unit = "INR";
+        subscription.database_allowance = pkg?.database_allowance || "250 MB";
+        subscription.file_storage_allowance = pkg?.file_storage_allowance || "2 GB";
+        subscription.monthly_bandwidth = pkg?.monthly_bandwidth || "10 GB";
+        subscription.compute_allowance = pkg?.compute_allowance || "100 units";
+        subscription.seo_service = pkg?.seo_service || "Basic SEO support";
+        subscription.features_list = pkg?.features_list || [];
+        subscription.services_list = pkg?.services_list || [];
+      } else {
+        const newSub = await db.query(
+          `
+          INSERT INTO subscriptions (
+            user_id, package_id, plan_name, status, starts_at, expires_at,
+            price, price_unit, billing_cycle, listing_allowance, listings_used, additional_credits
+          ) VALUES (
+            $1, $2, $3, 'active', CURRENT_DATE, (CURRENT_DATE + INTERVAL '1 month')::date,
+            $4, 'INR', 'monthly', $5, 0, 0
+          ) RETURNING *
+          `,
+          [userId, pkgId, pkg?.name || "Launch", price, allowance]
+        );
 
-      subscription = {
-        ...newSub.rows[0],
-        package_name: pkg?.name || "Starter",
-        tier: "starter",
-        listing_limit_monthly: allowance,
-        features_list: pkg?.features_list || [],
-        services_list: pkg?.services_list || [],
-      };
+        subscription = {
+          ...newSub.rows[0],
+          package_name: pkg?.name || "Launch",
+          tier: pkg?.tier || "launch",
+          listing_limit_monthly: allowance,
+          database_allowance: pkg?.database_allowance || "250 MB",
+          file_storage_allowance: pkg?.file_storage_allowance || "2 GB",
+          monthly_bandwidth: pkg?.monthly_bandwidth || "10 GB",
+          compute_allowance: pkg?.compute_allowance || "100 units",
+          seo_service: pkg?.seo_service || "Basic SEO support",
+          features_list: pkg?.features_list || [],
+          services_list: pkg?.services_list || [],
+        };
+      }
     }
 
     // 2. Count actual unique listing usage records for current billing cycle
@@ -122,8 +155,13 @@ export async function GET(req: Request) {
         tier: subscription.tier || "starter",
         status: subscription.status,
         price: Number(subscription.price),
-        price_unit: subscription.price_unit || "USD",
+        price_unit: subscription.price_unit || "INR",
         billing_cycle: subscription.billing_cycle || "monthly",
+        database_allowance: subscription.database_allowance || "250 MB",
+        file_storage_allowance: subscription.file_storage_allowance || "2 GB",
+        monthly_bandwidth: subscription.monthly_bandwidth || "10 GB",
+        compute_allowance: subscription.compute_allowance || "100 units",
+        seo_service: subscription.seo_service || "Basic SEO support",
         starts_at: subscription.starts_at,
         expires_at: subscription.expires_at,
         next_billing_date: subscription.expires_at,

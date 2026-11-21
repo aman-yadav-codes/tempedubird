@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { LogOut, Loader2, ChevronDown } from "lucide-react";
+import Link from "next/link";
+import { LogOut, Loader2, ChevronDown, Package, Store, User as UserIcon, Settings } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuthStore } from "@/store";
@@ -11,6 +12,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -151,13 +153,58 @@ export function AdminUserProfileMenu() {
             </div>
           </DropdownMenuLabel>
 
+          <DropdownMenuSeparator className="my-1" />
+
+          {/* Navigation Items Matching Platform Header */}
+          <DropdownMenuItem asChild>
+            <Link
+              href="/packages"
+              className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2.5 text-foreground hover:text-amber-600 rounded-lg hover:bg-muted"
+            >
+              <Package className="size-4 text-amber-500" />
+              <span>My Packages</span>
+            </Link>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem asChild>
+            <Link
+              href="/workspace"
+              className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2.5 text-foreground hover:text-sky-600 rounded-lg hover:bg-muted"
+            >
+              <Store className="size-4 text-sky-500" />
+              <span>My Store</span>
+            </Link>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem asChild>
+            <Link
+              href="/admin/account"
+              className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2.5 text-foreground hover:text-sky-600 rounded-lg hover:bg-muted"
+            >
+              <UserIcon className="size-4 text-sky-500" />
+              <span>Profile</span>
+            </Link>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem asChild>
+            <Link
+              href="/admin/settings"
+              className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2.5 text-foreground hover:text-sky-600 rounded-lg hover:bg-muted"
+            >
+              <Settings className="size-4 text-sky-500" />
+              <span>Settings</span>
+            </Link>
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator className="my-1" />
+
           {/* Sign Out Item */}
           <DropdownMenuItem
             onSelect={(e) => {
               e.preventDefault();
               setLogoutOpen(true);
             }}
-            className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive font-semibold mt-1"
+            className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive font-semibold"
           >
             <LogOut className="mr-2 h-4 w-4" />
             <span>Sign Out</span>

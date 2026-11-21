@@ -43,6 +43,7 @@ import {
   Store,
   ExternalLink,
   Boxes,
+  Package,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore, useCartStore } from "@/store";
@@ -561,6 +562,15 @@ export function PublicNavbar({
                   </div>
 
                   {/* Dropdown Items */}
+                  <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
+                    <Link href="/packages" className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-2.5">
+                        <Package className="h-4 w-4 text-amber-500" />
+                        <span className="text-xs font-semibold text-gray-900">My Packages</span>
+                      </div>
+                      <span className="text-[10px] text-amber-600 font-bold">Active & Plans</span>
+                    </Link>
+                  </DropdownMenuItem>
                   {!isPlatformAdmin && (
                     <DropdownMenuItem asChild className="cursor-pointer py-2.5 px-3 rounded-lg">
                       <Link
