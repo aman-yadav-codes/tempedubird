@@ -677,53 +677,7 @@ export default function BusinessGrowthPackagesPage() {
         </div>
       </section>
 
-      {/* ================= 4. FEATURE COMPARISON TABLE ================= */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24 space-y-10">
-        <div className="text-center space-y-3 max-w-3xl mx-auto">
-          <h2 className="text-3xl sm:text-4xl font-black text-slate-900">Compare Plan Capabilities</h2>
-          <p className="text-sm text-slate-600">
-            A comprehensive breakdown of tools, professional services, and assisted capabilities included across all plans.
-          </p>
-        </div>
 
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-slate-800">
-                <th className="p-4 sm:p-5 font-black text-sm text-slate-900 w-1/3">Capability Matrix</th>
-                <th className="p-4 sm:p-5 font-bold text-slate-700">Starter</th>
-                <th className="p-4 sm:p-5 font-bold text-amber-800 bg-amber-50">Growth (Popular)</th>
-                <th className="p-4 sm:p-5 font-bold text-slate-700">Professional</th>
-                <th className="p-4 sm:p-5 font-bold text-slate-900">Enterprise</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {[
-                { feature: "Monthly Unique Listing Limit", s: "100 listings", g: "500 listings", p: "2,000 listings", e: "5,000+ (Custom)" },
-                { feature: "Business Setup & Registration", s: "Basic Guidance", g: "Assisted Setup", p: "Advanced Assistance", e: "Custom Dedicated Setup" },
-                { feature: "Hiring & Recruitment", s: "—", g: "Job Postings & Pipelines", p: "Multi-department Hiring", e: "Large-scale Recruitment" },
-                { feature: "Sales Pipeline Management", s: "Basic Deals", g: "Lead Generation & Pipelines", p: "Advanced Multi-stage Pipelines", e: "Enterprise CRM & Custom Workflows" },
-                { feature: "Marketing & Campaigns", s: "Directory Promotion", g: "Campaigns & Social Ads", p: "Strategy & Omnichannel", e: "Enterprise Strategy & Growth Manager" },
-                { feature: "Branding & Online Presence", s: "Basic Profile", g: "Branding Improvement", p: "Brand Positioning & Collateral", e: "Advanced Custom Branding" },
-                { feature: "Business Operations (BPM)", s: "Essential Tools", g: "Customer Follow-ups", p: "Business Process Management", e: "Full Workflow Automation" },
-                { feature: "CRM & Customer Engagement", s: "Contact Book", g: "Lead Pipeline CRM", p: "Advanced Customer Insights", e: "Enterprise Multi-location CRM" },
-                { feature: "Business Analytics & Reports", s: "Standard Stats", g: "Advanced Analytics", p: "KPI Monitoring & Exports", e: "Custom BI & Predictive Analytics" },
-                { feature: "Team Members & Permissions", s: "Up to 3 Users", g: "Up to 10 Users", p: "Up to 25 Users", e: "Unlimited Multi-Branch" },
-                { feature: "Automation & API Integrations", s: "—", g: "Webhooks", p: "Standard API Access", e: "Custom Integrations & Webhooks" },
-                { feature: "Customer Support SLA", s: "Standard Email", g: "Priority Email & Chat", p: "24/7 Priority Support", e: "Dedicated Account Advisor + Phone" },
-              ].map((row, idx) => (
-                <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                  <td className="p-4 sm:p-4.5 font-bold text-slate-800">{row.feature}</td>
-                  <td className="p-4 sm:p-4.5 text-slate-600">{row.s}</td>
-                  <td className="p-4 sm:p-4.5 font-semibold text-amber-800 bg-amber-50/50">{row.g}</td>
-                  <td className="p-4 sm:p-4.5 text-slate-600">{row.p}</td>
-                  <td className="p-4 sm:p-4.5 font-bold text-slate-900">{row.e}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
 
       {/* ================= 5. FAQ SECTION ================= */}
       <section className="bg-slate-50 border-t border-slate-200 py-16 lg:py-24">
