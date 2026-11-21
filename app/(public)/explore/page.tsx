@@ -925,6 +925,18 @@ function CustomerExplorePageContent({
     process.env.NEXT_PUBLIC_APP_MODE === "institution"
   );
 
+  const formatLocationAreaAndCity = (loc?: string | null) => {
+    if (!loc || loc === "All Locations" || loc === "all") return "";
+    let trimmed = loc.trim();
+    if (trimmed.toLowerCase().includes("pandeypur") && !trimmed.toLowerCase().includes("varanasi")) {
+      return `${trimmed}, Varanasi`;
+    }
+    return trimmed;
+  };
+  const effectiveFullLocation = formatLocationAreaAndCity(
+    userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : city
+  );
+
   return (
     <div className="min-h-screen bg-white text-slate-900 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6">
       {/* 1. Breadcrumbs */}
@@ -948,10 +960,10 @@ function CustomerExplorePageContent({
         >
           {activeType === "all" ? "Explore" : activeType === "business" ? "Businesses" : activeType === "service" ? "Services" : activeType === "product" ? "Products" : activeType === "professional" ? "Professionals" : activeType === "course" ? "Courses" : "Jobs"}
         </button>
-        {(userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : city) && (
+        {effectiveFullLocation && (
           <>
             <ChevronRight className="size-3 text-slate-400" />
-            <span className="text-slate-700 font-medium">{userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : city}</span>
+            <span className="text-slate-700 font-medium">{effectiveFullLocation}</span>
           </>
         )}
         {(selectedCategoryName || selectedSubcategoryName) && (
@@ -966,10 +978,10 @@ function CustomerExplorePageContent({
       <div className="space-y-1.5 pt-1">
         <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
           {selectedSubcategoryName || selectedCategoryName || (activeType === "all" ? "Businesses & Services" : activeType.charAt(0).toUpperCase() + activeType.slice(1))}
-          {(userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : city) ? ` in ${userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : city}` : ""}
+          {effectiveFullLocation ? ` in ${effectiveFullLocation}` : ""}
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 max-w-3xl">
-          Explore {selectedSubcategoryName || selectedCategoryName || "verified"} {activeType === "all" ? "businesses, services, and opportunities" : `${activeType}s`} in {(userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : city) || "your area"}.
+          Explore {selectedSubcategoryName || selectedCategoryName || "verified"} {activeType === "all" ? "businesses, services, and opportunities" : `${activeType}s`} in {effectiveFullLocation || "your area"}.
         </p>
       </div>
 
@@ -1852,35 +1864,6 @@ function CustomerExplorePageContent({
               </div>
             </div>
 
-            {/* Main Business Category Filter */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-700">
-                Main Business Category
-              </label>
-              <select
-                value={selectedBusinessCategoryId || ""}
-                onChange={(e) => {
-                  const val = e.target.value ? Number(e.target.value) : null;
-                  setSelectedBusinessCategoryId(val);
-                  setSelectedCategoryId(null);
-                  setSelectedCategoryName("");
-                  setSelectedCategorySlug("");
-                  setSelectedSubcategoryId(null);
-                  setSelectedSubcategoryName("");
-                  setSelectedSubcategorySlug("");
-                  syncUrlParams({ category: null, subcategory: null });
-                }}
-                className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 focus:outline-none focus:bg-white cursor-pointer"
-              >
-                <option value="">All Business Types ({businessCategories.length})</option>
-                {businessCategories.map((bc) => (
-                  <option key={bc.id} value={bc.id}>
-                    {bc.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
           {/* Main Business Category Filter (Only for business or all types) */}
           {(activeType === "all" || activeType === "business") && (
             <div className="space-y-2">
@@ -1972,24 +1955,7 @@ function CustomerExplorePageContent({
                 </button>
                 {subcategories.map((sub) => (
                   <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedSubcategoryId(null);
-                      setSelectedSubcategoryName("");
-                      setSelectedSubcategorySlug("");
-                      syncUrlParams({ subcategory: null });
-                    }}
-                    className={cn(
-                      "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
-                      !selectedSubcategoryId ? "bg-amber-100 text-amber-900 font-semibold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                    )}
-                  >
-                    <span>All Subcategories</span>
-                    <span className="text-[10px] text-slate-400">({subcategories.length})</span>
-                  </button>
-                  {subcategories.map((sub) => (
-                    <button
-                      key={sub.id}
+                    key={sub.id}
                       type="button"
                       onClick={() => {
                         setSelectedSubcategoryId(sub.id);

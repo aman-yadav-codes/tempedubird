@@ -358,6 +358,24 @@ export function buildPropertySeoUrl(prop: {
 }
 
 /**
+ * Extract canonical city name and slug for SEO URLs
+ * E.g. "Pandeypur Chauraha, Varanasi" -> "varanasi"
+ * E.g. "Pandeypur Chauraha" -> "varanasi" (resolves known area to city)
+ */
+export function extractCanonicalCitySlug(locationRaw?: string | null): string {
+  if (!locationRaw || locationRaw.toLowerCase() === "all locations" || locationRaw.toLowerCase() === "all") return "";
+  let raw = locationRaw.trim();
+  if (raw.includes(",")) {
+    const parts = raw.split(",").map((p) => p.trim()).filter(Boolean);
+    raw = parts[parts.length - 1] || parts[0];
+  }
+  if (raw.toLowerCase().includes("pandeypur")) {
+    return "varanasi";
+  }
+  return slugify(raw);
+}
+
+/**
  * Build structured discovery / listing SEO URL
  * Format: /{listingType}/{category-slug}-in-{location}
  * Example: /professionals/doctors-and-healthcare-in-varanasi
@@ -395,8 +413,8 @@ export function buildDiscoverySeoUrl({
   let catSlug = slugify(rawCat);
   if (catSlug.startsWith("all-")) catSlug = "";
 
-  const locRaw = location || [locality, city].filter(Boolean).join(" ") || city || locality || "";
-  const locSlug = locRaw && locRaw.toLowerCase() !== "all locations" ? slugify(locRaw) : "";
+  const locRaw = city || location || [locality, city].filter(Boolean).join(" ") || locality || "";
+  const locSlug = extractCanonicalCitySlug(locRaw);
 
   if (catSlug && locSlug) {
     return `${prefix}/${catSlug}-in-${locSlug}`;

@@ -921,6 +921,8 @@ export function UnifiedMarketplaceHome() {
               className="w-full h-auto object-contain drop-shadow-[0_20px_40px_rgba(0,80,180,0.18)]"
             />
           </div>
+        </div>
+      </div>
 
           {/* Live Metric Stats Bar (Glassmorphic cards over hero landscape - Click opens dedicated page according to selected location) */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 pt-6 border-t border-white/50 w-full relative z-20">

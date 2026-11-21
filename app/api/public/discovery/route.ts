@@ -23,17 +23,19 @@ export async function GET(req: NextRequest) {
         const catLookup = await db.query(
           `SELECT id, name, slug, parent_id, category_type, business_category_id 
            FROM categories 
-           WHERE slug = $1 
+           WHERE (slug = $1 
               OR slug LIKE $2
               OR name ILIKE $1 
-              OR name ILIKE $3
+              OR name ILIKE $3)
+              ${type && type !== "all" ? `AND (category_type = '${type.replace(/'/g, "''")}' OR category_type IS NULL OR business_category_id IS NOT NULL)` : ""}
            ORDER BY 
               CASE 
                 WHEN slug = $1 THEN 0 
-                WHEN slug LIKE $2 THEN 1
+                WHEN ${type && type !== "all" ? `category_type = '${type.replace(/'/g, "''")}'` : "false"} AND slug LIKE $2 THEN 1
                 WHEN ${type && type !== "all" ? `category_type = '${type.replace(/'/g, "''")}'` : "false"} THEN 2
-                WHEN parent_id IS NULL THEN 3 
-                ELSE 4 
+                WHEN slug LIKE $2 THEN 3
+                WHEN parent_id IS NULL THEN 4 
+                ELSE 5 
               END, id ASC
            LIMIT 1`,
           [cleanSlug, `${cleanSlug}%`, `%${targetStr.replace(/-/g, " ")}%`]
