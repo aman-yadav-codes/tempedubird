@@ -110,6 +110,8 @@ export function CategoryManagerContent() {
   const [filterBizCatId, setFilterBizCatId] = useState<string>("all");
   const [filterBizSubcatId, setFilterBizSubcatId] = useState<string>("all");
   const [filterProfCatId, setFilterProfCatId] = useState<string>("all");
+  const [filterParentCatId, setFilterParentCatId] = useState<string>("all");
+  const [filterParentOptions, setFilterParentOptions] = useState<CategoryItem[]>([]);
 
   // Root Business & Professional Categories (for dropdowns)
   const [businessRootCategories, setBusinessRootCategories] = useState<BizCategoryOption[]>([]);
@@ -117,6 +119,10 @@ export function CategoryManagerContent() {
   // Business Subcategories cache (keyed by parent_id)
   const [bizSubcategoriesMap, setBizSubcategoriesMap] = useState<Record<number, BizCategoryOption[]>>({});
   const [loadingSubcategories, setLoadingSubcategories] = useState(false);
+
+  // Dynamic Parent Category options depending on business_subcategory_id & business_category_id
+  const [availableParentOptions, setAvailableParentOptions] = useState<CategoryItem[]>([]);
+  const [loadingParentOptions, setLoadingParentOptions] = useState(false);
 
   // Dialog states
   // 1. Business Category Modal (Root)
@@ -228,6 +234,88 @@ export function CategoryManagerContent() {
     }
   }, [accessToken, bizSubcategoriesMap]);
 
+  // Dynamic Parent Category options for Dialogs depending on business_subcategory_id & business_category_id
+  useEffect(() => {
+    if (!catalogCatDialogOpen && !editDialogOpen) return;
+
+    let isMounted = true;
+    const fetchParentOptions = async () => {
+      setLoadingParentOptions(true);
+      try {
+        const typeParam = formType === "all" ? "" : `&type=${formType}`;
+        const bizSubcatParam =
+          formBizSubcatId && formBizSubcatId !== "all" && formBizSubcatId !== "none"
+            ? `&business_subcategory_id=${formBizSubcatId}`
+            : "";
+        const bizCatParam =
+          formBizCatId && formBizCatId !== "all"
+            ? `&business_category_id=${formBizCatId}`
+            : "";
+
+        const res = await fetch(
+          `/api/admin/categories?onlyRoot=true&limit=200${typeParam}${bizSubcatParam}${bizCatParam}`,
+          {
+            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+          }
+        );
+        const data = await res.json();
+        if (isMounted && data?.data) {
+          setAvailableParentOptions(data.data);
+        }
+      } catch (err) {
+        console.warn("Failed to load parent category options:", err);
+      } finally {
+        if (isMounted) setLoadingParentOptions(false);
+      }
+    };
+
+    fetchParentOptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [catalogCatDialogOpen, editDialogOpen, formType, formBizSubcatId, formBizCatId, accessToken]);
+
+  // Options to display in edit dialog, preserving existing parent if not already present
+  const parentOptionsToDisplay = useMemo(() => {
+    const list = [...availableParentOptions];
+    if (editingCategory?.parent_id && editingCategory.parent_name) {
+      if (!list.some((p) => p.id === editingCategory.parent_id)) {
+        list.unshift({
+          id: editingCategory.parent_id,
+          name: editingCategory.parent_name,
+          depth: 1,
+          slug: "",
+        } as any);
+      }
+    }
+    return list.filter((c) => !editingCategory || c.id !== editingCategory.id);
+  }, [availableParentOptions, editingCategory]);
+
+  // Load Parent options for Table Filter Bar when business subcategory is filtered
+  useEffect(() => {
+    if (filterBizSubcatId === "all" || activeTab === "business") {
+      setFilterParentOptions([]);
+      return;
+    }
+    const fetchFilterParents = async () => {
+      try {
+        const typeParam = activeTab === "all" ? "" : `&type=${activeTab}`;
+        const res = await fetch(
+          `/api/admin/categories?onlyRoot=true&limit=150${typeParam}&business_subcategory_id=${filterBizSubcatId}`,
+          { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} }
+        );
+        const data = await res.json();
+        if (data?.data) {
+          setFilterParentOptions(data.data);
+        }
+      } catch {
+        setFilterParentOptions([]);
+      }
+    };
+    fetchFilterParents();
+  }, [filterBizSubcatId, activeTab, accessToken]);
+
   // Load Main Categories Table Data
   const loadCategories = useCallback(async () => {
     setLoading(true);
@@ -242,13 +330,13 @@ export function CategoryManagerContent() {
         activeTab !== "professional" && filterBizSubcatId !== "all"
           ? `&business_subcategory_id=${filterBizSubcatId}`
           : "";
-      const profParentParam =
-        activeTab === "professional" && filterProfCatId !== "all"
-          ? `&parentId=${filterProfCatId}`
-          : "";
+      const parentParam =
+        activeTab === "professional"
+          ? (filterProfCatId !== "all" ? `&parentId=${filterProfCatId}` : "")
+          : (filterParentCatId !== "all" ? `&parentId=${filterParentCatId}` : "");
 
       const res = await fetch(
-        `/api/admin/categories?page=${page}&limit=50${typeParam}${searchParam}${bizCatParam}${bizSubcatParam}${profParentParam}`,
+        `/api/admin/categories?page=${page}&limit=50${typeParam}${searchParam}${bizCatParam}${bizSubcatParam}${parentParam}`,
         {
           headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
         }
@@ -269,7 +357,7 @@ export function CategoryManagerContent() {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, activeTab, search, page, filterBizCatId, filterBizSubcatId, filterProfCatId]);
+  }, [accessToken, activeTab, search, page, filterBizCatId, filterBizSubcatId, filterProfCatId, filterParentCatId]);
 
   useEffect(() => {
     loadCategories();
@@ -488,7 +576,7 @@ export function CategoryManagerContent() {
           category_type: formType,
           business_category_id: Number(formBizCatId),
           business_subcategory_id: formBizSubcatId ? Number(formBizSubcatId) : null,
-          parentId: null,
+          parentId: formParentId !== "none" ? Number(formParentId) : null,
           icon_url: formIconUrl.trim() || null,
           description: formDesc.trim() || null,
           synonyms: formSynonyms.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean),
@@ -919,6 +1007,7 @@ export function CategoryManagerContent() {
                   value={filterBizSubcatId}
                   onValueChange={(val) => {
                     setFilterBizSubcatId(val);
+                    setFilterParentCatId("all");
                     setPage(1);
                   }}
                 >
@@ -941,13 +1030,42 @@ export function CategoryManagerContent() {
               </div>
             )}
 
-            {(filterBizCatId !== "all" || filterBizSubcatId !== "all") && (
+            {filterBizSubcatId !== "all" && filterParentOptions.length > 0 && (
+              <div className="w-full sm:w-52">
+                <Select
+                  value={filterParentCatId}
+                  onValueChange={(val) => {
+                    setFilterParentCatId(val);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="h-9 text-xs bg-card">
+                    <span className="truncate">
+                      {filterParentCatId === "all"
+                        ? "All Parent Categories"
+                        : filterParentOptions.find((p) => String(p.id) === filterParentCatId)?.name || "Parent Category"}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent className="max-h-56">
+                    <SelectItem value="all">All Parent Categories</SelectItem>
+                    {filterParentOptions.map((p) => (
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {(filterBizCatId !== "all" || filterBizSubcatId !== "all" || filterParentCatId !== "all") && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
                   setFilterBizCatId("all");
                   setFilterBizSubcatId("all");
+                  setFilterParentCatId("all");
                   setPage(1);
                 }}
                 className="h-9 px-2 text-xs text-muted-foreground hover:text-foreground"
@@ -1490,7 +1608,10 @@ export function CategoryManagerContent() {
                   </Label>
                   <Select
                     value={formBizSubcatId}
-                    onValueChange={(val) => setFormBizSubcatId(val === "none" ? "" : val)}
+                    onValueChange={(val) => {
+                      setFormBizSubcatId(val === "none" ? "" : val);
+                      setFormParentId("none");
+                    }}
                   >
                     <SelectTrigger className="mt-1 h-9 text-xs bg-background">
                       <SelectValue placeholder="Select Business Subcategory..." />
@@ -1504,6 +1625,38 @@ export function CategoryManagerContent() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              )}
+
+              {formBizCatId && (
+                <div className="pt-1">
+                  <Label className="text-[11px] font-semibold text-foreground">
+                    Parent Category (Optional)
+                  </Label>
+                  <Select value={formParentId} onValueChange={setFormParentId}>
+                    <SelectTrigger className="mt-1 h-9 text-xs bg-background">
+                      <SelectValue placeholder="None (Root Category)" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-56">
+                      <SelectItem value="none">None (Root Category)</SelectItem>
+                      {loadingParentOptions ? (
+                        <div className="p-2 text-center text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+                          <Loader2 className="size-3 animate-spin text-primary" /> Loading parent categories...
+                        </div>
+                      ) : (
+                        availableParentOptions.map((p) => (
+                          <SelectItem key={p.id} value={String(p.id)}>
+                            {p.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {formBizSubcatId
+                      ? `Parent categories filtered by selected business subcategory.`
+                      : `Select a business subcategory above to filter parent categories.`}
+                  </p>
                 </div>
               )}
             </div>
@@ -1646,7 +1799,10 @@ export function CategoryManagerContent() {
                       <Label className="text-[10px] text-muted-foreground">Business Subcategory</Label>
                       <Select
                         value={formBizSubcatId}
-                        onValueChange={setFormBizSubcatId}
+                        onValueChange={(val) => {
+                          setFormBizSubcatId(val);
+                          setFormParentId("none");
+                        }}
                         disabled={!formBizCatId || loadingSubcategories}
                       >
                         <SelectTrigger className="mt-1 h-8 text-xs bg-background">
@@ -1689,19 +1845,28 @@ export function CategoryManagerContent() {
                   <Label className="text-xs font-semibold">Parent Category</Label>
                   <Select value={formParentId} onValueChange={setFormParentId}>
                     <SelectTrigger className="mt-1 h-9 text-xs">
-                      <SelectValue placeholder="None (Root)" />
+                      <SelectValue placeholder="None (Root Category)" />
                     </SelectTrigger>
                     <SelectContent className="max-h-56">
                       <SelectItem value="none">None (Root Category)</SelectItem>
-                      {categories
-                        .filter((c) => c.id !== editingCategory.id && c.depth === 1)
-                        .map((p) => (
+                      {loadingParentOptions ? (
+                        <div className="p-2 text-center text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+                          <Loader2 className="size-3 animate-spin text-primary" /> Loading...
+                        </div>
+                      ) : (
+                        parentOptionsToDisplay.map((p) => (
                           <SelectItem key={p.id} value={String(p.id)}>
                             {p.name}
                           </SelectItem>
-                        ))}
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {formBizSubcatId
+                      ? `Parent categories filtered by selected business subcategory.`
+                      : `Select a business subcategory above to filter parent categories.`}
+                  </p>
                 </div>
               </div>
 
