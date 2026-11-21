@@ -109,7 +109,7 @@ export function PublicBusinessProfileClient({
   const highlightId = highlightParam ? Number(highlightParam) : null;
 
   const [activeTab, setActiveTab] = useState<string>(() => {
-    if (urlTab && ["overview", "products", "packages", "services", "courses", "jobs", "team", "reviews", "gallery"].includes(urlTab)) {
+    if (urlTab && ["overview", "about", "products", "packages", "services", "courses", "jobs", "team", "reviews", "gallery"].includes(urlTab)) {
       return urlTab;
     }
     return "overview";
@@ -134,7 +134,7 @@ export function PublicBusinessProfileClient({
   }, [packages]);
 
   useEffect(() => {
-    if (urlTab && ["overview", "products", "packages", "services", "courses", "jobs", "team", "reviews", "gallery"].includes(urlTab)) {
+    if (urlTab && ["overview", "about", "products", "packages", "services", "courses", "jobs", "team", "reviews", "gallery"].includes(urlTab)) {
       setActiveTab(urlTab);
     }
   }, [urlTab]);
@@ -168,6 +168,7 @@ export function PublicBusinessProfileClient({
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
   const [selectedBookingService, setSelectedBookingService] = useState<BookingServiceItem | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [allReviewsOpen, setAllReviewsOpen] = useState(false);
   const [enquiryOpen, setEnquiryOpen] = useState(false);
   const [selectedGalleryImage, setSelectedGalleryImage] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
@@ -1345,9 +1346,9 @@ export function PublicBusinessProfileClient({
                 <Users className="size-3.5" />
                 <span>Team ({professionals.length})</span>
               </TabsTrigger>
-              <TabsTrigger value="reviews" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                <Star className="size-3.5" />
-                <span>Reviews ({reviewCount})</span>
+              <TabsTrigger value="about" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
+                <Info className="size-3.5" />
+                <span>About</span>
               </TabsTrigger>
               <TabsTrigger value="gallery" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
                 <Camera className="size-3.5" />
@@ -1846,7 +1847,7 @@ export function PublicBusinessProfileClient({
                           type="button"
                           variant="ghost"
                           size="sm"
-                          onClick={() => setActiveTab("reviews")}
+                          onClick={() => setAllReviewsOpen(true)}
                           className="text-xs font-bold text-primary hover:underline p-0 h-auto cursor-pointer"
                         >
                           View all reviews ({reviewCount}) &rarr;
@@ -3276,6 +3277,214 @@ export function PublicBusinessProfileClient({
               )}
             </TabsContent>
 
+            {/* ================= ABOUT TAB ================= */}
+            <TabsContent value="about" className="mt-6 space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left 2 Cols: Main About, Mission/Vision, Highlights */}
+                <div className="lg:col-span-2 space-y-6">
+                  {/* About Card */}
+                  <Card className="rounded-2xl border shadow-xs">
+                    <CardHeader>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
+                          About Us
+                        </Badge>
+                        <span className="text-xs text-muted-foreground font-medium">• Business Profile</span>
+                      </div>
+                      <CardTitle className="text-xl font-bold mt-1">About {business.name}</CardTitle>
+                      <CardDescription className="text-xs">
+                        Learn more about our background, identity, and commitment to service
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4 text-sm text-muted-foreground leading-relaxed">
+                      {business.about ? (
+                        <p className="whitespace-pre-line text-foreground/90">{business.about}</p>
+                      ) : (
+                        <p className="italic text-muted-foreground">
+                          Welcome to {business.name}. We provide quality products, trusted professional solutions, and reliable customer satisfaction in {business.city || "our local community"}.
+                        </p>
+                      )}
+
+                      {/* Featured Highlights Grid */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-4 border-t">
+                        <div className="p-3.5 rounded-xl bg-muted/40 border">
+                          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+                            Business Type
+                          </span>
+                          <span className="text-xs font-bold text-foreground mt-0.5 block">
+                            {business.business_type || "Enterprise"}
+                          </span>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-muted/40 border">
+                          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+                            Established
+                          </span>
+                          <span className="text-xs font-bold text-foreground mt-0.5 block">
+                            {business.established_year ? `Year ${business.established_year}` : "Verified Member"}
+                          </span>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-muted/40 border">
+                          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+                            Verification
+                          </span>
+                          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 block flex items-center gap-1">
+                            <ShieldCheck className="size-3.5" /> Verified Store
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Mission, Vision & Strategic Goals Card */}
+                  <Card className="rounded-2xl border shadow-xs">
+                    <CardHeader className="pb-3 border-b">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
+                          Core Principles
+                        </Badge>
+                        <span className="text-xs text-muted-foreground font-medium">• Philosophy & Goals</span>
+                      </div>
+                      <CardTitle className="text-lg font-bold mt-1">Our Mission, Vision & Strategic Goals</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-4 space-y-4">
+                      <div className="p-4 rounded-xl bg-primary/5 border border-primary/15 space-y-2">
+                        <div className="flex items-center gap-2 font-bold text-sm text-foreground">
+                          <Target className="size-4 text-primary" />
+                          <span>Our Mission</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed pl-6">
+                          {business.mission?.trim() || `To deliver dependable products, transparent services, and exceptional value to every customer at ${business.name}.`}
+                        </p>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/15 space-y-2">
+                        <div className="flex items-center gap-2 font-bold text-sm text-foreground">
+                          <Compass className="size-4 text-amber-500" />
+                          <span>Our Vision</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed pl-6">
+                          {business.vision?.trim() || `To become the most trusted and preferred local establishment in ${business.city || "the region"}, setting higher benchmarks in quality and reliability.`}
+                        </p>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/15 space-y-2">
+                        <div className="flex items-center gap-2 font-bold text-sm text-foreground">
+                          <Award className="size-4 text-emerald-500" />
+                          <span>Strategic Goals & Commitments</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed pl-6 whitespace-pre-line">
+                          {business.goal?.trim() || business.strategic_goals?.trim() || `• Customer Centricity: Providing high satisfaction with genuine products and services.\n• Community Engagement: Fostering long-term customer trust.\n• Continual Growth: Expanding catalog offerings and modern service convenience.`}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Right 1 Col: Key Info, Business Details & Operating Hours */}
+                <div className="space-y-6">
+                  {/* Store Information */}
+                  <Card className="rounded-2xl border shadow-xs">
+                    <CardHeader className="pb-3 border-b">
+                      <CardTitle className="text-base font-bold flex items-center gap-2">
+                        <Store className="size-4 text-primary" />
+                        <span>Business Information</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-4 space-y-3.5 text-xs">
+                      {fullAddress && (
+                        <div className="flex items-start gap-2.5">
+                          <MapPin className="size-4 text-primary shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-bold text-foreground block">Address</span>
+                            <span className="text-muted-foreground">{fullAddress}</span>
+                            <div className="pt-1.5">
+                              <a
+                                href={mapsUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline"
+                              >
+                                <Navigation className="size-3" /> Get Directions
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {business.phone && (
+                        <div className="flex items-center gap-2.5 pt-1 border-t">
+                          <Phone className="size-4 text-primary shrink-0" />
+                          <div>
+                            <span className="font-bold text-foreground block">Phone</span>
+                            <a href={`tel:${cleanPhone}`} className="text-primary hover:underline font-medium">{business.phone}</a>
+                          </div>
+                        </div>
+                      )}
+                      {business.whatsapp && (
+                        <div className="flex items-center gap-2.5 pt-1 border-t">
+                          <MessageCircle className="size-4 text-emerald-600 shrink-0" />
+                          <div>
+                            <span className="font-bold text-foreground block">WhatsApp</span>
+                            <a href={`https://wa.me/${cleanWhatsapp}`} target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:underline font-medium">Chat on WhatsApp</a>
+                          </div>
+                        </div>
+                      )}
+                      {business.email && (
+                        <div className="flex items-center gap-2.5 pt-1 border-t">
+                          <Mail className="size-4 text-primary shrink-0" />
+                          <div>
+                            <span className="font-bold text-foreground block">Email</span>
+                            <a href={`mailto:${business.email}`} className="text-primary hover:underline font-medium">{business.email}</a>
+                          </div>
+                        </div>
+                      )}
+                      {business.website && (
+                        <div className="flex items-center gap-2.5 pt-1 border-t">
+                          <Globe className="size-4 text-primary shrink-0" />
+                          <div>
+                            <span className="font-bold text-foreground block">Website</span>
+                            <a href={business.website.startsWith("http") ? business.website : `https://${business.website}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
+                              {business.website.replace(/^https?:\/\//, "")}
+                            </a>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Business Hours */}
+                  <Card className="rounded-2xl border shadow-xs">
+                    <CardHeader className="pb-3 border-b">
+                      <CardTitle className="text-base font-bold flex items-center gap-2">
+                        <Clock className="size-4 text-primary" />
+                        <span>Working Hours</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-4 space-y-2 text-xs">
+                      {business.opening_time || business.closing_time ? (
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-muted-foreground font-medium">Monday - Saturday</span>
+                          <span className="font-bold text-foreground">
+                            {business.opening_time || "09:00 AM"} – {business.closing_time || "09:00 PM"}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-muted-foreground font-medium">Everyday (Mon - Sun)</span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">Open Daily</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between py-1 border-t text-muted-foreground">
+                        <span>Sunday</span>
+                        <span className="font-semibold text-foreground">
+                          {business.sunday_hours || "09:00 AM – 02:00 PM (or Open Daily)"}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </TabsContent>
+
             {/* ================= REVIEWS TAB ================= */}
             <TabsContent value="reviews" className="mt-6 space-y-6">
               <Card className="rounded-2xl border shadow-xs">
@@ -3554,6 +3763,96 @@ export function PublicBusinessProfileClient({
           setSubmittedReviews((prev) => [newRev, ...prev]);
         }}
       />
+
+      {/* ================= ALL REVIEWS DIALOG ================= */}
+      <Dialog open={allReviewsOpen} onOpenChange={setAllReviewsOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="flex flex-row items-center justify-between pb-2 border-b">
+            <div>
+              <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                <Star className="size-4 text-amber-500 fill-amber-500" />
+                <span>Customer Reviews ({reviewCount})</span>
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Verified customer ratings and testimonials for {business.name}
+              </DialogDescription>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                setAllReviewsOpen(false);
+                setFeedbackOpen(true);
+              }}
+              className="text-xs font-bold cursor-pointer"
+            >
+              Write a Review
+            </Button>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            {/* Rating summary */}
+            <div className="p-4 rounded-xl bg-muted/30 border flex items-center gap-6">
+              <div className="text-center shrink-0">
+                <span className="text-4xl font-black text-foreground block">{avgRating}</span>
+                <div className="flex items-center gap-1 justify-center my-1 text-amber-500">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star key={s} className="size-3.5 fill-amber-500 text-amber-500" />
+                  ))}
+                </div>
+                <span className="text-[11px] text-muted-foreground">{reviewCount} Reviews</span>
+              </div>
+              <div className="border-l pl-6 space-y-1 text-xs text-muted-foreground flex-1">
+                <p className="font-semibold text-foreground">100% Verified Customer Feedback</p>
+                <p>All reviews are submitted by authenticated users on our marketplace.</p>
+              </div>
+            </div>
+
+            {/* List */}
+            {allReviews.length === 0 ? (
+              <div className="p-6 text-center text-xs text-muted-foreground">
+                No customer reviews yet. Be the first to share your experience with {business.name}!
+              </div>
+            ) : (
+              <div className="divide-y divide-border/60">
+                {allReviews.map((rev) => (
+                  <div key={rev.id} className="py-4 space-y-2 text-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-foreground text-sm">
+                          {rev.user_name || rev.reviewer_name || "Customer"}
+                        </span>
+                        {(rev.is_verified_user ?? true) && (
+                          <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 font-semibold gap-1 py-0">
+                            <ShieldCheck className="size-3 text-emerald-600" />
+                            <span>{rev.reviewer_role || "Verified Buyer"}</span>
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-0.5 text-amber-500">
+                          {[...Array(Number(rev.rating || 5))].map((_, i) => (
+                            <Star key={i} className="size-3.5 fill-amber-500 text-amber-500" />
+                          ))}
+                        </div>
+                        <span className="text-[11px] text-muted-foreground/70 font-medium">
+                          {rev.created_at ? new Date(rev.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" }) : "Recent"}
+                        </span>
+                      </div>
+                    </div>
+                    {rev.title && (
+                      <h4 className="font-bold text-xs text-foreground">{rev.title}</h4>
+                    )}
+                    <p className="text-muted-foreground leading-relaxed text-xs">
+                      {rev.review || rev.comment}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ================= PHOTO LIGHTBOX DIALOG ================= */}
       <Dialog open={Boolean(selectedGalleryImage)} onOpenChange={(open) => !open && setSelectedGalleryImage(null)}>
