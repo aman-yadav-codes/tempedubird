@@ -19,9 +19,24 @@ export async function GET(req: NextRequest) {
     if (!categoryId && (subcategoryParam || categoryParam)) {
       try {
         const targetStr = subcategoryParam || categoryParam;
+        const cleanSlug = targetStr.toLowerCase().trim();
         const catLookup = await db.query(
-          `SELECT id FROM categories WHERE slug = $1 OR name ILIKE $2 OR name ILIKE $1 LIMIT 1`,
-          [targetStr.toLowerCase(), `%${targetStr.replace(/-/g, " ")}%`]
+          `SELECT id, name, slug, parent_id, category_type, business_category_id 
+           FROM categories 
+           WHERE slug = $1 
+              OR slug LIKE $2
+              OR name ILIKE $1 
+              OR name ILIKE $3
+           ORDER BY 
+              CASE 
+                WHEN slug = $1 THEN 0 
+                WHEN slug LIKE $2 THEN 1
+                WHEN ${type && type !== "all" ? `category_type = '${type.replace(/'/g, "''")}'` : "false"} THEN 2
+                WHEN parent_id IS NULL THEN 3 
+                ELSE 4 
+              END, id ASC
+           LIMIT 1`,
+          [cleanSlug, `${cleanSlug}%`, `%${targetStr.replace(/-/g, " ")}%`]
         );
         if (catLookup.rows.length > 0) {
           categoryId = Number(catLookup.rows[0].id);
@@ -77,12 +92,13 @@ export async function GET(req: NextRequest) {
     if (categoryId) {
       try {
         const catRes = await db.query(
-          "SELECT id, name, parent_id, slug, category_type FROM categories WHERE id = $1",
+          "SELECT id, name, parent_id, slug, category_type, business_category_id FROM categories WHERE id = $1",
           [categoryId]
         );
         if (catRes.rows.length > 0) {
           const cat = catRes.rows[0];
           const parentId = cat.parent_id;
+          const bizCatId = cat.business_category_id;
           const words = (cat.name || "").split(/[\s,&-]+/).filter((w: string) => w.length >= 3);
           const firstWord = words[0];
 
@@ -91,6 +107,7 @@ export async function GET(req: NextRequest) {
              WHERE id = $1
                OR parent_id = $1
                ${parentId ? "OR id = $2 OR parent_id = $2" : ""}
+               ${bizCatId ? `OR id = ${Number(bizCatId)} OR business_category_id = ${Number(bizCatId)}` : `OR business_category_id = $1`}
                ${firstWord ? `OR name ILIKE $${parentId ? 3 : 2}` : ""}
             `,
             parentId
@@ -111,6 +128,21 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Multi-token location resolution (supporting "Pandeypur Chauraha, Varanasi" -> matches "Pandeypur" and "Varanasi")
+    const cityTokens: string[] = [];
+    if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
+      cityTokens.push(`%${city.trim()}%`);
+      const commaParts = city.split(",").map((p) => p.trim()).filter(Boolean);
+      for (const p of commaParts) {
+        if (p.length >= 2) cityTokens.push(`%${p}%`);
+        const subWords = p.split(/\s+/).filter((w) => w.length >= 3);
+        for (const w of subWords) {
+          cityTokens.push(`%${w}%`);
+        }
+      }
+    }
+    const uniqueCityTokens = Array.from(new Set(cityTokens));
+
     // 1. Search Businesses
     if (type === "all" || type === "business") {
       const bConditions: string[] = ["COALESCE(bp.is_active, true) = true"];
@@ -130,9 +162,9 @@ export async function GET(req: NextRequest) {
         bParams.push(country.toUpperCase());
         bConditions.push(`(bp.country_code = $${bParams.length} OR ($${bParams.length} = 'IN' AND bp.country_code IS NULL))`);
       }
-      if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
-        bParams.push(`%${city}%`);
-        bConditions.push(`(bp.city ILIKE $${bParams.length} OR bp.locality ILIKE $${bParams.length} OR bp.address ILIKE $${bParams.length} OR bp.state ILIKE $${bParams.length})`);
+      if (uniqueCityTokens.length > 0) {
+        bParams.push(uniqueCityTokens);
+        bConditions.push(`(bp.city ILIKE ANY($${bParams.length}::text[]) OR bp.locality ILIKE ANY($${bParams.length}::text[]) OR bp.address ILIKE ANY($${bParams.length}::text[]) OR bp.state ILIKE ANY($${bParams.length}::text[]))`);
       }
       if (state) {
         bParams.push(`%${state}%`);
@@ -231,9 +263,9 @@ export async function GET(req: NextRequest) {
         pParams.push(country.toUpperCase());
         pConditions.push(`(pp.country_code = $${pParams.length} OR ($${pParams.length} = 'IN' AND pp.country_code IS NULL))`);
       }
-      if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
-        pParams.push(`%${city}%`);
-        pConditions.push(`(pp.city ILIKE $${pParams.length} OR pp.locality ILIKE $${pParams.length} OR pp.address ILIKE $${pParams.length} OR pp.state ILIKE $${pParams.length})`);
+      if (uniqueCityTokens.length > 0) {
+        pParams.push(uniqueCityTokens);
+        pConditions.push(`(pp.city ILIKE ANY($${pParams.length}::text[]) OR pp.locality ILIKE ANY($${pParams.length}::text[]) OR pp.address ILIKE ANY($${pParams.length}::text[]) OR pp.state ILIKE ANY($${pParams.length}::text[]))`);
       }
       if (state) {
         pParams.push(`%${state}%`);
@@ -432,18 +464,18 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
-        prodParams.push(`%${city}%`);
+      if (uniqueCityTokens.length > 0) {
+        prodParams.push(uniqueCityTokens);
         prodConditions.push(`(
           mp.id IN (
             SELECT bprod.master_product_id FROM business_products bprod
             JOIN business_profiles bp ON (bp.id = bprod.business_profile_id OR bp.id = bprod.business_id)
-            WHERE (bp.city ILIKE $${prodParams.length} OR bp.locality ILIKE $${prodParams.length} OR bp.address ILIKE $${prodParams.length} OR bp.state ILIKE $${prodParams.length})
+            WHERE (bp.city ILIKE ANY($${prodParams.length}::text[]) OR bp.locality ILIKE ANY($${prodParams.length}::text[]) OR bp.address ILIKE ANY($${prodParams.length}::text[]) OR bp.state ILIKE ANY($${prodParams.length}::text[]))
               AND COALESCE(bprod.is_available, true) = true
           )
           OR mp.business_profile_id IN (
             SELECT bp2.id FROM business_profiles bp2
-            WHERE (bp2.city ILIKE $${prodParams.length} OR bp2.locality ILIKE $${prodParams.length} OR bp2.address ILIKE $${prodParams.length} OR bp2.state ILIKE $${prodParams.length})
+            WHERE (bp2.city ILIKE ANY($${prodParams.length}::text[]) OR bp2.locality ILIKE ANY($${prodParams.length}::text[]) OR bp2.address ILIKE ANY($${prodParams.length}::text[]) OR bp2.state ILIKE ANY($${prodParams.length}::text[]))
           )
         )`);
       }
@@ -559,24 +591,24 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
-        sParams.push(`%${city}%`);
+      if (uniqueCityTokens.length > 0) {
+        sParams.push(uniqueCityTokens);
         sConditions.push(`(
           ms.id IN (
             SELECT bserv.master_service_id FROM business_services bserv
             JOIN business_profiles bp ON bp.id = bserv.business_id
-            WHERE (bp.city ILIKE $${sParams.length} OR bp.locality ILIKE $${sParams.length} OR bp.address ILIKE $${sParams.length} OR bp.state ILIKE $${sParams.length})
+            WHERE (bp.city ILIKE ANY($${sParams.length}::text[]) OR bp.locality ILIKE ANY($${sParams.length}::text[]) OR bp.address ILIKE ANY($${sParams.length}::text[]) OR bp.state ILIKE ANY($${sParams.length}::text[]))
               AND COALESCE(bserv.is_active, true) = true
           )
           OR ms.id IN (
             SELECT ps.master_service_id FROM professional_services ps
             JOIN professional_profiles pp ON pp.id = ps.professional_id
-            WHERE (pp.city ILIKE $${sParams.length} OR pp.locality ILIKE $${sParams.length} OR pp.address ILIKE $${sParams.length} OR pp.state ILIKE $${sParams.length})
+            WHERE (pp.city ILIKE ANY($${sParams.length}::text[]) OR pp.locality ILIKE ANY($${sParams.length}::text[]) OR pp.address ILIKE ANY($${sParams.length}::text[]) OR pp.state ILIKE ANY($${sParams.length}::text[]))
               AND COALESCE(ps.is_active, true) = true
           )
           OR ms.business_profile_id IN (
             SELECT bp2.id FROM business_profiles bp2
-            WHERE (bp2.city ILIKE $${sParams.length} OR bp2.locality ILIKE $${sParams.length} OR bp2.address ILIKE $${sParams.length} OR bp2.state ILIKE $${sParams.length})
+            WHERE (bp2.city ILIKE ANY($${sParams.length}::text[]) OR bp2.locality ILIKE ANY($${sParams.length}::text[]) OR bp2.address ILIKE ANY($${sParams.length}::text[]) OR bp2.state ILIKE ANY($${sParams.length}::text[]))
           )
         )`);
       }
@@ -737,12 +769,13 @@ export async function GET(req: NextRequest) {
             )`);
           }
 
-          if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
-            ipParams.push(`%${city}%`);
+          if (uniqueCityTokens.length > 0) {
+            ipParams.push(uniqueCityTokens);
             ipConditions.push(`(
-              loc.city ILIKE $${ipParams.length}
-              OR ip.city ILIKE $${ipParams.length}
-              OR ip.address ILIKE $${ipParams.length}
+              loc.city ILIKE ANY($${ipParams.length}::text[])
+              OR ip.city ILIKE ANY($${ipParams.length}::text[])
+              OR ip.address ILIKE ANY($${ipParams.length}::text[])
+              OR loc.address ILIKE ANY($${ipParams.length}::text[])
             )`);
           }
 
@@ -916,9 +949,12 @@ export async function GET(req: NextRequest) {
           )`);
         }
 
-        if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
-          jParams.push(`%${city}%`);
-          jConditions.push(`sjp.location ILIKE $${jParams.length}`);
+        if (uniqueCityTokens.length > 0) {
+          jParams.push(uniqueCityTokens);
+          jConditions.push(`(
+            sjp.location ILIKE ANY($${jParams.length}::text[])
+            OR COALESCE(sjp.description, '') ILIKE ANY($${jParams.length}::text[])
+          )`);
         }
 
         if (categoryIds.length > 0) {

@@ -38,6 +38,7 @@ import {
   X,
   Navigation,
   ChevronDown,
+  Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -388,21 +389,22 @@ export function UnifiedMarketplaceHome() {
   return (
     <div className="flex-1 flex flex-col w-full bg-background">
       {/* ================= 1. HERO SECTION (143PANDA DISCOVERY THEME) ================= */}
-      <section className="relative overflow-hidden min-h-[580px] sm:min-h-[640px] lg:min-h-[680px] flex items-center py-14 sm:py-18 lg:py-20 border-b border-border/50 bg-[#08090d]">
-        {/* Clean ambient lighting - NO background image */}
-        <div className="absolute top-1/4 right-1/4 size-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none z-0" />
-        <div className="absolute -bottom-20 left-10 size-96 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none z-0" />
+      <section className="relative overflow-hidden min-h-[580px] sm:min-h-[640px] lg:min-h-[690px] flex items-center py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-[#259bf8] via-[#65befd] to-[#d0ecff]">
+        {/* Soft atmospheric clouds */}
+        <div className="absolute top-4 left-10 w-72 h-28 bg-white/35 rounded-full blur-2xl pointer-events-none z-0" />
+        <div className="absolute top-16 right-16 w-96 h-36 bg-white/40 rounded-full blur-3xl pointer-events-none z-0" />
+        <div className="absolute bottom-10 left-1/3 w-80 h-28 bg-white/30 rounded-full blur-2xl pointer-events-none z-0" />
 
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full space-y-8">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
             {/* Left Column: Eyebrow, Heading, Search Bar, Categories */}
-            <div className="lg:col-span-7 space-y-6 sm:space-y-7">
+            <div className="lg:col-span-7 space-y-5 sm:space-y-6">
               {/* Top Eyebrow Tag & Location Badge */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-amber-400 font-extrabold uppercase tracking-[0.2em] text-xs sm:text-sm drop-shadow-md flex items-center gap-2">
-                  <Sparkles className="size-4 text-amber-400 animate-pulse" />
-                  THE PREMIER LOCAL DISCOVERY PLATFORM
-                </span>
+              <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
+                <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#0c1a2e] text-white border border-slate-700/60 text-[11px] sm:text-xs font-bold shadow-md">
+                  <Trophy className="size-3.5 text-amber-400" />
+                  <span className="text-amber-400 font-extrabold tracking-wider">THE PREMIER LOCAL DISCOVERY PLATFORM</span>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
@@ -410,23 +412,23 @@ export function UnifiedMarketplaceHome() {
                       window.dispatchEvent(new CustomEvent("edubird-open-location-dialog"));
                     }
                   }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-amber-300 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#0c1a2e] hover:bg-[#152742] text-white border border-slate-700/60 text-[11px] sm:text-xs font-bold transition-all cursor-pointer shadow-md active:scale-95"
                   title="Click to select or change location"
                 >
-                  <MapPin className="size-3 text-amber-400" />
-                  <span>Location: <strong className="text-white underline">{displayCity}</strong></span>
-                  <span className="text-[10px] text-amber-400/80 ml-0.5">Change →</span>
+                  <MapPin className="size-3.5 text-amber-400" />
+                  <span>Location: <strong className="text-white">{displayCity || "South Africa"}</strong></span>
+                  <span className="text-[11px] text-amber-400/90 ml-0.5">Change ⌵</span>
                 </button>
               </div>
 
-              {/* Heading & Subheading - Exactly 2 rows */}
-              <div className="space-y-3.5 max-w-2xl">
-                <h1 className="text-3xl sm:text-5xl md:text-5xl lg:text-[58px] font-black tracking-tight text-white leading-[1.08] drop-shadow-xl">
-                  <span className="block whitespace-nowrap">Looking for something?</span>
-                  <span className="block text-white">Let&apos;s find it.</span>
+              {/* Heading & Subheading matching mockup */}
+              <div className="space-y-3 max-w-2xl">
+                <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-[68px] font-black tracking-tight text-[#071933] leading-[1.05]">
+                  <span className="block">Find Anything,</span>
+                  <span className="block">Anywhere Near You. <span className="inline-block text-amber-400 text-3xl sm:text-4xl">✨</span></span>
                 </h1>
-                <p className="text-sm sm:text-base lg:text-lg text-white/90 max-w-2xl leading-relaxed drop-shadow-md font-medium">
-                  Discover businesses, places, services, property, courses, products, jobs and more across South Africa &amp; your region.
+                <p className="text-sm sm:text-base text-[#0f284d]/90 max-w-xl leading-relaxed font-medium">
+                  From products and services to businesses, professionals, jobs, property and events — discover everything you need, all in one place.
                 </p>
               </div>
 
@@ -438,10 +440,10 @@ export function UnifiedMarketplaceHome() {
                 e.preventDefault();
                 handleSearch();
               }}
-              className="relative group flex items-center bg-black/45 backdrop-blur-md border border-white/25 hover:border-white/40 focus-within:border-amber-400/90 focus-within:ring-4 focus-within:ring-amber-400/20 rounded-full px-3 sm:px-4 py-2 sm:py-2.5 shadow-2xl transition-all"
+              className="relative group flex items-center bg-white rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.12)] border border-sky-100 px-3 sm:px-4 py-2 sm:py-2.5 transition-all focus-within:ring-4 focus-within:ring-sky-400/20"
             >
-              <div className="pl-1 flex items-center pointer-events-none text-amber-400">
-                <Sparkles className="size-5" />
+              <div className="pl-1 flex items-center pointer-events-none text-sky-500">
+                <Search className="size-5" />
               </div>
               <input
                 type="text"
@@ -459,12 +461,12 @@ export function UnifiedMarketplaceHome() {
                   }
                 }}
                 placeholder="What are you looking for today?"
-                className="w-full h-11 pl-3 pr-4 bg-transparent text-white placeholder:text-white/70 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 border-0"
+                className="w-full h-11 pl-3 pr-4 bg-transparent text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 border-0"
               />
 
               <div className="flex items-center gap-1.5 shrink-0 pr-1">
                 {isSearching ? (
-                  <Loader2 className="size-4 animate-spin text-amber-400 mr-1" />
+                  <Loader2 className="size-4 animate-spin text-sky-500 mr-1" />
                 ) : searchQuery ? (
                   <button
                     type="button"
@@ -473,18 +475,18 @@ export function UnifiedMarketplaceHome() {
                       setSearchResults(null);
                       setIsDropdownOpen(false);
                     }}
-                    className="p-1 rounded-full hover:bg-white/15 text-white/70 hover:text-white cursor-pointer mr-1 transition-colors"
+                    className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer mr-1 transition-colors"
                     title="Clear search"
                   >
                     <X className="size-4" />
                   </button>
                 ) : null}
 
-                {/* Circular Orange Search Button */}
+                {/* Circular Bright Blue Search Button matching mockup */}
                 <Button
                   type="submit"
                   size="icon"
-                  className="size-10 sm:size-11 rounded-full bg-orange-500 hover:bg-orange-600 active:scale-95 text-white shadow-lg cursor-pointer transition-transform shrink-0"
+                  className="size-10 sm:size-11 rounded-full bg-[#0080ff] hover:bg-[#0070e0] active:scale-95 text-white shadow-md cursor-pointer transition-transform shrink-0"
                   title="Search"
                 >
                   <Search className="size-5" />
@@ -492,368 +494,436 @@ export function UnifiedMarketplaceHome() {
               </div>
             </form>
 
-            {/* Quick Category Navigation Pills */}
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap pt-1 text-xs">
-              <Link
-                href="/explore?type=product"
-                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-              >
-                <span>📦 Products</span>
-              </Link>
-              <Link
-                href="/explore?type=professional"
-                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-              >
-                <span>👨‍💼 Professionals</span>
-              </Link>
-              <Link
-                href="/explore?type=course"
-                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-              >
-                <span>🎓 Courses</span>
-              </Link>
-              <Link
-                href="/explore?type=job"
-                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-              >
-                <span>💼 Jobs</span>
-              </Link>
-              <Link
-                href="/explore?type=business"
-                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-              >
-                <span>🏢 Business</span>
-              </Link>
-              <Link
-                href="/explore?categoryName=Entertainment&type=all"
-                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-              >
-                <span>🎭 Entertainment</span>
-              </Link>
-              <Link
-                href="/explore?type=vehicle"
-                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-              >
-                <span>🚗 Vehicle</span>
-              </Link>
-              <Link
-                href="/explore?type=property"
-                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-              >
-                <span>🏠 Property</span>
-              </Link>
+            {/* Quick Category Navigation Pills (Arranged in 2 clean horizontal rows matching mockup) */}
+            <div className="space-y-2 pt-1">
+              {/* Row 1 */}
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-xs">
+                <Link
+                  href="/businesses"
+                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-amber-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                >
+                  <span className="text-amber-500">💼</span>
+                  <span>Businesses</span>
+                </Link>
+                <Link
+                  href="/professionals"
+                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-sky-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                >
+                  <span className="text-sky-500">👥</span>
+                  <span>Professionals</span>
+                </Link>
+                <Link
+                  href="/courses"
+                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-emerald-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                >
+                  <span className="text-emerald-500">🎓</span>
+                  <span>Courses</span>
+                </Link>
+                <Link
+                  href="/jobs"
+                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-purple-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                >
+                  <span className="text-purple-500">💼</span>
+                  <span>Jobs</span>
+                </Link>
+                <Link
+                  href="/businesses"
+                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-cyan-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                >
+                  <span className="text-cyan-600">🏢</span>
+                  <span>Property</span>
+                </Link>
+                <Link
+                  href="/explore?type=all&category=events"
+                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-rose-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                >
+                  <span className="text-rose-500">📅</span>
+                  <span>Events</span>
+                </Link>
+              </div>
+
+              {/* Row 2 */}
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-xs">
+                <Link
+                  href="/products"
+                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-blue-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                >
+                  <span className="text-blue-600">📦</span>
+                  <span>Products</span>
+                </Link>
+                <Link
+                  href="/services"
+                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-emerald-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                >
+                  <span className="text-emerald-600">🏠</span>
+                  <span>Services</span>
+                </Link>
+                <Link
+                  href="/explore?categoryName=Entertainment&type=all"
+                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-red-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                >
+                  <span className="text-red-500">▶️</span>
+                  <span>Entertainment</span>
+                </Link>
+                <Link
+                  href="/businesses"
+                  className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-slate-400 text-slate-700 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
+                >
+                  <span>&amp; More...</span>
+                </Link>
+              </div>
             </div>
 
-            {/* ================= AUTOCOMPLETE SEARCH SUGGESTIONS DROPDOWN ================= */}
-            {isDropdownOpen && searchQuery.trim().length > 0 && (
-              <div className="absolute left-0 right-0 top-[58px] w-full bg-card rounded-2xl border border-border shadow-2xl z-50 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-150">
-                {/* Filter Pills Header */}
-                <div className="flex items-center gap-1.5 p-2.5 border-b bg-muted/40 overflow-x-auto scrollbar-none text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setActiveSearchTab("all")}
-                    className={`px-2.5 py-1 rounded-full font-bold transition-all cursor-pointer whitespace-nowrap text-[11px] ${
-                      activeSearchTab === "all"
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "bg-background text-muted-foreground border hover:bg-muted"
-                    }`}
+                {/* Quick Category Navigation Pills */}
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap pt-1 text-xs">
+                  <Link
+                    href="/explore?type=product"
+                    className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
                   >
-                    All ({searchCounts.all})
-                  </button>
-
-                  {searchCounts.products > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setActiveSearchTab("products")}
-                      className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${
-                        activeSearchTab === "products"
-                          ? "bg-primary text-primary-foreground shadow-xs"
-                          : "bg-background text-muted-foreground border hover:bg-muted"
-                      }`}
-                    >
-                      <Package className="size-3" />
-                      <span>Products ({searchCounts.products})</span>
-                    </button>
-                  )}
-
-                  {searchCounts.services > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setActiveSearchTab("services")}
-                      className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${
-                        activeSearchTab === "services"
-                          ? "bg-primary text-primary-foreground shadow-xs"
-                          : "bg-background text-muted-foreground border hover:bg-muted"
-                      }`}
-                    >
-                      <Briefcase className="size-3" />
-                      <span>Services ({searchCounts.services})</span>
-                    </button>
-                  )}
-
-                  {searchCounts.businesses > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setActiveSearchTab("businesses")}
-                      className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${
-                        activeSearchTab === "businesses"
-                          ? "bg-primary text-primary-foreground shadow-xs"
-                          : "bg-background text-muted-foreground border hover:bg-muted"
-                      }`}
-                    >
-                      <Building2 className="size-3" />
-                      <span>Businesses ({searchCounts.businesses})</span>
-                    </button>
-                  )}
-
-                  {searchCounts.professionals > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setActiveSearchTab("professionals")}
-                      className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${
-                        activeSearchTab === "professionals"
-                          ? "bg-primary text-primary-foreground shadow-xs"
-                          : "bg-background text-muted-foreground border hover:bg-muted"
-                      }`}
-                    >
-                      <UserCheck className="size-3" />
-                      <span>Professionals ({searchCounts.professionals})</span>
-                    </button>
-                  )}
-
-                  {searchCounts.categories > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setActiveSearchTab("categories")}
-                      className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${
-                        activeSearchTab === "categories"
-                          ? "bg-primary text-primary-foreground shadow-xs"
-                          : "bg-background text-muted-foreground border hover:bg-muted"
-                      }`}
-                    >
-                      <FolderTree className="size-3" />
-                      <span>Categories ({searchCounts.categories})</span>
-                    </button>
-                  )}
+                    <span>📦 Products</span>
+                  </Link>
+                  <Link
+                    href="/explore?type=professional"
+                    className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                  >
+                    <span>👨‍💼 Professionals</span>
+                  </Link>
+                  <Link
+                    href="/explore?type=course"
+                    className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                  >
+                    <span>🎓 Courses</span>
+                  </Link>
+                  <Link
+                    href="/explore?type=job"
+                    className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                  >
+                    <span>💼 Jobs</span>
+                  </Link>
+                  <Link
+                    href="/explore?type=business"
+                    className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                  >
+                    <span>🏢 Business</span>
+                  </Link>
+                  <Link
+                    href="/explore?categoryName=Entertainment&type=all"
+                    className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                  >
+                    <span>🎭 Entertainment</span>
+                  </Link>
+                  <Link
+                    href="/explore?type=vehicle"
+                    className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                  >
+                    <span>🚗 Vehicle</span>
+                  </Link>
+                  <Link
+                    href="/explore?type=property"
+                    className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/70 active:scale-95 backdrop-blur-md border border-white/20 hover:border-amber-400/60 text-white/95 font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                  >
+                    <span>🏠 Property</span>
+                  </Link>
                 </div>
 
-                {/* Suggestions List Container */}
-                <div className="max-h-[380px] overflow-y-auto divide-y divide-border/50 text-left">
-                  {displayedSearchItems.length === 0 ? (
-                    <div className="p-6 text-center space-y-2">
-                      <p className="text-xs font-semibold text-muted-foreground">
-                        No results found for &quot;<span className="text-foreground">{searchQuery}</span>&quot;
-                      </p>
+                {/* ================= AUTOCOMPLETE SEARCH SUGGESTIONS DROPDOWN ================= */}
+                {isDropdownOpen && searchQuery.trim().length > 0 && (
+                  <div className="absolute left-0 right-0 top-[58px] w-full bg-card rounded-2xl border border-border shadow-2xl z-50 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-150">
+                    {/* Filter Pills Header */}
+                    <div className="flex items-center gap-1.5 p-2.5 border-b bg-muted/40 overflow-x-auto scrollbar-none text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setActiveSearchTab("all")}
+                        className={`px-2.5 py-1 rounded-full font-bold transition-all cursor-pointer whitespace-nowrap text-[11px] ${activeSearchTab === "all"
+                          ? "bg-primary text-primary-foreground shadow-xs"
+                          : "bg-background text-muted-foreground border hover:bg-muted"
+                          }`}
+                      >
+                        All ({searchCounts.all})
+                      </button>
+
+                      {searchCounts.products > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveSearchTab("products")}
+                          className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${activeSearchTab === "products"
+                            ? "bg-primary text-primary-foreground shadow-xs"
+                            : "bg-background text-muted-foreground border hover:bg-muted"
+                            }`}
+                        >
+                          <Package className="size-3" />
+                          <span>Products ({searchCounts.products})</span>
+                        </button>
+                      )}
+
+                      {searchCounts.services > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveSearchTab("services")}
+                          className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${activeSearchTab === "services"
+                            ? "bg-primary text-primary-foreground shadow-xs"
+                            : "bg-background text-muted-foreground border hover:bg-muted"
+                            }`}
+                        >
+                          <Briefcase className="size-3" />
+                          <span>Services ({searchCounts.services})</span>
+                        </button>
+                      )}
+
+                      {searchCounts.businesses > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveSearchTab("businesses")}
+                          className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${activeSearchTab === "businesses"
+                            ? "bg-primary text-primary-foreground shadow-xs"
+                            : "bg-background text-muted-foreground border hover:bg-muted"
+                            }`}
+                        >
+                          <Building2 className="size-3" />
+                          <span>Businesses ({searchCounts.businesses})</span>
+                        </button>
+                      )}
+
+                      {searchCounts.professionals > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveSearchTab("professionals")}
+                          className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${activeSearchTab === "professionals"
+                            ? "bg-primary text-primary-foreground shadow-xs"
+                            : "bg-background text-muted-foreground border hover:bg-muted"
+                            }`}
+                        >
+                          <UserCheck className="size-3" />
+                          <span>Professionals ({searchCounts.professionals})</span>
+                        </button>
+                      )}
+
+                      {searchCounts.categories > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveSearchTab("categories")}
+                          className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${activeSearchTab === "categories"
+                            ? "bg-primary text-primary-foreground shadow-xs"
+                            : "bg-background text-muted-foreground border hover:bg-muted"
+                            }`}
+                        >
+                          <FolderTree className="size-3" />
+                          <span>Categories ({searchCounts.categories})</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Suggestions List Container */}
+                    <div className="max-h-[380px] overflow-y-auto divide-y divide-border/50 text-left">
+                      {displayedSearchItems.length === 0 ? (
+                        <div className="p-6 text-center space-y-2">
+                          <p className="text-xs font-semibold text-muted-foreground">
+                            No results found for &quot;<span className="text-foreground">{searchQuery}</span>&quot;
+                          </p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="mt-1 text-xs cursor-pointer"
+                            onClick={() => {
+                              setIsDropdownOpen(false);
+                              handleSearch();
+                            }}
+                          >
+                            Search Full Marketplace
+                          </Button>
+                        </div>
+                      ) : (
+                        displayedSearchItems.map((item, idx) => {
+                          const isProfile = item.type === "business" || item.type === "professional";
+
+                          return (
+                            <div
+                              key={`${item.type}-${item.id}-${idx}`}
+                              className="p-3 hover:bg-muted/50 transition-colors flex items-center justify-between gap-3 group"
+                            >
+                              {/* Left: Icon, Name, Category Badges & Subtitle */}
+                              <div
+                                onClick={() => {
+                                  setIsDropdownOpen(false);
+                                  if (item.type === "product") {
+                                    setSelectedProductForStores({ id: item.id, name: item.title });
+                                    setProductStoresDialogOpen(true);
+                                  } else if (isProfile) {
+                                    router.push(item.profileHref || item.href);
+                                  } else {
+                                    router.push(item.storefrontHref || item.listingHref || item.href);
+                                  }
+                                }}
+                                className="flex items-start gap-2.5 min-w-0 flex-1 cursor-pointer text-left"
+                              >
+                                {/* Icon Badge */}
+                                <div
+                                  className={`size-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${item.type === "product"
+                                    ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+                                    : item.type === "service"
+                                      ? "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-400"
+                                      : item.type === "business"
+                                        ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
+                                        : item.type === "professional"
+                                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
+                                          : "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400"
+                                    }`}
+                                >
+                                  {item.type === "product" ? (
+                                    <Package className="size-4" />
+                                  ) : item.type === "service" ? (
+                                    <Briefcase className="size-4" />
+                                  ) : item.type === "business" ? (
+                                    <Building2 className="size-4" />
+                                  ) : item.type === "professional" ? (
+                                    <UserCheck className="size-4" />
+                                  ) : (
+                                    <FolderTree className="size-4" />
+                                  )}
+                                </div>
+
+                                {/* Text info */}
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
+                                      {item.title}
+                                    </span>
+
+                                    {/* Type Pill */}
+                                    <Badge
+                                      variant="outline"
+                                      className={`text-[9px] px-1.5 py-0 uppercase font-bold tracking-wider ${item.type === "product"
+                                        ? "border-amber-300 text-amber-700 bg-amber-50 dark:bg-amber-950/40"
+                                        : item.type === "service"
+                                          ? "border-sky-300 text-sky-700 bg-sky-50 dark:bg-sky-950/40"
+                                          : item.type === "business"
+                                            ? "border-indigo-300 text-indigo-700 bg-indigo-50 dark:bg-indigo-950/40"
+                                            : item.type === "professional"
+                                              ? "border-emerald-300 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40"
+                                              : "border-rose-300 text-rose-700 bg-rose-50 dark:bg-rose-950/40"
+                                        }`}
+                                    >
+                                      {item.type}
+                                    </Badge>
+
+                                    {item.category_name && item.type !== "category" && (
+                                      <Badge
+                                        variant="secondary"
+                                        className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground font-semibold flex items-center gap-1"
+                                      >
+                                        <Tag className="size-2.5" />
+                                        <span>{item.category_name}</span>
+                                      </Badge>
+                                    )}
+                                  </div>
+
+                                  {item.subtitle && (
+                                    <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
+                                      {item.subtitle}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Right: Quick Action Buttons */}
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {isProfile ? (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="default"
+                                    className="h-6 text-[10px] font-bold px-2 bg-primary hover:bg-primary/90 text-primary-foreground gap-1 cursor-pointer"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setIsDropdownOpen(false);
+                                      router.push(item.profileHref || item.href);
+                                    }}
+                                  >
+                                    <span>View Profile</span>
+                                    <ExternalLink className="size-2.5" />
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="secondary"
+                                    className="h-6 text-[10px] font-bold px-2 hover:bg-primary hover:text-primary-foreground gap-1 transition-all cursor-pointer"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setIsDropdownOpen(false);
+                                      if (item.type === "product") {
+                                        setSelectedProductForStores({ id: item.id, name: item.title });
+                                        setProductStoresDialogOpen(true);
+                                      } else {
+                                        router.push(item.storefrontHref || item.listingHref || item.href);
+                                      }
+                                    }}
+                                  >
+                                    {item.type === "product" ? (
+                                      <>
+                                        <Store className="size-3" />
+                                        <span>Compare Stores</span>
+                                      </>
+                                    ) : item.type === "service" ? (
+                                      <>
+                                        <Store className="size-3" />
+                                        <span>Store Front</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span>Open</span>
+                                        <ChevronRight className="size-3" />
+                                      </>
+                                    )}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    {/* Dropdown Footer: View All Listings */}
+                    <div className="p-2 bg-muted/40 border-t flex items-center justify-between text-xs px-3">
+                      <span className="text-[10px] text-muted-foreground">
+                        Top suggestions for &quot;<strong className="text-foreground">{searchQuery}</strong>&quot;
+                      </span>
                       <Button
                         type="button"
+                        variant="ghost"
                         size="sm"
-                        variant="outline"
-                        className="mt-1 text-xs cursor-pointer"
+                        className="h-6 text-[11px] font-bold text-primary hover:text-primary gap-1 cursor-pointer p-0 hover:bg-transparent"
                         onClick={() => {
                           setIsDropdownOpen(false);
                           handleSearch();
                         }}
                       >
-                        Search Full Marketplace
+                        <span>View All</span>
+                        <ArrowRight className="size-3" />
                       </Button>
                     </div>
-                  ) : (
-                    displayedSearchItems.map((item, idx) => {
-                      const isProfile = item.type === "business" || item.type === "professional";
-
-                      return (
-                        <div
-                          key={`${item.type}-${item.id}-${idx}`}
-                          className="p-3 hover:bg-muted/50 transition-colors flex items-center justify-between gap-3 group"
-                        >
-                          {/* Left: Icon, Name, Category Badges & Subtitle */}
-                          <div
-                            onClick={() => {
-                              setIsDropdownOpen(false);
-                              if (item.type === "product") {
-                                setSelectedProductForStores({ id: item.id, name: item.title });
-                                setProductStoresDialogOpen(true);
-                              } else if (isProfile) {
-                                router.push(item.profileHref || item.href);
-                              } else {
-                                router.push(item.storefrontHref || item.listingHref || item.href);
-                              }
-                            }}
-                            className="flex items-start gap-2.5 min-w-0 flex-1 cursor-pointer text-left"
-                          >
-                            {/* Icon Badge */}
-                            <div
-                              className={`size-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                                item.type === "product"
-                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
-                                  : item.type === "service"
-                                  ? "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-400"
-                                  : item.type === "business"
-                                  ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
-                                  : item.type === "professional"
-                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
-                                  : "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400"
-                              }`}
-                            >
-                              {item.type === "product" ? (
-                                <Package className="size-4" />
-                              ) : item.type === "service" ? (
-                                <Briefcase className="size-4" />
-                              ) : item.type === "business" ? (
-                                <Building2 className="size-4" />
-                              ) : item.type === "professional" ? (
-                                <UserCheck className="size-4" />
-                              ) : (
-                                <FolderTree className="size-4" />
-                              )}
-                            </div>
-
-                            {/* Text info */}
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
-                                  {item.title}
-                                </span>
-
-                                {/* Type Pill */}
-                                <Badge
-                                  variant="outline"
-                                  className={`text-[9px] px-1.5 py-0 uppercase font-bold tracking-wider ${
-                                    item.type === "product"
-                                      ? "border-amber-300 text-amber-700 bg-amber-50 dark:bg-amber-950/40"
-                                      : item.type === "service"
-                                      ? "border-sky-300 text-sky-700 bg-sky-50 dark:bg-sky-950/40"
-                                      : item.type === "business"
-                                      ? "border-indigo-300 text-indigo-700 bg-indigo-50 dark:bg-indigo-950/40"
-                                      : item.type === "professional"
-                                      ? "border-emerald-300 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40"
-                                      : "border-rose-300 text-rose-700 bg-rose-50 dark:bg-rose-950/40"
-                                  }`}
-                                >
-                                  {item.type}
-                                </Badge>
-
-                                {item.category_name && item.type !== "category" && (
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground font-semibold flex items-center gap-1"
-                                  >
-                                    <Tag className="size-2.5" />
-                                    <span>{item.category_name}</span>
-                                  </Badge>
-                                )}
-                              </div>
-
-                              {item.subtitle && (
-                                <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
-                                  {item.subtitle}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Right: Quick Action Buttons */}
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {isProfile ? (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="default"
-                                className="h-6 text-[10px] font-bold px-2 bg-primary hover:bg-primary/90 text-primary-foreground gap-1 cursor-pointer"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setIsDropdownOpen(false);
-                                  router.push(item.profileHref || item.href);
-                                }}
-                              >
-                                <span>View Profile</span>
-                                <ExternalLink className="size-2.5" />
-                              </Button>
-                            ) : (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="secondary"
-                                className="h-6 text-[10px] font-bold px-2 hover:bg-primary hover:text-primary-foreground gap-1 transition-all cursor-pointer"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setIsDropdownOpen(false);
-                                  if (item.type === "product") {
-                                    setSelectedProductForStores({ id: item.id, name: item.title });
-                                    setProductStoresDialogOpen(true);
-                                  } else {
-                                    router.push(item.storefrontHref || item.listingHref || item.href);
-                                  }
-                                }}
-                              >
-                                {item.type === "product" ? (
-                                  <>
-                                    <Store className="size-3" />
-                                    <span>Compare Stores</span>
-                                  </>
-                                ) : item.type === "service" ? (
-                                  <>
-                                    <Store className="size-3" />
-                                    <span>Store Front</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <span>Open</span>
-                                    <ChevronRight className="size-3" />
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-
-                {/* Dropdown Footer: View All Listings */}
-                <div className="p-2 bg-muted/40 border-t flex items-center justify-between text-xs px-3">
-                  <span className="text-[10px] text-muted-foreground">
-                    Top suggestions for &quot;<strong className="text-foreground">{searchQuery}</strong>&quot;
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 text-[11px] font-bold text-primary hover:text-primary gap-1 cursor-pointer p-0 hover:bg-transparent"
-                    onClick={() => {
-                      setIsDropdownOpen(false);
-                      handleSearch();
-                    }}
-                  >
-                    <span>View All</span>
-                    <ArrowRight className="size-3" />
-                  </Button>
-                </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
 
-        {/* Right Column: Dedicated Panda Mascot on Right Side */}
+        {/* Right Column: 3D Baby Panda with Magnifying Glass & Directional Signpost */}
         <div className="lg:col-span-5 hidden lg:flex items-center justify-center relative">
-          <div className="relative w-full max-w-[420px] aspect-[102/120] flex items-center justify-center">
-            {/* Soft ambient aura behind panda */}
-            <div className="absolute inset-0 bg-gradient-to-tr from-amber-500/15 via-emerald-500/10 to-amber-400/20 rounded-full blur-3xl -z-10 scale-95" />
+          <div className="relative w-full max-w-[480px] aspect-[484/452] flex items-center justify-center">
             <Image
-              src="/images/hero-panda-right.webp"
-              alt="143Panda Discovery"
-              fill
+              src="/images/hero-panda-3d-clean.webp"
+              alt="143Panda 3D Discovery Mascot & Navigation"
+              width={484}
+              height={452}
               priority
-              className="object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.85)]"
-              sizes="(max-width: 1024px) 100vw, 420px"
+              className="w-full h-auto object-contain drop-shadow-[0_20px_40px_rgba(0,80,180,0.18)]"
             />
           </div>
-        </div>
-      </div>
 
           {/* Live Metric Stats Bar (Glassmorphic cards over hero landscape - Click opens dedicated page according to selected location) */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 pt-6 border-t border-white/20 w-full">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 pt-6 border-t border-white/50 w-full relative z-20">
             {[
               {
                 label: "Local Products",
@@ -907,20 +977,41 @@ export function UnifiedMarketplaceHome() {
                   key={i}
                   type="button"
                   onClick={() => router.push(targetUrl)}
-                  className="p-3 rounded-xl border border-white/20 bg-black/45 hover:bg-black/75 hover:border-amber-400/60 hover:scale-[1.03] active:scale-[0.98] backdrop-blur-md flex items-center gap-2.5 shadow-lg transition-all cursor-pointer text-left group"
+                  className="p-3 rounded-2xl border border-white/80 bg-white/85 hover:bg-white hover:border-sky-300 hover:scale-[1.03] active:scale-[0.98] backdrop-blur-md flex items-center gap-2.5 shadow-[0_4px_16px_rgba(0,0,0,0.06)] transition-all cursor-pointer text-left group"
                   title={`Explore ${stat.label}${userLocation && userLocation !== "All Locations" ? ` in ${userLocation}` : ""}`}
                 >
-                  <div className="size-8 rounded-lg bg-amber-500/20 text-amber-300 group-hover:bg-amber-500 group-hover:text-black flex items-center justify-center shrink-0 transition-colors">
+                  <div className="size-8 rounded-xl bg-sky-500/10 text-sky-600 group-hover:bg-sky-500 group-hover:text-white flex items-center justify-center shrink-0 transition-colors">
                     <Icon className="size-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm font-black text-white group-hover:text-amber-300 transition-colors">{stat.value}</div>
-                    <div className="text-[10px] text-white/75 group-hover:text-white truncate">{stat.label}</div>
+                    <div className="text-sm font-black text-slate-900 group-hover:text-sky-600 transition-colors">{stat.value}</div>
+                    <div className="text-[10px] text-slate-600 group-hover:text-slate-900 truncate font-medium">{stat.label}</div>
                   </div>
                 </button>
               );
             })}
           </div>
+        </div>
+
+        {/* Curved Wave Divider at Bottom of Hero */}
+        <div className="absolute -bottom-1 left-0 right-0 overflow-hidden leading-none pointer-events-none z-10">
+          <svg
+            viewBox="0 0 1440 90"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-full h-10 sm:h-14 md:h-16"
+            preserveAspectRatio="none"
+          >
+            <path
+              d="M0,32 C360,75 720,10 1080,48 C1260,66 1380,38 1440,32 L1440,90 L0,90 Z"
+              fill="#0284c7"
+              opacity="0.25"
+            />
+            <path
+              d="M0,48 C320,85 700,24 1060,58 C1240,74 1360,52 1440,48 L1440,90 L0,90 Z"
+              fill="white"
+            />
+          </svg>
         </div>
       </section>
 
@@ -973,11 +1064,10 @@ export function UnifiedMarketplaceHome() {
                   key={tab.id}
                   type="button"
                   onClick={() => setSelectedProductTab(tab.id)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                    isSelected
-                      ? "bg-primary text-primary-foreground shadow-xs"
-                      : "bg-card hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60"
-                  }`}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${isSelected
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "bg-card hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60"
+                    }`}
                 >
                   {tab.label}
                 </button>

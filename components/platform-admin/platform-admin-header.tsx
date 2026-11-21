@@ -30,6 +30,10 @@ import {
   GraduationCap,
   Menu,
   FileText,
+  LogOut,
+  Settings,
+  Calendar,
+  Building,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -93,6 +97,18 @@ interface SearchResultsState {
 
 const TOP_NAV_ITEMS = [
   {
+    label: "Business",
+    type: "business",
+    icon: Building2,
+    subcategories: [
+      { label: "All Businesses", categorySlug: "all-businesses" },
+      { label: "Verified Enterprises", categorySlug: "verified-enterprises" },
+      { label: "Retail Stores & Supermarkets", categorySlug: "retail-and-shopping" },
+      { label: "Coaching Institutes", categorySlug: "education-and-coaching" },
+      { label: "Clinics & Healthcare", categorySlug: "healthcare-and-medical" },
+    ],
+  },
+  {
     label: "Products",
     type: "product",
     icon: Package,
@@ -141,35 +157,34 @@ const TOP_NAV_ITEMS = [
     ],
   },
   {
-    label: "Business",
-    type: "business",
-    icon: Building2,
+    label: "Property",
+    type: "property",
+    icon: Building,
     subcategories: [
-      { label: "All Businesses", categorySlug: "all-businesses" },
-      { label: "Verified Enterprises", categorySlug: "verified-enterprises" },
-      { label: "Retail Stores & Supermarkets", categorySlug: "retail-and-shopping" },
-      { label: "Coaching Institutes", categorySlug: "education-and-coaching" },
-      { label: "Clinics & Healthcare", categorySlug: "healthcare-and-medical" },
+      { label: "All Properties", categorySlug: "all-properties" },
+      { label: "Commercial & Office Spaces", categorySlug: "commercial-office" },
+      { label: "Residential Apartments", categorySlug: "residential-apartments" },
+      { label: "Coaching & Training Centers", categorySlug: "coaching-training-centers" },
+      { label: "Retail Shops & Showrooms", categorySlug: "retail-shops-showrooms" },
     ],
   },
   {
-    label: "Blog",
-    type: "blog",
-    icon: FileText,
-    href: "/blogs",
+    label: "Events",
+    type: "event",
+    icon: Calendar,
     subcategories: [
-      { label: "All Articles & Insights", href: "/blogs" },
-      { label: "Academic & Curriculum", href: "/blogs?category=Academic+%26+Curriculum" },
-      { label: "Career & Placements", href: "/blogs?category=Placements+%26+Career" },
-      { label: "Technology & Innovation", href: "/blogs?category=Technology+%26+Innovation" },
-      { label: "Admissions & Counseling", href: "/blogs?category=Admissions+%26+Counseling" },
+      { label: "All Events", categorySlug: "all-events" },
+      { label: "Conferences & Seminars", categorySlug: "conferences-seminars" },
+      { label: "Workshops & Masterclasses", categorySlug: "workshops-masterclasses" },
+      { label: "Campus Drives & Job Fairs", categorySlug: "campus-drives-job-fairs" },
+      { label: "Cultural & Exhibitions", categorySlug: "cultural-exhibitions" },
     ],
   },
 ];
 
 export function PlatformAdminHeader() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, clearAuth } = useAuthStore();
   const { getTotalCount, toggleCart } = useCartStore();
   const [mounted, setMounted] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
@@ -275,10 +290,18 @@ export function PlatformAdminHeader() {
   ) => {
     if (sub?.href) return sub.href;
     if ("href" in item && (item as any).href && !sub) return (item as any).href;
+
+    // Use clean city part for canonical SEO URLs (e.g. "Pandeypur Chauraha, Varanasi" -> "Varanasi")
+    let locCity = location && location !== "All Locations" ? location : null;
+    if (locCity && locCity.includes(",")) {
+      const parts = locCity.split(",").map((p) => p.trim()).filter(Boolean);
+      locCity = parts[parts.length - 1] || parts[0];
+    }
+
     return buildDiscoverySeoUrl({
       type: item.type,
       category: sub?.categorySlug,
-      location: location && location !== "All Locations" ? location : null,
+      location: locCity,
     });
   };
 
@@ -406,7 +429,7 @@ export function PlatformAdminHeader() {
   );
 
   return (
-    <header className="w-full border-b border-border/40 bg-background/85 backdrop-blur-md sticky top-0 z-40 transition-colors">
+    <header className="w-full border-b border-sky-100 bg-gradient-to-r from-sky-50/95 via-white/95 to-sky-50/95 backdrop-blur-md sticky top-0 z-40 transition-colors shadow-2xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-3 lg:gap-6">
         {/* Left: 143Panda Platform Brand */}
         <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
@@ -428,27 +451,27 @@ export function PlatformAdminHeader() {
           </Link>
         </div>
 
-        {/* Center: Top Navigation Menu (Products, Professionals, Courses, Jobs, Business) */}
+        {/* Center: Top Navigation Menu (Business, Products, Professionals, Courses, Jobs, Property, Events) */}
         <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
           {TOP_NAV_ITEMS.map((item) => (
             <DropdownMenu key={item.label}>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-foreground/90 hover:text-primary hover:bg-muted/70 transition-colors cursor-pointer outline-none group"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-800 hover:text-sky-600 hover:bg-sky-50/80 transition-colors cursor-pointer outline-none group"
                 >
                   <span>{item.label}</span>
-                  <ChevronDown className="size-3 text-muted-foreground/60 group-hover:text-primary transition-transform group-data-[state=open]:rotate-180" />
+                  <ChevronDown className="size-3 text-slate-400 group-hover:text-sky-600 transition-transform group-data-[state=open]:rotate-180" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56 p-1.5 space-y-0.5 z-50">
-                <div className="px-2.5 py-1.5 mb-1 bg-primary/5 rounded-md flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+              <DropdownMenuContent align="start" className="w-56 p-1.5 space-y-0.5 z-50 rounded-xl shadow-xl border-sky-100">
+                <div className="px-2.5 py-1.5 mb-1 bg-sky-50 rounded-md flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
                     Explore {item.label}
                   </span>
                   <Link
                     href={getNavHref(item)}
-                    className="text-[10px] text-primary hover:underline font-bold"
+                    className="text-[10px] text-sky-600 hover:underline font-bold"
                   >
                     View All →
                   </Link>
@@ -457,7 +480,7 @@ export function PlatformAdminHeader() {
                   <DropdownMenuItem key={sub.label} asChild>
                     <Link
                       href={getNavHref(item, sub)}
-                      className="cursor-pointer text-xs py-1.5 px-2.5 rounded-md font-medium text-foreground hover:text-primary hover:bg-muted"
+                      className="cursor-pointer text-xs py-1.5 px-2.5 rounded-md font-medium text-slate-700 hover:text-sky-600 hover:bg-sky-50"
                     >
                       {sub.label}
                     </Link>
@@ -468,81 +491,166 @@ export function PlatformAdminHeader() {
           ))}
         </nav>
 
-        {/* Right: + Add Listing, Location Selector, Search, Cart, Sign In */}
+        {/* Right: + Add Listing, Cart, Country Flag, Location Selector, User Profile */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-          {/* + Add Listing Button: Direct Link to Packages & Pricing Page */}
+          {/* + Add Listing Button: Red pill border with red text matching mockup */}
           <Link href="/packages">
             <Button
               variant="outline"
               size="sm"
-              className="h-8.5 px-3.5 rounded-full border border-border/80 bg-background/60 hover:bg-muted font-bold text-xs gap-1.5 cursor-pointer shadow-2xs shrink-0 hover:border-primary/50 transition-all"
+              className="h-8.5 px-3.5 rounded-full border border-rose-500/80 bg-white hover:bg-rose-50 text-rose-600 hover:text-rose-700 font-bold text-xs gap-1.5 cursor-pointer shadow-2xs shrink-0 transition-all"
             >
-              <Plus className="size-3.5 text-primary" />
+              <Plus className="size-3.5 text-rose-600" />
               <span>Add Listing</span>
             </Button>
           </Link>
-          {/* Cart Button */}
+
+          {/* Cart Button with vibrant Red Count Badge */}
           <button
             type="button"
             onClick={toggleCart}
-            className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors cursor-pointer shrink-0"
+            className="relative p-2 rounded-full hover:bg-sky-100/60 text-slate-700 hover:text-sky-700 transition-colors cursor-pointer shrink-0"
             title="Shopping Cart"
             aria-label="Shopping Cart"
           >
-            <ShoppingCart className="size-4" />
+            <ShoppingCart className="size-4.5" />
             {mounted && getTotalCount() > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white shadow-xs">
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-black text-white shadow-xs">
                 {getTotalCount()}
               </span>
             )}
           </button>
 
-          {/* Location Selector Button (Circular FindMy styled pin icon) */}
+          {/* Country Flag Selector (South Africa 🇿🇦 / India 🇮🇳) */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-1 p-1 sm:px-2 sm:py-1 rounded-full hover:bg-sky-100/60 transition-colors cursor-pointer text-xs font-bold text-slate-700 shrink-0"
+                title="Select Country"
+              >
+                <span className="text-base leading-none">🇿🇦</span>
+                <ChevronDown className="size-3 text-slate-400" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44 p-1.5 rounded-xl shadow-lg border-sky-100">
+              <DropdownMenuItem
+                onClick={() => {
+                  toast.success("Country set to South Africa 🇿🇦");
+                }}
+                className="cursor-pointer text-xs font-medium gap-2 py-2"
+              >
+                <span className="text-base">🇿🇦</span>
+                <span>South Africa</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  toast.success("Country set to India 🇮🇳");
+                }}
+                className="cursor-pointer text-xs font-medium gap-2 py-2"
+              >
+                <span className="text-base">🇮🇳</span>
+                <span>India</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Location Selector Button (Pin icon) */}
           <button
             type="button"
             onClick={() => setLocationDialogOpen(true)}
-            className="relative size-8.5 rounded-full border border-border/80 bg-background/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-all cursor-pointer shrink-0 shadow-2xs group flex items-center justify-center"
+            className="relative size-8.5 rounded-full border border-sky-200/80 bg-white hover:bg-sky-50 text-slate-700 hover:text-sky-700 transition-all cursor-pointer shrink-0 shadow-2xs group flex items-center justify-center"
             title={location ? `Location: ${location} (Click to change)` : "Select Location"}
             aria-label="Select Location"
           >
             <MapPin className="size-4 text-amber-500 group-hover:scale-110 transition-transform" />
             {isDetected && (
               <span
-                className="absolute top-1 right-1 size-2 rounded-full bg-emerald-500 ring-2 ring-background"
+                className="absolute top-1 right-1 size-2 rounded-full bg-emerald-500 ring-2 ring-white"
                 title="GPS Live Detected"
               />
             )}
           </button>
 
-          {user ? (
-            <div className="flex items-center gap-2">
-              <Link href="/platformadmin/my-profile">
-                <Button size="sm" variant="ghost" className="gap-1.5 text-xs h-9 px-2.5">
-                  <User className="size-3.5 text-muted-foreground" />
-                  <span className="max-w-[120px] truncate hidden md:inline">
-                    {user.full_name || user.email}
-                  </span>
-                </Button>
-              </Link>
-            </div>
-          ) : (
-            <Button
-              size="sm"
-              onClick={() => {
-                setAuthDialogTab("signin");
-                setAuthDialogOpen(true);
-              }}
-              className="gap-1.5 text-xs h-9 cursor-pointer bg-[#d9232e] hover:bg-[#d9232e]/90 text-white font-semibold"
-            >
-              <LogIn className="size-3.5" />
-              Sign In
-            </Button>
-          )}
+          {/* User Profile Dropdown matching mockup (My Store, Profile, Settings, Sign Out) */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-1 p-1 rounded-full hover:bg-sky-100/60 transition-colors cursor-pointer shrink-0 group outline-none"
+                title={user ? user.full_name || user.email : "My Account"}
+              >
+                <div className="size-8.5 rounded-full bg-sky-500 hover:bg-sky-600 text-white flex items-center justify-center shadow-xs transition-colors">
+                  <User className="size-4.5 text-white" />
+                </div>
+                <ChevronDown className="size-3 text-slate-400 group-hover:text-slate-600 transition-transform" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 p-1.5 rounded-xl shadow-xl border-sky-100">
+              <DropdownMenuLabel className="px-3 py-1.5 text-xs text-muted-foreground font-semibold truncate">
+                {user ? (user.full_name || user.email) : "Guest User"}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/workspace"
+                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
+                >
+                  <Store className="size-4 text-sky-500" />
+                  <span>My Store</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/platformadmin/my-profile"
+                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
+                >
+                  <User className="size-4 text-sky-500" />
+                  <span>Profile</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/workspace/settings"
+                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
+                >
+                  <Settings className="size-4 text-sky-500" />
+                  <span>Settings</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {user ? (
+                <DropdownMenuItem
+                  onClick={() => {
+                    clearAuth();
+                    toast.success("Signed out successfully");
+                    router.push("/");
+                  }}
+                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-rose-600 hover:text-rose-700 rounded-lg hover:bg-rose-50"
+                >
+                  <LogOut className="size-4 text-rose-500" />
+                  <span>Sign Out</span>
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem
+                  onClick={() => {
+                    setAuthDialogTab("signin");
+                    setAuthDialogOpen(true);
+                  }}
+                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-sky-600 hover:text-sky-700 rounded-lg hover:bg-sky-50"
+                >
+                  <LogIn className="size-4 text-sky-500" />
+                  <span>Sign In</span>
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           {/* Mobile Menu Hamburger */}
           <button
             type="button"
             onClick={() => setMobileNavOpen(true)}
-            className="lg:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors cursor-pointer shrink-0"
+            className="lg:hidden p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-sky-100/60 transition-colors cursor-pointer shrink-0"
             title="Open Menu"
             aria-label="Open Menu"
           >
@@ -1047,7 +1155,14 @@ export function PlatformAdminHeader() {
                     key={item.id || item.place_id}
                     type="button"
                     onClick={() => {
-                      const chosenLocation = item.name || item.description.split(",")[0].trim();
+                      let chosenLocation = item.name || item.description.split(",")[0].trim();
+                      if (item.secondary_text) {
+                        const secParts = item.secondary_text.split(",").map((p) => p.trim()).filter(Boolean);
+                        const cityPart = secParts[0];
+                        if (cityPart && !chosenLocation.toLowerCase().includes(cityPart.toLowerCase())) {
+                          chosenLocation = `${chosenLocation}, ${cityPart}`;
+                        }
+                      }
                       setLocation(chosenLocation, false);
                       toast.success(`Location set to "${chosenLocation}"`);
                       setCustomLocationInput("");

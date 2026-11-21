@@ -385,6 +385,8 @@ export function buildDiscoverySeoUrl({
   else if (normType === "job" || normType === "jobs") prefix = "/jobs";
   else if (normType === "business" || normType === "businesses") prefix = "/businesses";
   else if (normType === "service" || normType === "services") prefix = "/services";
+  else if (normType === "property" || normType === "properties") prefix = "/businesses";
+  else if (normType === "event" || normType === "events") prefix = "/businesses";
   else if (!normType || normType === "all") {
     prefix = "/businesses";
   }

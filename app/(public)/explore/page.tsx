@@ -299,7 +299,7 @@ function CustomerExplorePageContent({
             setSelectedSubcategorySlug(sub.slug || urlSubcategoryParam);
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     }
 
     if (urlType && ["all", "business", "service", "product", "professional", "course", "job"].includes(urlType)) {
@@ -380,7 +380,7 @@ function CustomerExplorePageContent({
           setBusinessCategories(d.data);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const filteredCategories = useMemo(() => {
@@ -675,7 +675,7 @@ function CustomerExplorePageContent({
           setFavorites(favSet);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [accessToken]);
 
   // Request Current Location
@@ -948,10 +948,10 @@ function CustomerExplorePageContent({
         >
           {activeType === "all" ? "Explore" : activeType === "business" ? "Businesses" : activeType === "service" ? "Services" : activeType === "product" ? "Products" : activeType === "professional" ? "Professionals" : activeType === "course" ? "Courses" : "Jobs"}
         </button>
-        {city && (
+        {(userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : city) && (
           <>
             <ChevronRight className="size-3 text-slate-400" />
-            <span className="text-slate-700 font-medium">{city}</span>
+            <span className="text-slate-700 font-medium">{userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : city}</span>
           </>
         )}
         {(selectedCategoryName || selectedSubcategoryName) && (
@@ -966,10 +966,10 @@ function CustomerExplorePageContent({
       <div className="space-y-1.5 pt-1">
         <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
           {selectedSubcategoryName || selectedCategoryName || (activeType === "all" ? "Businesses & Services" : activeType.charAt(0).toUpperCase() + activeType.slice(1))}
-          {city ? ` in ${city}` : ""}
+          {(userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : city) ? ` in ${userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : city}` : ""}
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 max-w-3xl">
-          Explore {selectedSubcategoryName || selectedCategoryName || "verified"} {activeType === "all" ? "businesses, services, and opportunities" : `${activeType}s`} in {city || "your area"}.
+          Explore {selectedSubcategoryName || selectedCategoryName || "verified"} {activeType === "all" ? "businesses, services, and opportunities" : `${activeType}s`} in {(userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : city) || "your area"}.
         </p>
       </div>
 
@@ -1095,671 +1095,708 @@ function CustomerExplorePageContent({
         {/* Main Content Column */}
         <div className="lg:col-span-8 xl:col-span-9 space-y-8">
 
-      {/* Results Content */}
-      {loading ? (
-        <div className="flex flex-col items-center justify-center p-16 text-muted-foreground gap-3">
-          <Loader2 className="size-8 animate-spin text-primary" />
-          <span className="text-sm font-medium">Finding matching listings...</span>
-        </div>
-      ) : (
-        <div className="space-y-8">
-          {/* Section: Businesses */}
-          {(activeType === "all" || activeType === "business") && filteredBusinesses.length > 0 && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                  <Building2 className="size-5 text-blue-600" />
-                  Businesses & Establishments ({filteredBusinesses.length})
-                </h2>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredBusinesses.map((biz) => {
-                  const favKey = `business-${biz.id}`;
-                  const isFavorited = favorites.has(favKey);
-                  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${biz.name} ${biz.city || ""}`)}`;
-                  const whatsappClean = (biz.whatsapp || biz.phone || "").replace(/[^0-9]/g, "");
-
-                  return (
-                    <div
-                      key={biz.id}
-                      className="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between group"
-                    >
-                      <div>
-                        {/* Top Image Banner with Category Badge */}
-                        <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
-                          <img
-                            src={(biz as any).cover_url || biz.logo_url || biz.default_image_url || "/images/hero-deer.jpg"}
-                            alt={biz.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
-                          <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-md text-slate-800 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-slate-200 shadow-xs">
-                            {biz.category_name || biz.business_type || "Business"}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleToggleFavorite(biz)}
-                            className={`absolute top-3 right-3 p-1.5 rounded-full backdrop-blur-md transition-colors cursor-pointer ${
-                              isFavorited
-                                ? "bg-rose-50 text-rose-600 border border-rose-200"
-                                : "bg-white/80 text-slate-600 hover:text-rose-600 border border-slate-200"
-                            }`}
-                            title={isFavorited ? "Remove from favorites" : "Save to favorites"}
-                          >
-                            <Heart className={`size-4 ${isFavorited ? "fill-rose-600" : ""}`} />
-                          </button>
-                        </div>
-
-                        {/* Body Info */}
-                        <div className="p-4 space-y-2.5">
-                          <div className="flex items-start justify-between gap-2">
-                            <Link href={buildBusinessSeoUrl(biz)} className="flex-1 min-w-0">
-                              <h3 className="text-base font-bold text-slate-900 group-hover:text-amber-600 transition-colors cursor-pointer truncate">
-                                {biz.name}
-                              </h3>
-                            </Link>
-                            {biz.is_verified && (
-                              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] px-1.5 py-0 shrink-0">
-                                <ShieldCheck className="size-3 mr-0.5 text-emerald-600" /> Verified
-                              </Badge>
-                            )}
-                          </div>
-
-                          {/* Rating & Reviews */}
-                          <div className="flex items-center justify-between text-xs text-slate-500">
-                            <div className="flex items-center gap-1">
-                              <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                              <span className="font-bold text-slate-900">{biz.avg_rating || "4.8"}</span>
-                              <span className="text-slate-500">({biz.review_count || 12} reviews)</span>
-                            </div>
-                            <div className="flex items-center gap-1 text-slate-500 text-xs">
-                              <MapPin className="size-3 text-amber-500 shrink-0" />
-                              <span className="truncate max-w-[120px]">{biz.city || "Available"}</span>
-                            </div>
-                          </div>
-
-                          {/* About snippet */}
-                          {biz.about && (
-                            <p className="text-slate-600 text-xs line-clamp-2">
-                              {biz.about}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Footer Actions */}
-                      <div className="p-4 pt-0 border-t border-slate-100 mt-2 flex flex-col gap-2">
-                        <div className="grid grid-cols-4 gap-1.5 w-full pt-3">
-                          {biz.phone ? (
-                            <a
-                              href={`tel:${biz.phone}`}
-                              className="inline-flex items-center justify-center p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                              title="Call Business"
-                            >
-                              <Phone className="size-4" />
-                            </a>
-                          ) : (
-                            <span className="opacity-40 p-2 text-center text-slate-400"><Phone className="size-4 mx-auto" /></span>
-                          )}
-
-                          {whatsappClean ? (
-                            <a
-                              href={`https://wa.me/${whatsappClean}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
-                              title="Chat on WhatsApp"
-                            >
-                              <MessageCircle className="size-4" />
-                            </a>
-                          ) : (
-                            <span className="opacity-40 p-2 text-center text-slate-400"><MessageCircle className="size-4 mx-auto" /></span>
-                          )}
-
-                          {biz.email ? (
-                            <a
-                              href={`mailto:${biz.email}`}
-                              className="inline-flex items-center justify-center p-2 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors"
-                              title="Send Email"
-                            >
-                              <Mail className="size-4" />
-                            </a>
-                          ) : (
-                            <span className="opacity-40 p-2 text-center text-slate-400"><Mail className="size-4 mx-auto" /></span>
-                          )}
-
-                          <a
-                            href={mapsUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center justify-center p-2 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors"
-                            title="Directions on Map"
-                          >
-                            <Navigation className="size-4" />
-                          </a>
-                        </div>
-
-                        <div className="flex items-center gap-2 w-full pt-1">
-                          <Link href={buildBusinessSeoUrl(biz)} className="flex-1">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="w-full text-xs font-semibold gap-1.5 cursor-pointer border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900"
-                            >
-                              <Building2 className="size-3.5" /> Details
-                            </Button>
-                          </Link>
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setEnquiryModalItem(biz);
-                              setEnquiryForm((prev) => ({
-                                ...prev,
-                                name: user?.full_name || "",
-                                email: user?.email || "",
-                                phone: user?.phone || "",
-                              }));
-                            }}
-                            className="flex-1 text-xs font-semibold gap-1.5 cursor-pointer bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold"
-                          >
-                            <Send className="size-3.5" /> Enquiry
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+          {/* Results Content */}
+          {loading ? (
+            <div className="flex flex-col items-center justify-center p-16 text-muted-foreground gap-3">
+              <Loader2 className="size-8 animate-spin text-primary" />
+              <span className="text-sm font-medium">Finding matching listings...</span>
             </div>
-          )}
+          ) : (
+            <div className="space-y-8">
+              {/* Section: Businesses */}
+              {(activeType === "all" || activeType === "business") && filteredBusinesses.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                      <Building2 className="size-5 text-blue-600" />
+                      Businesses & Establishments ({filteredBusinesses.length})
+                    </h2>
+                  </div>
 
-                    {/* Section: Professionals */}
-          {(activeType === "all" || activeType === "professional") && filteredProfessionals.length > 0 && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                  <Briefcase className="size-5 text-purple-600" />
-                  Top Professionals & Consultants ({filteredProfessionals.length})
-                </h2>
-              </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredBusinesses.map((biz) => {
+                      const favKey = `business-${biz.id}`;
+                      const isFavorited = favorites.has(favKey);
+                      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${biz.name} ${biz.city || ""}`)}`;
+                      const whatsappClean = (biz.whatsapp || biz.phone || "").replace(/[^0-9]/g, "");
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredProfessionals.map((pro) => {
-                  const favKey = `professional-${pro.id}`;
-                  const isFavorited = favorites.has(favKey);
-                  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${pro.name} ${pro.city || ""}`)}`;
-                  const whatsappClean = (pro.whatsapp || pro.phone || "").replace(/[^0-9]/g, "");
+                      return (
+                        <div
+                          key={biz.id}
+                          className="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between group"
+                        >
+                          <div>
+                            {/* Top Image Banner with Category Badge */}
+                            <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
+                              <img
+                                src={(biz as any).cover_url || biz.logo_url || biz.default_image_url || "/images/hero-deer.jpg"}
+                                alt={biz.name}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
+                              <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-md text-slate-800 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-slate-200 shadow-xs">
+                                {biz.category_name || biz.business_type || "Business"}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleFavorite(biz)}
+                                className={`absolute top-3 right-3 p-1.5 rounded-full backdrop-blur-md transition-colors cursor-pointer ${isFavorited
+                                  ? "bg-rose-50 text-rose-600 border border-rose-200"
+                                  : "bg-white/80 text-slate-600 hover:text-rose-600 border border-slate-200"
+                                  }`}
+                                title={isFavorited ? "Remove from favorites" : "Save to favorites"}
+                              >
+                                <Heart className={`size-4 ${isFavorited ? "fill-rose-600" : ""}`} />
+                              </button>
+                            </div>
 
-                  return (
-                    <Card key={pro.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
-                      <div>
-                        <CardHeader className="pb-3 border-b bg-muted/10">
-                          <div className="flex items-start justify-between gap-2">
-<div className="flex items-start gap-3 min-w-0 flex-1">
-                                {pro.avatar_url ? (
-                                  <img
-                                    src={pro.avatar_url}
-                                    alt={pro.name}
-                                    className="size-11 rounded-full object-cover border border-border shadow-2xs shrink-0"
-                                  />
-                                ) : (
-                                  <div className="size-11 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center shrink-0 text-xs border border-primary/20">
-                                    {pro.name.slice(0, 2).toUpperCase()}
-                                  </div>
+                            {/* Body Info */}
+                            <div className="p-4 space-y-2.5">
+                              <div className="flex items-start justify-between gap-2">
+                                <Link href={buildBusinessSeoUrl(biz)} className="flex-1 min-w-0">
+                                  <h3 className="text-base font-bold text-slate-900 group-hover:text-amber-600 transition-colors cursor-pointer truncate">
+                                    {biz.name}
+                                  </h3>
+                                </Link>
+                                {biz.is_verified && (
+                                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] px-1.5 py-0 shrink-0">
+                                    <ShieldCheck className="size-3 mr-0.5 text-emerald-600" /> Verified
+                                  </Badge>
                                 )}
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <Link href={buildProfessionalSeoUrl(pro)}>
-                                      <CardTitle className="text-base font-bold text-foreground hover:text-primary transition-colors cursor-pointer truncate">
-                                        {pro.name}
-                                      </CardTitle>
-                                    </Link>
-                                    {pro.is_verified && (
-                                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 text-[10px] px-1 py-0">
-                                        <ShieldCheck className="size-3 mr-0.5 text-emerald-600" /> Verified
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <span className="text-xs text-muted-foreground block mt-0.5 font-medium text-purple-600 dark:text-purple-400">
-                                    {pro.profession_type} {pro.experience_years ? `• ${pro.experience_years} Years Experience` : ""}
-                                  </span>
+                              </div>
+
+                              {/* Rating & Reviews */}
+                              <div className="flex items-center justify-between text-xs text-slate-500">
+                                <div className="flex items-center gap-1">
+                                  <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                                  <span className="font-bold text-slate-900">{biz.avg_rating || "4.8"}</span>
+                                  <span className="text-slate-500">({biz.review_count || 12} reviews)</span>
+                                </div>
+                                <div className="flex items-center gap-1 text-slate-500 text-xs">
+                                  <MapPin className="size-3 text-amber-500 shrink-0" />
+                                  <span className="truncate max-w-[120px]">{biz.city || "Available"}</span>
                                 </div>
                               </div>
 
-                            <button
-                              onClick={() => handleToggleFavorite(pro)}
-                              className={`p-1.5 rounded-full transition-all cursor-pointer ${
-                                isFavorited ? "text-rose-600 bg-rose-50 dark:bg-rose-950/50" : "text-muted-foreground hover:text-rose-600"
-                              }`}
-                              title={isFavorited ? "Remove from favorites" : "Save to favorites"}
-                            >
-                              <Heart className={`size-4 ${isFavorited ? "fill-rose-600" : ""}`} />
-                            </button>
+                              {/* About snippet */}
+                              {biz.about && (
+                                <p className="text-slate-600 text-xs line-clamp-2">
+                                  {biz.about}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Footer Actions */}
+                          <div className="p-4 pt-0 border-t border-slate-100 mt-2 flex flex-col gap-2">
+                            <div className="grid grid-cols-4 gap-1.5 w-full pt-3">
+                              {biz.phone ? (
+                                <a
+                                  href={`tel:${biz.phone}`}
+                                  className="inline-flex items-center justify-center p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                                  title="Call Business"
+                                >
+                                  <Phone className="size-4" />
+                                </a>
+                              ) : (
+                                <span className="opacity-40 p-2 text-center text-slate-400"><Phone className="size-4 mx-auto" /></span>
+                              )}
+
+                              {whatsappClean ? (
+                                <a
+                                  href={`https://wa.me/${whatsappClean}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
+                                  title="Chat on WhatsApp"
+                                >
+                                  <MessageCircle className="size-4" />
+                                </a>
+                              ) : (
+                                <span className="opacity-40 p-2 text-center text-slate-400"><MessageCircle className="size-4 mx-auto" /></span>
+                              )}
+
+                              {biz.email ? (
+                                <a
+                                  href={`mailto:${biz.email}`}
+                                  className="inline-flex items-center justify-center p-2 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors"
+                                  title="Send Email"
+                                >
+                                  <Mail className="size-4" />
+                                </a>
+                              ) : (
+                                <span className="opacity-40 p-2 text-center text-slate-400"><Mail className="size-4 mx-auto" /></span>
+                              )}
+
+                              <a
+                                href={mapsUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center justify-center p-2 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors"
+                                title="Directions on Map"
+                              >
+                                <Navigation className="size-4" />
+                              </a>
+                            </div>
+
+                            <div className="flex items-center gap-2 w-full pt-1">
+                              <Link href={buildBusinessSeoUrl(biz)} className="flex-1">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="w-full text-xs font-semibold gap-1.5 cursor-pointer border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                                >
+                                  <Building2 className="size-3.5" /> Details
+                                </Button>
+                              </Link>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setEnquiryModalItem(biz);
+                                  setEnquiryForm((prev) => ({
+                                    ...prev,
+                                    name: user?.full_name || "",
+                                    email: user?.email || "",
+                                    phone: user?.phone || "",
+                                  }));
+                                }}
+                                className="flex-1 text-xs font-semibold gap-1.5 cursor-pointer bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold"
+                              >
+                                <Send className="size-3.5" /> Enquiry
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Section: Professionals */}
+              {(activeType === "all" || activeType === "professional") && filteredProfessionals.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                      <Briefcase className="size-5 text-purple-600" />
+                      Top Professionals & Consultants ({filteredProfessionals.length})
+                    </h2>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredProfessionals.map((pro) => {
+                      const favKey = `professional-${pro.id}`;
+                      const isFavorited = favorites.has(favKey);
+                      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${pro.name} ${pro.city || ""}`)}`;
+                      const whatsappClean = (pro.whatsapp || pro.phone || "").replace(/[^0-9]/g, "");
+
+                      return (
+                        <Card key={pro.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
+                          <div>
+                            <CardHeader className="pb-3 border-b bg-muted/10">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-start gap-3 min-w-0 flex-1">
+                                  {pro.avatar_url ? (
+                                    <img
+                                      src={pro.avatar_url}
+                                      alt={pro.name}
+                                      className="size-11 rounded-full object-cover border border-border shadow-2xs shrink-0"
+                                    />
+                                  ) : (
+                                    <div className="size-11 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center shrink-0 text-xs border border-primary/20">
+                                      {pro.name.slice(0, 2).toUpperCase()}
+                                    </div>
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <Link href={buildProfessionalSeoUrl(pro)}>
+                                        <CardTitle className="text-base font-bold text-foreground hover:text-primary transition-colors cursor-pointer truncate">
+                                          {pro.name}
+                                        </CardTitle>
+                                      </Link>
+                                      {pro.is_verified && (
+                                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 text-[10px] px-1 py-0">
+                                          <ShieldCheck className="size-3 mr-0.5 text-emerald-600" /> Verified
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <span className="text-xs text-muted-foreground block mt-0.5 font-medium text-purple-600 dark:text-purple-400">
+                                      {pro.profession_type} {pro.experience_years ? `• ${pro.experience_years} Years Experience` : ""}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <button
+                                  onClick={() => handleToggleFavorite(pro)}
+                                  className={`p-1.5 rounded-full transition-all cursor-pointer ${isFavorited ? "text-rose-600 bg-rose-50 dark:bg-rose-950/50" : "text-muted-foreground hover:text-rose-600"
+                                    }`}
+                                  title={isFavorited ? "Remove from favorites" : "Save to favorites"}
+                                >
+                                  <Heart className={`size-4 ${isFavorited ? "fill-rose-600" : ""}`} />
+                                </button>
+                              </div>
+                            </CardHeader>
+
+                            <CardContent className="p-4 space-y-3 text-xs">
+                              {/* Rating & Reviews */}
+                              <div className="flex items-center justify-between text-xs">
+                                <div className="flex items-center gap-1">
+                                  <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                                  <span className="font-bold text-foreground">{pro.avg_rating || "New"}</span>
+                                  <span className="text-muted-foreground">({pro.review_count || 0} reviews)</span>
+                                </div>
+                                <button
+                                  onClick={() => setReviewModalItem(pro)}
+                                  className="text-primary hover:underline text-[11px] font-semibold cursor-pointer"
+                                >
+                                  Write Review
+                                </button>
+                              </div>
+
+                              {/* Address / Location */}
+                              <div className="flex items-start gap-1.5 text-muted-foreground text-xs">
+                                <MapPin className="size-3.5 shrink-0 mt-0.5 text-primary" />
+                                <span>{[pro.locality, pro.city, pro.state].filter(Boolean).join(", ") || "City location available"}</span>
+                              </div>
+
+                              {/* About snippet */}
+                              {pro.about && (
+                                <p className="text-muted-foreground text-xs line-clamp-2 italic">
+                                  &quot;{pro.about}&quot;
+                                </p>
+                              )}
+                            </CardContent>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <CardFooter className="p-4 pt-0 border-t border-border/40 bg-muted/5 flex flex-col gap-2 mt-2">
+                            <div className="grid grid-cols-4 gap-1.5 w-full pt-3">
+                              {pro.phone ? (
+                                <a
+                                  href={`tel:${pro.phone}`}
+                                  className="inline-flex items-center justify-center p-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300 transition-colors"
+                                  title="Call Professional"
+                                >
+                                  <Phone className="size-4" />
+                                </a>
+                              ) : (
+                                <span className="opacity-40 p-2 text-center text-muted-foreground"><Phone className="size-4 mx-auto" /></span>
+                              )}
+
+                              {whatsappClean ? (
+                                <a
+                                  href={`https://wa.me/${whatsappClean}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 transition-colors"
+                                  title="Chat on WhatsApp"
+                                >
+                                  <MessageCircle className="size-4" />
+                                </a>
+                              ) : (
+                                <span className="opacity-40 p-2 text-center text-muted-foreground"><MessageCircle className="size-4 mx-auto" /></span>
+                              )}
+
+                              {pro.email ? (
+                                <a
+                                  href={`mailto:${pro.email}`}
+                                  className="inline-flex items-center justify-center p-2 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-950 dark:text-purple-300 transition-colors"
+                                  title="Send Email"
+                                >
+                                  <Mail className="size-4" />
+                                </a>
+                              ) : (
+                                <span className="opacity-40 p-2 text-center text-muted-foreground"><Mail className="size-4 mx-auto" /></span>
+                              )}
+
+                              <a
+                                href={mapsUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center justify-center p-2 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-300 transition-colors"
+                                title="Directions on Map"
+                              >
+                                <Navigation className="size-4" />
+                              </a>
+                            </div>
+
+                            <div className="flex items-center gap-2 w-full pt-1">
+                              <Link href={buildProfessionalSeoUrl(pro)} className="flex-1">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="w-full text-xs font-semibold gap-1.5 cursor-pointer"
+                                >
+                                  <Briefcase className="size-3.5" /> View Profile
+                                </Button>
+                              </Link>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => {
+                                  setCheckoutItem({
+                                    id: pro.id,
+                                    name: `Consultation with ${pro.name}`,
+                                    type: "service",
+                                    provider_name: pro.name,
+                                    duration_minutes: 45,
+                                    suggested_price_inr: (pro as any).consultation_fee || 500,
+                                    institution_id: (pro as any).institution_profile_id || null,
+                                  });
+                                  setCheckoutOpen(true);
+                                }}
+                                className="flex-1 text-xs font-semibold gap-1.5 cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90"
+                              >
+                                <Calendar className="size-3.5" /> Book
+                              </Button>
+                              <button
+                                onClick={() => setReportModalItem(pro)}
+                                className="text-[11px] text-muted-foreground hover:text-destructive px-1.5 py-1 shrink-0"
+                                title="Report listing"
+                              >
+                                Report
+                              </button>
+                            </div>
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Section: Products */}
+              {(activeType === "all" || activeType === "product") && filteredProducts.length > 0 && (
+                <div className="space-y-4">
+                  <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                    <Package className="size-5 text-indigo-600" />
+                    Featured Products & Master Catalog ({filteredProducts.length})
+                  </h2>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {filteredProducts.map((prod) => (
+                      <CompactProductCard
+                        key={prod.id}
+                        product={prod}
+                        business={prod.seller_info ? {
+                          id: prod.seller_info.business_id,
+                          name: prod.seller_info.business_name,
+                          slug: prod.seller_info.business_slug,
+                          institution_profile_id: prod.seller_info.institution_id,
+                          user_id: prod.seller_info.user_id,
+                        } : undefined}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Section: Services */}
+              {(activeType === "all" || activeType === "service") && filteredServices.length > 0 && (
+                <div className="space-y-4">
+                  <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                    <Sparkles className="size-5 text-emerald-600" />
+                    Featured Services & Master Services ({filteredServices.length})
+                  </h2>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {filteredServices.map((srv) => (
+                      <CompactServiceCard
+                        key={srv.id}
+                        service={srv}
+                        business={srv.seller_info ? {
+                          id: srv.seller_info.business_id,
+                          name: srv.seller_info.business_name,
+                          slug: srv.seller_info.business_slug,
+                          institution_profile_id: srv.seller_info.institution_id,
+                          user_id: srv.seller_info.user_id,
+                        } : undefined}
+                        onBook={(s) => {
+                          setSelectedBookingService({
+                            id: s.id,
+                            name: s.name,
+                            price: (s as any).suggested_price_inr || (s as any).price || 0,
+                            regular_price: (s as any).regular_price ? Number((s as any).regular_price) : null,
+                            pricing_model: s.pricing_model,
+                            estimated_duration: (s as any).estimated_duration || `${(s as any).duration_minutes || 60} mins`,
+                            service_location: (s as any).service_location || "In-Person & Online",
+                            default_image_url: s.default_image_url,
+                            provider_name: (s as any).provider_name || s.seller_info?.business_name || "Service Provider",
+                            business_id: (s as any).business_id || s.seller_info?.business_id || null,
+                            professional_id: (s as any).professional_id || null,
+                            institution_id: (s as any).institution_id || null,
+                          });
+                          setBookingDialogOpen(true);
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Section: Courses */}
+              {(activeType === "all" || activeType === "course") && filteredCourses.length > 0 && (
+                <div className="space-y-4">
+                  <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                    <BookOpen className="size-5 text-amber-600" />
+                    Featured Academic Courses & Programs ({filteredCourses.length})
+                  </h2>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredCourses.map((c) => (
+                      <Card key={c.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card">
+                        <CardHeader className="p-4 pb-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              {c.category_name && (
+                                <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 mb-1 bg-amber-50 text-amber-700 border-amber-200">
+                                  {c.category_name}
+                                </Badge>
+                              )}
+                              <Link href={buildCourseSeoUrl(c)} className="hover:text-primary transition-colors cursor-pointer block">
+                                <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
+                                  {c.name}
+                                </h3>
+                              </Link>
+                              {c.code && (
+                                <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                                  Code: {c.code}
+                                </p>
+                              )}
+                            </div>
+                            <div className="size-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+                              <BookOpen className="size-4.5" />
+                            </div>
                           </div>
                         </CardHeader>
-
-                        <CardContent className="p-4 space-y-3 text-xs">
-                          {/* Rating & Reviews */}
-                          <div className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-1">
-                              <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                              <span className="font-bold text-foreground">{pro.avg_rating || "New"}</span>
-                              <span className="text-muted-foreground">({pro.review_count || 0} reviews)</span>
-                            </div>
-                            <button
-                              onClick={() => setReviewModalItem(pro)}
-                              className="text-primary hover:underline text-[11px] font-semibold cursor-pointer"
-                            >
-                              Write Review
-                            </button>
-                          </div>
-
-                          {/* Address / Location */}
-                          <div className="flex items-start gap-1.5 text-muted-foreground text-xs">
-                            <MapPin className="size-3.5 shrink-0 mt-0.5 text-primary" />
-                            <span>{[pro.locality, pro.city, pro.state].filter(Boolean).join(", ") || "City location available"}</span>
-                          </div>
-
-                          {/* About snippet */}
-                          {pro.about && (
-                            <p className="text-muted-foreground text-xs line-clamp-2 italic">
-                              &quot;{pro.about}&quot;
+                        <CardContent className="p-4 pt-1 pb-3 text-xs space-y-2 flex-1">
+                          {c.description && (
+                            <p className="text-muted-foreground text-[11px] line-clamp-2">
+                              {c.description}
                             </p>
                           )}
+                          <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
+                            {c.duration_value && (
+                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                                <Clock className="size-3 text-primary" />
+                                {c.duration_value} {c.duration_unit || "Months"}
+                              </span>
+                            )}
+                            {c.university_name && (
+                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                                <Building2 className="size-3 text-primary" />
+                                {c.university_name}
+                              </span>
+                            )}
+                            {c.seats_available !== undefined && (
+                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                                {c.seats_available} Seats Available
+                              </span>
+                            )}
+                          </div>
                         </CardContent>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <CardFooter className="p-4 pt-0 border-t border-border/40 bg-muted/5 flex flex-col gap-2 mt-2">
-                        <div className="grid grid-cols-4 gap-1.5 w-full pt-3">
-                          {pro.phone ? (
-                            <a
-                              href={`tel:${pro.phone}`}
-                              className="inline-flex items-center justify-center p-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300 transition-colors"
-                              title="Call Professional"
-                            >
-                              <Phone className="size-4" />
-                            </a>
-                          ) : (
-                            <span className="opacity-40 p-2 text-center text-muted-foreground"><Phone className="size-4 mx-auto" /></span>
-                          )}
-
-                          {whatsappClean ? (
-                            <a
-                              href={`https://wa.me/${whatsappClean}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 transition-colors"
-                              title="Chat on WhatsApp"
-                            >
-                              <MessageCircle className="size-4" />
-                            </a>
-                          ) : (
-                            <span className="opacity-40 p-2 text-center text-muted-foreground"><MessageCircle className="size-4 mx-auto" /></span>
-                          )}
-
-                          {pro.email ? (
-                            <a
-                              href={`mailto:${pro.email}`}
-                              className="inline-flex items-center justify-center p-2 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-950 dark:text-purple-300 transition-colors"
-                              title="Send Email"
-                            >
-                              <Mail className="size-4" />
-                            </a>
-                          ) : (
-                            <span className="opacity-40 p-2 text-center text-muted-foreground"><Mail className="size-4 mx-auto" /></span>
-                          )}
-
-                          <a
-                            href={mapsUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center justify-center p-2 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-300 transition-colors"
-                            title="Directions on Map"
+                        <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setCheckoutItem({
+                                id: c.id,
+                                name: c.name,
+                                type: "service",
+                                price: Number(c.price || c.fee || c.annual_fee || 5000),
+                                sale_price: Number(c.sale_price || c.discounted_price || c.price || c.fee || 5000),
+                                institution_id: c.institution_id || c.institution_profile_id || null,
+                                provider_name: c.university_name || c.institution_name || "Maa Sharda Institute",
+                              } as any);
+                              setCheckoutOpen(true);
+                            }}
+                            className="flex-1 text-xs font-semibold cursor-pointer border-slate-300 hover:bg-slate-100"
                           >
-                            <Navigation className="size-4" />
-                          </a>
-                        </div>
+                            Buy Now
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => {
+                              setEnquiryModalItem(c);
+                              setEnquiryForm({
+                                name: user?.full_name || "",
+                                email: user?.email || "",
+                                phone: user?.phone || "",
+                                message: `Hi, I am interested in admission for ${c.name}. Please share details and fee structure.`,
+                                preferredDate: "",
+                                preferredTime: "",
+                              });
+                            }}
+                            className="flex-1 text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white"
+                          >
+                            Enquire
+                          </Button>
+                        </CardFooter>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-                        <div className="flex items-center gap-2 w-full pt-1">
-                          <Link href={buildProfessionalSeoUrl(pro)} className="flex-1">
+              {/* Section: Jobs */}
+              {(activeType === "all" || activeType === "job") && filteredJobs.length > 0 && (
+                <div className="space-y-4">
+                  <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                    <Briefcase className="size-5 text-blue-600" />
+                    Featured Job Openings & Vacancies ({filteredJobs.length})
+                  </h2>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredJobs.map((j) => (
+                      <Card key={j.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card">
+                        <CardHeader className="p-4 pb-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              {j.department && (
+                                <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 mb-1 bg-blue-50 text-blue-700 border-blue-200">
+                                  {j.department}
+                                </Badge>
+                              )}
+                              <Link href={buildJobSeoUrl(j)} className="hover:text-primary transition-colors cursor-pointer block">
+                                <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
+                                  {j.title || j.name}
+                                </h3>
+                              </Link>
+                              {j.company_name && (
+                                <p className="text-xs text-muted-foreground font-semibold mt-0.5">
+                                  {j.company_name}
+                                </p>
+                              )}
+                            </div>
+                            <div className="size-9 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0">
+                              <Briefcase className="size-4.5" />
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-1 pb-3 text-xs space-y-2 flex-1">
+                          {j.description && (
+                            <p className="text-muted-foreground text-[11px] line-clamp-2">
+                              {j.description}
+                            </p>
+                          )}
+                          <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
+                            {j.location && (
+                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                                <MapPin className="size-3 text-primary" />
+                                {j.location}
+                              </span>
+                            )}
+                            {j.employment_type && (
+                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                                {j.employment_type}
+                              </span>
+                            )}
+                            {j.work_mode && (
+                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md capitalize">
+                                {j.work_mode}
+                              </span>
+                            )}
+                            {j.salary_range && (
+                              <span className="flex items-center gap-1 font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
+                                {j.salary_range}
+                              </span>
+                            )}
+                          </div>
+                        </CardContent>
+                        <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
+                          <Link href={buildJobSeoUrl(j)} className="flex-1">
                             <Button
-                              type="button"
                               size="sm"
                               variant="outline"
-                              className="w-full text-xs font-semibold gap-1.5 cursor-pointer"
+                              className="w-full text-xs font-semibold"
                             >
-                              <Briefcase className="size-3.5" /> View Profile
+                              View Details
                             </Button>
                           </Link>
                           <Button
                             size="sm"
                             variant="default"
                             onClick={() => {
-                              setCheckoutItem({
-                                id: pro.id,
-                                name: `Consultation with ${pro.name}`,
-                                type: "service",
-                                provider_name: pro.name,
-                                duration_minutes: 45,
-                                suggested_price_inr: (pro as any).consultation_fee || 500,
-                                institution_id: (pro as any).institution_profile_id || null,
+                              setEnquiryModalItem(j);
+                              setEnquiryForm({
+                                name: user?.full_name || "",
+                                email: user?.email || "",
+                                phone: user?.phone || "",
+                                message: `Hi, I would like to apply for the ${j.title || j.name} position. Please review my candidacy.`,
+                                preferredDate: "",
+                                preferredTime: "",
                               });
-                              setCheckoutOpen(true);
                             }}
-                            className="flex-1 text-xs font-semibold gap-1.5 cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90"
+                            className="flex-1 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white"
                           >
-                            <Calendar className="size-3.5" /> Book
+                            Apply Now
                           </Button>
-                          <button
-                            onClick={() => setReportModalItem(pro)}
-                            className="text-[11px] text-muted-foreground hover:text-destructive px-1.5 py-1 shrink-0"
-                            title="Report listing"
-                          >
-                            Report
-                          </button>
-                        </div>
-                      </CardFooter>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                        </CardFooter>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-                    {/* Section: Products */}
-          {(activeType === "all" || activeType === "product") && filteredProducts.length > 0 && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                <Package className="size-5 text-indigo-600" />
-                Featured Products & Master Catalog ({filteredProducts.length})
-              </h2>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                {filteredProducts.map((prod) => (
-                  <CompactProductCard
-                    key={prod.id}
-                    product={prod}
-                    business={prod.seller_info ? {
-                      id: prod.seller_info.business_id,
-                      name: prod.seller_info.business_name,
-                      slug: prod.seller_info.business_slug,
-                      institution_profile_id: prod.seller_info.institution_id,
-                      user_id: prod.seller_info.user_id,
-                    } : undefined}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-                    {/* Section: Services */}
-          {(activeType === "all" || activeType === "service") && filteredServices.length > 0 && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                <Sparkles className="size-5 text-emerald-600" />
-                Featured Services & Master Services ({filteredServices.length})
-              </h2>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                {filteredServices.map((srv) => (
-                  <CompactServiceCard
-                    key={srv.id}
-                    service={srv}
-                    business={srv.seller_info ? {
-                      id: srv.seller_info.business_id,
-                      name: srv.seller_info.business_name,
-                      slug: srv.seller_info.business_slug,
-                      institution_profile_id: srv.seller_info.institution_id,
-                      user_id: srv.seller_info.user_id,
-                    } : undefined}
-                    onBook={(s) => {
-                      setSelectedBookingService({
-                        id: s.id,
-                        name: s.name,
-                        price: (s as any).suggested_price_inr || (s as any).price || 0,
-                        regular_price: (s as any).regular_price ? Number((s as any).regular_price) : null,
-                        pricing_model: s.pricing_model,
-                        estimated_duration: (s as any).estimated_duration || `${(s as any).duration_minutes || 60} mins`,
-                        service_location: (s as any).service_location || "In-Person & Online",
-                        default_image_url: s.default_image_url,
-                        provider_name: (s as any).provider_name || s.seller_info?.business_name || "Service Provider",
-                        business_id: (s as any).business_id || s.seller_info?.business_id || null,
-                        professional_id: (s as any).professional_id || null,
-                        institution_id: (s as any).institution_id || null,
-                      });
-                      setBookingDialogOpen(true);
+              {/* Empty state */}
+              {totalFilteredCount === 0 && (
+                <div className="text-center py-16 space-y-3 bg-slate-50 border border-slate-200 rounded-2xl p-8">
+                  <Search className="size-10 text-slate-400 mx-auto" />
+                  <h3 className="text-base font-bold text-slate-900">No matching listings found</h3>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    Try searching for a different keyword or relaxing your category or city filters.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setQuery("");
+                      setCity("");
+                      setLocality("");
+                      setPostalCode("");
+                      setSelectedBusinessCategoryId(null);
+                      setSelectedCategoryId(null);
+                      setSelectedCategoryName("");
+                      setSelectedCategorySlug("");
+                      setSelectedSubcategoryId(null);
+                      setSelectedSubcategoryName("");
+                      setSelectedSubcategorySlug("");
+                      setSortBy("featured");
+                      setProductNameSearch("");
+                      setSelectedBrand("all");
+                      setActiveType("all");
+                      setRadius("no_radius");
+                      setMinRating(0);
+                      setVerifiedOnly(false);
+                      syncUrlParams({ type: "all", city: "", category: null, subcategory: null, q: "", brand: "all" });
                     }}
-                  />
-                ))}
-              </div>
+                    className="text-xs font-semibold cursor-pointer border-slate-300 text-slate-700 hover:bg-slate-100"
+                  >
+                    Reset All Filters
+                  </Button>
+                </div>
+              )}
             </div>
           )}
+        </div>
 
-                              {/* Section: Courses */}
-          {(activeType === "all" || activeType === "course") && filteredCourses.length > 0 && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                <BookOpen className="size-5 text-amber-600" />
-                Featured Academic Courses & Programs ({filteredCourses.length})
+        {/* Right Column: Filters Sidebar */}
+        <aside className="lg:col-span-4 xl:col-span-3">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs sticky top-24 space-y-6">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <SlidersHorizontal className="size-4 text-amber-500" />
+                Filters
               </h2>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredCourses.map((c) => (
-                  <Card key={c.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card">
-                    <CardHeader className="p-4 pb-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          {c.category_name && (
-                            <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 mb-1 bg-amber-50 text-amber-700 border-amber-200">
-                              {c.category_name}
-                            </Badge>
-                          )}
-                          <Link href={buildCourseSeoUrl(c)} className="hover:text-primary transition-colors cursor-pointer block">
-                            <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
-                              {c.name}
-                            </h3>
-                          </Link>
-                          {c.code && (
-                            <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
-                              Code: {c.code}
-                            </p>
-                          )}
-                        </div>
-                        <div className="size-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
-                          <BookOpen className="size-4.5" />
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-1 pb-3 text-xs space-y-2 flex-1">
-                      {c.description && (
-                        <p className="text-muted-foreground text-[11px] line-clamp-2">
-                          {c.description}
-                        </p>
-                      )}
-                      <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
-                        {c.duration_value && (
-                          <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
-                            <Clock className="size-3 text-primary" />
-                            {c.duration_value} {c.duration_unit || "Months"}
-                          </span>
-                        )}
-                        {c.university_name && (
-                          <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
-                            <Building2 className="size-3 text-primary" />
-                            {c.university_name}
-                          </span>
-                        )}
-                        {c.seats_available !== undefined && (
-                          <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
-                            {c.seats_available} Seats Available
-                          </span>
-                        )}
-                      </div>
-                    </CardContent>
-                    <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setCheckoutItem({
-                            id: c.id,
-                            name: c.name,
-                            type: "service",
-                            price: Number(c.price || c.fee || c.annual_fee || 5000),
-                            sale_price: Number(c.sale_price || c.discounted_price || c.price || c.fee || 5000),
-                            institution_id: c.institution_id || c.institution_profile_id || null,
-                            provider_name: c.university_name || c.institution_name || "Maa Sharda Institute",
-                          } as any);
-                          setCheckoutOpen(true);
-                        }}
-                        className="flex-1 text-xs font-semibold cursor-pointer border-slate-300 hover:bg-slate-100"
-                      >
-                        Buy Now
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="default"
-                        onClick={() => {
-                          setEnquiryModalItem(c);
-                          setEnquiryForm({
-                            name: user?.full_name || "",
-                            email: user?.email || "",
-                            phone: user?.phone || "",
-                            message: `Hi, I am interested in admission for ${c.name}. Please share details and fee structure.`,
-                            preferredDate: "",
-                            preferredTime: "",
-                          });
-                        }}
-                        className="flex-1 text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white"
-                      >
-                        Enquire
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Section: Jobs */}
-          {(activeType === "all" || activeType === "job") && filteredJobs.length > 0 && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                <Briefcase className="size-5 text-blue-600" />
-                Featured Job Openings & Vacancies ({filteredJobs.length})
-              </h2>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredJobs.map((j) => (
-                  <Card key={j.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card">
-                    <CardHeader className="p-4 pb-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          {j.department && (
-                            <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 mb-1 bg-blue-50 text-blue-700 border-blue-200">
-                              {j.department}
-                            </Badge>
-                          )}
-                          <Link href={buildJobSeoUrl(j)} className="hover:text-primary transition-colors cursor-pointer block">
-                            <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
-                              {j.title || j.name}
-                            </h3>
-                          </Link>
-                          {j.company_name && (
-                            <p className="text-xs text-muted-foreground font-semibold mt-0.5">
-                              {j.company_name}
-                            </p>
-                          )}
-                        </div>
-                        <div className="size-9 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0">
-                          <Briefcase className="size-4.5" />
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-1 pb-3 text-xs space-y-2 flex-1">
-                      {j.description && (
-                        <p className="text-muted-foreground text-[11px] line-clamp-2">
-                          {j.description}
-                        </p>
-                      )}
-                      <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
-                        {j.location && (
-                          <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
-                            <MapPin className="size-3 text-primary" />
-                            {j.location}
-                          </span>
-                        )}
-                        {j.employment_type && (
-                          <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
-                            {j.employment_type}
-                          </span>
-                        )}
-                        {j.work_mode && (
-                          <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md capitalize">
-                            {j.work_mode}
-                          </span>
-                        )}
-                        {j.salary_range && (
-                          <span className="flex items-center gap-1 font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                            {j.salary_range}
-                          </span>
-                        )}
-                      </div>
-                    </CardContent>
-                    <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
-                      <Link href={buildJobSeoUrl(j)} className="flex-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full text-xs font-semibold"
-                        >
-                          View Details
-                        </Button>
-                      </Link>
-                      <Button
-                        size="sm"
-                        variant="default"
-                        onClick={() => {
-                          setEnquiryModalItem(j);
-                          setEnquiryForm({
-                            name: user?.full_name || "",
-                            email: user?.email || "",
-                            phone: user?.phone || "",
-                            message: `Hi, I would like to apply for the ${j.title || j.name} position. Please review my candidacy.`,
-                            preferredDate: "",
-                            preferredTime: "",
-                          });
-                        }}
-                        className="flex-1 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white"
-                      >
-                        Apply Now
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Empty state */}
-          {totalFilteredCount === 0 && (
-            <div className="text-center py-16 space-y-3 bg-slate-50 border border-slate-200 rounded-2xl p-8">
-              <Search className="size-10 text-slate-400 mx-auto" />
-              <h3 className="text-base font-bold text-slate-900">No matching listings found</h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Try searching for a different keyword or relaxing your category or city filters.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
+              <button
+                type="button"
                 onClick={() => {
-                  setQuery("");
-                  setCity("");
-                  setLocality("");
-                  setPostalCode("");
+                  setProductNameSearch("");
+                  setActiveType("all");
                   setSelectedBusinessCategoryId(null);
                   setSelectedCategoryId(null);
                   setSelectedCategoryName("");
@@ -1767,126 +1804,118 @@ function CustomerExplorePageContent({
                   setSelectedSubcategoryId(null);
                   setSelectedSubcategoryName("");
                   setSelectedSubcategorySlug("");
-                  setSortBy("featured");
-                  setProductNameSearch("");
                   setSelectedBrand("all");
-                  setActiveType("all");
+                  setCity("");
                   setRadius("no_radius");
                   setMinRating(0);
                   setVerifiedOnly(false);
+                  setSortBy("featured");
                   syncUrlParams({ type: "all", city: "", category: null, subcategory: null, q: "", brand: "all" });
                 }}
-                className="text-xs font-semibold cursor-pointer border-slate-300 text-slate-700 hover:bg-slate-100"
+                className="text-xs font-semibold text-amber-600 hover:text-amber-700 transition-colors cursor-pointer"
               >
-                Reset All Filters
-              </Button>
+                Clear all
+              </button>
             </div>
-          )}
-        </div>
-      )}
-      </div>
 
-      {/* Right Column: Filters Sidebar */}
-      <aside className="lg:col-span-4 xl:col-span-3">
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs sticky top-24 space-y-6">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <SlidersHorizontal className="size-4 text-amber-500" />
-              Filters
-            </h2>
-            <button
-              type="button"
-              onClick={() => {
-                setProductNameSearch("");
-                setActiveType("all");
-                setSelectedBusinessCategoryId(null);
-                setSelectedCategoryId(null);
-                setSelectedCategoryName("");
-                setSelectedCategorySlug("");
-                setSelectedSubcategoryId(null);
-                setSelectedSubcategoryName("");
-                setSelectedSubcategorySlug("");
-                setSelectedBrand("all");
-                setCity("");
-                setRadius("no_radius");
-                setMinRating(0);
-                setVerifiedOnly(false);
-                setSortBy("featured");
-                syncUrlParams({ type: "all", city: "", category: null, subcategory: null, q: "", brand: "all" });
-              }}
-              className="text-xs font-semibold text-amber-600 hover:text-amber-700 transition-colors cursor-pointer"
-            >
-              Clear all
-            </button>
-          </div>
+            {/* 1. Listing Type Filter (On Top in Dropdown) */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <Layers className="size-3.5 text-amber-500" />
+                Listing Type
+              </label>
+              <div className="relative">
+                <select
+                  value={activeType}
+                  onChange={(e) => {
+                    const newType = e.target.value as any;
+                    setActiveType(newType);
+                    setSelectedCategoryId(null);
+                    setSelectedCategoryName("");
+                    setSelectedCategorySlug("");
+                    setSelectedSubcategoryId(null);
+                    setSelectedSubcategoryName("");
+                    setSelectedSubcategorySlug("");
+                    syncUrlParams({ type: newType, category: null, subcategory: null });
+                  }}
+                  className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white cursor-pointer appearance-none font-semibold capitalize"
+                >
+                  <option value="all">All Types</option>
+                  <option value="business">Businesses</option>
+                  <option value="service">Services</option>
+                  <option value="product">Products</option>
+                  <option value="professional">Professionals</option>
+                  <option value="course">Courses</option>
+                  <option value="job">Jobs</option>
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
 
-          {/* 1. Listing Type Filter (On Top in Dropdown) */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-              <Layers className="size-3.5 text-amber-500" />
-              Listing Type
-            </label>
-            <div className="relative">
+            {/* Main Business Category Filter */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-700">
+                Main Business Category
+              </label>
               <select
-                value={activeType}
+                value={selectedBusinessCategoryId || ""}
                 onChange={(e) => {
-                  const newType = e.target.value as any;
-                  setActiveType(newType);
+                  const val = e.target.value ? Number(e.target.value) : null;
+                  setSelectedBusinessCategoryId(val);
                   setSelectedCategoryId(null);
                   setSelectedCategoryName("");
                   setSelectedCategorySlug("");
                   setSelectedSubcategoryId(null);
                   setSelectedSubcategoryName("");
                   setSelectedSubcategorySlug("");
-                  syncUrlParams({ type: newType, category: null, subcategory: null });
+                  syncUrlParams({ category: null, subcategory: null });
                 }}
-                className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white cursor-pointer appearance-none font-semibold capitalize"
+                className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 focus:outline-none focus:bg-white cursor-pointer"
               >
-                <option value="all">All Types</option>
-                <option value="business">Businesses</option>
-                <option value="service">Services</option>
-                <option value="product">Products</option>
-                <option value="professional">Professionals</option>
-                <option value="course">Courses</option>
-                <option value="job">Jobs</option>
+                <option value="">All Business Types ({businessCategories.length})</option>
+                {businessCategories.map((bc) => (
+                  <option key={bc.id} value={bc.id}>
+                    {bc.name}
+                  </option>
+                ))}
               </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
             </div>
-          </div>
 
-          {/* Main Business Category Filter */}
+          {/* Main Business Category Filter (Only for business or all types) */}
+          {(activeType === "all" || activeType === "business") && (
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-700">
+                Main Business Category
+              </label>
+              <select
+                value={selectedBusinessCategoryId || ""}
+                onChange={(e) => {
+                  const val = e.target.value ? Number(e.target.value) : null;
+                  setSelectedBusinessCategoryId(val);
+                  setSelectedCategoryId(null);
+                  setSelectedCategoryName("");
+                  setSelectedCategorySlug("");
+                  setSelectedSubcategoryId(null);
+                  setSelectedSubcategoryName("");
+                  setSelectedSubcategorySlug("");
+                  syncUrlParams({ category: null, subcategory: null });
+                }}
+                className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 focus:outline-none focus:bg-white cursor-pointer"
+              >
+                <option value="">All Business Types ({businessCategories.length})</option>
+                {businessCategories.map((bc) => (
+                  <option key={bc.id} value={bc.id}>
+                    {bc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Particular Category Filter (Related to Selected Type) */}
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-700">
-              Main Business Category
-            </label>
-            <select
-              value={selectedBusinessCategoryId || ""}
-              onChange={(e) => {
-                const val = e.target.value ? Number(e.target.value) : null;
-                setSelectedBusinessCategoryId(val);
-                setSelectedCategoryId(null);
-                setSelectedCategoryName("");
-                setSelectedCategorySlug("");
-                setSelectedSubcategoryId(null);
-                setSelectedSubcategoryName("");
-                setSelectedSubcategorySlug("");
-                syncUrlParams({ category: null, subcategory: null });
-              }}
-              className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 focus:outline-none focus:bg-white cursor-pointer"
-            >
-              <option value="">All Business Types ({businessCategories.length})</option>
-              {businessCategories.map((bc) => (
-                <option key={bc.id} value={bc.id}>
-                  {bc.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Particular Category Filter (Related to Selected Business Category) */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-700">
-              {activeType === "service" ? "Services category" : activeType === "course" ? "Course category" : "Particular Category"}
+              {activeType === "service" ? "Service Category" : activeType === "course" ? "Course Category" : activeType === "professional" ? "Profession Category" : activeType === "job" ? "Job Domain" : "Category"}
             </label>
             <select
               value={selectedCategoryId || ""}
@@ -1943,68 +1972,85 @@ function CustomerExplorePageContent({
                 </button>
                 {subcategories.map((sub) => (
                   <button
-                    key={sub.id}
                     type="button"
                     onClick={() => {
-                      setSelectedSubcategoryId(sub.id);
-                      setSelectedSubcategoryName(sub.name);
-                      const subSlug = sub.slug || sub.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-                      setSelectedSubcategorySlug(subSlug);
-                      syncUrlParams({ subcategory: subSlug });
+                      setSelectedSubcategoryId(null);
+                      setSelectedSubcategoryName("");
+                      setSelectedSubcategorySlug("");
+                      syncUrlParams({ subcategory: null });
                     }}
                     className={cn(
                       "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
-                      selectedSubcategoryId === sub.id ? "bg-amber-100 text-amber-900 font-semibold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      !selectedSubcategoryId ? "bg-amber-100 text-amber-900 font-semibold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                     )}
                   >
-                    <span className="truncate">{sub.name}</span>
+                    <span>All Subcategories</span>
+                    <span className="text-[10px] text-slate-400">({subcategories.length})</span>
                   </button>
-                ))}
+                  {subcategories.map((sub) => (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedSubcategoryId(sub.id);
+                        setSelectedSubcategoryName(sub.name);
+                        const subSlug = sub.slug || sub.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+                        setSelectedSubcategorySlug(subSlug);
+                        syncUrlParams({ subcategory: subSlug });
+                      }}
+                      className={cn(
+                        "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
+                        selectedSubcategoryId === sub.id ? "bg-amber-100 text-amber-900 font-semibold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      )}
+                    >
+                      <span className="truncate">{sub.name}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
+            )}
+
+
+            {/* Brand Filter (if products available) */}
+            {availableBrands.length > 0 && (
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-700">Brand</label>
+                <select
+                  value={selectedBrand}
+                  onChange={(e) => {
+                    setSelectedBrand(e.target.value);
+                    syncUrlParams({ brand: e.target.value });
+                  }}
+                  className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 focus:outline-none focus:bg-white cursor-pointer"
+                >
+                  <option value="all">All Brands ({availableBrands.length})</option>
+                  {availableBrands.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Verified Only Toggle */}
+            <div className="pt-2 border-t border-slate-200">
+              <label className="flex items-center justify-between cursor-pointer text-xs text-slate-700 font-medium">
+                <span className="flex items-center gap-2">
+                  <ShieldCheck className="size-4 text-emerald-600" />
+                  Verified Listings Only
+                </span>
+                <input
+                  type="checkbox"
+                  checked={verifiedOnly}
+                  onChange={(e) => setVerifiedOnly(e.target.checked)}
+                  className="rounded border-slate-300 text-amber-500 focus:ring-amber-500 size-4 cursor-pointer"
+                />
+              </label>
             </div>
-          )}
-
-
-          {/* Brand Filter (if products available) */}
-          {availableBrands.length > 0 && (
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-700">Brand</label>
-              <select
-                value={selectedBrand}
-                onChange={(e) => {
-                  setSelectedBrand(e.target.value);
-                  syncUrlParams({ brand: e.target.value });
-                }}
-                className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 focus:outline-none focus:bg-white cursor-pointer"
-              >
-                <option value="all">All Brands ({availableBrands.length})</option>
-                {availableBrands.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Verified Only Toggle */}
-          <div className="pt-2 border-t border-slate-200">
-            <label className="flex items-center justify-between cursor-pointer text-xs text-slate-700 font-medium">
-              <span className="flex items-center gap-2">
-                <ShieldCheck className="size-4 text-emerald-600" />
-                Verified Listings Only
-              </span>
-              <input
-                type="checkbox"
-                checked={verifiedOnly}
-                onChange={(e) => setVerifiedOnly(e.target.checked)}
-                className="rounded border-slate-300 text-amber-500 focus:ring-amber-500 size-4 cursor-pointer"
-              />
-            </label>
           </div>
-        </div>
-      </aside>
-    </div>
+        </aside>
+      </div>
 
       {/* Enquiry Modal */}
       <Dialog open={Boolean(enquiryModalItem)} onOpenChange={(open) => !open && setEnquiryModalItem(null)}>
@@ -2125,11 +2171,10 @@ function CustomerExplorePageContent({
                     className="p-1 cursor-pointer transition-transform hover:scale-110"
                   >
                     <Star
-                      className={`size-6 ${
-                        star <= reviewForm.rating
-                          ? "fill-amber-400 text-amber-400"
-                          : "text-muted-foreground/40"
-                      }`}
+                      className={`size-6 ${star <= reviewForm.rating
+                        ? "fill-amber-400 text-amber-400"
+                        : "text-muted-foreground/40"
+                        }`}
                     />
                   </button>
                 ))}
