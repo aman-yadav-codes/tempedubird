@@ -34,6 +34,7 @@ import {
   Settings,
   Calendar,
   Building,
+  Globe,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -266,7 +267,7 @@ export function PlatformAdminHeader() {
     const timer = setTimeout(async () => {
       setIsLoadingLocationSuggestions(true);
       try {
-        const res = await fetch(`/api/public/places/autocomplete?input=${encodeURIComponent(trimmed)}&country=${encodeURIComponent(country.code || "")}`);
+        const res = await fetch(`/api/public/places/autocomplete?input=${encodeURIComponent(trimmed)}`);
         const data = await res.json();
         if (data?.predictions && Array.isArray(data.predictions)) {
           setLocationSuggestions(data.predictions);
@@ -1049,11 +1050,13 @@ export function PlatformAdminHeader() {
           }
         }}
       >
-        <DialogContent className="max-w-md bg-card border text-foreground rounded-3xl p-6 space-y-5 shadow-2xl">
-          <DialogHeader className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <DialogTitle className="text-xl font-black flex items-center gap-2">
-                <MapPin className="size-5 text-amber-500" />
+        <DialogContent className="sm:max-w-lg w-[calc(100vw-2rem)] bg-card border border-border/80 text-foreground rounded-3xl p-5 sm:p-6 shadow-2xl overflow-hidden gap-4">
+          <DialogHeader className="space-y-1 pb-1 border-b border-border/40">
+            <div className="flex items-center justify-between gap-2 pr-6">
+              <DialogTitle className="text-lg sm:text-xl font-black flex items-center gap-2 text-foreground">
+                <span className="p-1.5 rounded-xl bg-amber-500/10 text-amber-500">
+                  <MapPin className="size-4 sm:size-5" />
+                </span>
                 <span>Select Your Location</span>
               </DialogTitle>
               {isDetected && (
@@ -1063,31 +1066,37 @@ export function PlatformAdminHeader() {
               )}
             </div>
             <DialogDescription className="text-xs text-muted-foreground">
-              Discover verified businesses, services, products, and opportunities in your area.
+              Discover verified businesses, services, products, and opportunities in your area worldwide.
             </DialogDescription>
           </DialogHeader>
 
           {/* Currently Selected Location Pill */}
-          <div className="p-3.5 rounded-2xl bg-muted/40 border flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Active Location:</span>
-            <div className="flex items-center gap-2">
-              <span className="font-extrabold text-foreground flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
-                <span>{location || "All Locations"}</span>
+          <div className="p-3 rounded-2xl bg-muted/40 border border-border/60 flex items-center justify-between text-xs gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground shrink-0">
+                Active:
               </span>
-              {location && location !== "All Locations" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLocation("All Locations", false);
-                    toast.success("Location set to All Locations");
-                  }}
-                  className="text-[10px] text-muted-foreground hover:text-amber-500 font-bold underline cursor-pointer ml-1"
-                >
-                  Clear
-                </button>
-              )}
+              <span className="font-extrabold text-foreground flex items-center gap-1.5 min-w-0 truncate">
+                <span className="size-2 rounded-full bg-amber-500 shrink-0 animate-pulse" />
+                <span className="truncate" title={location || "All Locations"}>
+                  {location || "All Locations"}
+                </span>
+              </span>
             </div>
+            {location && location !== "All Locations" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setLocation("All Locations", false);
+                  toast.success("Location set to All Locations");
+                }}
+                className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-background hover:bg-rose-50 dark:hover:bg-rose-950/40 text-[11px] font-bold text-muted-foreground hover:text-rose-600 border border-border/60 transition-colors cursor-pointer shadow-2xs"
+                title="Reset location"
+              >
+                <X className="size-3" />
+                <span>Clear</span>
+              </button>
+            )}
           </div>
 
           {/* 1. Detect Live GPS Button */}
@@ -1099,7 +1108,7 @@ export function PlatformAdminHeader() {
               setLocationDialogOpen(false);
             }}
             disabled={isDetecting}
-            className="w-full py-5 rounded-2xl border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-foreground font-bold text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+            className="w-full py-4 sm:py-5 rounded-2xl border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-foreground font-bold text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-xs cursor-pointer transition-all"
           >
             {isDetecting ? (
               <>
@@ -1115,10 +1124,10 @@ export function PlatformAdminHeader() {
           </Button>
 
           {/* Divider */}
-          <div className="relative flex items-center justify-center">
-            <div className="w-full border-t border-border" />
-            <span className="absolute bg-card px-3 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              Or Enter Location
+          <div className="relative flex items-center justify-center my-0.5">
+            <div className="w-full border-t border-border/60" />
+            <span className="absolute bg-card px-3 text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">
+              Or Enter Location Worldwide
             </span>
           </div>
 
@@ -1150,10 +1159,12 @@ export function PlatformAdminHeader() {
               <Search className="absolute left-3.5 size-4 text-muted-foreground pointer-events-none" />
               <input
                 type="text"
-                placeholder="Enter city, province, or area name..."
+                placeholder="Search any city, country, or area worldwide..."
                 value={customLocationInput}
                 onChange={(e) => setCustomLocationInput(e.target.value)}
-                className="w-full h-11 pl-10 pr-24 rounded-2xl bg-background border border-border/80 text-xs sm:text-sm font-medium focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                spellCheck={false}
+                autoComplete="off"
+                className="w-full h-11 pl-10 pr-20 rounded-2xl bg-background border border-border/80 text-xs sm:text-sm font-medium placeholder:text-muted-foreground/60 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all"
               />
               {isLoadingLocationSuggestions && (
                 <div className="absolute right-14 flex items-center justify-center pointer-events-none">
@@ -1164,7 +1175,7 @@ export function PlatformAdminHeader() {
                 type="submit"
                 size="sm"
                 disabled={!customLocationInput.trim()}
-                className="absolute right-1.5 h-8 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs cursor-pointer disabled:opacity-40"
+                className="absolute right-1.5 h-8 px-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs cursor-pointer shadow-xs disabled:opacity-40"
               >
                 Set
               </Button>
@@ -1172,13 +1183,13 @@ export function PlatformAdminHeader() {
 
             {/* Google Places Autocomplete Suggestions */}
             {locationSuggestions.length > 0 && (
-              <div className="space-y-1 max-h-60 overflow-y-auto rounded-2xl border border-border/70 bg-card p-1.5 shadow-lg animate-in fade-in-50 duration-200">
-                <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/40 pb-1">
-                  <span className="flex items-center gap-1.5">
-                    <MapPin className="size-3 text-amber-500" />
-                    Location Suggestions
+              <div className="space-y-1 max-h-56 overflow-y-auto rounded-2xl border border-border/80 bg-background/95 backdrop-blur-xs p-1.5 shadow-xl animate-in fade-in-50 duration-200">
+                <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/40 pb-1 mb-1">
+                  <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                    <Globe className="size-3" />
+                    Worldwide Suggestions
                   </span>
-                  <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full font-bold">
+                  <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full font-bold border border-amber-500/20">
                     Google Places
                   </span>
                 </div>
@@ -1210,21 +1221,60 @@ export function PlatformAdminHeader() {
                       setLocationSuggestions([]);
                       setLocationDialogOpen(false);
                     }}
-                    className="w-full text-left p-2.5 rounded-xl hover:bg-amber-500/10 transition-colors flex items-start gap-2.5 group cursor-pointer"
+                    className="w-full text-left p-2.5 rounded-xl hover:bg-amber-500/10 dark:hover:bg-amber-500/15 transition-all flex items-start gap-2.5 group cursor-pointer"
                   >
-                    <div className="size-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-amber-500 group-hover:text-black transition-colors">
+                    <div className="size-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-amber-500 group-hover:text-black transition-colors shadow-2xs">
                       <MapPin className="size-3.5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold text-foreground group-hover:text-amber-600 transition-colors truncate">
+                      <div className="text-xs font-bold text-foreground group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors truncate">
                         {item.name}
                       </div>
-                      <div className="text-[11px] text-muted-foreground truncate">
+                      <div className="text-[11px] text-muted-foreground group-hover:text-foreground/80 transition-colors truncate mt-0.5">
                         {item.secondary_text || item.description}
                       </div>
                     </div>
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/* Quick Popular Worldwide Cities */}
+            {!customLocationInput.trim() && (
+              <div className="pt-1">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                  <Globe className="size-3 text-amber-500" />
+                  <span>Popular Locations Worldwide</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { name: "Varanasi, India", code: "IN" },
+                    { name: "Cape Town, South Africa", code: "ZA" },
+                    { name: "Johannesburg, South Africa", code: "ZA" },
+                    { name: "London, UK", code: "GB" },
+                    { name: "New York, USA", code: "US" },
+                    { name: "Dubai, UAE", code: "AE" },
+                    { name: "Sydney, Australia", code: "AU" },
+                    { name: "Toronto, Canada", code: "CA" },
+                  ].map((city) => (
+                    <button
+                      key={city.name}
+                      type="button"
+                      onClick={() => {
+                        setLocation(city.name, false, city.code);
+                        setCountry(city.code);
+                        const cm = getCatalogCountryMeta(city.code);
+                        toast.success(`Location set to "${city.name}"`, {
+                          description: `Country & Currency set to ${cm.name} (${cm.currencyCode} ${cm.currencySymbol})`,
+                        });
+                        setLocationDialogOpen(false);
+                      }}
+                      className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-muted/60 hover:bg-amber-500/15 hover:text-amber-700 dark:hover:text-amber-400 border border-border/50 transition-colors cursor-pointer"
+                    >
+                      {city.name}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </form>
