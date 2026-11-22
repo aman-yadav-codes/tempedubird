@@ -8,9 +8,14 @@ export default function MarketingRoomsPage({ isMasterCatalog }: { isMasterCatalo
     <div className="container mx-auto p-4 md:p-6 space-y-6">
       <BusinessRecordManager
         vertical="hotels"
-        title="Hotel Rooms & Accommodations"
-        description="Create and manage your hotel rooms, bed configurations, and rates powered by centralized master data."
+        title={isMasterCatalog ? "Master Rooms & Stay Catalog" : "Hotel Rooms & Accommodations"}
+        description={
+          isMasterCatalog
+            ? "Centralized platform directory of all hotel rooms, suites, homestays, and resort accommodations."
+            : "Create and manage your hotel rooms, bed configurations, and rates powered by centralized master data."
+        }
         icon={BedDouble}
+        isMasterCatalog={isMasterCatalog}
       />
     </div>
   );

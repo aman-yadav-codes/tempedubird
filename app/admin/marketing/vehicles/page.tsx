@@ -8,9 +8,14 @@ export default function MarketingVehiclesPage({ isMasterCatalog }: { isMasterCat
     <div className="container mx-auto p-4 md:p-6 space-y-6">
       <BusinessRecordManager
         vertical="vehicles"
-        title="Vehicle Inventory"
-        description="Create and manage your business vehicle listings powered by centralized vehicle master data."
+        title={isMasterCatalog ? "Master Vehicles Catalog" : "Vehicle Inventory"}
+        description={
+          isMasterCatalog
+            ? "Centralized platform directory of all motor vehicles, commercial fleets, and EV inventory."
+            : "Create and manage your business vehicle listings powered by centralized vehicle master data."
+        }
         icon={Car}
+        isMasterCatalog={isMasterCatalog}
       />
     </div>
   );

@@ -80,21 +80,24 @@ export interface BusinessRecordManagerProps {
   title: string;
   description: string;
   icon?: any;
+  isMasterCatalog?: boolean;
 }
 
-export function BusinessRecordManager({ vertical, title, description, icon: HeaderIcon }: BusinessRecordManagerProps) {
+export function BusinessRecordManager({ vertical, title, description, icon: HeaderIcon, isMasterCatalog = false }: BusinessRecordManagerProps) {
   const { accessToken } = useAuthStore();
 
   const getHeaders = useCallback(() => {
     const headers: Record<string, string> = {};
     if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
-    const activeInst = typeof window !== "undefined" ? (localStorage.getItem("active_institution_id") || "") : "";
-    if (activeInst) {
-      headers["x-institution-id"] = activeInst;
-      headers["x-business-id"] = activeInst;
+    if (!isMasterCatalog) {
+      const activeInst = typeof window !== "undefined" ? (localStorage.getItem("active_institution_id") || "") : "";
+      if (activeInst) {
+        headers["x-institution-id"] = activeInst;
+        headers["x-business-id"] = activeInst;
+      }
     }
     return headers;
-  }, [accessToken]);
+  }, [accessToken, isMasterCatalog]);
 
   // Data States
   const { countryCode, currencyCode, currencySymbol, formatPrice: formatCurrencyPrice } = useBusinessCurrency();
@@ -169,6 +172,7 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
         page: String(page),
         limit: "20",
       });
+      if (isMasterCatalog) params.set("is_master", "true");
       if (search.trim()) params.set("search", search.trim());
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (categoryFilter !== "all") params.set("category_id", categoryFilter);
@@ -189,7 +193,7 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
     } finally {
       setLoading(false);
     }
-  }, [vertical, page, search, statusFilter, categoryFilter]);
+  }, [vertical, page, search, statusFilter, categoryFilter, getHeaders, isMasterCatalog]);
 
   useEffect(() => {
     fetchFormConfig();
@@ -714,6 +718,12 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
                               ) : (
                                 <Badge variant="outline" className="text-muted-foreground text-[9px] py-0 px-1.5 h-4 gap-0.5">
                                   <XCircle className="size-2.5" /> Inactive
+                                </Badge>
+                              )}
+                              {r.business_name && (
+                                <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 bg-muted/40 text-muted-foreground font-normal gap-1">
+                                  <Building2 className="size-2.5 text-muted-foreground" />
+                                  <span className="truncate max-w-[160px]">{r.business_name}</span>
                                 </Badge>
                               )}
                             </div>
