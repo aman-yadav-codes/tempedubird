@@ -550,8 +550,80 @@ export async function GET(req: Request) {
           ORDER BY br.created_at DESC
           LIMIT 100
         `;
+      } else if (type === "vehicle") {
+        query = `
+          SELECT
+            br.id,
+            br.title as name,
+            COALESCE(vd.manufacturing_year::text || ' ' || COALESCE(vd.color, ''), br.slug) as subtitle,
+            br.slug,
+            br.description,
+            br.price,
+            br.currency,
+            br.featured_image as image_url,
+            br.status,
+            br.is_active,
+            br.is_featured,
+            br.metadata,
+            br.created_at,
+            c.name as category_name,
+            subc.name as subcategory_name,
+            bp.name as business_name,
+            COALESCE(bp.city, vd.location, 'Varanasi') as city,
+            COALESCE(vd.contact_info, bp.phone) as phone,
+            vd.manufacturing_year,
+            vd.color,
+            vd.mileage,
+            vd.kilometers_driven,
+            vd.engine_capacity,
+            vd.registration_number
+          FROM business_records br
+          LEFT JOIN vehicle_details vd ON vd.record_id = br.id
+          LEFT JOIN business_profiles bp ON bp.id = br.business_id
+          LEFT JOIN categories c ON c.id = br.category_id
+          LEFT JOIN categories subc ON subc.id = br.subcategory_id
+          WHERE ${where.join(" AND ")}
+          ORDER BY br.created_at DESC
+          LIMIT 100
+        `;
+      } else if (type === "property") {
+        query = `
+          SELECT
+            br.id,
+            br.title as name,
+            COALESCE(pd.street_address, pd.city, br.slug) as subtitle,
+            br.slug,
+            br.description,
+            COALESCE(pd.rental_amount, br.price) as price,
+            br.currency,
+            br.featured_image as image_url,
+            br.status,
+            br.is_active,
+            br.is_featured,
+            br.metadata,
+            br.created_at,
+            c.name as category_name,
+            subc.name as subcategory_name,
+            bp.name as business_name,
+            COALESCE(pd.city, bp.city, 'Varanasi') as city,
+            bp.phone,
+            pd.bedrooms,
+            pd.bathrooms,
+            pd.built_up_area,
+            pd.area_unit,
+            pd.street_address,
+            pd.availability_status
+          FROM business_records br
+          LEFT JOIN property_details pd ON pd.record_id = br.id
+          LEFT JOIN business_profiles bp ON bp.id = br.business_id
+          LEFT JOIN categories c ON c.id = br.category_id
+          LEFT JOIN categories subc ON subc.id = br.subcategory_id
+          WHERE ${where.join(" AND ")}
+          ORDER BY br.created_at DESC
+          LIMIT 100
+        `;
       } else {
-        // vehicle or property
+        // Fallback for any other vertical
         query = `
           SELECT
             br.id,

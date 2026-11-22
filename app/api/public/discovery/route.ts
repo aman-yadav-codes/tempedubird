@@ -86,6 +86,9 @@ export async function GET(req: NextRequest) {
     let services: any[] = [];
     let courses: any[] = [];
     let jobs: any[] = [];
+    let properties: any[] = [];
+    let vehicles: any[] = [];
+    let events: any[] = [];
 
     // Resolve Category Family & Linked Businesses if categoryId is provided
     let categoryIds: number[] = categoryId ? [categoryId] : [];
@@ -1047,7 +1050,249 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const total = businesses.length + professionals.length + products.length + services.length + courses.length + jobs.length;
+    // 7. Search Properties
+    if (type === "all" || type === "property" || type === "properties") {
+      try {
+        const pConditions: string[] = [
+          "br.vertical_code = 'properties'",
+          "(br.is_deleted IS NULL OR br.is_deleted = FALSE)",
+          "(br.is_active = TRUE OR br.is_active IS NULL)"
+        ];
+        const pParams: any[] = [];
+
+        if (scopedBusinessId) {
+          pParams.push(scopedBusinessId);
+          pConditions.push(`br.business_id = $${pParams.length}`);
+        }
+
+        if (likeQ) {
+          pParams.push(likeQ);
+          pConditions.push(`(
+            br.title ILIKE $${pParams.length}
+            OR COALESCE(br.description, '') ILIKE $${pParams.length}
+            OR COALESCE(pd.street_address, '') ILIKE $${pParams.length}
+            OR COALESCE(pd.city, '') ILIKE $${pParams.length}
+            OR COALESCE(bp.name, '') ILIKE $${pParams.length}
+          )`);
+        }
+
+        if (uniqueCityTokens.length > 0) {
+          pParams.push(uniqueCityTokens);
+          pConditions.push(`(
+            pd.city ILIKE ANY($${pParams.length}::text[])
+            OR bp.city ILIKE ANY($${pParams.length}::text[])
+            OR COALESCE(pd.street_address, '') ILIKE ANY($${pParams.length}::text[])
+          )`);
+        }
+
+        const pQuery = `
+          SELECT
+            br.id,
+            br.title AS name,
+            br.title,
+            br.slug,
+            br.description,
+            COALESCE(pd.rental_amount, br.price) AS price,
+            br.currency,
+            br.featured_image AS default_image_url,
+            br.featured_image AS image_url,
+            br.is_active,
+            br.is_featured,
+            br.created_at,
+            bp.id AS business_id,
+            bp.name AS business_name,
+            COALESCE(pd.city, bp.city, 'Varanasi') AS city,
+            COALESCE(pd.state, bp.state, 'Uttar Pradesh') AS state,
+            COALESCE(pd.street_address, bp.address) AS address,
+            COALESCE(bp.phone, '+91 94152 20303') AS phone,
+            bp.whatsapp,
+            bp.email,
+            c.name AS category_name,
+            subc.name AS subcategory_name,
+            pd.bedrooms,
+            pd.bathrooms,
+            pd.built_up_area,
+            pd.area_unit,
+            pd.rental_amount,
+            pd.availability_status
+          FROM business_records br
+          LEFT JOIN property_details pd ON pd.record_id = br.id
+          LEFT JOIN business_profiles bp ON bp.id = br.business_id
+          LEFT JOIN categories c ON c.id = br.category_id
+          LEFT JOIN categories subc ON subc.id = br.subcategory_id
+          WHERE ${pConditions.join(" AND ")}
+          ORDER BY br.id DESC
+          LIMIT $${pParams.length + 1} OFFSET $${pParams.length + 2}
+        `;
+        const pRes = await db.query(pQuery, [...pParams, limit, offset]);
+        properties = pRes.rows.map((r) => ({ ...r, resultType: "property" }));
+      } catch (pErr) {
+        console.warn("Could not query properties in discovery:", pErr);
+      }
+    }
+
+    // 8. Search Vehicles
+    if (type === "all" || type === "vehicle" || type === "vehicles") {
+      try {
+        const vConditions: string[] = [
+          "br.vertical_code = 'vehicles'",
+          "(br.is_deleted IS NULL OR br.is_deleted = FALSE)",
+          "(br.is_active = TRUE OR br.is_active IS NULL)"
+        ];
+        const vParams: any[] = [];
+
+        if (scopedBusinessId) {
+          pParams.push(scopedBusinessId);
+          vConditions.push(`br.business_id = $${vParams.length}`);
+        }
+
+        if (likeQ) {
+          vParams.push(likeQ);
+          vConditions.push(`(
+            br.title ILIKE $${vParams.length}
+            OR COALESCE(br.description, '') ILIKE $${vParams.length}
+            OR COALESCE(vd.location, '') ILIKE $${vParams.length}
+            OR COALESCE(bp.name, '') ILIKE $${vParams.length}
+          )`);
+        }
+
+        if (uniqueCityTokens.length > 0) {
+          vParams.push(uniqueCityTokens);
+          vConditions.push(`(
+            bp.city ILIKE ANY($${vParams.length}::text[])
+            OR COALESCE(vd.location, '') ILIKE ANY($${vParams.length}::text[])
+          )`);
+        }
+
+        const vQuery = `
+          SELECT
+            br.id,
+            br.title AS name,
+            br.title,
+            br.slug,
+            br.description,
+            br.price,
+            br.currency,
+            br.featured_image AS default_image_url,
+            br.featured_image AS image_url,
+            br.is_active,
+            br.is_featured,
+            br.created_at,
+            bp.id AS business_id,
+            bp.name AS business_name,
+            COALESCE(bp.city, vd.location, 'Varanasi') AS city,
+            COALESCE(bp.state, 'Uttar Pradesh') AS state,
+            COALESCE(vd.location, bp.address) AS address,
+            COALESCE(vd.contact_info, bp.phone, '+91 94152 20302') AS phone,
+            bp.whatsapp,
+            bp.email,
+            c.name AS category_name,
+            subc.name AS subcategory_name,
+            vd.manufacturing_year,
+            vd.color,
+            vd.mileage,
+            vd.kilometers_driven,
+            vd.engine_capacity,
+            vd.registration_number
+          FROM business_records br
+          LEFT JOIN vehicle_details vd ON vd.record_id = br.id
+          LEFT JOIN business_profiles bp ON bp.id = br.business_id
+          LEFT JOIN categories c ON c.id = br.category_id
+          LEFT JOIN categories subc ON subc.id = br.subcategory_id
+          WHERE ${vConditions.join(" AND ")}
+          ORDER BY br.id DESC
+          LIMIT $${vParams.length + 1} OFFSET $${vParams.length + 2}
+        `;
+        const vRes = await db.query(vQuery, [...vParams, limit, offset]);
+        vehicles = vRes.rows.map((r) => ({ ...r, resultType: "vehicle" }));
+      } catch (vErr) {
+        console.warn("Could not query vehicles in discovery:", vErr);
+      }
+    }
+
+    // 9. Search Events
+    if (type === "all" || type === "event" || type === "events") {
+      try {
+        const eConditions: string[] = [
+          "br.vertical_code = 'events'",
+          "(br.is_deleted IS NULL OR br.is_deleted = FALSE)",
+          "(br.is_active = TRUE OR br.is_active IS NULL)"
+        ];
+        const eParams: any[] = [];
+
+        if (scopedBusinessId) {
+          eParams.push(scopedBusinessId);
+          eConditions.push(`br.business_id = $${eParams.length}`);
+        }
+
+        if (likeQ) {
+          eParams.push(likeQ);
+          eConditions.push(`(
+            br.title ILIKE $${eParams.length}
+            OR COALESCE(br.description, '') ILIKE $${eParams.length}
+            OR COALESCE(e.venue_name, '') ILIKE $${eParams.length}
+            OR COALESCE(e.city, '') ILIKE $${eParams.length}
+            OR COALESCE(bp.name, '') ILIKE $${eParams.length}
+          )`);
+        }
+
+        if (uniqueCityTokens.length > 0) {
+          eParams.push(uniqueCityTokens);
+          eConditions.push(`(
+            e.city ILIKE ANY($${eParams.length}::text[])
+            OR bp.city ILIKE ANY($${eParams.length}::text[])
+            OR COALESCE(e.complete_address, '') ILIKE ANY($${eParams.length}::text[])
+          )`);
+        }
+
+        const eQuery = `
+          SELECT
+            br.id,
+            br.title AS name,
+            br.title,
+            br.slug,
+            br.description,
+            br.price,
+            br.currency,
+            br.featured_image AS default_image_url,
+            br.featured_image AS image_url,
+            br.is_active,
+            br.is_featured,
+            br.created_at,
+            bp.id AS business_id,
+            bp.name AS business_name,
+            COALESCE(e.city, bp.city, 'Varanasi') AS city,
+            COALESCE(e.state, bp.state, 'Uttar Pradesh') AS state,
+            COALESCE(e.venue_name, e.complete_address, bp.address) AS address,
+            COALESCE(bp.phone, '+91 94152 20304') AS phone,
+            bp.whatsapp,
+            bp.email,
+            c.name AS category_name,
+            subc.name AS subcategory_name,
+            e.venue_name,
+            e.start_date,
+            e.end_date,
+            e.start_time,
+            e.end_time,
+            e.is_free,
+            e.organizer_name
+          FROM business_records br
+          LEFT JOIN events e ON e.record_id = br.id
+          LEFT JOIN business_profiles bp ON bp.id = br.business_id
+          LEFT JOIN categories c ON c.id = br.category_id
+          LEFT JOIN categories subc ON subc.id = br.subcategory_id
+          WHERE ${eConditions.join(" AND ")}
+          ORDER BY br.id DESC
+          LIMIT $${eParams.length + 1} OFFSET $${eParams.length + 2}
+        `;
+        const eRes = await db.query(eQuery, [...eParams, limit, offset]);
+        events = eRes.rows.map((r) => ({ ...r, resultType: "event" }));
+      } catch (eErr) {
+        console.warn("Could not query events in discovery:", eErr);
+      }
+    }
+
+    const total = businesses.length + professionals.length + products.length + services.length + courses.length + jobs.length + properties.length + vehicles.length + events.length;
 
     return NextResponse.json({
       success: true,
@@ -1058,6 +1303,9 @@ export async function GET(req: NextRequest) {
         services,
         courses,
         jobs,
+        properties,
+        vehicles,
+        events,
         meta: {
           total,
           page,

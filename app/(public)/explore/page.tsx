@@ -58,6 +58,9 @@ import {
   ShoppingCart,
   Plus,
   Minus,
+  Car,
+  Home,
+  BedDouble,
 } from "lucide-react";
 import { useAuthStore, useCartStore } from "@/store";
 import { toast } from "sonner";
@@ -73,7 +76,7 @@ import { CompactServiceCard } from "@/components/shared/compact-service-card";
 
 interface DiscoveryItem {
   id: number;
-  resultType: "business" | "professional" | "product" | "service" | "course" | "job";
+  resultType: "business" | "professional" | "product" | "service" | "course" | "job" | "property" | "vehicle" | "event";
   name: string;
   title?: string;
   brand?: string | null;
@@ -131,6 +134,28 @@ interface DiscoveryItem {
   openings_count?: number;
   company_name?: string;
   company_logo?: string;
+  // Property specific
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  built_up_area?: number | string | null;
+  area_unit?: string | null;
+  rental_amount?: number | null;
+  availability_status?: string | null;
+  // Vehicle specific
+  manufacturing_year?: number | null;
+  color?: string | null;
+  mileage?: string | null;
+  kilometers_driven?: number | null;
+  registration_number?: string | null;
+  // Event specific
+  venue_name?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  is_free?: boolean | null;
+  organizer_name?: string | null;
+  business_name?: string | null;
 }
 
 export interface CustomerExplorePageProps {
@@ -152,7 +177,7 @@ function CustomerExplorePageContent({
   const searchParams = useSearchParams();
   const urlQ = searchParams?.get("q") || searchParams?.get("query") || searchParams?.get("search") || initialQuery || "";
   const rawType = (searchParams?.get("type") as any) || initialType || "all";
-  const urlType = ["all", "business", "service", "product", "professional", "course", "job"].includes(rawType) ? rawType : "all";
+  const urlType = ["all", "business", "service", "product", "professional", "course", "job", "property", "vehicle", "event"].includes(rawType) ? rawType : "all";
   const urlCountry = searchParams?.get("country") || "";
   const urlCity = searchParams?.get("city") || searchParams?.get("location") || initialCity || "";
   const urlCategoryParam = searchParams?.get("category") || searchParams?.get("category_slug") || initialCategory || "";
@@ -166,7 +191,7 @@ function CustomerExplorePageContent({
   const { location: userGlobalLocation, setLocation: setGlobalLocation } = useUserLocation();
 
   const [query, setQuery] = useState(urlQ);
-  const [activeType, setActiveType] = useState<"all" | "business" | "service" | "product" | "professional" | "course" | "job">(urlType);
+  const [activeType, setActiveType] = useState<"all" | "business" | "service" | "product" | "professional" | "course" | "job" | "property" | "vehicle" | "event">(urlType);
   const [country, setCountry] = useState<string>(urlCountry);
   const [city, setCity] = useState<string>(
     urlCity || (userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : "")
@@ -302,7 +327,7 @@ function CustomerExplorePageContent({
         .catch(() => { });
     }
 
-    if (urlType && ["all", "business", "service", "product", "professional", "course", "job"].includes(urlType)) {
+    if (urlType && ["all", "business", "service", "product", "professional", "course", "job", "property", "vehicle", "event"].includes(urlType)) {
       setActiveType(urlType);
     }
     if (urlCity) {
@@ -323,6 +348,9 @@ function CustomerExplorePageContent({
   const [services, setServices] = useState<DiscoveryItem[]>([]);
   const [courses, setCourses] = useState<DiscoveryItem[]>([]);
   const [jobs, setJobs] = useState<DiscoveryItem[]>([]);
+  const [properties, setProperties] = useState<DiscoveryItem[]>([]);
+  const [vehicles, setVehicles] = useState<DiscoveryItem[]>([]);
+  const [events, setEvents] = useState<DiscoveryItem[]>([]);
 
   // Filter: Sort By, Keyword Search, Brand
   const [sortBy, setSortBy] = useState<string>("featured");
@@ -600,13 +628,83 @@ function CustomerExplorePageContent({
     return list;
   }, [jobs, productNameSearch, sortBy]);
 
+  const filteredProperties = useMemo(() => {
+    let list = [...properties];
+    if (productNameSearch.trim()) {
+      const q = productNameSearch.toLowerCase().trim();
+      list = list.filter(
+        (p) =>
+          (p.name || p.title || "").toLowerCase().includes(q) ||
+          (p.description || "").toLowerCase().includes(q) ||
+          (p.city || "").toLowerCase().includes(q) ||
+          (p.business_name || "").toLowerCase().includes(q)
+      );
+    }
+    if (sortBy === "name_asc") {
+      list.sort((a, b) => (a.name || a.title || "").localeCompare(b.name || b.title || ""));
+    } else if (sortBy === "name_desc") {
+      list.sort((a, b) => (b.name || b.title || "").localeCompare(a.name || a.title || ""));
+    } else if (sortBy === "newest") {
+      list.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    }
+    return list;
+  }, [properties, productNameSearch, sortBy]);
+
+  const filteredVehicles = useMemo(() => {
+    let list = [...vehicles];
+    if (productNameSearch.trim()) {
+      const q = productNameSearch.toLowerCase().trim();
+      list = list.filter(
+        (v) =>
+          (v.name || v.title || "").toLowerCase().includes(q) ||
+          (v.description || "").toLowerCase().includes(q) ||
+          (v.city || "").toLowerCase().includes(q) ||
+          (v.business_name || "").toLowerCase().includes(q)
+      );
+    }
+    if (sortBy === "name_asc") {
+      list.sort((a, b) => (a.name || a.title || "").localeCompare(b.name || b.title || ""));
+    } else if (sortBy === "name_desc") {
+      list.sort((a, b) => (b.name || b.title || "").localeCompare(a.name || a.title || ""));
+    } else if (sortBy === "newest") {
+      list.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    }
+    return list;
+  }, [vehicles, productNameSearch, sortBy]);
+
+  const filteredEvents = useMemo(() => {
+    let list = [...events];
+    if (productNameSearch.trim()) {
+      const q = productNameSearch.toLowerCase().trim();
+      list = list.filter(
+        (e) =>
+          (e.name || e.title || "").toLowerCase().includes(q) ||
+          (e.description || "").toLowerCase().includes(q) ||
+          (e.venue_name || "").toLowerCase().includes(q) ||
+          (e.city || "").toLowerCase().includes(q) ||
+          (e.business_name || "").toLowerCase().includes(q)
+      );
+    }
+    if (sortBy === "name_asc") {
+      list.sort((a, b) => (a.name || a.title || "").localeCompare(b.name || b.title || ""));
+    } else if (sortBy === "name_desc") {
+      list.sort((a, b) => (b.name || b.title || "").localeCompare(a.name || a.title || ""));
+    } else if (sortBy === "newest") {
+      list.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    }
+    return list;
+  }, [events, productNameSearch, sortBy]);
+
   const totalFilteredCount =
     filteredBusinesses.length +
     filteredProfessionals.length +
     filteredProducts.length +
     filteredServices.length +
     filteredCourses.length +
-    filteredJobs.length;
+    filteredJobs.length +
+    filteredProperties.length +
+    filteredVehicles.length +
+    filteredEvents.length;
 
   // Favorites set
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
@@ -755,6 +853,9 @@ function CustomerExplorePageContent({
         setServices(data.data.services || []);
         setCourses(data.data.courses || []);
         setJobs(data.data.jobs || []);
+        setProperties(data.data.properties || []);
+        setVehicles(data.data.vehicles || []);
+        setEvents(data.data.events || []);
       }
     } catch (err) {
       console.error(err);
@@ -1726,6 +1827,332 @@ function CustomerExplorePageContent({
                 </div>
               )}
 
+              {/* Properties Section */}
+              {(activeType === "all" || activeType === "property") && filteredProperties.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <Home className="size-4 text-emerald-600" />
+                      Featured Properties & Real Estate ({filteredProperties.length})
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredProperties.map((p) => (
+                      <Card key={p.id} className="border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between">
+                        <div>
+                          <div className="relative h-44 w-full bg-slate-100 overflow-hidden group">
+                            {p.image_url || p.default_image_url ? (
+                              <img
+                                src={p.image_url || p.default_image_url || ""}
+                                alt={p.title || p.name}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-emerald-50 text-emerald-600">
+                                <Home className="size-12 opacity-60" />
+                              </div>
+                            )}
+                            <div className="absolute top-2.5 right-2.5">
+                              <Badge className="bg-emerald-600 text-white font-bold text-[10px] px-2 py-0.5">
+                                {p.rental_amount ? `₹${Number(p.rental_amount).toLocaleString()}/mo` : p.price ? `₹${Number(p.price).toLocaleString()}` : "Price on Request"}
+                              </Badge>
+                            </div>
+                            {p.city && (
+                              <div className="absolute bottom-2.5 left-2.5">
+                                <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-[10px] px-2 py-0.5 flex items-center gap-1">
+                                  <MapPin className="size-2.5" />
+                                  {p.city}
+                                </Badge>
+                              </div>
+                            )}
+                          </div>
+                          <CardContent className="p-4 space-y-2">
+                            <h3 className="font-bold text-slate-900 text-sm line-clamp-1 hover:text-emerald-600 transition-colors">
+                              {p.title || p.name}
+                            </h3>
+                            {p.business_name && (
+                              <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                                <Building2 className="size-3 text-slate-400 shrink-0" />
+                                <span className="truncate font-medium text-slate-700">{p.business_name}</span>
+                              </div>
+                            )}
+                            {p.description && (
+                              <p className="text-xs text-slate-600 line-clamp-2">
+                                {p.description}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2 text-[11px] text-slate-600 pt-1 flex-wrap">
+                              {p.bedrooms ? (
+                                <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                  {p.bedrooms} BHK
+                                </span>
+                              ) : null}
+                              {p.built_up_area ? (
+                                <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                  {p.built_up_area} {p.area_unit || "sq ft"}
+                                </span>
+                              ) : null}
+                              {p.address && (
+                                <span className="text-[10px] text-slate-400 truncate max-w-[200px]">
+                                  {p.address}
+                                </span>
+                              )}
+                            </div>
+                          </CardContent>
+                        </div>
+                        <CardFooter className="p-4 pt-0 border-t bg-slate-50/50 flex items-center justify-between gap-2 mt-2">
+                          {p.phone && (
+                            <a
+                              href={`tel:${p.phone}`}
+                              className="inline-flex items-center justify-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 flex-1 transition-colors"
+                            >
+                              <Phone className="size-3" /> Call
+                            </a>
+                          )}
+                          <Button
+                            size="sm"
+                            className="flex-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                            onClick={() => {
+                              setEnquiryModalItem(p);
+                              setEnquiryForm({
+                                name: user?.full_name || "",
+                                email: user?.email || "",
+                                phone: user?.phone || "",
+                                message: `Hi, I am interested in "${p.title || p.name}". Please share more details and arrange a site visit.`,
+                                preferredDate: "",
+                                preferredTime: "",
+                              });
+                            }}
+                          >
+                            Enquire Now
+                          </Button>
+                        </CardFooter>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Vehicles Section */}
+              {(activeType === "all" || activeType === "vehicle") && filteredVehicles.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <Car className="size-4 text-blue-600" />
+                      Featured Vehicles & Mobility ({filteredVehicles.length})
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredVehicles.map((v) => (
+                      <Card key={v.id} className="border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between">
+                        <div>
+                          <div className="relative h-44 w-full bg-slate-100 overflow-hidden group">
+                            {v.image_url || v.default_image_url ? (
+                              <img
+                                src={v.image_url || v.default_image_url || ""}
+                                alt={v.title || v.name}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-blue-50 text-blue-600">
+                                <Car className="size-12 opacity-60" />
+                              </div>
+                            )}
+                            <div className="absolute top-2.5 right-2.5">
+                              <Badge className="bg-blue-600 text-white font-bold text-[10px] px-2 py-0.5">
+                                {v.price ? `₹${Number(v.price).toLocaleString()}` : "Price on Request"}
+                              </Badge>
+                            </div>
+                            {v.city && (
+                              <div className="absolute bottom-2.5 left-2.5">
+                                <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-[10px] px-2 py-0.5 flex items-center gap-1">
+                                  <MapPin className="size-2.5" />
+                                  {v.city}
+                                </Badge>
+                              </div>
+                            )}
+                          </div>
+                          <CardContent className="p-4 space-y-2">
+                            <h3 className="font-bold text-slate-900 text-sm line-clamp-1 hover:text-blue-600 transition-colors">
+                              {v.title || v.name}
+                            </h3>
+                            {v.business_name && (
+                              <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                                <Building2 className="size-3 text-slate-400 shrink-0" />
+                                <span className="truncate font-medium text-slate-700">{v.business_name}</span>
+                              </div>
+                            )}
+                            {v.description && (
+                              <p className="text-xs text-slate-600 line-clamp-2">
+                                {v.description}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2 text-[11px] text-slate-600 pt-1 flex-wrap">
+                              {v.manufacturing_year ? (
+                                <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                  {v.manufacturing_year}
+                                </span>
+                              ) : null}
+                              {v.color ? (
+                                <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                  {v.color}
+                                </span>
+                              ) : null}
+                              {v.mileage ? (
+                                <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                  {v.mileage}
+                                </span>
+                              ) : null}
+                              {v.kilometers_driven ? (
+                                <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                  {Number(v.kilometers_driven).toLocaleString()} km
+                                </span>
+                              ) : null}
+                            </div>
+                          </CardContent>
+                        </div>
+                        <CardFooter className="p-4 pt-0 border-t bg-slate-50/50 flex items-center justify-between gap-2 mt-2">
+                          {v.phone && (
+                            <a
+                              href={`tel:${v.phone}`}
+                              className="inline-flex items-center justify-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 flex-1 transition-colors"
+                            >
+                              <Phone className="size-3" /> Call Dealer
+                            </a>
+                          )}
+                          <Button
+                            size="sm"
+                            className="flex-1 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white"
+                            onClick={() => {
+                              setEnquiryModalItem(v);
+                              setEnquiryForm({
+                                name: user?.full_name || "",
+                                email: user?.email || "",
+                                phone: user?.phone || "",
+                                message: `Hi, I am interested in purchasing "${v.title || v.name}". Please share test drive and best price details.`,
+                                preferredDate: "",
+                                preferredTime: "",
+                              });
+                            }}
+                          >
+                            Enquire Now
+                          </Button>
+                        </CardFooter>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Events Section */}
+              {(activeType === "all" || activeType === "event") && filteredEvents.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <Calendar className="size-4 text-purple-600" />
+                      Upcoming Events & Expos ({filteredEvents.length})
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredEvents.map((e) => (
+                      <Card key={e.id} className="border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between">
+                        <div>
+                          <div className="relative h-44 w-full bg-slate-100 overflow-hidden group">
+                            {e.image_url || e.default_image_url ? (
+                              <img
+                                src={e.image_url || e.default_image_url || ""}
+                                alt={e.title || e.name}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-purple-50 text-purple-600">
+                                <Calendar className="size-12 opacity-60" />
+                              </div>
+                            )}
+                            <div className="absolute top-2.5 right-2.5">
+                              <Badge className={e.is_free ? "bg-emerald-600 text-white font-bold text-[10px] px-2 py-0.5" : "bg-purple-600 text-white font-bold text-[10px] px-2 py-0.5"}>
+                                {e.is_free ? "Free Entry" : e.price ? `₹${Number(e.price).toLocaleString()}` : "Pass Required"}
+                              </Badge>
+                            </div>
+                            {e.city && (
+                              <div className="absolute bottom-2.5 left-2.5">
+                                <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-[10px] px-2 py-0.5 flex items-center gap-1">
+                                  <MapPin className="size-2.5" />
+                                  {e.city}
+                                </Badge>
+                              </div>
+                            )}
+                          </div>
+                          <CardContent className="p-4 space-y-2">
+                            <h3 className="font-bold text-slate-900 text-sm line-clamp-1 hover:text-purple-600 transition-colors">
+                              {e.title || e.name}
+                            </h3>
+                            {e.venue_name && (
+                              <div className="text-[11px] text-slate-600 flex items-center gap-1 font-medium">
+                                <MapPin className="size-3 text-purple-500 shrink-0" />
+                                <span className="truncate">{e.venue_name}</span>
+                              </div>
+                            )}
+                            {e.business_name && (
+                              <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                                <Building2 className="size-3 text-slate-400 shrink-0" />
+                                <span className="truncate font-medium text-slate-700">{e.business_name}</span>
+                              </div>
+                            )}
+                            {e.description && (
+                              <p className="text-xs text-slate-600 line-clamp-2">
+                                {e.description}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2 text-[11px] text-slate-600 pt-1 flex-wrap">
+                              {e.start_date && (
+                                <span className="bg-purple-50 text-purple-700 font-semibold px-2 py-0.5 rounded flex items-center gap-1">
+                                  <Calendar className="size-3" />
+                                  {new Date(e.start_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                                </span>
+                              )}
+                              {e.start_time && (
+                                <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded flex items-center gap-1">
+                                  <Clock className="size-3" />
+                                  {e.start_time}
+                                </span>
+                              )}
+                            </div>
+                          </CardContent>
+                        </div>
+                        <CardFooter className="p-4 pt-0 border-t bg-slate-50/50 flex items-center justify-between gap-2 mt-2">
+                          {e.phone && (
+                            <a
+                              href={`tel:${e.phone}`}
+                              className="inline-flex items-center justify-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 flex-1 transition-colors"
+                            >
+                              <Phone className="size-3" /> Contact
+                            </a>
+                          )}
+                          <Button
+                            size="sm"
+                            className="flex-1 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white"
+                            onClick={() => {
+                              setEnquiryModalItem(e);
+                              setEnquiryForm({
+                                name: user?.full_name || "",
+                                email: user?.email || "",
+                                phone: user?.phone || "",
+                                message: `Hi, I would like to register/attend "${e.title || e.name}". Please confirm schedule and booking.`,
+                                preferredDate: e.start_date || "",
+                                preferredTime: e.start_time || "",
+                              });
+                            }}
+                          >
+                            Register / Enquire
+                          </Button>
+                        </CardFooter>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Empty state */}
               {totalFilteredCount === 0 && (
                 <div className="text-center py-16 space-y-3 bg-slate-50 border border-slate-200 rounded-2xl p-8">
@@ -1826,8 +2253,11 @@ function CustomerExplorePageContent({
                 >
                   <option value="all">All Types</option>
                   <option value="business">Businesses</option>
-                  <option value="service">Services</option>
                   <option value="product">Products</option>
+                  <option value="service">Services</option>
+                  <option value="property">Properties</option>
+                  <option value="vehicle">Vehicles</option>
+                  <option value="event">Events</option>
                   <option value="professional">Professionals</option>
                   <option value="course">Courses</option>
                   <option value="job">Jobs</option>
