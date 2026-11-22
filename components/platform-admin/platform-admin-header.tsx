@@ -48,8 +48,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { useUserCountry } from "@/hooks/use-user-country";
-import { resolveCountryFromLocation } from "@/lib/utils/geo-location";
-import { getCatalogCountryMeta } from "@/lib/config/country-config";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -252,7 +250,7 @@ export function PlatformAdminHeader() {
         }, 500);
         return () => clearTimeout(timer);
       }
-    } catch {}
+    } catch { }
   }, []);
 
   // Debounced Google Places Autocomplete for Location Modal
@@ -554,9 +552,8 @@ export function PlatformAdminHeader() {
                       description: `Currency: ${c.currencyCode} (${c.currencySymbol})`,
                     });
                   }}
-                  className={`cursor-pointer text-xs font-medium gap-2.5 py-2 px-2.5 rounded-lg flex items-center justify-between ${
-                    country.code === c.code ? "bg-sky-50 text-sky-700 font-bold" : ""
-                  }`}
+                  className={`cursor-pointer text-xs font-medium gap-2.5 py-2 px-2.5 rounded-lg flex items-center justify-between ${country.code === c.code ? "bg-sky-50 text-sky-700 font-bold" : ""
+                    }`}
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-base">{c.flag}</span>
@@ -776,11 +773,10 @@ export function PlatformAdminHeader() {
                 <button
                   type="button"
                   onClick={() => setActiveTab("all")}
-                  className={`px-2.5 py-1 rounded-full font-bold transition-all cursor-pointer whitespace-nowrap text-[11px] ${
-                    activeTab === "all"
-                      ? "bg-primary text-primary-foreground shadow-xs"
-                      : "bg-background text-muted-foreground border hover:bg-muted"
-                  }`}
+                  className={`px-2.5 py-1 rounded-full font-bold transition-all cursor-pointer whitespace-nowrap text-[11px] ${activeTab === "all"
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "bg-background text-muted-foreground border hover:bg-muted"
+                    }`}
                 >
                   All ({counts.all})
                 </button>
@@ -789,11 +785,10 @@ export function PlatformAdminHeader() {
                   <button
                     type="button"
                     onClick={() => setActiveTab("products")}
-                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${
-                      activeTab === "products"
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "bg-background text-muted-foreground border hover:bg-muted"
-                    }`}
+                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${activeTab === "products"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-background text-muted-foreground border hover:bg-muted"
+                      }`}
                   >
                     <Package className="size-3" />
                     <span>Products ({counts.products})</span>
@@ -804,11 +799,10 @@ export function PlatformAdminHeader() {
                   <button
                     type="button"
                     onClick={() => setActiveTab("services")}
-                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${
-                      activeTab === "services"
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "bg-background text-muted-foreground border hover:bg-muted"
-                    }`}
+                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${activeTab === "services"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-background text-muted-foreground border hover:bg-muted"
+                      }`}
                   >
                     <Briefcase className="size-3" />
                     <span>Services ({counts.services})</span>
@@ -819,11 +813,10 @@ export function PlatformAdminHeader() {
                   <button
                     type="button"
                     onClick={() => setActiveTab("businesses")}
-                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${
-                      activeTab === "businesses"
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "bg-background text-muted-foreground border hover:bg-muted"
-                    }`}
+                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${activeTab === "businesses"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-background text-muted-foreground border hover:bg-muted"
+                      }`}
                   >
                     <Building2 className="size-3" />
                     <span>Businesses ({counts.businesses})</span>
@@ -834,11 +827,10 @@ export function PlatformAdminHeader() {
                   <button
                     type="button"
                     onClick={() => setActiveTab("professionals")}
-                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${
-                      activeTab === "professionals"
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "bg-background text-muted-foreground border hover:bg-muted"
-                    }`}
+                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${activeTab === "professionals"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-background text-muted-foreground border hover:bg-muted"
+                      }`}
                   >
                     <UserCheck className="size-3" />
                     <span>Professionals ({counts.professionals})</span>
@@ -849,11 +841,10 @@ export function PlatformAdminHeader() {
                   <button
                     type="button"
                     onClick={() => setActiveTab("categories")}
-                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${
-                      activeTab === "categories"
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "bg-background text-muted-foreground border hover:bg-muted"
-                    }`}
+                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${activeTab === "categories"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-background text-muted-foreground border hover:bg-muted"
+                      }`}
                   >
                     <FolderTree className="size-3" />
                     <span>Categories ({counts.categories})</span>
@@ -893,17 +884,16 @@ export function PlatformAdminHeader() {
                           className="flex items-start gap-2.5 min-w-0 flex-1 cursor-pointer text-left"
                         >
                           <div
-                            className={`size-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                              item.type === "product"
-                                ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
-                                : item.type === "service"
+                            className={`size-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${item.type === "product"
+                              ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+                              : item.type === "service"
                                 ? "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-400"
                                 : item.type === "business"
-                                ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
-                                : item.type === "professional"
-                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
-                                : "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400"
-                            }`}
+                                  ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
+                                  : item.type === "professional"
+                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
+                                    : "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400"
+                              }`}
                           >
                             {item.type === "product" ? (
                               <Package className="size-4" />
@@ -1137,17 +1127,8 @@ export function PlatformAdminHeader() {
               e.preventDefault();
               const trimmed = customLocationInput.trim();
               if (trimmed) {
-                const resolvedCountry = resolveCountryFromLocation(trimmed);
-                setLocation(trimmed, false, resolvedCountry);
-                if (resolvedCountry) {
-                  setCountry(resolvedCountry);
-                  const cm = getCatalogCountryMeta(resolvedCountry);
-                  toast.success(`Location set to "${trimmed}"`, {
-                    description: `Country & Currency set to ${cm.name} (${cm.currencyCode} ${cm.currencySymbol})`,
-                  });
-                } else {
-                  toast.success(`Location set to "${trimmed}"`);
-                }
+                setLocation(trimmed, false);
+                toast.success(`Location set to "${trimmed}"`);
                 setCustomLocationInput("");
                 setLocationSuggestions([]);
                 setLocationDialogOpen(false);
@@ -1206,17 +1187,8 @@ export function PlatformAdminHeader() {
                           chosenLocation = `${chosenLocation}, ${cityPart}`;
                         }
                       }
-                      const resolvedCountry = resolveCountryFromLocation(item.description || item.secondary_text || chosenLocation);
-                      setLocation(chosenLocation, false, resolvedCountry);
-                      if (resolvedCountry) {
-                        setCountry(resolvedCountry);
-                        const cm = getCatalogCountryMeta(resolvedCountry);
-                        toast.success(`Location set to "${chosenLocation}"`, {
-                          description: `Country & Currency set to ${cm.name} (${cm.currencyCode} ${cm.currencySymbol})`,
-                        });
-                      } else {
-                        toast.success(`Location set to "${chosenLocation}"`);
-                      }
+                      setLocation(chosenLocation, false);
+                      toast.success(`Location set to "${chosenLocation}"`);
                       setCustomLocationInput("");
                       setLocationSuggestions([]);
                       setLocationDialogOpen(false);
