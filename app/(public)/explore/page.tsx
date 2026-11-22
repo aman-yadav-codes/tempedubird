@@ -1910,43 +1910,42 @@ function CustomerExplorePageContent({
                 <label className="text-xs font-semibold text-slate-700">Subcategory</label>
                 <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
                   <button
-                    key={sub.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedSubcategoryId(null);
-                        setSelectedSubcategoryName("");
-                        setSelectedSubcategorySlug("");
-                        syncUrlParams({ subcategory: null });
-                      }}
-                      className={cn(
-                        "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
-                        !selectedSubcategoryId ? "bg-amber-100 text-amber-900 font-semibold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                      )}
-                    >
-                      <span>All Subcategories</span>
-                      <span className="text-[10px] text-slate-400">({subcategories.length})</span>
-                    </button>
+                    type="button"
+                    onClick={() => {
+                      setSelectedSubcategoryId(null);
+                      setSelectedSubcategoryName("");
+                      setSelectedSubcategorySlug("");
+                      syncUrlParams({ subcategory: null });
+                    }}
+                    className={cn(
+                      "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
+                      !selectedSubcategoryId ? "bg-amber-100 text-amber-900 font-semibold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    )}
+                  >
+                    <span>All Subcategories</span>
+                    <span className="text-[10px] text-slate-400">({subcategories.length})</span>
+                  </button>
                   {
-                      subcategories.map((sub) => (
-                        <button
-                          key={sub.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedSubcategoryId(sub.id);
-                            setSelectedSubcategoryName(sub.name);
-                            const subSlug = sub.slug || sub.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-                            setSelectedSubcategorySlug(subSlug);
-                            syncUrlParams({ subcategory: subSlug });
-                          }}
-                          className={cn(
-                            "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
-                            selectedSubcategoryId === sub.id ? "bg-amber-100 text-amber-900 font-semibold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                          )}
-                        >
-                          <span className="truncate">{sub.name}</span>
-                        </button>
-                      ))
-                    }
+                    subcategories.map((sub) => (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedSubcategoryId(sub.id);
+                          setSelectedSubcategoryName(sub.name);
+                          const subSlug = sub.slug || sub.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+                          setSelectedSubcategorySlug(subSlug);
+                          syncUrlParams({ subcategory: subSlug });
+                        }}
+                        className={cn(
+                          "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
+                          selectedSubcategoryId === sub.id ? "bg-amber-100 text-amber-900 font-semibold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                        )}
+                      >
+                        <span className="truncate">{sub.name}</span>
+                      </button>
+                    ))
+                  }
                 </div>
               </div>
             )}
