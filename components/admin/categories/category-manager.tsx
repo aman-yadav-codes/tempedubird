@@ -757,9 +757,21 @@ export function CategoryManagerContent() {
             size="sm"
             variant="outline"
             className="gap-1.5 text-xs font-bold border-emerald-300 text-emerald-700 hover:bg-emerald-50 h-9"
-            title="Download all categories and subcategories in Excel"
+            title="Download current tab categories in Excel"
           >
             <Download className="size-3.5 text-emerald-600" /> Download Excel
+          </Button>
+
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="gap-1.5 text-xs font-bold border-blue-300 text-blue-700 hover:bg-blue-50 h-9"
+            title="Download all categories & subcategories in a single ZIP folder"
+          >
+            <a href="/downloads/categories/All_Categories_Excel.zip" download="All_Categories_Excel.zip">
+              <Download className="size-3.5 text-blue-600" /> Download All (ZIP)
+            </a>
           </Button>
 
           {activeTab === "business" ? (
