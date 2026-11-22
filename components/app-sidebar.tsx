@@ -234,6 +234,19 @@ const navItems: SidebarItem[] = [
         title: "Listings",
         url: "/admin/profiles",
         icon: Layers,
+        children: [
+            { title: "Businesses", url: "/admin/profiles?tab=business", icon: Building2 },
+            { title: "Professionals", url: "/admin/profiles?tab=professional", icon: UserCheck },
+            { title: "Courses", url: "/admin/profiles?tab=course", icon: GraduationCap },
+            { title: "Jobs", url: "/admin/profiles?tab=job", icon: Briefcase },
+            { title: "Products", url: "/admin/profiles?tab=products", icon: Package },
+            { title: "Services", url: "/admin/profiles?tab=services", icon: Layers },
+            { title: "Room & Stay", url: "/admin/profiles?tab=room", icon: BedDouble },
+            { title: "Vehicles", url: "/admin/profiles?tab=vehicle", icon: Car },
+            { title: "Dishes", url: "/admin/profiles?tab=dish", icon: UtensilsCrossed },
+            { title: "Events", url: "/admin/profiles?tab=event", icon: CalendarDays },
+            { title: "Properties", url: "/admin/profiles?tab=property", icon: Building2 },
+        ],
     },
     {
         title: "Business Type Access Management",
@@ -667,6 +680,21 @@ function getActiveSidebarLeaf(
             return;
         }
 
+        if (item.url.startsWith("/admin/profiles")) {
+            const itemTab = item.url.includes("tab=")
+                ? item.url.split("tab=")[1]?.split("&")[0]
+                : "business";
+            const currentTab = searchTab || searchParam || "business";
+            const normPath = normalizeAdminPath(pathname);
+            if (
+                (normPath === "/admin/profiles" || normPath === "/platformadmin/profiles" || normPath === "/workspace/profiles") &&
+                itemTab === currentTab
+            ) {
+                matches.push({ key: item.url, pathLength: item.url.length + 15 });
+            }
+            return;
+        }
+
         if (item.url.startsWith("/admin/categories")) {
             const itemType = item.url.includes("type=")
                 ? item.url.split("type=")[1]?.split("&")[0]
@@ -1027,14 +1055,14 @@ export function AppSidebar() {
                     if (item.url === "/admin/students") return [];
                     if (item.url === "/admin/institutions") return [];
                     if (item.url === "/admin/vendors") return [];
-                    if (item.url === "/admin/profiles") return [item];
+                    if (item.url === "/admin/profiles" || item.url.startsWith("/admin/profiles")) return [item];
                     if (item.url === "/admin/business-type-access") return [item];
                     if (item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [item];
                     if (item.url === "/platformadmin/content/blog" || item.url === "/admin/content/blog") return [item];
                     if (item.url.startsWith("/admin/categories") || item.url === "/admin/content/categories") return [item];
                     if (item.url === "/admin/catalog/products") return [item];
                 } else {
-                    if (item.url === "/admin/profiles") return [];
+                    if (item.url === "/admin/profiles" || item.url.startsWith("/admin/profiles")) return [];
                     if (item.url === "/admin/business-type-access") return [];
                     if (item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [];
                     if (item.url === "/platformadmin/content/blog") return [];

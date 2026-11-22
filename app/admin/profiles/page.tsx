@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, Suspense } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -110,9 +111,36 @@ const TAB_CONFIG: TabMeta[] = [
   { id: "property", label: "Properties", icon: Home, color: "text-green-600", badgeClass: "bg-green-50 text-green-700 dark:bg-green-950/50 dark:text-green-400" },
 ];
 
-export default function PlatformListingsManagementPage() {
+function PlatformListingsManagementPageContent() {
   const { accessToken } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<ListingVertical>("business");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const urlTab = (searchParams?.get("tab") || searchParams?.get("vertical") || searchParams?.get("type")) as ListingVertical | null;
+
+  const [activeTab, setActiveTab] = useState<ListingVertical>(() => {
+    if (urlTab && TAB_CONFIG.some((t) => t.id === urlTab)) {
+      return urlTab;
+    }
+    return "business";
+  });
+
+  // Sync activeTab when URL tab parameter changes
+  useEffect(() => {
+    if (urlTab && TAB_CONFIG.some((t) => t.id === urlTab) && urlTab !== activeTab) {
+      setActiveTab(urlTab);
+    }
+  }, [urlTab, activeTab]);
+
+  const handleTabChange = useCallback((newTab: ListingVertical) => {
+    setActiveTab(newTab);
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      params.set("tab", newTab);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
+  }, [pathname, router]);
   const [items, setItems] = useState<any[]>([]);
   const [counts, setCounts] = useState<Record<ListingVertical, number>>({
     business: 0,
@@ -399,7 +427,7 @@ export default function PlatformListingsManagementPage() {
               <button
                 key={t.id}
                 type="button"
-                onClick={() => setActiveTab(t.id)}
+                onClick={() => handleTabChange(t.id)}
                 className={`px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 cursor-pointer ${
                   isActive
                     ? "bg-background text-foreground shadow-xs font-semibold"
@@ -1318,5 +1346,18 @@ export default function PlatformListingsManagementPage() {
         onSuccess={() => loadListings()}
       />
     </div>
+  );
+}
+
+
+export default function PlatformListingsManagementPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-8 flex items-center justify-center min-h-[400px]">
+        <Loader2 className="size-6 animate-spin text-primary" />
+      </div>
+    }>
+      <PlatformListingsManagementPageContent />
+    </Suspense>
   );
 }
