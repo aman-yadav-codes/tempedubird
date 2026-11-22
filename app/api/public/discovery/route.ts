@@ -832,7 +832,53 @@ export async function GET(req: NextRequest) {
           console.warn("Could not query institution_programs in discovery:", ipErr);
         }
 
-        courses = [...masterCoursesRows, ...instCoursesRows];
+        let bizCoursesRows: any[] = [];
+        try {
+          const bcConditions: string[] = ["COALESCE(bc.is_active, true) = true"];
+          const bcParams: any[] = [];
+          if (likeQ) {
+            bcParams.push(likeQ);
+            bcConditions.push(`(
+              bc.course_name ILIKE $${bcParams.length}
+              OR COALESCE(bc.stream, '') ILIKE $${bcParams.length}
+              OR COALESCE(bc.description, '') ILIKE $${bcParams.length}
+            )`);
+          }
+          if (uniqueCityTokens.length > 0) {
+            bcParams.push(uniqueCityTokens);
+            bcConditions.push(`(
+              bp.city ILIKE ANY($${bcParams.length}::text[])
+              OR bp.address ILIKE ANY($${bcParams.length}::text[])
+            )`);
+          }
+          const bcRes = await db.query(`
+            SELECT
+              bc.id,
+              bc.course_name AS name,
+              NULL AS slug,
+              NULL AS code,
+              bc.description,
+              bc.duration AS duration_value,
+              NULL AS duration_unit,
+              NULL AS thumbnail_url,
+              NULL AS icon_url,
+              COALESCE(bp.name, ip.name, 'Institution') AS university_name,
+              'institution' AS authority_type,
+              COALESCE(bc.stream, 'Academic & Competitive Program') AS category_name,
+              COALESCE(bc.seats_available, 60) AS seats_available
+            FROM business_courses bc
+            LEFT JOIN institution_profiles ip ON ip.id = bc.institution_id
+            LEFT JOIN business_profiles bp ON bp.institution_profile_id = bc.institution_id
+            WHERE ${bcConditions.join(" AND ")}
+            ORDER BY bc.id DESC
+            LIMIT $${bcParams.length + 1} OFFSET $${bcParams.length + 2}
+          `, [...bcParams, limit, offset]);
+          bizCoursesRows = bcRes.rows.map((r) => ({ ...r, resultType: "course" }));
+        } catch (bcErr) {
+          console.warn("Could not query business_courses in discovery:", bcErr);
+        }
+
+        courses = [...masterCoursesRows, ...instCoursesRows, ...bizCoursesRows];
       }
     }
 

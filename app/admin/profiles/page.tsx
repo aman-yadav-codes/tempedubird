@@ -70,7 +70,11 @@ import {
   DollarSign,
   Info,
   Check,
+  Edit2,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/store";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -163,6 +167,12 @@ function PlatformListingsManagementPageContent() {
 
   // Inspection Modal
   const [selectedProfile, setSelectedProfile] = useState<{
+    type: ListingVertical;
+    data: any;
+  } | null>(null);
+
+  // Edit Modal
+  const [editingListing, setEditingListing] = useState<{
     type: ListingVertical;
     data: any;
   } | null>(null);
@@ -368,14 +378,20 @@ function PlatformListingsManagementPageContent() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b pb-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">Listings</h1>
+          <div className="flex items-center gap-2.5">
+            <div className={`p-1.5 rounded-lg bg-muted flex items-center justify-center`}>
+              {(() => {
+                const CurrentIcon = currentTabMeta.icon;
+                return <CurrentIcon className={`size-5 ${currentTabMeta.color}`} />;
+              })()}
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight">{currentTabMeta.label}</h1>
             <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs">
-              11 Verticals
+              {counts[activeTab]?.toLocaleString() || items.length} Total
             </Badge>
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Centralized platform directory: Manage businesses, professionals, courses, jobs, products, services, rooms, vehicles, dishes, events, and properties.
+          <p className="text-sm text-muted-foreground mt-1">
+            Centralized platform directory: Manage, edit details, and activate or suspend {currentTabMeta.label.toLowerCase()} listings.
           </p>
         </div>
 
@@ -413,39 +429,6 @@ function PlatformListingsManagementPageContent() {
             <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-        </div>
-      </div>
-
-      {/* 11 Horizontal Scrollable Tabs */}
-      <div className="overflow-x-auto pb-1 scrollbar-thin">
-        <div className="flex items-center gap-1.5 min-w-max p-1 bg-muted/70 rounded-lg">
-          {TAB_CONFIG.map((t) => {
-            const Icon = t.icon;
-            const count = counts[t.id] ?? 0;
-            const isActive = activeTab === t.id;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => handleTabChange(t.id)}
-                className={`px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 cursor-pointer ${
-                  isActive
-                    ? "bg-background text-foreground shadow-xs font-semibold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-background/50"
-                }`}
-              >
-                <Icon className={`size-3.5 ${t.color}`} />
-                <span>{t.label}</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                    isActive ? t.badgeClass : "bg-muted-foreground/15 text-muted-foreground"
-                  }`}
-                >
-                  {count.toLocaleString()}
-                </span>
-              </button>
-            );
-          })}
         </div>
       </div>
 
@@ -679,6 +662,15 @@ function PlatformListingsManagementPageContent() {
                             <ExternalLink className="size-3.5 mr-1" /> View
                           </Button>
                         )}
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingListing({ type: activeTab, data: item })}
+                          className="h-7 text-xs cursor-pointer hover:bg-muted font-medium"
+                        >
+                          <Edit2 className="size-3 mr-1" /> Edit
+                        </Button>
 
                         <Button
                           variant="outline"
@@ -1199,6 +1191,18 @@ function PlatformListingsManagementPageContent() {
                     <div className="grid grid-cols-2 gap-2">
                       <Button
                         size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const toEdit = { type: selectedProfile.type, data: selectedProfile.data };
+                          setSelectedProfile(null);
+                          setEditingListing(toEdit);
+                        }}
+                        className="h-8 text-xs font-semibold col-span-2 cursor-pointer bg-background hover:bg-muted"
+                      >
+                        <Edit2 className="size-3 mr-1" /> Edit Listing Details
+                      </Button>
+                      <Button
+                        size="sm"
                         variant={selectedProfile.data.is_featured ? "secondary" : "outline"}
                         onClick={() =>
                           handleAction(selectedProfile.type, selectedProfile.data.id, "feature", {
@@ -1345,7 +1349,287 @@ function PlatformListingsManagementPageContent() {
         initialData={createBusinessInitialData}
         onSuccess={() => loadListings()}
       />
+
+      {/* Edit Listing Dialog for all 11 verticals */}
+      <EditListingDialog
+        editingListing={editingListing}
+        onClose={() => setEditingListing(null)}
+        onSave={async (type, id, data) => {
+          await handleAction(type, id, "edit", { data });
+        }}
+      />
     </div>
+  );
+}
+
+interface EditListingDialogProps {
+  editingListing: { type: ListingVertical; data: any } | null;
+  onClose: () => void;
+  onSave: (type: ListingVertical, id: number, payload: Record<string, any>) => Promise<void>;
+}
+
+function EditListingDialog({ editingListing, onClose, onSave }: EditListingDialogProps) {
+  const item = editingListing?.data;
+  const type = editingListing?.type;
+
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    category: "",
+    subcategory: "",
+    city: "",
+    phone: "",
+    price: "",
+    extra: "",
+    isActive: true,
+    isFeatured: false,
+  });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (item && type) {
+      const name = item.name || item.title || item.course_name || item.custom_name || item.custom_title || "";
+      const description = item.description || item.about || item.custom_description || "";
+      const category = item.category_name || item.stream || item.department || "";
+      const subcategory = item.subcategory_name || item.board_or_university || item.employment_type || item.subtitle || "";
+      const city = item.city || item.location || "";
+      const phone = item.phone || "";
+      const price = item.price !== undefined && item.price !== null ? String(item.price) : item.fee_amount !== undefined && item.fee_amount !== null ? String(item.fee_amount) : item.salary_range || "";
+      const extra = (
+        item.stock !== undefined ? String(item.stock) :
+        item.duration ? String(item.duration) :
+        item.openings_count ? String(item.openings_count) :
+        item.experience_years ? String(item.experience_years) : ""
+      );
+      const isActive = item.is_active !== undefined ? Boolean(item.is_active) : true;
+      const isFeatured = Boolean(item.is_featured);
+
+      setFormData({
+        name,
+        description,
+        category,
+        subcategory,
+        city,
+        phone,
+        price,
+        extra,
+        isActive,
+        isFeatured,
+      });
+    }
+  }, [item, type]);
+
+  if (!editingListing || !item || !type) return null;
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const payload: Record<string, any> = {
+        name: formData.name,
+        title: formData.name,
+        description: formData.description,
+        about: formData.description,
+        city: formData.city,
+        location: formData.city,
+        phone: formData.phone,
+        price: formData.price,
+        fee_amount: formData.price,
+        salary_range: formData.price,
+        category_name: formData.category,
+        stream: formData.category,
+        department: formData.category,
+        subcategory_name: formData.subcategory,
+        board_or_university: formData.subcategory,
+        employment_type: formData.subcategory,
+        is_active: formData.isActive,
+        is_featured: formData.isFeatured,
+      };
+
+      if (type === "products") {
+        payload.stock = Number(formData.extra) || 0;
+        payload.inventory_count = Number(formData.extra) || 0;
+      } else if (type === "services") {
+        payload.duration = Number(formData.extra) || 60;
+        payload.duration_minutes = Number(formData.extra) || 60;
+      } else if (type === "course") {
+        payload.duration = formData.extra;
+      } else if (type === "job") {
+        payload.openings_count = Number(formData.extra) || 1;
+      } else if (type === "professional") {
+        payload.experience_years = Number(formData.extra) || 0;
+      }
+
+      await onSave(type, item.id, payload);
+      onClose();
+    } catch {
+      // Handled in onSave
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getExtraLabel = () => {
+    switch (type) {
+      case "products": return "Inventory Stock Count";
+      case "services": return "Duration (Minutes)";
+      case "course": return "Duration (e.g. 6 Months, 2 Years)";
+      case "job": return "Openings Count";
+      case "professional": return "Experience (Years)";
+      default: return null;
+    }
+  };
+
+  const extraLabel = getExtraLabel();
+  const supportsFeatured = ["business", "professional", "room", "vehicle", "dish", "event", "property"].includes(type);
+
+  return (
+    <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <form onSubmit={handleFormSubmit}>
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="capitalize text-xs font-semibold">
+                {type}
+              </Badge>
+              <DialogTitle className="text-lg font-bold">Edit Listing Details</DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Modify listing information, pricing, location, and visibility settings.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 text-xs">
+            <div className="sm:col-span-2 space-y-1.5">
+              <Label className="text-xs font-semibold">Listing Title / Name *</Label>
+              <Input
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+                className="h-9 text-xs"
+                placeholder="Listing title or business name"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Category / Stream / Department</Label>
+              <Input
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                className="h-9 text-xs"
+                placeholder="e.g. Retail, Medical, IT"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Subcategory / Specialization</Label>
+              <Input
+                value={formData.subcategory}
+                onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
+                className="h-9 text-xs"
+                placeholder="e.g. Full-time, CBSE, Luxury"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">City / Location</Label>
+              <Input
+                value={formData.city}
+                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                className="h-9 text-xs"
+                placeholder="City name, e.g. Varanasi"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Contact Phone</Label>
+              <Input
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                className="h-9 text-xs"
+                placeholder="Primary phone number"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Price / Fee / Salary Range</Label>
+              <Input
+                value={formData.price}
+                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                className="h-9 text-xs"
+                placeholder="e.g. 500 or 15000-25000"
+              />
+            </div>
+
+            {extraLabel && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">{extraLabel}</Label>
+                <Input
+                  value={formData.extra}
+                  onChange={(e) => setFormData({ ...formData, extra: e.target.value })}
+                  className="h-9 text-xs"
+                  placeholder={extraLabel}
+                />
+              </div>
+            )}
+
+            <div className="sm:col-span-2 space-y-1.5">
+              <Label className="text-xs font-semibold">Description / About</Label>
+              <Textarea
+                rows={4}
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="text-xs"
+                placeholder="Comprehensive description or overview of this listing"
+              />
+            </div>
+
+            {/* Visibility & Status toggles */}
+            <div className="sm:col-span-2 border rounded-lg p-3 bg-muted/30 space-y-3">
+              <h4 className="text-xs font-semibold text-foreground">Status & Frontend Visibility</h4>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-xs text-foreground">Listing Active</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    When active, this listing appears across public search, explore, and category feeds. Suspended listings are hidden from frontend users.
+                  </p>
+                </div>
+                <Switch
+                  checked={formData.isActive}
+                  onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
+                />
+              </div>
+
+              {supportsFeatured && (
+                <div className="flex items-center justify-between pt-2 border-t">
+                  <div>
+                    <p className="font-medium text-xs text-foreground">Featured Listing</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Featured listings receive badge highlights and top placement in search results.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={formData.isFeatured}
+                    onCheckedChange={(checked) => setFormData({ ...formData, isFeatured: checked })}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
+            <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="submit" size="sm" disabled={saving} className="bg-red-600 hover:bg-red-700 text-white font-semibold">
+              {saving ? <Loader2 className="size-3.5 animate-spin mr-1.5" /> : null}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

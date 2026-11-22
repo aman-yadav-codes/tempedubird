@@ -475,7 +475,8 @@ export async function GET(req: NextRequest) {
             FROM business_records br_loc
             JOIN business_profiles bp_loc ON bp_loc.id = br_loc.business_id
             WHERE br_loc.vertical_code = 'properties'
-              AND COALESCE(br_loc.is_active, TRUE) = TRUE
+              AND COALESCE(br_loc.is_active, FALSE) = TRUE
+              AND br_loc.status = 'published'
               AND ${hasLocation ? buildLocClause("bp_loc", ["city", "locality", "address", "state"], 1) : "TRUE"}
           ),
           1
@@ -487,12 +488,14 @@ export async function GET(req: NextRequest) {
             FROM business_records br2
             JOIN business_profiles bp2 ON bp2.id = br2.business_id
             WHERE br2.vertical_code = 'properties'
+              AND COALESCE(br2.is_active, FALSE) = TRUE
+              AND br2.status = 'published'
               AND ${hasLocation ? buildLocClause("bp2", ["city", "locality", "address", "state"], 1) : "TRUE"}
             LIMIT 3
           ) sub
         ) AS sample_items
       FROM categories c
-      LEFT JOIN business_records br ON (br.category_id = c.id OR br.subcategory_id = c.id) AND br.vertical_code = 'properties'
+      LEFT JOIN business_records br ON (br.category_id = c.id OR br.subcategory_id = c.id) AND br.vertical_code = 'properties' AND COALESCE(br.is_active, FALSE) = TRUE AND br.status = 'published'
       LEFT JOIN business_profiles bp ON bp.id = br.business_id AND ${propLocSql}
       WHERE c.category_type = 'property'
       GROUP BY c.id, c.name, c.slug
@@ -522,7 +525,8 @@ export async function GET(req: NextRequest) {
             FROM business_records br_loc
             JOIN business_profiles bp_loc ON bp_loc.id = br_loc.business_id
             WHERE br_loc.vertical_code = 'events'
-              AND COALESCE(br_loc.is_active, TRUE) = TRUE
+              AND COALESCE(br_loc.is_active, FALSE) = TRUE
+              AND br_loc.status = 'published'
               AND ${hasLocation ? buildLocClause("bp_loc", ["city", "locality", "address", "state"], 1) : "TRUE"}
           ),
           1
@@ -534,12 +538,14 @@ export async function GET(req: NextRequest) {
             FROM business_records br2
             JOIN business_profiles bp2 ON bp2.id = br2.business_id
             WHERE br2.vertical_code = 'events'
+              AND COALESCE(br2.is_active, FALSE) = TRUE
+              AND br2.status = 'published'
               AND ${hasLocation ? buildLocClause("bp2", ["city", "locality", "address", "state"], 1) : "TRUE"}
             LIMIT 3
           ) sub
         ) AS sample_items
       FROM categories c
-      LEFT JOIN business_records br ON (br.category_id = c.id OR br.subcategory_id = c.id) AND br.vertical_code = 'events'
+      LEFT JOIN business_records br ON (br.category_id = c.id OR br.subcategory_id = c.id) AND br.vertical_code = 'events' AND COALESCE(br.is_active, FALSE) = TRUE AND br.status = 'published'
       LEFT JOIN business_profiles bp ON bp.id = br.business_id AND ${evtLocSql}
       WHERE c.category_type = 'event'
       GROUP BY c.id, c.name, c.slug
