@@ -696,8 +696,10 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
                               href={publicUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className={`font-semibold truncate max-w-xs flex items-center gap-1 group hover:underline ${
-                                r.is_active ? "text-emerald-600 hover:text-emerald-700" : "text-rose-600 hover:text-rose-700"
+                              className={`font-bold truncate max-w-xs flex items-center gap-1 group hover:underline ${
+                                (r.is_active !== undefined && r.is_active !== null ? Boolean(r.is_active) : (r.status === "published" || r.status === "active"))
+                                  ? "!text-emerald-600 dark:!text-emerald-400 hover:!text-emerald-700"
+                                  : "!text-rose-600 dark:!text-rose-400 hover:!text-rose-700"
                               }`}
                             >
                               <span>{r.title}</span>

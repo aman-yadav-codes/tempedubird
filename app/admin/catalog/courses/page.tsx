@@ -470,7 +470,9 @@ export default function MasterCoursesPage() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className={`font-bold leading-tight flex items-center gap-1 group hover:underline ${
-                                c.is_active ? "text-emerald-600 hover:text-emerald-700" : "text-rose-600 hover:text-rose-700"
+                                (c.is_active !== undefined && c.is_active !== null ? Boolean(c.is_active) : true)
+                                  ? "!text-emerald-600 dark:!text-emerald-400 hover:!text-emerald-700"
+                                  : "!text-rose-600 dark:!text-rose-400 hover:!text-rose-700"
                               }`}
                             >
                               <span>{c.name}</span>

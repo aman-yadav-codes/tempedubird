@@ -579,7 +579,9 @@ export default function MasterJobsPage() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className={`font-bold leading-tight flex items-center gap-1 group hover:underline ${
-                                j.is_active ? "text-emerald-600 hover:text-emerald-700" : "text-rose-600 hover:text-rose-700"
+                                (j.is_active !== undefined && j.is_active !== null ? Boolean(j.is_active) : ["active", "published", "open"].includes(String(j.status || "").toLowerCase()))
+                                  ? "!text-emerald-600 dark:!text-emerald-400 hover:!text-emerald-700"
+                                  : "!text-rose-600 dark:!text-rose-400 hover:!text-rose-700"
                               }`}
                             >
                               <span>{j.title}</span>

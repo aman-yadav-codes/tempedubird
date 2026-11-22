@@ -563,7 +563,9 @@ function PlatformListingsManagementPageContent() {
                     priceText = item.salary_range;
                   }
 
-                  const isActive = item.is_active ?? (item.status === "active" || item.status === "published");
+                  const isActive = item.is_active !== undefined && item.is_active !== null
+                    ? Boolean(item.is_active)
+                    : (["active", "published", "open"].includes(String(item.status || "").toLowerCase()));
                   const isVerified = Boolean(item.is_verified);
                   const isFeatured = Boolean(item.is_featured);
 
@@ -588,8 +590,8 @@ function PlatformListingsManagementPageContent() {
                               href={publicUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className={`font-semibold truncate block cursor-pointer transition-colors hover:underline ${
-                                isActive ? "text-emerald-600 hover:text-emerald-700" : "text-rose-600 hover:text-rose-700"
+                              className={`font-bold truncate block cursor-pointer transition-colors hover:underline ${
+                                isActive ? "!text-emerald-600 dark:!text-emerald-400 hover:!text-emerald-700" : "!text-rose-600 dark:!text-rose-400 hover:!text-rose-700"
                               }`}
                               title={`${itemTitle} (Click to open listing details in new tab)`}
                             >

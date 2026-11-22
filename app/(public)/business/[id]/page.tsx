@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db/db";
 import { extractIdFromSlug, buildBusinessSeoUrl } from "@/lib/utils/seo-slug";
 import { PublicBusinessProfileClient } from "@/components/profile/public-business-profile-client";
+import { filterListingsByBusinessCategory } from "@/lib/utils/business-vertical-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -319,6 +320,37 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
         ORDER BY id ASC
         LIMIT 50`
       ),
+
+      // Business Records (Properties, Vehicles, Events, Dishes, Rooms)
+      db.query(
+        `SELECT 
+          br.*,
+          cat.name as category_name,
+          subcat.name as subcategory_name,
+          COALESCE(br.featured_image, (SELECT brm.url FROM business_record_media brm WHERE brm.record_id = br.id LIMIT 1)) as image_url,
+          CASE br.vertical_code
+            WHEN 'vehicles' THEN row_to_json(vd)
+            WHEN 'properties' THEN row_to_json(pd)
+            WHEN 'restaurants' THEN row_to_json(d)
+            WHEN 'hotels' THEN row_to_json(hr)
+            WHEN 'events' THEN row_to_json(ev)
+            ELSE NULL
+          END as details
+        FROM business_records br
+        LEFT JOIN master_records cat ON cat.id = br.category_id
+        LEFT JOIN master_records subcat ON subcat.id = br.subcategory_id
+        LEFT JOIN vehicle_details vd ON vd.record_id = br.id
+        LEFT JOIN property_details pd ON pd.record_id = br.id
+        LEFT JOIN dishes d ON d.record_id = br.id
+        LEFT JOIN hotel_rooms hr ON hr.record_id = br.id
+        LEFT JOIN events ev ON ev.record_id = br.id
+        WHERE (br.business_id = $1 OR (br.institution_id IS NOT NULL AND br.institution_id = $2))
+          AND br.is_deleted = FALSE
+          AND COALESCE(br.is_active, TRUE) = TRUE
+          AND br.status = 'published'
+        ORDER BY br.id DESC`,
+        [bizId, instId]
+      ),
     ]);
 
     const galleryRows = gallerySettled.status === "fulfilled" ? gallerySettled.value.rows : [];
@@ -387,15 +419,61 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
       // ignore
     }
 
-    return {
-      business,
+    const recordsRows = recordsSettled.status === "fulfilled" ? recordsSettled.value.rows : [];
+    const properties = recordsRows.filter((r: any) => r.vertical_code === "properties").map((r: any) => ({
+      ...r,
+      ...(r.details || {}),
+      image_url: r.image_url || r.featured_image || null,
+    }));
+    const vehicles = recordsRows.filter((r: any) => r.vertical_code === "vehicles").map((r: any) => ({
+      ...r,
+      ...(r.details || {}),
+      image_url: r.image_url || r.featured_image || null,
+    }));
+    const events = recordsRows.filter((r: any) => r.vertical_code === "events").map((r: any) => ({
+      ...r,
+      ...(r.details || {}),
+      image_url: r.image_url || r.featured_image || null,
+    }));
+    const dishes = recordsRows.filter((r: any) => r.vertical_code === "restaurants").map((r: any) => ({
+      ...r,
+      ...(r.details || {}),
+      image_url: r.image_url || r.featured_image || null,
+    }));
+    const rooms = recordsRows.filter((r: any) => r.vertical_code === "hotels").map((r: any) => ({
+      ...r,
+      ...(r.details || {}),
+      image_url: r.image_url || r.featured_image || null,
+    }));
+
+    const filteredBundle = filterListingsByBusinessCategory(business, {
       products: productsSettled.status === "fulfilled" ? productsSettled.value.rows : [],
       services: resolvedServices,
       professionals: professionalsSettled.status === "fulfilled" ? professionalsSettled.value.rows : [],
-      reviews: reviewsSettled.status === "fulfilled" ? reviewsSettled.value.rows : [],
       courses: coursesSettled.status === "fulfilled" ? coursesSettled.value.rows : [],
       jobs: jobsSettled.status === "fulfilled" ? jobsSettled.value.rows : [],
       packages: packagesSettled.status === "fulfilled" ? packagesSettled.value.rows : [],
+      properties,
+      vehicles,
+      events,
+      dishes,
+      rooms,
+    });
+
+    return {
+      business,
+      products: filteredBundle.products,
+      services: filteredBundle.services,
+      professionals: filteredBundle.professionals,
+      reviews: reviewsSettled.status === "fulfilled" ? reviewsSettled.value.rows : [],
+      courses: filteredBundle.courses,
+      jobs: filteredBundle.jobs,
+      packages: filteredBundle.packages || [],
+      properties: filteredBundle.properties,
+      vehicles: filteredBundle.vehicles,
+      events: filteredBundle.events,
+      dishes: filteredBundle.dishes,
+      rooms: filteredBundle.rooms,
     };
   } catch (err: any) {
     console.warn("fetchBusinessFullData fallback:", err?.message || err);
@@ -556,6 +634,11 @@ export default async function BusinessProfilePage({ params }: Props) {
         courses={data.courses}
         jobs={data.jobs}
         packages={data.packages || []}
+        properties={data.properties || []}
+        vehicles={data.vehicles || []}
+        events={data.events || []}
+        dishes={data.dishes || []}
+        rooms={data.rooms || []}
       />
     </Suspense>
   );

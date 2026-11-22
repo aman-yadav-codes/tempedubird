@@ -20,6 +20,7 @@ import { PublicCourseDetailView } from "@/components/public/public-course-detail
 import { PublicJobDetailView } from "@/components/public/public-job-detail-view";
 import { PublicProductDetailView } from "@/components/public/public-product-detail-view";
 import { PublicPropertyDetailView } from "@/components/public/public-property-detail-view";
+import { filterListingsByBusinessCategory } from "@/lib/utils/business-vertical-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -1108,7 +1109,7 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
         const business = looseBizRes.rows[0];
         const bizId = business.id;
         const instId = business.institution_profile_id || -1;
-        const [productsSettled, servicesSettled, professionalsSettled, reviewsSettled] = await Promise.allSettled([
+        const [productsSettled, servicesSettled, professionalsSettled, reviewsSettled, coursesSettled, jobsSettled, recordsSettled] = await Promise.allSettled([
           db.query(
             `SELECT p.* FROM products p WHERE (p.business_profile_id = $1 OR (p.institution_id IS NOT NULL AND p.institution_id = $2)) AND COALESCE(p.status, 'active') = 'active' ORDER BY p.id DESC`,
             [bizId, instId]
@@ -1125,15 +1126,75 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
             `SELECT pr.*, u.full_name AS user_name FROM platform_reviews pr LEFT JOIN users u ON u.id = pr.user_id WHERE pr.business_id = $1 AND COALESCE(pr.is_approved, TRUE) = TRUE ORDER BY pr.id DESC LIMIT 20`,
             [bizId]
           ),
+          db.query(
+            `SELECT c.* FROM institution_courses c WHERE (c.business_profile_id = $1 OR (c.institution_id IS NOT NULL AND c.institution_id = $2)) AND COALESCE(c.status, 'published') = 'published' ORDER BY c.id DESC`,
+            [bizId, instId]
+          ),
+          db.query(
+            `SELECT j.* FROM staff_job_postings j WHERE (j.business_id = $1 OR (j.institution_id IS NOT NULL AND j.institution_id = $2)) AND COALESCE(j.status, 'published') IN ('published', 'active', 'open') ORDER BY j.id DESC`,
+            [bizId, instId]
+          ),
+          db.query(
+            `SELECT 
+              br.*,
+              cat.name as category_name,
+              subcat.name as subcategory_name,
+              COALESCE(br.featured_image, (SELECT brm.url FROM business_record_media brm WHERE brm.record_id = br.id LIMIT 1)) as image_url,
+              CASE br.vertical_code
+                WHEN 'vehicles' THEN row_to_json(vd)
+                WHEN 'properties' THEN row_to_json(pd)
+                WHEN 'restaurants' THEN row_to_json(d)
+                WHEN 'hotels' THEN row_to_json(hr)
+                WHEN 'events' THEN row_to_json(ev)
+                ELSE NULL
+              END as details
+            FROM business_records br
+            LEFT JOIN master_records cat ON cat.id = br.category_id
+            LEFT JOIN master_records subcat ON subcat.id = br.subcategory_id
+            LEFT JOIN vehicle_details vd ON vd.record_id = br.id
+            LEFT JOIN property_details pd ON pd.record_id = br.id
+            LEFT JOIN dishes d ON d.record_id = br.id
+            LEFT JOIN hotel_rooms hr ON hr.record_id = br.id
+            LEFT JOIN events ev ON ev.record_id = br.id
+            WHERE (br.business_id = $1 OR (br.institution_id IS NOT NULL AND br.institution_id = $2))
+              AND br.is_deleted = FALSE
+              AND COALESCE(br.is_active, TRUE) = TRUE
+              AND br.status = 'published'
+            ORDER BY br.id DESC`,
+            [bizId, instId]
+          ),
         ]);
+
+        const recordsRows = recordsSettled.status === "fulfilled" ? recordsSettled.value.rows : [];
+        const rawBundle = {
+          products: productsSettled.status === "fulfilled" ? productsSettled.value.rows : [],
+          services: servicesSettled.status === "fulfilled" ? servicesSettled.value.rows : [],
+          professionals: professionalsSettled.status === "fulfilled" ? professionalsSettled.value.rows : [],
+          courses: coursesSettled.status === "fulfilled" ? coursesSettled.value.rows : [],
+          jobs: jobsSettled.status === "fulfilled" ? jobsSettled.value.rows : [],
+          properties: recordsRows.filter((r: any) => r.vertical_code === "properties").map((r: any) => ({ ...r, ...(r.details || {}), image_url: r.image_url || r.featured_image || null })),
+          vehicles: recordsRows.filter((r: any) => r.vertical_code === "vehicles").map((r: any) => ({ ...r, ...(r.details || {}), image_url: r.image_url || r.featured_image || null })),
+          events: recordsRows.filter((r: any) => r.vertical_code === "events").map((r: any) => ({ ...r, ...(r.details || {}), image_url: r.image_url || r.featured_image || null })),
+          dishes: recordsRows.filter((r: any) => r.vertical_code === "restaurants").map((r: any) => ({ ...r, ...(r.details || {}), image_url: r.image_url || r.featured_image || null })),
+          rooms: recordsRows.filter((r: any) => r.vertical_code === "hotels").map((r: any) => ({ ...r, ...(r.details || {}), image_url: r.image_url || r.featured_image || null })),
+        };
+
+        const filtered = filterListingsByBusinessCategory(business, rawBundle);
 
         return {
           type: "business" as const,
           business,
-          products: productsSettled.status === "fulfilled" ? productsSettled.value.rows : [],
-          services: servicesSettled.status === "fulfilled" ? servicesSettled.value.rows : [],
-          professionals: professionalsSettled.status === "fulfilled" ? professionalsSettled.value.rows : [],
+          products: filtered.products,
+          services: filtered.services,
+          professionals: filtered.professionals,
           reviews: reviewsSettled.status === "fulfilled" ? reviewsSettled.value.rows : [],
+          courses: filtered.courses,
+          jobs: filtered.jobs,
+          properties: filtered.properties,
+          vehicles: filtered.vehicles,
+          events: filtered.events,
+          dishes: filtered.dishes,
+          rooms: filtered.rooms,
         };
       }
     } catch {
@@ -1310,10 +1371,18 @@ export default async function SeoCategoryProfilePage({ params }: Props) {
         <Suspense fallback={<div className="min-h-screen bg-background p-8 text-center text-sm">Loading business profile...</div>}>
           <PublicBusinessProfileClient
             business={biz}
-            products={data.products}
-            services={data.services}
-            professionals={data.professionals}
-            reviews={data.reviews}
+            products={data.products || []}
+            services={data.services || []}
+            professionals={data.professionals || []}
+            reviews={data.reviews || []}
+            courses={data.courses || []}
+            jobs={data.jobs || []}
+            packages={data.packages || []}
+            properties={data.properties || []}
+            vehicles={data.vehicles || []}
+            events={data.events || []}
+            dishes={data.dishes || []}
+            rooms={data.rooms || []}
           />
         </Suspense>
       </>

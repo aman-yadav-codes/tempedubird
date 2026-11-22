@@ -942,13 +942,15 @@ export default function MasterProductsPage() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="font-semibold text-xs text-foreground max-w-[260px]">
+                      <TableCell className="text-xs max-w-[260px]">
                         <a
                           href={`/products/${p.id}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className={`font-semibold text-xs truncate block cursor-pointer transition-colors hover:underline ${
-                            p.is_active ? "text-emerald-600 hover:text-emerald-700" : "text-rose-600 hover:text-rose-700"
+                          className={`font-bold text-xs truncate block cursor-pointer transition-colors hover:underline ${
+                            (p.is_active !== undefined && p.is_active !== null ? Boolean(p.is_active) : (p.listing_status === "published" || p.status === "active"))
+                              ? "!text-emerald-600 dark:!text-emerald-400 hover:!text-emerald-700"
+                              : "!text-rose-600 dark:!text-rose-400 hover:!text-rose-700"
                           }`}
                           title={`${p.name} (Click to open product page)`}
                         >

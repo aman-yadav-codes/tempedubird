@@ -928,7 +928,11 @@ export default function AdminProductsPage() {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <Link
                       href={`/products/${prod.id}`}
-                      className="text-xs font-bold text-foreground truncate hover:text-primary transition-colors cursor-pointer block max-w-[170px]"
+                      className={`text-xs font-bold truncate transition-colors cursor-pointer block max-w-[170px] hover:underline ${
+                        (prod.is_active !== undefined && prod.is_active !== null ? Boolean(prod.is_active) : (prod.status === "active" || prod.status === "published"))
+                          ? "!text-emerald-600 dark:!text-emerald-400 hover:!text-emerald-700"
+                          : "!text-rose-600 dark:!text-rose-400 hover:!text-rose-700"
+                      }`}
                       title={prod.title}
                     >
                       {prod.title}

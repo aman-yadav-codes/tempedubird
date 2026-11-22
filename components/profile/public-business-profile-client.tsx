@@ -49,6 +49,11 @@ import {
   Wrench,
   Boxes,
   ArrowRight,
+  Home,
+  Car,
+  Utensils,
+  Bed,
+  CalendarDays,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -86,6 +91,11 @@ interface BusinessProfileClientProps {
   courses?: any[];
   jobs?: any[];
   packages?: any[];
+  properties?: any[];
+  vehicles?: any[];
+  events?: any[];
+  dishes?: any[];
+  rooms?: any[];
   isHomePage?: boolean;
 }
 
@@ -98,6 +108,11 @@ export function PublicBusinessProfileClient({
   courses = [],
   jobs = [],
   packages = [],
+  properties = [],
+  vehicles = [],
+  events = [],
+  dishes = [],
+  rooms = [],
   isHomePage = false,
 }: BusinessProfileClientProps) {
   const { user } = useAuthStore();
@@ -109,9 +124,14 @@ export function PublicBusinessProfileClient({
   const highlightId = highlightParam ? Number(highlightParam) : null;
 
   const [activeTab, setActiveTab] = useState<string>(() => {
-    if (urlTab && ["overview", "about", "products", "packages", "services", "courses", "jobs", "team", "reviews", "gallery"].includes(urlTab)) {
+    if (urlTab && ["overview", "about", "products", "packages", "services", "courses", "jobs", "team", "reviews", "gallery", "properties", "vehicles", "events", "dishes", "rooms"].includes(urlTab)) {
       return urlTab;
     }
+    if (properties.length > 0 && products.length === 0 && services.length === 0) return "properties";
+    if (vehicles.length > 0 && products.length === 0 && services.length === 0) return "vehicles";
+    if (events.length > 0 && products.length === 0 && services.length === 0) return "events";
+    if (dishes.length > 0 && products.length === 0 && services.length === 0) return "dishes";
+    if (rooms.length > 0 && products.length === 0 && services.length === 0) return "rooms";
     return "overview";
   });
 
@@ -1324,24 +1344,60 @@ export function PublicBusinessProfileClient({
                 <Building2 className="size-3.5" />
                 <span>Overview</span>
               </TabsTrigger>
-              <TabsTrigger value="products" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                <Package className="size-3.5" />
-                <span>Products ({products.length})</span>
-              </TabsTrigger>
+              {properties.length > 0 && (
+                <TabsTrigger value="properties" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
+                  <Home className="size-3.5" />
+                  <span>Properties ({properties.length})</span>
+                </TabsTrigger>
+              )}
+              {vehicles.length > 0 && (
+                <TabsTrigger value="vehicles" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
+                  <Car className="size-3.5" />
+                  <span>Vehicles ({vehicles.length})</span>
+                </TabsTrigger>
+              )}
+              {events.length > 0 && (
+                <TabsTrigger value="events" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
+                  <CalendarDays className="size-3.5" />
+                  <span>Events ({events.length})</span>
+                </TabsTrigger>
+              )}
+              {dishes.length > 0 && (
+                <TabsTrigger value="dishes" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
+                  <Utensils className="size-3.5" />
+                  <span>Dishes & Menu ({dishes.length})</span>
+                </TabsTrigger>
+              )}
+              {rooms.length > 0 && (
+                <TabsTrigger value="rooms" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
+                  <Bed className="size-3.5" />
+                  <span>Rooms & Stays ({rooms.length})</span>
+                </TabsTrigger>
+              )}
+              {products.length > 0 && (
+                <TabsTrigger value="products" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
+                  <Package className="size-3.5" />
+                  <span>Products ({products.length})</span>
+                </TabsTrigger>
+              )}
               {services.length > 0 && (
                 <TabsTrigger value="services" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
                   <Wrench className="size-3.5" />
                   <span>Services ({services.length})</span>
                 </TabsTrigger>
               )}
-              <TabsTrigger value="courses" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                <GraduationCap className="size-3.5" />
-                <span>Courses ({courses.length})</span>
-              </TabsTrigger>
-              <TabsTrigger value="jobs" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                <Briefcase className="size-3.5" />
-                <span>Jobs ({jobs.length})</span>
-              </TabsTrigger>
+              {courses.length > 0 && (
+                <TabsTrigger value="courses" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
+                  <GraduationCap className="size-3.5" />
+                  <span>Courses ({courses.length})</span>
+                </TabsTrigger>
+              )}
+              {jobs.length > 0 && (
+                <TabsTrigger value="jobs" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
+                  <Briefcase className="size-3.5" />
+                  <span>Jobs ({jobs.length})</span>
+                </TabsTrigger>
+              )}
               <TabsTrigger value="team" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
                 <Users className="size-3.5" />
                 <span>Team ({professionals.length})</span>
@@ -2069,6 +2125,486 @@ export function PublicBusinessProfileClient({
                   )}
                 </div>
               </div>
+            </TabsContent>
+
+            {/* ================= PROPERTIES TAB ================= */}
+            <TabsContent value="properties" className="mt-6 space-y-6">
+              {properties.length === 0 ? (
+                <div className="p-12 text-center rounded-2xl border bg-card space-y-3">
+                  <Home className="size-10 mx-auto text-muted-foreground opacity-40" />
+                  <h3 className="text-sm font-bold text-foreground">No Real Estate Properties Listed Yet</h3>
+                  <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                    This real estate agency has not published any commercial or residential property listings yet.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                        <Home className="size-5 text-indigo-600" />
+                        <span>Exclusive Property Listings</span>
+                        <Badge variant="secondary" className="text-xs font-bold">
+                          {properties.length} Available
+                        </Badge>
+                      </h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Verified residential apartments, commercial plots, and luxury villas in {business.city || "Varanasi"}.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {properties.map((p: any) => {
+                      const price = Number(p.price || p.details?.price || 0);
+                      const bedrooms = p.bedrooms || p.details?.bedrooms || p.bhk;
+                      const area = p.carpet_area || p.super_builtup_area || p.area_sqft || p.details?.carpet_area;
+                      const propType = p.property_type || p.details?.property_type || p.category_name || "Real Estate";
+                      const img = p.image_url || p.featured_image || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=600&auto=format&fit=crop&q=80";
+
+                      return (
+                        <Card key={p.id} className="rounded-2xl overflow-hidden border shadow-2xs hover:shadow-md transition-all group flex flex-col justify-between">
+                          <div>
+                            <div className="relative aspect-[16/10] bg-muted overflow-hidden">
+                              <img
+                                src={img}
+                                alt={p.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
+                                <Badge className="bg-primary/90 text-primary-foreground text-[10px] font-bold backdrop-blur-xs">
+                                  {propType}
+                                </Badge>
+                                {p.status === "published" && (
+                                  <Badge className="bg-emerald-600/90 text-white text-[10px] font-semibold">
+                                    Verified
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            <CardHeader className="p-4 pb-2">
+                              <div className="flex items-baseline justify-between gap-2">
+                                <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">
+                                  ₹{price > 0 ? price.toLocaleString("en-IN") : "Price on Request"}
+                                </span>
+                              </div>
+                              <CardTitle className="text-sm font-bold line-clamp-1 group-hover:text-primary transition-colors">
+                                {p.title}
+                              </CardTitle>
+                              <CardDescription className="text-xs flex items-center gap-1 line-clamp-1 mt-1">
+                                <MapPin className="size-3 shrink-0 text-muted-foreground" />
+                                <span>{p.address || p.locality || business.address || `${business.city}, Uttar Pradesh`}</span>
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent className="px-4 py-2">
+                              <div className="grid grid-cols-2 gap-2 text-[11px] p-2.5 rounded-xl bg-muted/40 border">
+                                <div>
+                                  <span className="text-muted-foreground block text-[10px]">Configuration</span>
+                                  <span className="font-semibold text-foreground">{bedrooms ? `${bedrooms} BHK` : "Standard"}</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground block text-[10px]">Super Area</span>
+                                  <span className="font-semibold text-foreground">{area ? `${area} sq.ft` : "Plot/Custom"}</span>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </div>
+                          <CardFooter className="p-4 pt-1 flex items-center gap-2">
+                            {business.phone ? (
+                              <Button
+                                size="sm"
+                                className="w-full text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 cursor-pointer"
+                                onClick={() => window.open(`tel:${business.phone}`, "_self")}
+                              >
+                                <Phone className="size-3.5" />
+                                <span>Contact Agent</span>
+                              </Button>
+                            ) : (
+                              <Button size="sm" className="w-full text-xs font-bold" variant="outline">
+                                View Details
+                              </Button>
+                            )}
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ================= VEHICLES TAB ================= */}
+            <TabsContent value="vehicles" className="mt-6 space-y-6">
+              {vehicles.length === 0 ? (
+                <div className="p-12 text-center rounded-2xl border bg-card space-y-3">
+                  <Car className="size-10 mx-auto text-muted-foreground opacity-40" />
+                  <h3 className="text-sm font-bold text-foreground">No Vehicles Listed Yet</h3>
+                  <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                    This automobile dealership has not published any motor vehicles or fleets yet.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                        <Car className="size-5 text-rose-600" />
+                        <span>Automobile & Mobility Inventory</span>
+                        <Badge variant="secondary" className="text-xs font-bold">
+                          {vehicles.length} Vehicles
+                        </Badge>
+                      </h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Brand new and verified pre-owned vehicles, electric scooters, and commercial transport.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {vehicles.map((v: any) => {
+                      const price = Number(v.price || v.details?.price || 0);
+                      const make = v.make || v.brand || v.details?.make || "";
+                      const model = v.model || v.details?.model || "";
+                      const year = v.year || v.details?.year || "";
+                      const fuel = v.fuel_type || v.details?.fuel_type || "Petrol/EV";
+                      const transmission = v.transmission || v.details?.transmission || "Automatic";
+                      const img = v.image_url || v.featured_image || "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=600&auto=format&fit=crop&q=80";
+
+                      return (
+                        <Card key={v.id} className="rounded-2xl overflow-hidden border shadow-2xs hover:shadow-md transition-all group flex flex-col justify-between">
+                          <div>
+                            <div className="relative aspect-[16/10] bg-muted overflow-hidden">
+                              <img
+                                src={img}
+                                alt={v.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
+                                <Badge className="bg-rose-600 text-white text-[10px] font-bold">
+                                  {year ? `${year} Model` : "Available"}
+                                </Badge>
+                                <Badge variant="secondary" className="text-[10px] font-semibold bg-background/80 backdrop-blur-xs">
+                                  {fuel}
+                                </Badge>
+                              </div>
+                            </div>
+                            <CardHeader className="p-4 pb-2">
+                              <div className="flex items-baseline justify-between gap-2">
+                                <span className="text-lg font-black text-rose-600 dark:text-rose-400">
+                                  ₹{price > 0 ? price.toLocaleString("en-IN") : "Contact for Price"}
+                                </span>
+                              </div>
+                              <CardTitle className="text-sm font-bold line-clamp-1 group-hover:text-primary transition-colors">
+                                {v.title}
+                              </CardTitle>
+                              <CardDescription className="text-xs flex items-center gap-1 line-clamp-1 mt-1">
+                                <span className="font-semibold text-foreground">{make} {model}</span>
+                                {v.city && <span>• {v.city}</span>}
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent className="px-4 py-2">
+                              <div className="grid grid-cols-2 gap-2 text-[11px] p-2.5 rounded-xl bg-muted/40 border">
+                                <div>
+                                  <span className="text-muted-foreground block text-[10px]">Transmission</span>
+                                  <span className="font-semibold text-foreground">{transmission}</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground block text-[10px]">Fuel Engine</span>
+                                  <span className="font-semibold text-foreground">{fuel}</span>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </div>
+                          <CardFooter className="p-4 pt-1 flex items-center gap-2">
+                            {business.phone ? (
+                              <Button
+                                size="sm"
+                                className="w-full text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white gap-1.5 cursor-pointer"
+                                onClick={() => window.open(`tel:${business.phone}`, "_self")}
+                              >
+                                <Phone className="size-3.5" />
+                                <span>Book Test Drive</span>
+                              </Button>
+                            ) : (
+                              <Button size="sm" className="w-full text-xs font-bold" variant="outline">
+                                View Specs
+                              </Button>
+                            )}
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ================= EVENTS TAB ================= */}
+            <TabsContent value="events" className="mt-6 space-y-6">
+              {events.length === 0 ? (
+                <div className="p-12 text-center rounded-2xl border bg-card space-y-3">
+                  <CalendarDays className="size-10 mx-auto text-muted-foreground opacity-40" />
+                  <h3 className="text-sm font-bold text-foreground">No Upcoming Events</h3>
+                  <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                    This venue has not scheduled any cultural, banquet, or corporate celebrations yet.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                        <CalendarDays className="size-5 text-amber-600" />
+                        <span>Banquet & Event Celebrations</span>
+                        <Badge variant="secondary" className="text-xs font-bold">
+                          {events.length} Events
+                        </Badge>
+                      </h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Festivals, grand weddings, corporate meetings, and banquet showcases.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {events.map((e: any) => {
+                      const price = Number(e.ticket_price || e.price || e.details?.ticket_price || 0);
+                      const venue = e.venue_name || e.venue || e.details?.venue_name || business.address || "Main Banquet Hall";
+                      const dateStr = e.start_date || e.event_date || e.details?.start_date || "Upcoming Season";
+                      const img = e.image_url || e.featured_image || "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=600&auto=format&fit=crop&q=80";
+
+                      return (
+                        <Card key={e.id} className="rounded-2xl overflow-hidden border shadow-2xs hover:shadow-md transition-all group flex flex-col justify-between">
+                          <div>
+                            <div className="relative aspect-[16/10] bg-muted overflow-hidden">
+                              <img
+                                src={img}
+                                alt={e.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
+                                <Badge className="bg-amber-600 text-white text-[10px] font-bold">
+                                  {dateStr}
+                                </Badge>
+                              </div>
+                            </div>
+                            <CardHeader className="p-4 pb-2">
+                              <div className="flex items-baseline justify-between gap-2">
+                                <span className="text-base font-black text-amber-600 dark:text-amber-400">
+                                  {price > 0 ? `₹${price.toLocaleString("en-IN")}` : "Free Admission / Package"}
+                                </span>
+                              </div>
+                              <CardTitle className="text-sm font-bold line-clamp-1 group-hover:text-primary transition-colors">
+                                {e.title}
+                              </CardTitle>
+                              <CardDescription className="text-xs flex items-center gap-1 line-clamp-1 mt-1">
+                                <MapPin className="size-3 shrink-0 text-muted-foreground" />
+                                <span>{venue}</span>
+                              </CardDescription>
+                            </CardHeader>
+                          </div>
+                          <CardFooter className="p-4 pt-1 flex items-center gap-2">
+                            {business.phone ? (
+                              <Button
+                                size="sm"
+                                className="w-full text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white gap-1.5 cursor-pointer"
+                                onClick={() => window.open(`tel:${business.phone}`, "_self")}
+                              >
+                                <Phone className="size-3.5" />
+                                <span>Reserve / Enquire Venue</span>
+                              </Button>
+                            ) : (
+                              <Button size="sm" className="w-full text-xs font-bold" variant="outline">
+                                View Schedule
+                              </Button>
+                            )}
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ================= DISHES TAB ================= */}
+            <TabsContent value="dishes" className="mt-6 space-y-6">
+              {dishes.length === 0 ? (
+                <div className="p-12 text-center rounded-2xl border bg-card space-y-3">
+                  <Utensils className="size-10 mx-auto text-muted-foreground opacity-40" />
+                  <h3 className="text-sm font-bold text-foreground">No Culinary Dishes Listed Yet</h3>
+                  <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                    This restaurant or cafe has not published its dining menu yet.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                        <Utensils className="size-5 text-orange-600" />
+                        <span>Dining Menu & Specialties</span>
+                        <Badge variant="secondary" className="text-xs font-bold">
+                          {dishes.length} Items
+                        </Badge>
+                      </h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Fresh chef preparations, signature recipes, and royal Banarasi sweets.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {dishes.map((d: any) => {
+                      const price = Number(d.price || d.details?.price || 0);
+                      const isVeg = d.is_veg ?? d.details?.is_veg ?? true;
+                      const portion = d.portion_size || d.details?.portion_size || "Serving";
+                      const img = d.image_url || d.featured_image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80";
+
+                      return (
+                        <Card key={d.id} className="rounded-2xl overflow-hidden border shadow-2xs hover:shadow-md transition-all group flex flex-col justify-between">
+                          <div>
+                            <div className="relative aspect-[16/10] bg-muted overflow-hidden">
+                              <img
+                                src={img}
+                                alt={d.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
+                                <Badge className={`text-[10px] font-bold ${isVeg ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>
+                                  {isVeg ? "100% Veg" : "Non-Veg"}
+                                </Badge>
+                                <Badge variant="secondary" className="text-[10px] font-semibold bg-background/80 backdrop-blur-xs">
+                                  {portion}
+                                </Badge>
+                              </div>
+                            </div>
+                            <CardHeader className="p-4 pb-2">
+                              <div className="flex items-baseline justify-between gap-2">
+                                <span className="text-base font-black text-orange-600 dark:text-orange-400">
+                                  ₹{price > 0 ? price.toLocaleString("en-IN") : "Market Price"}
+                                </span>
+                              </div>
+                              <CardTitle className="text-sm font-bold line-clamp-1 group-hover:text-primary transition-colors">
+                                {d.title}
+                              </CardTitle>
+                              {d.description && (
+                                <CardDescription className="text-xs line-clamp-2 mt-1">
+                                  {d.description}
+                                </CardDescription>
+                              )}
+                            </CardHeader>
+                          </div>
+                          <CardFooter className="p-4 pt-1 flex items-center gap-2">
+                            {business.phone ? (
+                              <Button
+                                size="sm"
+                                className="w-full text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white gap-1.5 cursor-pointer"
+                                onClick={() => window.open(`tel:${business.phone}`, "_self")}
+                              >
+                                <Phone className="size-3.5" />
+                                <span>Order / Dine-In Table</span>
+                              </Button>
+                            ) : (
+                              <Button size="sm" className="w-full text-xs font-bold" variant="outline">
+                                View Recipe
+                              </Button>
+                            )}
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ================= ROOMS TAB ================= */}
+            <TabsContent value="rooms" className="mt-6 space-y-6">
+              {rooms.length === 0 ? (
+                <div className="p-12 text-center rounded-2xl border bg-card space-y-3">
+                  <Bed className="size-10 mx-auto text-muted-foreground opacity-40" />
+                  <h3 className="text-sm font-bold text-foreground">No Rooms Listed Yet</h3>
+                  <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                    This hotel or homestay has not published room accommodations yet.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                        <Bed className="size-5 text-cyan-600" />
+                        <span>Hotel Rooms & Stay Accommodations</span>
+                        <Badge variant="secondary" className="text-xs font-bold">
+                          {rooms.length} Suites
+                        </Badge>
+                      </h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Air-conditioned suites, riverview heritage rooms, and corporate lodging.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {rooms.map((rm: any) => {
+                      const price = Number(rm.price || rm.details?.price || 0);
+                      const maxOccupancy = rm.max_occupancy || rm.details?.max_occupancy || 2;
+                      const bedType = rm.bed_type || rm.details?.bed_type || "King Bed";
+                      const img = rm.image_url || rm.featured_image || "https://images.unsplash.com/photo-1590490360182-c33d57733427?w=600&auto=format&fit=crop&q=80";
+
+                      return (
+                        <Card key={rm.id} className="rounded-2xl overflow-hidden border shadow-2xs hover:shadow-md transition-all group flex flex-col justify-between">
+                          <div>
+                            <div className="relative aspect-[16/10] bg-muted overflow-hidden">
+                              <img
+                                src={img}
+                                alt={rm.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
+                                <Badge className="bg-cyan-600 text-white text-[10px] font-bold">
+                                  Up to {maxOccupancy} Guests
+                                </Badge>
+                                <Badge variant="secondary" className="text-[10px] font-semibold bg-background/80 backdrop-blur-xs">
+                                  {bedType}
+                                </Badge>
+                              </div>
+                            </div>
+                            <CardHeader className="p-4 pb-2">
+                              <div className="flex items-baseline justify-between gap-2">
+                                <span className="text-lg font-black text-cyan-600 dark:text-cyan-400">
+                                  ₹{price > 0 ? price.toLocaleString("en-IN") : "Contact Hotel"}
+                                  <span className="text-xs text-muted-foreground font-normal"> / night</span>
+                                </span>
+                              </div>
+                              <CardTitle className="text-sm font-bold line-clamp-1 group-hover:text-primary transition-colors">
+                                {rm.title}
+                              </CardTitle>
+                            </CardHeader>
+                          </div>
+                          <CardFooter className="p-4 pt-1 flex items-center gap-2">
+                            {business.phone ? (
+                              <Button
+                                size="sm"
+                                className="w-full text-xs font-bold bg-cyan-600 hover:bg-cyan-700 text-white gap-1.5 cursor-pointer"
+                                onClick={() => window.open(`tel:${business.phone}`, "_self")}
+                              >
+                                <Phone className="size-3.5" />
+                                <span>Book Room</span>
+                              </Button>
+                            ) : (
+                              <Button size="sm" className="w-full text-xs font-bold" variant="outline">
+                                View Suite
+                              </Button>
+                            )}
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </TabsContent>
 
             {/* ================= PRODUCTS TAB (CATEGORY-WISE) ================= */}

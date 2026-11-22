@@ -1063,8 +1063,10 @@ export default function MasterServicesPage() {
                             href={`/services/${s.id}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className={`font-semibold text-xs flex items-center gap-1 group hover:underline ${
-                              s.is_active ? "text-emerald-600 hover:text-emerald-700" : "text-rose-600 hover:text-rose-700"
+                            className={`font-bold text-xs flex items-center gap-1 group hover:underline ${
+                              (s.is_active !== undefined && s.is_active !== null ? Boolean(s.is_active) : ["active", "published"].includes(String(s.status || "").toLowerCase()))
+                                ? "!text-emerald-600 dark:!text-emerald-400 hover:!text-emerald-700"
+                                : "!text-rose-600 dark:!text-rose-400 hover:!text-rose-700"
                             }`}
                           >
                             <span>{s.name}</span>
