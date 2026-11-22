@@ -578,10 +578,12 @@ export default function MasterJobsPage() {
                               href={`/jobs/${j.id}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="font-bold text-foreground leading-tight hover:text-primary hover:underline flex items-center gap-1 group"
+                              className={`font-bold leading-tight flex items-center gap-1 group hover:underline ${
+                                j.is_active ? "text-emerald-600 hover:text-emerald-700" : "text-rose-600 hover:text-rose-700"
+                              }`}
                             >
                               <span>{j.title}</span>
-                              <ExternalLink className="size-3 opacity-0 group-hover:opacity-100 transition-opacity text-primary" />
+                              <ExternalLink className="size-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                             </a>
 
                             <div className="flex flex-wrap items-center gap-1.5 text-[10px]">

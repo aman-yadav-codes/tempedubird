@@ -692,10 +692,12 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
                               href={publicUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="font-semibold text-foreground truncate max-w-xs hover:text-primary hover:underline flex items-center gap-1 group"
+                              className={`font-semibold truncate max-w-xs flex items-center gap-1 group hover:underline ${
+                                r.is_active ? "text-emerald-600 hover:text-emerald-700" : "text-rose-600 hover:text-rose-700"
+                              }`}
                             >
                               <span>{r.title}</span>
-                              <ExternalLink className="size-3 opacity-0 group-hover:opacity-100 transition-opacity text-primary shrink-0" />
+                              <ExternalLink className="size-3 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                             </a>
                             <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
                               <span className="text-muted-foreground font-mono">/{r.slug}</span>

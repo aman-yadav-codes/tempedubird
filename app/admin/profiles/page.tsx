@@ -588,7 +588,9 @@ function PlatformListingsManagementPageContent() {
                               href={publicUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="font-semibold text-foreground hover:text-primary hover:underline truncate block cursor-pointer transition-colors"
+                              className={`font-semibold truncate block cursor-pointer transition-colors hover:underline ${
+                                isActive ? "text-emerald-600 hover:text-emerald-700" : "text-rose-600 hover:text-rose-700"
+                              }`}
                               title={`${itemTitle} (Click to open listing details in new tab)`}
                             >
                               {itemTitle}

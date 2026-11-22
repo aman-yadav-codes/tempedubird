@@ -947,7 +947,9 @@ export default function MasterProductsPage() {
                           href={`/products/${p.id}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-semibold text-xs text-foreground hover:text-primary hover:underline truncate block cursor-pointer transition-colors"
+                          className={`font-semibold text-xs truncate block cursor-pointer transition-colors hover:underline ${
+                            p.is_active ? "text-emerald-600 hover:text-emerald-700" : "text-rose-600 hover:text-rose-700"
+                          }`}
                           title={`${p.name} (Click to open product page)`}
                         >
                           {p.name}

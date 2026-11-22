@@ -1063,10 +1063,12 @@ export default function MasterServicesPage() {
                             href={`/services/${s.id}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-semibold text-xs text-foreground hover:text-primary hover:underline flex items-center gap-1 group"
+                            className={`font-semibold text-xs flex items-center gap-1 group hover:underline ${
+                              s.is_active ? "text-emerald-600 hover:text-emerald-700" : "text-rose-600 hover:text-rose-700"
+                            }`}
                           >
                             <span>{s.name}</span>
-                            <ExternalLink className="size-3 opacity-0 group-hover:opacity-100 transition-opacity text-primary" />
+                            <ExternalLink className="size-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                           </a>
 
                           <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
