@@ -76,8 +76,18 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
     const instId = business.institution_profile_id || -1;
     const userId = business.user_id || -1;
 
-    // 2. Concurrently fetch products, services, professionals, reviews, courses, jobs, gallery
-    const [productsSettled, servicesSettled, professionalsSettled, reviewsSettled, coursesSettled, jobsSettled, gallerySettled, packagesSettled] = await Promise.allSettled([
+    // 2. Concurrently fetch products, services, professionals, reviews, courses, jobs, gallery, packages, records
+    const [
+      productsSettled,
+      servicesSettled,
+      professionalsSettled,
+      reviewsSettled,
+      coursesSettled,
+      jobsSettled,
+      gallerySettled,
+      packagesSettled,
+      recordsSettled,
+    ] = await Promise.allSettled([
       // Products: Query store products first, falling back to / unioning master_products
       db.query(
         `SELECT
@@ -476,107 +486,8 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
       rooms: filteredBundle.rooms,
     };
   } catch (err: any) {
-    console.warn("fetchBusinessFullData fallback:", err?.message || err);
-    const { id: numId } = extractIdFromSlug(idOrSlug);
-    const resolvedId = numId || 160;
-
-    return {
-      business: {
-        id: resolvedId,
-        name: "Maa Sharda Institute PVT LTD",
-        slug: idOrSlug.includes("-") ? idOrSlug : "maa-sharda-institute",
-        about: "Maa sharda institute PVT LTD well known, coaching institute running successfully since last 6 years in Pandeypur varanasi. We believe in providing all deserving students in Pandeypur and around varanasi with the best curriculum and pedagogy along with the highest quality of education in coaching the students for 11 and 12(science), 8-10 (state and CBSE) and entrance Exam(NEET/JEE) police Bharti, Railway bharti etc..",
-        mission: "Maa sharda institute PVT LTD brings out of the latent strengths of every student so that they feel motivated and applauded for their strengths and explore the greater depth of their potential.",
-        vision: "To be recognized as a premier educational institute delivering transformative coaching, character development, and academic excellence across Varanasi.",
-        goal: "Quality Education: Provide top-grade pedagogy and personal mentorship.\nExam Readiness: Excel in Board exams, JEE, NEET, Police & Railway recruitments.\nStudent Growth: Foster teamwork, analytical thinking, and ethical character.",
-        owner_name: "Director & Academic Head",
-        owner_designation: "Founder & Leadership",
-        founder_name: "Er. Arvind Yadav",
-        founder_title: "Founder & Managing Director",
-        phone: "+91 9876543210",
-        email: "contact@maasharda.com",
-        is_verified: true,
-        category_name: "Education & Coaching Institute",
-        subcategory_name: "Coaching Classes",
-        city: "Varanasi",
-        state: "Uttar Pradesh",
-        address: "Pandeypur, Varanasi, Uttar Pradesh",
-        gallery_media: [],
-        gallery_images: [],
-      },
-      products: [],
-      services: [],
-      professionals: [
-        {
-          id: "prof-1",
-          name: "Er. Arvind Yadav",
-          slug: "arvind-yadav",
-          designation: "Founder & Physics Specialist",
-          profession_type: "Lead Faculty",
-          experience_years: "12",
-          city: "Varanasi",
-          state: "Uttar Pradesh",
-          member_type: "professional",
-          sort_order: 1,
-        },
-      ],
-      reviews: [
-        {
-          id: 1,
-          title: "Exceptional Guidance",
-          review: "Excellent faculty and concept-oriented coaching for board and competitive exams.",
-          rating: 5,
-          user_name: "Aman Sharma",
-        },
-      ],
-      courses: [
-        {
-          id: 1,
-          name: "IIT-JEE / NEET Foundation Course",
-          slug: "iit-jee-neet-foundation",
-          description: "Comprehensive coaching covering Physics, Chemistry, Mathematics & Biology with test series.",
-          category_name: "Competitive Exams",
-          duration_value: 1,
-          duration_unit: "Year",
-          fee_amount: 45000,
-          seats_available: 40,
-        },
-        {
-          id: 2,
-          name: "Class 11 & 12 Science (CBSE / State Board)",
-          slug: "class-11-12-science",
-          description: "Full curriculum mastery for board exam excellence with chapter-wise test papers.",
-          category_name: "School Coaching",
-          duration_value: 1,
-          duration_unit: "Year",
-          fee_amount: 30000,
-          seats_available: 60,
-        },
-      ],
-      jobs: [
-        {
-          id: 1,
-          title: "Senior Physics Faculty (JEE / NEET)",
-          slug: "senior-physics-faculty",
-          department: "Academic & Teaching",
-          employment_type: "Full-time",
-          experience_level: "3+ years",
-          work_mode: "On-site",
-          location_display: "Main Campus, Pandeypur",
-        },
-        {
-          id: 2,
-          title: "Academic Counselor & Front Desk Manager",
-          slug: "academic-counselor",
-          department: "Administration",
-          employment_type: "Full-time",
-          experience_level: "1-2 years",
-          work_mode: "On-site",
-          location_display: "Main Campus, Pandeypur",
-        },
-      ],
-      packages: [],
-    };
+    console.error("fetchBusinessFullData error:", err?.message || err);
+    return null;
   }
 });
 
