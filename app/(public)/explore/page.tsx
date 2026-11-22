@@ -66,7 +66,7 @@ import { useAuthStore, useCartStore } from "@/store";
 import { toast } from "sonner";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { buildBusinessSeoUrl, buildProfessionalSeoUrl, buildCourseSeoUrl, buildJobSeoUrl, buildDiscoverySeoUrl, slugify } from "@/lib/utils/seo-slug";
+import { buildBusinessSeoUrl, buildProfessionalSeoUrl, buildCourseSeoUrl, buildJobSeoUrl, buildDiscoverySeoUrl, slugify, extractCleanCity } from "@/lib/utils/seo-slug";
 import { OrderCheckoutDialog, CheckoutItem } from "@/components/checkout/order-checkout-dialog";
 import { CartDrawer } from "@/components/checkout/cart-drawer";
 import { CartFloatingButton } from "@/components/checkout/cart-floating-button";
@@ -194,7 +194,7 @@ function CustomerExplorePageContent({
   const [activeType, setActiveType] = useState<"all" | "business" | "service" | "product" | "professional" | "course" | "job" | "property" | "vehicle" | "event">(urlType);
   const [country, setCountry] = useState<string>(urlCountry);
   const [city, setCity] = useState<string>(
-    urlCity || (userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : "")
+    extractCleanCity(urlCity) || extractCleanCity(userGlobalLocation) || ""
   );
   const [locality, setLocality] = useState<string>("");
   const [postalCode, setPostalCode] = useState<string>("");
@@ -330,13 +330,8 @@ function CustomerExplorePageContent({
     if (urlType && ["all", "business", "service", "product", "professional", "course", "job", "property", "vehicle", "event"].includes(urlType)) {
       setActiveType(urlType);
     }
-    if (urlCity) {
-      setCity(urlCity);
-    } else if (userGlobalLocation && userGlobalLocation !== "All Locations") {
-      setCity(userGlobalLocation);
-    } else if (userGlobalLocation === "All Locations") {
-      setCity("");
-    }
+    const resolvedCity = extractCleanCity(urlCity) || extractCleanCity(userGlobalLocation) || "";
+    setCity(resolvedCity);
     if (urlCountry) setCountry(urlCountry);
   }, [urlQ, urlType, urlCity, urlCountry, urlCategory, urlCategoryParam, urlSubcategoryParam, urlCategoryName, userGlobalLocation]);
 
@@ -1035,8 +1030,23 @@ function CustomerExplorePageContent({
     return trimmed;
   };
   const effectiveFullLocation = formatLocationAreaAndCity(
-    userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : city
+    extractCleanCity(city) || extractCleanCity(userGlobalLocation) || ""
   );
+
+  const getVerticalLabel = (t: string) => {
+    switch (t) {
+      case "business": return "Businesses";
+      case "service": return "Services";
+      case "product": return "Products";
+      case "professional": return "Professionals";
+      case "course": return "Courses";
+      case "job": return "Jobs";
+      case "property": return "Properties";
+      case "vehicle": return "Vehicles";
+      case "event": return "Events";
+      default: return "Explore";
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white text-slate-900 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6">
@@ -1059,7 +1069,7 @@ function CustomerExplorePageContent({
           }}
           className="hover:text-slate-900 transition-colors capitalize cursor-pointer font-medium"
         >
-          {activeType === "all" ? "Explore" : activeType === "business" ? "Businesses" : activeType === "service" ? "Services" : activeType === "product" ? "Products" : activeType === "professional" ? "Professionals" : activeType === "course" ? "Courses" : "Jobs"}
+          {getVerticalLabel(activeType)}
         </button>
         {effectiveFullLocation && (
           <>
@@ -1078,11 +1088,11 @@ function CustomerExplorePageContent({
       {/* 2. Hero Headline Title & Subtitle */}
       <div className="space-y-1.5 pt-1">
         <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
-          {selectedSubcategoryName || selectedCategoryName || (activeType === "all" ? "Businesses & Services" : activeType.charAt(0).toUpperCase() + activeType.slice(1))}
+          {selectedSubcategoryName || selectedCategoryName || getVerticalLabel(activeType)}
           {effectiveFullLocation ? ` in ${effectiveFullLocation}` : ""}
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 max-w-3xl">
-          Explore {selectedSubcategoryName || selectedCategoryName || "verified"} {activeType === "all" ? "businesses, services, and opportunities" : `${activeType}s`} in {effectiveFullLocation || "your area"}.
+          Explore {selectedSubcategoryName || selectedCategoryName || "verified"} {activeType === "all" ? "businesses, services, and opportunities" : getVerticalLabel(activeType).toLowerCase()} in {effectiveFullLocation || "your area"}.
         </p>
       </div>
 

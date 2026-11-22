@@ -59,7 +59,7 @@ import {
 import { useAuthStore, useCartStore } from "@/store";
 import { toast } from "sonner";
 import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
-import { buildDiscoverySeoUrl } from "@/lib/utils/seo-slug";
+import { buildDiscoverySeoUrl, extractCleanCity } from "@/lib/utils/seo-slug";
 import { CartDrawer } from "@/components/checkout/cart-drawer";
 import { parseSearchIntent } from "@/lib/utils/search-intent";
 import { ProductStoresDialog } from "@/components/public/product-stores-dialog";
@@ -383,12 +383,8 @@ export function PlatformAdminHeader() {
     if (sub?.href) return sub.href;
     if ("href" in item && (item as any).href && !sub) return (item as any).href;
 
-    // Use clean city part for canonical SEO URLs (e.g. "Pandeypur Chauraha, Varanasi" -> "Varanasi")
-    let locCity = location && location !== "All Locations" ? location : null;
-    if (locCity && locCity.includes(",")) {
-      const parts = locCity.split(",").map((p) => p.trim()).filter(Boolean);
-      locCity = parts[parts.length - 1] || parts[0];
-    }
+    // Use clean canonical city (e.g. "Pandeypur Chauraha, Varanasi, Uttar Pradesh, India" -> "Varanasi")
+    const locCity = extractCleanCity(location) || null;
 
     if (item.type === "property" || item.type === "event" || item.type === "vehicle") {
       const p = new URLSearchParams();

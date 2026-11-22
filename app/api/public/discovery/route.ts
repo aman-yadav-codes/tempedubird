@@ -1,17 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/db";
 import { getFrontendConfig } from "@/lib/config/frontend-config";
+import { extractCleanCity } from "@/lib/utils/seo-slug";
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get("q") || searchParams.get("query") || "").trim();
     const type = searchParams.get("type") || "all"; // 'all' | 'business' | 'professional' | 'product' | 'service'
-    const country = searchParams.get("country") || "";
-    const state = searchParams.get("state") || "";
-    const city = searchParams.get("city") || "";
-    const locality = searchParams.get("locality") || "";
-    const postalCode = searchParams.get("postalCode") || searchParams.get("zip") || searchParams.get("pincode") || "";
+    let country = (searchParams.get("country") || "").trim();
+    const state = (searchParams.get("state") || "").trim();
+    let city = (searchParams.get("city") || searchParams.get("location") || "").trim();
+    const locality = (searchParams.get("locality") || "").trim();
+    const postalCode = (searchParams.get("postalCode") || searchParams.get("zip") || searchParams.get("pincode") || "").trim();
+
+    // Country vs City normalization: country names passed in city filter should set country, not city
+    const COUNTRY_CODES: Record<string, string> = {
+      india: "IN",
+      in: "IN",
+      "united states": "US",
+      usa: "US",
+      us: "US",
+      "united kingdom": "GB",
+      uk: "GB",
+      canada: "CA",
+      ca: "CA",
+      australia: "AU",
+      au: "AU",
+      uae: "AE",
+    };
+
+    if (city && COUNTRY_CODES[city.toLowerCase().trim()]) {
+      if (!country) country = COUNTRY_CODES[city.toLowerCase().trim()];
+      city = "";
+    } else if (city) {
+      const cleanCity = extractCleanCity(city);
+      if (cleanCity) {
+        city = cleanCity;
+      }
+    }
     let categoryId = searchParams.get("categoryId") ? Number(searchParams.get("categoryId")) : null;
     const categoryParam = (searchParams.get("category") || searchParams.get("category_slug") || searchParams.get("categoryName") || "").trim();
     const subcategoryParam = (searchParams.get("subcategory") || searchParams.get("subcategory_slug") || "").trim();
@@ -1076,6 +1103,31 @@ export async function GET(req: NextRequest) {
           )`);
         }
 
+        if (country && country.toUpperCase() !== "ALL") {
+          pParams.push(country.toUpperCase());
+          pConditions.push(`(bp.country_code = $${pParams.length} OR ($${pParams.length} = 'IN' AND bp.country_code IS NULL))`);
+        }
+
+        if (categoryParam || categoryIds.length > 0) {
+          const isComm = categoryParam.toLowerCase().includes("commercial");
+          const isRes = categoryParam.toLowerCase().includes("residential");
+          const isPlot = categoryParam.toLowerCase().includes("plot") || categoryParam.toLowerCase().includes("land");
+          const isInd = categoryParam.toLowerCase().includes("industrial") || categoryParam.toLowerCase().includes("warehous");
+
+          if (isComm) {
+            pConditions.push(`(br.category_id = 50 OR br.title ILIKE '%commercial%' OR br.title ILIKE '%retail%' OR br.title ILIKE '%showroom%' OR br.title ILIKE '%office%' OR br.title ILIKE '%suite%')`);
+          } else if (isRes) {
+            pConditions.push(`(br.category_id = 49 OR br.title ILIKE '%apartment%' OR br.title ILIKE '%flat%' OR br.title ILIKE '%villa%' OR br.title ILIKE '%penthouse%' OR br.title ILIKE '%haveli%')`);
+          } else if (isPlot) {
+            pConditions.push(`(br.category_id = 51 OR br.title ILIKE '%plot%' OR br.title ILIKE '%land%')`);
+          } else if (isInd) {
+            pConditions.push(`(br.category_id = 52 OR br.title ILIKE '%industrial%' OR br.title ILIKE '%warehouse%')`);
+          } else if (categoryIds.length > 0) {
+            pParams.push(categoryIds);
+            pConditions.push(`(br.category_id = ANY($${pParams.length}::int[]) OR br.subcategory_id = ANY($${pParams.length}::int[]))`);
+          }
+        }
+
         if (uniqueCityTokens.length > 0) {
           pParams.push(uniqueCityTokens);
           pConditions.push(`(
@@ -1118,8 +1170,8 @@ export async function GET(req: NextRequest) {
           FROM business_records br
           LEFT JOIN property_details pd ON pd.record_id = br.id
           LEFT JOIN business_profiles bp ON bp.id = br.business_id
-          LEFT JOIN categories c ON c.id = br.category_id
-          LEFT JOIN categories subc ON subc.id = br.subcategory_id
+          LEFT JOIN master_records c ON c.id = br.category_id
+          LEFT JOIN master_records subc ON subc.id = br.subcategory_id
           WHERE ${pConditions.join(" AND ")}
           ORDER BY br.id DESC
           LIMIT $${pParams.length + 1} OFFSET $${pParams.length + 2}
@@ -1142,7 +1194,7 @@ export async function GET(req: NextRequest) {
         const vParams: any[] = [];
 
         if (scopedBusinessId) {
-          pParams.push(scopedBusinessId);
+          vParams.push(scopedBusinessId);
           vConditions.push(`br.business_id = $${vParams.length}`);
         }
 
@@ -1154,6 +1206,31 @@ export async function GET(req: NextRequest) {
             OR COALESCE(vd.location, '') ILIKE $${vParams.length}
             OR COALESCE(bp.name, '') ILIKE $${vParams.length}
           )`);
+        }
+
+        if (country && country.toUpperCase() !== "ALL") {
+          vParams.push(country.toUpperCase());
+          vConditions.push(`(bp.country_code = $${vParams.length} OR ($${vParams.length} = 'IN' AND bp.country_code IS NULL))`);
+        }
+
+        if (categoryParam || categoryIds.length > 0) {
+          const isPass = categoryParam.toLowerCase().includes("passenger") || categoryParam.toLowerCase().includes("car") || categoryParam.toLowerCase().includes("suv");
+          const isComm = categoryParam.toLowerCase().includes("commercial") || categoryParam.toLowerCase().includes("transport") || categoryParam.toLowerCase().includes("truck") || categoryParam.toLowerCase().includes("van");
+          const isBike = categoryParam.toLowerCase().includes("two-wheeler") || categoryParam.toLowerCase().includes("motorcycle") || categoryParam.toLowerCase().includes("bike") || categoryParam.toLowerCase().includes("scooter");
+          const isLux = categoryParam.toLowerCase().includes("luxury") || categoryParam.toLowerCase().includes("exotic");
+
+          if (isPass) {
+            vConditions.push(`(br.category_id IN (2, 4) OR br.title ILIKE '%scorpio%' OR br.title ILIKE '%thar%' OR br.title ILIKE '%xuv%' OR br.title ILIKE '%fortuner%' OR br.title ILIKE '%creta%' OR br.title ILIKE '%seltos%' OR br.title ILIKE '%city%' OR br.title ILIKE '%safari%' OR br.title ILIKE '%nexon%' OR br.title ILIKE '%vitara%')`);
+          } else if (isComm) {
+            vConditions.push(`(br.category_id = 6 OR br.title ILIKE '%innova%' OR br.title ILIKE '%truck%' OR br.title ILIKE '%bus%' OR br.title ILIKE '%transport%')`);
+          } else if (isBike) {
+            vConditions.push(`(br.category_id = 5 OR br.title ILIKE '%classic 350%' OR br.title ILIKE '%hunter%' OR br.title ILIKE '%ola%' OR br.title ILIKE '%ather%' OR br.title ILIKE '%enfield%' OR br.title ILIKE '%scooter%')`);
+          } else if (isLux) {
+            vConditions.push(`(br.category_id = 4 OR br.title ILIKE '%luxury%' OR br.title ILIKE '%exotic%' OR br.title ILIKE '%fortuner%' OR br.title ILIKE '%safari%')`);
+          } else if (categoryIds.length > 0) {
+            vParams.push(categoryIds);
+            vConditions.push(`(br.category_id = ANY($${vParams.length}::int[]) OR br.subcategory_id = ANY($${vParams.length}::int[]))`);
+          }
         }
 
         if (uniqueCityTokens.length > 0) {
@@ -1197,8 +1274,8 @@ export async function GET(req: NextRequest) {
           FROM business_records br
           LEFT JOIN vehicle_details vd ON vd.record_id = br.id
           LEFT JOIN business_profiles bp ON bp.id = br.business_id
-          LEFT JOIN categories c ON c.id = br.category_id
-          LEFT JOIN categories subc ON subc.id = br.subcategory_id
+          LEFT JOIN master_records c ON c.id = br.category_id
+          LEFT JOIN master_records subc ON subc.id = br.subcategory_id
           WHERE ${vConditions.join(" AND ")}
           ORDER BY br.id DESC
           LIMIT $${vParams.length + 1} OFFSET $${vParams.length + 2}
@@ -1234,6 +1311,31 @@ export async function GET(req: NextRequest) {
             OR COALESCE(e.city, '') ILIKE $${eParams.length}
             OR COALESCE(bp.name, '') ILIKE $${eParams.length}
           )`);
+        }
+
+        if (country && country.toUpperCase() !== "ALL") {
+          eParams.push(country.toUpperCase());
+          eConditions.push(`(bp.country_code = $${eParams.length} OR ($${eParams.length} = 'IN' AND bp.country_code IS NULL))`);
+        }
+
+        if (categoryParam || categoryIds.length > 0) {
+          const isCorp = categoryParam.toLowerCase().includes("corporate") || categoryParam.toLowerCase().includes("industry") || categoryParam.toLowerCase().includes("business");
+          const isWed = categoryParam.toLowerCase().includes("wedding") || categoryParam.toLowerCase().includes("social") || categoryParam.toLowerCase().includes("gala");
+          const isEnt = categoryParam.toLowerCase().includes("entertainment") || categoryParam.toLowerCase().includes("cultural") || categoryParam.toLowerCase().includes("music") || categoryParam.toLowerCase().includes("show") || categoryParam.toLowerCase().includes("art");
+          const isSports = categoryParam.toLowerCase().includes("sports") || categoryParam.toLowerCase().includes("fitness") || categoryParam.toLowerCase().includes("tournament") || categoryParam.toLowerCase().includes("marathon");
+
+          if (isCorp) {
+            eConditions.push(`(br.category_id = 350 OR br.title ILIKE '%tech%' OR br.title ILIKE '%summit%' OR br.title ILIKE '%conclave%' OR br.title ILIKE '%expo%' OR br.title ILIKE '%agritech%' OR br.title ILIKE '%handloom%')`);
+          } else if (isWed) {
+            eConditions.push(`(br.category_id = 352 OR br.title ILIKE '%wedding%' OR br.title ILIKE '%deepawali%' OR br.title ILIKE '%gala%' OR br.title ILIKE '%celebration%' OR br.title ILIKE '%fashion%')`);
+          } else if (isEnt) {
+            eConditions.push(`(br.category_id = 351 OR br.title ILIKE '%mahotsav%' OR br.title ILIKE '%music%' OR br.title ILIKE '%litfest%' OR br.title ILIKE '%food%' OR br.title ILIKE '%carnival%' OR br.title ILIKE '%dhrupad%')`);
+          } else if (isSports) {
+            eConditions.push(`(br.category_id = 354 OR br.title ILIKE '%marathon%' OR br.title ILIKE '%sports%' OR br.title ILIKE '%cricket%' OR br.title ILIKE '%run%')`);
+          } else if (categoryIds.length > 0) {
+            eParams.push(categoryIds);
+            eConditions.push(`(br.category_id = ANY($${eParams.length}::int[]) OR br.subcategory_id = ANY($${eParams.length}::int[]))`);
+          }
         }
 
         if (uniqueCityTokens.length > 0) {
@@ -1279,8 +1381,8 @@ export async function GET(req: NextRequest) {
           FROM business_records br
           LEFT JOIN events e ON e.record_id = br.id
           LEFT JOIN business_profiles bp ON bp.id = br.business_id
-          LEFT JOIN categories c ON c.id = br.category_id
-          LEFT JOIN categories subc ON subc.id = br.subcategory_id
+          LEFT JOIN master_records c ON c.id = br.category_id
+          LEFT JOIN master_records subc ON subc.id = br.subcategory_id
           WHERE ${eConditions.join(" AND ")}
           ORDER BY br.id DESC
           LIMIT $${eParams.length + 1} OFFSET $${eParams.length + 2}

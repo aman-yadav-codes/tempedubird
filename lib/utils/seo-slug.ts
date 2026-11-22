@@ -357,22 +357,81 @@ export function buildPropertySeoUrl(prop: {
   return `/${catSlug}/${itemPart}`;
 }
 
+const KNOWN_COUNTRIES = new Set([
+  "india", "in", "united states", "usa", "us", "united kingdom", "uk",
+  "canada", "ca", "australia", "au", "uae", "singapore"
+]);
+
+const KNOWN_STATES = new Set([
+  "uttar pradesh", "up", "maharashtra", "delhi", "new delhi", "rajasthan",
+  "bihar", "karnataka", "punjab", "west bengal", "tamil nadu", "telangana",
+  "gujarat", "haryana", "madhya pradesh", "mp", "kerala", "odisha", "assam"
+]);
+
+/**
+ * Cleanly extract only the City name from any composite address or location string.
+ * Strips countries, states, and postal codes.
+ */
+export function extractCleanCity(locationRaw?: string | null): string {
+  if (!locationRaw) return "";
+  const trimmed = locationRaw.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower === "all locations" || lower === "all" || lower === "worldwide") return "";
+  if (KNOWN_COUNTRIES.has(lower)) return "";
+
+  // Check known Indian cities and common localities/aliases
+  if (lower.includes("varanasi") || lower.includes("kashi") || lower.includes("benaras") || lower.includes("pandeypur") || lower.includes("sigra")) {
+    return "Varanasi";
+  }
+  if (lower.includes("delhi") || lower.includes("noida") || lower.includes("gurgaon") || lower.includes("gurugram")) {
+    return "New Delhi";
+  }
+  if (lower.includes("mumbai") || lower.includes("bombay") || lower.includes("thane")) {
+    return "Mumbai";
+  }
+  if (lower.includes("bengaluru") || lower.includes("bangalore")) {
+    return "Bengaluru";
+  }
+  if (lower.includes("kolkata") || lower.includes("calcutta")) {
+    return "Kolkata";
+  }
+  if (lower.includes("hyderabad") || lower.includes("secunderabad")) {
+    return "Hyderabad";
+  }
+  if (lower.includes("lucknow") || lower.includes("kanpur") || lower.includes("prayagraj") || lower.includes("allahabad")) {
+    return "Lucknow";
+  }
+  if (lower.includes("jaipur") || lower.includes("kota")) return "Jaipur";
+  if (lower.includes("pune")) return "Pune";
+  if (lower.includes("chennai")) return "Chennai";
+  if (lower.includes("patna")) return "Patna";
+  if (lower.includes("ahmedabad") || lower.includes("surat")) return "Ahmedabad";
+  if (lower.includes("chandigarh")) return "Chandigarh";
+
+  if (trimmed.includes(",")) {
+    const parts = trimmed.split(",").map((p) => p.trim()).filter(Boolean);
+    const filtered = parts.filter((p) => {
+      const pLow = p.toLowerCase();
+      return !KNOWN_COUNTRIES.has(pLow) && !KNOWN_STATES.has(pLow) && !/^\d{5,6}$/.test(pLow);
+    });
+    if (filtered.length > 0) {
+      return filtered[filtered.length - 1];
+    }
+    return "";
+  }
+
+  if (KNOWN_STATES.has(lower)) return "";
+  return trimmed;
+}
+
 /**
  * Extract canonical city name and slug for SEO URLs
  * E.g. "Pandeypur Chauraha, Varanasi" -> "varanasi"
- * E.g. "Pandeypur Chauraha" -> "varanasi" (resolves known area to city)
+ * E.g. "India" -> "" (Country is not a city)
  */
 export function extractCanonicalCitySlug(locationRaw?: string | null): string {
-  if (!locationRaw || locationRaw.toLowerCase() === "all locations" || locationRaw.toLowerCase() === "all") return "";
-  let raw = locationRaw.trim();
-  if (raw.includes(",")) {
-    const parts = raw.split(",").map((p) => p.trim()).filter(Boolean);
-    raw = parts[parts.length - 1] || parts[0];
-  }
-  if (raw.toLowerCase().includes("pandeypur")) {
-    return "varanasi";
-  }
-  return slugify(raw);
+  const city = extractCleanCity(locationRaw);
+  return city ? slugify(city) : "";
 }
 
 /**
@@ -403,8 +462,9 @@ export function buildDiscoverySeoUrl({
   else if (normType === "job" || normType === "jobs") prefix = "/jobs";
   else if (normType === "business" || normType === "businesses") prefix = "/businesses";
   else if (normType === "service" || normType === "services") prefix = "/services";
-  else if (normType === "property" || normType === "properties") prefix = "/businesses";
-  else if (normType === "event" || normType === "events") prefix = "/businesses";
+  else if (normType === "property" || normType === "properties") prefix = "/explore?type=property";
+  else if (normType === "vehicle" || normType === "vehicles") prefix = "/explore?type=vehicle";
+  else if (normType === "event" || normType === "events") prefix = "/explore?type=event";
   else if (!normType || normType === "all") {
     prefix = "/businesses";
   }
@@ -415,6 +475,14 @@ export function buildDiscoverySeoUrl({
 
   const locRaw = city || location || [locality, city].filter(Boolean).join(" ") || locality || "";
   const locSlug = extractCanonicalCitySlug(locRaw);
+
+  if (prefix.startsWith("/explore")) {
+    const params = new URLSearchParams();
+    if (normType) params.set("type", normType);
+    if (catSlug) params.set("category", catSlug);
+    if (locSlug) params.set("city", locSlug);
+    return `/explore?${params.toString()}`;
+  }
 
   if (catSlug && locSlug) {
     return `${prefix}/${catSlug}-in-${locSlug}`;
@@ -452,6 +520,10 @@ export function parseDiscoverySeoSlug(slug: string | undefined | null) {
     categorySlug = "";
   }
 
+  if (locationSlug && KNOWN_COUNTRIES.has(locationSlug.toLowerCase())) {
+    locationSlug = "";
+  }
+
   const city = locationSlug
     ? locationSlug
         .split("-")
@@ -459,5 +531,5 @@ export function parseDiscoverySeoSlug(slug: string | undefined | null) {
         .join(" ")
     : "";
 
-  return { categorySlug, locationSlug, city };
+  return { categorySlug, locationSlug, city: extractCleanCity(city) || city };
 }
