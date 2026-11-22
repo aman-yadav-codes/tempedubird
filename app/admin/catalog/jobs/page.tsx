@@ -32,6 +32,14 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Briefcase,
   Plus,
   Search,
@@ -53,6 +61,7 @@ import {
   Tag,
   DollarSign,
   Users,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useBusinessCurrency } from "@/hooks/use-business-currency";
@@ -548,13 +557,11 @@ export default function MasterJobsPage() {
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     <TableHead className="w-[70px] text-xs">ID</TableHead>
-                    <TableHead className="text-xs min-w-[220px]">Job Title &amp; Role</TableHead>
-                    <TableHead className="text-xs">Classification</TableHead>
+                    <TableHead className="text-xs min-w-[240px]">Job Title &amp; Details</TableHead>
                     <TableHead className="text-xs">Department &amp; Mode</TableHead>
                     <TableHead className="text-xs">Experience &amp; Compensation</TableHead>
                     <TableHead className="text-xs">Openings &amp; Location</TableHead>
-                    <TableHead className="text-xs text-center">Status</TableHead>
-                    <TableHead className="text-xs text-right">Actions</TableHead>
+                    <TableHead className="text-xs text-right w-[120px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -562,31 +569,47 @@ export default function MasterJobsPage() {
                     <TableRow key={j.id} className="hover:bg-muted/20 text-xs">
                       <TableCell className="font-mono text-muted-foreground">#{j.id}</TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2.5">
-                          <div className="size-8 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0">
+                        <div className="flex items-start gap-2.5">
+                          <div className="size-8 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
                             <Briefcase className="size-4" />
                           </div>
-                          <div>
-                            <div className="font-bold text-foreground leading-tight">{j.title}</div>
-                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
+                          <div className="space-y-1">
+                            <a
+                              href={`/jobs/${j.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-bold text-foreground leading-tight hover:text-primary hover:underline flex items-center gap-1 group"
+                            >
+                              <span>{j.title}</span>
+                              <ExternalLink className="size-3 opacity-0 group-hover:opacity-100 transition-opacity text-primary" />
+                            </a>
+
+                            <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
                               {j.role_name && <span className="font-semibold text-primary">{j.role_name}</span>}
-                              <span className="truncate max-w-[150px]">({j.employment_type})</span>
+                              <span className="text-muted-foreground">({j.employment_type})</span>
+
+                              {j.business_category_name && (
+                                <Badge variant="outline" className="text-[9px] bg-rose-50 text-rose-800 border-rose-200 py-0 px-1.5 h-4 truncate max-w-[150px]">
+                                  {j.business_category_name}
+                                </Badge>
+                              )}
+                              {j.professional_category_name && (
+                                <Badge variant="secondary" className="text-[9px] bg-purple-50 text-purple-800 border-purple-200 py-0 px-1.5 h-4 truncate max-w-[150px]">
+                                  {j.professional_category_name}
+                                </Badge>
+                              )}
+
+                              {j.is_active ? (
+                                <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-[9px] py-0 px-1.5 h-4 gap-0.5">
+                                  <CheckCircle2 className="size-2.5" /> Active
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-muted-foreground text-[9px] py-0 px-1.5 h-4 gap-0.5">
+                                  <XCircle className="size-2.5" /> Inactive
+                                </Badge>
+                              )}
                             </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          {j.business_category_name && (
-                            <Badge variant="outline" className="text-[10px] bg-rose-50 text-rose-800 border-rose-200 block truncate max-w-[180px]">
-                              {j.business_category_name}
-                            </Badge>
-                          )}
-                          {j.professional_category_name && (
-                            <Badge variant="secondary" className="text-[10px] bg-purple-50 text-purple-800 border-purple-200 block truncate max-w-[180px]">
-                              {j.professional_category_name}
-                            </Badge>
-                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -619,45 +642,63 @@ export default function MasterJobsPage() {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStatus(j)}
-                          className="cursor-pointer"
-                          title="Click to toggle status"
-                        >
-                          {j.is_active ? (
-                            <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px]">
-                              Active
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary" className="text-[10px]">
-                              Inactive
-                            </Badge>
-                          )}
-                        </button>
-                      </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7"
-                            onClick={() => openEditDialog(j)}
-                            title="Edit Job"
-                          >
-                            <Edit2 className="size-3.5 text-muted-foreground hover:text-foreground" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 hover:bg-rose-50 hover:text-rose-600"
-                            onClick={() => handleDelete(j.id)}
-                            title="Delete Job"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-7 text-xs font-medium gap-1 px-2">
+                              <span>Actions</span>
+                              <ChevronDown className="size-3 opacity-60" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                              Job Actions
+                            </DropdownMenuLabel>
+                            <DropdownMenuItem asChild>
+                              <a
+                                href={`/jobs/${j.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="cursor-pointer flex items-center gap-2"
+                              >
+                                <ExternalLink className="size-3.5 text-blue-500" />
+                                <span>View Public Page</span>
+                              </a>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => openEditDialog(j)}
+                              className="cursor-pointer flex items-center gap-2"
+                            >
+                              <Edit2 className="size-3.5 text-primary" />
+                              <span>Edit Job</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleToggleStatus(j)}
+                              className="cursor-pointer flex items-center gap-2"
+                            >
+                              {j.is_active ? (
+                                <>
+                                  <XCircle className="size-3.5 text-amber-500" />
+                                  <span>Deactivate Job</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="size-3.5 text-emerald-500" />
+                                  <span>Activate Job</span>
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleDelete(j.id)}
+                              className="cursor-pointer flex items-center gap-2 text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="size-3.5 text-destructive" />
+                              <span>Delete Job</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}

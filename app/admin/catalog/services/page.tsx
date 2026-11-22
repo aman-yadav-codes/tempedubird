@@ -33,6 +33,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -61,6 +69,7 @@ import {
   X,
   AlertCircle,
   ChevronDown,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
@@ -759,6 +768,27 @@ export default function MasterServicesPage() {
     }
   };
 
+  const handleToggleStatus = async (service: MasterService) => {
+    try {
+      const res = await fetch("/api/admin/catalog/services", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ id: service.id, is_active: !service.is_active }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to update service status");
+      }
+      toast.success(service.is_active ? "Service suspended" : "Service activated");
+      loadData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update service status");
+    }
+  };
+
   const handleExportCsv = () => {
     window.open(`/api/admin/catalog/services?format=csv`, "_blank");
   };
@@ -1002,12 +1032,10 @@ export default function MasterServicesPage() {
                 <TableHeader>
                   <TableRow className="bg-muted/30">
                     <TableHead className="w-[70px]">Image</TableHead>
-                    <TableHead>Service Title & Slug</TableHead>
-                    <TableHead>Category Hierarchy</TableHead>
+                    <TableHead>Service Title & Details</TableHead>
                     <TableHead>Pricing Model & Duration</TableHead>
                     <TableHead className="text-right">Suggested Price</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="text-right w-[120px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1029,48 +1057,65 @@ export default function MasterServicesPage() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="font-semibold text-xs text-foreground">
-                        <div>{s.name}</div>
-                        <div className="text-[10px] text-muted-foreground font-mono">
-                          /{s.slug}
-                        </div>
-                        {s.business_name && (
-                          <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                            <Briefcase className="size-2.5 text-primary shrink-0" />
-                            <span className="font-medium text-foreground">{s.business_name}</span>
-                          </div>
-                        )}
-                        {s.professional_name && (
-                          <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                            <span className="text-[9px] text-blue-500 font-bold shrink-0">👤</span>
-                            <span>{s.professional_name}</span>
-                          </div>
-                        )}
-                        {s.description && (
-                          <div className="text-[10px] text-muted-foreground line-clamp-1 max-w-xs font-normal mt-0.5">
-                            {s.description}
-                          </div>
-                        )}
-                      </TableCell>
                       <TableCell className="text-xs">
-                        <div className="space-y-0.5">
-                          {s.main_category_name ? (
-                            <Badge variant="outline" className="text-[10px] bg-primary/5">
-                              {s.main_category_name}
-                            </Badge>
-                          ) : s.category_name ? (
-                            <Badge variant="outline" className="text-[10px]">
-                              {s.category_name}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground text-[10px]">—</span>
-                          )}
-                          {s.subcategory_name && (
-                            <div>
-                              <span className="text-[9px] text-muted-foreground">↳ </span>
-                              <Badge variant="secondary" className="text-[9px]">
+                        <div className="flex flex-col gap-1">
+                          <a
+                            href={`/services/${s.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-semibold text-xs text-foreground hover:text-primary hover:underline flex items-center gap-1 group"
+                          >
+                            <span>{s.name}</span>
+                            <ExternalLink className="size-3 opacity-0 group-hover:opacity-100 transition-opacity text-primary" />
+                          </a>
+
+                          <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                            <span className="text-muted-foreground font-mono">#{s.id}</span>
+                            <span className="text-muted-foreground">•</span>
+                            <span className="text-muted-foreground font-mono">/{s.slug}</span>
+
+                            {s.main_category_name ? (
+                              <Badge variant="outline" className="text-[9px] bg-primary/5 py-0 px-1.5 h-4">
+                                {s.main_category_name}
+                              </Badge>
+                            ) : s.category_name ? (
+                              <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4">
+                                {s.category_name}
+                              </Badge>
+                            ) : null}
+
+                            {s.subcategory_name && (
+                              <Badge variant="secondary" className="text-[9px] py-0 px-1.5 h-4">
                                 {s.subcategory_name}
                               </Badge>
+                            )}
+
+                            {s.is_active ? (
+                              <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-[9px] py-0 px-1.5 h-4 gap-0.5">
+                                <CheckCircle2 className="size-2.5" /> Active
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-muted-foreground text-[9px] py-0 px-1.5 h-4 gap-0.5">
+                                <XCircle className="size-2.5" /> Inactive
+                              </Badge>
+                            )}
+                          </div>
+
+                          {s.business_name && (
+                            <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                              <Briefcase className="size-2.5 text-primary shrink-0" />
+                              <span className="font-medium text-foreground">{s.business_name}</span>
+                            </div>
+                          )}
+                          {s.professional_name && (
+                            <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                              <span className="text-[9px] text-blue-500 font-bold shrink-0">👤</span>
+                              <span>{s.professional_name}</span>
+                            </div>
+                          )}
+                          {s.description && (
+                            <div className="text-[10px] text-muted-foreground line-clamp-1 max-w-xs font-normal">
+                              {s.description}
                             </div>
                           )}
                         </div>
@@ -1171,56 +1216,77 @@ export default function MasterServicesPage() {
                           </PopoverContent>
                         </Popover>
                       </TableCell>
-                      <TableCell className="text-center">
-                        {s.is_active ? (
-                          <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-[10px] gap-1">
-                            <CheckCircle2 className="size-3" /> Active
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-muted-foreground text-[10px] gap-1">
-                            <XCircle className="size-3" /> Inactive
-                          </Badge>
-                        )}
-                      </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 text-muted-foreground hover:text-foreground"
-                            onClick={() => setDetailService(s)}
-                            title="View Service Details"
-                          >
-                            <Eye className="size-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 text-amber-600 hover:text-amber-700"
-                            onClick={() => openSynonymsManager(s)}
-                            title="Manage Synonyms"
-                          >
-                            <Tag className="size-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 text-primary hover:text-primary"
-                            onClick={() => openEditDialog(s)}
-                            title="Edit Service"
-                          >
-                            <Edit2 className="size-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 text-destructive hover:text-destructive"
-                            onClick={() => handleDelete(s.id)}
-                            title="Delete Service"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-7 text-xs font-medium gap-1 px-2">
+                              <span>Actions</span>
+                              <ChevronDown className="size-3 opacity-60" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                              Service Actions
+                            </DropdownMenuLabel>
+                            <DropdownMenuItem asChild>
+                              <a
+                                href={`/services/${s.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="cursor-pointer flex items-center gap-2"
+                              >
+                                <ExternalLink className="size-3.5 text-blue-500" />
+                                <span>View Public Page</span>
+                              </a>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => openEditDialog(s)}
+                              className="cursor-pointer flex items-center gap-2"
+                            >
+                              <Edit2 className="size-3.5 text-primary" />
+                              <span>Edit Service</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setDetailService(s)}
+                              className="cursor-pointer flex items-center gap-2"
+                            >
+                              <Eye className="size-3.5 text-muted-foreground" />
+                              <span>View Details</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => openSynonymsManager(s)}
+                              className="cursor-pointer flex items-center gap-2"
+                            >
+                              <Tag className="size-3.5 text-amber-600" />
+                              <span>Manage Synonyms</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleToggleStatus(s)}
+                              className="cursor-pointer flex items-center gap-2"
+                            >
+                              {s.is_active ? (
+                                <>
+                                  <XCircle className="size-3.5 text-amber-500" />
+                                  <span>Deactivate Service</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="size-3.5 text-emerald-500" />
+                                  <span>Activate Service</span>
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleDelete(s.id)}
+                              className="cursor-pointer flex items-center gap-2 text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="size-3.5 text-destructive" />
+                              <span>Delete Service</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}
