@@ -104,10 +104,18 @@ const TOP_NAV_ITEMS = [
     icon: Building2,
     subcategories: [
       { label: "All Businesses", categorySlug: "all-businesses" },
-      { label: "Verified Enterprises", categorySlug: "verified-enterprises" },
-      { label: "Retail Stores & Supermarkets", categorySlug: "retail-and-shopping" },
-      { label: "Coaching Institutes", categorySlug: "education-and-coaching" },
-      { label: "Clinics & Healthcare", categorySlug: "healthcare-and-medical" },
+      { label: "Automotive & Transport", categorySlug: "automotive-and-transport" },
+      { label: "Education & Coaching", categorySlug: "education-and-coaching" },
+      { label: "Fitness & Sports", categorySlug: "fitness-and-sports" },
+      { label: "Food, Dining & Cafes", categorySlug: "food-dining-and-cafes" },
+      { label: "Healthcare & Medical", categorySlug: "healthcare-and-medical" },
+      { label: "Home Services & Maintenance", categorySlug: "home-services-and-maintenance" },
+      { label: "Hospitality & Events", categorySlug: "hospitality-and-events" },
+      { label: "IT & Digital Agencies", categorySlug: "it-and-digital-agencies" },
+      { label: "Professional & Financial Services", categorySlug: "professional-and-financial-services" },
+      { label: "Real Estate & Construction", categorySlug: "real-estate-and-construction" },
+      { label: "Retail & Shopping", categorySlug: "retail-and-shopping" },
+      { label: "Salons & Personal Care", categorySlug: "salons-and-personal-care" },
     ],
   },
   {
@@ -116,10 +124,14 @@ const TOP_NAV_ITEMS = [
     icon: Package,
     subcategories: [
       { label: "All Products", categorySlug: "all-products" },
-      { label: "Electronics & Tech", categorySlug: "electronics-and-gadgets" },
-      { label: "Fashion & Apparel", categorySlug: "uniforms-and-apparel" },
-      { label: "Home & Kitchen", categorySlug: "kitchenware-and-appliances" },
-      { label: "Groceries & Fresh", categorySlug: "packaged-foods-and-gourmet-groceries" },
+      { label: "Electronics & Gadgets", categorySlug: "electronics-and-gadgets" },
+      { label: "Automobiles & Electric Vehicles", categorySlug: "automobiles-cars-and-electric-vehicles" },
+      { label: "Building Materials & Construction", categorySlug: "building-materials-and-construction-hardware" },
+      { label: "Books & Study Materials", categorySlug: "books-and-study-materials" },
+      { label: "Fashion Accessories & Apparel", categorySlug: "fashion-accessories-and-footwear" },
+      { label: "Bakery & Gourmet Foods", categorySlug: "packaged-foods-and-gourmet-groceries" },
+      { label: "Event Supplies & Decor", categorySlug: "event-decor-and-celebration-supplies" },
+      { label: "Kitchenware & Appliances", categorySlug: "kitchenware-and-appliances" },
     ],
   },
   {
@@ -128,10 +140,14 @@ const TOP_NAV_ITEMS = [
     icon: UserCheck,
     subcategories: [
       { label: "All Professionals", categorySlug: "all-professionals" },
-      { label: "Doctors & Healthcare", categorySlug: "doctors-and-healthcare" },
-      { label: "Teachers & Mentors", categorySlug: "academic-tutors-and-education-specialists" },
-      { label: "Legal & Financial Advisors", categorySlug: "legal-law-and-compliance-experts" },
-      { label: "Tech & Software Consultants", categorySlug: "software-it-and-technology-specialists" },
+      { label: "Doctors & Healthcare Specialists", categorySlug: "doctors-and-healthcare-specialists" },
+      { label: "Academic Tutors & Educators", categorySlug: "academic-tutors-and-education-specialists" },
+      { label: "Chartered Accountants & Financial", categorySlug: "chartered-accountants-and-financial-advisors" },
+      { label: "Legal & Law Experts", categorySlug: "legal-law-and-compliance-experts" },
+      { label: "Design, Architecture & Creative", categorySlug: "design-architecture-and-creative-experts" },
+      { label: "Business & Strategy Consultants", categorySlug: "business-strategy-and-management-consultants" },
+      { label: "Fitness & Wellness Trainers", categorySlug: "fitness-wellness-and-sports-trainers" },
+      { label: "Beauty & Styling Artists", categorySlug: "beauty-hair-and-styling-artists" },
     ],
   },
   {
@@ -141,9 +157,11 @@ const TOP_NAV_ITEMS = [
     subcategories: [
       { label: "All Courses", categorySlug: "all-courses" },
       { label: "Competitive Exams (JEE / NEET)", categorySlug: "competitive-exams-jee-neet" },
-      { label: "Skill & Coding Bootcamps", categorySlug: "skill-and-coding-bootcamps" },
-      { label: "School Coaching (8th-12th)", categorySlug: "school-coaching-8th-12th" },
-      { label: "Degree & Diploma Programs", categorySlug: "degree-and-diploma-programs" },
+      { label: "App & Software Development", categorySlug: "app-development-training" },
+      { label: "Class 11 & 12 Board Curriculum", categorySlug: "class-11-to-12" },
+      { label: "Class 6 to 10 Foundation", categorySlug: "class-6-to-8" },
+      { label: "Bachelors Degree Programs", categorySlug: "bachelors" },
+      { label: "Skill & Certification Bootcamps", categorySlug: "skill-and-coding-bootcamps" },
     ],
   },
   {
@@ -152,10 +170,13 @@ const TOP_NAV_ITEMS = [
     icon: Briefcase,
     subcategories: [
       { label: "All Job Openings", categorySlug: "all-job-openings" },
-      { label: "Full-Time Roles", categorySlug: "full-time-roles" },
-      { label: "Part-Time & Internships", categorySlug: "part-time-and-internships" },
-      { label: "Teaching & Faculty", categorySlug: "teaching-and-faculty" },
-      { label: "Retail & Operations", categorySlug: "retail-and-operations" },
+      { label: "Administration & HR", categorySlug: "administration-hr" },
+      { label: "Automotive Engineering & Operations", categorySlug: "job-automotive-engineering-operations" },
+      { label: "Finance & Accounting", categorySlug: "finance-accounting" },
+      { label: "Healthcare & Medical Services", categorySlug: "job-healthcare-medical-services" },
+      { label: "Hospitality & Restaurant Culinary", categorySlug: "job-hospitality-restaurant-culinary" },
+      { label: "Real Estate & Construction", categorySlug: "job-real-estate-construction" },
+      { label: "Retail & Store Operations", categorySlug: "hospitality-retail-store-operations" },
     ],
   },
   {
@@ -164,10 +185,10 @@ const TOP_NAV_ITEMS = [
     icon: Building,
     subcategories: [
       { label: "All Properties", categorySlug: "all-properties" },
-      { label: "Commercial & Office Spaces", categorySlug: "commercial-office" },
-      { label: "Residential Apartments", categorySlug: "residential-apartments" },
-      { label: "Coaching & Training Centers", categorySlug: "coaching-training-centers" },
-      { label: "Retail Shops & Showrooms", categorySlug: "retail-shops-showrooms" },
+      { label: "Commercial Properties", categorySlug: "property-commercial-properties" },
+      { label: "Residential Real Estate", categorySlug: "property-residential-real-estate" },
+      { label: "Industrial & Warehousing Estates", categorySlug: "property-industrial-warehousing-estates" },
+      { label: "Plots & Development Lands", categorySlug: "property-plots-development-lands" },
     ],
   },
   {
@@ -176,10 +197,10 @@ const TOP_NAV_ITEMS = [
     icon: Calendar,
     subcategories: [
       { label: "All Events", categorySlug: "all-events" },
-      { label: "Conferences & Seminars", categorySlug: "conferences-seminars" },
-      { label: "Workshops & Masterclasses", categorySlug: "workshops-masterclasses" },
-      { label: "Campus Drives & Job Fairs", categorySlug: "campus-drives-job-fairs" },
-      { label: "Cultural & Exhibitions", categorySlug: "cultural-exhibitions" },
+      { label: "Corporate & Industry Events", categorySlug: "event-corporate-industry-events" },
+      { label: "Live Entertainment & Cultural Shows", categorySlug: "event-live-entertainment-cultural-shows" },
+      { label: "Sports & Fitness Tournaments", categorySlug: "event-sports-fitness-tournaments" },
+      { label: "Weddings & Social Galas", categorySlug: "event-weddings-social-galas" },
     ],
   },
 ];
@@ -283,6 +304,72 @@ export function PlatformAdminHeader() {
     return () => clearTimeout(timer);
   }, [customLocationInput]);
 
+  // Dynamic main categories fetched from database for all navigation verticals
+  const [verticalCategories, setVerticalCategories] = useState<Record<string, Array<{ label: string; categorySlug: string }>>>({});
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadMainCategories() {
+      try {
+        const res = await fetch("/api/public/categories?type=all&onlyRoot=true&limit=300");
+        if (!res.ok) return;
+        const json = await res.json();
+        const list = json.data || json.categories || [];
+
+        const mapped: Record<string, Array<{ label: string; categorySlug: string }>> = {
+          business: [],
+          product: [],
+          professional: [],
+          course: [],
+          job: [],
+          property: [],
+          event: [],
+        };
+
+        list.forEach((c: any) => {
+          const catType = String(c.category_type || "").toLowerCase();
+          const item = { label: c.name, categorySlug: c.slug };
+
+          if (catType === "business") {
+            mapped.business.push(item);
+          } else if (catType === "product") {
+            mapped.product.push(item);
+          } else if (catType === "professional") {
+            mapped.professional.push(item);
+          } else if (catType === "course" || catType === "academic") {
+            mapped.course.push(item);
+          } else if (catType === "job" || catType === "jobs") {
+            mapped.job.push(item);
+          } else if (catType === "property" || catType === "properties") {
+            mapped.property.push(item);
+          } else if (catType === "event" || catType === "events") {
+            mapped.event.push(item);
+          }
+        });
+
+        if (isMounted) {
+          setVerticalCategories(mapped);
+        }
+      } catch (err) {
+        console.warn("Failed to load header navigation categories:", err);
+      }
+    }
+
+    loadMainCategories();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const getItemSubcategories = (item: (typeof TOP_NAV_ITEMS)[0]) => {
+    const fromDb = verticalCategories[item.type];
+    if (fromDb && fromDb.length > 0) {
+      const allItem = { label: `All ${item.label}`, categorySlug: `all-${item.type}` };
+      return [allItem, ...fromDb];
+    }
+    return item.subcategories;
+  };
+
   const withLocation = (url: string) => {
     if (!location || location === "All Locations") return url;
     const separator = url.includes("?") ? "&" : "?";
@@ -301,6 +388,18 @@ export function PlatformAdminHeader() {
     if (locCity && locCity.includes(",")) {
       const parts = locCity.split(",").map((p) => p.trim()).filter(Boolean);
       locCity = parts[parts.length - 1] || parts[0];
+    }
+
+    if (item.type === "property" || item.type === "event" || item.type === "vehicle") {
+      const p = new URLSearchParams();
+      p.set("type", item.type);
+      if (sub?.categorySlug && !sub.categorySlug.startsWith("all-")) {
+        p.set("category", sub.categorySlug);
+      }
+      if (locCity) {
+        p.set("city", locCity);
+      }
+      return `/explore?${p.toString()}`;
     }
 
     return buildDiscoverySeoUrl({
@@ -469,8 +568,8 @@ export function PlatformAdminHeader() {
                   <ChevronDown className="size-3 text-slate-400 group-hover:text-sky-600 transition-transform group-data-[state=open]:rotate-180" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56 p-1.5 space-y-0.5 z-50 rounded-xl shadow-xl border-sky-100">
-                <div className="px-2.5 py-1.5 mb-1 bg-sky-50 rounded-md flex items-center justify-between">
+              <DropdownMenuContent align="start" className="w-64 max-h-[420px] overflow-y-auto p-1.5 space-y-0.5 z-50 rounded-xl shadow-xl border-sky-100 scrollbar-thin">
+                <div className="sticky top-0 z-10 px-2.5 py-1.5 mb-1 bg-sky-50/95 backdrop-blur-xs rounded-md flex items-center justify-between border-b border-sky-100 shadow-2xs">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
                     Explore {item.label}
                   </span>
@@ -481,7 +580,7 @@ export function PlatformAdminHeader() {
                     View All →
                   </Link>
                 </div>
-                {item.subcategories.map((sub) => (
+                {getItemSubcategories(item).map((sub) => (
                   <DropdownMenuItem key={sub.label} asChild>
                     <Link
                       href={getNavHref(item, sub)}
