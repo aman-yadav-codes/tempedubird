@@ -71,7 +71,18 @@ import {
   Info,
   Check,
   Edit2,
+  ChevronDown,
+  MoreHorizontal,
+  MoreVertical,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -92,6 +103,33 @@ export type ListingVertical =
   | "dish"
   | "event"
   | "property";
+
+export const getPublicUrl = (type: ListingVertical, item: any): string => {
+  switch (type) {
+    case "business":
+      return item.slug ? `/institutes/${item.slug}` : `/institutes/${item.id}`;
+    case "professional":
+      return item.slug ? `/professionals/${item.slug}` : `/professionals/${item.id}`;
+    case "course":
+      return `/courses/${item.id}`;
+    case "job":
+      return `/jobs/${item.id}`;
+    case "products":
+      return `/products/${item.id}`;
+    case "services":
+      return `/services/${item.id}`;
+    case "room":
+    case "vehicle":
+    case "dish":
+    case "event":
+    case "property":
+      return item.slug
+        ? `/explore?q=${encodeURIComponent(item.slug)}`
+        : `/explore?type=${type}&q=${encodeURIComponent(item.name || item.title || "")}`;
+    default:
+      return `/explore?q=${encodeURIComponent(item.name || item.title || "")}`;
+  }
+};
 
 interface TabMeta {
   id: ListingVertical;
@@ -484,25 +522,22 @@ function PlatformListingsManagementPageContent() {
             <TableHeader>
               <TableRow>
                 <TableHead className="text-xs">Listing Name & ID</TableHead>
-                <TableHead className="text-xs">Category & Location</TableHead>
                 <TableHead className="text-xs">Business / Contact</TableHead>
                 <TableHead className="text-xs">Price & Details</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Featured</TableHead>
                 <TableHead className="text-xs text-right">Admin Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-36 text-center text-xs text-muted-foreground">
+                  <TableCell colSpan={4} className="h-36 text-center text-xs text-muted-foreground">
                     <Loader2 className="size-5 animate-spin mx-auto mb-2 text-primary" />
                     Loading {currentTabMeta.label.toLowerCase()}...
                   </TableCell>
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-36 text-center text-xs text-muted-foreground">
+                  <TableCell colSpan={4} className="h-36 text-center text-xs text-muted-foreground">
                     <Info className="size-6 mx-auto mb-2 opacity-50" />
                     No {currentTabMeta.label.toLowerCase()} found matching criteria.
                   </TableCell>
@@ -516,6 +551,7 @@ function PlatformListingsManagementPageContent() {
                   const locationText = [item.city, item.state, item.country_code].filter(Boolean).join(", ") || "India";
                   const businessName = item.business_name || item.owner_name || "Platform Direct";
                   const contactText = item.phone || item.email || item.owner_phone || "—";
+                  const publicUrl = getPublicUrl(activeTab, item);
                   
                   // Format price text
                   let priceText = "—";
@@ -533,55 +569,75 @@ function PlatformListingsManagementPageContent() {
 
                   return (
                     <TableRow key={item.id} className="hover:bg-muted/40 transition-colors">
-                      {/* Name & ID */}
+                      {/* Name & ID - on click open new page show detail of listing */}
                       <TableCell className="font-medium text-xs">
                         <div className="flex items-center gap-2.5">
                           {item.image_url || item.logo_url || item.avatar_url || item.featured_image ? (
                             <img
                               src={item.image_url || item.logo_url || item.avatar_url || item.featured_image}
                               alt={itemTitle}
-                              className="size-8 rounded-lg object-cover border"
+                              className="size-8 rounded-lg object-cover border shrink-0"
                             />
                           ) : (
-                            <div className={`size-8 rounded-lg flex items-center justify-center font-bold text-xs ${currentTabMeta.badgeClass}`}>
+                            <div className={`size-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${currentTabMeta.badgeClass}`}>
                               <Icon className="size-4" />
                             </div>
                           )}
-                          <div className="max-w-[220px]">
-                            <p className="font-semibold text-foreground truncate" title={itemTitle}>
+                          <div className="max-w-[280px]">
+                            <a
+                              href={publicUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-semibold text-foreground hover:text-primary hover:underline truncate block cursor-pointer transition-colors"
+                              title={`${itemTitle} (Click to open listing details in new tab)`}
+                            >
                               {itemTitle}
-                            </p>
-                            <span className="text-[10px] text-muted-foreground truncate block">
-                              #{item.id} • {itemSubtitle}
-                            </span>
+                            </a>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              <span className="text-[10px] text-muted-foreground truncate">
+                                #{item.id} • {categoryText}
+                              </span>
+                              {isActive ? (
+                                <Badge variant="outline" className="text-[9px] py-0 px-1 bg-emerald-50 text-emerald-700 border-emerald-200">
+                                  Active
+                                </Badge>
+                              ) : (
+                                <Badge variant="destructive" className="text-[9px] py-0 px-1">
+                                  Suspended
+                                </Badge>
+                              )}
+                              {isFeatured && (
+                                <Badge variant="outline" className="text-[9px] py-0 px-1 bg-amber-50 text-amber-700 border-amber-200">
+                                  Featured
+                                </Badge>
+                              )}
+                              {isVerified && (
+                                <Badge variant="outline" className="text-[9px] py-0 px-1 bg-blue-50 text-blue-700 border-blue-200">
+                                  Verified
+                                </Badge>
+                              )}
+                              {item.verification_status === "pending" && (
+                                <Badge variant="outline" className="text-[9px] py-0 px-1 bg-amber-50 text-amber-700 border-amber-200">
+                                  Pending
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </TableCell>
 
-                      {/* Category & Location */}
-                      <TableCell className="text-xs space-y-0.5">
-                        <Badge variant="secondary" className="text-[10px] truncate max-w-[160px]">
-                          {categoryText}
-                        </Badge>
-                        {item.subcategory_name && (
-                          <span className="text-[10px] text-muted-foreground block truncate">
-                            {item.subcategory_name}
-                          </span>
-                        )}
-                        <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                          <MapPin className="size-3 text-muted-foreground shrink-0" />
-                          <span className="truncate">{locationText}</span>
-                        </p>
-                      </TableCell>
-
                       {/* Business & Contact */}
                       <TableCell className="text-xs space-y-0.5">
-                        <p className="font-medium text-foreground truncate max-w-[150px]" title={businessName}>
+                        <p className="font-medium text-foreground truncate max-w-[170px]" title={businessName}>
                           {businessName}
                         </p>
                         <p className="text-[11px] text-muted-foreground flex items-center gap-1">
                           <Phone className="size-2.5 text-muted-foreground shrink-0" />
                           <span className="truncate">{contactText}</span>
+                        </p>
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                          <MapPin className="size-2.5 text-muted-foreground shrink-0" />
+                          <span className="truncate">{locationText}</span>
                         </p>
                       </TableCell>
 
@@ -601,136 +657,131 @@ function PlatformListingsManagementPageContent() {
                         ) : null}
                       </TableCell>
 
-                      {/* Status */}
-                      <TableCell className="text-xs space-y-0.5">
-                        {isActive ? (
-                          <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
-                            Active
-                          </Badge>
-                        ) : (
-                          <Badge variant="destructive" className="text-[10px]">
-                            Suspended
-                          </Badge>
-                        )}
-                        {isVerified && (
-                          <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 block w-fit mt-0.5">
-                            Verified
-                          </Badge>
-                        )}
-                        {item.verification_status === "pending" && (
-                          <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 block w-fit mt-0.5">
-                            Pending
-                          </Badge>
-                        )}
-                      </TableCell>
-
-                      {/* Featured */}
-                      <TableCell className="text-xs">
-                        {activeTab === "business" || activeTab === "professional" || ["room", "vehicle", "dish", "event", "property"].includes(activeTab) ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              handleAction(activeTab, item.id, "feature", {
-                                isFeatured: !isFeatured,
-                              })
-                            }
-                            className={`h-6 text-[10px] px-2 cursor-pointer ${
-                              isFeatured ? "text-amber-600 font-bold bg-amber-50 dark:bg-amber-950/40" : "text-muted-foreground"
-                            }`}
-                          >
-                            <Sparkles className="size-3 mr-1" />
-                            {isFeatured ? "Featured" : "Standard"}
-                          </Button>
-                        ) : (
-                          <span className="text-muted-foreground text-[10px]">Standard</span>
-                        )}
-                      </TableCell>
-
-                      {/* Admin Actions */}
-                      <TableCell className="text-xs text-right space-x-1 whitespace-nowrap">
-                        {activeTab === "business" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="View Public Profile Page"
-                            onClick={() =>
-                              window.open(item.slug ? `/institutes/${item.slug}` : `/institutes/${item.id}`, "_blank")
-                            }
-                            className="h-7 px-2 text-xs text-muted-foreground hover:text-primary cursor-pointer"
-                          >
-                            <ExternalLink className="size-3.5 mr-1" /> View
-                          </Button>
-                        )}
-
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setEditingListing({ type: activeTab, data: item })}
-                          className="h-7 text-xs cursor-pointer hover:bg-muted font-medium"
-                        >
-                          <Edit2 className="size-3 mr-1" /> Edit
-                        </Button>
-
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSelectedProfile({ type: activeTab, data: item })}
-                          className="h-7 text-xs cursor-pointer"
-                        >
-                          <Eye className="size-3 mr-1" /> Inspect
-                        </Button>
-
-                        {/* Verification / Approval buttons for pending businesses */}
-                        {item.verification_status === "pending" ? (
-                          <>
+                      {/* Admin Actions - Dropdown with everything from Image 2 */}
+                      <TableCell className="text-xs text-right whitespace-nowrap">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
                             <Button
-                              variant="default"
+                              variant="outline"
                               size="sm"
-                              onClick={() => handleAction(activeTab, item.id, "approve")}
-                              className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                              className="h-7 px-2.5 text-xs gap-1 cursor-pointer font-medium hover:bg-muted"
                             >
-                              Approve
+                              <span>Actions</span>
+                              <ChevronDown className="size-3 text-muted-foreground" />
                             </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleAction(activeTab, item.id, "reject")}
-                              className="h-7 text-xs cursor-pointer"
-                            >
-                              Reject
-                            </Button>
-                          </>
-                        ) : (
-                          <Button
-                            variant={isActive ? "destructive" : "secondary"}
-                            size="sm"
-                            onClick={() =>
-                              handleAction(activeTab, item.id, "toggle_status", {
-                                isActive: !isActive,
-                              })
-                            }
-                            className="h-7 text-xs cursor-pointer"
-                          >
-                            {isActive ? "Suspend" : "Activate"}
-                          </Button>
-                        )}
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-52 text-xs">
+                            <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                              Listing Actions
+                            </DropdownMenuLabel>
 
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setDeleteConfirm({
-                              type: activeTab,
-                              id: item.id,
-                              name: itemTitle,
-                            })
-                          }
-                          className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600 cursor-pointer"
-                          title="Delete Listing"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
+                            <DropdownMenuItem
+                              onClick={() => window.open(publicUrl, "_blank")}
+                              className="cursor-pointer text-xs"
+                            >
+                              <ExternalLink className="size-3.5 mr-2 text-muted-foreground" /> View Public Page
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem
+                              onClick={() => setEditingListing({ type: activeTab, data: item })}
+                              className="cursor-pointer text-xs"
+                            >
+                              <Edit2 className="size-3.5 mr-2 text-muted-foreground" /> Edit Details
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem
+                              onClick={() => setSelectedProfile({ type: activeTab, data: item })}
+                              className="cursor-pointer text-xs"
+                            >
+                              <Eye className="size-3.5 mr-2 text-muted-foreground" /> Inspect Listing
+                            </DropdownMenuItem>
+
+                            <DropdownMenuSeparator />
+
+                            {/* Status Toggle */}
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleAction(activeTab, item.id, "toggle_status", {
+                                  isActive: !isActive,
+                                })
+                              }
+                              className={`cursor-pointer text-xs ${
+                                isActive ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400 font-medium"
+                              }`}
+                            >
+                              {isActive ? (
+                                <>
+                                  <XCircle className="size-3.5 mr-2" /> Suspend Listing
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="size-3.5 mr-2" /> Activate Listing
+                                </>
+                              )}
+                            </DropdownMenuItem>
+
+                            {/* Featured Toggle */}
+                            {(activeTab === "business" || activeTab === "professional" || ["room", "vehicle", "dish", "event", "property"].includes(activeTab)) && (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  handleAction(activeTab, item.id, "feature", {
+                                    isFeatured: !isFeatured,
+                                  })
+                                }
+                                className="cursor-pointer text-xs"
+                              >
+                                <Sparkles className={`size-3.5 mr-2 ${isFeatured ? "text-muted-foreground" : "text-amber-500"}`} />
+                                {isFeatured ? "Remove Featured" : "Mark as Featured"}
+                              </DropdownMenuItem>
+                            )}
+
+                            {/* Approval / Verification */}
+                            {item.verification_status === "pending" ? (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleAction(activeTab, item.id, "approve")}
+                                  className="cursor-pointer text-xs text-emerald-600 font-semibold"
+                                >
+                                  <CheckCircle2 className="size-3.5 mr-2" /> Approve Listing
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleAction(activeTab, item.id, "reject")}
+                                  className="cursor-pointer text-xs text-rose-600 font-semibold"
+                                >
+                                  <XCircle className="size-3.5 mr-2" /> Reject Listing
+                                </DropdownMenuItem>
+                              </>
+                            ) : (activeTab === "business" || activeTab === "professional") ? (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  handleAction(activeTab, item.id, "verify", {
+                                    isVerified: !isVerified,
+                                  })
+                                }
+                                className="cursor-pointer text-xs"
+                              >
+                                <ShieldCheck className={`size-3.5 mr-2 ${isVerified ? "text-muted-foreground" : "text-blue-500"}`} />
+                                {isVerified ? "Remove Verification" : "Mark Verified"}
+                              </DropdownMenuItem>
+                            ) : null}
+
+                            <DropdownMenuSeparator />
+
+                            <DropdownMenuItem
+                              onClick={() =>
+                                setDeleteConfirm({
+                                  type: activeTab,
+                                  id: item.id,
+                                  name: itemTitle,
+                                })
+                              }
+                              className="cursor-pointer text-xs text-rose-600 dark:text-rose-400 focus:bg-rose-50 dark:focus:bg-rose-950/30 font-medium"
+                            >
+                              <Trash2 className="size-3.5 mr-2" /> Delete Permanently
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   );
