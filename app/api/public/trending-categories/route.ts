@@ -610,17 +610,17 @@ export async function GET(req: NextRequest) {
       return rows.map((r) => {
         let href = `/explore?type=${verticalType}&categoryId=${r.id}&categoryName=${encodeURIComponent(r.name)}`;
         if (verticalType === "course") {
-          href = `/courses?category=${encodeURIComponent(r.name)}`;
+          href = `/courses/${r.slug || encodeURIComponent(r.name)}`;
         } else if (verticalType === "job") {
-          href = `/jobs?department=${encodeURIComponent(r.name)}`;
+          href = `/jobs/${r.slug || encodeURIComponent(r.name)}`;
         } else if (verticalType === "business") {
-          href = `/businesses?category=${encodeURIComponent(r.name)}`;
+          href = `/businesses/${r.slug || encodeURIComponent(r.name)}`;
         } else if (verticalType === "property") {
-          href = `/explore?type=property&categoryId=${r.id}&categoryName=${encodeURIComponent(r.name)}`;
+          href = `/properties/${r.slug || encodeURIComponent(r.name)}`;
         } else if (verticalType === "event") {
-          href = `/explore?type=all&category=events&categoryName=${encodeURIComponent(r.name)}`;
+          href = `/events/${r.slug || encodeURIComponent(r.name)}`;
         } else if (verticalType === "vehicle") {
-          href = `/explore?type=vehicle&category=${r.slug}&categoryId=${r.id}&categoryName=${encodeURIComponent(r.name)}`;
+          href = `/vehicles/${r.slug || encodeURIComponent(r.name)}`;
         }
 
         return {

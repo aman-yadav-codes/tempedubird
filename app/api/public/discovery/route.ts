@@ -23,11 +23,28 @@ export async function GET(req: NextRequest) {
       us: "US",
       "united kingdom": "GB",
       uk: "GB",
+      gb: "GB",
       canada: "CA",
       ca: "CA",
       australia: "AU",
       au: "AU",
       uae: "AE",
+      "united arab emirates": "AE",
+      ae: "AE",
+      singapore: "SG",
+      sg: "SG",
+      germany: "DE",
+      de: "DE",
+      france: "FR",
+      fr: "FR",
+      "saudi arabia": "SA",
+      sa: "SA",
+      "new zealand": "NZ",
+      nz: "NZ",
+      "south africa": "ZA",
+      "south-africa": "ZA",
+      za: "ZA",
+      rsa: "ZA",
     };
 
     if (city && COUNTRY_CODES[city.toLowerCase().trim()]) {
@@ -37,6 +54,13 @@ export async function GET(req: NextRequest) {
       const cleanCity = extractCleanCity(city);
       if (cleanCity) {
         city = cleanCity;
+      } else {
+        // If cleanCity returned empty, city was actually a country or invalid city string
+        const lowerCity = city.toLowerCase().trim();
+        if (COUNTRY_CODES[lowerCity]) {
+          if (!country) country = COUNTRY_CODES[lowerCity];
+        }
+        city = "";
       }
     }
     let categoryId = searchParams.get("categoryId") ? Number(searchParams.get("categoryId")) : null;

@@ -138,7 +138,7 @@ const VERTICAL_CONFIGS = {
     borderHover: "hover:border-cyan-500/40",
     btnColor: "text-cyan-600 hover:text-cyan-700 dark:text-cyan-400",
     badgeLabel: "Real Estate",
-    exploreAllUrl: "/explore?type=property",
+    exploreAllUrl: "/properties",
   },
   event: {
     label: "Event",
@@ -148,7 +148,7 @@ const VERTICAL_CONFIGS = {
     borderHover: "hover:border-rose-500/40",
     btnColor: "text-rose-600 hover:text-rose-700 dark:text-rose-400",
     badgeLabel: "Live Event",
-    exploreAllUrl: "/explore?type=all&category=events",
+    exploreAllUrl: "/events",
   },
   vehicle: {
     label: "Vehicle",
@@ -158,7 +158,7 @@ const VERTICAL_CONFIGS = {
     borderHover: "hover:border-blue-500/40",
     btnColor: "text-blue-600 hover:text-blue-700 dark:text-blue-400",
     badgeLabel: "Automobile & EV",
-    exploreAllUrl: "/explore?type=vehicle",
+    exploreAllUrl: "/vehicles",
   },
 };
 

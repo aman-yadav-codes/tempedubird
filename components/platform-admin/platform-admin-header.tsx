@@ -402,18 +402,6 @@ export function PlatformAdminHeader() {
     // Use clean canonical city (e.g. "Pandeypur Chauraha, Varanasi, Uttar Pradesh, India" -> "Varanasi")
     const locCity = extractCleanCity(location) || null;
 
-    if (item.type === "property" || item.type === "event" || item.type === "vehicle") {
-      const p = new URLSearchParams();
-      p.set("type", item.type);
-      if (sub?.categorySlug && !sub.categorySlug.startsWith("all-")) {
-        p.set("category", sub.categorySlug);
-      }
-      if (locCity) {
-        p.set("city", locCity);
-      }
-      return `/explore?${p.toString()}`;
-    }
-
     return buildDiscoverySeoUrl({
       type: item.type,
       category: sub?.categorySlug,

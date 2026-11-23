@@ -358,8 +358,18 @@ export function buildPropertySeoUrl(prop: {
 }
 
 const KNOWN_COUNTRIES = new Set([
-  "india", "in", "united states", "usa", "us", "united kingdom", "uk",
-  "canada", "ca", "australia", "au", "uae", "singapore"
+  "india", "in",
+  "united states", "usa", "us", "america",
+  "united kingdom", "uk", "gb", "great britain",
+  "canada", "ca",
+  "australia", "au",
+  "uae", "united arab emirates", "ae",
+  "singapore", "sg",
+  "germany", "de", "deutschland",
+  "france", "fr",
+  "saudi arabia", "sa", "ksa",
+  "new zealand", "nz",
+  "south africa", "south-africa", "za", "rsa"
 ]);
 
 const KNOWN_STATES = new Set([
@@ -462,9 +472,9 @@ export function buildDiscoverySeoUrl({
   else if (normType === "job" || normType === "jobs") prefix = "/jobs";
   else if (normType === "business" || normType === "businesses") prefix = "/businesses";
   else if (normType === "service" || normType === "services") prefix = "/services";
-  else if (normType === "property" || normType === "properties") prefix = "/explore?type=property";
-  else if (normType === "vehicle" || normType === "vehicles") prefix = "/explore?type=vehicle";
-  else if (normType === "event" || normType === "events") prefix = "/explore?type=event";
+  else if (normType === "property" || normType === "properties") prefix = "/properties";
+  else if (normType === "vehicle" || normType === "vehicles") prefix = "/vehicles";
+  else if (normType === "event" || normType === "events") prefix = "/events";
   else if (!normType || normType === "all") {
     prefix = "/businesses";
   }
@@ -475,14 +485,6 @@ export function buildDiscoverySeoUrl({
 
   const locRaw = city || location || [locality, city].filter(Boolean).join(" ") || locality || "";
   const locSlug = extractCanonicalCitySlug(locRaw);
-
-  if (prefix.startsWith("/explore")) {
-    const params = new URLSearchParams();
-    if (normType) params.set("type", normType);
-    if (catSlug) params.set("category", catSlug);
-    if (locSlug) params.set("city", locSlug);
-    return `/explore?${params.toString()}`;
-  }
 
   if (catSlug && locSlug) {
     return `${prefix}/${catSlug}-in-${locSlug}`;
