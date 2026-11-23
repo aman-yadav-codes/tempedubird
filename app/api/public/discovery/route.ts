@@ -79,6 +79,11 @@ export async function GET(req: NextRequest) {
       }
     }
     let categoryId = searchParams.get("categoryId") ? Number(searchParams.get("categoryId")) : null;
+    const bizCatParam = searchParams.get("businessCategoryId") || searchParams.get("business_category_id");
+    const businessCategoryId = bizCatParam && /^\d+$/.test(bizCatParam) ? Number(bizCatParam) : null;
+    if (!categoryId && businessCategoryId) {
+      categoryId = businessCategoryId;
+    }
     const categoryParam = (searchParams.get("category") || searchParams.get("category_slug") || searchParams.get("categoryName") || "").trim();
     const subcategoryParam = (searchParams.get("subcategory") || searchParams.get("subcategory_slug") || "").trim();
 

@@ -189,6 +189,9 @@ function CustomerExplorePageContent({
   const urlBiz = searchParams?.get("businessId") || searchParams?.get("business_id");
   const activeBusinessId = urlBiz && /^\d+$/.test(urlBiz.trim()) ? Number(urlBiz.trim()) : null;
 
+  const urlBizCatParam = searchParams?.get("businessCategoryId") || searchParams?.get("business_category_id");
+  const urlBizCat = urlBizCatParam && /^\d+$/.test(urlBizCatParam.trim()) ? Number(urlBizCatParam.trim()) : null;
+
   const { location: userGlobalLocation, setLocation: setGlobalLocation } = useUserLocation();
 
   const [query, setQuery] = useState(urlQ);
@@ -202,7 +205,7 @@ function CustomerExplorePageContent({
 
   // Cascading Category & Subcategory states
   const [businessCategories, setBusinessCategories] = useState<Array<{ id: number; name: string }>>([]);
-  const [selectedBusinessCategoryId, setSelectedBusinessCategoryId] = useState<number | null>(null);
+  const [selectedBusinessCategoryId, setSelectedBusinessCategoryId] = useState<number | null>(urlBizCat);
   const [categories, setCategories] = useState<Array<{ id: number; name: string; slug?: string; parent_id?: number | null; business_category_id?: number | null }>>([]);
   const [subcategories, setSubcategories] = useState<Array<{ id: number; name: string; slug?: string }>>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(urlCategory);
@@ -331,10 +334,13 @@ function CustomerExplorePageContent({
     if (urlType && ["all", "business", "service", "product", "professional", "course", "job", "property", "vehicle", "event"].includes(urlType)) {
       setActiveType(urlType);
     }
+    if (urlBizCat) {
+      setSelectedBusinessCategoryId(urlBizCat);
+    }
     const resolvedCity = extractCleanCity(urlCity) || extractCleanCity(userGlobalLocation) || "";
     setCity(resolvedCity);
     if (urlCountry) setCountry(urlCountry);
-  }, [urlQ, urlType, urlCity, urlCountry, urlCategory, urlCategoryParam, urlSubcategoryParam, urlCategoryName, userGlobalLocation]);
+  }, [urlQ, urlType, urlCity, urlCountry, urlCategory, urlCategoryParam, urlSubcategoryParam, urlCategoryName, urlBizCat, userGlobalLocation]);
 
   // Sync with global header location / country change events (e.g. Pin button in header)
   useEffect(() => {
@@ -408,7 +414,7 @@ function CustomerExplorePageContent({
     return () => { ignore = true; };
   }, []);
 
-  // Load categories dynamically based on selected Type
+  // Load categories dynamically based on selected Type and Main Business Type
   useEffect(() => {
     let ignore = false;
     async function loadTypeCategories() {
@@ -416,7 +422,8 @@ function CustomerExplorePageContent({
       try {
         const typeParam = activeType === "all" ? "" : `type=${activeType}&`;
         const bizParam = activeBusinessId ? `businessId=${activeBusinessId}&` : "";
-        const res = await fetch(`/api/public/categories?${typeParam}${bizParam}onlyRoot=true&limit=300`);
+        const bizCatParam = selectedBusinessCategoryId ? `businessCategoryId=${selectedBusinessCategoryId}&` : "";
+        const res = await fetch(`/api/public/categories?${typeParam}${bizParam}${bizCatParam}onlyRoot=true&limit=300`);
         const json = await res.json();
         if (!ignore && json?.data) {
           setCategories(json.data);
@@ -429,7 +436,7 @@ function CustomerExplorePageContent({
     }
     loadTypeCategories();
     return () => { ignore = true; };
-  }, [activeType, activeBusinessId]);
+  }, [activeType, activeBusinessId, selectedBusinessCategoryId]);
 
   // Load Main Business Categories
   useEffect(() => {
@@ -445,7 +452,7 @@ function CustomerExplorePageContent({
 
   const filteredCategories = useMemo(() => {
     if (!selectedBusinessCategoryId) return categories;
-    return categories.filter((c) => c.business_category_id === selectedBusinessCategoryId);
+    return categories.filter((c) => c.business_category_id === selectedBusinessCategoryId || c.id === selectedBusinessCategoryId);
   }, [categories, selectedBusinessCategoryId]);
 
   // Load subcategories dynamically based on selected Category
@@ -867,6 +874,7 @@ function CustomerExplorePageContent({
       if (city.trim()) params.set("city", city.trim());
       if (locality.trim()) params.set("locality", locality.trim());
       if (postalCode.trim()) params.set("postalCode", postalCode.trim());
+      if (selectedBusinessCategoryId) params.set("businessCategoryId", String(selectedBusinessCategoryId));
 
       const effectiveCatId = selectedSubcategoryId || selectedCategoryId;
       if (effectiveCatId) params.set("categoryId", String(effectiveCatId));
@@ -895,7 +903,7 @@ function CustomerExplorePageContent({
     } finally {
       setLoading(false);
     }
-  }, [activeBusinessId, query, activeType, country, city, locality, postalCode, selectedCategoryId, selectedSubcategoryId, selectedCategorySlug, selectedCategoryName, selectedSubcategorySlug, selectedSubcategoryName]);
+  }, [activeBusinessId, query, activeType, country, city, locality, postalCode, selectedBusinessCategoryId, selectedCategoryId, selectedSubcategoryId, selectedCategorySlug, selectedCategoryName, selectedSubcategorySlug, selectedSubcategoryName]);
 
   useEffect(() => {
     performSearch();
@@ -2359,7 +2367,40 @@ function CustomerExplorePageContent({
               </button>
             </div>
 
-            {/* 1. Listing Type Filter (On Top in Dropdown) */}
+            {/* 1. Main Business Type Filter (First) */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <Building2 className="size-3.5 text-amber-500" />
+                Main Business Type
+              </label>
+              <div className="relative">
+                <select
+                  value={selectedBusinessCategoryId || ""}
+                  onChange={(e) => {
+                    const val = e.target.value ? Number(e.target.value) : null;
+                    setSelectedBusinessCategoryId(val);
+                    setSelectedCategoryId(null);
+                    setSelectedCategoryName("");
+                    setSelectedCategorySlug("");
+                    setSelectedSubcategoryId(null);
+                    setSelectedSubcategoryName("");
+                    setSelectedSubcategorySlug("");
+                    syncUrlParams({ category: null, subcategory: null });
+                  }}
+                  className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white cursor-pointer appearance-none font-semibold"
+                >
+                  <option value="">All Business Types ({businessCategories.length})</option>
+                  {businessCategories.map((bc) => (
+                    <option key={bc.id} value={bc.id}>
+                      {bc.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* 2. Listing Type Filter (Second) */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
                 <Layers className="size-3.5 text-amber-500" />
@@ -2396,72 +2437,65 @@ function CustomerExplorePageContent({
               </div>
             </div>
 
-            {/* Main Business Category Filter (Only for business or all types) */}
-            {(activeType === "all" || activeType === "business") && (
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-slate-700">
-                  Main Business Category
-                </label>
+            {/* 3. Particular Category Filter (Third - Cascading based on Main Business Type & Listing Type) */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                <span>
+                  {activeType === "service"
+                    ? "Service Category"
+                    : activeType === "product"
+                    ? "Product Category"
+                    : activeType === "course"
+                    ? "Course Category"
+                    : activeType === "professional"
+                    ? "Profession Category"
+                    : activeType === "job"
+                    ? "Job Domain"
+                    : activeType === "property"
+                    ? "Property Category"
+                    : activeType === "vehicle"
+                    ? "Vehicle Category"
+                    : activeType === "event"
+                    ? "Event Category"
+                    : activeType === "business"
+                    ? "Business Category"
+                    : "Category"}
+                </span>
+                {loadingCategories && <span className="text-[10px] text-amber-600 font-normal animate-pulse">Loading...</span>}
+              </label>
+              <div className="relative">
                 <select
-                  value={selectedBusinessCategoryId || ""}
+                  value={selectedCategoryId || ""}
                   onChange={(e) => {
                     const val = e.target.value ? Number(e.target.value) : null;
-                    setSelectedBusinessCategoryId(val);
-                    setSelectedCategoryId(null);
-                    setSelectedCategoryName("");
-                    setSelectedCategorySlug("");
+                    setSelectedCategoryId(val);
                     setSelectedSubcategoryId(null);
                     setSelectedSubcategoryName("");
                     setSelectedSubcategorySlug("");
-                    syncUrlParams({ category: null, subcategory: null });
+                    if (val) {
+                      const cat = categories.find((c) => c.id === val);
+                      const catName = cat ? cat.name : "";
+                      const catSlug = cat ? (cat.slug || cat.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")) : "";
+                      setSelectedCategoryName(catName);
+                      setSelectedCategorySlug(catSlug);
+                      syncUrlParams({ category: catSlug || catName, subcategory: null });
+                    } else {
+                      setSelectedCategoryName("");
+                      setSelectedCategorySlug("");
+                      syncUrlParams({ category: null, subcategory: null });
+                    }
                   }}
-                  className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 focus:outline-none focus:bg-white cursor-pointer"
+                  className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white cursor-pointer appearance-none font-medium"
                 >
-                  <option value="">All Business Types ({businessCategories.length})</option>
-                  {businessCategories.map((bc) => (
-                    <option key={bc.id} value={bc.id}>
-                      {bc.name}
+                  <option value="">All Categories ({filteredCategories.length})</option>
+                  {filteredCategories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
                     </option>
                   ))}
                 </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
               </div>
-            )}
-
-            {/* Particular Category Filter (Related to Selected Type) */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-700">
-                {activeType === "service" ? "Service Category" : activeType === "course" ? "Course Category" : activeType === "professional" ? "Profession Category" : activeType === "job" ? "Job Domain" : "Category"}
-              </label>
-              <select
-                value={selectedCategoryId || ""}
-                onChange={(e) => {
-                  const val = e.target.value ? Number(e.target.value) : null;
-                  setSelectedCategoryId(val);
-                  setSelectedSubcategoryId(null);
-                  setSelectedSubcategoryName("");
-                  setSelectedSubcategorySlug("");
-                  if (val) {
-                    const cat = categories.find((c) => c.id === val);
-                    const catName = cat ? cat.name : "";
-                    const catSlug = cat ? (cat.slug || cat.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")) : "";
-                    setSelectedCategoryName(catName);
-                    setSelectedCategorySlug(catSlug);
-                    syncUrlParams({ category: catSlug || catName, subcategory: null });
-                  } else {
-                    setSelectedCategoryName("");
-                    setSelectedCategorySlug("");
-                    syncUrlParams({ category: null, subcategory: null });
-                  }
-                }}
-                className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 focus:outline-none focus:bg-white cursor-pointer"
-              >
-                <option value="">All Categories ({filteredCategories.length})</option>
-                {filteredCategories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
             </div>
 
             {/* Subcategory Filter (if category selected) */}

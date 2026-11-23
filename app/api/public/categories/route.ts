@@ -54,6 +54,13 @@ export async function GET(req: NextRequest) {
       )`);
     }
 
+    const bizCatParam = searchParams.get("businessCategoryId") || searchParams.get("business_category_id");
+    const bizCatId = bizCatParam && /^\d+$/.test(bizCatParam) ? Number(bizCatParam) : null;
+    if (bizCatId) {
+      params.push(bizCatId);
+      conditions.push(`(business_category_id = $${params.length} OR id = $${params.length})`);
+    }
+
     if (type && type !== "all") {
       if (type === "course" || type === "courses") {
         conditions.push(`category_type IN ('academic', 'course', 'courses')`);
