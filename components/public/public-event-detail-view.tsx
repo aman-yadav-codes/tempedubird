@@ -212,7 +212,7 @@ export function PublicEventDetailView({ event, owner }: Props) {
                     <span className="text-[11px] text-muted-foreground block font-medium">
                       Date
                     </span>
-                    <span className="text-xs font-bold text-foreground flex items-center gap-1 mt-0.5">
+                    <span suppressHydrationWarning className="text-xs font-bold text-foreground flex items-center gap-1 mt-0.5">
                       <Calendar className="size-3.5 text-purple-600" />
                       {formattedDate || "Announced Soon"}
                     </span>

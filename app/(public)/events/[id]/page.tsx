@@ -13,7 +13,16 @@ interface Props {
 
 async function fetchEventRecord(idOrSlug: string) {
   try {
-    const { id: numId } = extractIdFromSlug(idOrSlug);
+    const rawSlug = decodeURIComponent(idOrSlug || "").trim().toLowerCase();
+    let withoutLocation = rawSlug;
+    const lastInIndex = rawSlug.lastIndexOf("-in-");
+    if (lastInIndex !== -1) {
+      withoutLocation = rawSlug.substring(0, lastInIndex);
+    }
+    const { id: rawNumId } = extractIdFromSlug(rawSlug);
+    const { id: withoutLocId } = extractIdFromSlug(withoutLocation);
+    const numId = rawNumId || withoutLocId || -1;
+
     const query = `
       SELECT 
         br.id,
@@ -55,12 +64,21 @@ async function fetchEventRecord(idOrSlug: string) {
       LEFT JOIN business_profiles bp ON bp.id = br.business_id
       LEFT JOIN master_records c ON c.id = br.category_id
       LEFT JOIN master_records subc ON subc.id = br.subcategory_id
-      WHERE br.vertical_code = 'events'
-        AND (br.slug = $1 OR br.id = $2 OR br.slug ILIKE $1)
+      WHERE (br.vertical_code = 'events' OR br.vertical_code = 'event')
+        AND (
+          br.slug = $1
+          OR br.slug = $2
+          OR br.slug ILIKE $1
+          OR br.slug ILIKE $2
+          OR (br.id = $3 AND $3 > 0)
+          OR $1 ILIKE '%' || br.slug || '%'
+          OR br.slug ILIKE '%' || $2 || '%'
+        )
         AND (br.is_deleted IS NULL OR br.is_deleted = FALSE)
+      ORDER BY (CASE WHEN br.slug = $1 THEN 0 WHEN br.slug = $2 THEN 1 ELSE 2 END), br.id DESC
       LIMIT 1
     `;
-    const res = await db.query(query, [idOrSlug, numId || -1]);
+    const res = await db.query(query, [rawSlug, withoutLocation, numId]);
     if (res.rows.length === 0) return null;
 
     const row = res.rows[0];
