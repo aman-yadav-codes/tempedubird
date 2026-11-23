@@ -277,9 +277,17 @@ export function PublicPropertyDetailView({ property, owner }: Props) {
                 Listed By
               </span>
               <div className="flex items-start gap-3">
-                <div className="size-12 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold text-base shrink-0">
-                  <Building2 className="size-6" />
-                </div>
+                {businessUrl !== "#" ? (
+                  <Link href={businessUrl} className="block cursor-pointer shrink-0">
+                    <div className="size-12 rounded-xl bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-colors flex items-center justify-center font-bold text-base">
+                      <Building2 className="size-6" />
+                    </div>
+                  </Link>
+                ) : (
+                  <div className="size-12 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold text-base shrink-0">
+                    <Building2 className="size-6" />
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   {businessSlug ? (
                     <Link href={businessUrl} className="hover:text-emerald-600 hover:underline block truncate">

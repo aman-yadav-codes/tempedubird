@@ -375,11 +375,27 @@ export function PublicServiceDetailView({
                 Offered By
               </span>
               <div className="flex items-start gap-3">
-                <div className="size-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-base shrink-0">
-                  {providerType === "professional" ? <Briefcase className="size-6" /> : <Store className="size-6" />}
-                </div>
+                {providerUrl !== "#" ? (
+                  <Link href={providerUrl} className="block cursor-pointer shrink-0" title={`Visit ${providerName} Profile`}>
+                    <div className="size-12 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 flex items-center justify-center font-bold text-base transition-colors">
+                      {providerType === "professional" ? <Briefcase className="size-6" /> : <Store className="size-6" />}
+                    </div>
+                  </Link>
+                ) : (
+                  <div className="size-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-base shrink-0">
+                    {providerType === "professional" ? <Briefcase className="size-6" /> : <Store className="size-6" />}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-sm text-foreground truncate">{providerName}</h4>
+                  {providerUrl !== "#" ? (
+                    <Link href={providerUrl} className="block cursor-pointer group/prov" title={`Visit ${providerName} Profile`}>
+                      <h4 className="font-bold text-sm text-foreground group-hover/prov:text-primary group-hover/prov:underline transition-colors truncate">
+                        {providerName}
+                      </h4>
+                    </Link>
+                  ) : (
+                    <h4 className="font-bold text-sm text-foreground truncate">{providerName}</h4>
+                  )}
                   <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                     <MapPin className="size-3 text-primary shrink-0" />
                     <span className="truncate">{providerLocation}</span>

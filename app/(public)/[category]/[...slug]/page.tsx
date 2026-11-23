@@ -1377,7 +1377,7 @@ export default async function SeoCategoryProfilePage({ params }: Props) {
             reviews={data.reviews || []}
             courses={data.courses || []}
             jobs={data.jobs || []}
-            packages={data.packages || []}
+            packages={(data as any).packages || []}
             properties={data.properties || []}
             vehicles={data.vehicles || []}
             events={data.events || []}

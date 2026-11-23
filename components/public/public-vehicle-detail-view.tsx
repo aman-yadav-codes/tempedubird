@@ -355,9 +355,17 @@ export function PublicVehicleDetailView({ vehicle, owner }: Props) {
                 {/* Dealer Info Box */}
                 <div className="p-4 rounded-xl bg-muted/40 border space-y-3">
                   <div className="flex items-center gap-2">
-                    <div className="size-9 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700">
-                      <Building2 className="size-5" />
-                    </div>
+                    {businessSlug ? (
+                      <Link href={`/business/${businessSlug}`} className="block cursor-pointer">
+                        <div className="size-9 rounded-lg bg-blue-100 hover:bg-blue-200 transition-colors flex items-center justify-center text-blue-700">
+                          <Building2 className="size-5" />
+                        </div>
+                      </Link>
+                    ) : (
+                      <div className="size-9 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700">
+                        <Building2 className="size-5" />
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <span className="text-[10px] text-muted-foreground block uppercase tracking-wider font-semibold">
                         Dealership

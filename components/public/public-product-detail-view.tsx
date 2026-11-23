@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -47,10 +47,36 @@ export function PublicProductDetailView({ product, seller, reviews = [] }: Props
   const hasDiscount = Boolean(regularPrice && regularPrice > price);
   const discountPercent = hasDiscount && regularPrice ? Math.round(((regularPrice - price) / regularPrice) * 100) : 0;
 
-  const sellerName = seller?.name || product.seller_info?.business_name || product.brand_name || "Verified Local Store";
+  const sellerName = seller?.name || product.seller_info?.business_name || product.business_name || product.brand_name || "Verified Local Store";
   const sellerLocation = [seller?.locality, seller?.city, seller?.state].filter(Boolean).join(", ") || product.city || "Varanasi";
-  const sellerPhone = seller?.phone || "+91 9876543210";
+  const sellerPhone = seller?.phone || product.business_phone || "+91 9876543210";
   const sellerWhatsapp = seller?.whatsapp || sellerPhone.replace(/[^0-9]/g, "");
+
+  const effectiveSeller = seller || product.seller_info || {
+    id: product.business_id || product.business_profile_id,
+    name: sellerName,
+    slug: product.business_slug,
+    category_name: product.category_name,
+    category_slug: product.category_slug,
+    locality: product.locality,
+    city: product.city,
+    state: product.state,
+  };
+
+  const storeSlugOrId = effectiveSeller?.slug || effectiveSeller?.id || product.business_slug || product.business_id;
+
+  const storeUrl = useMemo(() => {
+    if (effectiveSeller && (effectiveSeller.slug || effectiveSeller.id)) {
+      if (effectiveSeller.category_name || effectiveSeller.category_slug) {
+        return buildBusinessSeoUrl(effectiveSeller);
+      }
+      return `/business/${effectiveSeller.slug || effectiveSeller.id}`;
+    }
+    if (storeSlugOrId) {
+      return `/business/${storeSlugOrId}`;
+    }
+    return "#";
+  }, [effectiveSeller, storeSlugOrId]);
 
   const cartItemId = `prod_${product.id}`;
   const currentCartQty = getItemQuantity(cartItemId);
@@ -280,11 +306,27 @@ export function PublicProductDetailView({ product, seller, reviews = [] }: Props
                 Sold & Fulfilled By
               </span>
               <div className="flex items-start gap-3">
-                <div className="size-12 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center font-bold text-base shrink-0">
-                  <Store className="size-6" />
-                </div>
+                {storeUrl !== "#" ? (
+                  <Link href={storeUrl} className="block cursor-pointer shrink-0" title={`Visit ${sellerName} Storefront`}>
+                    <div className="size-12 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center font-bold text-base hover:bg-indigo-500/20 transition-colors">
+                      <Store className="size-6" />
+                    </div>
+                  </Link>
+                ) : (
+                  <div className="size-12 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center font-bold text-base shrink-0">
+                    <Store className="size-6" />
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-sm text-foreground truncate">{sellerName}</h4>
+                  {storeUrl !== "#" ? (
+                    <Link href={storeUrl} className="block cursor-pointer group/store" title={`Visit ${sellerName} Storefront`}>
+                      <h4 className="font-bold text-sm text-foreground group-hover/store:text-primary group-hover/store:underline transition-colors truncate">
+                        {sellerName}
+                      </h4>
+                    </Link>
+                  ) : (
+                    <h4 className="font-bold text-sm text-foreground truncate">{sellerName}</h4>
+                  )}
                   <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                     <MapPin className="size-3 text-primary shrink-0" />
                     <span className="truncate">{sellerLocation}</span>
@@ -329,9 +371,9 @@ export function PublicProductDetailView({ product, seller, reviews = [] }: Props
                 </Button>
               </div>
 
-              {seller && (
-                <Button asChild variant="outline" size="sm" className="w-full text-xs font-semibold">
-                  <Link href={buildBusinessSeoUrl(seller)}>
+              {storeUrl !== "#" && (
+                <Button asChild variant="outline" size="sm" className="w-full text-xs font-semibold cursor-pointer">
+                  <Link href={storeUrl}>
                     View Storefront & All Inventory <ArrowRight className="size-3.5 ml-1" />
                   </Link>
                 </Button>

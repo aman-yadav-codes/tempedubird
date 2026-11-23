@@ -198,6 +198,8 @@ export default function ProductDetailPage() {
 
   const storeLink = product?.business_slug
     ? `/${product.category_slug || "retail-shopping"}/${product.business_slug}?tab=products&highlight=${product.id}`
+    : (product?.business_profile_id || product?.business_id)
+    ? `/business/${product.business_profile_id || product.business_id}`
     : null;
 
   if (loading) {

@@ -63,6 +63,16 @@ export function PublicCourseDetailView({
   const instPhone = institution?.phone || course.phone || "+91 9876543210";
   const instWhatsapp = institution?.whatsapp || instPhone.replace(/[^0-9]/g, "");
 
+  const instUrl = institution
+    ? (institution.category_name || institution.category_slug
+        ? buildBusinessSeoUrl(institution)
+        : `/business/${institution.slug || institution.id}`)
+    : course.institution_slug
+    ? `/business/${course.institution_slug}`
+    : course.institution_id
+    ? `/business/${course.institution_id}`
+    : "#";
+
   const feeAmount = Number(course.fee_amount || course.fee || course.price || 0);
 
   const handleEnquirySubmit = async (e: React.FormEvent) => {
@@ -323,11 +333,27 @@ export function PublicCourseDetailView({
                 Offered By Institute
               </span>
               <div className="flex items-start gap-3">
-                <div className="size-12 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold text-base shrink-0">
-                  <Building2 className="size-6" />
-                </div>
+                {instUrl !== "#" ? (
+                  <Link href={instUrl} className="block cursor-pointer shrink-0" title={`Visit ${instName}`}>
+                    <div className="size-12 rounded-xl bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors flex items-center justify-center font-bold text-base">
+                      <Building2 className="size-6" />
+                    </div>
+                  </Link>
+                ) : (
+                  <div className="size-12 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold text-base shrink-0">
+                    <Building2 className="size-6" />
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-sm text-foreground truncate">{instName}</h4>
+                  {instUrl !== "#" ? (
+                    <Link href={instUrl} className="block cursor-pointer group/inst" title={`Visit ${instName}`}>
+                      <h4 className="font-bold text-sm text-foreground group-hover/inst:text-amber-600 group-hover/inst:underline transition-colors truncate">
+                        {instName}
+                      </h4>
+                    </Link>
+                  ) : (
+                    <h4 className="font-bold text-sm text-foreground truncate">{instName}</h4>
+                  )}
                   <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                     <MapPin className="size-3 text-primary shrink-0" />
                     <span className="truncate">{instLocation}</span>
@@ -344,9 +370,9 @@ export function PublicCourseDetailView({
                 </p>
               )}
 
-              {institution && (
+              {instUrl !== "#" && (
                 <Button asChild variant="outline" size="sm" className="w-full text-xs font-semibold">
-                  <Link href={buildBusinessSeoUrl(institution)}>
+                  <Link href={instUrl}>
                     View Institute Campus & All Courses <ArrowRight className="size-3.5 ml-1" />
                   </Link>
                 </Button>

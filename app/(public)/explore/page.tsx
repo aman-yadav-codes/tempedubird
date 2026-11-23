@@ -157,6 +157,18 @@ interface DiscoveryItem {
   is_free?: boolean | null;
   organizer_name?: string | null;
   business_name?: string | null;
+  business_slug?: string | null;
+  business_id?: number | string | null;
+  institution_id?: number | string | null;
+  institution_profile_id?: number | string | null;
+  institution_slug?: string | null;
+  institution_name?: string | null;
+  image_url?: string | null;
+  fee?: number | string | null;
+  annual_fee?: number | string | null;
+  sale_price?: number | string | null;
+  discounted_price?: number | string | null;
+  [key: string]: any;
 }
 
 export interface CustomerExplorePageProps {
@@ -1863,9 +1875,18 @@ function CustomerExplorePageContent({
                                 </h3>
                               </Link>
                               {j.company_name && (
-                                <p className="text-xs text-muted-foreground font-semibold mt-0.5">
-                                  {j.company_name}
-                                </p>
+                                j.business_slug || j.business_id ? (
+                                  <Link
+                                    href={j.business_slug ? `/business/${j.business_slug}` : `/business/${j.business_id}`}
+                                    className="text-xs text-muted-foreground font-semibold mt-0.5 hover:text-primary hover:underline truncate block transition-colors"
+                                  >
+                                    {j.company_name}
+                                  </Link>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground font-semibold mt-0.5 truncate">
+                                    {j.company_name}
+                                  </p>
+                                )
                               )}
                             </div>
                             <div className="size-9 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0">
@@ -1989,7 +2010,7 @@ function CustomerExplorePageContent({
                               <div className="text-[11px] text-slate-500 flex items-center gap-1">
                                 <Building2 className="size-3 text-slate-400 shrink-0" />
                                 <Link
-                                  href={p.business_slug ? `/business/${p.business_slug}` : `/business/${p.business_id}`}
+                                  href={p.business_slug ? `/business/${p.business_slug}` : p.business_id ? `/business/${p.business_id}` : "#"}
                                   className="truncate font-medium text-slate-700 hover:text-emerald-600 hover:underline transition-colors"
                                 >
                                   {p.business_name}
@@ -2104,7 +2125,7 @@ function CustomerExplorePageContent({
                               <div className="text-[11px] text-slate-500 flex items-center gap-1">
                                 <Building2 className="size-3 text-slate-400 shrink-0" />
                                 <Link
-                                  href={v.business_slug ? `/business/${v.business_slug}` : `/business/${v.business_id}`}
+                                  href={v.business_slug ? `/business/${v.business_slug}` : v.business_id ? `/business/${v.business_id}` : "#"}
                                   className="truncate font-medium text-slate-700 hover:text-blue-600 hover:underline transition-colors"
                                 >
                                   {v.business_name}
@@ -2230,7 +2251,7 @@ function CustomerExplorePageContent({
                               <div className="text-[11px] text-slate-500 flex items-center gap-1">
                                 <Building2 className="size-3 text-slate-400 shrink-0" />
                                 <Link
-                                  href={e.business_slug ? `/business/${e.business_slug}` : `/business/${e.business_id}`}
+                                  href={e.business_slug ? `/business/${e.business_slug}` : e.business_id ? `/business/${e.business_id}` : "#"}
                                   className="truncate font-medium text-slate-700 hover:text-purple-600 hover:underline transition-colors"
                                 >
                                   {e.business_name}
