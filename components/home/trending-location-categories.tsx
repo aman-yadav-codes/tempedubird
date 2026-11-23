@@ -19,6 +19,7 @@ import {
   Building2,
   Building,
   Calendar,
+  Car,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,7 @@ export interface TrendingCategoryItem {
   id: number;
   name: string;
   slug: string;
-  vertical: "product" | "service" | "professional" | "course" | "job" | "business" | "property" | "event";
+  vertical: "product" | "service" | "professional" | "course" | "job" | "business" | "property" | "event" | "vehicle";
   itemCount: number;
   storeCount?: number | null;
   providerCount?: number | null;
@@ -48,6 +49,7 @@ interface TrendingCategoriesResponse {
     businesses: number;
     properties: number;
     events: number;
+    vehicles: number;
     total: number;
   };
   categories: {
@@ -59,6 +61,7 @@ interface TrendingCategoriesResponse {
     businesses: TrendingCategoryItem[];
     properties: TrendingCategoryItem[];
     events: TrendingCategoryItem[];
+    vehicles: TrendingCategoryItem[];
   };
 }
 
@@ -147,9 +150,19 @@ const VERTICAL_CONFIGS = {
     badgeLabel: "Live Event",
     exploreAllUrl: "/explore?type=all&category=events",
   },
+  vehicle: {
+    label: "Vehicle",
+    pluralLabel: "Vehicles",
+    icon: Car,
+    colorClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+    borderHover: "hover:border-blue-500/40",
+    btnColor: "text-blue-600 hover:text-blue-700 dark:text-blue-400",
+    badgeLabel: "Automobile & EV",
+    exploreAllUrl: "/explore?type=vehicle",
+  },
 };
 
-type ActiveTab = "all" | "products" | "services" | "professionals" | "courses" | "jobs" | "businesses" | "properties" | "events";
+type ActiveTab = "all" | "products" | "services" | "professionals" | "courses" | "jobs" | "businesses" | "properties" | "events" | "vehicles";
 
 export function TrendingLocationCategories({ location }: TrendingLocationCategoriesProps) {
   const [data, setData] = useState<TrendingCategoriesResponse | null>(null);
@@ -197,6 +210,7 @@ export function TrendingLocationCategories({ location }: TrendingLocationCategor
     if (activeTab === "businesses") return data.categories.businesses || [];
     if (activeTab === "properties") return data.categories.properties || [];
     if (activeTab === "events") return data.categories.events || [];
+    if (activeTab === "vehicles") return data.categories.vehicles || [];
 
     // "all": Interleave categories from all verticals
     const p = data.categories.products || [];
@@ -207,9 +221,10 @@ export function TrendingLocationCategories({ location }: TrendingLocationCategor
     const b = data.categories.businesses || [];
     const prop = data.categories.properties || [];
     const ev = data.categories.events || [];
+    const v = data.categories.vehicles || [];
 
     const result: TrendingCategoryItem[] = [];
-    const maxLen = Math.max(p.length, s.length, prof.length, c.length, j.length, b.length, prop.length, ev.length);
+    const maxLen = Math.max(p.length, s.length, prof.length, c.length, j.length, b.length, prop.length, ev.length, v.length);
 
     for (let i = 0; i < maxLen; i++) {
       if (p[i]) result.push(p[i]);
@@ -220,9 +235,10 @@ export function TrendingLocationCategories({ location }: TrendingLocationCategor
       if (b[i]) result.push(b[i]);
       if (prop[i]) result.push(prop[i]);
       if (ev[i]) result.push(ev[i]);
+      if (v[i]) result.push(v[i]);
     }
 
-    return result.slice(0, 16);
+    return result.slice(0, 18);
   }, [data, activeTab]);
 
   const counts = data?.counts || {
@@ -234,6 +250,7 @@ export function TrendingLocationCategories({ location }: TrendingLocationCategor
     businesses: 0,
     properties: 0,
     events: 0,
+    vehicles: 0,
     total: 0,
   };
 
@@ -439,6 +456,26 @@ export function TrendingLocationCategories({ location }: TrendingLocationCategor
               }`}
             >
               {counts.properties}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("vehicles")}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+              activeTab === "vehicles"
+                ? "bg-blue-600 text-white shadow-xs"
+                : "bg-card hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60"
+            }`}
+          >
+            <Car className="size-3.5 text-blue-500" />
+            <span>Vehicles</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                activeTab === "vehicles" ? "bg-white/20 text-white" : "bg-muted text-foreground"
+              }`}
+            >
+              {counts.vehicles}
             </span>
           </button>
 

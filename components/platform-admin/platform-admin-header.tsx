@@ -34,6 +34,7 @@ import {
   Settings,
   Calendar,
   Building,
+  Car,
   Globe,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -192,6 +193,18 @@ const TOP_NAV_ITEMS = [
     ],
   },
   {
+    label: "Vehicles",
+    type: "vehicle",
+    icon: Car,
+    subcategories: [
+      { label: "All Vehicles", categorySlug: "all-vehicles" },
+      { label: "Passenger Cars & SUVs", categorySlug: "vehicle-passenger-cars-suvs" },
+      { label: "Commercial & Transport Vehicles", categorySlug: "vehicle-commercial-transport-vehicles" },
+      { label: "Two-Wheelers & Motorcycles", categorySlug: "vehicle-two-wheelers-motorcycles" },
+      { label: "Luxury & Exotic Automobiles", categorySlug: "vehicle-luxury-exotic-automobiles" },
+    ],
+  },
+  {
     label: "Events",
     type: "event",
     icon: Calendar,
@@ -323,6 +336,7 @@ export function PlatformAdminHeader() {
           course: [],
           job: [],
           property: [],
+          vehicle: [],
           event: [],
         };
 
@@ -342,6 +356,8 @@ export function PlatformAdminHeader() {
             mapped.job.push(item);
           } else if (catType === "property" || catType === "properties") {
             mapped.property.push(item);
+          } else if (catType === "vehicle" || catType === "vehicles") {
+            mapped.vehicle.push(item);
           } else if (catType === "event" || catType === "events") {
             mapped.event.push(item);
           }
