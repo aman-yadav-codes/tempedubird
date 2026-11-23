@@ -1944,24 +1944,26 @@ function CustomerExplorePageContent({
                       <Card key={p.id} className="border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between">
                         <div>
                           <div className="relative h-44 w-full bg-slate-100 overflow-hidden group">
-                            {p.image_url || p.default_image_url ? (
-                              <img
-                                src={p.image_url || p.default_image_url || ""}
-                                alt={p.title || p.name}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-emerald-50 text-emerald-600">
-                                <Home className="size-12 opacity-60" />
-                              </div>
-                            )}
-                            <div className="absolute top-2.5 right-2.5">
+                            <Link href={`/properties/${p.slug || p.id}`} className="block w-full h-full">
+                              {p.image_url || p.default_image_url ? (
+                                <img
+                                  src={p.image_url || p.default_image_url || ""}
+                                  alt={p.title || p.name}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-emerald-50 text-emerald-600">
+                                  <Home className="size-12 opacity-60" />
+                                </div>
+                              )}
+                            </Link>
+                            <div className="absolute top-2.5 right-2.5 pointer-events-none">
                               <Badge className="bg-emerald-600 text-white font-bold text-[10px] px-2 py-0.5">
                                 {p.rental_amount ? `₹${Number(p.rental_amount).toLocaleString()}/mo` : p.price ? `₹${Number(p.price).toLocaleString()}` : "Price on Request"}
                               </Badge>
                             </div>
                             {p.city && (
-                              <div className="absolute bottom-2.5 left-2.5">
+                              <div className="absolute bottom-2.5 left-2.5 pointer-events-none">
                                 <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-[10px] px-2 py-0.5 flex items-center gap-1">
                                   <MapPin className="size-2.5" />
                                   {p.city}
@@ -1971,12 +1973,19 @@ function CustomerExplorePageContent({
                           </div>
                           <CardContent className="p-4 space-y-2">
                             <h3 className="font-bold text-slate-900 text-sm line-clamp-1 hover:text-emerald-600 transition-colors">
-                              {p.title || p.name}
+                              <Link href={`/properties/${p.slug || p.id}`}>
+                                {p.title || p.name}
+                              </Link>
                             </h3>
                             {p.business_name && (
                               <div className="text-[11px] text-slate-500 flex items-center gap-1">
                                 <Building2 className="size-3 text-slate-400 shrink-0" />
-                                <span className="truncate font-medium text-slate-700">{p.business_name}</span>
+                                <Link
+                                  href={p.business_slug ? `/business/${p.business_slug}` : `/business/${p.business_id}`}
+                                  className="truncate font-medium text-slate-700 hover:text-emerald-600 hover:underline transition-colors"
+                                >
+                                  {p.business_name}
+                                </Link>
                               </div>
                             )}
                             {p.description && (
@@ -2050,24 +2059,26 @@ function CustomerExplorePageContent({
                       <Card key={v.id} className="border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between">
                         <div>
                           <div className="relative h-44 w-full bg-slate-100 overflow-hidden group">
-                            {v.image_url || v.default_image_url ? (
-                              <img
-                                src={v.image_url || v.default_image_url || ""}
-                                alt={v.title || v.name}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-blue-50 text-blue-600">
-                                <Car className="size-12 opacity-60" />
-                              </div>
-                            )}
-                            <div className="absolute top-2.5 right-2.5">
+                            <Link href={`/vehicles/${v.slug || v.id}`} className="block w-full h-full">
+                              {v.image_url || v.default_image_url ? (
+                                <img
+                                  src={v.image_url || v.default_image_url || ""}
+                                  alt={v.title || v.name}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-blue-50 text-blue-600">
+                                  <Car className="size-12 opacity-60" />
+                                </div>
+                              )}
+                            </Link>
+                            <div className="absolute top-2.5 right-2.5 pointer-events-none">
                               <Badge className="bg-blue-600 text-white font-bold text-[10px] px-2 py-0.5">
                                 {v.price ? `₹${Number(v.price).toLocaleString()}` : "Price on Request"}
                               </Badge>
                             </div>
                             {v.city && (
-                              <div className="absolute bottom-2.5 left-2.5">
+                              <div className="absolute bottom-2.5 left-2.5 pointer-events-none">
                                 <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-[10px] px-2 py-0.5 flex items-center gap-1">
                                   <MapPin className="size-2.5" />
                                   {v.city}
@@ -2077,12 +2088,19 @@ function CustomerExplorePageContent({
                           </div>
                           <CardContent className="p-4 space-y-2">
                             <h3 className="font-bold text-slate-900 text-sm line-clamp-1 hover:text-blue-600 transition-colors">
-                              {v.title || v.name}
+                              <Link href={`/vehicles/${v.slug || v.id}`}>
+                                {v.title || v.name}
+                              </Link>
                             </h3>
                             {v.business_name && (
                               <div className="text-[11px] text-slate-500 flex items-center gap-1">
                                 <Building2 className="size-3 text-slate-400 shrink-0" />
-                                <span className="truncate font-medium text-slate-700">{v.business_name}</span>
+                                <Link
+                                  href={v.business_slug ? `/business/${v.business_slug}` : `/business/${v.business_id}`}
+                                  className="truncate font-medium text-slate-700 hover:text-blue-600 hover:underline transition-colors"
+                                >
+                                  {v.business_name}
+                                </Link>
                               </div>
                             )}
                             {v.description && (
@@ -2161,24 +2179,26 @@ function CustomerExplorePageContent({
                       <Card key={e.id} className="border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between">
                         <div>
                           <div className="relative h-44 w-full bg-slate-100 overflow-hidden group">
-                            {e.image_url || e.default_image_url ? (
-                              <img
-                                src={e.image_url || e.default_image_url || ""}
-                                alt={e.title || e.name}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-purple-50 text-purple-600">
-                                <Calendar className="size-12 opacity-60" />
-                              </div>
-                            )}
-                            <div className="absolute top-2.5 right-2.5">
+                            <Link href={`/events/${e.slug || e.id}`} className="block w-full h-full">
+                              {e.image_url || e.default_image_url ? (
+                                <img
+                                  src={e.image_url || e.default_image_url || ""}
+                                  alt={e.title || e.name}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-purple-50 text-purple-600">
+                                  <Calendar className="size-12 opacity-60" />
+                                </div>
+                              )}
+                            </Link>
+                            <div className="absolute top-2.5 right-2.5 pointer-events-none">
                               <Badge className={e.is_free ? "bg-emerald-600 text-white font-bold text-[10px] px-2 py-0.5" : "bg-purple-600 text-white font-bold text-[10px] px-2 py-0.5"}>
                                 {e.is_free ? "Free Entry" : e.price ? `₹${Number(e.price).toLocaleString()}` : "Pass Required"}
                               </Badge>
                             </div>
                             {e.city && (
-                              <div className="absolute bottom-2.5 left-2.5">
+                              <div className="absolute bottom-2.5 left-2.5 pointer-events-none">
                                 <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-[10px] px-2 py-0.5 flex items-center gap-1">
                                   <MapPin className="size-2.5" />
                                   {e.city}
@@ -2188,7 +2208,9 @@ function CustomerExplorePageContent({
                           </div>
                           <CardContent className="p-4 space-y-2">
                             <h3 className="font-bold text-slate-900 text-sm line-clamp-1 hover:text-purple-600 transition-colors">
-                              {e.title || e.name}
+                              <Link href={`/events/${e.slug || e.id}`}>
+                                {e.title || e.name}
+                              </Link>
                             </h3>
                             {e.venue_name && (
                               <div className="text-[11px] text-slate-600 flex items-center gap-1 font-medium">
@@ -2199,7 +2221,12 @@ function CustomerExplorePageContent({
                             {e.business_name && (
                               <div className="text-[11px] text-slate-500 flex items-center gap-1">
                                 <Building2 className="size-3 text-slate-400 shrink-0" />
-                                <span className="truncate font-medium text-slate-700">{e.business_name}</span>
+                                <Link
+                                  href={e.business_slug ? `/business/${e.business_slug}` : `/business/${e.business_id}`}
+                                  className="truncate font-medium text-slate-700 hover:text-purple-600 hover:underline transition-colors"
+                                >
+                                  {e.business_name}
+                                </Link>
                               </div>
                             )}
                             {e.description && (

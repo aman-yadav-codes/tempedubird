@@ -52,6 +52,8 @@ export function PublicPropertyDetailView({ property, owner }: Props) {
   const propLocation = [property.locality, property.city, property.state].filter(Boolean).join(", ") || "Pandeypur, Varanasi";
   const ownerPhone = owner?.phone || property.phone || "+91 9876543210";
   const ownerWhatsapp = owner?.whatsapp || ownerPhone.replace(/[^0-9]/g, "");
+  const businessSlug = owner?.slug || property.business_slug || property.business_id;
+  const businessUrl = businessSlug ? `/business/${businessSlug}` : (owner ? buildBusinessSeoUrl(owner) : "#");
 
   const price = Number(property.price || property.rent_amount || 0);
 
@@ -279,7 +281,13 @@ export function PublicPropertyDetailView({ property, owner }: Props) {
                   <Building2 className="size-6" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-sm text-foreground truncate">{ownerName}</h4>
+                  {businessSlug ? (
+                    <Link href={businessUrl} className="hover:text-emerald-600 hover:underline block truncate">
+                      <h4 className="font-bold text-sm text-foreground truncate">{ownerName}</h4>
+                    </Link>
+                  ) : (
+                    <h4 className="font-bold text-sm text-foreground truncate">{ownerName}</h4>
+                  )}
                   <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                     <MapPin className="size-3 text-primary shrink-0" />
                     <span className="truncate">{propLocation}</span>
@@ -290,9 +298,9 @@ export function PublicPropertyDetailView({ property, owner }: Props) {
                 </div>
               </div>
 
-              {owner && (
+              {(owner || businessSlug) && (
                 <Button asChild variant="outline" size="sm" className="w-full text-xs font-semibold">
-                  <Link href={buildBusinessSeoUrl(owner)}>
+                  <Link href={businessUrl}>
                     View Owner Profile & All Properties <ArrowRight className="size-3.5 ml-1" />
                   </Link>
                 </Button>

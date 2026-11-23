@@ -1,15 +1,123 @@
-import { parseDiscoverySeoSlug } from "@/lib/utils/seo-slug";
+import { db } from "@/lib/db/db";
+import { parseDiscoverySeoSlug, extractIdFromSlug } from "@/lib/utils/seo-slug";
 import CustomerExplorePage from "@/app/(public)/explore/page";
+import { PublicPropertyDetailView } from "@/components/public/public-property-detail-view";
+import type { Metadata } from "next";
+
+export const dynamic = "force-dynamic";
+
+interface Props {
+  params: Promise<{ id: string }> | { id: string };
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+async function fetchPropertyRecord(idOrSlug: string) {
+  try {
+    const { id: numId } = extractIdFromSlug(idOrSlug);
+    const query = `
+      SELECT 
+        br.id,
+        br.business_id,
+        br.vertical_code,
+        br.category_id,
+        br.subcategory_id,
+        br.title,
+        br.title AS name,
+        br.slug,
+        br.description,
+        COALESCE(pd.rental_amount, br.price) AS price,
+        pd.rental_amount,
+        br.currency,
+        br.featured_image AS image_url,
+        br.featured_image AS default_image_url,
+        br.is_active,
+        br.is_featured,
+        br.created_at,
+        bp.id AS business_id,
+        bp.name AS business_name,
+        bp.slug AS business_slug,
+        COALESCE(pd.city, bp.city, 'Varanasi') AS city,
+        COALESCE(pd.state, bp.state, 'Uttar Pradesh') AS state,
+        COALESCE(pd.street_address, bp.address) AS address,
+        COALESCE(bp.phone, '+91 94152 20303') AS phone,
+        bp.whatsapp,
+        bp.email,
+        c.name AS category_name,
+        subc.name AS subcategory_name,
+        pd.bedrooms,
+        pd.bathrooms,
+        pd.built_up_area,
+        pd.built_up_area AS area_sqft,
+        pd.area_unit,
+        pd.availability_status
+      FROM business_records br
+      LEFT JOIN property_details pd ON pd.record_id = br.id
+      LEFT JOIN business_profiles bp ON bp.id = br.business_id
+      LEFT JOIN master_records c ON c.id = br.category_id
+      LEFT JOIN master_records subc ON subc.id = br.subcategory_id
+      WHERE br.vertical_code = 'properties'
+        AND (br.slug = $1 OR br.id = $2 OR br.slug ILIKE $1)
+        AND (br.is_deleted IS NULL OR br.is_deleted = FALSE)
+      LIMIT 1
+    `;
+    const res = await db.query(query, [idOrSlug, numId || -1]);
+    if (res.rows.length === 0) return null;
+
+    const row = res.rows[0];
+    const owner = {
+      id: row.business_id,
+      name: row.business_name || "Property Manager",
+      slug: row.business_slug,
+      phone: row.phone,
+      whatsapp: row.whatsapp,
+      email: row.email,
+      city: row.city,
+      state: row.state,
+    };
+
+    return { property: row, owner };
+  } catch (err) {
+    console.error("Error fetching property record:", err);
+    return null;
+  }
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const resolved = await params;
+  const rawId = resolved.id;
+  const data = await fetchPropertyRecord(rawId);
+
+  if (data?.property) {
+    const prop = data.property;
+    return {
+      title: `${prop.name || prop.title} | Real Estate & Properties`,
+      description: prop.description?.slice(0, 160) || `Explore ${prop.title} in ${prop.city || "Varanasi"}.`,
+    };
+  }
+
+  const { city, categorySlug } = parseDiscoverySeoSlug(rawId);
+  const locationText = city ? ` in ${city.charAt(0).toUpperCase() + city.slice(1)}` : "";
+  const catText = categorySlug ? `${categorySlug.replace(/-/g, " ")} ` : "";
+  return {
+    title: `Explore ${catText}Properties & Real Estate${locationText} | 143Panda`,
+    description: `Discover verified real estate, commercial plots, and homes${locationText}.`,
+  };
+}
 
 export default async function PropertyAliasOrListingPage({
   params,
   searchParams,
-}: {
-  params: Promise<{ id: string }> | { id: string };
-  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
-}) {
+}: Props) {
   const resolvedParams = await params;
   const rawId = resolvedParams.id;
+
+  // 1. Check if this is a single property detail view
+  const data = await fetchPropertyRecord(rawId);
+  if (data?.property) {
+    return <PublicPropertyDetailView property={data.property} owner={data.owner} />;
+  }
+
+  // 2. Otherwise treat as a category/location filter alias
   const { categorySlug, city } = parseDiscoverySeoSlug(rawId);
   const sp = searchParams ? await searchParams : {};
   const query = typeof sp.q === "string" ? sp.q : "";
