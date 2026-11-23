@@ -67,6 +67,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { buildBusinessSeoUrl, buildProfessionalSeoUrl, buildCourseSeoUrl, buildJobSeoUrl, buildDiscoverySeoUrl, slugify, extractCleanCity } from "@/lib/utils/seo-slug";
+import { getCatalogCountryMeta } from "@/lib/config/country-config";
 import { OrderCheckoutDialog, CheckoutItem } from "@/components/checkout/order-checkout-dialog";
 import { CartDrawer } from "@/components/checkout/cart-drawer";
 import { CartFloatingButton } from "@/components/checkout/cart-floating-button";
@@ -334,6 +335,42 @@ function CustomerExplorePageContent({
     setCity(resolvedCity);
     if (urlCountry) setCountry(urlCountry);
   }, [urlQ, urlType, urlCity, urlCountry, urlCategory, urlCategoryParam, urlSubcategoryParam, urlCategoryName, userGlobalLocation]);
+
+  // Sync with global header location / country change events (e.g. Pin button in header)
+  useEffect(() => {
+    const handleLocationChange = (e: any) => {
+      const newLoc = e?.detail?.location;
+      const newCountry = e?.detail?.countryCode;
+      if (newLoc) {
+        if (newLoc === "All Locations" || newLoc === "all") {
+          setCity("");
+          syncUrlParams({ city: "" });
+        } else {
+          const clean = extractCleanCity(newLoc) || newLoc;
+          setCity(clean);
+          syncUrlParams({ city: clean });
+        }
+      }
+      if (newCountry) {
+        setCountry(newCountry);
+      }
+    };
+
+    const handleCountryChange = (e: any) => {
+      const newCountry = e?.detail?.countryCode;
+      if (newCountry) {
+        setCountry(newCountry);
+      }
+    };
+
+    window.addEventListener("edubird-location-change", handleLocationChange);
+    window.addEventListener("edubird-country-change", handleCountryChange);
+
+    return () => {
+      window.removeEventListener("edubird-location-change", handleLocationChange);
+      window.removeEventListener("edubird-country-change", handleCountryChange);
+    };
+  }, [syncUrlParams]);
 
   // Results
   const [loading, setLoading] = useState(false);
@@ -1024,13 +1061,35 @@ function CustomerExplorePageContent({
   const formatLocationAreaAndCity = (loc?: string | null) => {
     if (!loc || loc === "All Locations" || loc === "all") return "";
     let trimmed = loc.trim();
+    if (trimmed.includes("-") && !trimmed.includes(" ")) {
+      trimmed = trimmed
+        .split("-")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(" ");
+    }
     if (trimmed.toLowerCase().includes("pandeypur") && !trimmed.toLowerCase().includes("varanasi")) {
       return `${trimmed}, Varanasi`;
     }
     return trimmed;
   };
+
+  const displayLocationText = useMemo(() => {
+    if (city) return formatLocationAreaAndCity(city);
+    if (userGlobalLocation && userGlobalLocation !== "All Locations" && userGlobalLocation !== "all") {
+      return formatLocationAreaAndCity(userGlobalLocation);
+    }
+    if (country && country.toUpperCase() !== "ALL") {
+      const cm = getCatalogCountryMeta(country);
+      if (cm?.name) return cm.name;
+    }
+    return "All Locations";
+  }, [city, userGlobalLocation, country]);
+
   const effectiveFullLocation = formatLocationAreaAndCity(
-    extractCleanCity(city) || extractCleanCity(userGlobalLocation) || ""
+    city ||
+    (userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : "") ||
+    (country && country.toUpperCase() !== "ALL" ? getCatalogCountryMeta(country)?.name : "") ||
+    ""
   );
 
   const getVerticalLabel = (t: string) => {
@@ -1128,25 +1187,59 @@ function CustomerExplorePageContent({
         </div>
 
         {/* Location Dropdown Pill */}
-        <div className="flex items-center gap-1.5 h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 cursor-pointer hover:border-slate-300">
-          <MapPin className="size-3.5 text-amber-500 shrink-0" />
+        <div className="flex items-center gap-1.5 h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 hover:border-amber-400 hover:bg-amber-50/20 transition-all">
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("edubird-open-location-dialog"));
+              }
+            }}
+            className="p-0.5 rounded hover:bg-amber-100/60 transition-colors cursor-pointer"
+            title="Open location selector dialog"
+          >
+            <MapPin className="size-3.5 text-amber-500 shrink-0" />
+          </button>
           <select
-            value={city}
+            value={city || (userGlobalLocation !== "All Locations" ? userGlobalLocation : "")}
             onChange={(e) => {
               const val = e.target.value;
-              setCity(val);
-              syncUrlParams({ city: val });
+              if (val === "__CUSTOM_LOCATION_MODAL__") {
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("edubird-open-location-dialog"));
+                }
+                return;
+              }
+              if (!val || val === "All Locations") {
+                setCity("");
+                setGlobalLocation("All Locations");
+                syncUrlParams({ city: "" });
+                return;
+              }
+              const clean = extractCleanCity(val) || val;
+              setCity(clean);
+              setGlobalLocation(val);
+              syncUrlParams({ city: clean });
             }}
-            className="bg-transparent text-xs sm:text-sm font-medium text-slate-900 focus:outline-none cursor-pointer pr-3 appearance-none"
+            className="bg-transparent text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none cursor-pointer pr-3 appearance-none max-w-[170px] sm:max-w-[220px] truncate"
           >
             <option value="" className="bg-white text-slate-900">All Locations</option>
+            {/* If currently selected location is active and not already in availableLocations, render it */}
+            {displayLocationText && displayLocationText !== "All Locations" && !availableLocations.some(l => l.name.toLowerCase() === displayLocationText.toLowerCase()) && (
+              <option value={displayLocationText} className="bg-white text-slate-900 font-bold">
+                📍 {displayLocationText}
+              </option>
+            )}
             {availableLocations.map((loc) => (
               <option key={loc.id} value={loc.name} className="bg-white text-slate-900">
                 {loc.name}
               </option>
             ))}
+            <option value="__CUSTOM_LOCATION_MODAL__" className="bg-amber-50 text-amber-700 font-bold">
+              🔍 Change Location / Worldwide...
+            </option>
           </select>
-          <ChevronDown className="size-3 text-slate-400 pointer-events-none" />
+          <ChevronDown className="size-3 text-slate-400 pointer-events-none shrink-0" />
         </div>
 
         {/* Radius Pill */}
