@@ -158,29 +158,31 @@ export function StorefrontProductCard({
     >
       <div>
         {/* Image Box */}
-        <div className="relative aspect-square w-full bg-muted overflow-hidden">
-          <Image
-            src={
-              p.default_image_url ||
-              "https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=500&auto=format&fit=crop&q=60"
-            }
-            alt={p.name}
-            fill
-            sizes="(max-width: 768px) 100vw, 300px"
-            className="object-cover group-hover:scale-105 transition-transform duration-300"
-          />
-          {hasDiscount && (
-            <Badge className="absolute top-2.5 left-2.5 bg-rose-600 text-white font-black text-[10px] px-2 py-0.5 shadow-sm">
-              SALE
-            </Badge>
-          )}
-          {isHighlighted && (
-            <Badge className="absolute top-2.5 right-2.5 bg-primary text-primary-foreground font-bold text-[10px] px-2 py-0.5 shadow-md flex items-center gap-1">
-              <Sparkles className="size-3" />
-              Selected
-            </Badge>
-          )}
-        </div>
+        <Link href={`/products/${p.slug || p.id}`} className="block cursor-pointer">
+          <div className="relative aspect-square w-full bg-muted overflow-hidden">
+            <Image
+              src={
+                p.default_image_url ||
+                "https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=500&auto=format&fit=crop&q=60"
+              }
+              alt={p.name}
+              fill
+              sizes="(max-width: 768px) 100vw, 300px"
+              className="object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+            {hasDiscount && (
+              <Badge className="absolute top-2.5 left-2.5 bg-rose-600 text-white font-black text-[10px] px-2 py-0.5 shadow-sm">
+                SALE
+              </Badge>
+            )}
+            {isHighlighted && (
+              <Badge className="absolute top-2.5 right-2.5 bg-primary text-primary-foreground font-bold text-[10px] px-2 py-0.5 shadow-md flex items-center gap-1">
+                <Sparkles className="size-3" />
+                Selected
+              </Badge>
+            )}
+          </div>
+        </Link>
 
         {/* Card Header & Title */}
         <CardHeader className="p-3.5 pb-1">
@@ -193,9 +195,11 @@ export function StorefrontProductCard({
               </>
             )}
           </div>
-          <CardTitle className="text-sm font-bold text-foreground group-hover:text-primary transition-colors line-clamp-2">
-            {p.name}
-          </CardTitle>
+          <Link href={`/products/${p.slug || p.id}`} className="block cursor-pointer">
+            <CardTitle className="text-sm font-bold text-foreground group-hover:text-primary transition-colors line-clamp-2">
+              {p.name}
+            </CardTitle>
+          </Link>
         </CardHeader>
 
         {p.description && (

@@ -145,7 +145,16 @@ export function CompactProductCard({
   return (
     <div
       id={`product-compact-${p.id}`}
-      className={`p-3 rounded-xl border transition-all flex items-center gap-3.5 group relative bg-card hover:bg-muted/30 ${
+      onClick={(e) => {
+        if (!e.defaultPrevented) {
+          if (onOpenDetails) {
+            onOpenDetails(p);
+          } else {
+            router.push(`/products/${productSlugOrId}`);
+          }
+        }
+      }}
+      className={`p-3 rounded-xl border transition-all flex items-center gap-3.5 group relative bg-card hover:bg-muted/30 cursor-pointer ${
         isHighlighted
           ? "ring-2 ring-primary border-primary bg-primary/10 shadow-sm"
           : "shadow-2xs hover:shadow-xs border-border/70"

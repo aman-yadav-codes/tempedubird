@@ -2161,36 +2161,41 @@ export function PublicBusinessProfileClient({
                       const area = p.carpet_area || p.super_builtup_area || p.area_sqft || p.details?.carpet_area;
                       const propType = p.property_type || p.details?.property_type || p.category_name || "Real Estate";
                       const img = p.image_url || p.featured_image || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=600&auto=format&fit=crop&q=80";
+                      const propertyUrl = `/properties/${p.slug || p.id}`;
 
                       return (
                         <Card key={p.id} className="rounded-2xl overflow-hidden border shadow-2xs hover:shadow-md transition-all group flex flex-col justify-between">
                           <div>
-                            <div className="relative aspect-[16/10] bg-muted overflow-hidden">
-                              <img
-                                src={img}
-                                alt={p.title}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              />
-                              <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
-                                <Badge className="bg-primary/90 text-primary-foreground text-[10px] font-bold backdrop-blur-xs">
-                                  {propType}
-                                </Badge>
-                                {p.status === "published" && (
-                                  <Badge className="bg-emerald-600/90 text-white text-[10px] font-semibold">
-                                    Verified
+                            <Link href={propertyUrl} className="block cursor-pointer">
+                              <div className="relative aspect-[16/10] bg-muted overflow-hidden">
+                                <img
+                                  src={img}
+                                  alt={p.title}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                />
+                                <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
+                                  <Badge className="bg-primary/90 text-primary-foreground text-[10px] font-bold backdrop-blur-xs">
+                                    {propType}
                                   </Badge>
-                                )}
+                                  {p.status === "published" && (
+                                    <Badge className="bg-emerald-600/90 text-white text-[10px] font-semibold">
+                                      Verified
+                                    </Badge>
+                                  )}
+                                </div>
                               </div>
-                            </div>
+                            </Link>
                             <CardHeader className="p-4 pb-2">
                               <div className="flex items-baseline justify-between gap-2">
                                 <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">
                                   ₹{price > 0 ? price.toLocaleString("en-IN") : "Price on Request"}
                                 </span>
                               </div>
-                              <CardTitle className="text-sm font-bold line-clamp-1 group-hover:text-primary transition-colors">
-                                {p.title}
-                              </CardTitle>
+                              <Link href={propertyUrl} className="block cursor-pointer">
+                                <CardTitle className="text-sm font-bold line-clamp-1 group-hover:text-primary transition-colors">
+                                  {p.title}
+                                </CardTitle>
+                              </Link>
                               <CardDescription className="text-xs flex items-center gap-1 line-clamp-1 mt-1">
                                 <MapPin className="size-3 shrink-0 text-muted-foreground" />
                                 <span>{p.address || p.locality || business.address || `${business.city}, Uttar Pradesh`}</span>
@@ -2210,20 +2215,21 @@ export function PublicBusinessProfileClient({
                             </CardContent>
                           </div>
                           <CardFooter className="p-4 pt-1 flex items-center gap-2">
+                            <Link href={propertyUrl} className="flex-1">
+                              <Button size="sm" variant="outline" className="w-full text-xs font-bold cursor-pointer">
+                                View Details
+                              </Button>
+                            </Link>
                             {business.phone ? (
                               <Button
                                 size="sm"
-                                className="w-full text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 cursor-pointer"
+                                className="flex-1 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 cursor-pointer"
                                 onClick={() => window.open(`tel:${business.phone}`, "_self")}
                               >
                                 <Phone className="size-3.5" />
                                 <span>Contact Agent</span>
                               </Button>
-                            ) : (
-                              <Button size="sm" className="w-full text-xs font-bold" variant="outline">
-                                View Details
-                              </Button>
-                            )}
+                            ) : null}
                           </CardFooter>
                         </Card>
                       );
@@ -2269,34 +2275,39 @@ export function PublicBusinessProfileClient({
                       const fuel = v.fuel_type || v.details?.fuel_type || "Petrol/EV";
                       const transmission = v.transmission || v.details?.transmission || "Automatic";
                       const img = v.image_url || v.featured_image || "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=600&auto=format&fit=crop&q=80";
+                      const vehicleUrl = `/vehicles/${v.slug || v.id}`;
 
                       return (
                         <Card key={v.id} className="rounded-2xl overflow-hidden border shadow-2xs hover:shadow-md transition-all group flex flex-col justify-between">
                           <div>
-                            <div className="relative aspect-[16/10] bg-muted overflow-hidden">
-                              <img
-                                src={img}
-                                alt={v.title}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              />
-                              <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
-                                <Badge className="bg-rose-600 text-white text-[10px] font-bold">
-                                  {year ? `${year} Model` : "Available"}
-                                </Badge>
-                                <Badge variant="secondary" className="text-[10px] font-semibold bg-background/80 backdrop-blur-xs">
-                                  {fuel}
-                                </Badge>
+                            <Link href={vehicleUrl} className="block cursor-pointer">
+                              <div className="relative aspect-[16/10] bg-muted overflow-hidden">
+                                <img
+                                  src={img}
+                                  alt={v.title}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                />
+                                <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
+                                  <Badge className="bg-rose-600 text-white text-[10px] font-bold">
+                                    {year ? `${year} Model` : "Available"}
+                                  </Badge>
+                                  <Badge variant="secondary" className="text-[10px] font-semibold bg-background/80 backdrop-blur-xs">
+                                    {fuel}
+                                  </Badge>
+                                </div>
                               </div>
-                            </div>
+                            </Link>
                             <CardHeader className="p-4 pb-2">
                               <div className="flex items-baseline justify-between gap-2">
                                 <span className="text-lg font-black text-rose-600 dark:text-rose-400">
                                   ₹{price > 0 ? price.toLocaleString("en-IN") : "Contact for Price"}
                                 </span>
                               </div>
-                              <CardTitle className="text-sm font-bold line-clamp-1 group-hover:text-primary transition-colors">
-                                {v.title}
-                              </CardTitle>
+                              <Link href={vehicleUrl} className="block cursor-pointer">
+                                <CardTitle className="text-sm font-bold line-clamp-1 group-hover:text-primary transition-colors">
+                                  {v.title}
+                                </CardTitle>
+                              </Link>
                               <CardDescription className="text-xs flex items-center gap-1 line-clamp-1 mt-1">
                                 <span className="font-semibold text-foreground">{make} {model}</span>
                                 {v.city && <span>• {v.city}</span>}
@@ -2316,20 +2327,21 @@ export function PublicBusinessProfileClient({
                             </CardContent>
                           </div>
                           <CardFooter className="p-4 pt-1 flex items-center gap-2">
+                            <Link href={vehicleUrl} className="flex-1">
+                              <Button size="sm" variant="outline" className="w-full text-xs font-bold cursor-pointer">
+                                View Specs
+                              </Button>
+                            </Link>
                             {business.phone ? (
                               <Button
                                 size="sm"
-                                className="w-full text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white gap-1.5 cursor-pointer"
+                                className="flex-1 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white gap-1.5 cursor-pointer"
                                 onClick={() => window.open(`tel:${business.phone}`, "_self")}
                               >
                                 <Phone className="size-3.5" />
                                 <span>Book Test Drive</span>
                               </Button>
-                            ) : (
-                              <Button size="sm" className="w-full text-xs font-bold" variant="outline">
-                                View Specs
-                              </Button>
-                            )}
+                            ) : null}
                           </CardFooter>
                         </Card>
                       );
@@ -2372,31 +2384,36 @@ export function PublicBusinessProfileClient({
                       const venue = e.venue_name || e.venue || e.details?.venue_name || business.address || "Main Banquet Hall";
                       const dateStr = e.start_date || e.event_date || e.details?.start_date || "Upcoming Season";
                       const img = e.image_url || e.featured_image || "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=600&auto=format&fit=crop&q=80";
+                      const eventUrl = `/events/${e.slug || e.id}`;
 
                       return (
                         <Card key={e.id} className="rounded-2xl overflow-hidden border shadow-2xs hover:shadow-md transition-all group flex flex-col justify-between">
                           <div>
-                            <div className="relative aspect-[16/10] bg-muted overflow-hidden">
-                              <img
-                                src={img}
-                                alt={e.title}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              />
-                              <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
-                                <Badge className="bg-amber-600 text-white text-[10px] font-bold">
-                                  {dateStr}
-                                </Badge>
+                            <Link href={eventUrl} className="block cursor-pointer">
+                              <div className="relative aspect-[16/10] bg-muted overflow-hidden">
+                                <img
+                                  src={img}
+                                  alt={e.title}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                />
+                                <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
+                                  <Badge className="bg-amber-600 text-white text-[10px] font-bold">
+                                    {dateStr}
+                                  </Badge>
+                                </div>
                               </div>
-                            </div>
+                            </Link>
                             <CardHeader className="p-4 pb-2">
                               <div className="flex items-baseline justify-between gap-2">
                                 <span className="text-base font-black text-amber-600 dark:text-amber-400">
                                   {price > 0 ? `₹${price.toLocaleString("en-IN")}` : "Free Admission / Package"}
                                 </span>
                               </div>
-                              <CardTitle className="text-sm font-bold line-clamp-1 group-hover:text-primary transition-colors">
-                                {e.title}
-                              </CardTitle>
+                              <Link href={eventUrl} className="block cursor-pointer">
+                                <CardTitle className="text-sm font-bold line-clamp-1 group-hover:text-primary transition-colors">
+                                  {e.title}
+                                </CardTitle>
+                              </Link>
                               <CardDescription className="text-xs flex items-center gap-1 line-clamp-1 mt-1">
                                 <MapPin className="size-3 shrink-0 text-muted-foreground" />
                                 <span>{venue}</span>
@@ -2404,20 +2421,21 @@ export function PublicBusinessProfileClient({
                             </CardHeader>
                           </div>
                           <CardFooter className="p-4 pt-1 flex items-center gap-2">
+                            <Link href={eventUrl} className="flex-1">
+                              <Button size="sm" variant="outline" className="w-full text-xs font-bold cursor-pointer">
+                                View Details
+                              </Button>
+                            </Link>
                             {business.phone ? (
                               <Button
                                 size="sm"
-                                className="w-full text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white gap-1.5 cursor-pointer"
+                                className="flex-1 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white gap-1.5 cursor-pointer"
                                 onClick={() => window.open(`tel:${business.phone}`, "_self")}
                               >
                                 <Phone className="size-3.5" />
-                                <span>Reserve / Enquire Venue</span>
+                                <span>Reserve Venue</span>
                               </Button>
-                            ) : (
-                              <Button size="sm" className="w-full text-xs font-bold" variant="outline">
-                                View Schedule
-                              </Button>
-                            )}
+                            ) : null}
                           </CardFooter>
                         </Card>
                       );
@@ -3340,9 +3358,11 @@ export function PublicBusinessProfileClient({
                                           </span>
                                         </div>
 
-                                        <h4 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
-                                          {c.name}
-                                        </h4>
+                                        <Link href={`/courses/${c.slug || c.id}`} className="block cursor-pointer">
+                                          <h4 className="font-bold text-sm text-foreground hover:text-primary transition-colors leading-snug line-clamp-2">
+                                            {c.name}
+                                          </h4>
+                                        </Link>
 
                                         <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
                                           {c.description || "Comprehensive academic syllabus and live practical training."}
@@ -3412,9 +3432,11 @@ export function PublicBusinessProfileClient({
                                 </span>
                               </div>
 
-                              <h4 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
-                                {c.name}
-                              </h4>
+                              <Link href={`/courses/${c.slug || c.id}`} className="block cursor-pointer">
+                                <h4 className="font-bold text-sm text-foreground hover:text-primary transition-colors leading-snug line-clamp-2">
+                                  {c.name}
+                                </h4>
+                              </Link>
 
                               <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
                                 {c.description || "Comprehensive academic syllabus and live practical training."}
@@ -3650,9 +3672,11 @@ export function PublicBusinessProfileClient({
                                           </span>
                                         </div>
 
-                                        <h4 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
-                                          {j.title}
-                                        </h4>
+                                        <Link href={`/jobs/${j.slug || j.id}`} className="block cursor-pointer">
+                                          <h4 className="font-bold text-sm text-foreground hover:text-primary transition-colors leading-snug line-clamp-2">
+                                            {j.title}
+                                          </h4>
+                                        </Link>
 
                                         <p className="text-xs text-muted-foreground line-clamp-2">
                                           {j.description || "Exciting career opportunity at our store & operations network."}
@@ -3722,9 +3746,11 @@ export function PublicBusinessProfileClient({
                                 </span>
                               </div>
 
-                              <h4 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
-                                {j.title}
-                              </h4>
+                              <Link href={`/jobs/${j.slug || j.id}`} className="block cursor-pointer">
+                                <h4 className="font-bold text-sm text-foreground hover:text-primary transition-colors leading-snug line-clamp-2">
+                                  {j.title}
+                                </h4>
+                              </Link>
 
                               <p className="text-xs text-muted-foreground line-clamp-2">
                                 {j.description || "Exciting career opportunity at our store & operations network."}
@@ -3763,20 +3789,26 @@ export function PublicBusinessProfileClient({
                 </Card>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-                  {professionals.map((prof) => (
+                  {professionals.map((prof) => {
+                    const profUrl = prof.slug ? `/professional/${prof.slug}` : `/professionals/${prof.id}`;
+                    return (
                     <Card key={prof.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-all overflow-hidden p-5 flex flex-col justify-between">
                       <div className="flex items-start gap-4">
-                        <div className="relative size-14 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 shrink-0 overflow-hidden border flex items-center justify-center font-bold">
-                          {prof.avatar_url ? (
-                            <Image src={prof.avatar_url} alt={prof.name} fill sizes="56px" className="object-cover" />
-                          ) : (
-                            <span>{(prof.name || "ST").slice(0, 2).toUpperCase()}</span>
-                          )}
-                        </div>
+                        <Link href={profUrl} className="block cursor-pointer shrink-0">
+                          <div className="relative size-14 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 overflow-hidden border flex items-center justify-center font-bold">
+                            {prof.avatar_url ? (
+                              <Image src={prof.avatar_url} alt={prof.name} fill sizes="56px" className="object-cover" />
+                            ) : (
+                              <span>{(prof.name || "ST").slice(0, 2).toUpperCase()}</span>
+                            )}
+                          </div>
+                        </Link>
                         <div className="min-w-0 flex-1">
-                          <h4 className="text-sm font-bold text-foreground hover:text-primary transition-colors truncate">
-                            {prof.name}
-                          </h4>
+                          <Link href={profUrl} className="block cursor-pointer">
+                            <h4 className="text-sm font-bold text-foreground hover:text-primary transition-colors truncate">
+                              {prof.name}
+                            </h4>
+                          </Link>
                           <p className="text-xs text-muted-foreground line-clamp-1">
                             {prof.designation || prof.profession_type || "Staff Specialist"}
                           </p>
@@ -3795,20 +3827,15 @@ export function PublicBusinessProfileClient({
 
                       <div className="pt-4 mt-3 border-t flex items-center justify-between">
                         <span className="text-xs text-muted-foreground truncate">{prof.city || business.city || "Headquarters"}</span>
-                        {prof.member_type === "professional" && prof.slug ? (
-                          <Link href={`/professional/${prof.slug || prof.id}`}>
-                            <Button size="sm" variant="outline" className="text-xs h-7 px-2.5 font-bold cursor-pointer">
-                              View Profile
-                            </Button>
-                          </Link>
-                        ) : (
-                          <Badge variant="secondary" className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-900/50">
-                            Verified Staff
-                          </Badge>
-                        )}
+                        <Link href={profUrl}>
+                          <Button size="sm" variant="outline" className="text-xs h-7 px-2.5 font-bold cursor-pointer">
+                            View Profile
+                          </Button>
+                        </Link>
                       </div>
                     </Card>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </TabsContent>
