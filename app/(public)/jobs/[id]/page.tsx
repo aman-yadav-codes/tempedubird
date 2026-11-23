@@ -51,13 +51,14 @@ interface JobDetailPageProps {
 export default function JobDetailPage({ params }: JobDetailPageProps) {
   const { id } = use(params);
 
-  if (id && (id.includes("-in-") || id.startsWith("all-") || id.startsWith("in-"))) {
+  if (id && (id.startsWith("all-") || id.startsWith("in-"))) {
     const { categorySlug, city } = parseDiscoverySeoSlug(id);
     return <CustomerExplorePage initialType="job" initialCategory={categorySlug} initialCity={city} />;
   }
   const router = useRouter();
   const [job, setJob] = useState<StaffJobPosting | null>(null);
   const [loading, setLoading] = useState(true);
+  const [notFoundFallback, setNotFoundFallback] = useState(false);
   const [notFoundState, setNotFoundState] = useState(false);
 
   // Application dialog
@@ -214,6 +215,11 @@ export default function JobDetailPage({ params }: JobDetailPageProps) {
       navigator.clipboard.writeText(window.location.href);
       toast.success("Job URL copied to clipboard!");
     }
+  }
+
+  if (notFoundFallback) {
+    const { categorySlug, city } = parseDiscoverySeoSlug(id);
+    return <CustomerExplorePage initialType="job" initialCategory={categorySlug} initialCity={city} />;
   }
 
   if (loading) {

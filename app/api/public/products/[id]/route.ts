@@ -7,7 +7,13 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const numId = Number(id);
+    const rawId = decodeURIComponent(id || "").trim().toLowerCase();
+    let withoutLocation = rawId;
+    const lastInIndex = rawId.lastIndexOf("-in-");
+    if (lastInIndex !== -1) {
+      withoutLocation = rawId.substring(0, lastInIndex);
+    }
+    const numId = Number(rawId) || Number(withoutLocation) || -1;
 
     // 1. Check products table first
     const pRes = await db.query(
@@ -46,9 +52,15 @@ export async function GET(
       LEFT JOIN categories c ON c.id = p.category_id
       LEFT JOIN business_profiles bp ON bp.id = p.business_profile_id
       LEFT JOIN professional_profiles pp ON pp.id = p.professional_profile_id
-      WHERE p.id = $1 OR p.slug = $2
+      WHERE (p.id = $1 AND $1 > 0)
+         OR p.slug = $2
+         OR p.slug = $3
+         OR p.slug ILIKE $2
+         OR p.slug ILIKE $3
+         OR $2 ILIKE '%' || p.slug || '%'
+         OR p.slug ILIKE '%' || $3 || '%'
       LIMIT 1`,
-      [isNaN(numId) ? -1 : numId, id]
+      [isNaN(numId) ? -1 : numId, rawId, withoutLocation]
     );
 
     if (pRes.rows.length > 0) {
@@ -92,9 +104,15 @@ export async function GET(
       LEFT JOIN categories c ON c.id = COALESCE(mp.main_category_id, mp.category_id)
       LEFT JOIN business_profiles bp ON bp.id = mp.business_profile_id
       LEFT JOIN professional_profiles pp ON pp.id = mp.professional_profile_id
-      WHERE mp.id = $1 OR mp.slug = $2
+      WHERE (mp.id = $1 AND $1 > 0)
+         OR mp.slug = $2
+         OR mp.slug = $3
+         OR mp.slug ILIKE $2
+         OR mp.slug ILIKE $3
+         OR $2 ILIKE '%' || mp.slug || '%'
+         OR mp.slug ILIKE '%' || $3 || '%'
       LIMIT 1`,
-      [isNaN(numId) ? -1 : numId, id]
+      [isNaN(numId) ? -1 : numId, rawId, withoutLocation]
     );
 
     if (prodRes.rows.length > 0) {

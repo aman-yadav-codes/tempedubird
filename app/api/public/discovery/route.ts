@@ -84,8 +84,17 @@ export async function GET(req: NextRequest) {
     if (!categoryId && businessCategoryId) {
       categoryId = businessCategoryId;
     }
-    const categoryParam = (searchParams.get("category") || searchParams.get("category_slug") || searchParams.get("categoryName") || "").trim();
-    const subcategoryParam = (searchParams.get("subcategory") || searchParams.get("subcategory_slug") || "").trim();
+    let categoryParam = (searchParams.get("category") || searchParams.get("category_slug") || searchParams.get("categoryName") || "").trim();
+    let subcategoryParam = (searchParams.get("subcategory") || searchParams.get("subcategory_slug") || "").trim();
+
+    // If categoryParam or subcategoryParam is "all" or starts with "all-", reset them to return unfiltered vertical records
+    if (categoryParam.toLowerCase().startsWith("all-") || categoryParam.toLowerCase() === "all" || categoryParam.toLowerCase().startsWith("all_")) {
+      categoryParam = "";
+      categoryId = null;
+    }
+    if (subcategoryParam.toLowerCase().startsWith("all-") || subcategoryParam.toLowerCase() === "all" || subcategoryParam.toLowerCase().startsWith("all_")) {
+      subcategoryParam = "";
+    }
 
     if (!categoryId && (subcategoryParam || categoryParam)) {
       try {
@@ -164,6 +173,7 @@ export async function GET(req: NextRequest) {
     // Resolve Category Family & Linked Businesses if categoryId is provided
     let categoryIds: number[] = categoryId ? [categoryId] : [];
     let matchingBusinessIds: number[] = [];
+    let resolvedCategoryName: string = categoryParam || "";
 
     if (categoryId) {
       try {
@@ -192,6 +202,17 @@ export async function GET(req: NextRequest) {
           );
 
           categoryIds = Array.from(new Set(relatedCats.rows.map((r: any) => Number(r.id))));
+
+          if (cat.name) {
+            resolvedCategoryName = cat.name;
+            const mrRes = await db.query(
+              `SELECT id FROM master_records WHERE name ILIKE $1 OR $2 ILIKE ('%' || name || '%')`,
+              [cat.name, cat.name]
+            );
+            for (const mr of mrRes.rows) {
+              categoryIds.push(Number(mr.id));
+            }
+          }
         }
 
         const bizLinkRes = await db.query(
@@ -1234,11 +1255,12 @@ export async function GET(req: NextRequest) {
           pConditions.push(`(bp.country_code = $${pParams.length} OR ($${pParams.length} = 'IN' AND bp.country_code IS NULL))`);
         }
 
-        if (categoryParam || categoryIds.length > 0) {
-          const isComm = categoryParam.toLowerCase().includes("commercial");
-          const isRes = categoryParam.toLowerCase().includes("residential");
-          const isPlot = categoryParam.toLowerCase().includes("plot") || categoryParam.toLowerCase().includes("land");
-          const isInd = categoryParam.toLowerCase().includes("industrial") || categoryParam.toLowerCase().includes("warehous");
+        if (categoryParam || resolvedCategoryName || categoryIds.length > 0) {
+          const catSearch = `${categoryParam} ${resolvedCategoryName}`.toLowerCase();
+          const isComm = catSearch.includes("commercial");
+          const isRes = catSearch.includes("residential") || catSearch.includes("apartment") || catSearch.includes("flat") || catSearch.includes("villa") || catSearch.includes("real estate");
+          const isPlot = catSearch.includes("plot") || catSearch.includes("land");
+          const isInd = catSearch.includes("industrial") || catSearch.includes("warehous");
 
           if (isComm) {
             pConditions.push(`(br.category_id = 50 OR br.title ILIKE '%commercial%' OR br.title ILIKE '%retail%' OR br.title ILIKE '%showroom%' OR br.title ILIKE '%office%' OR br.title ILIKE '%suite%')`);
@@ -1340,11 +1362,12 @@ export async function GET(req: NextRequest) {
           vConditions.push(`(bp.country_code = $${vParams.length} OR ($${vParams.length} = 'IN' AND bp.country_code IS NULL))`);
         }
 
-        if (categoryParam || categoryIds.length > 0) {
-          const isPass = categoryParam.toLowerCase().includes("passenger") || categoryParam.toLowerCase().includes("car") || categoryParam.toLowerCase().includes("suv");
-          const isComm = categoryParam.toLowerCase().includes("commercial") || categoryParam.toLowerCase().includes("transport") || categoryParam.toLowerCase().includes("truck") || categoryParam.toLowerCase().includes("van");
-          const isBike = categoryParam.toLowerCase().includes("two-wheeler") || categoryParam.toLowerCase().includes("motorcycle") || categoryParam.toLowerCase().includes("bike") || categoryParam.toLowerCase().includes("scooter");
-          const isLux = categoryParam.toLowerCase().includes("luxury") || categoryParam.toLowerCase().includes("exotic");
+        if (categoryParam || resolvedCategoryName || categoryIds.length > 0) {
+          const catSearch = `${categoryParam} ${resolvedCategoryName}`.toLowerCase();
+          const isPass = catSearch.includes("passenger") || catSearch.includes("car") || catSearch.includes("suv") || catSearch.includes("auto");
+          const isComm = catSearch.includes("commercial") || catSearch.includes("transport") || catSearch.includes("truck") || catSearch.includes("van");
+          const isBike = catSearch.includes("two-wheeler") || catSearch.includes("two wheeler") || catSearch.includes("motorcycle") || catSearch.includes("bike") || catSearch.includes("scooter");
+          const isLux = catSearch.includes("luxury") || catSearch.includes("exotic");
 
           if (isPass) {
             vConditions.push(`(br.category_id IN (2, 4) OR br.title ILIKE '%scorpio%' OR br.title ILIKE '%thar%' OR br.title ILIKE '%xuv%' OR br.title ILIKE '%fortuner%' OR br.title ILIKE '%creta%' OR br.title ILIKE '%seltos%' OR br.title ILIKE '%city%' OR br.title ILIKE '%safari%' OR br.title ILIKE '%nexon%' OR br.title ILIKE '%vitara%')`);
@@ -1446,11 +1469,12 @@ export async function GET(req: NextRequest) {
           eConditions.push(`(bp.country_code = $${eParams.length} OR ($${eParams.length} = 'IN' AND bp.country_code IS NULL))`);
         }
 
-        if (categoryParam || categoryIds.length > 0) {
-          const isCorp = categoryParam.toLowerCase().includes("corporate") || categoryParam.toLowerCase().includes("industry") || categoryParam.toLowerCase().includes("business");
-          const isWed = categoryParam.toLowerCase().includes("wedding") || categoryParam.toLowerCase().includes("social") || categoryParam.toLowerCase().includes("gala");
-          const isEnt = categoryParam.toLowerCase().includes("entertainment") || categoryParam.toLowerCase().includes("cultural") || categoryParam.toLowerCase().includes("music") || categoryParam.toLowerCase().includes("show") || categoryParam.toLowerCase().includes("art");
-          const isSports = categoryParam.toLowerCase().includes("sports") || categoryParam.toLowerCase().includes("fitness") || categoryParam.toLowerCase().includes("tournament") || categoryParam.toLowerCase().includes("marathon");
+        if (categoryParam || resolvedCategoryName || categoryIds.length > 0) {
+          const catSearch = `${categoryParam} ${resolvedCategoryName}`.toLowerCase();
+          const isCorp = catSearch.includes("corporate") || catSearch.includes("industry") || catSearch.includes("business") || catSearch.includes("tech");
+          const isWed = catSearch.includes("wedding") || catSearch.includes("social") || catSearch.includes("gala") || catSearch.includes("celebration");
+          const isEnt = catSearch.includes("entertainment") || catSearch.includes("cultural") || catSearch.includes("music") || catSearch.includes("show") || catSearch.includes("art");
+          const isSports = catSearch.includes("sports") || catSearch.includes("fitness") || catSearch.includes("tournament") || catSearch.includes("marathon") || catSearch.includes("athletics");
 
           if (isCorp) {
             eConditions.push(`(br.category_id = 350 OR br.title ILIKE '%tech%' OR br.title ILIKE '%summit%' OR br.title ILIKE '%conclave%' OR br.title ILIKE '%expo%' OR br.title ILIKE '%agritech%' OR br.title ILIKE '%handloom%')`);

@@ -7,7 +7,13 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const numId = Number(id);
+    const rawId = decodeURIComponent(id || "").trim().toLowerCase();
+    let withoutLocation = rawId;
+    const lastInIndex = rawId.lastIndexOf("-in-");
+    if (lastInIndex !== -1) {
+      withoutLocation = rawId.substring(0, lastInIndex);
+    }
+    const numId = Number(rawId) || Number(withoutLocation) || -1;
 
     // 1. Check services table first
     const sRes = await db.query(
@@ -46,9 +52,14 @@ export async function GET(
       LEFT JOIN professional_profiles pp ON pp.id = s.professional_profile_id
       WHERE (s.id = $1 AND $1 > 0)
          OR s.slug = $2
+         OR s.slug = $3
+         OR s.slug ILIKE $2
+         OR s.slug ILIKE $3
+         OR $2 ILIKE '%' || s.slug || '%'
+         OR s.slug ILIKE '%' || $3 || '%'
          OR (s.master_service_id = $1 AND $1 > 0)
       LIMIT 1`,
-      [isNaN(numId) ? -1 : numId, id]
+      [isNaN(numId) ? -1 : numId, rawId, withoutLocation]
     );
 
     if (sRes.rows.length > 0) {
@@ -92,7 +103,7 @@ export async function GET(
       LEFT JOIN professional_profiles pp ON pp.id = ms.professional_profile_id
       WHERE ms.id = $1 OR ms.slug = $2
       LIMIT 1`,
-      [isNaN(numId) ? -1 : numId, id]
+      [isNaN(numId) ? -1 : numId, rawId, withoutLocation]
     );
 
     if (srvRes.rows.length > 0) {

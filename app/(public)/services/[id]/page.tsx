@@ -32,7 +32,7 @@ export default function ServiceDetailPage() {
   const router = useRouter();
   const serviceId = params?.id as string;
 
-  if (serviceId && (serviceId.includes("-in-") || serviceId.startsWith("all-") || serviceId.startsWith("in-"))) {
+  if (serviceId && (serviceId.startsWith("all-") || serviceId.startsWith("in-"))) {
     const { categorySlug, city } = parseDiscoverySeoSlug(serviceId);
     return <CustomerExplorePage initialType="service" initialCategory={categorySlug} initialCity={city} />;
   }
@@ -42,6 +42,7 @@ export default function ServiceDetailPage() {
 
   const [service, setService] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [notFoundFallback, setNotFoundFallback] = useState(false);
 
   useEffect(() => {
     if (!serviceId) return;
@@ -59,6 +60,9 @@ export default function ServiceDetailPage() {
           }
         } else {
           setService(null);
+          if (serviceId && (serviceId.includes("-in-") || serviceId.includes("-"))) {
+            setNotFoundFallback(true);
+          }
         }
       })
       .catch((err) => {
@@ -119,6 +123,11 @@ export default function ServiceDetailPage() {
     : service?.professional_slug
     ? `/professional/${service.professional_slug}?tab=services&highlight=${service.id}`
     : null;
+
+  if (notFoundFallback) {
+    const { categorySlug, city } = parseDiscoverySeoSlug(serviceId);
+    return <CustomerExplorePage initialType="service" initialCategory={categorySlug} initialCity={city} />;
+  }
 
   if (loading) {
     return (

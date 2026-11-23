@@ -48,7 +48,7 @@ export default function ProductDetailPage() {
   const router = useRouter();
   const productId = params?.id as string;
 
-  if (productId && (productId.includes("-in-") || productId.startsWith("all-") || productId.startsWith("in-"))) {
+  if (productId && (productId.startsWith("all-") || productId.startsWith("in-"))) {
     const { categorySlug, city } = parseDiscoverySeoSlug(productId);
     return <CustomerExplorePage initialType="product" initialCategory={categorySlug} initialCity={city} />;
   }
@@ -59,6 +59,7 @@ export default function ProductDetailPage() {
   const [mounted, setMounted] = useState(false);
   const [product, setProduct] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [notFoundFallback, setNotFoundFallback] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string>("");
 
   useEffect(() => {
@@ -82,6 +83,9 @@ export default function ProductDetailPage() {
           }
         } else {
           setProduct(null);
+          if (productId && (productId.includes("-in-") || productId.includes("-"))) {
+            setNotFoundFallback(true);
+          }
         }
       })
       .catch((err) => {
@@ -201,6 +205,11 @@ export default function ProductDetailPage() {
     : (product?.business_profile_id || product?.business_id)
     ? `/business/${product.business_profile_id || product.business_id}`
     : null;
+
+  if (notFoundFallback) {
+    const { categorySlug, city } = parseDiscoverySeoSlug(productId);
+    return <CustomerExplorePage initialType="product" initialCategory={categorySlug} initialCity={city} />;
+  }
 
   if (loading) {
     return (

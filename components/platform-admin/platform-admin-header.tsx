@@ -61,6 +61,7 @@ import { useAuthStore, useCartStore } from "@/store";
 import { toast } from "sonner";
 import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
 import { buildDiscoverySeoUrl, extractCleanCity } from "@/lib/utils/seo-slug";
+import { getCatalogCountryMeta } from "@/lib/config/country-config";
 import { CartDrawer } from "@/components/checkout/cart-drawer";
 import { parseSearchIntent } from "@/lib/utils/search-intent";
 import { ProductStoresDialog } from "@/components/public/product-stores-dialog";

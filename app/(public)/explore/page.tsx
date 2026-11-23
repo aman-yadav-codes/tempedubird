@@ -193,10 +193,22 @@ function CustomerExplorePageContent({
   const urlType = ["all", "business", "service", "product", "professional", "course", "job", "property", "vehicle", "event"].includes(rawType) ? rawType : "all";
   const urlCountry = searchParams?.get("country") || "";
   const urlCity = searchParams?.get("city") || searchParams?.get("location") || initialCity || "";
-  const urlCategoryParam = searchParams?.get("category") || searchParams?.get("category_slug") || initialCategory || "";
+  const rawCatParam = searchParams?.get("category") || searchParams?.get("category_slug") || initialCategory || "";
+  const isAllCat = rawCatParam.toLowerCase().startsWith("all-") || rawCatParam.toLowerCase() === "all";
+  const urlCategoryParam = isAllCat ? "" : rawCatParam;
   const urlSubcategoryParam = searchParams?.get("subcategory") || searchParams?.get("subcategory_slug") || initialSubcategory || "";
-  const urlCategory = searchParams?.get("categoryId") ? Number(searchParams.get("categoryId")) : null;
-  const urlCategoryName = searchParams?.get("categoryName") || "";
+  const urlCategory = isAllCat ? null : (searchParams?.get("categoryId") ? Number(searchParams.get("categoryId")) : null);
+  const urlCategoryName = isAllCat ? "" : (searchParams?.get("categoryName") || "");
+
+  const { location: userGlobalLocation, setLocation: setGlobalLocation } = useUserLocation();
+
+  const resolvedCountryFromCity = (urlCity && EXPLORE_COUNTRY_CODES[urlCity.toLowerCase().trim()])
+    || (urlCity && EXPLORE_COUNTRY_CODES[urlCity.toLowerCase().replace(/-/g, " ").trim()])
+    || "";
+  const initialEffectiveCountry = urlCountry || resolvedCountryFromCity || "";
+  const initialEffectiveCity = resolvedCountryFromCity
+    ? ""
+    : (extractCleanCity(urlCity) || extractCleanCity(userGlobalLocation) || urlCity);
 
   const urlBiz = searchParams?.get("businessId") || searchParams?.get("business_id");
   const activeBusinessId = urlBiz && /^\d+$/.test(urlBiz.trim()) ? Number(urlBiz.trim()) : null;
@@ -204,14 +216,10 @@ function CustomerExplorePageContent({
   const urlBizCatParam = searchParams?.get("businessCategoryId") || searchParams?.get("business_category_id");
   const urlBizCat = urlBizCatParam && /^\d+$/.test(urlBizCatParam.trim()) ? Number(urlBizCatParam.trim()) : null;
 
-  const { location: userGlobalLocation, setLocation: setGlobalLocation } = useUserLocation();
-
   const [query, setQuery] = useState(urlQ);
   const [activeType, setActiveType] = useState<"all" | "business" | "service" | "product" | "professional" | "course" | "job" | "property" | "vehicle" | "event">(urlType);
-  const [country, setCountry] = useState<string>(urlCountry);
-  const [city, setCity] = useState<string>(
-    extractCleanCity(urlCity) || extractCleanCity(userGlobalLocation) || ""
-  );
+  const [country, setCountry] = useState<string>(initialEffectiveCountry);
+  const [city, setCity] = useState<string>(initialEffectiveCity);
   const [locality, setLocality] = useState<string>("");
   const [postalCode, setPostalCode] = useState<string>("");
 
@@ -273,7 +281,7 @@ function CustomerExplorePageContent({
   useEffect(() => {
     if (urlQ) setQuery(urlQ);
 
-    if (urlCategoryParam) {
+    if (urlCategoryParam && !urlCategoryParam.startsWith("all-") && urlCategoryParam !== "all") {
       const typeParam = urlType && urlType !== "all" ? `&type=${urlType}` : "";
       fetch(`/api/public/categories?slug=${encodeURIComponent(urlCategoryParam)}${typeParam}`)
         .then((r) => r.json())
@@ -1221,7 +1229,7 @@ function CustomerExplorePageContent({
             <MapPin className="size-3.5 text-amber-500 shrink-0" />
           </button>
           <select
-            value={city || (userGlobalLocation !== "All Locations" ? userGlobalLocation : "")}
+            value={displayLocationText && displayLocationText !== "All Locations" ? displayLocationText : ""}
             onChange={(e) => {
               const val = e.target.value;
               if (val === "__CUSTOM_LOCATION_MODAL__") {
@@ -1232,14 +1240,23 @@ function CustomerExplorePageContent({
               }
               if (!val || val === "All Locations") {
                 setCity("");
+                setCountry("");
                 setGlobalLocation("All Locations");
                 syncUrlParams({ city: "" });
                 return;
               }
-              const clean = extractCleanCity(val) || val;
-              setCity(clean);
-              setGlobalLocation(val);
-              syncUrlParams({ city: clean });
+              const countryCode = EXPLORE_COUNTRY_CODES[val.toLowerCase().trim()] || EXPLORE_COUNTRY_CODES[val.toLowerCase().replace(/-/g, " ").trim()];
+              if (countryCode) {
+                setCountry(countryCode);
+                setCity("");
+                setGlobalLocation(val);
+                syncUrlParams({ city: slugify(val) });
+              } else {
+                const clean = extractCleanCity(val) || val;
+                setCity(clean);
+                setGlobalLocation(val);
+                syncUrlParams({ city: clean });
+              }
             }}
             className="bg-transparent text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none cursor-pointer pr-3 appearance-none max-w-[170px] sm:max-w-[220px] truncate"
           >
@@ -2865,6 +2882,36 @@ function CustomerExplorePageContent({
     </div>
   );
 }
+
+const EXPLORE_COUNTRY_CODES: Record<string, string> = {
+  india: "IN",
+  in: "IN",
+  "united states": "US",
+  usa: "US",
+  us: "US",
+  "united kingdom": "GB",
+  uk: "GB",
+  canada: "CA",
+  ca: "CA",
+  australia: "AU",
+  au: "AU",
+  uae: "AE",
+  "united arab emirates": "AE",
+  singapore: "SG",
+  sg: "SG",
+  germany: "DE",
+  de: "DE",
+  france: "FR",
+  fr: "FR",
+  "saudi arabia": "SA",
+  sa: "SA",
+  "new zealand": "NZ",
+  nz: "NZ",
+  "south africa": "ZA",
+  "south-africa": "ZA",
+  za: "ZA",
+  rsa: "ZA",
+};
 
 export default function CustomerExplorePage(props: CustomerExplorePageProps = {}) {
   return (
