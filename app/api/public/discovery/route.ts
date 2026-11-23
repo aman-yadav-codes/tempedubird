@@ -47,6 +47,21 @@ export async function GET(req: NextRequest) {
       rsa: "ZA",
     };
 
+    const COUNTRY_NAMES: Record<string, string> = {
+      IN: "India",
+      US: "United States",
+      GB: "United Kingdom",
+      CA: "Canada",
+      AU: "Australia",
+      AE: "United Arab Emirates",
+      SG: "Singapore",
+      DE: "Germany",
+      FR: "France",
+      SA: "Saudi Arabia",
+      NZ: "New Zealand",
+      ZA: "South Africa",
+    };
+
     if (city && COUNTRY_CODES[city.toLowerCase().trim()]) {
       if (!country) country = COUNTRY_CODES[city.toLowerCase().trim()];
       city = "";
@@ -508,7 +523,18 @@ export async function GET(req: NextRequest) {
       }
       if (country && country.toUpperCase() !== "ALL") {
         prodParams.push(country.toUpperCase());
-        prodConditions.push(`($${prodParams.length} = ANY(COALESCE(mp.countries, '{"IN", "US"}')))`);
+        prodConditions.push(`(
+          $${prodParams.length} = ANY(COALESCE(mp.countries, '{"IN", "US"}'))
+          OR mp.business_profile_id IN (
+            SELECT bp.id FROM business_profiles bp
+            WHERE bp.country_code = $${prodParams.length} OR ($${prodParams.length} = 'IN' AND bp.country_code IS NULL)
+          )
+          OR mp.id IN (
+            SELECT bprod.master_product_id FROM business_products bprod
+            JOIN business_profiles bp ON (bp.id = bprod.business_profile_id OR bp.id = bprod.business_id)
+            WHERE bp.country_code = $${prodParams.length} OR ($${prodParams.length} = 'IN' AND bp.country_code IS NULL)
+          )
+        )`);
       }
       if (categoryIds.length > 0) {
         prodParams.push(categoryIds);
@@ -635,7 +661,23 @@ export async function GET(req: NextRequest) {
       }
       if (country && country.toUpperCase() !== "ALL") {
         sParams.push(country.toUpperCase());
-        sConditions.push(`($${sParams.length} = ANY(COALESCE(ms.countries, '{"IN", "US"}')))`);
+        sConditions.push(`(
+          $${sParams.length} = ANY(COALESCE(ms.countries, '{"IN", "US"}'))
+          OR ms.business_profile_id IN (
+            SELECT bp.id FROM business_profiles bp
+            WHERE bp.country_code = $${sParams.length} OR ($${sParams.length} = 'IN' AND bp.country_code IS NULL)
+          )
+          OR ms.id IN (
+            SELECT bserv.master_service_id FROM business_services bserv
+            JOIN business_profiles bp ON bp.id = bserv.business_id
+            WHERE bp.country_code = $${sParams.length} OR ($${sParams.length} = 'IN' AND bp.country_code IS NULL)
+          )
+          OR ms.id IN (
+            SELECT ps.master_service_id FROM professional_services ps
+            JOIN professional_profiles pp ON pp.id = ps.professional_id
+            WHERE pp.country_code = $${sParams.length} OR ($${sParams.length} = 'IN' AND pp.country_code IS NULL)
+          )
+        )`);
       }
       if (categoryIds.length > 0) {
         sParams.push(categoryIds);
@@ -998,7 +1040,35 @@ export async function GET(req: NextRequest) {
               OR COALESCE(mj.description, '') ILIKE $${mjParams.length}
             )`);
           }
-          if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
+          if (country && country.toUpperCase() !== "ALL") {
+            const cUpper = country.toUpperCase();
+            const cName = COUNTRY_NAMES[cUpper] || (cUpper === "ZA" ? "South Africa" : cUpper === "IN" ? "India" : "");
+            if (cUpper === "IN") {
+              mjConditions.push(`(
+                mj.location ILIKE '%India%'
+                OR mj.location ILIKE '%Varanasi%'
+                OR mj.location ILIKE '%Delhi%'
+                OR mj.location ILIKE '%Bangalore%'
+                OR mj.location ILIKE '%Kota%'
+                OR mj.location ILIKE '%Remote%'
+              )`);
+            } else if (cUpper === "ZA") {
+              mjConditions.push(`(
+                mj.location ILIKE '%South Africa%'
+                OR mj.location ILIKE '%ZA%'
+                OR mj.location ILIKE '%Cape Town%'
+                OR mj.location ILIKE '%Johannesburg%'
+                OR mj.location ILIKE '%Sandton%'
+              )`);
+            } else if (cName) {
+              mjParams.push(`%${cName}%`);
+              mjConditions.push(`mj.location ILIKE $${mjParams.length}`);
+            }
+          }
+          if (uniqueCityTokens.length > 0) {
+            mjParams.push(uniqueCityTokens);
+            mjConditions.push(`mj.location ILIKE ANY($${mjParams.length}::text[])`);
+          } else if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
             mjParams.push(`%${city}%`);
             mjConditions.push(`mj.location ILIKE $${mjParams.length}`);
           }
@@ -1049,6 +1119,33 @@ export async function GET(req: NextRequest) {
             OR COALESCE(sjp.department, '') ILIKE $${jParams.length}
             OR COALESCE(sjp.location, '') ILIKE $${jParams.length}
           )`);
+        }
+
+        if (country && country.toUpperCase() !== "ALL") {
+          const cUpper = country.toUpperCase();
+          const cName = COUNTRY_NAMES[cUpper] || (cUpper === "ZA" ? "South Africa" : cUpper === "IN" ? "India" : "");
+          if (cUpper === "IN") {
+            jConditions.push(`(
+              sjp.location ILIKE '%India%'
+              OR sjp.location ILIKE '%Varanasi%'
+              OR sjp.location ILIKE '%Remote%'
+              OR sjp.location ILIKE '%Delhi%'
+              OR sjp.location ILIKE '%Kota%'
+              OR sjp.location IS NULL
+              OR sjp.location = ''
+            )`);
+          } else if (cUpper === "ZA") {
+            jConditions.push(`(
+              sjp.location ILIKE '%South Africa%'
+              OR sjp.location ILIKE '%Cape Town%'
+              OR sjp.location ILIKE '%Johannesburg%'
+              OR sjp.location ILIKE '%Sandton%'
+              OR sjp.location ILIKE '%ZA%'
+            )`);
+          } else if (cName) {
+            jParams.push(`%${cName}%`);
+            jConditions.push(`sjp.location ILIKE $${jParams.length}`);
+          }
         }
 
         if (uniqueCityTokens.length > 0) {
