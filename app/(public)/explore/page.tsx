@@ -2517,44 +2517,7 @@ function CustomerExplorePageContent({
               </div>
             </div>
 
-            {/* 2. Listing Type Filter (Second) */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                <Layers className="size-3.5 text-amber-500" />
-                Listing Type
-              </label>
-              <div className="relative">
-                <select
-                  value={activeType}
-                  onChange={(e) => {
-                    const newType = e.target.value as any;
-                    setActiveType(newType);
-                    setSelectedCategoryId(null);
-                    setSelectedCategoryName("");
-                    setSelectedCategorySlug("");
-                    setSelectedSubcategoryId(null);
-                    setSelectedSubcategoryName("");
-                    setSelectedSubcategorySlug("");
-                    syncUrlParams({ type: newType, category: null, subcategory: null });
-                  }}
-                  className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white cursor-pointer appearance-none font-semibold capitalize"
-                >
-                  <option value="all">All Types</option>
-                  <option value="business">Businesses</option>
-                  <option value="product">Products</option>
-                  <option value="service">Services</option>
-                  <option value="property">Properties</option>
-                  <option value="vehicle">Vehicles</option>
-                  <option value="event">Events</option>
-                  <option value="professional">Professionals</option>
-                  <option value="course">Courses</option>
-                  <option value="job">Jobs</option>
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
-              </div>
-            </div>
-
-            {/* 3. Particular Category Filter (Third - Cascading based on Main Business Type & Listing Type) */}
+            {/* Particular Category Filter (Cascading based on Main Business Type & Listing Type) */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
                 <span>
