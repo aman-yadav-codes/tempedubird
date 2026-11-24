@@ -51,9 +51,9 @@ interface JobDetailPageProps {
 export default function JobDetailPage({ params }: JobDetailPageProps) {
   const { id } = use(params);
 
-  if (id && (id.startsWith("all-") || id.startsWith("in-"))) {
+  if (id && (id.startsWith("all-") || id.startsWith("in-") || id.startsWith("job-"))) {
     const { categorySlug, city } = parseDiscoverySeoSlug(id);
-    return <CustomerExplorePage initialType="job" initialCategory={categorySlug} initialCity={city} />;
+    return <CustomerExplorePage key={`job-${id}`} initialType="job" initialCategory={categorySlug} initialCity={city} />;
   }
   const router = useRouter();
   const [job, setJob] = useState<StaffJobPosting | null>(null);
@@ -219,7 +219,7 @@ export default function JobDetailPage({ params }: JobDetailPageProps) {
 
   if (notFoundFallback) {
     const { categorySlug, city } = parseDiscoverySeoSlug(id);
-    return <CustomerExplorePage initialType="job" initialCategory={categorySlug} initialCity={city} />;
+    return <CustomerExplorePage key={`job-${id}`} initialType="job" initialCategory={categorySlug} initialCity={city} />;
   }
 
   if (loading) {

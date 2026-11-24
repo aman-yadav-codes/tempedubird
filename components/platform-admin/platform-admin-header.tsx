@@ -576,21 +576,36 @@ export function PlatformAdminHeader() {
                   </span>
                   <Link
                     href={getNavHref(item)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push(getNavHref(item));
+                    }}
                     className="text-[10px] text-sky-600 hover:underline font-bold"
                   >
                     View All →
                   </Link>
                 </div>
-                {getItemSubcategories(item).map((sub) => (
-                  <DropdownMenuItem key={sub.label} asChild>
-                    <Link
-                      href={getNavHref(item, sub)}
-                      className="cursor-pointer text-xs py-1.5 px-2.5 rounded-md font-medium text-slate-700 hover:text-sky-600 hover:bg-sky-50"
+                {getItemSubcategories(item).map((sub) => {
+                  const navHref = getNavHref(item, sub);
+                  return (
+                    <DropdownMenuItem
+                      key={sub.label}
+                      onSelect={() => router.push(navHref)}
+                      asChild
                     >
-                      {sub.label}
-                    </Link>
-                  </DropdownMenuItem>
-                ))}
+                      <Link
+                        href={navHref}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(navHref);
+                        }}
+                        className="cursor-pointer text-xs py-1.5 px-2.5 rounded-md font-medium text-slate-700 hover:text-sky-600 hover:bg-sky-50"
+                      >
+                        {sub.label}
+                      </Link>
+                    </DropdownMenuItem>
+                  );
+                })}
               </DropdownMenuContent>
             </DropdownMenu>
           ))}

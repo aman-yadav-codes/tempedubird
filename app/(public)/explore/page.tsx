@@ -280,6 +280,18 @@ function CustomerExplorePageContent({
   // Sync state if URL search parameters change
   useEffect(() => {
     if (urlQ) setQuery(urlQ);
+    if (urlType) setActiveType(urlType);
+    if (initialEffectiveCity !== undefined) setCity(initialEffectiveCity);
+    if (initialEffectiveCountry !== undefined) setCountry(initialEffectiveCountry);
+
+    if (!urlCategoryParam && !urlCategory) {
+      setSelectedCategoryId(null);
+      setSelectedCategoryName("");
+      setSelectedCategorySlug("");
+      setSelectedSubcategoryId(null);
+      setSelectedSubcategoryName("");
+      setSelectedSubcategorySlug("");
+    }
 
     if (urlCategoryParam && !urlCategoryParam.startsWith("all-") && urlCategoryParam !== "all") {
       const typeParam = urlType && urlType !== "all" ? `&type=${urlType}` : "";

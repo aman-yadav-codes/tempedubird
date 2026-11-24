@@ -14,6 +14,9 @@ interface Props {
 async function fetchEventRecord(idOrSlug: string) {
   try {
     const rawSlug = decodeURIComponent(idOrSlug || "").trim().toLowerCase();
+    if (rawSlug.startsWith("in-") || rawSlug.startsWith("all-") || rawSlug.startsWith("event-")) {
+      return null;
+    }
     let withoutLocation = rawSlug;
     const lastInIndex = rawSlug.lastIndexOf("-in-");
     if (lastInIndex !== -1) {
@@ -71,8 +74,7 @@ async function fetchEventRecord(idOrSlug: string) {
           OR br.slug ILIKE $1
           OR br.slug ILIKE $2
           OR (br.id = $3 AND $3 > 0)
-          OR $1 ILIKE '%' || br.slug || '%'
-          OR br.slug ILIKE '%' || $2 || '%'
+          
         )
         AND (br.is_deleted IS NULL OR br.is_deleted = FALSE)
       ORDER BY (CASE WHEN br.slug = $1 THEN 0 WHEN br.slug = $2 THEN 1 ELSE 2 END), br.id DESC
@@ -142,6 +144,7 @@ export default async function EventAliasOrListingPage({
 
   return (
     <CustomerExplorePage
+      key={`event-${rawId}`}
       initialType="event"
       initialCategory={categorySlug}
       initialCity={city}
