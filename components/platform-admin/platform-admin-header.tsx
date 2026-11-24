@@ -125,27 +125,11 @@ const BUSINESS_MEGA_CATEGORIES = [
 
 const TOP_NAV_ITEMS = [
   {
-    label: "Categories",
+    label: "Business",
     type: "business",
     icon: LayoutGrid,
     isSpecialCategory: true,
     subcategories: BUSINESS_MEGA_CATEGORIES,
-  },
-  {
-    label: "Shopping",
-    type: "product",
-    icon: ShoppingBag,
-    subcategories: [
-      { label: "All Products", categorySlug: "all-products" },
-      { label: "Electronics & Gadgets", categorySlug: "electronics-and-gadgets" },
-      { label: "Automobiles & Electric Vehicles", categorySlug: "automobiles-cars-and-electric-vehicles" },
-      { label: "Building Materials & Construction", categorySlug: "building-materials-and-construction-hardware" },
-      { label: "Books & Study Materials", categorySlug: "books-and-study-materials" },
-      { label: "Fashion Accessories & Apparel", categorySlug: "fashion-accessories-and-footwear" },
-      { label: "Bakery & Gourmet Foods", categorySlug: "packaged-foods-and-gourmet-groceries" },
-      { label: "Event Supplies & Decor", categorySlug: "event-decor-and-celebration-supplies" },
-      { label: "Kitchenware & Appliances", categorySlug: "kitchenware-and-appliances" },
-    ],
   },
   {
     label: "Professionals",
@@ -179,18 +163,6 @@ const TOP_NAV_ITEMS = [
     ],
   },
   {
-    label: "Events",
-    type: "event",
-    icon: Calendar,
-    subcategories: [
-      { label: "All Events", categorySlug: "all-events" },
-      { label: "Corporate & Industry Events", categorySlug: "event-corporate-industry-events" },
-      { label: "Live Entertainment & Cultural Shows", categorySlug: "event-live-entertainment-cultural-shows" },
-      { label: "Sports & Fitness Tournaments", categorySlug: "event-sports-fitness-tournaments" },
-      { label: "Weddings & Social Galas", categorySlug: "event-weddings-social-galas" },
-    ],
-  },
-  {
     label: "Courses",
     type: "course",
     icon: GraduationCap,
@@ -202,43 +174,6 @@ const TOP_NAV_ITEMS = [
       { label: "Class 6 to 10 Foundation", categorySlug: "class-6-to-8" },
       { label: "Bachelors Degree Programs", categorySlug: "bachelors" },
       { label: "Skill & Certification Bootcamps", categorySlug: "skill-and-coding-bootcamps" },
-    ],
-  },
-  {
-    label: "Property",
-    type: "property",
-    icon: Building,
-    subcategories: [
-      { label: "All Properties", categorySlug: "all-properties" },
-      { label: "Commercial Properties", categorySlug: "property-commercial-properties" },
-      { label: "Residential Real Estate", categorySlug: "property-residential-real-estate" },
-      { label: "Industrial & Warehousing Estates", categorySlug: "property-industrial-warehousing-estates" },
-      { label: "Plots & Development Lands", categorySlug: "property-plots-development-lands" },
-    ],
-  },
-  {
-    label: "Vehicle",
-    type: "vehicle",
-    icon: Car,
-    subcategories: [
-      { label: "All Vehicles", categorySlug: "all-vehicles" },
-      { label: "Passenger Cars & SUVs", categorySlug: "vehicle-passenger-cars-suvs" },
-      { label: "Commercial & Transport Vehicles", categorySlug: "vehicle-commercial-transport-vehicles" },
-      { label: "Two-Wheelers & Motorcycles", categorySlug: "vehicle-two-wheelers-motorcycles" },
-      { label: "Luxury & Exotic Automobiles", categorySlug: "vehicle-luxury-exotic-automobiles" },
-    ],
-  },
-  {
-    label: "Financial",
-    type: "service",
-    icon: Landmark,
-    subcategories: [
-      { label: "All Financial Services", categorySlug: "all-financial-services" },
-      { label: "Chartered Accountants & Financial", categorySlug: "chartered-accountants-and-financial-advisors" },
-      { label: "Business Loans & Commercial Finance", categorySlug: "business-loans-financing" },
-      { label: "Insurance & Risk Advisory", categorySlug: "insurance-risk-advisory" },
-      { label: "Investment & Wealth Management", categorySlug: "wealth-investment-management" },
-      { label: "Legal, Tax & Corporate Compliance", categorySlug: "legal-law-and-compliance-experts" },
     ],
   },
 ];
