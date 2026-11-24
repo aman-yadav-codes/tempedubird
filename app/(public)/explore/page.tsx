@@ -350,8 +350,9 @@ function CustomerExplorePageContent({
         .catch(() => { });
     }
 
-    if (urlType && ["all", "business", "service", "product", "professional", "course", "job", "property", "vehicle", "event"].includes(urlType)) {
-      setActiveType(urlType);
+    const effectiveType = (urlType && urlType !== "all") ? urlType : (initialType || urlType || "all");
+    if (["all", "business", "service", "product", "professional", "course", "job", "property", "vehicle", "event"].includes(effectiveType)) {
+      setActiveType(effectiveType as any);
     }
     if (urlBizCat) {
       setSelectedBusinessCategoryId(urlBizCat);
@@ -367,7 +368,7 @@ function CustomerExplorePageContent({
     const resolvedCity = extractCleanCity(urlCity) || extractCleanCity(userGlobalLocation) || "";
     setCity(resolvedCity);
     if (urlCountry) setCountry(urlCountry);
-  }, [urlQ, urlType, urlCity, urlCountry, urlCategory, urlCategoryParam, urlSubcategoryParam, urlCategoryName, urlBizCat, userGlobalLocation]);
+  }, [urlQ, urlType, initialType, urlCity, urlCountry, urlCategory, urlCategoryParam, urlSubcategoryParam, urlCategoryName, urlBizCat, userGlobalLocation]);
 
   // Sync with global header location / country change events (e.g. Pin button in header)
   useEffect(() => {
@@ -1219,45 +1220,6 @@ function CustomerExplorePageContent({
           >
             <Search className="size-3.5" />
           </button>
-        </div>
-
-        {/* Listing Type Dropdown Pill (Replaces location: Job Vacancy, Professionals, Product & Goods, Course & Education, etc.) */}
-        <div className="flex items-center gap-1.5 h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 hover:border-amber-400 hover:bg-amber-50/20 transition-all">
-          <Layers className="size-3.5 text-amber-500 shrink-0" />
-          <select
-            value={activeType}
-            onChange={(e) => {
-              const newType = e.target.value as any;
-              setActiveType(newType);
-              setSelectedCategoryId(null);
-              setSelectedCategoryName("");
-              setSelectedCategorySlug("");
-              setSelectedSubcategoryId(null);
-              setSelectedSubcategoryName("");
-              setSelectedSubcategorySlug("");
-              setSelectedBusinessCategoryId(null);
-
-              const locCity = city || extractCleanCity(userGlobalLocation) || null;
-              const newPath = buildDiscoverySeoUrl({
-                type: newType,
-                city: locCity,
-              });
-              const qParam = productNameSearch && productNameSearch.trim() ? `?q=${encodeURIComponent(productNameSearch.trim())}` : "";
-              router.push(`${newPath}${qParam}`);
-            }}
-            className="bg-transparent text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none cursor-pointer pr-3 appearance-none max-w-[170px] sm:max-w-[220px] truncate"
-          >
-            <option value="job" className="bg-white text-slate-900">Job Vacancy</option>
-            <option value="professional" className="bg-white text-slate-900">Professionals</option>
-            <option value="product" className="bg-white text-slate-900">Product &amp; Goods</option>
-            <option value="course" className="bg-white text-slate-900">Course &amp; Education</option>
-            <option value="business" className="bg-white text-slate-900">Businesses</option>
-            <option value="property" className="bg-white text-slate-900">Property</option>
-            <option value="vehicle" className="bg-white text-slate-900">Vehicle</option>
-            <option value="event" className="bg-white text-slate-900">Events</option>
-            <option value="all" className="bg-white text-slate-900">All Listings</option>
-          </select>
-          <ChevronDown className="size-3 text-slate-400 pointer-events-none shrink-0" />
         </div>
 
         {/* Radius Pill */}
