@@ -202,26 +202,20 @@ function CustomerExplorePageContent({
   const urlCategory = isAllCat ? null : (searchParams?.get("categoryId") ? Number(searchParams.get("categoryId")) : null);
   const urlCategoryName = isAllCat ? "" : (searchParams?.get("categoryName") || initialCategoryName || formatCategorySlug(urlCategoryParam) || "");
 
-  const { location: userGlobalLocation, setLocation: setGlobalLocation } = useUserLocation();
-
-  const resolvedCountryFromCity = (urlCity && EXPLORE_COUNTRY_CODES[urlCity.toLowerCase().trim()])
-    || (urlCity && EXPLORE_COUNTRY_CODES[urlCity.toLowerCase().replace(/-/g, " ").trim()])
-    || "";
-  const initialEffectiveCountry = urlCountry || resolvedCountryFromCity || "";
-  const initialEffectiveCity = resolvedCountryFromCity
-    ? ""
-    : (extractCleanCity(urlCity) || extractCleanCity(userGlobalLocation) || urlCity);
-
   const urlBiz = searchParams?.get("businessId") || searchParams?.get("business_id");
   const activeBusinessId = urlBiz && /^\d+$/.test(urlBiz.trim()) ? Number(urlBiz.trim()) : null;
 
   const urlBizCatParam = searchParams?.get("businessCategoryId") || searchParams?.get("business_category_id");
   const urlBizCat = urlBizCatParam && /^\d+$/.test(urlBizCatParam.trim()) ? Number(urlBizCatParam.trim()) : null;
 
+  const { location: userGlobalLocation, setLocation: setGlobalLocation } = useUserLocation();
+
   const [query, setQuery] = useState(urlQ);
   const [activeType, setActiveType] = useState<"all" | "business" | "service" | "product" | "professional" | "course" | "job" | "property" | "vehicle" | "event">(urlType);
-  const [country, setCountry] = useState<string>(initialEffectiveCountry);
-  const [city, setCity] = useState<string>(initialEffectiveCity);
+  const [country, setCountry] = useState<string>(urlCountry);
+  const [city, setCity] = useState<string>(
+    extractCleanCity(urlCity) || extractCleanCity(userGlobalLocation) || ""
+  );
   const [locality, setLocality] = useState<string>("");
   const [postalCode, setPostalCode] = useState<string>("");
 
@@ -282,20 +276,8 @@ function CustomerExplorePageContent({
   // Sync state if URL search parameters change
   useEffect(() => {
     if (urlQ) setQuery(urlQ);
-    if (urlType) setActiveType(urlType);
-    if (initialEffectiveCity !== undefined) setCity(initialEffectiveCity);
-    if (initialEffectiveCountry !== undefined) setCountry(initialEffectiveCountry);
 
-    if (!urlCategoryParam && !urlCategory) {
-      setSelectedCategoryId(null);
-      setSelectedCategoryName("");
-      setSelectedCategorySlug("");
-      setSelectedSubcategoryId(null);
-      setSelectedSubcategoryName("");
-      setSelectedSubcategorySlug("");
-    }
-
-    if (urlCategoryParam && !urlCategoryParam.startsWith("all-") && urlCategoryParam !== "all") {
+    if (urlCategoryParam) {
       const typeParam = urlType && urlType !== "all" ? `&type=${urlType}` : "";
       fetch(`/api/public/categories?slug=${encodeURIComponent(urlCategoryParam)}${typeParam}`)
         .then((r) => r.json())
@@ -372,6 +354,14 @@ function CustomerExplorePageContent({
     }
     if (urlBizCat) {
       setSelectedBusinessCategoryId(urlBizCat);
+    }
+    if (!urlCategoryParam && !urlCategory) {
+      setSelectedCategoryId(null);
+      setSelectedCategoryName("");
+      setSelectedCategorySlug("");
+      setSelectedSubcategoryId(null);
+      setSelectedSubcategoryName("");
+      setSelectedSubcategorySlug("");
     }
     const resolvedCity = extractCleanCity(urlCity) || extractCleanCity(userGlobalLocation) || "";
     setCity(resolvedCity);
@@ -1245,7 +1235,7 @@ function CustomerExplorePageContent({
             <MapPin className="size-3.5 text-amber-500 shrink-0" />
           </button>
           <select
-            value={displayLocationText && displayLocationText !== "All Locations" ? displayLocationText : ""}
+            value={city || (userGlobalLocation !== "All Locations" ? userGlobalLocation : "")}
             onChange={(e) => {
               const val = e.target.value;
               if (val === "__CUSTOM_LOCATION_MODAL__") {
@@ -1256,23 +1246,14 @@ function CustomerExplorePageContent({
               }
               if (!val || val === "All Locations") {
                 setCity("");
-                setCountry("");
                 setGlobalLocation("All Locations");
                 syncUrlParams({ city: "" });
                 return;
               }
-              const countryCode = EXPLORE_COUNTRY_CODES[val.toLowerCase().trim()] || EXPLORE_COUNTRY_CODES[val.toLowerCase().replace(/-/g, " ").trim()];
-              if (countryCode) {
-                setCountry(countryCode);
-                setCity("");
-                setGlobalLocation(val);
-                syncUrlParams({ city: slugify(val) });
-              } else {
-                const clean = extractCleanCity(val) || val;
-                setCity(clean);
-                setGlobalLocation(val);
-                syncUrlParams({ city: clean });
-              }
+              const clean = extractCleanCity(val) || val;
+              setCity(clean);
+              setGlobalLocation(val);
+              syncUrlParams({ city: clean });
             }}
             className="bg-transparent text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none cursor-pointer pr-3 appearance-none max-w-[170px] sm:max-w-[220px] truncate"
           >
@@ -2498,22 +2479,22 @@ function CustomerExplorePageContent({
                   {activeType === "service"
                     ? "Service Category"
                     : activeType === "product"
-                    ? "Product Category"
-                    : activeType === "course"
-                    ? "Course Category"
-                    : activeType === "professional"
-                    ? "Profession Category"
-                    : activeType === "job"
-                    ? "Job Domain"
-                    : activeType === "property"
-                    ? "Property Category"
-                    : activeType === "vehicle"
-                    ? "Vehicle Category"
-                    : activeType === "event"
-                    ? "Event Category"
-                    : activeType === "business"
-                    ? "Business Category"
-                    : "Category"}
+                      ? "Product Category"
+                      : activeType === "course"
+                        ? "Course Category"
+                        : activeType === "professional"
+                          ? "Profession Category"
+                          : activeType === "job"
+                            ? "Job Domain"
+                            : activeType === "property"
+                              ? "Property Category"
+                              : activeType === "vehicle"
+                                ? "Vehicle Category"
+                                : activeType === "event"
+                                  ? "Event Category"
+                                  : activeType === "business"
+                                    ? "Business Category"
+                                    : "Category"}
                 </span>
                 {loadingCategories && <span className="text-[10px] text-amber-600 font-normal animate-pulse">Loading...</span>}
               </label>
@@ -2898,36 +2879,6 @@ function CustomerExplorePageContent({
     </div>
   );
 }
-
-const EXPLORE_COUNTRY_CODES: Record<string, string> = {
-  india: "IN",
-  in: "IN",
-  "united states": "US",
-  usa: "US",
-  us: "US",
-  "united kingdom": "GB",
-  uk: "GB",
-  canada: "CA",
-  ca: "CA",
-  australia: "AU",
-  au: "AU",
-  uae: "AE",
-  "united arab emirates": "AE",
-  singapore: "SG",
-  sg: "SG",
-  germany: "DE",
-  de: "DE",
-  france: "FR",
-  fr: "FR",
-  "saudi arabia": "SA",
-  sa: "SA",
-  "new zealand": "NZ",
-  nz: "NZ",
-  "south africa": "ZA",
-  "south-africa": "ZA",
-  za: "ZA",
-  rsa: "ZA",
-};
 
 export default function CustomerExplorePage(props: CustomerExplorePageProps = {}) {
   return (

@@ -55,6 +55,12 @@ export default function JobDetailPage({ params }: JobDetailPageProps) {
     const { categorySlug, categoryName, city } = parseDiscoverySeoSlug(id);
     return <CustomerExplorePage key={`job-${id}`} initialType="job" initialCategory={categorySlug} initialCategoryName={categoryName} initialCity={city} />;
   }
+
+  return <JobDetailContent jobId={id} />;
+}
+
+function JobDetailContent({ jobId }: { jobId: string }) {
+  const id = jobId;
   const router = useRouter();
   const [job, setJob] = useState<StaffJobPosting | null>(null);
   const [loading, setLoading] = useState(true);

@@ -194,9 +194,20 @@ export function CompactProductCard({
           )}
         </div>
 
-        <p className="text-[11px] text-muted-foreground truncate" title={brandName}>
-          {brandName}
-        </p>
+        {effectiveBusiness.slug || effectiveBusiness.id ? (
+          <Link
+            href={effectiveBusiness.slug ? `/business/${effectiveBusiness.slug}` : `/business/${effectiveBusiness.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="text-[11px] text-muted-foreground font-semibold hover:text-primary hover:underline truncate block"
+            title={effectiveBusiness.name || brandName}
+          >
+            {effectiveBusiness.name || brandName}
+          </Link>
+        ) : (
+          <p className="text-[11px] text-muted-foreground truncate" title={brandName}>
+            {brandName}
+          </p>
+        )}
 
         {/* Pricing */}
         <div className="flex items-center justify-between mt-1">

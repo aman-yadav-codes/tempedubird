@@ -45,13 +45,26 @@ import {
 
 export default function ProductDetailPage() {
   const params = useParams();
-  const router = useRouter();
-  const productId = params?.id as string;
+  const rawId = (params?.id as string) || "";
 
-  if (productId && (productId.startsWith("all-") || productId.startsWith("in-"))) {
-    const { categorySlug, city } = parseDiscoverySeoSlug(productId);
-    return <CustomerExplorePage initialType="product" initialCategory={categorySlug} initialCity={city} />;
+  if (rawId && (rawId.startsWith("all-") || rawId.startsWith("in-") || rawId.startsWith("product-"))) {
+    const { categorySlug, categoryName, city } = parseDiscoverySeoSlug(rawId);
+    return (
+      <CustomerExplorePage
+        key={`product-${rawId}`}
+        initialType="product"
+        initialCategory={categorySlug}
+        initialCategoryName={categoryName}
+        initialCity={city}
+      />
+    );
   }
+
+  return <ProductDetailContent productId={rawId} />;
+}
+
+function ProductDetailContent({ productId }: { productId: string }) {
+  const router = useRouter();
 
   const { user } = useAuthStore();
   const { addItem, getItemQuantity, updateQuantity, setIsOpen } = useCartStore();
@@ -200,11 +213,8 @@ export default function ProductDetailPage() {
     setIsOpen(true);
   };
 
-  const storeLink = product?.business_slug
-    ? `/${product.category_slug || "retail-shopping"}/${product.business_slug}?tab=products&highlight=${product.id}`
-    : (product?.business_profile_id || product?.business_id)
-    ? `/business/${product.business_profile_id || product.business_id}`
-    : null;
+  const storeSlugOrId = product?.business_slug || product?.business_profile_id || product?.business_id;
+  const storeLink = storeSlugOrId ? `/business/${storeSlugOrId}` : null;
 
   if (notFoundFallback) {
     const { categorySlug, city } = parseDiscoverySeoSlug(productId);

@@ -158,9 +158,23 @@ export function CompactServiceCard({
           )}
         </div>
 
-        <p className="text-[11px] text-muted-foreground truncate" title={subtitle}>
-          {subtitle}
-        </p>
+        {effectiveBusiness.slug || effectiveBusiness.id ? (
+          <div className="flex items-center gap-1 text-[11px] text-muted-foreground truncate">
+            <span>{pricingModel} {durationText ? `• ${durationText}` : ""} • </span>
+            <Link
+              href={effectiveBusiness.slug ? `/business/${effectiveBusiness.slug}` : `/business/${effectiveBusiness.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="font-semibold hover:text-primary hover:underline truncate"
+              title={effectiveBusiness.name}
+            >
+              {effectiveBusiness.name}
+            </Link>
+          </div>
+        ) : (
+          <p className="text-[11px] text-muted-foreground truncate" title={subtitle}>
+            {subtitle}
+          </p>
+        )}
 
         {/* Pricing */}
         <div className="flex items-center justify-between mt-1">
