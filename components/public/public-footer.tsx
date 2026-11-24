@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { GraduationCap, School, Mail, Phone, MapPin, Smartphone } from "lucide-react";
+import { GraduationCap, School, Mail, Phone, MapPin, Smartphone, Users, Store, Handshake } from "lucide-react";
+import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { useAuthStore } from "@/store";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
@@ -123,6 +124,17 @@ export function PublicFooter({ configuredInstitutionId }: { configuredInstitutio
     phone?: string;
     address?: string;
   }>(() => cachedPlatformContact || {});
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+
+  const handleNewsletterSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newsletterEmail || !newsletterEmail.includes("@")) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    toast.success("Thank you for subscribing to 143Panda updates!");
+    setNewsletterEmail("");
+  };
 
   const defaultEnvInstId =
     configuredInstitutionId ||
@@ -284,9 +296,147 @@ export function PublicFooter({ configuredInstitutionId }: { configuredInstitutio
     { label: "Refund Policy", href: "/refund-policy" },
   ];
 
+  const marketplaceVerticals = [
+    { label: "Businesses & Stores", href: "/businesses" },
+    { label: "Products & Shopping", href: "/products" },
+    { label: "Verified Professionals", href: "/professionals" },
+    { label: "Jobs & Careers", href: "/jobs" },
+    { label: "Courses & Coaching", href: "/courses" },
+    { label: "Real Estate Properties", href: "/properties" },
+    { label: "Vehicles & Transport", href: "/vehicles" },
+    { label: "Hospitality & Events", href: "/events" },
+  ];
+
   return (
     <footer className="border-t border-border bg-background py-12">
       <div className="container mx-auto px-4">
+        {/* 143Panda App & Community Pre-Footer Bar */}
+        <div className="mb-12 rounded-2xl bg-[#f0f6ff] border border-blue-100/90 p-4 sm:p-5 shadow-xs">
+          <div className="flex flex-col xl:flex-row items-center justify-between gap-6">
+            {/* 1. Left: Get the 143Panda App */}
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-4 shrink-0 w-full xl:w-auto justify-center sm:justify-start">
+              <div className="relative size-12 sm:size-14 shrink-0 flex items-center justify-center">
+                <Image
+                  src="/images/hero-panda-3d-clean.webp"
+                  alt="143Panda Mascot"
+                  width={56}
+                  height={56}
+                  className="size-12 sm:size-14 object-contain drop-shadow-sm"
+                />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight leading-tight">
+                  Get the 143Panda App
+                </h4>
+                <p className="text-xs text-slate-500 leading-tight mt-0.5 whitespace-nowrap">
+                  Discover, connect and grow on the go!
+                </p>
+              </div>
+              <div className="flex items-center gap-2 sm:pl-2">
+                <a
+                  href="#"
+                  className="flex items-center gap-2 bg-black hover:bg-neutral-800 text-white px-3 py-1.5 rounded-lg transition-colors shadow-2xs group"
+                  title="Download on the App Store"
+                >
+                  <AppleIcon className="size-4.5 fill-current" />
+                  <div className="flex flex-col text-left">
+                    <span className="text-[8px] text-neutral-300 uppercase leading-none tracking-tight">Download on the</span>
+                    <span className="text-[12px] font-bold leading-tight font-sans tracking-tight">App Store</span>
+                  </div>
+                </a>
+
+                <a
+                  href="#"
+                  className="flex items-center gap-2 bg-black hover:bg-neutral-800 text-white px-3 py-1.5 rounded-lg transition-colors shadow-2xs group"
+                  title="GET IT ON Google Play"
+                >
+                  <PlayStoreIcon className="size-4.5 fill-current" />
+                  <div className="flex flex-col text-left">
+                    <span className="text-[8px] text-neutral-300 uppercase leading-none tracking-tight">GET IT ON</span>
+                    <span className="text-[12px] font-bold leading-tight font-sans tracking-tight">Google Play</span>
+                  </div>
+                </a>
+              </div>
+            </div>
+
+            {/* Vertical Divider */}
+            <div className="hidden xl:block w-px h-10 bg-blue-200/70 shrink-0" />
+
+            {/* 2. Middle: Stats Counter */}
+            <div className="flex items-center justify-around sm:justify-center gap-6 sm:gap-8 shrink-0 w-full xl:w-auto py-2 xl:py-0 border-y xl:border-y-0 border-blue-100/80">
+              {/* 10K+ Happy Users */}
+              <div className="flex items-center gap-2.5">
+                <div className="size-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                  <Users className="size-4.5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-extrabold text-slate-900 leading-tight">10K+</span>
+                  <span className="text-[11px] font-medium text-slate-500 leading-tight">Happy Users</span>
+                </div>
+              </div>
+
+              {/* 5K+ Businesses */}
+              <div className="flex items-center gap-2.5">
+                <div className="size-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                  <Store className="size-4.5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-extrabold text-slate-900 leading-tight">5K+</span>
+                  <span className="text-[11px] font-medium text-slate-500 leading-tight">Businesses</span>
+                </div>
+              </div>
+
+              {/* 1M+ Connections */}
+              <div className="flex items-center gap-2.5">
+                <div className="size-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                  <Handshake className="size-4.5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-extrabold text-slate-900 leading-tight">1M+</span>
+                  <span className="text-[11px] font-medium text-slate-500 leading-tight">Connections</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Vertical Divider */}
+            <div className="hidden xl:block w-px h-10 bg-blue-200/70 shrink-0" />
+
+            {/* 3. Right: Stay Updated Newsletter */}
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-3.5 shrink-0 w-full xl:w-auto justify-center sm:justify-end">
+              <div className="flex items-center gap-3">
+                <div className="size-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                  <Mail className="size-4.5" />
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-tight">
+                    Stay Updated
+                  </h4>
+                  <p className="text-[11px] text-slate-500 leading-tight mt-0.5 whitespace-nowrap">
+                    Get the latest deals & updates
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleNewsletterSubmit} className="flex items-center gap-2">
+                <input
+                  type="email"
+                  value={newsletterEmail}
+                  onChange={(e) => setNewsletterEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  required
+                  className="h-9 px-3.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-2xs w-44 sm:w-52"
+                />
+                <button
+                  type="submit"
+                  className="h-9 px-4 bg-[#0070f3] hover:bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-2xs transition-colors shrink-0 cursor-pointer"
+                >
+                  Subscribe
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-5">
           {/* Brand Column */}
           <div>
@@ -311,16 +461,19 @@ export function PublicFooter({ configuredInstitutionId }: { configuredInstitutio
                   </span>
                 </>
               ) : (
-                <>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                    <GraduationCap className="h-5 w-5 text-primary-foreground" />
-                  </div>
-                  <span className="text-xl font-bold text-foreground">EduBird</span>
-                </>
+                <Link href="/" className="flex items-center gap-2">
+                  <Image
+                    src="/images/143panda-logo.png"
+                    alt="143Panda"
+                    width={130}
+                    height={36}
+                    className="h-8 w-auto object-contain"
+                  />
+                </Link>
               )}
             </div>
             <p className="text-sm text-muted-foreground line-clamp-3">
-              {isInstitutionView ? institutionTagline : "Your trusted platform for finding verified courses from top educational institutes."}
+              {isInstitutionView ? institutionTagline : "Your trusted hyper-local marketplace for finding verified businesses, products, services, professionals, jobs, and courses."}
             </p>
 
             {/* Social Media Links */}
@@ -399,36 +552,18 @@ export function PublicFooter({ configuredInstitutionId }: { configuredInstitutio
             </ul>
           </div>
 
-          {/* App Download Column */}
+          {/* Marketplace Verticals Column */}
           <div>
-            <h4 className="mb-4 font-semibold text-foreground flex items-center gap-1.5">
-              <Smartphone className="size-4 text-primary shrink-0" />
-              <span>{isInstitutionView ? `${institutionDisplayName} App` : "App"}</span>
-            </h4>
-            <p className="text-xs text-muted-foreground leading-relaxed mb-4">
-              {isInstitutionView ? `${institutionDisplayName} app coming soon for faster local discovery.` : "EduBird app coming soon for faster local discovery."}
-            </p>
-            <div className="space-y-2.5">
-              <div className="flex items-center gap-3 p-2.5 rounded-xl border border-border/80 bg-card/80 shadow-2xs hover:border-primary/40 transition-colors">
-                <div className="size-8 rounded-lg bg-black text-white dark:bg-white dark:text-black flex items-center justify-center shrink-0">
-                  <AppleIcon className="size-4.5 fill-current" />
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[11px] font-bold text-foreground leading-tight">iOS App</span>
-                  <span className="text-[10px] text-muted-foreground leading-tight truncate">Coming soon on the App Store</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 p-2.5 rounded-xl border border-border/80 bg-card/80 shadow-2xs hover:border-primary/40 transition-colors">
-                <div className="size-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                  <PlayStoreIcon className="size-4.5 fill-current" />
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[11px] font-bold text-foreground leading-tight">Android App</span>
-                  <span className="text-[10px] text-muted-foreground leading-tight truncate">Coming soon on Google Play</span>
-                </div>
-              </div>
-            </div>
+            <h4 className="mb-4 font-semibold text-foreground">Explore Marketplace</h4>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              {marketplaceVerticals.map((link) => (
+                <li key={link.href + link.label}>
+                  <Link href={link.href} className="hover:text-foreground transition-colors">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
 
@@ -436,7 +571,7 @@ export function PublicFooter({ configuredInstitutionId }: { configuredInstitutio
 
         <div className="flex flex-col items-center justify-between gap-4 text-center sm:flex-row sm:text-left">
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} {isInstitutionView ? institutionDisplayName : "EduBird"}. All rights reserved.
+            © {new Date().getFullYear()} {isInstitutionView ? institutionDisplayName : "143Panda"}. All rights reserved.
           </p>
           <div className="flex flex-wrap justify-center gap-4 text-sm text-muted-foreground sm:justify-end">
             <Link href="/about" className="hover:text-foreground transition-colors">

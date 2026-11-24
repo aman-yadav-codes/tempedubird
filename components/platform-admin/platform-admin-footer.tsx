@@ -14,6 +14,9 @@ import {
   Sparkles,
   ArrowRight,
   Smartphone,
+  Users,
+  Store,
+  Handshake,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,39 +57,132 @@ export function PlatformAdminFooter() {
 
   return (
     <footer className="w-full border-t border-border/60 bg-gradient-to-b from-card via-muted/20 to-card text-foreground">
-      {/* Top Newsletter & Highlights Strip */}
-      <div className="border-b border-border/40 bg-primary/5 py-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="space-y-1 text-center md:text-left">
-            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-primary">
-              <Sparkles className="size-3.5" />
-              <span>Stay Ahead with 143Panda</span>
-            </div>
-            <h3 className="text-lg sm:text-xl font-black text-foreground tracking-tight">
-              Get notified about trending products, fresh jobs &amp; verified courses
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Direct updates from verified local stores and accredited institutions in your city.
-            </p>
-          </div>
+      {/* Top Pre-Footer Bar: App Download, Community Stats & Stay Updated */}
+      <div className="py-6 px-4 sm:px-6 lg:px-8 border-b border-border/40">
+        <div className="max-w-7xl mx-auto rounded-2xl bg-[#f0f6ff] border border-blue-100/90 p-4 sm:p-5 shadow-xs">
+          <div className="flex flex-col xl:flex-row items-center justify-between gap-6">
+            {/* 1. Left: Get the 143Panda App */}
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-4 shrink-0 w-full xl:w-auto justify-center sm:justify-start">
+              <div className="relative size-12 sm:size-14 shrink-0 flex items-center justify-center">
+                <Image
+                  src="/images/hero-panda-3d-clean.webp"
+                  alt="143Panda Mascot"
+                  width={56}
+                  height={56}
+                  className="size-12 sm:size-14 object-contain drop-shadow-sm"
+                />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight leading-tight">
+                  Get the 143Panda App
+                </h4>
+                <p className="text-xs text-slate-500 leading-tight mt-0.5 whitespace-nowrap">
+                  Discover, connect and grow on the go!
+                </p>
+              </div>
+              <div className="flex items-center gap-2 sm:pl-2">
+                <a
+                  href="#"
+                  className="flex items-center gap-2 bg-black hover:bg-neutral-800 text-white px-3 py-1.5 rounded-lg transition-colors shadow-2xs group"
+                  title="Download on the App Store"
+                >
+                  <AppleIcon className="size-4.5 fill-current" />
+                  <div className="flex flex-col text-left">
+                    <span className="text-[8px] text-neutral-300 uppercase leading-none tracking-tight">Download on the</span>
+                    <span className="text-[12px] font-bold leading-tight font-sans tracking-tight">App Store</span>
+                  </div>
+                </a>
 
-          <form onSubmit={handleSubscribe} className="flex w-full md:w-auto items-center gap-2 max-w-md">
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email address..."
-              className="h-10 text-xs bg-background/90 rounded-xl border-border/80 min-w-[220px]"
-            />
-            <Button
-              type="submit"
-              size="sm"
-              className="h-10 px-4 text-xs font-bold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 shrink-0"
-            >
-              <span>{subscribed ? "Subscribed" : "Subscribe"}</span>
-              <ArrowRight className="size-3.5" />
-            </Button>
-          </form>
+                <a
+                  href="#"
+                  className="flex items-center gap-2 bg-black hover:bg-neutral-800 text-white px-3 py-1.5 rounded-lg transition-colors shadow-2xs group"
+                  title="GET IT ON Google Play"
+                >
+                  <PlayStoreIcon className="size-4.5 fill-current" />
+                  <div className="flex flex-col text-left">
+                    <span className="text-[8px] text-neutral-300 uppercase leading-none tracking-tight">GET IT ON</span>
+                    <span className="text-[12px] font-bold leading-tight font-sans tracking-tight">Google Play</span>
+                  </div>
+                </a>
+              </div>
+            </div>
+
+            {/* Vertical Divider */}
+            <div className="hidden xl:block w-px h-10 bg-blue-200/70 shrink-0" />
+
+            {/* 2. Middle: Stats Counter */}
+            <div className="flex items-center justify-around sm:justify-center gap-6 sm:gap-8 shrink-0 w-full xl:w-auto py-2 xl:py-0 border-y xl:border-y-0 border-blue-100/80">
+              {/* 10K+ Happy Users */}
+              <div className="flex items-center gap-2.5">
+                <div className="size-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                  <Users className="size-4.5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-extrabold text-slate-900 leading-tight">10K+</span>
+                  <span className="text-[11px] font-medium text-slate-500 leading-tight">Happy Users</span>
+                </div>
+              </div>
+
+              {/* 5K+ Businesses */}
+              <div className="flex items-center gap-2.5">
+                <div className="size-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                  <Store className="size-4.5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-extrabold text-slate-900 leading-tight">5K+</span>
+                  <span className="text-[11px] font-medium text-slate-500 leading-tight">Businesses</span>
+                </div>
+              </div>
+
+              {/* 1M+ Connections */}
+              <div className="flex items-center gap-2.5">
+                <div className="size-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                  <Handshake className="size-4.5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-extrabold text-slate-900 leading-tight">1M+</span>
+                  <span className="text-[11px] font-medium text-slate-500 leading-tight">Connections</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Vertical Divider */}
+            <div className="hidden xl:block w-px h-10 bg-blue-200/70 shrink-0" />
+
+            {/* 3. Right: Stay Updated Newsletter */}
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-3.5 shrink-0 w-full xl:w-auto justify-center sm:justify-end">
+              <div className="flex items-center gap-3">
+                <div className="size-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                  <Mail className="size-4.5" />
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-tight">
+                    Stay Updated
+                  </h4>
+                  <p className="text-[11px] text-slate-500 leading-tight mt-0.5 whitespace-nowrap">
+                    Get the latest deals & updates
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleSubscribe} className="flex items-center gap-2">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  required
+                  className="h-9 px-3.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-2xs w-44 sm:w-52"
+                />
+                <button
+                  type="submit"
+                  className="h-9 px-4 bg-[#0070f3] hover:bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-2xs transition-colors shrink-0 cursor-pointer"
+                >
+                  Subscribe
+                </button>
+              </form>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -122,7 +218,7 @@ export function PlatformAdminFooter() {
               </div>
               <div className="flex items-center gap-2">
                 <Mail className="size-3.5 text-primary shrink-0" />
-                <span>support@edubird.com</span>
+                <span>support@143panda.com</span>
               </div>
             </div>
 
@@ -134,38 +230,6 @@ export function PlatformAdminFooter() {
               <Badge variant="outline" className="text-[10px] font-medium text-muted-foreground border-border/60">
                 100% Verified Stores
               </Badge>
-            </div>
-
-            {/* App Section */}
-            <div className="pt-3 space-y-2 border-t border-border/40">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-                <Smartphone className="size-3.5 text-primary" />
-                <span>143Panda App</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                143Panda app coming soon for faster local discovery.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 max-w-md">
-                <div className="flex items-center gap-2.5 p-2 rounded-xl border border-border/80 bg-background/80 shadow-2xs hover:border-primary/40 transition-colors">
-                  <div className="size-7 rounded-lg bg-black text-white dark:bg-white dark:text-black flex items-center justify-center shrink-0">
-                    <AppleIcon className="size-4 fill-current" />
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[11px] font-bold text-foreground leading-tight">iOS App</span>
-                    <span className="text-[10px] text-muted-foreground leading-tight truncate">Coming soon on the App Store</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2.5 p-2 rounded-xl border border-border/80 bg-background/80 shadow-2xs hover:border-primary/40 transition-colors">
-                  <div className="size-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                    <PlayStoreIcon className="size-4 fill-current" />
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[11px] font-bold text-foreground leading-tight">Android App</span>
-                    <span className="text-[10px] text-muted-foreground leading-tight truncate">Coming soon on Google Play</span>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
 
